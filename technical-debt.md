@@ -9,6 +9,45 @@ impact of leaving it, and the path to resolve it. Newest section first.
 
 ---
 
+## 2026-07-01 — `.agents/` submodule: commit + push before codex (CLI only)
+
+Background: `.agents/` was converted to a git submodule in every repo. The CLI loop
+(`AgentsSubmodulePublisher`) now commits and pushes the submodule to its own remote at two
+points per iteration — once BEFORE invoking codex (`LoopRunner`, persisting the
+operational_context / decisions / rotated handoff codex will consume) and again at
+end-of-iteration (`CommitGate`, capturing codex's new handoff) — then the revamped
+`CommitGate` advances the parent gitlink and pushes it, with stall detection re-based onto
+parent changes outside the `.agents` gitlink. Scope was CLI-only; the backend
+`RepositoryOrchestrator` was deliberately left unchanged (TD-8).
+
+### TD-8 — Backend `RepositoryOrchestrator` does not commit+push the `.agents/` submodule before codex
+
+**Deferred.** The CLI's `AgentsSubmodulePublisher` commits and pushes the `.agents/`
+submodule before every codex turn and at end-of-iteration. The backend
+`RepositoryOrchestrator` writes `.agents/` artifacts via `artifactStore.WriteAsync`
+(operational_context, decisions, handoffs, specs) and invokes codex via
+`agentRuntime.RunOneShotAsync`, but never commits the submodule — it only publishes the plan
+via `planArtifactPublisher.PublishAsync`, which commits the target repo through `GitService`
+(and `GitService`/`IGitService` have no submodule/sub-path support).
+
+**Why deferred:** the CLI loop is the active execution path; the backend
+`RepositoryOrchestrator` is the legacy in-process orchestration mode (see TD-1). Bringing
+parity requires either extending `IGitService` with a submodule-aware working-directory
+overload or introducing a shared submodule publisher the backend can call before each
+`RunOneShotAsync`.
+
+**Impact:** post-submodule-conversion, backend execution runs write `.agents/` artifacts to
+disk but never persist them to the submodule's remote, and the parent repo cannot capture
+them through its plan commit (a dirty submodule is not committable from the parent). So the
+backend path's `.agents/` history and cross-repo sync are lost until a CLI loop later commits
+them. Asymmetry with the CLI.
+
+**Resolution:** when the backend execution paths are retained or migrated (decision: TD-1),
+apply the same commit+push-before-codex to the `RepositoryOrchestrator` transfer/execution
+sites, sharing the CLI's publisher logic or a submodule-aware `IGitService` overload.
+
+---
+
 ## 2026-06-30 — decisions.md is the execution agent's system prompt (CLI decision-first)
 
 Background: `CommandCenter.CLI` was re-sequenced so the **decision session runs before

@@ -9,26 +9,28 @@ public class CommitGateTests
 {
     private const string CommitMessage = "Orchestration loop: automated execution and decision iteration";
 
+    // git add stages everything except the `.agents` submodule — the gate never touches the gitlink.
+    private static readonly string[] AddExcludingAgents = ["add", "-A", "--", ".", ":(exclude).agents"];
+
     private static CommitGate New(FakeProcessRunner fake) =>
         new(fake, new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" }, new RecordingLoopConsole());
 
     /// <summary>Scripts a runner whose `git status` always returns the given porcelain; everything else succeeds.</summary>
     private static FakeProcessRunner StatusRunner(string porcelain) => new()
     {
-        Handler = args => args[0] == "status"
+        Handler = (_, args) => args[0] == "status"
             ? FakeProcessRunner.Ok(porcelain)
             : FakeProcessRunner.Ok()
     };
 
-    // Two bookkeeping paths (decisions + handoff) — the every-iteration churn that must NOT count as progress.
-    private const string Bookkeeping =
-        " M .agents/decisions/decisions.md\n M .agents/handoffs/handoff.md";
+    // The parent working tree only ever surfaces the submodule as a lone `.agents` gitlink, which CommitGate
+    // ignores — so an iteration that shows only this made no real progress.
+    private const string GitlinkOnly = " M .agents";
 
     [Fact]
-    public async Task T1_OnlyBookkeeping_TripsAfterThreshold()
+    public async Task T1_OnlyAgentsGitlink_TripsAfterThreshold()
     {
-        var fake = StatusRunner(Bookkeeping);
-        var gate = New(fake);
+        var gate = New(StatusRunner(GitlinkOnly));
 
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 1
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 2
@@ -38,24 +40,24 @@ public class CommitGateTests
     }
 
     [Fact]
-    public async Task T2_NonBookkeepingChange_ResetsCounter()
+    public async Task T2_RealSourceChange_ResetsCounter()
     {
-        var fake = StatusRunner(Bookkeeping);
+        var fake = StatusRunner(GitlinkOnly);
         var gate = New(fake);
 
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 1
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 2
 
-        // A real source change resets the counter to 0.
-        fake.Handler = args => args[0] == "status"
-            ? FakeProcessRunner.Ok(" M .agents/decisions/decisions.md\n M src/Foo.cs")
+        // A real (non-.agents) source change — even alongside the ignored gitlink — resets the counter to 0.
+        fake.Handler = (_, args) => args[0] == "status"
+            ? FakeProcessRunner.Ok(" M .agents\n M src/Foo.cs")
             : FakeProcessRunner.Ok();
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None));
         Assert.Equal(0, gate.NoChangesCount);
 
-        // Prove the reset really happened: it takes 3 MORE bookkeeping iterations to trip again.
-        fake.Handler = args => args[0] == "status"
-            ? FakeProcessRunner.Ok(Bookkeeping)
+        // Prove the reset really happened: it takes 3 MORE gitlink-only iterations to trip again.
+        fake.Handler = (_, args) => args[0] == "status"
+            ? FakeProcessRunner.Ok(GitlinkOnly)
             : FakeProcessRunner.Ok();
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 1
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 2
@@ -64,9 +66,10 @@ public class CommitGateTests
     }
 
     [Fact]
-    public async Task T3_CommitsAndPushes_WhenChangesPresent()
+    public async Task T3_CommitsAndPushes_ExcludingAgents_WhenRealChangesPresent()
     {
-        var fake = StatusRunner(" M src/Foo.cs");
+        // The gitlink is present but ignored; the real source change drives the commit.
+        var fake = StatusRunner(" M .agents\n M src/Foo.cs");
         var gate = New(fake);
 
         await gate.CommitPushAndEvaluateAsync(CancellationToken.None);
@@ -74,12 +77,10 @@ public class CommitGateTests
         Assert.Equal(4, fake.Calls.Count);
         Assert.All(fake.Calls, call => Assert.Equal("git", call.FileName));
         Assert.Equal(new[] { "status", "--porcelain" }, fake.Calls[0].Args);
-        Assert.Equal(new[] { "add", "-A" }, fake.Calls[1].Args);
+        // The add EXCLUDES the `.agents` submodule so the gitlink is never staged/committed.
+        Assert.Equal(AddExcludingAgents, fake.Calls[1].Args);
         Assert.Equal(new[] { "commit", "-m", CommitMessage }, fake.Calls[2].Args);
         Assert.Equal(new[] { "push" }, fake.Calls[3].Args);
-
-        // The commit message argument must be the exact constant.
-        Assert.Equal(CommitMessage, fake.Calls[2].Args[2]);
     }
 
     [Fact]
@@ -94,7 +95,6 @@ public class CommitGateTests
         Assert.Single(fake.Calls);
         Assert.Equal(new[] { "status", "--porcelain" }, fake.Calls[0].Args);
 
-        // The empty changeset still counts as no-progress and trips on the 3rd iteration.
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 2
         Assert.True(await gate.CommitPushAndEvaluateAsync(CancellationToken.None));  // count 3 -> trip
         Assert.Equal(3, gate.NoChangesCount);
@@ -105,9 +105,9 @@ public class CommitGateTests
     {
         var fake = new FakeProcessRunner
         {
-            Handler = args => args[0] switch
+            Handler = (_, args) => args[0] switch
             {
-                "status" => FakeProcessRunner.Ok(Bookkeeping),
+                "status" => FakeProcessRunner.Ok(" M src/Foo.cs"),
                 "push" => FakeProcessRunner.Fail("push rejected"),
                 _ => FakeProcessRunner.Ok()
             }
@@ -123,9 +123,9 @@ public class CommitGateTests
     {
         var fake = new FakeProcessRunner
         {
-            Handler = args => args[0] switch
+            Handler = (_, args) => args[0] switch
             {
-                "status" => FakeProcessRunner.Ok(Bookkeeping),
+                "status" => FakeProcessRunner.Ok(" M src/Foo.cs"),
                 "commit" => FakeProcessRunner.Fail("nothing to commit"),
                 _ => FakeProcessRunner.Ok()
             }
@@ -141,7 +141,7 @@ public class CommitGateTests
     {
         var fake = new FakeProcessRunner
         {
-            Handler = args => args[0] == "status"
+            Handler = (_, args) => args[0] == "status"
                 ? FakeProcessRunner.Fail("not a git repository")
                 : FakeProcessRunner.Ok()
         };
@@ -156,14 +156,10 @@ public class CommitGateTests
     }
 
     [Fact]
-    public async Task T8_OperationalContextChange_DoesNotCountAsProgress()
+    public async Task T8_AgentsSubpaths_AreIgnored_NotCountedAsProgress()
     {
-        // An iteration that touched only decisions + .agents/operational_context.md is still no-progress:
-        // operational_context is orchestration bookkeeping, not substantive milestone work. So the counter
-        // keeps climbing and trips on the 3rd iteration rather than resetting (which is what a real source
-        // change would do — see T2).
-        var fake = StatusRunner(" M .agents/decisions/decisions.md\n M .agents/operational_context.md");
-        var gate = New(fake);
+        // Defensive: even if a `.agents/<file>` path surfaced at the parent, it is ignored like the gitlink.
+        var gate = New(StatusRunner(" M .agents\n M .agents/operational_context.md"));
 
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 1
         Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 2

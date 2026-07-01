@@ -54,8 +54,9 @@ var gatedRuntime = new GatedAgentRuntime(runtime, usageGate);
 var gate = new MilestoneGate(store, repository);
 var execution = new ExecutionStep(gatedRuntime, artifacts, console, repository);
 var decision = new DecisionSession(gatedRuntime, router, artifacts, console, repository);
+var submodulePublisher = new AgentsSubmodulePublisher(processRunner, repository, console);
 var commitGate = new CommitGate(processRunner, repository, console);
-var loop = new LoopRunner(gate, artifacts, execution, decision, commitGate, console);
+var loop = new LoopRunner(gate, artifacts, execution, decision, submodulePublisher, commitGate, console);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---
 using var cts = new CancellationTokenSource();

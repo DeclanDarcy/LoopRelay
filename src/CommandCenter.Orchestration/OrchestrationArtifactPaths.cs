@@ -7,6 +7,13 @@ namespace CommandCenter.Orchestration;
 /// </summary>
 public static class OrchestrationArtifactPaths
 {
+    /// <summary>
+    /// Repository-relative root of the agent artifacts, now a git submodule. The CLI loop commits/pushes
+    /// this submodule directly; the parent repo only ever sees it as a single gitlink entry in
+    /// <c>git status</c>, which is why <c>CommitGate</c> treats a lone <c>.agents</c> change as bookkeeping.
+    /// </summary>
+    public const string AgentsDirectory = ".agents";
+
     public const string Plan = ".agents/plan.md";
 
     /// <summary>Roadmap textarea, persisted before the initial planning prompt runs (m3).</summary>

@@ -119,14 +119,16 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
 /// </summary>
 internal sealed class FakeProcessRunner : IProcessRunner
 {
-    public List<(string FileName, IReadOnlyList<string> Args)> Calls { get; } = new();
+    public List<(string FileName, IReadOnlyList<string> Args, string WorkingDirectory)> Calls { get; } = new();
 
-    public Func<IReadOnlyList<string>, ProcessRunResult>? Handler { get; set; }
+    // Handler receives the working directory too, so a test can script the .agents submodule
+    // (workingDirectory ends in ".agents") differently from the parent repo.
+    public Func<string, IReadOnlyList<string>, ProcessRunResult>? Handler { get; set; }
 
     public Task<ProcessRunResult> RunAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory)
     {
-        Calls.Add((fileName, arguments));
-        return Task.FromResult(Handler?.Invoke(arguments) ?? Ok());
+        Calls.Add((fileName, arguments, workingDirectory));
+        return Task.FromResult(Handler?.Invoke(workingDirectory, arguments) ?? Ok());
     }
 
     public Task<ProcessStartResult> StartAsync(

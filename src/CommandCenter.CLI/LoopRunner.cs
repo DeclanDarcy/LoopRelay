@@ -11,6 +11,7 @@ internal sealed class LoopRunner(
     LoopArtifacts artifacts,
     ExecutionStep execution,
     DecisionSession decision,
+    AgentsSubmodulePublisher submodulePublisher,
     CommitGate commitGate,
     ILoopConsole console) : IAsyncDisposable
 {
@@ -43,9 +44,25 @@ internal sealed class LoopRunner(
                 // (a no-op on the first pass, when no handoff exists yet).
                 await artifacts.RotateLiveHandoffAsync();
 
+                // ---- Persist context BEFORE invoking codex ----
+                // `.agents/` is a git submodule, so the parent repo cannot commit its contents. Commit and
+                // push the submodule now, before the execution turn opens, so the exact context codex is
+                // about to consume (operational_context, decisions, the rotated handoff) is persisted and
+                // shared to the submodule's own remote first.
+                await submodulePublisher.PublishAsync(
+                    AgentsSubmodulePublisher.ContextUpdateMessage, cancellationToken);
+
                 // ---- Execution ----
                 // Consume decisions.md, do the work, and write the next handoff.
                 await execution.RunAsync(cancellationToken);
+
+                // ---- Persist codex's writes ----
+                // Publish codex's `.agents/` output (the new handoff, milestone box-checks, final decisions) to
+                // the submodule. CommitGate ignores `.agents/`, and the epic-complete check short-circuits at
+                // the TOP of the next iteration BEFORE its pre-codex publish — so without this the completing
+                // (and stalling) iteration's state would never reach the submodule remote.
+                await submodulePublisher.PublishAsync(
+                    AgentsSubmodulePublisher.ExecutionHandoffMessage, cancellationToken);
 
                 // decision.RunAsync verifies decisions.md and execution.RunAsync verifies handoff.md (each throws
                 // if its artifact is missing). Commit and push the working tree, then apply the stall gate: stop

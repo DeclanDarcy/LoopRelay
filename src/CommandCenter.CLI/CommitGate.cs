@@ -6,12 +6,15 @@ using CommandCenter.Orchestration;
 namespace CommandCenter.Cli;
 
 /// <summary>
-/// Commits and pushes the target repository's working tree at the end of each loop iteration, then
-/// applies the no-substantive-change stall gate. An iteration that changed ONLY bookkeeping files
-/// (everything under <c>.agents/decisions/</c> and <c>.agents/handoffs/</c>, plus the
-/// <c>.agents/operational_context.md</c> file) makes no real progress, so it increments
-/// <see cref="NoChangesCount"/>; any iteration that touched something else resets it to 0.
-/// Once the count exceeds <see cref="MaxNoChangesCount"/> the loop is asked to stop (the run is stalled).
+/// Commits and pushes the target repository's real working-tree changes at the end of each loop iteration,
+/// then applies the no-substantive-change stall gate.
+///
+/// The <c>.agents/</c> submodule is deliberately IGNORED here: it is committed and pushed to its own remote by
+/// <see cref="AgentsSubmodulePublisher"/> before each codex turn, so this gate neither stages nor advances the
+/// <c>.agents</c> gitlink pointer, and it never counts a lone submodule change as progress. Consequently
+/// "substantive progress" means a real (non-<c>.agents</c>) repository file changed; an iteration that touched
+/// only <c>.agents/</c> made no progress and increments <see cref="NoChangesCount"/>, while any real change
+/// resets it to 0. Once the count exceeds <see cref="MaxNoChangesCount"/> the loop is asked to stop.
 ///
 /// Git is driven through <see cref="IProcessRunner"/> with <c>workingDirectory = repository.Path</c> (no
 /// <c>-C</c>), mirroring <c>GitService</c>; a nonzero exit on any git call aborts the iteration by throwing
@@ -23,41 +26,36 @@ internal sealed class CommitGate(IProcessRunner processRunner, Repository reposi
 
     private const string CommitMessage = "Orchestration loop: automated execution and decision iteration";
 
-    // Bookkeeping prefixes derived from the canonical artifact-path constants (never hardcoded). The
-    // operational_context file is a single artifact (not a directory), so it is matched by exact equality.
-    private static readonly string DecisionsPrefix = OrchestrationArtifactPaths.DecisionsDirectory + "/";
-    private static readonly string HandoffsPrefix = OrchestrationArtifactPaths.HandoffsDirectory + "/";
+    // Stage everything EXCEPT the `.agents` submodule, so the loop never commits or advances the gitlink from
+    // here (the submodule is published independently to its own remote by AgentsSubmodulePublisher).
+    private static readonly string[] AddExcludingAgents =
+        ["add", "-A", "--", ".", ":(exclude)" + OrchestrationArtifactPaths.AgentsDirectory];
 
     private int noChangesCount;
 
     internal int NoChangesCount => noChangesCount;
 
     /// <summary>
-    /// Commits and pushes the target repository's working tree, then evaluates the no-substantive-change
-    /// stall gate. Returns true if the loop should STOP (NoChangesCount has exceeded MaxNoChangesCount).
+    /// Commits and pushes the target repository's real (non-<c>.agents</c>) working-tree changes, then evaluates
+    /// the stall gate. Returns true if the loop should STOP (NoChangesCount has exceeded MaxNoChangesCount).
     /// </summary>
     public async Task<bool> CommitPushAndEvaluateAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        IReadOnlyList<string> changed = await GetChangedPathsAsync();
-        bool onlyBookkeeping = changed.All(IsBookkeeping);
+        IReadOnlyList<string> changed = await GetRealChangedPathsAsync();
 
         if (changed.Count > 0)
         {
-            await RunGitAsync("add", ["add", "-A"]);
+            await RunGitAsync("add", AddExcludingAgents);
             await RunGitAsync("commit", ["commit", "-m", CommitMessage]);
             await RunGitAsync("push", ["push"]);
-        }
-
-        if (onlyBookkeeping)
-        {
-            noChangesCount++;
-            console.Info($"No substantive changes this iteration ({noChangesCount}/{MaxNoChangesCount}).");
+            noChangesCount = 0;
         }
         else
         {
-            noChangesCount = 0;
+            noChangesCount++;
+            console.Info($"No substantive changes this iteration ({noChangesCount}/{MaxNoChangesCount}).");
         }
 
         if (noChangesCount > MaxNoChangesCount)
@@ -70,7 +68,10 @@ internal sealed class CommitGate(IProcessRunner processRunner, Repository reposi
         return false;
     }
 
-    private async Task<IReadOnlyList<string>> GetChangedPathsAsync()
+    // The target repo's changed paths with the `.agents/` submodule filtered out. The parent working tree only
+    // ever surfaces the submodule as a single `.agents` gitlink entry (a moved pointer from the pre-codex
+    // publish); this gate ignores it so it is neither committed nor treated as progress.
+    private async Task<IReadOnlyList<string>> GetRealChangedPathsAsync()
     {
         ProcessRunResult result = await processRunner.RunAsync("git", ["status", "--porcelain"], repository.Path);
         if (result.ExitCode != 0)
@@ -78,35 +79,12 @@ internal sealed class CommitGate(IProcessRunner processRunner, Repository reposi
             throw new LoopStepException($"git status failed: {result.StandardError}");
         }
 
-        var changed = new List<string>();
-        foreach (string rawLine in result.StandardOutput.Split('\n'))
-        {
-            string line = rawLine.TrimEnd('\r');
-            if (line.Length < 4)
-            {
-                continue;
-            }
-
-            // Drop the 2-char XY status + the separating space; keep the path.
-            string path = line[3..];
-
-            // A rename/copy entry is "old -> new"; the new path is the one that now exists.
-            int arrow = path.IndexOf(" -> ", StringComparison.Ordinal);
-            if (arrow >= 0)
-            {
-                path = path[(arrow + " -> ".Length)..];
-            }
-
-            changed.Add(path.Replace('\\', '/').Trim('"'));
-        }
-
-        return changed;
+        return GitPorcelain.ChangedPaths(result.StandardOutput)
+            .Where(path =>
+                path != OrchestrationArtifactPaths.AgentsDirectory &&
+                !path.StartsWith(OrchestrationArtifactPaths.AgentsDirectory + "/", StringComparison.Ordinal))
+            .ToList();
     }
-
-    private static bool IsBookkeeping(string path) =>
-        path.StartsWith(DecisionsPrefix, StringComparison.Ordinal) ||
-        path.StartsWith(HandoffsPrefix, StringComparison.Ordinal) ||
-        string.Equals(path, OrchestrationArtifactPaths.OperationalContext, StringComparison.Ordinal);
 
     private async Task RunGitAsync(string label, IReadOnlyList<string> arguments)
     {

@@ -26,12 +26,15 @@ public class LoopRunnerTests
         // (UsageGateTests) and its per-turn placement in GatedAgentRuntimeTests, so the loop runs ungated.
         var exec = new ExecutionStep(rt, art, con, repo);
         var dec = new DecisionSession(rt, router, art, con, repo);
-        // By default `git status` reports an EMPTY working tree, so the gate skips commit/push and the
-        // existing single-iteration tests reach their asserted outcome before it could ever trip.
-        var git = new FakeProcessRunner { Handler = _ => FakeProcessRunner.Ok() };
+        // By default `git status` reports an EMPTY working tree, so the submodule publisher is a no-op and
+        // the gate skips commit/push — the existing single-iteration tests reach their asserted outcome
+        // before it could ever trip.
+        var git = new FakeProcessRunner { Handler = (_, _) => FakeProcessRunner.Ok() };
+        // CommitGate IGNORES `.agents`; the submodule is committed+pushed only by the publisher (pre-codex).
+        var submodulePublisher = new AgentsSubmodulePublisher(git, repo, con);
         var commitGate = new CommitGate(git, repo, con);
         return new Harness(
-            new LoopRunner(gate, art, exec, dec, commitGate, con), rt, store, repo, con, git);
+            new LoopRunner(gate, art, exec, dec, submodulePublisher, commitGate, con), rt, store, repo, con, git);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
@@ -165,10 +168,15 @@ public class LoopRunnerTests
         // The epic never completes: the milestone box stays unchecked for the whole run.
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
 
-        // git status always reports ONLY bookkeeping paths (the every-iteration decisions+handoff churn).
-        h.Git.Handler = args => args[0] == "status"
-            ? FakeProcessRunner.Ok(" M .agents/decisions/decisions.md\n M .agents/handoffs/handoff.md")
-            : FakeProcessRunner.Ok();
+        // The parent working tree reports ONLY the `.agents` submodule gitlink every iteration (the
+        // decisions/handoff churn now lives inside the submodule); the submodule reports its own dirty
+        // content and a tracking branch so the publisher can commit+push it.
+        h.Git.Handler = (_, args) => args[0] switch
+        {
+            "status" => FakeProcessRunner.Ok(" M .agents"),
+            "branch" => FakeProcessRunner.Ok("main"),
+            _ => FakeProcessRunner.Ok()
+        };
 
         // Each iteration runs decision-first: the decision seed (first iteration only), the decision proposal
         // (persists decisions.md), then execution's work turn and handoff turn (writes a fresh handoff). Script
@@ -210,5 +218,64 @@ public class LoopRunnerTests
         LoopOutcome outcome = await h.Runner.RunAsync(cts.Token);
 
         Assert.Equal(LoopOutcome.Cancelled, outcome);
+    }
+
+    [Fact]
+    public async Task Run_CommitsAndPushesAgentsSubmodule_BeforeInvokingCodex()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+
+        // A shared timeline records the FIRST submodule push (the pre-codex publish) and the moment codex's
+        // execution work turn runs, so we can assert the submodule was persisted before codex was invoked.
+        var timeline = new List<string>();
+        h.Git.Handler = (wd, args) =>
+        {
+            bool submodule = wd.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);
+            if (args[0] == "status")
+            {
+                return FakeProcessRunner.Ok(submodule ? " M decisions/decisions.md" : " M .agents");
+            }
+
+            if (args[0] == "branch")
+            {
+                return FakeProcessRunner.Ok("main");
+            }
+
+            if (submodule && args[0] == "push")
+            {
+                timeline.Add("submodule-push");
+            }
+
+            return FakeProcessRunner.Ok();
+        };
+
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DEC")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            timeline.Add("codex-exec");   // the execution work turn = "invoking codex"
+            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("executed");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H").Wait();
+            return Turns.Completed("handoff");
+        }));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
+        int firstSubmodulePush = timeline.IndexOf("submodule-push");
+        int codexExec = timeline.IndexOf("codex-exec");
+        int lastSubmodulePush = timeline.LastIndexOf("submodule-push");
+        Assert.True(firstSubmodulePush >= 0, "the .agents submodule must be committed+pushed");
+        Assert.True(codexExec >= 0, "codex must run");
+        Assert.True(firstSubmodulePush < codexExec, "the .agents submodule must be pushed BEFORE codex runs");
+        // ...and codex's own writes (milestone box-check, handoff) are published AFTER the codex turn, so the
+        // completing iteration's state reaches the submodule remote.
+        Assert.True(lastSubmodulePush > codexExec, "the .agents submodule must also be pushed AFTER codex runs");
     }
 }
