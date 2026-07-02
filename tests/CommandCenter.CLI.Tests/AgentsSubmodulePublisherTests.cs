@@ -205,6 +205,59 @@ public class AgentsSubmodulePublisherTests
     }
 
     [Fact]
+    public async Task SubmodulePushFailure_WhenRetrySucceeds_ContinuesToParentGitlink()
+    {
+        int submodulePushes = 0;
+        var fake = new FakeProcessRunner
+        {
+            Handler = (dir, args) => (args[0], IsSubmodule(dir)) switch
+            {
+                ("status", _) => FakeProcessRunner.Ok(" M handoffs/handoff.md"),
+                ("branch", _) => FakeProcessRunner.Ok("main"),
+                ("push", true) => ++submodulePushes == 1
+                    ? FakeProcessRunner.Fail("Recv failure: Connection was reset")
+                    : FakeProcessRunner.Ok(),
+                _ => FakeProcessRunner.Ok()
+            }
+        };
+
+        bool committed = await New(fake).PublishAsync(Message, CancellationToken.None);
+
+        Assert.True(committed);
+        Assert.Equal(2, submodulePushes);
+        Assert.Contains(fake.Calls, c =>
+            !IsSubmodule(c.WorkingDirectory) &&
+            c.Args.SequenceEqual(new[] { "commit", "-m", AgentsSubmodulePublisher.GitlinkPointerMessage }));
+    }
+
+    [Fact]
+    public async Task SubmodulePushFailure_WhenUpstreamAlreadyHasHead_IsTreatedAsPushed()
+    {
+        const string head = "918eca5cc5762e21c267303838fa2dcec1461963";
+        var fake = new FakeProcessRunner
+        {
+            Handler = (dir, args) => (args[0], IsSubmodule(dir)) switch
+            {
+                ("status", _) => FakeProcessRunner.Ok(" M handoffs/handoff.md"),
+                ("branch", _) => FakeProcessRunner.Ok("main"),
+                ("push", true) => FakeProcessRunner.Fail("Recv failure: Connection was reset"),
+                ("fetch", true) => FakeProcessRunner.Ok(),
+                ("rev-parse", true) when args[1] == "HEAD" => FakeProcessRunner.Ok(head),
+                ("rev-parse", true) when args[1] == "@{u}" => FakeProcessRunner.Ok(head),
+                _ => FakeProcessRunner.Ok()
+            }
+        };
+
+        bool committed = await New(fake).PublishAsync(Message, CancellationToken.None);
+
+        Assert.True(committed);
+        Assert.Single(fake.Calls, c => IsSubmodule(c.WorkingDirectory) && c.Args.SequenceEqual(new[] { "push" }));
+        Assert.Contains(fake.Calls, c =>
+            !IsSubmodule(c.WorkingDirectory) &&
+            c.Args.SequenceEqual(new[] { "commit", "-m", AgentsSubmodulePublisher.GitlinkPointerMessage }));
+    }
+
+    [Fact]
     public async Task CommitFailure_Throws()
     {
         var fake = new FakeProcessRunner

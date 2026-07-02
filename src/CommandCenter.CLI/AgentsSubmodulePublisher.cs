@@ -63,7 +63,7 @@ internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Rep
             string branch = await RequireBranchAsync();
             await RunGitAsync("add", ["add", "-A"]);
             await RunGitAsync("commit", ["commit", "-m", commitMessage]);
-            await RunGitAsync("push", ["push"]);
+            await PushSubmoduleAsync();
             console.Info($"Committed and pushed the .agents submodule ({branch}).");
             committed = true;
         }
@@ -74,7 +74,7 @@ internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Rep
         else if (await HasUnpushedCommitsAsync())
         {
             string branch = await RequireBranchAsync();
-            await RunGitAsync("push", ["push"]);
+            await PushSubmoduleAsync();
             console.Info($"Pushed a previously-stranded .agents submodule commit ({branch}).");
         }
 
@@ -174,6 +174,63 @@ internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Rep
         return branch;
     }
 
+    private async Task PushSubmoduleAsync()
+    {
+        ProcessRunResult first = await processRunner.RunAsync("git", ["push"], SubmodulePath);
+        if (first.ExitCode == 0)
+        {
+            return;
+        }
+
+        if (await SubmoduleUpstreamAlreadyAtHeadAsync())
+        {
+            console.Info("The .agents submodule commit was already present on the upstream branch.");
+            return;
+        }
+
+        ProcessRunResult retry = await processRunner.RunAsync("git", ["push"], SubmodulePath);
+        if (retry.ExitCode == 0)
+        {
+            console.Info("Retried the .agents submodule push after a transient failure.");
+            return;
+        }
+
+        if (await SubmoduleUpstreamAlreadyAtHeadAsync())
+        {
+            console.Info("The .agents submodule commit reached the upstream branch after a push retry.");
+            return;
+        }
+
+        throw new LoopStepException(
+            $"git push (.agents submodule) failed: {NonEmpty(retry.StandardError, first.StandardError)}");
+    }
+
+    private async Task<bool> SubmoduleUpstreamAlreadyAtHeadAsync()
+    {
+        ProcessRunResult fetch = await processRunner.RunAsync("git", ["fetch", "--quiet"], SubmodulePath);
+        if (fetch.ExitCode != 0)
+        {
+            return false;
+        }
+
+        ProcessRunResult head = await processRunner.RunAsync("git", ["rev-parse", "HEAD"], SubmodulePath);
+        if (head.ExitCode != 0)
+        {
+            return false;
+        }
+
+        ProcessRunResult upstream = await processRunner.RunAsync("git", ["rev-parse", "@{u}"], SubmodulePath);
+        if (upstream.ExitCode != 0)
+        {
+            return false;
+        }
+
+        string headSha = head.StandardOutput.Trim();
+        string upstreamSha = upstream.StandardOutput.Trim();
+        return headSha.Length > 0 &&
+            string.Equals(headSha, upstreamSha, StringComparison.OrdinalIgnoreCase);
+    }
+
     // True when the submodule HEAD is ahead of its upstream (unpushed commits). A non-zero exit (e.g. no
     // upstream configured) is treated as "nothing recoverable" rather than an error.
     private async Task<bool> HasUnpushedCommitsAsync()
@@ -219,4 +276,7 @@ internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Rep
             throw new LoopStepException($"git {label} (.agents submodule) failed: {result.StandardError}");
         }
     }
+
+    private static string NonEmpty(string preferred, string fallback) =>
+        string.IsNullOrWhiteSpace(preferred) ? fallback : preferred;
 }
