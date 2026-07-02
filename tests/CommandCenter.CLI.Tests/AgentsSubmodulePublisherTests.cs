@@ -135,6 +135,33 @@ public class AgentsSubmodulePublisherTests
     }
 
     [Fact]
+    public async Task ParentGitlinkPushFailure_WhenUpstreamAlreadyHasHead_IsTreatedAsPushed()
+    {
+        const string head = "24803b3509216ff9ea0d1d0f8f45f7e19149f8c4";
+        var fake = new FakeProcessRunner
+        {
+            Handler = (dir, args) => (args[0], IsSubmodule(dir)) switch
+            {
+                ("status", _) => FakeProcessRunner.Ok(" M decisions/decisions.md"),
+                ("branch", _) => FakeProcessRunner.Ok("main"),
+                ("push", false) => FakeProcessRunner.Fail(
+                    "cannot lock ref 'refs/heads/main': is at " + head + " but expected a75de6f"),
+                ("fetch", false) => FakeProcessRunner.Ok(),
+                ("rev-parse", false) when args[1] == "HEAD" => FakeProcessRunner.Ok(head),
+                ("rev-parse", false) when args[1] == "@{u}" => FakeProcessRunner.Ok(head),
+                _ => FakeProcessRunner.Ok()
+            }
+        };
+
+        bool committed = await New(fake).PublishAsync(Message, CancellationToken.None);
+
+        Assert.True(committed);
+        Assert.Contains(fake.Calls, c => !IsSubmodule(c.WorkingDirectory) && c.Args.SequenceEqual(new[] { "fetch", "--quiet" }));
+        Assert.Contains(fake.Calls, c => !IsSubmodule(c.WorkingDirectory) && c.Args.SequenceEqual(new[] { "rev-parse", "HEAD" }));
+        Assert.Contains(fake.Calls, c => !IsSubmodule(c.WorkingDirectory) && c.Args.SequenceEqual(new[] { "rev-parse", "@{u}" }));
+    }
+
+    [Fact]
     public async Task CommitMessage_IsPassedThrough()
     {
         var fake = Runner(status: " M handoffs/handoff.md");

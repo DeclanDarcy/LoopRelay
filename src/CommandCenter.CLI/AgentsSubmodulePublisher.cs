@@ -100,8 +100,52 @@ internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Rep
     {
         await RunParentGitAsync("add", ["add", "--", OrchestrationArtifactPaths.AgentsDirectory]);
         await RunParentGitAsync("commit", ["commit", "-m", GitlinkPointerMessage]);
-        await RunParentGitAsync("push", ["push"]);
+        await PushParentGitlinkAsync();
         console.Info("Recorded and pushed the .agents submodule pointer in the parent repo.");
+    }
+
+    private async Task PushParentGitlinkAsync()
+    {
+        ProcessRunResult result = await processRunner.RunAsync("git", ["push"], repository.Path);
+        if (result.ExitCode == 0)
+        {
+            return;
+        }
+
+        if (await ParentUpstreamAlreadyAtHeadAsync())
+        {
+            console.Info("The parent .agents submodule pointer was already present on the upstream branch.");
+            return;
+        }
+
+        throw new LoopStepException(
+            $"git push (.agents gitlink, parent repo) failed: {result.StandardError}");
+    }
+
+    private async Task<bool> ParentUpstreamAlreadyAtHeadAsync()
+    {
+        ProcessRunResult fetch = await processRunner.RunAsync("git", ["fetch", "--quiet"], repository.Path);
+        if (fetch.ExitCode != 0)
+        {
+            return false;
+        }
+
+        ProcessRunResult head = await processRunner.RunAsync("git", ["rev-parse", "HEAD"], repository.Path);
+        if (head.ExitCode != 0)
+        {
+            return false;
+        }
+
+        ProcessRunResult upstream = await processRunner.RunAsync("git", ["rev-parse", "@{u}"], repository.Path);
+        if (upstream.ExitCode != 0)
+        {
+            return false;
+        }
+
+        string headSha = head.StandardOutput.Trim();
+        string upstreamSha = upstream.StandardOutput.Trim();
+        return headSha.Length > 0 &&
+            string.Equals(headSha, upstreamSha, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task RunParentGitAsync(string label, IReadOnlyList<string> arguments)
