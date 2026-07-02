@@ -16,6 +16,14 @@ public static class OrchestrationArtifactPaths
 
     public const string Plan = ".agents/plan.md";
 
+    /// <summary>
+    /// Optional companion to <see cref="Plan"/>: extended detail a non-self-contained plan.md declares as a
+    /// required addendum. Injected into the execution prompt directly after the plan (same existence-guarded
+    /// treatment: read when present, rendered as the empty string when absent) so the execution agent never
+    /// has to chase the file on disk.
+    /// </summary>
+    public const string Details = ".agents/details.md";
+
     /// <summary>Roadmap textarea, persisted before the initial planning prompt runs (m3).</summary>
     public const string SpecsRoadmap = ".agents/specs/roadmap.md";
 

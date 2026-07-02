@@ -9,9 +9,10 @@ namespace CommandCenter.Execution.Services;
 /// Renders the operational execution prompt from the <c>CommandCenter.Core.Prompts</c> catalog —
 /// the single prompt authority. This is the catalog's first runtime consumer.
 /// <para>
-/// The exact text of <c>.agents/plan.md</c> fills the <c>{plan}</c> hole; the current handoff
-/// (<c>.agents/handoffs/handoff.md</c>) fills <c>{handoff}</c>; and the exact raw text of
-/// <c>.agents/decisions/decisions.md</c> fills <c>{decisions}</c> on continuation. The prompt carries
+/// The exact text of <c>.agents/plan.md</c> fills the <c>{plan}</c> hole; the optional
+/// <c>.agents/details.md</c> addendum fills the <c>{details}</c> hole directly after it (empty when
+/// absent); and the exact raw text of <c>.agents/decisions/decisions.md</c> fills <c>{decisions}</c> on
+/// continuation. The prompt carries
 /// the verbatim artifacts the agent reads — no composition, no structured rendering.
 /// </para>
 /// <para>
@@ -33,6 +34,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
     private static readonly string[] ArtifactRoleOrder =
     [
         "Plan",
+        "Details",
         "OperationalContext",
         "CurrentHandoff",
         "Decisions"
@@ -43,6 +45,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         // {plan} is the exact text of .agents/plan.md; {handoff} the exact current handoff; {decisions}
         // the exact raw .agents/decisions/decisions.md. Operational context is excluded by design.
         string? plan = ContentForRole(context.Artifacts, "Plan");
+        string? details = ContentForRole(context.Artifacts, "Details");
         string? handoff = ContentForRole(context.Artifacts, "CurrentHandoff");
         string? decisions = ContentForRole(context.Artifacts, "Decisions");
 
@@ -54,8 +57,8 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         // first-milestone start (StartExecution has no handoff/decisions holes).
         bool continuing = handoff is not null;
         string text = continuing
-            ? ContinueExecution.Render(plan, decisions)
-            : StartExecution.Render(plan);
+            ? ContinueExecution.Render(plan, details, decisions)
+            : StartExecution.Render(plan, details);
 
         return new ExecutionPrompt
         {

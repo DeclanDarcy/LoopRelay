@@ -990,9 +990,10 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
             // 4) Start execution — Operational, Medium, one-shot. Writes the live handoff.
             ExecutionStream.Publish("phase", Serialize(new { phase = "StartExecution" }));
+            string? startDetails = await ResolveDetailsAsync(repository).ConfigureAwait(false);
             AgentTurnResult start = await agentRuntime.RunOneShotAsync(
                 BuildOperationalSpec(repository, AgentEffortLevel.Medium, identifier: null),
-                StartExecution.Render(plan),
+                StartExecution.Render(plan, startDetails),
                 chunk => PublishExecutionDelta("StartExecution", chunk),
                 cancellationToken).ConfigureAwait(false);
             executionProvenance.Add(BuildStartExecutionProvenance());
@@ -1109,6 +1110,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             // The cached plan under the reserved {repositoryId}:Plan slot (m4 cached it at Execute Plan), with a
             // fall back to the live plan artifact so a restarted orchestrator still continues against the plan.
             string plan = await ResolvePlanAsync(repository).ConfigureAwait(false);
+            string? details = await ResolveDetailsAsync(repository).ConfigureAwait(false);
 
             // The latest execution handoff, resolved from DISK (restart-safe): live handoff.md else newest rotated.
             (string? handoff, string? handoffPath) = await ReadLatestHandoffAsync(repository).ConfigureAwait(false);
@@ -1126,7 +1128,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             ExecutionStream.Publish("phase", Serialize(new { phase = "ContinueExecution" }));
             AgentTurnResult continuation = await agentRuntime.RunOneShotAsync(
                 BuildOperationalSpec(repository, AgentEffortLevel.Medium, identifier: null),
-                ContinueExecution.Render(plan, decisions),
+                ContinueExecution.Render(plan, details, decisions),
                 chunk => PublishExecutionDelta("ContinueExecution", chunk),
                 cancellationToken).ConfigureAwait(false);
             executionProvenance.Add(BuildContinueExecutionProvenance(handoffPath!));
@@ -1340,6 +1342,15 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
         string planPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan);
         return await artifactStore.ReadAsync(planPath).ConfigureAwait(false) ?? string.Empty;
+    }
+
+    // The optional .agents/details.md addendum, read from DISK (null when absent -> rendered as empty by the
+    // prompt), injected directly after the plan into the StartExecution/ContinueExecution {details} hole. Same
+    // existence-guarded disk read as ResolvePlanAsync's fallback; there is no cache slot for it.
+    private async Task<string?> ResolveDetailsAsync(Repository repository)
+    {
+        string detailsPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Details);
+        return await artifactStore.ReadAsync(detailsPath).ConfigureAwait(false);
     }
 
     // Next rotated decision number = (highest existing decisions.000N.md) + 1, computed from DISK so a restarted

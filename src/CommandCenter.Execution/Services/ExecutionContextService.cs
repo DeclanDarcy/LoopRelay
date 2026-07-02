@@ -18,6 +18,9 @@ public sealed class ExecutionContextService(
     IDecisionProjectionService? decisionProjectionService = null) : IExecutionContextService
 {
     private const string PlanPath = ".agents/plan.md";
+    // Optional plan companion, loaded right after the plan and injected into the {details} hole. Existence-guarded
+    // (like the other optional artifacts) so a repository without a details.md is unaffected.
+    private const string DetailsPath = ".agents/details.md";
     private const string OperationalContextPath = ".agents/operational_context.md";
     private const string CurrentHandoffPath = ".agents/handoffs/handoff.md";
 
@@ -48,6 +51,7 @@ public sealed class ExecutionContextService(
         }
 
         await AddRequiredArtifactAsync(repository, artifacts, "Plan", PlanPath, validationErrors);
+        await AddOptionalArtifactAsync(repository, artifacts, "Details", DetailsPath, missingOptionalArtifacts);
 
         await AddOptionalArtifactAsync(repository, artifacts, "OperationalContext", OperationalContextPath, missingOptionalArtifacts);
         await AddOptionalArtifactAsync(repository, artifacts, "CurrentHandoff", CurrentHandoffPath, missingOptionalArtifacts);

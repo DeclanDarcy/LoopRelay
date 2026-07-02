@@ -9,8 +9,8 @@ namespace CommandCenter.Cli;
 /// <summary>
 /// One execution slice over a HELD-OPEN operational codex session (app-server JSON-RPC over stdio, so the
 /// second turn sends only its delta instead of re-sending the whole transcript). Two user-input turns:
-/// (1) the work turn — StartExecution renders the plan alone on the FIRST execution (no decisions.md yet: the
-/// fresh, self-contained plan is context enough), else ContinueExecution renders plan + decisions.md (the
+/// (1) the work turn — StartExecution renders the plan (plus its optional .agents/details.md addendum) on the
+/// FIRST execution (no decisions.md yet), else ContinueExecution renders plan + details + decisions.md (the
 /// execution agent's system prompt the decision session produced this slice) — and is NOT asked for a handoff;
 /// then (2) GenerateHandoff writes .agents/handoffs/handoff.md from the in-session context of turn 1.
 /// The session is opened per slice and closed in a finally; the new handoff is verified after turn 2.
@@ -21,6 +21,10 @@ internal sealed class ExecutionStep(
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         string? plan = await artifacts.ReadPlanAsync();
+        // .agents/details.md is the optional plan addendum, injected directly after the plan in every execution
+        // prompt (read like the plan: null when absent, rendered as empty) so a non-self-contained plan carries
+        // its detail inline and the agent never has to chase the file on disk.
+        string? details = await artifacts.ReadDetailsAsync();
 
         // First execution of a fresh plan (no decisions.md) starts straight from the plan via StartExecution —
         // the self-contained plan is context enough to get going. Once a decision has produced decisions.md (the
@@ -32,12 +36,12 @@ internal sealed class ExecutionStep(
         if (hasDecisions)
         {
             (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
-            executionPrompt = ContinueExecution.Render(plan, decisions);
+            executionPrompt = ContinueExecution.Render(plan, details, decisions);
             workPhase = "Execution: ContinueExecution";
         }
         else
         {
-            executionPrompt = StartExecution.Render(plan);
+            executionPrompt = StartExecution.Render(plan, details);
             workPhase = "Execution: StartExecution";
         }
 

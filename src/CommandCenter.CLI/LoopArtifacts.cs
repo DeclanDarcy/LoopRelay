@@ -30,6 +30,9 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
 
     public Task<string?> ReadPlanAsync() => ReadAsync(OrchestrationArtifactPaths.Plan);
 
+    /// <summary>The optional plan companion (<c>.agents/details.md</c>): null when absent, mirroring <see cref="ReadPlanAsync"/>.</summary>
+    public Task<string?> ReadDetailsAsync() => ReadAsync(OrchestrationArtifactPaths.Details);
+
     public Task<string?> RotateLiveHandoffAsync() => RotateAsync(
         OrchestrationArtifactPaths.LiveHandoff,
         OrchestrationArtifactPaths.HandoffsDirectory,

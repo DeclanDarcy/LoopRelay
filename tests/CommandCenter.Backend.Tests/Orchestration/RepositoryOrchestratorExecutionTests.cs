@@ -57,7 +57,7 @@ public sealed class RepositoryOrchestratorExecutionTests
 
         // The two operational one-shots: ExtractMilestones (xhigh) then StartExecution (medium), both Operational + workspace-write.
         Assert.Equal(ExtractMilestones.Text, runtime.OneShotPrompts[0]);
-        Assert.Equal(StartExecution.Render(PlanBody), runtime.OneShotPrompts[1]);
+        Assert.Equal(StartExecution.Render(PlanBody, null), runtime.OneShotPrompts[1]);
         Assert.Equal(SessionRole.OperationalExecution, runtime.OneShotSpecs[0].Role);
         Assert.True(runtime.OneShotSpecs[0].Sandbox.CanWriteWorkspace);
         Assert.Equal("xhigh", runtime.OneShotSpecs[0].Effort.Identifier);
@@ -139,7 +139,7 @@ public sealed class RepositoryOrchestratorExecutionTests
         // The continuation one-shot (the first/only one-shot here) opened at medium with no identifier.
         Assert.Equal(AgentEffortLevel.Medium, runtime.OneShotSpecs[0].Effort.Level);
         Assert.Null(runtime.OneShotSpecs[0].Effort.Identifier);
-        Assert.Equal(ContinueExecution.Render(PlanBody, "DECISIONS ONE"), runtime.OneShotPrompts[0]);
+        Assert.Equal(ContinueExecution.Render(PlanBody, null, "DECISIONS ONE"), runtime.OneShotPrompts[0]);
     }
 
     [Fact]

@@ -46,7 +46,7 @@ public sealed class RepositoryOrchestratorContinuationTests
 
         // The continuation rendered the cached plan and the submitted decisions — the two inputs ContinueExecution
         // now renders ({handoff} was removed from the template; the handoff is still read as continuation context).
-        Assert.Equal(ContinueExecution.Render(Plan, "DECISIONS ONE"), runtime.OneShotPrompts[0]);
+        Assert.Equal(ContinueExecution.Render(Plan, null, "DECISIONS ONE"), runtime.OneShotPrompts[0]);
     }
 
     [Fact]
