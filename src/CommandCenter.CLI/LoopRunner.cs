@@ -34,30 +34,37 @@ internal sealed class LoopRunner(
 
                 await artifacts.EnsureOperationalContextAsync();
 
-                // ---- Decision-first (unless a prior decisions.md is still pending) ----
-                // Normally the decision session produces decisions.md — the next execution agent's system prompt.
-                // On the first pass (no handoff yet) it generates the first agent's prompt from scratch;
-                // afterwards it folds the previous execution session's handoff into the next agent's prompt.
+                // ---- Sequence this slice: execution-first, decision-first, or skip-to-execution ----
+                // The decision session only earns its keep once there is a handoff to fold into the next agent's
+                // system prompt. So the sequencing depends on state:
                 //
-                // But if an unrotated decisions.md already exists (a prior slice produced it and was interrupted
-                // before its execution consumed+retired it), skip the expensive decision session and execute that
-                // pending decisions.md directly — same flow, just this portion skipped. The handoff rotation is
-                // skipped too. A live handoff can linger here (the prior slice crashed before rotating the handoff
-                // it consumed, or after execution wrote a fresh one); the skip path intentionally leaves it for
-                // execution's turn-2 write to overwrite rather than archiving it. That costs nothing at runtime:
-                // the only handoff consumer reads the LATEST handoff, a consumed handoff's content already lives in
-                // the decisions snapshot it was folded into (and in the submodule's git history), and the numbered
-                // handoff sequence tolerates gaps — so a missing numbered entry is cosmetic, not lost state.
+                //  * A pending (unrotated) decisions.md — a prior slice produced it and was interrupted before its
+                //    execution consumed+retired it — is executed directly; the decision session is skipped (same
+                //    flow, just this portion skipped). Handoff rotation is skipped too. A live handoff can linger
+                //    here (the prior slice crashed before rotating the handoff it consumed, or after execution wrote
+                //    a fresh one); the skip path intentionally leaves it for execution's turn-2 write to overwrite
+                //    rather than archiving it. That costs nothing: the only handoff consumer reads the LATEST
+                //    handoff, a consumed handoff's content already lives in the decisions snapshot it was folded
+                //    into (and in git), and the numbered handoff sequence tolerates gaps — a missing entry is
+                //    cosmetic, not lost state.
+                //  * No handoff yet (the first pass over a fresh plan) runs EXECUTION FIRST, straight from the plan
+                //    via StartExecution — the self-contained plan is context enough to get going, and there is no
+                //    prior session to adapt from, so no decision session runs and no decisions.md is produced.
+                //  * Otherwise (a handoff exists) the decision session folds that handoff into decisions.md — the
+                //    next agent's system prompt — and then execution continues from it.
                 if (await artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions))
                 {
                     console.Info("Found an unrotated decisions.md — skipping the decision session and executing it directly.");
+                }
+                else if ((await artifacts.ReadLatestHandoffAsync()).Content is null)
+                {
+                    console.Info("No handoff yet — starting the first execution directly from the plan.");
                 }
                 else
                 {
                     await decision.RunAsync(cancellationToken);
 
-                    // Archive the handoff the decision just consumed so execution writes onto a clean slate
-                    // (a no-op on the first pass, when no handoff exists yet).
+                    // Archive the handoff the decision just consumed so execution writes onto a clean slate.
                     await artifacts.RotateLiveHandoffAsync();
                 }
 

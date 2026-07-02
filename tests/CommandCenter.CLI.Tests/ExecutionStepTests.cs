@@ -21,9 +21,9 @@ public class ExecutionStepTests
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
 
-    // Execution always continues from decisions.md (the execution agent's system prompt the decision session
-    // produced before this slice): ContinueExecution renders plan + decisions, then a SECOND GenerateHandoff turn
-    // (on the same held-open session) writes handoff.md, which is verified afterwards. There is no StartExecution.
+    // With a decisions.md present (the execution agent's system prompt the decision session produced this slice),
+    // execution CONTINUES from it: ContinueExecution renders plan + decisions, then a SECOND GenerateHandoff turn
+    // (on the same held-open session) writes handoff.md, which is verified afterwards.
     [Fact]
     public async Task Run_ContinueExecutionWithPlanAndDecisions_ThenGenerateHandoff_WritesHandoff_Verifies()
     {
@@ -50,6 +50,37 @@ public class ExecutionStepTests
         Assert.True(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff)));
         Assert.Contains("work done", con.Messages);
         Assert.Contains("handoff done", con.Messages);
+        Assert.Equal(1, rt.OpenSessions);
+        Assert.Equal(1, rt.ClosedSessions);
+    }
+
+    // With NO decisions.md (the first execution of a fresh plan), the work turn uses StartExecution — the plan
+    // alone is context enough — then the same held-open session writes handoff.md, verified afterwards.
+    [Fact]
+    public async Task Run_NoDecisions_StartsFromPlanViaStartExecution_ThenGenerateHandoff()
+    {
+        var (step, rt, store, _, repo, con) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN-CONTENT");
+        // No decisions.md is written — this is the first execution.
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
+        {
+            Assert.Contains("PLAN-CONTENT", prompt);                        // StartExecution.Render(plan)
+            Assert.Contains("start executing the first milestone", prompt);
+            Assert.DoesNotContain("continue executing", prompt);           // not the ContinueExecution prompt
+            return Turns.Completed("work done");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
+        {
+            Assert.Contains("Write .agents/handoffs/handoff.md", prompt);   // GenerateHandoff.Text
+            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF-1").Wait();
+            return Turns.Completed("handoff done");
+        }));
+
+        await step.RunAsync(CancellationToken.None);
+
+        Assert.True(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff)));
+        Assert.Contains("work done", con.Messages);
         Assert.Equal(1, rt.OpenSessions);
         Assert.Equal(1, rt.ClosedSessions);
     }

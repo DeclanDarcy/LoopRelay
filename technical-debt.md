@@ -9,6 +9,39 @@ impact of leaving it, and the path to resolve it. Newest section first.
 
 ---
 
+## 2026-07-01 — CLI: execution-first on the first pass (`StartExecution` revived)
+
+Background: the CLI `LoopRunner` was re-sequenced so that on the FIRST pass — when no handoff
+exists yet — execution runs FIRST, straight from the self-contained plan via `StartExecution`,
+with no decision session and no `decisions.md`. The decision session now runs only once a
+handoff exists, always folding it via `GenerateSystemPromptForNextExecutionAgent`. This revives
+`StartExecution` in the CLI (`ExecutionStep` renders it when there is no live `decisions.md`) —
+so it is no longer CLI-dead (see the correction to TD-6 below) — and, symmetrically, retires the
+first-pass decision prompt.
+
+### TD-9 — `GenerateSystemPromptForFirstExecutionAgent` is now CLI-dead but retained
+
+**Deferred (obsolete, not deleted).** With execution-first on the first pass, the CLI decision
+session only runs when a handoff is present, so it always renders
+`GenerateSystemPromptForNextExecutionAgent.Render(handoff)`. The first-pass branch —
+`GenerateSystemPromptForFirstExecutionAgent.Text` — is therefore **never reached from the loop**.
+
+**Why deferred:** removing it means deleting the `handoff is null` branch in
+`DecisionSession.BuildProposalPromptAsync`, its unit test
+(`DecisionSessionTests.Run_FirstPass_NoHandoff_...`), and the `.prompt` (plus its provenance /
+`SourceHash` wiring) — a small but real change the maintainer may prefer to keep as a defensive
+path rather than delete now.
+
+**Impact:** one prompt template in `CommandCenter.Core/Prompts` that the active loop never
+renders (the CLI has no first-pass decision anymore). Unlike TD-6's `GetNextDecisions`, no
+backend path consumes it either — it was CLI-only from the start — so it is dead everywhere.
+
+**Resolution:** delete `GenerateSystemPromptForFirstExecutionAgent.prompt`, the `handoff is
+null` branch in `DecisionSession.BuildProposalPromptAsync`, and its unit test once the
+first-pass decision path is confirmed permanently unused.
+
+---
+
 ## 2026-07-01 — `.agents/` submodule: commit + push before codex (CLI only)
 
 Background: `.agents/` was converted to a git submodule in every repo. The CLI loop
@@ -61,28 +94,29 @@ had its `{handoff}` hole **removed** (its `Render` is now `(plan, decisions)`), 
 handoff now reaches the next agent through the generated system prompt, not the execution
 prompt. Scope was CLI-only; the backend/legacy paths were adapted just enough to stay green.
 
-### TD-6 — `GetNextDecisions` and `StartExecution` prompts are now CLI-dead but retained
+### TD-6 — `GetNextDecisions` prompt is now CLI-dead but retained
 
-**Deferred (obsolete, not deleted).** After the decision-first change the CLI no longer
-renders `GetNextDecisions.prompt` or `StartExecution.prompt`. They are **kept** solely
-because the two legacy backend paths still consume them:
+**Deferred (obsolete, not deleted).** After the decision-first change the CLI no longer renders
+`GetNextDecisions.prompt` — it proposes via `GenerateSystemPromptFor{First,Next}ExecutionAgent`
+instead. It is **kept** solely because the legacy backend decision path still consumes it:
+`CommandCenter.Orchestration` → `RepositoryOrchestrator` renders `GetNextDecisions.Render(handoff)`.
 
-- `CommandCenter.Orchestration` → `RepositoryOrchestrator` renders `GetNextDecisions.Render(handoff)`
-  (decision proposal) and `StartExecution.Render(plan)` (Execute-Plan first turn).
-- `CommandCenter.Execution` → `ExecutionPromptBuilder` renders `StartExecution.Render(plan)`
-  for a first-milestone start.
+(`StartExecution` was also CLI-dead under decision-first, but the 2026-07-01 execution-first
+change **revived it in the CLI** — `ExecutionStep` renders `StartExecution.Render(plan)` on the
+first pass — so it is no longer dead anywhere and has been dropped from this item. The backend
+`RepositoryOrchestrator` / `ExecutionPromptBuilder` continue to render it too.)
 
-**Why deferred:** deleting them would break those paths, and the maintainer chose to leave
-the backend flow unchanged (see TD-1). Marking them obsolete here rather than deleting keeps
+**Why deferred:** deleting it would break the backend decision path, and the maintainer chose to
+leave the backend flow unchanged (see TD-1). Marking it obsolete here rather than deleting keeps
 the record without forcing the larger backend migration.
 
-**Impact:** two prompt templates in `CommandCenter.Core/Prompts` that the *active* (CLI) loop
-never renders. Provenance/tests still reference their `SourceHash`, so they cannot be removed
+**Impact:** one prompt template in `CommandCenter.Core/Prompts` that the *active* (CLI) loop
+never renders. Provenance/tests still reference its `SourceHash`, so it cannot be removed
 piecemeal.
 
-**Resolution:** delete `GetNextDecisions.prompt` + `StartExecution.prompt` (and their
-`ExecutionPromptBuilder`/`RepositoryOrchestrator` consumers + provenance) if/when the backend
-execution paths are retired (this is the same decision as TD-1's option (b)).
+**Resolution:** delete `GetNextDecisions.prompt` (and its `RepositoryOrchestrator` consumer +
+provenance) if/when the backend execution paths are retired (this is the same decision as TD-1's
+option (b)).
 
 ### TD-7 — Shared `ContinueExecution.prompt` lost `{handoff}`; docs and backend prompt-text drift
 

@@ -55,21 +55,20 @@ public class LoopRunnerTests
     }
 
     [Fact]
-    public async Task Run_FirstIteration_DecisionThenExecution_ThenCompletes()
+    public async Task Run_FirstIteration_NoHandoff_ExecutionFirstFromPlan_NoDecision_ThenCompletes()
     {
         var h = New();
         // milestone incomplete at first, becomes complete after the execution agent "checks the box".
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] task");
 
-        // Decision-first: the decision session proposes decisions.md (the first execution agent's system prompt,
-        // since no handoff exists yet — the operational context is folded into that one turn). THEN the execution
-        // session runs two turns off the same
-        // SessionTurns queue: turn 1 does the work (checks the milestone box, so the epic completes next
-        // LoopStart), turn 2 writes handoff.md.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        // First pass, no handoff yet: execution runs FIRST, straight from the plan via StartExecution — NO decision
+        // session. The execution session runs two turns off the SessionTurns queue: turn 1 does the work (checks the
+        // milestone box, so the epic completes next LoopStart), turn 2 writes handoff.md. No decisions.md is produced.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
         {
+            Assert.Contains("PLAN", prompt);                                   // StartExecution.Render(plan)
+            Assert.Contains("start executing the first milestone", prompt);
             s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] task").Wait();
             return Turns.Completed("executed");
         }));
@@ -82,19 +81,16 @@ public class LoopRunnerTests
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        // The decision proposal was persisted; execution then consumed and RETIRED the live decisions.md, so the
-        // numbered snapshot is where it survives (live is gone after the slice).
-        Assert.Equal("DECISIONS-1", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+        // No decision ran, so no decisions.md was produced (neither live nor a numbered snapshot).
         Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
-        // After one iteration: live handoff present (written by execution, rotated next loop only).
+        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+        // After one iteration: live handoff present (written by execution).
         Assert.True(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff)));
 
-        // The decision phase ran BEFORE the execution phase (the sequencing was swapped to decision-first).
+        // Execution ran with NO preceding decision phase.
         List<string> phases = Phases(h.Con);
-        int decisionIndex = phases.FindIndex(p => p.StartsWith("Decision"));
-        int executionIndex = phases.FindIndex(p => p.StartsWith("Execution"));
-        Assert.True(decisionIndex >= 0 && executionIndex >= 0, "both phases must run");
-        Assert.True(decisionIndex < executionIndex, "decision must precede execution");
+        Assert.DoesNotContain(phases, p => p.StartsWith("Decision"));
+        Assert.Contains(phases, p => p.StartsWith("Execution"));
     }
 
     [Fact]
@@ -173,6 +169,8 @@ public class LoopRunnerTests
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        // A handoff exists, so this slice is decision-first (a handoff is what the decision session folds in).
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-0");
 
         // No pending decisions.md, so the decision session runs (one proposal turn) and persists decisions.md; the
         // execution slice then consumes it and the loop retires the live file. Epic completes after one slice.
@@ -205,6 +203,9 @@ public class LoopRunnerTests
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        // A handoff exists, so this slice is decision-first — the decision produces the decisions.md whose survival
+        // across an execution failure this test pins.
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-0");
 
         // Decision succeeds (one proposal turn -> persists decisions.md); the execution work turn then fails.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
@@ -227,6 +228,9 @@ public class LoopRunnerTests
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        // A handoff exists from the start, so BOTH slices are decision-first (a fresh decision each), which is what
+        // this test pins — without it, slice 1 (no handoff) would be execution-first and run no decision.
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-0");
 
         // Slice 1: propose (DECISIONS-1) on the fresh process, execution work (does NOT complete the milestone) + handoff.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
@@ -300,7 +304,9 @@ public class LoopRunnerTests
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
-        // Decision runs first: the proposal turn fails -> DecisionSession throws -> Failed.
+        // A handoff exists, so this slice is decision-first; the decision's proposal turn fails ->
+        // DecisionSession throws -> Failed.
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-0");
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
@@ -314,8 +320,7 @@ public class LoopRunnerTests
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
-        // Decision succeeds (one proposal turn), then the execution work turn fails -> ExecutionStep throws -> Failed.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D")));
+        // First pass (no handoff): execution runs first from the plan; its work turn fails -> ExecutionStep throws -> Failed.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
@@ -330,6 +335,9 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         // The epic never completes: the milestone box stays unchecked for the whole run.
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        // A handoff exists from the start so EVERY iteration is decision-first (uniform decision+work+handoff),
+        // which the loop scripting below assumes.
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-init");
 
         // The parent working tree reports ONLY the `.agents` submodule gitlink every iteration (the
         // decisions/handoff churn now lives inside the submodule); the submodule reports its own dirty
@@ -367,7 +375,7 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
         using var cts = new CancellationTokenSource();
-        // The decision proposal turn (first SessionTurns entry, since decision now runs first) cancels mid-flight.
+        // First pass (no handoff) is execution-first, so the first execution turn cancels mid-flight.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
         {
             cts.Cancel();
@@ -410,7 +418,6 @@ public class LoopRunnerTests
             return FakeProcessRunner.Ok();
         };
 
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DEC")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
             timeline.Add("codex-exec");   // the execution work turn = "invoking codex"
@@ -472,7 +479,6 @@ public class LoopRunnerTests
             return FakeProcessRunner.Ok();
         };
 
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DEC")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
             timeline.Add("codex-exec");   // the execution work turn = "invoking codex"
@@ -521,8 +527,7 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
         DirtySubmoduleCleanParent(h);
 
-        // Decision succeeds (one proposal turn); the execution work turn fails -> ExecutionStep throws -> Failed.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D")));
+        // First pass (no handoff): execution runs first; its work turn fails -> ExecutionStep throws -> Failed.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
@@ -540,7 +545,7 @@ public class LoopRunnerTests
         DirtySubmoduleCleanParent(h);
 
         using var cts = new CancellationTokenSource();
-        // The decision proposal turn cancels mid-flight (before any pre-codex publish runs).
+        // First pass (no handoff) is execution-first, so the first execution turn cancels mid-flight.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
         {
             cts.Cancel();
@@ -561,8 +566,10 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
 
-        // Submodule dirty on a branch, but every push fails. The decision proposal turn fails first (-> Failed);
-        // the on-exit salvage then also fails to push and MUST be swallowed rather than masking the outcome.
+        // Submodule dirty on a branch, but every push fails. A handoff exists so this slice is decision-first; the
+        // decision proposal turn fails first (-> Failed) BEFORE any pre-codex publish, so the on-exit salvage is the
+        // only push — and it too fails and MUST be swallowed rather than masking the outcome.
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-0");
         h.Git.Handler = (wd, args) =>
         {
             bool submodule = wd.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);

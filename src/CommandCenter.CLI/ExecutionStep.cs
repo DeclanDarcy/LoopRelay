@@ -9,9 +9,10 @@ namespace CommandCenter.Cli;
 /// <summary>
 /// One execution slice over a HELD-OPEN operational codex session (app-server JSON-RPC over stdio, so the
 /// second turn sends only its delta instead of re-sending the whole transcript). Two user-input turns:
-/// (1) ContinueExecution renders plan + decisions.md (the execution agent's system prompt) and does the work,
-/// and is NOT asked for a handoff; then
-/// (2) GenerateHandoff writes .agents/handoffs/handoff.md from the in-session context of turn 1.
+/// (1) the work turn — StartExecution renders the plan alone on the FIRST execution (no decisions.md yet: the
+/// fresh, self-contained plan is context enough), else ContinueExecution renders plan + decisions.md (the
+/// execution agent's system prompt the decision session produced this slice) — and is NOT asked for a handoff;
+/// then (2) GenerateHandoff writes .agents/handoffs/handoff.md from the in-session context of turn 1.
 /// The session is opened per slice and closed in a finally; the new handoff is verified after turn 2.
 /// </summary>
 internal sealed class ExecutionStep(
@@ -20,12 +21,25 @@ internal sealed class ExecutionStep(
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         string? plan = await artifacts.ReadPlanAsync();
-        (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
 
-        // The decision session produces decisions.md (the execution agent's system prompt) before every
-        // execution slice, so execution always continues from it — there is no separate first-milestone
-        // StartExecution path, and the handoff is consumed by the decision session, not rendered here.
-        string executionPrompt = ContinueExecution.Render(plan, decisions);
+        // First execution of a fresh plan (no decisions.md) starts straight from the plan via StartExecution —
+        // the self-contained plan is context enough to get going. Once a decision has produced decisions.md (the
+        // execution agent's system prompt), execution CONTINUES from it. The handoff is consumed by the decision
+        // session, not rendered here.
+        bool hasDecisions = await artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions);
+        string executionPrompt;
+        string workPhase;
+        if (hasDecisions)
+        {
+            (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
+            executionPrompt = ContinueExecution.Render(plan, decisions);
+            workPhase = "Execution: ContinueExecution";
+        }
+        else
+        {
+            executionPrompt = StartExecution.Render(plan);
+            workPhase = "Execution: StartExecution";
+        }
 
         // The execution agent runs codex with full access (no sandbox): it needs to build, run tools, touch
         // git, and reach outside the workspace to do real work. This is the ONE session granted danger-full-access
@@ -37,7 +51,7 @@ internal sealed class ExecutionStep(
         try
         {
             // Turn 1 - do the work. The prompt no longer asks for a handoff.
-            console.Phase("Execution: ContinueExecution");
+            console.Phase(workPhase);
             var workRenderer = new ConsoleTurnRenderer(console);
             AgentTurnResult work = await session.RunTurnAsync(executionPrompt, workRenderer.Stream, cancellationToken);
             if (work.State != AgentTurnState.Completed)
