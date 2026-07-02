@@ -9,8 +9,12 @@ namespace CommandCenter.Agents.Services;
 /// <item><b>Persistent</b> → <c>codex … app-server --listen stdio://</c>: the held-open JSON-RPC
 /// transport driven by <see cref="CodexAppServerSession"/>. Sandbox/approval/effort are set per
 /// thread/turn in the protocol; the global flags set process-level defaults.</item>
-/// <item><b>OneShot</b> → <c>codex exec --json … -</c>: a single turn with the prompt piped on stdin,
-/// events streaming back as JSONL parsed by <see cref="CodexEventTurnBoundaryDetector"/>.</item>
+/// <item><b>OneShot</b> → <c>codex exec --json --skip-git-repo-check … -</c>: a single turn with the
+/// prompt piped on stdin, events streaming back as JSONL parsed by
+/// <see cref="CodexEventTurnBoundaryDetector"/>. <c>--skip-git-repo-check</c> is required because
+/// one-shot turns may run with <c>--cd</c> pointed at a temp sandbox workspace outside any trusted
+/// git repository — without the flag codex exits 1 immediately ("Not inside a trusted directory and
+/// --skip-git-repo-check was not specified") and the turn never runs.</item>
 /// </list>
 /// The removed <c>codex proto</c> subcommand no longer exists; held-open multi-turn is impossible
 /// with <c>exec</c> (each <c>exec</c> turn reads its prompt to stdin EOF and exits), which is why the
@@ -50,6 +54,9 @@ public static class CodexAgentArgumentBuilder
         {
             "exec",
             "--json",
+            // One-shots may target a temp sandbox --cd outside any trusted git repo; codex refuses to run
+            // there (exit 1, "Not inside a trusted directory") unless the trust check is skipped.
+            "--skip-git-repo-check",
             "--cd",
             workingDirectory,
             "-c",

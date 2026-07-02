@@ -256,10 +256,12 @@ public class LoopRunnerTests
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        // Both slices ran their OWN decision (skip never fired): two numbered snapshots, two Decision phases.
+        // Both slices ran their OWN decision (skip never fired): two numbered snapshots, two decision runs.
         Assert.Equal("DECISIONS-1", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
         Assert.Equal("DECISIONS-2", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(2))));
-        Assert.Equal(2, Phases(h.Con).Count(p => p.StartsWith("Decision")));
+        // Count the routing header (one per decision RUN) — each run also emits sub-phases such as
+        // "Decision: Propose", so a bare "Decision" prefix would over-count.
+        Assert.Equal(2, Phases(h.Con).Count(p => p.StartsWith("Decision (route=")));
         // Final decisions.md retired after the last slice's execution.
         Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
     }

@@ -35,6 +35,33 @@ public sealed class CodexAgentArgumentBuilderTests
         Assert.DoesNotContain("--sandbox", args); // exec path intentionally omits the sandbox flag
     }
 
+    // One-shot turns may run with --cd pointed at a temp sandbox workspace outside any trusted git
+    // repository; without --skip-git-repo-check codex exits 1 immediately ("Not inside a trusted
+    // directory and --skip-git-repo-check was not specified") and the turn never runs. The flag must
+    // precede the trailing positional "-" (the stdin prompt) or codex parses it as prompt input.
+    [Fact]
+    public void OneShotSkipsGitRepoTrustCheck_BeforeTheTrailingStdinPositional()
+    {
+        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
+            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
+            AgentSessionMode.OneShot);
+
+        Assert.Contains("--skip-git-repo-check", args);
+        Assert.Equal("-", args[^1]); // the positional stdin marker stays last
+    }
+
+    // The persistent/app-server path talks JSON-RPC from the repo itself — the trust check applies
+    // there and is intentionally NOT skipped.
+    [Fact]
+    public void PersistentDoesNotSkipGitRepoTrustCheck()
+    {
+        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
+            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
+            AgentSessionMode.Persistent);
+
+        Assert.DoesNotContain("--skip-git-repo-check", args);
+    }
+
     [Fact]
     public void PersistentBuildsAppServerStdioArgs()
     {

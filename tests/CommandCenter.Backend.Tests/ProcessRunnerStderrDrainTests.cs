@@ -77,4 +77,67 @@ public sealed class ProcessRunnerStderrDrainTests
             }
         }
     }
+
+    [Fact]
+    public async Task StartInteractiveAsync_RetainsStderrTailAndExitCode_WhenChildFails()
+    {
+        // Regression for the SILENT one-shot failure: codex refusing to run (stderr message, exit 1,
+        // nothing on stdout) used to leave no trace — the drain discarded stderr and nobody consulted
+        // the exit code. By the time the stdout line stream completes, the exit code and a bounded
+        // stderr tail must both be observable on the IAgentProcess.
+        string dir = Path.GetTempPath();
+        string scriptPath;
+        string file;
+        string[] args;
+
+        if (OperatingSystem.IsWindows())
+        {
+            scriptPath = Path.Combine(dir, $"fail-{Guid.NewGuid():N}.bat");
+            await File.WriteAllTextAsync(
+                scriptPath,
+                "@echo off\r\necho Not inside a trusted directory marker 1>&2\r\nexit /b 7\r\n");
+            file = "cmd.exe";
+            args = ["/c", scriptPath];
+        }
+        else
+        {
+            scriptPath = Path.Combine(dir, $"fail-{Guid.NewGuid():N}.sh");
+            await File.WriteAllTextAsync(
+                scriptPath,
+                "echo 'Not inside a trusted directory marker' 1>&2\nexit 7\n");
+            file = "/bin/sh";
+            args = [scriptPath];
+        }
+
+        IAgentProcess? process = null;
+        try
+        {
+            var runner = new ProcessRunner();
+            process = await runner.StartInteractiveAsync(file, args, dir);
+
+            await foreach (string _ in process.ReadOutputLinesAsync())
+            {
+            }
+
+            // Stream end must not race the exit-state capture: the exit code is already observable here.
+            Assert.Equal(7, process.ExitCode);
+            Assert.Contains("Not inside a trusted directory marker", process.ErrorSnapshot);
+        }
+        finally
+        {
+            if (process is not null)
+            {
+                await process.DisposeAsync();
+            }
+
+            try
+            {
+                File.Delete(scriptPath);
+            }
+            catch
+            {
+                // Best-effort cleanup of the temp script.
+            }
+        }
+    }
 }

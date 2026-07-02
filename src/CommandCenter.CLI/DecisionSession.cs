@@ -70,6 +70,9 @@ internal sealed class DecisionSession(
         (string? handoff, _) = await artifacts.ReadLatestHandoffAsync();
         string proposalPrompt = await BuildProposalPromptAsync(handoff);
 
+        // Own phase header so post-transfer proposal output no longer prints under the last
+        // "Decision: Transfer/…" header.
+        console.Phase("Decision: Propose");
         var proposalRenderer = new ConsoleTurnRenderer(console);
         AgentTurnResult proposed = await session.RunTurnAsync(
             proposalPrompt, proposalRenderer.Stream, cancellationToken);
@@ -77,7 +80,8 @@ internal sealed class DecisionSession(
         if (proposed.State != AgentTurnState.Completed)
         {
             await CloseAsync();
-            throw new LoopStepException($"Decision turn ended in state {proposed.State}.");
+            throw new LoopStepException(WithDiagnostics(
+                $"Decision turn ended in state {proposed.State}.", proposed.Diagnostics));
         }
 
         // The process now holds the operational context (delivered inline in this turn), so subsequent proposals
@@ -135,13 +139,17 @@ internal sealed class DecisionSession(
     private async Task TransferAsync(CancellationToken cancellationToken)
     {
         console.Phase("Decision: Transfer/ProduceOperationalDelta");
+        var deltaRenderer = new ConsoleTurnRenderer(console);
         AgentTurnResult delta = await session!.RunTurnAsync(
-            ProduceOperationalDelta.Text, new ConsoleTurnRenderer(console).Stream, cancellationToken);
+            ProduceOperationalDelta.Text, deltaRenderer.Stream, cancellationToken);
         if (delta.State != AgentTurnState.Completed)
         {
             await CloseAsync();
-            throw new LoopStepException($"Operational-delta turn ended in state {delta.State}.");
+            throw new LoopStepException(WithDiagnostics(
+                $"Operational-delta turn ended in state {delta.State}.", delta.Diagnostics));
         }
+
+        deltaRenderer.EchoIfSilent(delta.Output);
 
         await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, delta.Output);
 
@@ -202,15 +210,19 @@ internal sealed class DecisionSession(
         await artifacts.WriteAbsoluteAsync(sandboxContextPath, currentContext);
         await artifacts.WriteAbsoluteAsync(sandboxDeltaPath, deltaOutput);
 
+        var updateRenderer = new ConsoleTurnRenderer(console);
         AgentTurnResult update = await runtime.RunOneShotAsync(
             AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh", workingDirectory: sandbox.RootPath),
             UpdateOperationalContext.Text,
-            new ConsoleTurnRenderer(console).Stream,
+            updateRenderer.Stream,
             cancellationToken);
         if (update.State != AgentTurnState.Completed)
         {
-            throw new LoopStepException($"Update-operational-context turn ended in state {update.State}.");
+            throw new LoopStepException(WithDiagnostics(
+                $"Update-operational-context turn ended in state {update.State}.", update.Diagnostics));
         }
+
+        updateRenderer.EchoIfSilent(update.Output);
 
         if (!await artifacts.ExistsAbsoluteAsync(sandboxContextPath))
         {
@@ -218,6 +230,19 @@ internal sealed class DecisionSession(
         }
 
         string evolved = await artifacts.ReadAbsoluteAsync(sandboxContextPath) ?? string.Empty;
+
+        // An existence check alone is self-satisfied — the CLI seeded that very file above. A turn that
+        // "completed" without touching the context (e.g. the agent never ran the rewrite) means the
+        // operational delta was NOT applied; failing here, BEFORE the copy-back (and thus before
+        // TransferAsync archives the delta), keeps the live operational_delta.md around for a retry
+        // instead of consuming it unapplied. (No such guard on the optimize step — a no-op
+        // optimization is legitimate.)
+        if (string.Equals(evolved, currentContext, StringComparison.Ordinal))
+        {
+            throw new LoopStepException(
+                "evolution left operational_context.md unchanged — the operational delta was not applied");
+        }
+
         await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalContext, evolved); // copy the evolved context back into the repo
         // Size-health is recorded by the optimization pass that follows — one measurement per transfer, on the
         // final revision the next proposal actually reads.
@@ -253,15 +278,19 @@ internal sealed class DecisionSession(
             }
         }
 
+        var optimizeRenderer = new ConsoleTurnRenderer(console);
         AgentTurnResult optimize = await runtime.RunOneShotAsync(
             AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh", workingDirectory: sandbox.RootPath),
             OptimizeOperationalDocuments.Text,
-            new ConsoleTurnRenderer(console).Stream,
+            optimizeRenderer.Stream,
             cancellationToken);
         if (optimize.State != AgentTurnState.Completed)
         {
-            throw new LoopStepException($"Optimize-operational-documents turn ended in state {optimize.State}.");
+            throw new LoopStepException(WithDiagnostics(
+                $"Optimize-operational-documents turn ended in state {optimize.State}.", optimize.Diagnostics));
         }
+
+        optimizeRenderer.EchoIfSilent(optimize.Output);
 
         if (!await artifacts.ExistsAbsoluteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext)))
         {
@@ -332,6 +361,13 @@ internal sealed class DecisionSession(
             ? measuredCost
             : transferCost + ((measuredCost - transferCost) / transferCount);
     }
+
+    // A failed turn's Diagnostics (the codex process's retained stderr tail) rides along in the thrown
+    // message so the actual refusal/error text reaches the operator instead of a bare turn state.
+    private static string WithDiagnostics(string message, string? diagnostics) =>
+        string.IsNullOrWhiteSpace(diagnostics)
+            ? message
+            : $"{message} Agent stderr (tail):\n{diagnostics}";
 
     private async Task CloseAsync()
     {

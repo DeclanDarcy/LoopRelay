@@ -77,8 +77,8 @@ internal static class Turns
     public static AgentTurnResult Completed(string output) =>
         new(0, AgentTurnState.Completed, output, new AgentTokenUsage(0, 0));
 
-    public static AgentTurnResult Failed(string output = "boom") =>
-        new(0, AgentTurnState.Failed, output, new AgentTokenUsage(0, 0));
+    public static AgentTurnResult Failed(string output = "boom", string? diagnostics = null) =>
+        new(0, AgentTurnState.Failed, output, new AgentTokenUsage(0, 0), diagnostics);
 }
 
 internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime

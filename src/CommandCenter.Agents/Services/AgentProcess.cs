@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text;
 using CommandCenter.Agents.Abstractions;
 using CommandCenter.Agents.Models;
 
@@ -7,8 +8,20 @@ namespace CommandCenter.Agents.Services;
 
 internal sealed class AgentProcess(Process process) : IAgentProcess
 {
+    /// <summary>How much of the standard-error stream is retained for diagnostics (last-writer-wins tail).</summary>
+    private const int ErrorTailCapacity = 8192;
+
+    /// <summary>
+    /// How long to wait, after stdout EOF, for the exit code to become observable. Stdout EOF means the
+    /// child is exiting (or has closed its output), so this is a formality that closes a small race —
+    /// it is bounded so a pathological child that closes stdout but lingers cannot stall the stream.
+    /// </summary>
+    private static readonly TimeSpan ExitCaptureTimeout = TimeSpan.FromSeconds(5);
+
     private readonly TaskCompletionSource completion =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly object errorTailLock = new();
+    private readonly StringBuilder errorTail = new();
     private bool disposed;
     private bool inputCompleted;
     private Task? errorDrain;
@@ -30,6 +43,22 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
 
     public Task Completion => completion.Task;
 
+    /// <summary>
+    /// The retained tail (last <see cref="ErrorTailCapacity"/> chars) of everything the drain read from
+    /// standard error, or null when nothing was written. Thread-safe: the drain task appends while a
+    /// session may read after stream end.
+    /// </summary>
+    public string? ErrorSnapshot
+    {
+        get
+        {
+            lock (errorTailLock)
+            {
+                return errorTail.Length == 0 ? null : errorTail.ToString();
+            }
+        }
+    }
+
     internal StreamReader StandardOutput => process.StandardOutput;
 
     internal StreamReader StandardError => process.StandardError;
@@ -44,7 +73,9 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
     /// A redirected stream that nobody reads deadlocks the child once it writes past the buffer (a few KB);
     /// codex's non-JSON <c>exec</c> output is verbose enough to hit this on a real prompt, which wedges the
     /// whole turn (the turn completes only when stdout ends, and a blocked child can never reach that).
-    /// The content is discarded — stdout carries the turn output; this exists purely to keep the pipe moving.
+    /// A bounded tail of the content is retained (exposed via <see cref="ErrorSnapshot"/>) so a failed
+    /// turn can surface the child's error output — e.g. codex's "Not inside a trusted directory" refusal —
+    /// instead of silently discarding it; the rest still exists purely to keep the pipe moving.
     /// </summary>
     public void StartErrorDrain()
     {
@@ -55,14 +86,32 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
     {
         try
         {
+            // Capture the reader once: Process.Dispose nulls the StandardError property (making the
+            // getter throw mid-drain) but does not close a sync-mode reader someone already holds, so
+            // a cached reference can still drain the final buffered stderr to EOF after teardown.
+            StreamReader reader = process.StandardError;
             char[] buffer = new char[4096];
-            while (await process.StandardError.ReadAsync(buffer.AsMemory()).ConfigureAwait(false) > 0)
+            int read;
+            while ((read = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) > 0)
             {
+                AppendErrorTail(buffer.AsSpan(0, read));
             }
         }
         catch
         {
             // The process exited or the stream closed during teardown — nothing left to drain.
+        }
+    }
+
+    private void AppendErrorTail(ReadOnlySpan<char> chunk)
+    {
+        lock (errorTailLock)
+        {
+            errorTail.Append(chunk);
+            if (errorTail.Length > ErrorTailCapacity)
+            {
+                errorTail.Remove(0, errorTail.Length - ErrorTailCapacity);
+            }
         }
     }
 
@@ -102,6 +151,61 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
         while (await process.StandardOutput.ReadLineAsync(cancellationToken) is { } line)
         {
             yield return line;
+        }
+
+        // Consumers treat stream end as the turn terminal and immediately consult ExitCode /
+        // ErrorSnapshot, but stdout EOF can precede the exit code becoming observable by a beat.
+        // Close that race before the enumeration completes.
+        await CaptureExitAfterOutputEndAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Bounded wait for the exit code (and the stderr drain, when running) after stdout EOF, so both
+    /// are reliably observable by the time the line stream completes. Caller cancellation propagates;
+    /// the timeout (a child that closed stdout but lingers) leaves <see cref="ExitCode"/> null.
+    /// </summary>
+    private async Task CaptureExitAfterOutputEndAsync(CancellationToken cancellationToken)
+    {
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        bounded.CancelAfter(ExitCaptureTimeout);
+
+        // The exit wait and the drain settle are guarded SEPARATELY: the exit observer can dispose
+        // the Process concurrently (it captures ExitCode/State first), and the resulting throw here
+        // must not skip the drain settle below — otherwise ErrorSnapshot is read while the drain may
+        // still be appending the final buffered stderr chunk, truncating the diagnostics.
+        try
+        {
+            if (ExitCode is null)
+            {
+                await process.WaitForExitAsync(bounded.Token).ConfigureAwait(false);
+                CaptureExitStateIfAvailable();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Rethrow only genuine caller cancellation; a lapsed bounded wait is non-fatal.
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch
+        {
+            // The exit observer disposed the process during teardown — it captured the exit state
+            // (ExitCode/State) before disposing, so there is nothing further to observe here.
+        }
+
+        if (errorDrain is { } drain)
+        {
+            try
+            {
+                // The process has exited (or was torn down), so stderr EOF is imminent — settle the
+                // tail before it is read. The drain never faults (it swallows its own exceptions), so
+                // only the bounded wait can throw here.
+                await drain.WaitAsync(bounded.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Rethrow only genuine caller cancellation; a lapsed bounded wait is non-fatal.
+                cancellationToken.ThrowIfCancellationRequested();
+            }
         }
     }
 

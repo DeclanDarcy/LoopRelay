@@ -9,6 +9,44 @@ impact of leaving it, and the path to resolve it. Newest section first.
 
 ---
 
+## 2026-07-02 — Transfer one-shots: trust-check fix, loud failures, unchanged-context guard
+
+Background: the CLI transfer's `UpdateOperationalContext` + `OptimizeOperationalDocuments`
+codex one-shots never actually ran — `codex exec --json --cd <tempSandboxDir> … -` exited 1
+("Not inside a trusted directory and --skip-git-repo-check was not specified"), the stderr was
+discarded, stream end was mapped to Completed without consulting the exit code, and the
+existence post-check was self-satisfied (the CLI seeded the file), so the delta was archived
+unapplied. Fixed by (1) adding `--skip-git-repo-check` to the shared one-shot argument builder,
+(2) retaining a bounded stderr tail + failing one-shot turns on nonzero exit (surfaced as
+`AgentTurnResult.Diagnostics`) in the shared `CommandCenter.Agents` components, and (4, CLI
+only) a `DecisionSession` guard that fails the transfer — before the delta archive — when the
+evolved sandbox `operational_context.md` comes back byte-identical to the seeded content.
+
+### TD-11 — Backend `RepositoryOrchestrator` sandboxed evolution lacks the unchanged-context guard
+
+**Deferred.** The backend `RepositoryOrchestrator`'s sandboxed context evolution gains fixes
+(1)–(2) automatically through the shared `CommandCenter.Agents` components (the one-shot arg
+builder, the exit-code-aware one-shot completion, and the stderr-tail diagnostics), but it has
+no equivalent of the CLI `DecisionSession.EvolveOperationalContextAsync` unchanged-context
+guard: an evolution one-shot that completes without modifying the seeded
+`operational_context.md` still passes the backend's existence check and the delta is archived
+unapplied.
+
+**Why deferred:** CLI-only scope for this fix set; the backend transfer publishes
+decision-stream phases and adding a new failure surface there touches provenance wiring,
+cert tests, and possibly the UI transfer-phase allowlist (same coupling that deferred TD-10).
+
+**Impact:** a silent no-op evolution on the backend path (e.g. a future codex regression that
+completes without writing) would still consume the operational delta unapplied; the CLI loop
+now fails loudly in that case.
+
+**Resolution:** mirror the CLI guard into `RepositoryOrchestrator`'s evolution step — compare
+the evolved sandbox `operational_context.md` against the pre-seeded content and fail the
+transfer before the delta archival when byte-identical (a no-op OPTIMIZATION stays legitimate,
+as in the CLI).
+
+---
+
 ## 2026-07-02 — CLI: post-evolution operational-documents optimization (Transfer)
 
 Background: the CLI Transfer now runs a second sandboxed one-shot immediately after

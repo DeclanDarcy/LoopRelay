@@ -92,7 +92,10 @@ public sealed class AgentSession : IAgentSession
                 turnIndex,
                 completed ? AgentTurnState.Completed : AgentTurnState.Failed,
                 output,
-                usage);
+                usage,
+                // Failure-only diagnostics: the retained stderr tail explains WHY the process failed
+                // (e.g. codex's "Not inside a trusted directory" refusal) instead of a bare state.
+                completed ? null : process.ErrorSnapshot);
         }
         finally
         {
@@ -196,8 +199,12 @@ public sealed class AgentSession : IAgentSession
             }
         }
 
-        // Stream ended: a normal terminal for one-shot, an unexpected exit for persistent.
-        return (output.ToString(), null, mode == AgentSessionMode.OneShot);
+        // Stream ended: the normal terminal for one-shot — but only when the process actually
+        // SUCCEEDED. A one-shot that exits nonzero without emitting a boundary (e.g. codex refusing
+        // to run at all) previously mapped to Completed because the exit code was never consulted.
+        // A null exit code means the process cannot report one (fakes/unknown) — legacy behavior.
+        // For persistent sessions a stream end is always an unexpected exit.
+        return (output.ToString(), null, mode == AgentSessionMode.OneShot && process.ExitCode is null or 0);
     }
 
     private async Task PumpOutputAsync()

@@ -584,6 +584,113 @@ public class DecisionSessionTests
         Assert.True(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
         Assert.Equal("OPCTX-1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
     }
+
+    [Fact]
+    public async Task Run_Transfer_EmitsProposePhase_AfterTheTransferPhases()
+    {
+        // Console visibility: every decision run announces its proposal turn with its own phase header, so
+        // post-transfer proposal output no longer prints under the last "Decision: Transfer/…" header.
+        var (session, rt, store, repo, con) = New(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        // Round 1: propose (occupancy 20 -> round 2 crosses the guard).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        // Round 2: Transfer (delta + update + optimize + archive), then the proposal.
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
+        {
+            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated");
+        }));
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose
+        await session.RunAsync(CancellationToken.None);
+
+        List<string> phases = con.Events.Where(e => e.Kind == "phase").Select(e => e.Text).ToList();
+        // One "Decision: Propose" per decision run (round 1 and round 2)…
+        Assert.Equal(2, phases.Count(p => p == "Decision: Propose"));
+        // …and the post-transfer proposal's header comes AFTER the last transfer phase, closing it out.
+        int archive = phases.LastIndexOf("Decision: Transfer/ArchiveOperationalDelta");
+        Assert.True(archive >= 0);
+        Assert.True(phases.LastIndexOf("Decision: Propose") > archive);
+        Assert.Equal("Decision: Propose", phases[^1]);
+    }
+
+    [Fact]
+    public async Task Run_Transfer_UnchangedEvolution_FailsBeforeTheDeltaIsArchived()
+    {
+        // The unchanged-context guard: an evolution one-shot that "completes" without touching the seeded
+        // sandbox context is exactly what a silently-failed codex launch looks like (the CLI seeded the
+        // file itself, so a bare existence check is self-satisfied). The transfer must FAIL before the
+        // delta archive, so the un-applied delta stays live for a retry instead of being consumed.
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = new LoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("did nothing")));  // UpdateOperationalContext: no write
+        // Neither the optimize one-shot, nor the archive, nor the propose turn is reached.
+
+        LoopStepException ex = await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        Assert.Contains("unchanged", ex.Message);
+
+        // The delta was NOT consumed: still live, nothing rotated into .agents/deltas/.
+        Assert.True(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
+        // The repo context is untouched (the unevolved sandbox copy was never copied back).
+        Assert.Equal("OPCTX-0", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
+        // Only the evolution one-shot ran.
+        Assert.Single(rt.OneShotCalls);
+    }
+
+    [Fact]
+    public async Task Run_Transfer_FailedUpdate_SurfacesTheAgentStderrInTheThrownMessage()
+    {
+        // A failed one-shot's Diagnostics (the codex process's retained stderr tail) must reach the
+        // operator through the LoopStepException message — a bare turn state hides WHY codex refused.
+        var (session, rt, store, repo, _) = New(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) =>                                     // UpdateOperationalContext fails
+            Turns.Failed("", "Not inside a trusted directory and --skip-git-repo-check was not specified.")));
+
+        LoopStepException ex = await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        Assert.Contains("Not inside a trusted directory", ex.Message);
+    }
+
+    [Fact]
+    public async Task Run_WhenProposeFails_TheThrownMessageCarriesDiagnostics()
+    {
+        var (session, rt, store, repo, _) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed("boom", "codex stderr tail")));
+
+        LoopStepException ex = await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        Assert.Contains("codex stderr tail", ex.Message);
+    }
 }
 
 /// <summary>Forwards to an inner store but throws when a write targets the .agents/deltas archive — models a

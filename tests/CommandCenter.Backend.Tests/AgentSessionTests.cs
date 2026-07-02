@@ -78,9 +78,59 @@ public sealed class AgentSessionTests
         process.EndOutput();
         AgentTurnResult result = await turn;
 
+        // A null exit code (a fake/unknown process) keeps the legacy semantics: stream end completes the turn.
         Assert.Equal(AgentTurnState.Completed, result.State);
         Assert.Equal("one\ntwo", result.Output);
+        Assert.Null(result.Diagnostics);
         Assert.True(process.InputCompleted);
+    }
+
+    // Regression for the silent one-shot failure: codex refusing to run at all (e.g. "Not inside a
+    // trusted directory", exit 1, no boundary event) used to map stream end to Completed because the
+    // exit code was never consulted. A nonzero exit now FAILS the turn and carries the retained
+    // stderr tail as diagnostics so the operator sees why.
+    [Fact]
+    public async Task OneShotStreamEndWithNonZeroExitFailsAndSurfacesStderrTail()
+    {
+        var process = new FakeInteractiveAgentProcess
+        {
+            ScriptedExitCode = 1,
+            ScriptedErrorSnapshot = "Not inside a trusted directory and --skip-git-repo-check was not specified."
+        };
+        await using var session = new AgentSession(
+            Spec(),
+            AgentSessionMode.OneShot,
+            process,
+            new SentinelTurnBoundaryDetector(),
+            new DeterministicAgentTokenEstimator());
+
+        Task<AgentTurnResult> turn = session.RunTurnAsync("only prompt");
+        process.EndOutput();
+        AgentTurnResult result = await turn;
+
+        Assert.Equal(AgentTurnState.Failed, result.State);
+        Assert.Contains("Not inside a trusted directory", result.Diagnostics);
+    }
+
+    [Fact]
+    public async Task OneShotStreamEndWithZeroExitCompletesWithoutDiagnostics()
+    {
+        var process = new FakeInteractiveAgentProcess { ScriptedExitCode = 0 };
+        await using var session = new AgentSession(
+            Spec(),
+            AgentSessionMode.OneShot,
+            process,
+            new SentinelTurnBoundaryDetector(),
+            new DeterministicAgentTokenEstimator());
+
+        Task<AgentTurnResult> turn = session.RunTurnAsync("only prompt");
+        process.Emit("done");
+        process.EndOutput();
+        AgentTurnResult result = await turn;
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Equal("done", result.Output);
+        Assert.Null(result.Diagnostics);
     }
 
     [Fact]
@@ -132,7 +182,15 @@ public sealed class AgentSessionTests
 
         public AgentProcessState State { get; private set; } = AgentProcessState.Running;
 
-        public int? ExitCode { get; private set; }
+        /// <summary>Exit code the fake reports once set (null = a process that cannot report one).</summary>
+        public int? ScriptedExitCode { get; init; }
+
+        /// <summary>Stderr tail the fake reports (null = nothing captured).</summary>
+        public string? ScriptedErrorSnapshot { get; init; }
+
+        public int? ExitCode => ScriptedExitCode;
+
+        public string? ErrorSnapshot => ScriptedErrorSnapshot;
 
         public bool HasExited => State is AgentProcessState.Exited or AgentProcessState.Canceled;
 
