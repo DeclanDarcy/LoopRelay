@@ -6,9 +6,10 @@ namespace CommandCenter.Cli;
 
 /// <summary>
 /// LoopStart epic-complete gate. Aggregates GitHub task-list checkboxes (parsed with the canonical
-/// RepositoryProjectionService.CountCheckboxes rule) across .agents/plan.md (if present) and every
-/// .agents/milestones/m*.md. The epic is complete only when at least one checkbox exists across them
-/// and every checkbox is checked. Files with zero checkboxes contribute nothing and never block.
+/// RepositoryProjectionService.CountCheckboxes rule) across every .agents/milestones/m*.md. The epic
+/// is complete only when at least one checkbox exists across them and every checkbox is checked. Files
+/// with zero checkboxes contribute nothing and never block. plan.md is intentionally excluded: agents
+/// never tick its boxes, so folding it into the aggregate would keep the epic permanently incomplete.
 ///
 /// The CLI runs this gate once per loop iteration, so during the long middle of an epic the same
 /// milestone file sits with an unchecked box across many calls. To avoid re-reading and re-parsing
@@ -64,15 +65,6 @@ internal sealed class MilestoneGate
         incomplete.Clear();
         int total = 0;
         int completed = 0;
-
-        // .agents/plan.md (if present) contributes its checkboxes alongside the milestones.
-        string planPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan);
-        DateTime? planStamp = lastWriteTime(planPath);
-        string? plan = await store.ReadAsync(planPath);
-        if (plan is not null)
-        {
-            Accumulate(planPath, planStamp, plan, ref total, ref completed);
-        }
 
         string dir = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.MilestonesDirectory);
         IReadOnlyList<string> files = await store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);

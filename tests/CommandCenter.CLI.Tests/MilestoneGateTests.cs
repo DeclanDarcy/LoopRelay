@@ -68,31 +68,12 @@ public class MilestoneGateTests
     }
 
     [Fact]
-    public async Task IsEpicComplete_UncheckedPlanBox_BlocksEvenWhenMilestonesComplete()
+    public async Task IsEpicComplete_IgnoresPlanCheckboxes_OnlyMilestonesCount()
     {
         var (gate, store, repo) = NewGate();
+        // Agents never tick plan.md's boxes, so an unchecked plan box must NOT block completion — only
+        // the milestone files count. With every milestone checked, the epic is complete despite the plan.
         await store.WriteAsync(Resolve(repo, ".agents/plan.md"), "- [ ] open item in the plan");
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [x] a");
-
-        Assert.False(await gate.IsEpicCompleteAsync());   // aggregate: plan.md still has an unchecked box
-    }
-
-    [Fact]
-    public async Task IsEpicComplete_PlanAndMilestonesAllChecked_ReturnsTrue()
-    {
-        var (gate, store, repo) = NewGate();
-        await store.WriteAsync(Resolve(repo, ".agents/plan.md"), "- [x] plan item");
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [x] a");
-
-        Assert.True(await gate.IsEpicCompleteAsync());
-    }
-
-    [Fact]
-    public async Task IsEpicComplete_PointerIndexPlanWithNoCheckboxes_DoesNotBlock()
-    {
-        var (gate, store, repo) = NewGate();
-        // plan.md rewritten into a milestone-pointer index by ExtractMilestones => zero checkboxes.
-        await store.WriteAsync(Resolve(repo, ".agents/plan.md"), "# Plan\n(See ./milestones/m1.md)");
         await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [x] a");
 
         Assert.True(await gate.IsEpicCompleteAsync());
@@ -228,29 +209,6 @@ public class MilestoneGateTests
 
         // A vanished tracked file must force a correct re-parse, not a stale false.
         Assert.True(await gate.IsEpicCompleteAsync());
-    }
-
-    [Fact]
-    public async Task T6_DeletedTrackedPlanFile_DoesNotFalselyShortCircuit()
-    {
-        var (gate, store, repo, mtimes) = NewTrackedGate();
-        string planPath = Resolve(repo, ".agents/plan.md");
-        string m1 = Resolve(repo, ".agents/milestones/m1.md");
-
-        // plan.md has one unchecked box (tracked incomplete); m1 is fully checked.
-        await store.WriteAsync(planPath, "- [ ] open plan item");
-        await store.WriteAsync(m1, "- [x] a");
-        mtimes[planPath] = T0;
-        mtimes[m1] = T0;
-
-        Assert.False(await gate.IsEpicCompleteAsync());   // plan.md tracked as incomplete
-
-        // plan.md vanishes: remove from store AND drop its mtime so provider returns null.
-        await store.DeleteAsync(planPath);
-        mtimes.Remove(planPath);
-
-        // The vanished tracked plan.md must force a correct full re-parse, not a stale false.
-        Assert.True(await gate.IsEpicCompleteAsync());    // only fully-checked m1 remains
     }
 }
 
