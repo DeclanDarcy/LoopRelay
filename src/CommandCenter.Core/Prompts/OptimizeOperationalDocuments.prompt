@@ -1,0 +1,33 @@
+# Operational Context Optimization
+
+Review and optimize the project's operational documents:
+* `plan.md`
+* `details.md`
+* `operational_context.md`
+
+Optimize these documents exclusively for maximizing execution and decision quality across the remaining milestones.
+
+Treat them as the project's operational memory, not its historical record.
+
+For every piece of information, determine whether it will materially improve execution or decision-making for one or more remaining milestones.
+
+Remove information that:
+
+* only explains or justifies completed work;
+* records implementation history without influencing future work;
+* has become obsolete, superseded, or irrelevant;
+* duplicates information available more authoritatively elsewhere;
+* no longer affects any remaining milestone.
+
+Preserve information that continues to influence one or more remaining milestones, including:
+
+* active constraints and architectural invariants;
+* enduring decisions and their operational consequences;
+* validated discoveries that changed the project's understanding;
+* unresolved risks, uncertainties, and follow-up work;
+* execution heuristics, implementation patterns, and lessons that improve future outcomes;
+* dependencies, assumptions, and sequencing that affect remaining work.
+
+Aggressively consolidate related information into concise operational knowledge. Prefer semantic understanding over implementation history and enduring guidance over milestone-specific narration.
+
+The resulting documents should contain only information that materially increases the probability of achieving the best possible outcomes for the remaining milestones. Remove everything else.

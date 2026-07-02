@@ -9,6 +9,37 @@ impact of leaving it, and the path to resolve it. Newest section first.
 
 ---
 
+## 2026-07-02 — CLI: post-evolution operational-documents optimization (Transfer)
+
+Background: the CLI Transfer now runs a second sandboxed one-shot immediately after
+`UpdateOperationalContext` — `OptimizeOperationalDocuments` (`DecisionSession.
+OptimizeOperationalDocumentsAsync`) — which prunes/consolidates `plan.md`, `details.md`
+(optional), and the just-evolved `operational_context.md` for the remaining milestones, in its
+own `ISandboxWorkspaceFactory` workspace (codex `--cd` confined), copying the optimized
+documents back into the repo. The operational-context size-health measurement moved to the
+optimized (final) revision. Scope was CLI-only.
+
+### TD-10 — Backend `RepositoryOrchestrator` transfer does not run `OptimizeOperationalDocuments`
+
+**Deferred.** `RepositoryOrchestrator.PrepareTransferAsync` still ends its transfer at
+`UpdateOperationalContext` + delta archival; it never runs the optimization one-shot, so
+backend-driven repos accrue operational-document bloat the CLI loop now prunes.
+
+**Why deferred:** the backend transfer publishes decision-stream phases, and adding a new
+phase requires syncing the UI's `DecisionRunTransferPhase` type + `TRANSFER_PHASES`
+allowlist + `devTauriMock` prelude (or the raw phase string leaks as a visible label), plus
+provenance wiring and cert-test updates — a cross-cutting change the CLI-only scope
+deliberately avoided.
+
+**Impact:** divergent transfer behaviour between the CLI loop and the backend orchestrator;
+backend operational documents are only ever evolved, never optimized.
+
+**Resolution:** mirror `DecisionSession.OptimizeOperationalDocumentsAsync` into
+`RepositoryOrchestrator.PrepareTransferAsync` (new phase + provenance + UI allowlist sync +
+tests), or retire the backend transfer path in favour of the CLI loop.
+
+---
+
 ## 2026-07-01 — CLI: execution-first on the first pass (`StartExecution` revived)
 
 Background: the CLI `LoopRunner` was re-sequenced so that on the FIRST pass — when no handoff

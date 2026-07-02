@@ -126,9 +126,11 @@ internal sealed class DecisionSession(
 
     /// <summary>
     /// Transfer recycle, mirroring RepositoryOrchestrator.PrepareTransferAsync: extract an operational delta
-    /// from the warm process, close it, and rewrite operational_context.md via a one-shot operational turn. The
-    /// fresh process is NOT reseeded here — RunAsync reopens it and its next proposal primes it with the just-
-    /// rewritten context inline (no legacy StartDecisionSession* turn), so this leaves the process closed.
+    /// from the warm process, close it, rewrite operational_context.md via a one-shot operational turn, then
+    /// optimize the operational documents (plan/details/context) via a second sandboxed one-shot (CLI-only;
+    /// the backend transfer does not run the optimization — see technical-debt.md). The fresh process is NOT
+    /// reseeded here — RunAsync reopens it and its next proposal primes it with the just-rewritten context
+    /// inline (no legacy StartDecisionSession* turn), so this leaves the process closed.
     /// </summary>
     private async Task TransferAsync(CancellationToken cancellationToken)
     {
@@ -148,6 +150,9 @@ internal sealed class DecisionSession(
 
         console.Phase("Decision: Transfer/UpdateOperationalContext");
         AgentTurnResult update = await EvolveOperationalContextAsync(delta.Output, cancellationToken);
+
+        console.Phase("Decision: Transfer/OptimizeOperationalDocuments");
+        AgentTurnResult optimize = await OptimizeOperationalDocumentsAsync(cancellationToken);
 
         // Archive the consumed operational delta now that operational_context.md is successfully updated: rotate
         // .agents/operational_delta.md into a numbered .agents/deltas/ copy and remove the live file. Hard step —
@@ -172,11 +177,12 @@ internal sealed class DecisionSession(
         // The fresh process is left CLOSED (seeded stays false): RunAsync reopens it and its next proposal primes
         // it with the just-rewritten operational context inline (see BuildProposalPromptAsync). No reseed turn.
 
-        // Cost-aware accounting: record the MEASURED transfer cost (delta + evolution) so the router's transfer-cost
-        // estimate (C) self-calibrates off reality. CloseAsync above reset the per-process reuse accounting; the
-        // fresh process's context-priming cost is captured by the next proposal's RecordProposalCost. transferCost
-        // persists across recycles.
-        RecordTransferCost(costModel.Measure(delta.Usage) + costModel.Measure(update.Usage));
+        // Cost-aware accounting: record the MEASURED transfer cost (delta + evolution + optimization) so the
+        // router's transfer-cost estimate (C) self-calibrates off reality. CloseAsync above reset the per-process
+        // reuse accounting; the fresh process's context-priming cost is captured by the next proposal's
+        // RecordProposalCost. transferCost persists across recycles.
+        RecordTransferCost(
+            costModel.Measure(delta.Usage) + costModel.Measure(update.Usage) + costModel.Measure(optimize.Usage));
     }
 
     // Stage 2 (mirrors RepositoryOrchestrator.EvolveOperationalContextAsync): evolve the operational context in an
@@ -213,8 +219,72 @@ internal sealed class DecisionSession(
 
         string evolved = await artifacts.ReadAbsoluteAsync(sandboxContextPath) ?? string.Empty;
         await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalContext, evolved); // copy the evolved context back into the repo
-        RecordOperationalContextHealth(evolved.Length);
+        // Size-health is recorded by the optimization pass that follows — one measurement per transfer, on the
+        // final revision the next proposal actually reads.
         return update;
+    }
+
+    // The operational documents the post-evolution optimization one-shot is scoped to — its sandbox is seeded
+    // with EXACTLY these (each existence-guarded) and only these are copied back.
+    private static readonly string[] OptimizationDocuments =
+    [
+        OrchestrationArtifactPaths.Plan,
+        OrchestrationArtifactPaths.Details,
+        OrchestrationArtifactPaths.OperationalContext,
+    ];
+
+    // Immediately after the context evolution, optimize the operational documents in a SECOND isolated sandbox
+    // with the same posture (codex --cd confined, workspace-write): seeded with plan.md + details.md + the
+    // just-evolved operational_context.md, optimized in place, then copied back into the repo. details.md (and a
+    // missing plan.md) are seeded and copied back only when present — a file the agent deleted in its sandbox is
+    // left untouched in the repo, never deleted. operational_context.md must survive the turn (the next proposal
+    // seeds the fresh process from it), so its absence fails the transfer, mirroring the evolution's hard check.
+    private async Task<AgentTurnResult> OptimizeOperationalDocumentsAsync(CancellationToken cancellationToken)
+    {
+        await using ISandboxWorkspace sandbox =
+            await sandboxFactory.CreateAsync("operational-documents-optimization", cancellationToken);
+
+        foreach (string document in OptimizationDocuments)
+        {
+            string? content = await artifacts.ReadAsync(document);
+            if (content is not null)
+            {
+                await artifacts.WriteAbsoluteAsync(sandbox.Resolve(document), content);
+            }
+        }
+
+        AgentTurnResult optimize = await runtime.RunOneShotAsync(
+            AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh", workingDirectory: sandbox.RootPath),
+            OptimizeOperationalDocuments.Text,
+            new ConsoleTurnRenderer(console).Stream,
+            cancellationToken);
+        if (optimize.State != AgentTurnState.Completed)
+        {
+            throw new LoopStepException($"Optimize-operational-documents turn ended in state {optimize.State}.");
+        }
+
+        if (!await artifacts.ExistsAbsoluteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext)))
+        {
+            throw new LoopStepException("Optimization left no operational_context.md to seed the next decision session from.");
+        }
+
+        foreach (string document in OptimizationDocuments)
+        {
+            string absolute = sandbox.Resolve(document);
+            if (!await artifacts.ExistsAbsoluteAsync(absolute))
+            {
+                continue;
+            }
+
+            string optimized = await artifacts.ReadAbsoluteAsync(absolute) ?? string.Empty;
+            await artifacts.WriteAsync(document, optimized);
+            if (document == OrchestrationArtifactPaths.OperationalContext)
+            {
+                RecordOperationalContextHealth(optimized.Length);
+            }
+        }
+
+        return optimize;
     }
 
     // Size-health guard (Stage 2, mirrors RepositoryOrchestrator.RecordOperationalContextHealth): warn on a
