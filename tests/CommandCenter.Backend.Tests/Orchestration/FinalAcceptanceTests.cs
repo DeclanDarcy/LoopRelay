@@ -90,13 +90,12 @@ public sealed class FinalAcceptanceTests
     public void Canonical_prompt_catalog_is_the_sole_generated_communication_surface()
     {
         // FA-12 / NG-5: all prompt text comes from the generated CommandCenter.Core.Prompts classes, which are
-        // pure text templates (no semantic authority). typeof pins the eleven canonical prompts as a compile-time
+        // pure text templates (no semantic authority). typeof pins the ten canonical prompts as a compile-time
         // contract — a removed or renamed prompt fails to build here. Each must expose the generated API surface
         // (a const Text for placeholder-free prompts, a Render method for those with holes).
         var promptTypes = new[]
         {
-            typeof(WritePlanForNewCodebase),
-            typeof(WritePlanAgainstCodebase),
+            typeof(WritePlan),
             typeof(RevisePlan),
             typeof(ExtractMilestones),
             typeof(StartExecution),
@@ -108,7 +107,7 @@ public sealed class FinalAcceptanceTests
             typeof(UpdateOperationalContext),
         };
 
-        Assert.Equal(11, promptTypes.Length);
+        Assert.Equal(10, promptTypes.Length);
 
         foreach (var promptType in promptTypes)
         {

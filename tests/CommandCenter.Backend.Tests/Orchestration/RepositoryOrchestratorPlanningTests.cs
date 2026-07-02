@@ -42,7 +42,7 @@ public sealed class RepositoryOrchestratorPlanningTests
     }
 
     [Fact]
-    public async Task Write_plan_against_codebase_selects_the_against_codebase_prompt()
+    public async Task Write_plan_selects_the_write_plan_prompt_when_not_a_new_codebase()
     {
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
@@ -53,11 +53,11 @@ public sealed class RepositoryOrchestratorPlanningTests
         await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r", NewCodebase = false });
         await orchestrator.PlanningTurnTask;
 
-        Assert.Equal(WritePlanAgainstCodebase.Text, Assert.Single(runtime.Sessions).Prompts.Single());
+        Assert.Equal(WritePlan.Text, Assert.Single(runtime.Sessions).Prompts.Single());
     }
 
     [Fact]
-    public async Task Write_plan_for_new_codebase_selects_the_new_codebase_prompt()
+    public async Task Write_plan_selects_the_write_plan_prompt_when_a_new_codebase()
     {
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
@@ -68,7 +68,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r", NewCodebase = true });
         await orchestrator.PlanningTurnTask;
 
-        Assert.Equal(WritePlanForNewCodebase.Text, Assert.Single(runtime.Sessions).Prompts.Single());
+        Assert.Equal(WritePlan.Text, Assert.Single(runtime.Sessions).Prompts.Single());
     }
 
     [Fact]
@@ -192,8 +192,8 @@ public sealed class RepositoryOrchestratorPlanningTests
         Assert.Equal(2, orchestrator.PlanningProvenance.Count);
 
         PromptProvenance write = orchestrator.PlanningProvenance[0];
-        Assert.Equal(nameof(WritePlanForNewCodebase), write.PromptName);
-        Assert.Equal(WritePlanForNewCodebase.SourceHash, write.SourceHash);
+        Assert.Equal(nameof(WritePlan), write.PromptName);
+        Assert.Equal(WritePlan.SourceHash, write.SourceHash);
         Assert.Equal(PromptSessionRole.Planning, write.SessionRole);
         Assert.Equal("WritePlan", write.WorkflowPhase);
         Assert.Contains(OrchestrationArtifactPaths.SpecsRoadmap, write.InputArtifactIdentities);

@@ -61,7 +61,7 @@ public sealed class RepositoryOrchestratorFeatureFlagsTests
         // No held-open planning session was opened; the one-shot carried the WritePlan prompt.
         Assert.False(orchestrator.HasPlanningSession);
         Assert.Empty(runtime.Sessions);
-        Assert.Equal(WritePlanAgainstCodebase.Text, Assert.Single(runtime.OneShotPrompts));
+        Assert.Equal(WritePlan.Text, Assert.Single(runtime.OneShotPrompts));
         Assert.Equal(SessionRole.Planning, Assert.Single(runtime.OneShotSpecs).Role);
 
         // The stream frame sequence is IDENTICAL to the warm path: turn-started / delta* / completed.

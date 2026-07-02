@@ -9,6 +9,37 @@ impact of leaving it, and the path to resolve it. Newest section first.
 
 ---
 
+## 2026-07-02 — WritePlan prompt consolidation (`WritePlanForNewCodebase`/`WritePlanAgainstCodebase` → `WritePlan`)
+
+Background: `RepositoryOrchestrator.BuildWritePlan` used to select between two near-identical
+`.prompt` templates — `WritePlanForNewCodebase` and `WritePlanAgainstCodebase` — based on
+`PlanWriteRequest.NewCodebase`. The two templates differed only by the phrase "against the
+current codebase", so they were merged into a single `WritePlan.prompt`/`WritePlan` class and
+`BuildWritePlan` no longer branches; it always renders `WritePlan.Text`.
+
+### TD-12 — `PlanWriteRequest.NewCodebase` and the UI "New Codebase" checkbox are now dead input
+
+**Deferred.** `PlanWriteRequest.NewCodebase` (`src/CommandCenter.Orchestration/Models/
+PlanWriteRequest.cs`) is still a public field on the Write Plan request, and
+`PlanAuthoringScreen.tsx` still has a "New Codebase" checkbox (`newCodebase`/`setNewCodebase`)
+that sends it, but the backend no longer reads the value for anything — `BuildWritePlan` renders
+`WritePlan.Text` unconditionally now.
+
+**Why deferred:** the prompt-consolidation ask was scoped to the two `.prompt` templates and
+their C# consumers, not the request contract or the UI. Removing the field/checkbox touches a
+wire contract and a UI component, which is a separate, larger change than a prompt rename.
+
+**Impact:** none functional — a repository can still submit `NewCodebase: true` or `false` and
+get the identical `WritePlan` prompt either way. It's dead surface area: a checkbox the user can
+toggle with no observable effect, and a field tests/call sites still have to populate for no
+reason.
+
+**Resolution:** remove `PlanWriteRequest.NewCodebase`, the "New Codebase" checkbox in
+`PlanAuthoringScreen.tsx`, and any test-only usages of the field, once confirmed no other
+consumer depends on it.
+
+---
+
 ## 2026-07-02 — Transfer one-shots: trust-check fix, loud failures, unchanged-context guard
 
 Background: the CLI transfer's `UpdateOperationalContext` + `OptimizeOperationalDocuments`

@@ -241,9 +241,9 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
     /// <summary>
     /// Write Plan (m3): persist the Roadmap and Specs BEFORE the prompt runs, open/reuse the held-open
-    /// Operational planning process, select <c>WritePlanForNewCodebase</c>/<c>WritePlanAgainstCodebase</c>,
-    /// and stream the turn to <see cref="PlanningStream"/>. The turn runs in the background on the
-    /// orchestrator's lifetime; this method returns once the turn is launched.
+    /// Operational planning process, render <c>WritePlan</c>, and stream the turn to
+    /// <see cref="PlanningStream"/>. The turn runs in the background on the orchestrator's lifetime;
+    /// this method returns once the turn is launched.
     /// </summary>
     public async Task BeginWritePlanAsync(Repository repository, PlanWriteRequest request, CancellationToken cancellationToken = default)
     {
@@ -2026,27 +2026,16 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
         string[] outputs = { OrchestrationArtifactPaths.Plan };
 
-        return request.NewCodebase
-            ? (WritePlanForNewCodebase.Text, new PromptProvenance
-            {
-                PromptName = nameof(WritePlanForNewCodebase),
-                PromptType = typeof(WritePlanForNewCodebase).FullName!,
-                SourceHash = WritePlanForNewCodebase.SourceHash,
-                SessionRole = PromptSessionRole.Planning,
-                WorkflowPhase = "WritePlan",
-                InputArtifactIdentities = inputs,
-                OutputArtifactIdentities = outputs,
-            })
-            : (WritePlanAgainstCodebase.Text, new PromptProvenance
-            {
-                PromptName = nameof(WritePlanAgainstCodebase),
-                PromptType = typeof(WritePlanAgainstCodebase).FullName!,
-                SourceHash = WritePlanAgainstCodebase.SourceHash,
-                SessionRole = PromptSessionRole.Planning,
-                WorkflowPhase = "WritePlan",
-                InputArtifactIdentities = inputs,
-                OutputArtifactIdentities = outputs,
-            });
+        return (WritePlan.Text, new PromptProvenance
+        {
+            PromptName = nameof(WritePlan),
+            PromptType = typeof(WritePlan).FullName!,
+            SourceHash = WritePlan.SourceHash,
+            SessionRole = PromptSessionRole.Planning,
+            WorkflowPhase = "WritePlan",
+            InputArtifactIdentities = inputs,
+            OutputArtifactIdentities = outputs,
+        });
     }
 
     private static (string Prompt, PromptProvenance Provenance) BuildRevisePlan(string feedback) =>

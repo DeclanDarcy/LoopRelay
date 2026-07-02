@@ -12,14 +12,13 @@ This is a structural invariant, not a convention:
 - The catalog is the *only* place a canonical prompt body appears in source. `ExecutionPromptBuilder` — the live execution path's prompt builder — previously hand-composed literals; that was deleted in favor of `ContinueExecution.Render(...)` / `StartExecution.Render(...)`, and the regression is locked out by `PromptAuthorityTests` (see *No-Literal-Prompt Enforcement*).
 - Every rendered turn records a `PromptProvenance` (see *Prompt Provenance*) so a turn is auditable back to the exact template that produced it.
 
-## The 11 Canonical Prompts
+## The 10 Canonical Prompts
 
-There are 11 canonical `.prompt` templates. A template with no `{placeholder}` emits a `const string Text` (plus a parameterless `Render()`); a template with placeholders emits `Render(string? …)` with one `string?` parameter per distinct placeholder, in first-appearance order. The "Generated signature" column below is derived from each template's placeholders and verified against the `.prompt` file; the "Session role" column is the `PromptSessionRole` recorded by the call site's provenance. Loop steps reference the lifecycle in `docs/architecture.md`.
+There are 10 canonical `.prompt` templates. A template with no `{placeholder}` emits a `const string Text` (plus a parameterless `Render()`); a template with placeholders emits `Render(string? …)` with one `string?` parameter per distinct placeholder, in first-appearance order. The "Generated signature" column below is derived from each template's placeholders and verified against the `.prompt` file; the "Session role" column is the `PromptSessionRole` recorded by the call site's provenance. Loop steps reference the lifecycle in `docs/architecture.md`.
 
 | Prompt | Generated signature | Session role | Where used in the loop |
 | --- | --- | --- | --- |
-| `WritePlanForNewCodebase` | `.Text` | `Planning` | Write plan, `newCodebase == true` branch of `BeginWritePlanAsync` (held-open Operational planning session). |
-| `WritePlanAgainstCodebase` | `.Text` | `Planning` | Write plan, `newCodebase == false` branch of `BeginWritePlanAsync` (held-open planning session). |
+| `WritePlan` | `.Text` | `Planning` | Write plan (`BeginWritePlanAsync`, held-open Operational planning session). |
 | `RevisePlan` | `.Render(feedback)` | `Planning` | Revise plan (`BeginRevisePlanAsync`) — re-runs against the persisted `.agents/plan.md`. |
 | `ExtractMilestones` | `.Text` | `OperationalExecution` | Execute plan — splits `.agents/plan.md` into `.agents/milestones/m*.md` (Operational one-shot). |
 | `StartExecution` | `.Render(plan)` | `OperationalExecution` | Execute plan — first-milestone start, writes the live handoff (Operational one-shot). No handoff/decisions holes. |
@@ -33,7 +32,7 @@ There are 11 canonical `.prompt` templates. A template with no `{placeholder}` e
 Notes:
 
 - `StartDecisionSessionFromTransfer`'s placeholder is `{operationalContext}` in the template, so its generated parameter is `operationalContext` even though the transfer call site passes a local named `newContext`.
-- The two `WritePlan*` and the three Transfer-phase context prompts (`ProduceOperationalDelta`, `UpdateOperationalContext`) are placeholder-free; their full instruction text is the artifact handed to the agent, and the artifact contents the agent reads (plan, operational context, delta) are supplied by the repository filesystem the turn runs against, not interpolated into the prompt.
+- `WritePlan` and the two Transfer-phase context prompts (`ProduceOperationalDelta`, `UpdateOperationalContext`) are placeholder-free; their full instruction text is the artifact handed to the agent, and the artifact contents the agent reads (plan, operational context, delta) are supplied by the repository filesystem the turn runs against, not interpolated into the prompt.
 
 ## Source Generation
 
