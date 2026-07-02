@@ -193,6 +193,12 @@ internal sealed class DecisionSession(
             costModel.Measure(delta.Usage) + costModel.Measure(update.Usage) + costModel.Measure(optimize.Usage));
     }
 
+    // One-shot sandboxes seed their inputs FLAT at the workspace root (bare filenames, not an .agents/ mirror):
+    // the workspace is purpose-built for the single turn, and a dot-hidden .agents/ directory hides the seeds
+    // from default listings (rg --files, Get-ChildItem without -Force) — observed to cost a live evolution agent
+    // several exploration turns before it found its inputs. The one-shot prompts name the bare filenames.
+    private static string SandboxSeedName(string artifactPath) => Path.GetFileName(artifactPath);
+
     // Stage 2 (mirrors RepositoryOrchestrator.EvolveOperationalContextAsync): evolve the operational context in an
     // ISOLATED sandbox workspace seeded with ONLY operational_context.md + operational_delta.md, so codex --cd
     // confines it there and it no longer re-explores the whole repo. The evolved context is copied back into the
@@ -202,8 +208,8 @@ internal sealed class DecisionSession(
     {
         await using ISandboxWorkspace sandbox =
             await sandboxFactory.CreateAsync("operational-context-evolution", cancellationToken);
-        string sandboxContextPath = sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext);
-        string sandboxDeltaPath = sandbox.Resolve(OrchestrationArtifactPaths.OperationalDelta);
+        string sandboxContextPath = sandbox.Resolve(SandboxSeedName(OrchestrationArtifactPaths.OperationalContext));
+        string sandboxDeltaPath = sandbox.Resolve(SandboxSeedName(OrchestrationArtifactPaths.OperationalDelta));
 
         // Seed the workspace with EXACTLY the two evolution inputs.
         string currentContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
@@ -274,7 +280,7 @@ internal sealed class DecisionSession(
             string? content = await artifacts.ReadAsync(document);
             if (content is not null)
             {
-                await artifacts.WriteAbsoluteAsync(sandbox.Resolve(document), content);
+                await artifacts.WriteAbsoluteAsync(sandbox.Resolve(SandboxSeedName(document)), content);
             }
         }
 
@@ -292,14 +298,14 @@ internal sealed class DecisionSession(
 
         optimizeRenderer.EchoIfSilent(optimize.Output);
 
-        if (!await artifacts.ExistsAbsoluteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext)))
+        if (!await artifacts.ExistsAbsoluteAsync(sandbox.Resolve(SandboxSeedName(OrchestrationArtifactPaths.OperationalContext))))
         {
             throw new LoopStepException("Optimization left no operational_context.md to seed the next decision session from.");
         }
 
         foreach (string document in OptimizationDocuments)
         {
-            string absolute = sandbox.Resolve(document);
+            string absolute = sandbox.Resolve(SandboxSeedName(document));
             if (!await artifacts.ExistsAbsoluteAsync(absolute))
             {
                 continue;

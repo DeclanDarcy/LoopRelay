@@ -30,6 +30,13 @@ public class DecisionSessionTests
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
 
+    // One-shot sandboxes seed their inputs FLAT at the workspace root, bare filenames only (see
+    // DecisionSession.SandboxSeedName) — scripted one-shot turns read/write these, never .agents/-shaped paths.
+    private const string SandboxContext = "operational_context.md";
+    private const string SandboxDelta = "operational_delta.md";
+    private const string SandboxPlan = "plan.md";
+    private const string SandboxDetails = "details.md";
+
     [Fact]
     public async Task Run_FreshProcess_DeliversContextInline_Proposes_PersistsAndVerifiesDecisions()
     {
@@ -162,7 +169,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) => Turns.Completed("DELTA-TEXT")));      // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                            // UpdateOperationalContext
         {
-            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated context");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));            // OptimizeOperationalDocuments
@@ -200,7 +207,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
         {
-            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
@@ -240,7 +247,7 @@ public class DecisionSessionTests
             new AgentTurnResult(0, AgentTurnState.Completed, "D3", new AgentTokenUsage(10, 10))));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // Transfer-only: UpdateOperationalContext
         {
-            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // Transfer-only: OptimizeOperationalDocuments
@@ -282,9 +289,9 @@ public class DecisionSessionTests
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
         {
             // The sandbox is seeded with ONLY the two evolution inputs; capture them before overwriting the context.
-            seededContext = s.ReadAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext)).Result;
-            seededDelta = s.ReadAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalDelta)).Result;
-            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            seededContext = s.ReadAsync(sandbox.Resolve(SandboxContext)).Result;
+            seededDelta = s.ReadAsync(sandbox.Resolve(SandboxDelta)).Result;
+            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));      // OptimizeOperationalDocuments
@@ -349,7 +356,7 @@ public class DecisionSessionTests
             rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("delta")));       // ProduceOperationalDelta
             rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                    // UpdateOperationalContext
             {
-                s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), evolved).Wait();
+                s.WriteAsync(sandbox.Resolve(SandboxContext), evolved).Wait();
                 return Turns.Completed("updated");
             }));
             rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));    // OptimizeOperationalDocuments
@@ -386,7 +393,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
         {
-            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
@@ -422,7 +429,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
-            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));   // OptimizeOperationalDocuments
@@ -466,17 +473,17 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));     // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
         {
-            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // OptimizeOperationalDocuments
         {
-            seededPlan = s.ReadAsync(sandbox.Resolve(OrchestrationArtifactPaths.Plan)).Result;
-            seededDetails = s.ReadAsync(sandbox.Resolve(OrchestrationArtifactPaths.Details)).Result;
-            seededContext = s.ReadAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext)).Result;
-            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.Plan), "PLAN-OPT").Wait();
-            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.Details), "DETAILS-OPT").Wait();
-            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-OPT").Wait();
+            seededPlan = s.ReadAsync(sandbox.Resolve(SandboxPlan)).Result;
+            seededDetails = s.ReadAsync(sandbox.Resolve(SandboxDetails)).Result;
+            seededContext = s.ReadAsync(sandbox.Resolve(SandboxContext)).Result;
+            s.WriteAsync(sandbox.Resolve(SandboxPlan), "PLAN-OPT").Wait();
+            s.WriteAsync(sandbox.Resolve(SandboxDetails), "DETAILS-OPT").Wait();
+            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-OPT").Wait();
             return Turns.Completed("optimized");
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                 // propose (context primed inline)
@@ -529,13 +536,13 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));     // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
         {
-            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // OptimizeOperationalDocuments
         {
-            sandboxHadPlan = s.ExistsAsync(sandbox.Resolve(OrchestrationArtifactPaths.Plan)).Result;
-            sandboxHadDetails = s.ExistsAsync(sandbox.Resolve(OrchestrationArtifactPaths.Details)).Result;
+            sandboxHadPlan = s.ExistsAsync(sandbox.Resolve(SandboxPlan)).Result;
+            sandboxHadDetails = s.ExistsAsync(sandbox.Resolve(SandboxDetails)).Result;
             return Turns.Completed("optimized");
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));             // propose
@@ -572,7 +579,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));     // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
         {
-            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));                    // OptimizeOperationalDocuments
@@ -603,7 +610,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
         {
-            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
@@ -690,6 +697,18 @@ public class DecisionSessionTests
 
         LoopStepException ex = await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
         Assert.Contains("codex stderr tail", ex.Message);
+    }
+
+    [Fact]
+    public void UpdateOperationalContextPrompt_InstructsFileWrite_NotOutputCapture()
+    {
+        // The evolution flow (CLI and backend, both flag paths) reads .agents/operational_context.md back from the
+        // workspace and DISCARDS the turn output — one-shot Output concatenates every agent message, preambles
+        // included, so it can never be consumed as the document. A prompt that asks for the replacement document as
+        // OUTPUT makes the agent legitimately skip the write and trip the unchanged-context guard (observed live
+        // 2026-07-02: the agent read both seeded files and replied with the merged doc, never touching the file).
+        Assert.Contains("overwriting `operational_context.md`", UpdateOperationalContext.Text);
+        Assert.DoesNotContain("The output should be the complete replacement document", UpdateOperationalContext.Text);
     }
 }
 

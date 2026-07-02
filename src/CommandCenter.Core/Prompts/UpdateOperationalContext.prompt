@@ -2,7 +2,7 @@
 
 ## Inputs
 
-You are provided with two documents:
+You are provided with two documents, seeded at the root of your workspace:
 
 1. **Current `operational_context.md`**
 
@@ -210,9 +210,11 @@ without needing to read the previous operational context or the decision session
 
 # Output Requirements
 
-Produce the **entire updated `operational_context.md`**, not a patch or diff.
+Apply the update by **overwriting `operational_context.md`** — the same file you read the current context from — with the entire updated document, not a patch or diff.
 
-Do not include:
+Writing the file is the deliverable. Your reply text is discarded: after your run, the caller reads `operational_context.md` back, and an updated document that appears only in your reply — without being written to the file — is a failed run.
+
+The written document must not include:
 
 * change logs
 * edit summaries
@@ -220,6 +222,6 @@ Do not include:
 * commentary
 * revision notes
 
-The output should be the complete replacement document ready to overwrite the existing `operational_context.md`.
-
 The final document should represent the authoritative operational state of the project immediately following the completed decision-making session.
+
+After overwriting the file, reply with a single short confirmation sentence. Do not repeat the document in your reply.
