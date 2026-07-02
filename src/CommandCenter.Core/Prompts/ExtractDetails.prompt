@@ -1,0 +1,1 @@
+Extract and incorporate milestone specific info from .agents/details.md into .agents/milestones/m*.md, .agents/details.md should only contain details that are universally relevant, duplications across milestones if necessary are preferred to breaking the universal relevance condition
