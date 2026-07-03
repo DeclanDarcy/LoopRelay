@@ -18,6 +18,12 @@ namespace CommandCenter.Cli;
 /// while any real change resets it to 0. Once the count exceeds <see cref="MaxNoChangesCount"/> the loop is
 /// asked to stop.
 ///
+/// ONE <c>.agents/</c> change does count: a reduction in unchecked milestone items across the iteration
+/// (fewer open boxes after execution than before it) is treated exactly like a real code change and resets
+/// the counter. Milestone box-ticks are how an epic advances when the repository itself needn't change —
+/// verification/audit milestones, or work the agent already committed itself — and without this credit the
+/// stall gate would kill a loop that is in fact converging on epic completion.
+///
 /// Git is driven through <see cref="IProcessRunner"/> with <c>workingDirectory = repository.Path</c> (no
 /// <c>-C</c>), mirroring <c>GitService</c>; a nonzero exit on any git call aborts the iteration by throwing
 /// <see cref="LoopStepException"/>, which the loop surfaces as a failed run.
@@ -40,9 +46,12 @@ internal sealed class CommitGate(
 
     /// <summary>
     /// Commits and pushes the target repository's real (non-<c>.agents</c>) working-tree changes, then evaluates
-    /// the stall gate. Returns true if the loop should STOP (NoChangesCount has exceeded MaxNoChangesCount).
+    /// the stall gate. The caller supplies the unchecked-milestone-item counts from before and after the
+    /// execution turn; a reduction counts as substantive progress even with a clean working tree. Returns true
+    /// if the loop should STOP (NoChangesCount has exceeded MaxNoChangesCount).
     /// </summary>
-    public async Task<bool> CommitPushAndEvaluateAsync(CancellationToken cancellationToken)
+    public async Task<bool> CommitPushAndEvaluateAsync(
+        int uncheckedMilestonesBefore, int uncheckedMilestonesAfter, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -54,6 +63,18 @@ internal sealed class CommitGate(
             await RunGitAsync("commit", ["commit", "-m", CommitMessage]);
             await RunGitAsync("push", ["push"]);
             noChangesCount = 0;
+        }
+        else if (uncheckedMilestonesAfter < uncheckedMilestonesBefore)
+        {
+            // Milestone box-ticks live inside `.agents/` (ignored here; published to its own remote by
+            // AgentsSubmodulePublisher), so there is nothing to commit — but fewer open milestone items than
+            // the iteration started with is real progress toward the epic, so it resets the stall counter
+            // exactly like a code change. Only a REDUCTION counts: an execution that merely rewrote or added
+            // milestone items still falls through to the no-progress branch.
+            noChangesCount = 0;
+            console.Info(
+                $"No repository changes, but unchecked milestone items fell from {uncheckedMilestonesBefore} " +
+                $"to {uncheckedMilestonesAfter} — counting as substantive progress.");
         }
         else
         {

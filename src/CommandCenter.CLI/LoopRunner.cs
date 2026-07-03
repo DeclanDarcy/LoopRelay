@@ -77,6 +77,12 @@ internal sealed class LoopRunner(
                     AgentsSubmodulePublisher.ContextUpdateMessage, cancellationToken);
 
                 // ---- Execution ----
+                // Snapshot the unchecked-milestone-item count before codex runs (nothing between here and
+                // the execution turn writes milestone files), so the stall gate can credit an iteration whose
+                // only progress is ticking milestone boxes — those live inside the ignored `.agents/`, so the
+                // working-tree probe alone would misread pure box-ticking as a stall.
+                int uncheckedMilestonesBefore = (await gate.GetUntickedItemsAsync()).Count;
+
                 // Consume decisions.md, do the work, and write the next handoff.
                 await execution.RunAsync(cancellationToken);
 
@@ -98,8 +104,11 @@ internal sealed class LoopRunner(
 
                 // decision.RunAsync verifies decisions.md and execution.RunAsync verifies handoff.md (each throws
                 // if its artifact is missing). Commit and push the working tree, then apply the stall gate: stop
-                // if no substantive change recurs.
-                if (await commitGate.CommitPushAndEvaluateAsync(cancellationToken))
+                // if no substantive change recurs. A drop in unchecked milestone items across the execution turn
+                // counts as substantive progress even when no real repository file changed.
+                int uncheckedMilestonesAfter = (await gate.GetUntickedItemsAsync()).Count;
+                if (await commitGate.CommitPushAndEvaluateAsync(
+                        uncheckedMilestonesBefore, uncheckedMilestonesAfter, cancellationToken))
                 {
                     return LoopOutcome.Stalled;
                 }

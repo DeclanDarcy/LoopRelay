@@ -372,6 +372,55 @@ public class LoopRunnerTests
         Assert.Equal(LoopOutcome.Stalled, outcome);
     }
 
+    // A reduction in unchecked milestone items IS substantive progress: an iteration that only ticks
+    // milestone boxes (which live inside the ignored `.agents/`) must reset the stall counter exactly like
+    // a real code change would, so a box-ticking-only epic runs to completion instead of stalling at 3.
+    [Fact]
+    public async Task Run_WhenOnlyMilestoneBoxesAreTickedEachIteration_DoesNotStall_CompletesEpic()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        // FOUR unchecked boxes and one ticked per iteration: without milestone-progress credit the stall
+        // gate would trip on the third no-change iteration, before the epic could ever complete.
+        string[] items = ["a", "b", "c", "d"];
+        await h.Store.WriteAsync(
+            Resolve(h.Repo, ".agents/milestones/m1.md"), string.Join("\n", items.Select(it => $"- [ ] {it}")));
+        // A handoff exists from the start so EVERY iteration is decision-first (uniform decision+work+handoff).
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-init");
+
+        // The parent working tree reports ONLY the `.agents` submodule gitlink every iteration — no real
+        // repository change ever appears; milestone box-ticks are the only progress being made.
+        h.Git.Handler = (_, args) => args[0] switch
+        {
+            "status" => FakeProcessRunner.Ok(" M .agents"),
+            "branch" => FakeProcessRunner.Ok("main"),
+            _ => FakeProcessRunner.Ok()
+        };
+
+        // Each iteration's work turn ticks exactly one more box; after the fourth the epic completes.
+        for (int i = 0; i < items.Length; i++)
+        {
+            int ticked = i + 1;
+            h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed($"DECISIONS-{ticked}")));
+            h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+            {
+                string content = string.Join(
+                    "\n", items.Select((it, j) => j < ticked ? $"- [x] {it}" : $"- [ ] {it}"));
+                s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), content).Wait();
+                return Turns.Completed($"executed-{ticked}");
+            }));
+            h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+            {
+                s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), $"H-{ticked}").Wait();
+                return Turns.Completed($"handoff-{ticked}");
+            }));
+        }
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
+    }
+
     [Fact]
     public async Task Run_WhenCancelled_ReturnsCancelled()
     {
