@@ -39,6 +39,7 @@ var console = new ConsoleLoopConsole();
 var store = provider.GetRequiredService<IArtifactStore>();
 var runtime = provider.GetRequiredService<IAgentRuntime>();
 var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
+var processRunner = provider.GetRequiredService<IProcessRunner>();
 ISandboxWorkspaceFactory sandboxFactory = new TempSandboxWorkspaceFactory();
 
 var artifacts = new PlanArtifacts(store, repository);
@@ -46,7 +47,9 @@ var preflight = new PreflightGate(artifacts);
 var planSession = new PlanSession(runtime, artifacts, console, repository);
 var review = new ReviewStep(runtime, artifacts, console, repository);
 var oneShot = new SandboxedPromptStep(runtime, sandboxFactory, artifacts, console, repository);
-var pipeline = new PlanPipeline(preflight, planSession, review, oneShot, artifacts, console);
+var publisher = new AgentsSubmodulePublisher(processRunner, repository, console);
+var rollover = new EpicRolloverStep(processRunner, artifacts, console, repository);
+var pipeline = new PlanPipeline(rollover, preflight, planSession, review, oneShot, publisher, artifacts, console);
 
 // --- Ctrl+C: cancel the pipeline AND let session disposal kill the codex child processes. ---
 using var cts = new CancellationTokenSource();
