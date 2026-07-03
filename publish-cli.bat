@@ -2,7 +2,9 @@
 setlocal
 
 rem Publishes CommandCenter.CLI (Release, framework-dependent) so the loop runner can be
-rem invoked from anywhere. Defaults to C:\tools\command-center; pass a path to override.
+rem invoked from anywhere, then publishes CommandCenter.Plan.CLI to its own default
+rem directory (C:\tools\command-center-plan) via publish-plan-cli.bat.
+rem Defaults CommandCenter.CLI's own output to C:\tools\command-center; pass a path to override.
 rem Usage: publish-cli.bat [output-directory]
 
 set "OUTPUT_DIR=%~1"
@@ -20,4 +22,12 @@ if errorlevel 1 (
 
 echo.
 echo Published "%OUTPUT_DIR%\CommandCenter.CLI.exe"
+
+call "%~dp0publish-plan-cli.bat"
+if errorlevel 1 (
+    echo.
+    echo Plan.CLI publish FAILED.
+    exit /b 1
+)
+
 endlocal
