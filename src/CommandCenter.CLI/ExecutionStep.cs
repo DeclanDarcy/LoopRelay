@@ -12,11 +12,21 @@ namespace CommandCenter.Cli;
 /// (1) the work turn — StartExecution renders the plan (plus its optional .agents/details.md addendum) on the
 /// FIRST execution (no decisions.md yet), else ContinueExecution renders plan + details + decisions.md (the
 /// execution agent's system prompt the decision session produced this slice) — and is NOT asked for a handoff;
-/// then (2) GenerateHandoff writes .agents/handoffs/handoff.md from the in-session context of turn 1.
+/// then (2) the handoff turn writes .agents/handoffs/handoff.md from the in-session context of turn 1.
+/// WHICH prompt turn 2 gets is decided by change detection run AFTER turn 1 (so the work turn's own writes
+/// count): a real (non-.agents) working-tree change means the ordinary GenerateHandoff; a clean tree means
+/// GenerateNoChangesHandoff, which confronts the agent with the milestone items still unticked — fresh by
+/// construction, since ticking a box during turn 1 advanced that file's stamp and forces the gate's re-parse
+/// — and demands an explanation or a permission request instead of a routine progress handoff.
 /// The session is opened per slice and closed in a finally; the new handoff is verified after turn 2.
 /// </summary>
 internal sealed class ExecutionStep(
-    IAgentRuntime runtime, LoopArtifacts artifacts, ILoopConsole console, Repository repository)
+    IAgentRuntime runtime,
+    LoopArtifacts artifacts,
+    ILoopConsole console,
+    Repository repository,
+    WorkingTreeChangeDetector changeDetector,
+    MilestoneGate milestones)
 {
     public async Task RunAsync(CancellationToken cancellationToken)
     {
@@ -65,11 +75,31 @@ internal sealed class ExecutionStep(
 
             workRenderer.EchoIfSilent(work.Output);
 
+            // Change detection BEFORE handoff generation: what turn 1 actually left in the working tree
+            // decides which handoff is asked for. "No changes" is CommitGate's exact progress rule (no
+            // real, non-.agents paths), so the handoff and the end-of-iteration stall gate can never tell
+            // different stories about the same slice. An EMPTY unticked list still takes the no-changes
+            // path — the rule is purely change-detection; the prompt then simply has no items to enumerate.
+            IReadOnlyList<string> changed = await changeDetector.GetRealChangedPathsAsync();
+            string handoffPrompt;
+            string handoffPhase;
+            if (changed.Count > 0)
+            {
+                handoffPrompt = GenerateHandoff.Text;
+                handoffPhase = "Execution: GenerateHandoff";
+            }
+            else
+            {
+                IReadOnlyList<string> unticked = await milestones.GetUntickedItemsAsync();
+                handoffPrompt = GenerateNoChangesHandoff.Render(string.Join("\n", unticked));
+                handoffPhase = "Execution: GenerateNoChangesHandoff";
+            }
+
             // Turn 2 - request the handoff on the same held-open session (delta only).
-            console.Phase("Execution: GenerateHandoff");
+            console.Phase(handoffPhase);
             var handoffRenderer = new ConsoleTurnRenderer(console);
             AgentTurnResult handoffTurn = await session.RunTurnAsync(
-                GenerateHandoff.Text, handoffRenderer.Stream, cancellationToken);
+                handoffPrompt, handoffRenderer.Stream, cancellationToken);
             if (handoffTurn.State != AgentTurnState.Completed)
             {
                 throw new LoopStepException($"Handoff turn ended in state {handoffTurn.State}.");

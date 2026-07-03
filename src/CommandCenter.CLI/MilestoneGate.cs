@@ -14,19 +14,27 @@ namespace CommandCenter.Cli;
 /// The CLI runs this gate once per loop iteration, so during the long middle of an epic the same
 /// milestone file sits with an unchecked box across many calls. To avoid re-reading and re-parsing
 /// every file each time, the gate remembers each parsed-incomplete file together with the last-write
-/// time it observed. On the next call it FIRST checks those remembered files: if any is unchanged
-/// since we parsed it, it still has an unchecked box, so the aggregate is still incomplete and the
-/// gate returns false WITHOUT reading or listing anything. This short-circuit only ever yields false
-/// — any single unchecked box keeps the aggregate false regardless of files completed or appearing
-/// elsewhere — so it can never wrongly report completion. When no remembered file is both present and
-/// unchanged (first call, any tracked file modified/removed, or no timestamps available at all), the
-/// gate falls back to the full parse, behaving exactly as it did before the optimization.
+/// time it observed (and the unticked items that parse produced). On the next call it FIRST checks
+/// those remembered files: if any is unchanged since we parsed it, it still has an unchecked box, so
+/// the aggregate is still incomplete and the gate returns false WITHOUT reading or listing anything.
+/// This short-circuit only ever yields false — any single unchecked box keeps the aggregate false
+/// regardless of files completed or appearing elsewhere — so it can never wrongly report completion.
+/// When no remembered file is both present and unchanged (first call, any tracked file
+/// modified/removed, or no timestamps available at all), the gate falls back to the full parse,
+/// behaving exactly as it did before the optimization.
 ///
-/// Known limitation: the short-circuit keys on last-write time, so a file that changes without its
+/// <see cref="GetUntickedItemsAsync"/> consumes the same cache from the other side: it always lists
+/// (new files must stay discoverable, and the listing fixes the item order), but serves each file's
+/// unticked items from the remembered parse while its last-write time is unchanged, re-reading only
+/// files whose stamp moved or was never captured. Any write to a milestone file — e.g. the work turn
+/// ticking a box — advances its stamp and forces the re-parse, so served items are current per stamp.
+///
+/// Known limitation: both paths key on last-write time, so a file that changes without its
 /// last-write time advancing — due to coarse filesystem timestamp granularity or timestamp-preserving
-/// tooling such as restore-from-backup — could be skipped on a re-parse. This is safe because the
-/// gate ONLY ever short-circuits to false, so it can never wrongly report completion; the worst case
-/// is one extra loop iteration before the updated content is detected.
+/// tooling such as restore-from-backup — could be skipped on a re-parse. This is safe for the epic
+/// gate because it ONLY ever short-circuits to false, so it can never wrongly report completion; the
+/// worst case is one extra loop iteration (or one stamp-stale unticked listing) before the updated
+/// content is detected.
 /// </summary>
 internal sealed class MilestoneGate
 {
@@ -34,8 +42,17 @@ internal sealed class MilestoneGate
     private readonly Repository repository;
     private readonly Func<string, DateTime?> lastWriteTime;
 
-    /// <summary>resolved-path -> last-write time observed when we last parsed it AND found >=1 unchecked box.</summary>
-    private readonly Dictionary<string, DateTime> incomplete = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>What the last parse of a still-incomplete file produced, keyed by the last-write time
+    /// captured BEFORE that read (so a racing write forces a re-parse next call, never a stale skip).</summary>
+    private readonly record struct ParsedIncomplete(DateTime Stamp, IReadOnlyList<string> Unticked);
+
+    /// <summary>
+    /// resolved-path -> stamp + unticked items from when we last parsed it AND found >=1 unchecked box.
+    /// Membership invariant: an entry ALWAYS means "had an unchecked box at this stamp" — files that are
+    /// fully checked or have an unknown stamp are never cached. IsEpicCompleteAsync's short-circuit
+    /// soundness rests on this: any unchanged entry proves the aggregate is still incomplete.
+    /// </summary>
+    private readonly Dictionary<string, ParsedIncomplete> incomplete = new(StringComparer.OrdinalIgnoreCase);
 
     public MilestoneGate(IArtifactStore store, Repository repository, Func<string, DateTime?>? lastWriteTime = null)
     {
@@ -53,9 +70,9 @@ internal sealed class MilestoneGate
         // SHORT-CIRCUIT: a remembered incomplete file unchanged since we parsed it still has an unchecked
         // box, so the aggregate is still incomplete. Sound regardless of files completed/appearing elsewhere
         // — any single unchecked box keeps the aggregate false. We ONLY ever short-circuit to false.
-        foreach ((string path, DateTime parsedAt) in incomplete)
+        foreach ((string path, ParsedIncomplete parsed) in incomplete)
         {
-            if (lastWriteTime(path) is { } now && now == parsedAt)
+            if (lastWriteTime(path) is { } now && now == parsed.Stamp)
             {
                 return false;
             }
@@ -80,23 +97,68 @@ internal sealed class MilestoneGate
         return total > 0 && completed == total;
     }
 
+    /// <summary>
+    /// Every unticked checkbox item — the trimmed full line, e.g. "- [ ] Implement X" — across
+    /// .agents/milestones/m*.md, in file-listing order and document order within a file. Feeds the
+    /// GenerateNoChangesHandoff prompt when an execution turn produced no real working-tree change, so
+    /// the agent must account for exactly the items it left open. A box ticked during that turn is
+    /// excluded by construction: the write advanced the file's stamp, which forces the re-parse here.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetUntickedItemsAsync()
+    {
+        var items = new List<string>();
+        string dir = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.MilestonesDirectory);
+        IReadOnlyList<string> files = await store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);
+        foreach (string file in files)
+        {
+            // Same stamp discipline as the full parse: capture BEFORE the read, never cache an unknown stamp.
+            DateTime? stamp = lastWriteTime(file);
+            if (stamp is { } current
+                && incomplete.TryGetValue(file, out ParsedIncomplete cached)
+                && cached.Stamp == current)
+            {
+                items.AddRange(cached.Unticked);
+                continue;
+            }
+
+            string content = await store.ReadAsync(file) ?? string.Empty;
+            (int t, int c, IReadOnlyList<string> unticked) = CountCheckboxes(content);
+            // Re-establish the membership invariant for this file: drop any stale entry first, so a file
+            // that became fully checked (or lost its stamp) can never keep short-circuiting the epic gate.
+            incomplete.Remove(file);
+            if (c < t && stamp is { } s)
+            {
+                incomplete[file] = new ParsedIncomplete(s, unticked);
+            }
+
+            items.AddRange(unticked);
+        }
+
+        return items;
+    }
+
     private void Accumulate(string path, DateTime? stamp, string content, ref int total, ref int completed)
     {
-        (int t, int c) = CountCheckboxes(content);
+        (int t, int c, IReadOnlyList<string> unticked) = CountCheckboxes(content);
         total += t;
         completed += c;
-        // Remember a still-incomplete file (>=1 unchecked box) so the next call can short-circuit on it.
+        // Remember a still-incomplete file (>=1 unchecked box) so the next call can short-circuit on it
+        // and GetUntickedItemsAsync can serve its items without a re-read.
         if (c < t && stamp is { } s)
         {
-            incomplete[path] = s;
+            incomplete[path] = new ParsedIncomplete(s, unticked);
         }
     }
 
-    // Ported verbatim from RepositoryProjectionService.CountCheckboxes (the canonical, authoritative rule).
-    internal static (int total, int completed) CountCheckboxes(string content)
+    // Ported from RepositoryProjectionService.CountCheckboxes (the canonical rule — legacy backend code
+    // that must NOT be modified). The RECOGNITION rule (fence toggling, the "- [ ] "/"- [x] " shape) is
+    // byte-identical to the backend's; the only extension is collecting each unticked item's trimmed line
+    // so callers can render the open items, not just count them.
+    internal static (int Total, int Completed, IReadOnlyList<string> Unticked) CountCheckboxes(string content)
     {
         int total = 0;
         int completed = 0;
+        var unticked = new List<string>();
         bool insideFence = false;
 
         foreach (ReadOnlySpan<char> rawLine in content.AsSpan().EnumerateLines())
@@ -122,6 +184,7 @@ internal sealed class MilestoneGate
             if (mark == ' ')
             {
                 total++;
+                unticked.Add(line.TrimEnd().ToString());
             }
             else if (mark is 'x' or 'X')
             {
@@ -130,6 +193,6 @@ internal sealed class MilestoneGate
             }
         }
 
-        return (total, completed);
+        return (total, completed, unticked);
     }
 }

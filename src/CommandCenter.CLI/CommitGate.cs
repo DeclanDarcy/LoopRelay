@@ -12,15 +12,18 @@ namespace CommandCenter.Cli;
 /// The <c>.agents/</c> submodule is deliberately IGNORED here: it is committed and pushed to its own remote by
 /// <see cref="AgentsSubmodulePublisher"/> before each codex turn, so this gate neither stages nor advances the
 /// <c>.agents</c> gitlink pointer, and it never counts a lone submodule change as progress. Consequently
-/// "substantive progress" means a real (non-<c>.agents</c>) repository file changed; an iteration that touched
-/// only <c>.agents/</c> made no progress and increments <see cref="NoChangesCount"/>, while any real change
-/// resets it to 0. Once the count exceeds <see cref="MaxNoChangesCount"/> the loop is asked to stop.
+/// "substantive progress" means a real (non-<c>.agents</c>) repository file changed — the shared
+/// <see cref="WorkingTreeChangeDetector"/> rule, which the handoff-prompt choice also keys on — so an
+/// iteration that touched only <c>.agents/</c> made no progress and increments <see cref="NoChangesCount"/>,
+/// while any real change resets it to 0. Once the count exceeds <see cref="MaxNoChangesCount"/> the loop is
+/// asked to stop.
 ///
 /// Git is driven through <see cref="IProcessRunner"/> with <c>workingDirectory = repository.Path</c> (no
 /// <c>-C</c>), mirroring <c>GitService</c>; a nonzero exit on any git call aborts the iteration by throwing
 /// <see cref="LoopStepException"/>, which the loop surfaces as a failed run.
 /// </summary>
-internal sealed class CommitGate(IProcessRunner processRunner, Repository repository, ILoopConsole console)
+internal sealed class CommitGate(
+    WorkingTreeChangeDetector changeDetector, IProcessRunner processRunner, Repository repository, ILoopConsole console)
 {
     internal const int MaxNoChangesCount = 2;
 
@@ -43,7 +46,7 @@ internal sealed class CommitGate(IProcessRunner processRunner, Repository reposi
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        IReadOnlyList<string> changed = await GetRealChangedPathsAsync();
+        IReadOnlyList<string> changed = await changeDetector.GetRealChangedPathsAsync();
 
         if (changed.Count > 0)
         {
@@ -66,24 +69,6 @@ internal sealed class CommitGate(IProcessRunner processRunner, Repository reposi
         }
 
         return false;
-    }
-
-    // The target repo's changed paths with the `.agents/` submodule filtered out. The parent working tree only
-    // ever surfaces the submodule as a single `.agents` gitlink entry (a moved pointer from the pre-codex
-    // publish); this gate ignores it so it is neither committed nor treated as progress.
-    private async Task<IReadOnlyList<string>> GetRealChangedPathsAsync()
-    {
-        ProcessRunResult result = await processRunner.RunAsync("git", ["status", "--porcelain"], repository.Path);
-        if (result.ExitCode != 0)
-        {
-            throw new LoopStepException($"git status failed: {result.StandardError}");
-        }
-
-        return GitPorcelain.ChangedPaths(result.StandardOutput)
-            .Where(path =>
-                path != OrchestrationArtifactPaths.AgentsDirectory &&
-                !path.StartsWith(OrchestrationArtifactPaths.AgentsDirectory + "/", StringComparison.Ordinal))
-            .ToList();
     }
 
     private async Task RunGitAsync(string label, IReadOnlyList<string> arguments)

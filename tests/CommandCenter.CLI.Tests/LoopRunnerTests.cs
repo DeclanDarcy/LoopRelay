@@ -22,17 +22,19 @@ public class LoopRunnerTests
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions());
         var gate = new MilestoneGate(store, repo);
+        // By default `git status` reports an EMPTY working tree, so the submodule publisher is a no-op, the
+        // gate skips commit/push — the existing single-iteration tests reach their asserted outcome before it
+        // could ever trip — and every execution slice takes the no-changes handoff (these tests only assert
+        // the "Execution" phase prefix and the handoff file, both identical across the two handoff prompts).
+        var git = new FakeProcessRunner { Handler = (_, _) => FakeProcessRunner.Ok() };
+        var detector = new WorkingTreeChangeDetector(git, repo);
         // These tests exercise loop orchestration only; the Codex usage gate is unit-tested separately
         // (UsageGateTests) and its per-turn placement in GatedAgentRuntimeTests, so the loop runs ungated.
-        var exec = new ExecutionStep(rt, art, con, repo);
+        var exec = new ExecutionStep(rt, art, con, repo, detector, gate);
         var dec = new DecisionSession(rt, router, art, con, repo);
-        // By default `git status` reports an EMPTY working tree, so the submodule publisher is a no-op and
-        // the gate skips commit/push — the existing single-iteration tests reach their asserted outcome
-        // before it could ever trip.
-        var git = new FakeProcessRunner { Handler = (_, _) => FakeProcessRunner.Ok() };
         // CommitGate IGNORES `.agents`; the submodule is committed+pushed only by the publisher (pre-codex).
         var submodulePublisher = new AgentsSubmodulePublisher(git, repo, con);
-        var commitGate = new CommitGate(git, repo, con);
+        var commitGate = new CommitGate(detector, git, repo, con);
         return new Harness(
             new LoopRunner(gate, art, exec, dec, submodulePublisher, commitGate, con), rt, store, repo, con, git);
     }

@@ -57,10 +57,14 @@ var telemetryRecorder = SessionTelemetryComposition.CreateRecorder(
 var gatedRuntime = new GatedAgentRuntime(
     runtime, usageGate, telemetryRecorder, telemetryClock, SessionTelemetryComposition.RepoName(repository));
 var gate = new MilestoneGate(store, repository);
-var execution = new ExecutionStep(gatedRuntime, artifacts, console, repository);
+// One detector serves both real-change consumers (handoff-prompt choice + commit/stall gate), and the
+// loop's MilestoneGate is the SAME instance handed to ExecutionStep so the handoff-time unticked lookup
+// reuses the epic gate's parse cache instead of re-reading every milestone file.
+var changeDetector = new WorkingTreeChangeDetector(processRunner, repository);
+var execution = new ExecutionStep(gatedRuntime, artifacts, console, repository, changeDetector, gate);
 var decision = new DecisionSession(gatedRuntime, router, artifacts, console, repository);
 var submodulePublisher = new AgentsSubmodulePublisher(processRunner, repository, console);
-var commitGate = new CommitGate(processRunner, repository, console);
+var commitGate = new CommitGate(changeDetector, processRunner, repository, console);
 var loop = new LoopRunner(gate, artifacts, execution, decision, submodulePublisher, commitGate, console);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---

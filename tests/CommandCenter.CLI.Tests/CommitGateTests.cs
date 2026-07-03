@@ -12,8 +12,11 @@ public class CommitGateTests
     // git add stages everything except the `.agents` submodule — the gate never touches the gitlink.
     private static readonly string[] AddExcludingAgents = ["add", "-A", "--", ".", ":(exclude).agents"];
 
-    private static CommitGate New(FakeProcessRunner fake) =>
-        new(fake, new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" }, new RecordingLoopConsole());
+    private static CommitGate New(FakeProcessRunner fake)
+    {
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        return new CommitGate(new WorkingTreeChangeDetector(fake, repo), fake, repo, new RecordingLoopConsole());
+    }
 
     /// <summary>Scripts a runner whose `git status` always returns the given porcelain; everything else succeeds.</summary>
     private static FakeProcessRunner StatusRunner(string porcelain) => new()
