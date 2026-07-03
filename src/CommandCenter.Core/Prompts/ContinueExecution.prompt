@@ -2,3 +2,4 @@
 {details}
 {decisions}
 continue executing the current milestone in .agents/milestones/
+before exiting, ensure that every completed checkbox item is ticked in the milestone doc(s) that you worked on
