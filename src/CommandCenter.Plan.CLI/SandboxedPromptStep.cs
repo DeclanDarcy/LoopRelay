@@ -65,6 +65,16 @@ internal sealed class SandboxedPromptStep(
             }
         }
 
+        // The changed-content guard is only meaningful against a seeded snapshot: a guard absent from Seeds
+        // would silently degrade to a "differs from empty" check, so the misconfiguration fails loud — and,
+        // like a missing seed, BEFORE any codex call so a bad step plan never burns a turn.
+        if (step.ChangedGuard is not null && changedGuardSnapshot is null)
+        {
+            throw new PlanStepException(
+                $"{step.Label} is misconfigured: ChangedGuard {step.ChangedGuard} is not among the step's Seeds, "
+                + "so there is no pre-turn snapshot to compare against.");
+        }
+
         var renderer = new ConsoleTurnRenderer(console);
         AgentTurnResult result = await runtime.RunOneShotAsync(
             AgentSpecs.SandboxedOneShot(repository, sandbox.RootPath),

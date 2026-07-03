@@ -193,15 +193,21 @@ public class PlanPipelineTests
         Harness h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
 
+        using var cts = new CancellationTokenSource();
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
             s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN V1").Wait();
             return Turns.Completed("wrote plan");
         }));
-        // Simulates cancellation arriving mid-run, during the adversarial review turn.
-        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => throw new OperationCanceledException()));
+        // Simulates cancellation arriving mid-run, during the adversarial review turn: the CALLER's token is
+        // cancelled (Cancelled is returned only for caller cancellation — see the Failed-path tests below).
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+        {
+            cts.Cancel();
+            throw new OperationCanceledException(cts.Token);
+        }));
 
-        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(cts.Token);
 
         Assert.Equal(PlanOutcome.Cancelled, outcome);
         // The review session closes itself (try/finally) even on the cancellation path; the planning
@@ -211,5 +217,42 @@ public class PlanPipelineTests
         // Mirrors Program.cs's `finally { await pipeline.DisposeAsync(); }`, which must run on every path.
         await h.Pipeline.DisposeAsync();
         Assert.Equal(2, h.Runtime.ClosedSessions);
+    }
+
+    [Fact]
+    public async Task RunAsync_UnexpectedException_ReturnsFailed_AndSurfacesTheMessageAsAConsoleError()
+    {
+        // Non-PlanStepException failures (Win32Exception on a bad CODEX_EXECUTABLE, IOException on app-server
+        // handshake death, ...) must honor the exit-code contract: message on the console, outcome Failed —
+        // never an unhandled crash with a stack trace.
+        Harness h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            throw new InvalidOperationException("codex launcher exploded")));
+
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+
+        Assert.Equal(PlanOutcome.Failed, outcome);
+        Assert.Contains(
+            h.Console.Events,
+            e => e.Kind == "error" && e.Text.Contains("codex launcher exploded"));
+    }
+
+    [Fact]
+    public async Task RunAsync_OperationCanceledWithoutCallerCancellation_ReturnsFailed_NotCancelled()
+    {
+        // An OperationCanceledException while the CALLER's token is not cancelled is not a cancellation the
+        // operator asked for (e.g. an internal timeout) — it is a Failed run, and its message is surfaced.
+        Harness h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            throw new OperationCanceledException("internal turn timeout")));
+
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+
+        Assert.Equal(PlanOutcome.Failed, outcome);
+        Assert.Contains(h.Console.Events, e => e.Kind == "error" && e.Text.Contains("internal turn timeout"));
     }
 }

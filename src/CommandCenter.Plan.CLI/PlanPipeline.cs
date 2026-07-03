@@ -75,12 +75,22 @@ internal sealed class PlanPipeline(
 
             return PlanOutcome.Completed;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            // Cancelled ONLY on the caller's token: an OperationCanceledException without caller cancellation
+            // (e.g. an internal timeout) is a failure, not a cancellation — it falls through to the catch below.
             return PlanOutcome.Cancelled;
         }
         catch (PlanStepException ex)
         {
+            console.Error(ex.Message);
+            return PlanOutcome.Failed;
+        }
+        catch (Exception ex)
+        {
+            // Anything else (Win32Exception on a bad CODEX_EXECUTABLE, IOException on app-server handshake
+            // death, ...) must still honor the documented exit-code contract: surface the message, exit Failed —
+            // never crash with a bare stack trace.
             console.Error(ex.Message);
             return PlanOutcome.Failed;
         }

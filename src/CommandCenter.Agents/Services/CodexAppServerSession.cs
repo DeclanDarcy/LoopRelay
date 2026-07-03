@@ -122,7 +122,16 @@ public sealed class CodexAppServerSession : IAgentSession
             completedTurns = turnIndex;
             Volatile.Write(ref totalUsage, totalUsage.Add(usage));
 
-            return new AgentTurnResult(turnIndex, outcome.State, outcome.Output, usage);
+            // Failure-only diagnostics: prefer the protocol-level failure message (turn/completed error), fall
+            // back to the process's retained stderr tail — so consumers see WHY codex failed, not a bare state.
+            return new AgentTurnResult(
+                turnIndex,
+                outcome.State,
+                outcome.Output,
+                usage,
+                outcome.State == AgentTurnState.Completed
+                    ? null
+                    : NonWhitespace(outcome.FailureMessage) ?? NonWhitespace(process.ErrorSnapshot));
         }
         finally
         {
@@ -361,6 +370,8 @@ public sealed class CodexAppServerSession : IAgentSession
                 AgentEffortLevel.Medium => "medium",
                 _ => "low"
             };
+
+    private static string? NonWhitespace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static void ThrowIfError(CodexAppServerMessage message, string context)
     {

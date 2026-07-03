@@ -30,6 +30,7 @@ public sealed class CodexAppServerSessionTests
 
         Assert.Equal(AgentTurnState.Completed, result.State);
         Assert.Equal("reply 1", result.Output);
+        Assert.Null(result.Diagnostics); // diagnostics are failure-only; a completed turn never carries them
         Assert.Equal(11, result.Usage.PromptTokens);
         Assert.Equal(5, result.Usage.OutputTokens);
         Assert.Equal(1, session.CompletedTurns);
@@ -57,14 +58,35 @@ public sealed class CodexAppServerSessionTests
     }
 
     [Fact]
-    public async Task FailedTurnSurfacesFailedState()
+    public async Task FailedTurnSurfacesFailedStateWithTheFailureMessageAsDiagnostics()
     {
+        // The turn/completed frame carried { status: "failed", error: { message: "boom" } } — that message must
+        // ride out on AgentTurnResult.Diagnostics so consumers surface the actual codex error, not a bare state.
         var process = new ScriptedAppServerProcess { TurnStatus = "failed" };
         await using CodexAppServerSession session = NewSession(process);
 
         AgentTurnResult result = await session.RunTurnAsync("hello");
 
         Assert.Equal(AgentTurnState.Failed, result.State);
+        Assert.NotNull(result.Diagnostics);
+        Assert.Contains("boom", result.Diagnostics);
+    }
+
+    [Fact]
+    public async Task FailedTurnWithoutAProtocolFailureMessageFallsBackToTheProcessErrorSnapshot()
+    {
+        var process = new ScriptedAppServerProcess
+        {
+            TurnStatus = "failed",
+            TurnErrorMessage = null,
+            ErrorSnapshot = "stderr tail: sandbox denied",
+        };
+        await using CodexAppServerSession session = NewSession(process);
+
+        AgentTurnResult result = await session.RunTurnAsync("hello");
+
+        Assert.Equal(AgentTurnState.Failed, result.State);
+        Assert.Equal("stderr tail: sandbox denied", result.Diagnostics);
     }
 
     [Fact]
@@ -339,6 +361,15 @@ public sealed class CodexAppServerSessionTests
         public List<string> Writes { get; } = [];
         public List<string> Methods { get; } = [];
         public string TurnStatus { get; init; } = "completed";
+
+        /// <summary>The error.message a failed turn/completed carries; null omits the error object entirely
+        /// (modeling a codex failure that reports no protocol-level message).</summary>
+        public string? TurnErrorMessage { get; init; } = "boom";
+
+        /// <summary>The retained stderr tail the session's diagnostics fall back to when the protocol
+        /// carried no failure message (IAgentProcess.ErrorSnapshot; interface default is null).</summary>
+        public string? ErrorSnapshot { get; init; }
+
         public bool EmitApprovalRequest { get; init; }
 
         /// <summary>m10 (B): how many item/agentMessage/delta notifications each turn emits (long-output stress).</summary>
@@ -497,7 +528,9 @@ public sealed class CodexAppServerSessionTests
 
                     EmitNotification("turn/completed", TurnStatus == "completed"
                         ? new { turn = new { id = $"u{index}", status = "completed" } }
-                        : (object)new { turn = new { id = $"u{index}", status = "failed", error = new { message = "boom" } } });
+                        : TurnErrorMessage is { } errorMessage
+                            ? (object)new { turn = new { id = $"u{index}", status = "failed", error = new { message = errorMessage } } }
+                            : new { turn = new { id = $"u{index}", status = "failed" } });
                     break;
             }
         }

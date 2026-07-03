@@ -163,6 +163,31 @@ public class SandboxedPromptStepTests
     }
 
     [Fact]
+    public async Task RunAsync_TurnFailed_AfterAgentWroteValidOutputIntoSandbox_StillCopiesBackNothing()
+    {
+        // Falsifies the "failed turn copies nothing back" invariant for real: the sandbox holds a perfectly
+        // valid output that WOULD satisfy every gate — the turn failure alone must keep it out of the repo.
+        var (step, rt, sandboxes, store, repo, _) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(sandboxes.Resolve("details.md"), "VALID DETAILS WRITTEN BEFORE FAILURE").Wait();
+            return Turns.Failed("boom", "stderr tail here");
+        }));
+
+        SandboxedStepPlan plan = Plan(
+            seeds: [OrchestrationArtifactPaths.Plan],
+            requiredOutputs: [OrchestrationArtifactPaths.Details],
+            copyBackFiles: [OrchestrationArtifactPaths.Details]);
+
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
+            () => step.RunAsync(plan, CancellationToken.None));
+
+        Assert.Contains("stderr tail here", ex.Message);
+        Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.Details)));
+    }
+
+    [Fact]
     public async Task RunAsync_TurnFailedWithoutDiagnostics_ThrowsWithoutDiagnosticsSuffix()
     {
         var (step, rt, sandboxes, store, repo, _) = New();
@@ -344,6 +369,99 @@ public class SandboxedPromptStepTests
         await step.RunAsync(plan, CancellationToken.None);
 
         Assert.Equal("PLAN REWRITTEN", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Plan)));
+    }
+
+    [Fact]
+    public async Task RunAsync_ChangedGuardNotAmongSeeds_ThrowsMisconfiguration_BeforeAnyCodexCall()
+    {
+        // A ChangedGuard with no seeded snapshot would silently degrade to a "differs from empty" check —
+        // the misconfiguration must fail loud, and before burning a codex turn.
+        var (step, rt, sandboxes, store, repo, _) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Details), "DETAILS");
+
+        SandboxedStepPlan plan = Plan(
+            seeds: [OrchestrationArtifactPaths.Details],
+            changedGuard: OrchestrationArtifactPaths.Plan,
+            copyBackFiles: [OrchestrationArtifactPaths.Plan]);
+
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
+            () => step.RunAsync(plan, CancellationToken.None));
+
+        Assert.Contains(OrchestrationArtifactPaths.Plan, ex.Message);
+        Assert.Contains("Seeds", ex.Message);
+        Assert.Empty(rt.OneShotCalls);
+        Assert.Single(sandboxes.Disposed);
+    }
+
+    [Fact]
+    public async Task RunAsync_ChangedGuard_CaseOnlyDifference_PassesTheOrdinalGate_AndCopiesBack()
+    {
+        // The gate compares ORDINAL: a case-only rewrite IS a change and must pass (and copy back).
+        var (step, rt, sandboxes, store, repo, _) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN ORIGINAL");
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(sandboxes.Resolve("plan.md"), "plan original").Wait();
+            return Turns.Completed("changed only the casing");
+        }));
+
+        SandboxedStepPlan plan = Plan(
+            seeds: [OrchestrationArtifactPaths.Plan],
+            changedGuard: OrchestrationArtifactPaths.Plan,
+            copyBackFiles: [OrchestrationArtifactPaths.Plan]);
+
+        await step.RunAsync(plan, CancellationToken.None);
+
+        Assert.Equal("plan original", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Plan)));
+    }
+
+    [Fact]
+    public async Task RunAsync_ChangedGuard_TrailingWhitespaceOnlyDifference_PassesTheOrdinalGate_AndCopiesBack()
+    {
+        // Ordinal means no trimming/normalization: a trailing-newline-only rewrite IS a change and must pass.
+        var (step, rt, sandboxes, store, repo, _) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN ORIGINAL");
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(sandboxes.Resolve("plan.md"), "PLAN ORIGINAL\n").Wait();
+            return Turns.Completed("appended a newline");
+        }));
+
+        SandboxedStepPlan plan = Plan(
+            seeds: [OrchestrationArtifactPaths.Plan],
+            changedGuard: OrchestrationArtifactPaths.Plan,
+            copyBackFiles: [OrchestrationArtifactPaths.Plan]);
+
+        await step.RunAsync(plan, CancellationToken.None);
+
+        Assert.Equal("PLAN ORIGINAL\n", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Plan)));
+    }
+
+    [Fact]
+    public async Task RunAsync_PathOutsideDotAgents_MapsToItselfInBothDirections_DocumentingStripAgentsPrefixPassThrough()
+    {
+        // StripAgentsPrefix only strips a leading ".agents/"; any other repo-relative path passes through
+        // unchanged (no such path exists in the pipeline today — this pins the current pass-through behavior).
+        var (step, rt, sandboxes, store, repo, _) = New();
+        await store.WriteAsync(Resolve(repo, "notes.md"), "NOTES ORIGINAL");
+
+        string? seenInSandbox = null;
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            seenInSandbox = s.ReadAsync(sandboxes.Resolve("notes.md")).Result;
+            s.WriteAsync(sandboxes.Resolve("notes.md"), "NOTES REWRITTEN").Wait();
+            return Turns.Completed("rewrote notes");
+        }));
+
+        SandboxedStepPlan plan = Plan(
+            seeds: ["notes.md"],
+            requiredOutputs: ["notes.md"],
+            copyBackFiles: ["notes.md"]);
+
+        await step.RunAsync(plan, CancellationToken.None);
+
+        Assert.Equal("NOTES ORIGINAL", seenInSandbox); // seeded at the unmapped sandbox path
+        Assert.Equal("NOTES REWRITTEN", await store.ReadAsync(Resolve(repo, "notes.md"))); // copied back to the same repo path
     }
 
     [Fact]
