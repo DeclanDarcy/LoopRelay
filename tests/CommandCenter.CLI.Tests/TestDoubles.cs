@@ -81,6 +81,30 @@ internal static class Turns
         new(0, AgentTurnState.Failed, output, new AgentTokenUsage(0, 0), diagnostics);
 }
 
+internal sealed class FakeDecisionSessionResumeStore : IDecisionSessionResumeStore
+{
+    public DecisionSessionResumeState? State { get; set; }
+    public List<DecisionSessionResumeState> Written { get; } = new();
+    public int ClearCalls { get; private set; }
+
+    public Task<DecisionSessionResumeState?> ReadAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(State);
+
+    public Task WriteAsync(DecisionSessionResumeState state, CancellationToken cancellationToken = default)
+    {
+        Written.Add(state);
+        State = state;
+        return Task.CompletedTask;
+    }
+
+    public Task ClearAsync(CancellationToken cancellationToken = default)
+    {
+        ClearCalls++;
+        State = null;
+        return Task.CompletedTask;
+    }
+}
+
 internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
 {
     public Queue<ScriptedTurn> OneShotTurns { get; } = new();

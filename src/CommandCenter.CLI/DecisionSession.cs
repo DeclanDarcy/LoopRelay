@@ -19,7 +19,9 @@ namespace CommandCenter.Cli;
 /// execution agent's system prompt — GenerateSystemPromptForFirstExecutionAgent on the first pass (no handoff
 /// yet), else GenerateSystemPromptForNextExecutionAgent(latestHandoff) (a post-Transfer process still has a
 /// handoff, so it is a NEXT proposal, not a first) — persists the proposal to decisions.{N:0000}.md AND
-/// canonical decisions.md; verifies decisions.md exists.
+/// canonical decisions.md; verifies decisions.md exists. Across CLI runs, the warm process is resumable: the
+/// codex thread id + router accounting persist to {repo}/.commandcenter/decision-session.json after every
+/// successful proposal (see OpenOrResumeSessionAsync).
 /// </summary>
 internal sealed class DecisionSession(
     IAgentRuntime runtime,
@@ -28,12 +30,16 @@ internal sealed class DecisionSession(
     ILoopConsole console,
     Repository repository,
     IDecisionCostModel? costModel = null,
-    ISandboxWorkspaceFactory? sandboxFactory = null) : IAsyncDisposable
+    ISandboxWorkspaceFactory? sandboxFactory = null,
+    IDecisionSessionResumeStore? resumeStore = null,
+    bool resumeEnabled = true) : IAsyncDisposable
 {
     private readonly IDecisionCostModel costModel = costModel ?? new EffectiveTokenCostModel();
     private readonly ISandboxWorkspaceFactory sandboxFactory = sandboxFactory ?? new TempSandboxWorkspaceFactory();
+    private readonly IDecisionSessionResumeStore resumeStore = resumeStore ?? new NullDecisionSessionResumeStore();
     private IAgentSession? session;
     private bool seeded;
+    private bool resumeAttempted;
 
     // Operational-context size-health state (Stage 2, mirrors RepositoryOrchestrator). Single-threaded, no lock.
     private int? previousOperationalContextSize;
@@ -65,7 +71,7 @@ internal sealed class DecisionSession(
             await TransferAsync(cancellationToken);
         }
 
-        session ??= await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
+        session ??= await OpenOrResumeSessionAsync(cancellationToken);
 
         (string? handoff, _) = await artifacts.ReadLatestHandoffAsync();
         string proposalPrompt = await BuildProposalPromptAsync(handoff);
@@ -88,6 +94,7 @@ internal sealed class DecisionSession(
         // on it are cheap handoff-only deltas.
         seeded = true;
         RecordProposalCost(proposed.Usage);
+        await PersistResumeStateAsync(cancellationToken);
         proposalRenderer.EchoIfSilent(proposed.Output);
 
         // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
@@ -126,6 +133,72 @@ internal sealed class DecisionSession(
         }
 
         return $"{operationalContext}\n\n{baseline}";
+    }
+
+    /// <summary>
+    /// The FIRST open of this CLI process attempts to resume the persisted decision session (if any); every
+    /// later open — the post-Transfer recycle, the reopen after a failed turn — starts fresh, because the
+    /// persisted state describes a thread this process has already moved past. Restored accounting is applied
+    /// only HERE, at a successful resume: the router's route evaluation runs before the open, so the first
+    /// route of a run always sees pre-restore (zeroed) inputs and the existing !seeded downgrade guards it.
+    /// </summary>
+    private async Task<IAgentSession> OpenOrResumeSessionAsync(CancellationToken cancellationToken)
+    {
+        bool firstOpen = !resumeAttempted;
+        resumeAttempted = true;
+
+        DecisionSessionResumeState? state = firstOpen && resumeEnabled
+            ? await resumeStore.ReadAsync(cancellationToken)
+            : null;
+        if (state is null)
+        {
+            return await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
+        }
+
+        try
+        {
+            IAgentSession resumed = await runtime.OpenSessionAsync(
+                AgentSpecs.Decision(repository, state.ThreadId), cancellationToken);
+
+            // The resumed thread already holds the operational context (its first proposal primed it), and
+            // the router accounting it accrued — restore both so priming and transfer economics continue
+            // where the previous run left off.
+            seeded = true;
+            occupancyTokens = state.OccupancyTokens;
+            reuseCost = state.ReuseCost;
+            reuseCycles = state.ReuseCycles;
+            lastCycleCost = state.LastCycleCost;
+            prevCycleCost = state.PrevCycleCost;
+            transferCost = state.TransferCost;
+            transferCount = state.TransferCount;
+            previousOperationalContextSize = state.PreviousOperationalContextSize;
+            operationalContextGrowthStreak = state.OperationalContextGrowthStreak;
+            console.Info($"Resumed decision session (thread {state.ThreadId}).");
+            return resumed;
+        }
+        catch (AgentSessionResumeException ex)
+        {
+            console.Warn($"Could not resume decision session (thread {state.ThreadId}): {ex.Message} Starting fresh.");
+            await resumeStore.ClearAsync(cancellationToken);
+            return await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// The state is only ever written after a SUCCESSFUL proposal turn, so its existence implies the thread is
+    /// primed (no seeded field in the schema). One small file write per decision step; the store is fail-open.
+    /// </summary>
+    private async Task PersistResumeStateAsync(CancellationToken cancellationToken)
+    {
+        if (session?.ThreadId is not { Length: > 0 } threadId)
+        {
+            return; // no codex thread id (legacy/one-shot shapes) — nothing a later run could resume
+        }
+
+        await resumeStore.WriteAsync(new DecisionSessionResumeState(
+            threadId, occupancyTokens, reuseCost, reuseCycles, lastCycleCost, prevCycleCost,
+            transferCost, transferCount, previousOperationalContextSize, operationalContextGrowthStreak),
+            cancellationToken);
     }
 
     /// <summary>
@@ -375,7 +448,11 @@ internal sealed class DecisionSession(
             ? message
             : $"{message} Agent stderr (tail):\n{diagnostics}";
 
-    private async Task CloseAsync()
+    // clearResumeState: a Transfer recycle or a failed turn ends the thread's useful life — the persisted
+    // resume state must die with it (the recycled process re-persists after its first successful turn).
+    // Disposal (loop exit) KEEPS the state: it is precisely the next run's resume payload, and no turn can
+    // mutate the thread between the last persist and disposal.
+    private async Task CloseAsync(bool clearResumeState = true)
     {
         if (session is not null)
         {
@@ -388,8 +465,13 @@ internal sealed class DecisionSession(
             reuseCycles = 0;
             lastCycleCost = 0d;
             prevCycleCost = 0d;
+
+            if (clearResumeState)
+            {
+                await resumeStore.ClearAsync(CancellationToken.None);
+            }
         }
     }
 
-    public async ValueTask DisposeAsync() => await CloseAsync();
+    public async ValueTask DisposeAsync() => await CloseAsync(clearResumeState: false);
 }

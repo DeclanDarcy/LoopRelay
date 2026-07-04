@@ -5,6 +5,7 @@ using CommandCenter.Core.Prompts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Orchestration;
 using CommandCenter.Orchestration.Abstractions;
+using CommandCenter.Orchestration.Models;
 using CommandCenter.Orchestration.Services;
 using Xunit;
 
@@ -29,6 +30,29 @@ public class DecisionSessionTests
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
+
+    private static (DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
+        RecordingLoopConsole Con, FakeDecisionSessionResumeStore Resume)
+        NewWithResume(
+            DecisionSessionRouterOptions? routerOptions = null,
+            DecisionSessionResumeState? state = null,
+            bool resumeEnabled = true)
+    {
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = new LoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
+        var sandbox = new FakeSandboxWorkspaceFactory { Root = repo.Path };
+        var resume = new FakeDecisionSessionResumeStore { State = state };
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox,
+            resumeStore: resume, resumeEnabled: resumeEnabled);
+        return (session, rt, store, repo, con, resume);
+    }
+
+    private static DecisionSessionResumeState ResumeState(string threadId = "thread-old") =>
+        new(threadId, 100, 5d, 2, 3d, 2d, 300_000d, 1, 500, 1);
 
     // One-shot sandboxes seed their inputs FLAT at the workspace root, bare filenames only (see
     // DecisionSession.SandboxSeedName) — scripted one-shot turns read/write these, never .agents/-shaped paths.
@@ -709,6 +733,155 @@ public class DecisionSessionTests
         // 2026-07-02: the agent read both seeded files and replied with the merged doc, never touching the file).
         Assert.Contains("overwriting `operational_context.md`", UpdateOperationalContext.Text);
         Assert.DoesNotContain("The output should be the complete replacement document", UpdateOperationalContext.Text);
+    }
+
+    [Fact]
+    public async Task Run_FirstEntry_WithPersistedState_ResumesWarm_NoContextResend_AndRestoresAccounting()
+    {
+        var (session, rt, store, repo, con, resume) = NewWithResume(state: ResumeState());
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            // A successfully resumed thread already holds the operational context — the proposal is the
+            // warm handoff-only delta, exactly as if the process had never restarted.
+            Assert.DoesNotContain("OPCTX", prompt);
+            Assert.Contains("HANDOFF", prompt);
+            return Turns.Completed("D-RESUMED");
+        }));
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Equal("thread-old", rt.OpenedSpecs.Single().ResumeThreadId);
+        Assert.Contains(con.Events, e => e.Kind == "info" && e.Text.Contains("Resumed decision session"));
+        // The restored accounting flowed through the post-turn persist: reuseCycles 2 -> 3, reuseCost intact,
+        // transfer calibration intact.
+        DecisionSessionResumeState written = Assert.Single(resume.Written);
+        Assert.Equal("thread-old", written.ThreadId);
+        Assert.Equal(3, written.ReuseCycles);
+        Assert.Equal(5d, written.ReuseCost);
+        Assert.Equal(300_000d, written.TransferCost);
+        Assert.Equal(1, written.TransferCount);
+    }
+
+    [Fact]
+    public async Task Run_FirstEntry_ResumeFails_WarnsClearsAndFallsBackToAFreshPrimedProcess()
+    {
+        var (session, rt, store, repo, con, resume) = NewWithResume(state: ResumeState());
+        rt.FailResume = true;
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            Assert.Contains("OPCTX", prompt);   // fresh process: primed inline, byte-identical to today
+            return Turns.Completed("D-FRESH");
+        }));
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Equal(2, rt.OpenedSpecs.Count);
+        Assert.Equal("thread-old", rt.OpenedSpecs[0].ResumeThreadId);
+        Assert.Null(rt.OpenedSpecs[1].ResumeThreadId);
+        Assert.Contains(con.Events, e => e.Kind == "warn" && e.Text.Contains("Could not resume"));
+        Assert.Equal(1, resume.ClearCalls);
+        // The fresh thread re-persisted after its successful turn — the next run resumes THAT thread.
+        Assert.Equal("thread-1", Assert.Single(resume.Written).ThreadId);
+    }
+
+    [Fact]
+    public async Task Run_NoPersistedState_OpensFresh_AndPersistsAfterTheSuccessfulProposal()
+    {
+        var (session, rt, store, repo, _, resume) = NewWithResume();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Null(rt.OpenedSpecs.Single().ResumeThreadId);
+        DecisionSessionResumeState written = Assert.Single(resume.Written);
+        Assert.Equal("thread-1", written.ThreadId);
+        Assert.Equal(1, written.ReuseCycles);
+        Assert.Equal(20, written.OccupancyTokens);
+    }
+
+    [Fact]
+    public async Task Run_TransferRecycle_ClearsTheState_ReopensWithoutResume_ThenPersistsTheNewThread()
+    {
+        var (session, rt, store, repo, _, resume) = NewWithResume(
+            new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        // Round 1: propose (occupancy 20 -> round 2 crosses the guard and Transfers).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        // Round 2: Transfer (delta + update + optimize + propose on the recycled process).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated");
+        }));
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, resume.ClearCalls);                    // the transfer close deleted the dead thread's state
+        Assert.Null(rt.OpenedSpecs[1].ResumeThreadId);         // the recycle opened FRESH — resume is first-open-only
+        Assert.Equal(2, resume.Written.Count);
+        Assert.Equal("thread-2", resume.Written[^1].ThreadId); // the post-transfer thread re-persisted
+    }
+
+    [Fact]
+    public async Task Run_FailedProposal_ClearsThePersistedState()
+    {
+        var (session, rt, store, repo, _, resume) = NewWithResume();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
+
+        await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
+
+        Assert.Equal(1, resume.ClearCalls);
+        Assert.Empty(resume.Written);
+    }
+
+    [Fact]
+    public async Task Dispose_KeepsThePersistedState_ItIsTheNextRunsResumePayload()
+    {
+        var (session, rt, store, repo, _, resume) = NewWithResume();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D1")));
+
+        await session.RunAsync(CancellationToken.None);
+        await session.DisposeAsync();
+
+        Assert.Equal(0, resume.ClearCalls);
+        Assert.NotNull(resume.State);
+        Assert.Equal(1, rt.ClosedSessions);   // the process still dies with the run — only the STATE survives
+    }
+
+    [Fact]
+    public async Task Run_WhenResumeDisabled_OpensFresh_ButStillPersists()
+    {
+        var (session, rt, store, repo, _, resume) = NewWithResume(state: ResumeState(), resumeEnabled: false);
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            Assert.Contains("OPCTX", prompt);   // no resume attempt -> fresh priming
+            return Turns.Completed("D1");
+        }));
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Null(rt.OpenedSpecs.Single().ResumeThreadId);   // the kill switch skips ONLY the resume attempt
+        Assert.NotEmpty(resume.Written);                        // persist/clear behavior is unchanged
     }
 }
 
