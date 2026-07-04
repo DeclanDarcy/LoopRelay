@@ -125,6 +125,9 @@ could mis-attribute; acceptable given the serial loop, and `null` is always a sa
   Not under `.agents/` — that submodule is committed & pushed every iteration
   (`AgentsSubmodulePublisher`), which would mean noisy telemetry commits and steady bloat.
   Add `.commandcenter/` to the repo's `.gitignore` (create if absent).
+  > **Superseded (2026-07-04):** `.commandcenter/` is now self-ignoring — `FileDecisionSessionResumeStore`
+  > writes a `.commandcenter/.gitignore` containing `*` when it first creates the directory, so the manual
+  > root-.gitignore step is no longer load-bearing once the loop has run a decision step in the repo.
 - **Rotation: per-day / size hybrid.**
   - A new file begins each **calendar day** (UTC): `sessions.2026-07-01.0000.jsonl`.
   - Within a day, when the active file crosses the size cap (**5 MiB = 5,242,880 bytes**,
