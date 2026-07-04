@@ -33,7 +33,7 @@ Provide a concise description of what the session ultimately accomplished.
 Include:
 
 * major objectives completed
-* roadmap evolution
+* epic evolution
 * architecture evolution
 * important design work
 * major planning completed
@@ -51,7 +51,7 @@ Identify all meaningful progress made.
 Examples:
 
 * milestones completed
-* roadmap updates
+* epic updates
 * implementation completed
 * audits completed
 * certifications

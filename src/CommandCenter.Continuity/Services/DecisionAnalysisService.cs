@@ -134,7 +134,7 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
             "continue",
             "priority",
             "guardrail",
-            "roadmap",
+            "epic",
             "durable",
             "stable",
             "future",

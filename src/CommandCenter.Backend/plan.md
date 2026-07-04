@@ -1,7 +1,7 @@
-# Cognitive Architecture Reconstruction - Roadmap (`plan.md`)
+# Cognitive Architecture Reconstruction - Epic (`plan.md`)
 
 **Subject:** `src/CommandCenter.Backend` (single-assembly modular monolith, .NET 10, 135 `.cs` files, 7 flat feature folders)
-**Informed by:** `COGNITIVE_AUDIT.md` (findings C1-C9), `ARCHITECTURE_AUDIT.md` (findings A1-A13), and roadmap review feedback dated 2026-06-20
+**Informed by:** `COGNITIVE_AUDIT.md` (findings C1-C9), `ARCHITECTURE_AUDIT.md` (findings A1-A13), and epic review feedback dated 2026-06-20
 **Date:** 2026-06-20
 
 > **Purpose.** This is not a code-quality, test-coverage, or runtime-architecture plan. Its single goal is to transform the repository from incidental organization into intentional cognitive architecture: the repository should teach itself, so an engineer can understand the major subsystems from the filesystem without reading large quantities of code.
@@ -14,7 +14,7 @@
 
 The backend is excellent at location and poor at orientation (`COGNITIVE_AUDIT.md` headline). A named type is found instantly: naming is consistent, one type per file, namespace mirrors folder. But a subsystem cannot be discovered: two of seven folders (`Execution` 58 files, `Continuity` 50 files) are flat file-seas, each hiding several real subsystems; behavior is invisible from routes (all 35 endpoints inline in one `Program.cs` method); and the load-bearing concepts - the execution state machine, the git-porcelain parser, the information-tier classifier - have no structural home.
 
-The fix is still expected to be mostly re-foldering and promotion, not rewriting. The important revision is sequencing: the roadmap no longer jumps from audit findings directly to a committed target tree. The early milestones must prove the cognitive topology first:
+The fix is still expected to be mostly re-foldering and promotion, not rewriting. The important revision is sequencing: the epic no longer jumps from audit findings directly to a committed target tree. The early milestones must prove the cognitive topology first:
 
 1. Ratify the constitutional rules and vocabulary.
 2. Inventory what exists: candidate concepts, authority claims, state progression, workflow touchpoints, and hidden concepts.
@@ -188,7 +188,7 @@ The provisional tree should be rejected or changed if topology discovery shows b
 
 ---
 
-## Milestone Roadmap
+## Milestone Epic
 
 Milestones are dependency-ordered. No folder moves occur before M3 ratifies the topology. State-machine ownership and hidden-concept visibility are intentionally moved earlier than folder reconstruction.
 
@@ -213,7 +213,7 @@ Milestones are dependency-ordered. No folder moves occur before M3 ratifies the 
 ### M1.5 - Cognitive Topology Discovery
 
 - **Objective:** Answer "how do humans interact with what exists?" by measuring navigation, search, co-change, review, and prediction behavior against the M1 inventory.
-- **Rationale:** The original roadmap's largest risk was knowing the answer too early. M1.5 keeps discovery explicit: the structure must be derived from how engineers actually navigate and how the system actually changes.
+- **Rationale:** The original epic's largest risk was knowing the answer too early. M1.5 keeps discovery explicit: the structure must be derived from how engineers actually navigate and how the system actually changes.
 - **Scope:** Run workflow topology mapping and engineer navigation analysis:
   - Measure files traversed, searches required, and navigation hops for real questions: commit, recovery, execution-state updates, proposal promotion, git status parsing, tier classification.
   - Review recent change/review history where available: which files were modified or reviewed together?
@@ -239,7 +239,7 @@ Milestones are dependency-ordered. No folder moves occur before M3 ratifies the 
 ### M3 - Target Topology Ratification
 
 - **Objective:** Convert M1/M1.5/M2 evidence into an approved or explicitly rejected target structure and file-assignment manifest.
-- **Rationale:** This is the approval gate the previous roadmap was missing. Folder reconstruction starts only after the cognitive topology and state ownership have been proven.
+- **Rationale:** This is the approval gate the previous epic was missing. Folder reconstruction starts only after the cognitive topology and state ownership have been proven.
 - **Scope:** Produce the final target tree, file-assignment manifest for all 135 files, workflow-owner map, state-machine home map, hidden-concept promotion list, and rejection log. Resolve the document-model boundary using M1.5 evidence.
 - **Non-goals:** No moves. No code edits.
 - **Validation:** Every file has exactly one approved destination or an explicit decision to remain colocated. Every approved folder has a written authority/topology justification. No folder is justified primarily by file count. No `Core`/`Shared`/`Misc` unit exists.
@@ -308,7 +308,7 @@ Milestones are dependency-ordered. No folder moves occur before M3 ratifies the 
 ### M10 - Cognitive Certification
 
 - **Objective:** Measure final outcomes against the M0 baselines and certify the reconstruction.
-- **Rationale:** The roadmap's success is defined by cognitive outcomes, not by completion of moves.
+- **Rationale:** The epic's success is defined by cognitive outcomes, not by completion of moves.
 - **Scope:** Re-run the Success Metrics; record current-vs-target deltas; run a structured cold-navigation exercise; run an engineer-predictability exercise; file a short certification note alongside `COGNITIVE_AUDIT.md`.
 - **Non-goals:** No new structural change except small gaps certification surfaces.
 - **Validation:** All Success Metrics meet target or have documented exceptions with follow-up issues.
@@ -355,15 +355,15 @@ M0 (ratify)
 | Composition-root split drifts HTTP responses | Medium | Medium | Snapshot endpoint responses (status + envelope) before/after; centralize exception mapping with integration tests. |
 | Git blame/history lost in moves | Medium | Low | Mandate `git mv`; avoid combining move + edit in one commit where possible. |
 | Over-foldering fragments cognitive units | Medium | High | Anti-fragmentation principle; M3 rejection conditions; single-file pseudo-subsystems colocated unless human-interaction evidence says otherwise. |
-| Reconstruction deprioritized mid-flight | Medium | Medium | M4-M6 each deliver standalone value; certification records remaining gaps if the roadmap pauses. |
+| Reconstruction deprioritized mid-flight | Medium | Medium | M4-M6 each deliver standalone value; certification records remaining gaps if the epic pauses. |
 
-**Behavioral-debt note:** the architecture audit's runtime items (A1 non-atomic writes, A7 coarse lock, A10 process probe) are out of scope here. Reconstruction makes them easier to fix later by giving each a visible home, but this roadmap does not directly change runtime behavior.
+**Behavioral-debt note:** the architecture audit's runtime items (A1 non-atomic writes, A7 coarse lock, A10 process probe) are out of scope here. Reconstruction makes them easier to fix later by giving each a visible home, but this epic does not directly change runtime behavior.
 
 ---
 
 ## Success Metrics
 
-Baselines begin with estimates from the current audit and are corrected during M1.5. Numeric targets are derived during M1.5/M3 unless the audit already provides a defensible threshold; the roadmap does not preselect attractive numbers without evidence.
+Baselines begin with estimates from the current audit and are corrected during M1.5. Numeric targets are derived during M1.5/M3 unless the audit already provides a defensible threshold; the epic does not preselect attractive numbers without evidence.
 
 | Metric | Current | Target | Certified in |
 |---|---|---|---|
@@ -381,7 +381,7 @@ Baselines begin with estimates from the current audit and are corrected during M
 
 ## Final Target State
 
-What an engineer experiences after the roadmap is complete:
+What an engineer experiences after the epic is complete:
 
 They open `CommandCenter.Backend/` and the README tells them, in one page, what each top-level folder owns, where the major workflows are coordinated, where the state machines live, which formerly hidden concepts now have names, and how the backend relates to the React UI and Rust-Tauri shell.
 
@@ -391,4 +391,4 @@ They open `Continuity/` and find proposal lifecycle, document/generation ownersh
 
 They need a route handler and find it by domain name in `Composition/`, not by scrolling a 713-line method. They do not discover load-bearing concepts by accident while reading unrelated service code; the concepts the system depends on have names in the tree.
 
-The repository now teaches itself. Crucially, it does so because the roadmap proved the cognitive topology before committing to a target structure.
+The repository now teaches itself. Crucially, it does so because the epic proved the cognitive topology before committing to a target structure.

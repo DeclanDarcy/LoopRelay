@@ -5,7 +5,7 @@ namespace CommandCenter.Plan.Cli;
 /// <summary>
 /// Pipeline step 1: verifies the repository is in a clean state to start a fresh planning run — none of
 /// plan.md / operational_context.md / details.md exist, milestones/ is empty — and that the mandatory
-/// input (specs/roadmap.md) is present. Returns one human-actionable violation string per failed check;
+/// input (specs/epic.md) is present. Returns one human-actionable violation string per failed check;
 /// an empty result means the pipeline is clear to run.
 /// </summary>
 internal sealed class PreflightGate(PlanArtifacts artifacts)
@@ -37,10 +37,10 @@ internal sealed class PreflightGate(PlanArtifacts artifacts)
                 $"{OrchestrationArtifactPaths.MilestonesDirectory} is not empty — archive or delete its contents before planning");
         }
 
-        if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.SpecsRoadmap))
+        if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.SpecsEpic))
         {
             violations.Add(
-                $"{OrchestrationArtifactPaths.SpecsRoadmap} not found — author the roadmap before running the planning pipeline");
+                $"{OrchestrationArtifactPaths.SpecsEpic} not found — author the epic before running the planning pipeline");
         }
 
         return violations;

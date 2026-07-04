@@ -13,7 +13,7 @@ namespace CommandCenter.Backend.Tests.Orchestration;
 
 /// <summary>
 /// Endpoint-level coverage for the Plan Authoring routes along the paths that reject BEFORE any Codex
-/// session opens — unknown repository (404), empty roadmap (400), and revise-without-a-warm-process
+/// session opens — unknown repository (404), empty epic (400), and revise-without-a-warm-process
 /// (409). The streaming happy path is unit-tested in <see cref="RepositoryOrchestratorPlanningTests"/>;
 /// route registration is asserted by the endpoint-disposition governance test.
 /// </summary>
@@ -27,19 +27,19 @@ public sealed class PlanAuthoringEndpointTests
 
         HttpResponseMessage response = await server.Client.PostAsJsonAsync(
             server.PlanRoute(Guid.NewGuid(), "write"),
-            new { roadmap = "roadmap", specs = Array.Empty<string>(), newCodebase = false });
+            new { epic = "epic", specs = Array.Empty<string>(), newCodebase = false });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
-    public async Task Write_plan_with_an_empty_roadmap_is_rejected()
+    public async Task Write_plan_with_an_empty_epic_is_rejected()
     {
         await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
 
         HttpResponseMessage response = await server.Client.PostAsJsonAsync(
             server.PlanRoute(server.RegisteredRepositoryId, "write"),
-            new { roadmap = "   ", specs = Array.Empty<string>(), newCodebase = false });
+            new { epic = "   ", specs = Array.Empty<string>(), newCodebase = false });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

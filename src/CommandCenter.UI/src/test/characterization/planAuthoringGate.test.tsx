@@ -64,7 +64,7 @@ describe('App plan-authoring gate', () => {
     await selectEmptyRepository()
     await screen.findByRole('region', { name: 'Plan authoring' })
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the planning workflow.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -85,7 +85,7 @@ describe('App plan-authoring gate', () => {
     await screen.findByRole('region', { name: 'Plan authoring' })
 
     // 1. Author the first plan.
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the planning workflow.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -139,7 +139,7 @@ describe('App plan-authoring gate', () => {
     await selectEmptyRepository()
     await screen.findByRole('region', { name: 'Plan authoring' })
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the planning workflow.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))

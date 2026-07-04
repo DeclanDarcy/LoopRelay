@@ -116,7 +116,7 @@ export function usePlanStream(repositoryId: string | null) {
       try {
         await writePlan(
           targetRepositoryId,
-          request.roadmap,
+          request.epic,
           request.specs,
           request.newCodebase,
         )

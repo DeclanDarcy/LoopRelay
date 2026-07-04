@@ -4,14 +4,14 @@ Date: 2026-06-27. Status: approved (no human available; decisions reasoned and r
 
 ## Intent
 
-A focused authoring surface where a developer drafts a roadmap (plus optional specs), watches an
+A focused authoring surface where a developer drafts a epic (plus optional specs), watches an
 implementation plan stream back from the backend agent, then revises it with feedback or executes it.
 This is the first screen a repository shows when no plan exists yet. The screen is a *drafting table*,
 not a dashboard: a single editorial column whose top-to-bottom order mirrors the authoring lifecycle.
 
 ## Hard constraints (from the brief — restated to bind the implementation)
 
-- Frontend NEVER composes prompt text or selects a prompt class. It sends only `{ roadmap, specs[], newCodebase }`
+- Frontend NEVER composes prompt text or selects a prompt class. It sends only `{ epic, specs[], newCodebase }`
   on write and `{ feedback }` on revise. The backend renders prompts.
 - Changes confined to `src/CommandCenter.UI/**` and `src/CommandCenter.Shell/src/main.rs`.
 - Mirror existing conventions: `invokeCommand` boundary, EventSource SSE pattern (`useExecutionEvents`),
@@ -22,7 +22,7 @@ not a dashboard: a single editorial column whose top-to-bottom order mirrors the
 Repository-scoped, `{id}` GUID "D" format.
 
 - `GET  /plan/status` → `{ planExists: boolean, state: 'PlanAuthoring' | 'ExecutingPlan' }`
-- `POST /plan/write`  `{ roadmap, specs[], newCodebase }` → 202 `{ phase: 'WritePlan' }` (404/400 empty roadmap/409 running)
+- `POST /plan/write`  `{ epic, specs[], newCodebase }` → 202 `{ phase: 'WritePlan' }` (404/400 empty epic/409 running)
 - `POST /plan/revise` `{ feedback }` → 202 `{ phase: 'RevisePlan' }` (404/400 empty feedback/409 no warm session/running)
 - `POST /plan/execute` (no body) → 202 `{ phase: 'ExecutePlan' }` (404/409 no plan/running)
 - `GET  /plan/stream` → SSE via EventSource directly against backend URL. Events:
@@ -36,7 +36,7 @@ Repository-scoped, `{id}` GUID "D" format.
 `Authoring → Planning → PlanReady → Revising → PlanReady → Executing`
 
 Transitions are driven by SSE events and command responses (not by optimistic guessing):
-- `Authoring`: inputs editable; Write Plan enabled iff roadmap has non-whitespace text.
+- `Authoring`: inputs editable; Write Plan enabled iff epic has non-whitespace text.
 - POST `write` (202) → optimistic `Planning` (so the UI responds even before the first event); `turn-started{WritePlan}` confirms.
 - `delta` events accumulate into a live streamed buffer (read-only).
 - `completed` → `PlanReady` (store `plan`, token counts). Copy button + Revise + Execute become available.
@@ -51,7 +51,7 @@ unit-testable without React or a backend.
 
 ## Component / module layout (mirrors existing feature folders)
 
-- `src/api/planning.ts` — `getPlanStatus(repositoryId)`, `writePlan(repositoryId, {roadmap,specs,newCodebase})`,
+- `src/api/planning.ts` — `getPlanStatus(repositoryId)`, `writePlan(repositoryId, {epic,specs,newCodebase})`,
   `revisePlan(repositoryId, feedback)`, `executePlan(repositoryId)` via `invokeCommand`; plus
   `subscribeToPlanEvents(backendUrl, repositoryId, onEvent)` mirroring `subscribeToExecutionEvents` (EventSource,
   `addEventListener` per event type, returns `{ close }`).
@@ -61,8 +61,8 @@ unit-testable without React or a backend.
 - `src/hooks/usePlanStream.ts` — own the reducer + SSE subscription (mirrors `useExecutionEvents`: load backend URL,
   subscribe keyed on `[backendUrl, repositoryId]`; in mock mode short-circuit EventSource and consume the
   mock plan-stream bridge). Exposes machine state + `submitWrite/submitRevise/submitExecute` actions.
-- `src/features/planning/PlanAuthoringScreen.tsx` — composition root; owns roadmap/specs/feedback local input state.
-- `src/features/planning/RoadmapField.tsx`, `SpecList.tsx`, `PlanStreamView.tsx`, `RenderedPlanView.tsx`,
+- `src/features/planning/PlanAuthoringScreen.tsx` — composition root; owns epic/specs/feedback local input state.
+- `src/features/planning/EpicField.tsx`, `SpecList.tsx`, `PlanStreamView.tsx`, `RenderedPlanView.tsx`,
   `PlanFailureNotice.tsx` — small focused units.
 - `src/features/planning/planAuthoringMachine.ts` — pure reducer + initial state (unit-tested).
 - `src/features/planning/PlanAuthoring.css` — `cc-plan-*` classes built only on existing tokens.
@@ -70,7 +70,7 @@ unit-testable without React or a backend.
 ## Visual direction (within the committed dark token system; identity preserved)
 
 - Layout: single editorial column, ~760px max, centered — a "sheet" distinct from the multi-panel dashboards.
-- Sections divided by hairline `--border-subtle` rules with small uppercase labels (Roadmap / Specifications / Plan).
+- Sections divided by hairline `--border-subtle` rules with small uppercase labels (Epic / Specifications / Plan).
   No numbered markers (the form is not a fixed sequence).
 - Type: UI in `--font-body`; the streamed plan and rendered plan in `--font-mono-small` (generated-source feel).
   No markdown library exists in the repo, so the plan renders as preformatted monospace text in a `<pre>` —
@@ -106,6 +106,6 @@ emitting `turn-started`, a few `delta`s, then `completed`. `execute_plan` flips 
 ## Testing (vitest characterization, mirrors existing style)
 
 - `planAuthoringMachine.test.ts` — write→turn-started→deltas→completed→PlanReady; revise path; failed path; execute.
-- `planAuthoringValidation.test.tsx` — Write disabled until roadmap non-empty; Revise disabled until feedback non-empty.
+- `planAuthoringValidation.test.tsx` — Write disabled until epic non-empty; Revise disabled until feedback non-empty.
 - `planAuthoringScreen.test.tsx` — renders inputs/states; copy button has accessible name; failed event surfaces reason.
 - App gate covered via the workspace-certification mock (planExists false → authoring screen) where feasible.

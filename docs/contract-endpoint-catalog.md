@@ -424,7 +424,7 @@ Shared contract notes for the loop surface:
 - **Command acknowledgement.** Every POST returns `202` with a `PlanRunAcknowledgement(string Phase)` body; the orchestrator runs the turn in the background on its lifetime token. The five phase wire strings are `WritePlan`, `RevisePlan`, `ExecutePlan`, `DecisionRun`, and `SubmitDecisions`. The TS API wrappers type the result loosely as `{ phase: string }`.
 - **Structured errors.** Faulted commands map exceptions to a single backend-owned `{ error }` envelope: `KeyNotFoundException -> 404`, `ArgumentException -> 400`, and `InvalidOperationException` (including `ObjectDisposedException`, which derives from it) `-> 409`. `plan/execute` and `decision/run` have no body and so never raise `400`. This mirrors the shared error envelope; consumers must preserve the structured payload per the catalog's error-envelope serialization rule.
 - **Stream contract.** The three SSE endpoints emit `id:` (monotonic sequence), `event:` (the event-type name), and `data:` (camelCase JSON) frames over `OrchestratorStreamChannel`, support `Last-Event-ID` replay, and respond `404` only before the stream opens. Their full event vocabularies are inventoried in `docs/contracts.md`.
-- **Request bodies.** `plan/write` carries `PlanWriteRequest { roadmap, specs[], newCodebase }`; `plan/revise` carries `PlanReviseRequest`; `decision/submit` carries `DecisionSubmitRequest { decisions }`. `plan/execute`, `decision/run`, and all GETs are bodyless.
+- **Request bodies.** `plan/write` carries `PlanWriteRequest { epic, specs[], newCodebase }`; `plan/revise` carries `PlanReviseRequest`; `decision/submit` carries `DecisionSubmitRequest { decisions }`. `plan/execute`, `decision/run`, and all GETs are bodyless.
 
 ## Remaining Catalog Work
 

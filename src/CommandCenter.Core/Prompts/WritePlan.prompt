@@ -1,2 +1,2 @@
-write .agents/plan.md to implement the roadmap and specs in .agents/specs/ against the current codebase
-Note: the roadmap and specs will be deleted after certifying the plan, the plan must be self-contained and shall not make statements about these source materials
+write .agents/plan.md to implement the epic and specs in .agents/specs/ against the current codebase
+Note: the epic and specs will be deleted after certifying the plan, the plan must be self-contained and shall not make statements about these source materials

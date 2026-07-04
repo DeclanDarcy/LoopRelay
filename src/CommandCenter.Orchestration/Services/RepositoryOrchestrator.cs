@@ -240,7 +240,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         EnsureSessionAsync(SessionSlot.Decision, BuildDecisionSpec(repository), cancellationToken);
 
     /// <summary>
-    /// Write Plan (m3): persist the Roadmap and Specs BEFORE the prompt runs, open/reuse the held-open
+    /// Write Plan (m3): persist the Epic and Specs BEFORE the prompt runs, open/reuse the held-open
     /// Operational planning process, render <c>WritePlan</c>, and stream the turn to
     /// <see cref="PlanningStream"/>. The turn runs in the background on the orchestrator's lifetime;
     /// this method returns once the turn is launched.
@@ -248,9 +248,9 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     public async Task BeginWritePlanAsync(Repository repository, PlanWriteRequest request, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        if (string.IsNullOrWhiteSpace(request.Roadmap))
+        if (string.IsNullOrWhiteSpace(request.Epic))
         {
-            throw new ArgumentException("Roadmap is required to write a plan.", nameof(request));
+            throw new ArgumentException("Epic is required to write a plan.", nameof(request));
         }
 
         // The single runState gate (claimed here) is what excludes an in-progress execution run — no
@@ -672,8 +672,8 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     private async Task PersistPlanInputsAsync(Repository repository, PlanWriteRequest request)
     {
         await artifactStore.WriteAsync(
-            ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.SpecsRoadmap),
-            request.Roadmap).ConfigureAwait(false);
+            ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.SpecsEpic),
+            request.Epic).ConfigureAwait(false);
 
         for (int index = 0; index < request.Specs.Count; index++)
         {
@@ -1901,7 +1901,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         var paths = new List<string>
         {
             OrchestrationArtifactPaths.Plan,
-            OrchestrationArtifactPaths.SpecsRoadmap,
+            OrchestrationArtifactPaths.SpecsEpic,
             OrchestrationArtifactPaths.OperationalContext,
         };
 
@@ -2018,7 +2018,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
     private static (string Prompt, PromptProvenance Provenance) BuildWritePlan(PlanWriteRequest request)
     {
-        var inputs = new List<string> { OrchestrationArtifactPaths.SpecsRoadmap };
+        var inputs = new List<string> { OrchestrationArtifactPaths.SpecsEpic };
         for (int index = 0; index < request.Specs.Count; index++)
         {
             inputs.Add(OrchestrationArtifactPaths.Spec(index + 1));

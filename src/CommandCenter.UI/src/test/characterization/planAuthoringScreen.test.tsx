@@ -19,18 +19,18 @@ function renderScreen() {
 }
 
 describe('PlanAuthoringScreen', () => {
-  it('disables Write Plan until the roadmap has non-whitespace text', () => {
+  it('disables Write Plan until the epic has non-whitespace text', () => {
     renderScreen()
 
     const writeButton = screen.getByRole('button', { name: 'Write Plan' })
     expect(writeButton).toBeDisabled()
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: '   ' },
     })
     expect(writeButton).toBeDisabled()
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     expect(writeButton).toBeEnabled()
@@ -51,7 +51,7 @@ describe('PlanAuthoringScreen', () => {
   it('streams deltas then shows the rendered plan with an accessible copy button', async () => {
     renderScreen()
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -66,7 +66,7 @@ describe('PlanAuthoringScreen', () => {
   it('keeps Revise Plan disabled until feedback has text, after a plan exists', async () => {
     renderScreen()
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -93,7 +93,7 @@ describe('PlanAuthoringScreen', () => {
     const bridge = window.__COMMAND_CENTER_MOCK_PLAN_STREAM__!
     const state = window.__COMMAND_CENTER_MOCK_STATE__!
     // Drive a failure directly through the stream bridge the screen is subscribed to.
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))

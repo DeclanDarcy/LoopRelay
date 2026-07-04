@@ -32,8 +32,8 @@ internal sealed class PlanPipeline(
             {
                 // The archive's parent gitlink is recorded IMMEDIATELY (not deferred to the end-of-run
                 // reconcile): new-epic leaves specs/ in place, so the run normally continues into planning
-                // the next epic from the surviving specs/roadmap.md — but it may still stop at the very next
-                // gate (preflight blocks when no roadmap exists), and the archive must be fully published
+                // the next epic from the surviving specs/epic.md — but it may still stop at the very next
+                // gate (preflight blocks when no epic exists), and the archive must be fully published
                 // either way.
                 if (await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.ArchivePreviousEpicMessage, cancellationToken))
                 {

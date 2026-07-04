@@ -40,18 +40,18 @@ public sealed class OrchestrationRecoveryCertificationTests
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
 
-        // The turn writes NO plan.md (no OnTurn side effect) — the half-window: roadmap/specs durable, plan absent.
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "ROADMAP", Specs = new[] { "SPEC ONE" } });
+        // The turn writes NO plan.md (no OnTurn side effect) — the half-window: epic/specs durable, plan absent.
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "EPIC", Specs = new[] { "SPEC ONE" } });
         await orchestrator.PlanningTurnTask;
 
-        Assert.Equal("ROADMAP", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.SpecsRoadmap)));
+        Assert.Equal("EPIC", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.SpecsEpic)));
         Assert.Equal("SPEC ONE", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.Spec(1))));
         Assert.False(await store.ExistsAsync(Resolve(repository, OrchestrationArtifactPaths.Plan)));
         Assert.False((await orchestrator.GetPlanStatusAsync(repository)).PlanExists);
 
         // Retry: this turn renders plan.md => the write succeeds and plan now exists.
         runtime.OnTurn = () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), Plan);
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "ROADMAP", Specs = new[] { "SPEC ONE" } });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "EPIC", Specs = new[] { "SPEC ONE" } });
         await orchestrator.PlanningTurnTask;
 
         Assert.Equal(Plan, await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.Plan)));

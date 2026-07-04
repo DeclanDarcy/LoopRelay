@@ -116,10 +116,10 @@ export function getPlanStatus(repositoryId: string) {
   return invokeCommand<PlanStatus>('get_plan_status', { repositoryId })
 }
 
-export function writePlan(repositoryId: string, roadmap: string, specs: string[], newCodebase: boolean) {
+export function writePlan(repositoryId: string, epic: string, specs: string[], newCodebase: boolean) {
   return invokeCommand<{ phase: string }>('write_plan', {
     repositoryId,
-    roadmap,
+    epic,
     specs,
     newCodebase,
   })

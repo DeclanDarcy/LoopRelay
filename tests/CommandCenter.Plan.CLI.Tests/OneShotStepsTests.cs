@@ -31,7 +31,7 @@ public class OneShotStepsTests
     public async Task CollectDetailsAsync_BuildsExpectedPlan_SeedingAllSpecsAndPlan_RequiringAndCopyingBackDetailsOnly()
     {
         var (artifacts, store, repo) = NewArtifacts();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Spec(1)), "SPEC 1");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
 
@@ -40,7 +40,7 @@ public class OneShotStepsTests
         Assert.Equal("collect-details", plan.Label);
         Assert.Equal(CollectDetails.Text, plan.Prompt);
         Assert.Equal(
-            new[] { OrchestrationArtifactPaths.SpecsRoadmap, OrchestrationArtifactPaths.Spec(1), OrchestrationArtifactPaths.Plan }
+            new[] { OrchestrationArtifactPaths.SpecsEpic, OrchestrationArtifactPaths.Spec(1), OrchestrationArtifactPaths.Plan }
                 .OrderBy(x => x, StringComparer.Ordinal),
             plan.Seeds.OrderBy(x => x, StringComparer.Ordinal));
         Assert.Equal(new[] { OrchestrationArtifactPaths.Details }, plan.RequiredOutputs);
@@ -66,10 +66,10 @@ public class OneShotStepsTests
     public async Task CollectDetails_EndToEnd_SeedsSpecsAndPlanAtPrefixStrippedPaths_AndCopiesBackDetails()
     {
         var (step, rt, sandboxes, store, artifacts, repo) = NewPipeline();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP CONTENT");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC CONTENT");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN CONTENT");
 
-        string? seenRoadmap = null;
+        string? seenEpic = null;
         string? seenPlan = null;
         rt.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
         {
@@ -77,7 +77,7 @@ public class OneShotStepsTests
             Assert.Equal("workspace-write", spec.Sandbox.Identifier);
             Assert.Equal("xhigh", spec.Effort.Identifier);
             Assert.Equal(CollectDetails.Text, prompt);
-            seenRoadmap = s.ReadAsync(sandboxes.Resolve("specs/roadmap.md")).Result;
+            seenEpic = s.ReadAsync(sandboxes.Resolve("specs/epic.md")).Result;
             seenPlan = s.ReadAsync(sandboxes.Resolve("plan.md")).Result;
             s.WriteAsync(sandboxes.Resolve("details.md"), "DETAILS CONTENT").Wait();
             return Turns.Completed("collected details");
@@ -86,11 +86,11 @@ public class OneShotStepsTests
         SandboxedStepPlan collectDetails = await OneShotSteps.CollectDetailsAsync(artifacts);
         await step.RunAsync(collectDetails, CancellationToken.None);
 
-        Assert.Equal("ROADMAP CONTENT", seenRoadmap);
+        Assert.Equal("EPIC CONTENT", seenEpic);
         Assert.Equal("PLAN CONTENT", seenPlan);
         Assert.Equal("DETAILS CONTENT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Details)));
         Assert.False(await store.ExistsAsync(sandboxes.Resolve(".agents/plan.md")));
-        Assert.False(await store.ExistsAsync(sandboxes.Resolve(".agents/specs/roadmap.md")));
+        Assert.False(await store.ExistsAsync(sandboxes.Resolve(".agents/specs/epic.md")));
     }
 
     [Fact]

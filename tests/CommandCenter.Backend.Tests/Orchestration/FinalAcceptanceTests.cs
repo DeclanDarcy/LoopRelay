@@ -13,7 +13,7 @@ namespace CommandCenter.Backend.Tests.Orchestration;
 /// <c>docs/final-acceptance.md</c>; this test pins the four m12-specific boundaries that no earlier milestone
 /// test protects:
 /// (1) the Completion-Statement command surface — the five orchestrator entry points that drive the whole
-///     roadmap/spec -> Write -> Revise -> Execute -> Decision -> Submit loop from one repository screen;
+///     epic/spec -> Write -> Revise -> Execute -> Decision -> Submit loop from one repository screen;
 /// (2) NON-GOAL isolation — the orchestration loop's composition root does not absorb the per-repository
 ///     reasoning / knowledge-graph subsystem (NG-1/NG-3: no knowledge platform, knowledge graph, or lineage
 ///     explorer was folded into the loop);

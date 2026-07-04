@@ -13,7 +13,7 @@ namespace CommandCenter.Plan.Cli;
 /// after every artifact-mutating pipeline step (<see cref="PublishAgentsAsync"/>), while the parent repo's moved
 /// <c>.agents</c> gitlink pointer is recorded ONCE at the end of a successful run
 /// (<see cref="RecordParentGitlinkAsync"/>) — except for the epic-archive step, which records it immediately:
-/// that run may still stop at preflight (e.g. no specs/roadmap.md ever existed), and the archive must be
+/// that run may still stop at preflight (e.g. no specs/epic.md ever existed), and the archive must be
 /// fully published, parent pointer included, either way.
 ///
 /// Git is driven through <see cref="IProcessRunner"/>: the submodule half runs with

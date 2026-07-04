@@ -60,10 +60,10 @@ public class PlanArtifactsTests
     }
 
     [Fact]
-    public async Task ListSpecsRelative_ReturnsRoadmapAndSFiles()
+    public async Task ListSpecsRelative_ReturnsEpicAndSFiles()
     {
         var (art, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Spec(1)), "S1");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Spec(2)), "S2");
 
@@ -72,7 +72,7 @@ public class PlanArtifactsTests
         Assert.Equal(
             new[]
             {
-                OrchestrationArtifactPaths.SpecsRoadmap,
+                OrchestrationArtifactPaths.SpecsEpic,
                 OrchestrationArtifactPaths.Spec(1),
                 OrchestrationArtifactPaths.Spec(2),
             }.OrderBy(s => s, StringComparer.OrdinalIgnoreCase),

@@ -19,7 +19,7 @@ async function renderToDecisionPhase() {
   installWorkspaceCertificationMock()
   render(<PlanAuthoringScreen repositoryId="repo-empty" repositoryName="EmptyRepo" />)
 
-  fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
     target: { value: 'Ship the dashboard.' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))

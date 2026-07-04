@@ -24,7 +24,7 @@ describe('Execute gating on backend-verified plan', () => {
       />,
     )
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -52,7 +52,7 @@ describe('Execute gating on backend-verified plan', () => {
       />,
     )
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -88,7 +88,7 @@ describe('Execute gating on backend-verified plan', () => {
       />,
     )
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -121,7 +121,7 @@ describe('Execute gating on backend-verified plan', () => {
       />,
     )
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -150,7 +150,7 @@ describe('Execute gating on backend-verified plan', () => {
       />,
     )
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))

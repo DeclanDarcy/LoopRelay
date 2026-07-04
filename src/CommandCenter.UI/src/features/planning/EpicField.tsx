@@ -1,22 +1,22 @@
-type RoadmapFieldProps = {
+type EpicFieldProps = {
   value: string
   disabled: boolean
   onChange: (value: string) => void
 }
 
-export function RoadmapField({ value, disabled, onChange }: RoadmapFieldProps) {
+export function EpicField({ value, disabled, onChange }: EpicFieldProps) {
   return (
     <div className="cc-plan-field">
-      <label className="cc-plan-field-label" htmlFor="cc-plan-roadmap">
-        Roadmap
+      <label className="cc-plan-field-label" htmlFor="cc-plan-epic">
+        Epic
       </label>
       <p className="cc-plan-field-hint">
         Describe where the codebase is headed. Required to write a plan.
       </p>
       <textarea
-        id="cc-plan-roadmap"
-        className="cc-plan-textarea cc-plan-roadmap"
-        aria-label="Roadmap"
+        id="cc-plan-epic"
+        className="cc-plan-textarea cc-plan-epic"
+        aria-label="Epic"
         placeholder="The product should ship a repository dashboard, then a planning workflow…"
         rows={6}
         value={value}

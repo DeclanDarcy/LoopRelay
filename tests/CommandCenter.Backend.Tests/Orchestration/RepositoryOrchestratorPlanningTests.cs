@@ -13,30 +13,30 @@ namespace CommandCenter.Backend.Tests.Orchestration;
 public sealed class RepositoryOrchestratorPlanningTests
 {
     [Fact]
-    public async Task Write_plan_persists_roadmap_and_specs_before_the_planning_prompt_runs()
+    public async Task Write_plan_persists_epic_and_specs_before_the_planning_prompt_runs()
     {
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
 
-        string roadmapPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.SpecsRoadmap);
+        string epicPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.SpecsEpic);
         string planPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan);
 
-        bool roadmapExistedWhenTurnRan = false;
+        bool epicExistedWhenTurnRan = false;
         runtime.OnTurn = async () =>
         {
-            roadmapExistedWhenTurnRan = await store.ExistsAsync(roadmapPath);
+            epicExistedWhenTurnRan = await store.ExistsAsync(epicPath);
             await store.WriteAsync(planPath, "PLAN BODY");
         };
 
         await orchestrator.BeginWritePlanAsync(
             repository,
-            new PlanWriteRequest { Roadmap = "roadmap text", Specs = new[] { "spec one", "spec two" } });
+            new PlanWriteRequest { Epic = "epic text", Specs = new[] { "spec one", "spec two" } });
         await orchestrator.PlanningTurnTask;
 
-        Assert.True(roadmapExistedWhenTurnRan, "roadmap/specs must be written before the planning prompt runs");
-        Assert.Equal("roadmap text", await store.ReadAsync(roadmapPath));
+        Assert.True(epicExistedWhenTurnRan, "epic/specs must be written before the planning prompt runs");
+        Assert.Equal("epic text", await store.ReadAsync(epicPath));
         Assert.Equal("spec one", await store.ReadAsync(ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Spec(1))));
         Assert.Equal("spec two", await store.ReadAsync(ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Spec(2))));
     }
@@ -50,7 +50,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
         runtime.OnTurn = () => store.WriteAsync(ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan), "PLAN");
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r", NewCodebase = false });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r", NewCodebase = false });
         await orchestrator.PlanningTurnTask;
 
         Assert.Equal(WritePlan.Text, Assert.Single(runtime.Sessions).Prompts.Single());
@@ -65,7 +65,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
         runtime.OnTurn = () => store.WriteAsync(ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan), "PLAN");
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r", NewCodebase = true });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r", NewCodebase = true });
         await orchestrator.PlanningTurnTask;
 
         Assert.Equal(WritePlan.Text, Assert.Single(runtime.Sessions).Prompts.Single());
@@ -80,7 +80,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
         runtime.OnTurn = () => store.WriteAsync(ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan), "RENDERED PLAN");
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         List<OrchestratorStreamEvent> events = await DrainAsync(orchestrator.PlanningStream, expectedCount: 4);
@@ -105,7 +105,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
         // No OnTurn — the turn "completes" but Codex never writes .agents/plan.md.
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         List<OrchestratorStreamEvent> events = await DrainAsync(orchestrator.PlanningStream, expectedCount: 2);
@@ -116,12 +116,12 @@ public sealed class RepositoryOrchestratorPlanningTests
     }
 
     [Fact]
-    public async Task Write_plan_requires_a_non_empty_roadmap()
+    public async Task Write_plan_requires_a_non_empty_epic()
     {
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => orchestrator.BeginWritePlanAsync(OrchestrationTestFactory.Repository(), new PlanWriteRequest { Roadmap = "   " }));
+            () => orchestrator.BeginWritePlanAsync(OrchestrationTestFactory.Repository(), new PlanWriteRequest { Epic = "   " }));
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         string planPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan);
 
         runtime.OnTurn = () => store.WriteAsync(planPath, "PLAN V1");
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         runtime.OnTurn = () => store.WriteAsync(planPath, "PLAN V2");
@@ -165,7 +165,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
         runtime.OnTurn = () => store.WriteAsync(ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan), "PLAN");
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         await Assert.ThrowsAsync<ArgumentException>(
@@ -184,7 +184,7 @@ public sealed class RepositoryOrchestratorPlanningTests
 
         await orchestrator.BeginWritePlanAsync(
             repository,
-            new PlanWriteRequest { Roadmap = "r", Specs = new[] { "a", "b" }, NewCodebase = true });
+            new PlanWriteRequest { Epic = "r", Specs = new[] { "a", "b" }, NewCodebase = true });
         await orchestrator.PlanningTurnTask;
         await orchestrator.BeginRevisePlanAsync(repository, new PlanReviseRequest { Feedback = "more detail" });
         await orchestrator.PlanningTurnTask;
@@ -196,7 +196,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         Assert.Equal(WritePlan.SourceHash, write.SourceHash);
         Assert.Equal(PromptSessionRole.Planning, write.SessionRole);
         Assert.Equal("WritePlan", write.WorkflowPhase);
-        Assert.Contains(OrchestrationArtifactPaths.SpecsRoadmap, write.InputArtifactIdentities);
+        Assert.Contains(OrchestrationArtifactPaths.SpecsEpic, write.InputArtifactIdentities);
         // Spec inputs are 1-based, mirroring the persisted s1.md/s2.md paths.
         Assert.Contains(OrchestrationArtifactPaths.Spec(1), write.InputArtifactIdentities);
         Assert.Contains(OrchestrationArtifactPaths.Spec(2), write.InputArtifactIdentities);
@@ -222,12 +222,12 @@ public sealed class RepositoryOrchestratorPlanningTests
         string planPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan);
         runtime.OnTurn = () => store.WriteAsync(planPath, "PLAN");
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         Assert.True(orchestrator.IsPlanningTurnActive);
 
         // A concurrent write AND a concurrent revise are both rejected while the first turn is parked.
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "again" }));
+            () => orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "again" }));
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => orchestrator.BeginRevisePlanAsync(repository, new PlanReviseRequest { Feedback = "now" }));
 
@@ -253,7 +253,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         Assert.True(orchestrator.IsPlanningTurnActive);
 
         Task dispose = orchestrator.DisposeAsync().AsTask();
@@ -276,7 +276,7 @@ public sealed class RepositoryOrchestratorPlanningTests
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         List<OrchestratorStreamEvent> events = await DrainAsync(orchestrator.PlanningStream, expectedCount: 2);

@@ -48,29 +48,29 @@ public class SandboxedPromptStepTests
     {
         var (step, rt, sandboxes, store, repo, _) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN CONTENT");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP CONTENT");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC CONTENT");
 
         string? seenPlan = null;
-        string? seenRoadmap = null;
+        string? seenEpic = null;
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
             seenPlan = s.ReadAsync(sandboxes.Resolve("plan.md")).Result;
-            seenRoadmap = s.ReadAsync(sandboxes.Resolve("specs/roadmap.md")).Result;
+            seenEpic = s.ReadAsync(sandboxes.Resolve("specs/epic.md")).Result;
             s.WriteAsync(sandboxes.Resolve("details.md"), "DETAILS").Wait();
             return Turns.Completed("done");
         }));
 
         SandboxedStepPlan plan = Plan(
-            seeds: [OrchestrationArtifactPaths.Plan, OrchestrationArtifactPaths.SpecsRoadmap],
+            seeds: [OrchestrationArtifactPaths.Plan, OrchestrationArtifactPaths.SpecsEpic],
             requiredOutputs: [OrchestrationArtifactPaths.Details],
             copyBackFiles: [OrchestrationArtifactPaths.Details]);
 
         await step.RunAsync(plan, CancellationToken.None);
 
         Assert.Equal("PLAN CONTENT", seenPlan);
-        Assert.Equal("ROADMAP CONTENT", seenRoadmap);
+        Assert.Equal("EPIC CONTENT", seenEpic);
         Assert.False(await store.ExistsAsync(sandboxes.Resolve(".agents/plan.md")));
-        Assert.False(await store.ExistsAsync(sandboxes.Resolve(".agents/specs/roadmap.md")));
+        Assert.False(await store.ExistsAsync(sandboxes.Resolve(".agents/specs/epic.md")));
     }
 
     [Fact]

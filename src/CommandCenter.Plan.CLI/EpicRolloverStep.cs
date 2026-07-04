@@ -14,7 +14,7 @@ namespace CommandCenter.Plan.Cli;
 /// Deliberately conservative: only a complete previous workspace is auto-archived; partial states still hit
 /// the preflight violations. NOTE the intended UX consequence: new-epic leaves <c>.agents/specs/</c> in
 /// place, so a rollover run continues straight into planning the next epic from the surviving
-/// <c>specs/roadmap.md</c>; it still exits PreflightBlocked (exit 4) if no roadmap existed in the first place.
+/// <c>specs/epic.md</c>; it still exits PreflightBlocked (exit 4) if no epic existed in the first place.
 /// </summary>
 internal sealed class EpicRolloverStep(
     IProcessRunner processRunner, PlanArtifacts artifacts, ILoopConsole console, Repository repository)

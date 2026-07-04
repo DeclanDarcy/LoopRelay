@@ -45,7 +45,7 @@ public sealed class OrchestrationProvenanceCertificationTests
         runtime.OnTurn = () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), Plan);
         await orchestrator.BeginWritePlanAsync(
             repository,
-            new PlanWriteRequest { Roadmap = "ROADMAP", Specs = new[] { "SPEC ONE" } });
+            new PlanWriteRequest { Epic = "EPIC", Specs = new[] { "SPEC ONE" } });
         await orchestrator.PlanningTurnTask;
         runtime.OnTurn = null;
 
@@ -82,8 +82,8 @@ public sealed class OrchestrationProvenanceCertificationTests
         PromptProvenance writePlan = Assert.Single(
             orchestrator.PlanningProvenance, p => p.WorkflowPhase == "WritePlan");
         AssertAllSevenFields(writePlan, PromptSessionRole.Planning, "WritePlan");
-        // WritePlan renders roadmap + spec inputs and is directed to produce the plan.
-        Assert.Contains(OrchestrationArtifactPaths.SpecsRoadmap, writePlan.InputArtifactIdentities);
+        // WritePlan renders epic + spec inputs and is directed to produce the plan.
+        Assert.Contains(OrchestrationArtifactPaths.SpecsEpic, writePlan.InputArtifactIdentities);
         Assert.Contains(OrchestrationArtifactPaths.Spec(1), writePlan.InputArtifactIdentities);
         Assert.Equal(OrchestrationArtifactPaths.Plan, Assert.Single(writePlan.OutputArtifactIdentities));
 
@@ -153,7 +153,7 @@ public sealed class OrchestrationProvenanceCertificationTests
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
 
         runtime.OnTurn = () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), Plan);
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         await orchestrator.BeginRevisePlanAsync(repository, new PlanReviseRequest { Feedback = "tighten scope" });

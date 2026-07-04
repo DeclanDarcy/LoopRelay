@@ -90,7 +90,7 @@ public sealed class OrchestrationRequestBoundaryContractTests
         Assert.Contains("repository_id: String", source, StringComparison.Ordinal);
         Assert.Contains("\"/api/repositories/{repository_id}/plan/write\"", body, StringComparison.Ordinal);
         Assert.Contains("backend_post_json_value(", body, StringComparison.Ordinal);
-        Assert.Contains("\"roadmap\": roadmap", body, StringComparison.Ordinal);
+        Assert.Contains("\"epic\": epic", body, StringComparison.Ordinal);
         Assert.Contains("\"specs\": specs", body, StringComparison.Ordinal);
         Assert.Contains("\"newCodebase\": new_codebase", body, StringComparison.Ordinal);
     }
@@ -102,12 +102,12 @@ public sealed class OrchestrationRequestBoundaryContractTests
         string body = ExtractTypeScriptFunctionBody(source, "writePlan");
 
         Assert.Contains(
-            "function writePlan(repositoryId: string, roadmap: string, specs: string[], newCodebase: boolean)",
+            "function writePlan(repositoryId: string, epic: string, specs: string[], newCodebase: boolean)",
             source,
             StringComparison.Ordinal);
         Assert.Contains("invokeCommand<{ phase: string }>('write_plan', {", body, StringComparison.Ordinal);
         Assert.Contains("repositoryId", body, StringComparison.Ordinal);
-        Assert.Contains("roadmap", body, StringComparison.Ordinal);
+        Assert.Contains("epic", body, StringComparison.Ordinal);
         Assert.Contains("specs", body, StringComparison.Ordinal);
         Assert.Contains("newCodebase", body, StringComparison.Ordinal);
     }
@@ -362,7 +362,7 @@ public sealed class OrchestrationRequestBoundaryContractTests
 /// Live structured-error contract tests for the orchestration commands (m8 slice). These boot the real app
 /// via <see cref="Program.CreateApp(string[], System.Action{IServiceCollection})"/> with a single registered
 /// repository, issue real HTTP requests, and assert the on-the-wire structured-error shape <c>{ error }</c>:
-/// an unknown repository GUID returns 404 and plan/write with a blank roadmap returns 400 — each with a JSON
+/// an unknown repository GUID returns 404 and plan/write with a blank epic returns 400 — each with a JSON
 /// body carrying a non-empty string <c>error</c> field. The harness mirrors
 /// <c>Orchestration.PlanAuthoringEndpointTests</c>.
 /// </summary>
@@ -388,20 +388,20 @@ public sealed class OrchestrationErrorContractTests
 
         HttpResponseMessage response = await server.Client.PostAsJsonAsync(
             $"/api/repositories/{Guid.NewGuid():D}/plan/write",
-            new { roadmap = "roadmap", specs = Array.Empty<string>(), newCodebase = false });
+            new { epic = "epic", specs = Array.Empty<string>(), newCodebase = false });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         await AssertStructuredErrorAsync(response);
     }
 
     [Fact]
-    public async Task PlanWriteWithBlankRoadmapReturnsStructuredBadRequestError()
+    public async Task PlanWriteWithBlankEpicReturnsStructuredBadRequestError()
     {
         await using OrchestrationErrorTestServer server = await OrchestrationErrorTestServer.StartAsync();
 
         HttpResponseMessage response = await server.Client.PostAsJsonAsync(
             $"/api/repositories/{server.RegisteredRepositoryId:D}/plan/write",
-            new { roadmap = "   ", specs = Array.Empty<string>(), newCodebase = false });
+            new { epic = "   ", specs = Array.Empty<string>(), newCodebase = false });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await AssertStructuredErrorAsync(response);

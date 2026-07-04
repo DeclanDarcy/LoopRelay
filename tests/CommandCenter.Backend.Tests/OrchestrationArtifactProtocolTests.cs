@@ -19,7 +19,7 @@ namespace CommandCenter.Backend.Tests;
 /// handoff/decisions ordinals, and the one-way re-execution guard — never from reset in-memory counters.
 ///
 /// The seven canonical artifacts certified here (EXACT constants):
-///   .agents/specs/roadmap.md             (OrchestrationArtifactPaths.SpecsRoadmap)
+///   .agents/specs/epic.md             (OrchestrationArtifactPaths.SpecsEpic)
 ///   .agents/specs/s{n}.md                (OrchestrationArtifactPaths.Spec(n), 1-based)
 ///   .agents/plan.md                      (OrchestrationArtifactPaths.Plan)
 ///   .agents/operational_context.md       (OrchestrationArtifactPaths.OperationalContext)
@@ -38,7 +38,7 @@ public sealed class OrchestrationArtifactProtocolTests
     // ---------------------------------------------------------------------------------------------------------
 
     [Fact]
-    public async Task Write_plan_persists_roadmap_and_specs_before_the_turn_and_plan_after()
+    public async Task Write_plan_persists_epic_and_specs_before_the_turn_and_plan_after()
     {
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
@@ -50,22 +50,22 @@ public sealed class OrchestrationArtifactProtocolTests
 
         await orchestrator.BeginWritePlanAsync(
             repository,
-            new PlanWriteRequest { Roadmap = "ROADMAP", Specs = new[] { "SPEC ONE", "SPEC TWO" } });
+            new PlanWriteRequest { Epic = "EPIC", Specs = new[] { "SPEC ONE", "SPEC TWO" } });
         await orchestrator.PlanningTurnTask;
 
-        // roadmap.md + s1.md + s2.md were written to their canonical paths (1-based specs).
-        Assert.Contains(Resolve(repository, OrchestrationArtifactPaths.SpecsRoadmap), store.WriteQueries);
+        // epic.md + s1.md + s2.md were written to their canonical paths (1-based specs).
+        Assert.Contains(Resolve(repository, OrchestrationArtifactPaths.SpecsEpic), store.WriteQueries);
         Assert.Contains(Resolve(repository, OrchestrationArtifactPaths.Spec(1)), store.WriteQueries);
         Assert.Contains(Resolve(repository, OrchestrationArtifactPaths.Spec(2)), store.WriteQueries);
-        Assert.Equal("ROADMAP", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.SpecsRoadmap)));
+        Assert.Equal("EPIC", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.SpecsEpic)));
         Assert.Equal("SPEC ONE", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.Spec(1))));
         Assert.Equal("SPEC TWO", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.Spec(2))));
 
-        // The roadmap/specs were persisted BEFORE the plan (the OnTurn that writes plan.md).
-        int roadmapIndex = store.WriteQueries.IndexOf(Resolve(repository, OrchestrationArtifactPaths.SpecsRoadmap));
+        // The epic/specs were persisted BEFORE the plan (the OnTurn that writes plan.md).
+        int epicIndex = store.WriteQueries.IndexOf(Resolve(repository, OrchestrationArtifactPaths.SpecsEpic));
         int planIndex = store.WriteQueries.IndexOf(Resolve(repository, OrchestrationArtifactPaths.Plan));
-        Assert.True(roadmapIndex >= 0 && planIndex >= 0 && roadmapIndex < planIndex,
-            "roadmap.md must be persisted before plan.md is written by the turn");
+        Assert.True(epicIndex >= 0 && planIndex >= 0 && epicIndex < planIndex,
+            "epic.md must be persisted before plan.md is written by the turn");
         Assert.Equal(Plan, await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.Plan)));
     }
 
@@ -174,7 +174,7 @@ public sealed class OrchestrationArtifactProtocolTests
     {
         // Lock the EXACT canonical path strings the protocol certifies — a constant rename would break recovery
         // and every independent consumer, so it must break this test.
-        Assert.Equal(".agents/specs/roadmap.md", OrchestrationArtifactPaths.SpecsRoadmap);
+        Assert.Equal(".agents/specs/epic.md", OrchestrationArtifactPaths.SpecsEpic);
         Assert.Equal(".agents/specs/s1.md", OrchestrationArtifactPaths.Spec(1));
         Assert.Equal(".agents/plan.md", OrchestrationArtifactPaths.Plan);
         Assert.Equal(".agents/operational_context.md", OrchestrationArtifactPaths.OperationalContext);
@@ -278,7 +278,7 @@ public sealed class OrchestrationArtifactProtocolTests
         Repository repository)
     {
         runtime.OnTurn = () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), Plan);
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
         runtime.OnTurn = null; // operational one-shots are driven by OneShotTurns, not OnTurn
     }

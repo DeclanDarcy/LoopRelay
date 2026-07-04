@@ -622,7 +622,7 @@ async fn get_plan_status(repository_id: String) -> Result<Value, String> {
 #[tauri::command]
 async fn write_plan(
     repository_id: String,
-    roadmap: String,
+    epic: String,
     specs: Vec<String>,
     new_codebase: bool,
 ) -> Result<Value, String> {
@@ -630,7 +630,7 @@ async fn write_plan(
         backend_post_json_value(
             &format!("/api/repositories/{repository_id}/plan/write"),
             &json!({
-                "roadmap": roadmap,
+                "epic": epic,
                 "specs": specs,
                 "newCodebase": new_codebase,
             }),

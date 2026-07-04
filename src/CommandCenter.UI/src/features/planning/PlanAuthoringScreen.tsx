@@ -7,7 +7,7 @@ import { ExecutionStreamView } from './ExecutionStreamView'
 import { PlanFailureNotice } from './PlanFailureNotice'
 import { PlanStreamView } from './PlanStreamView'
 import { RenderedPlanView } from './RenderedPlanView'
-import { RoadmapField } from './RoadmapField'
+import { EpicField } from './EpicField'
 import { SpecList } from './SpecList'
 import './PlanAuthoring.css'
 
@@ -40,7 +40,7 @@ export function PlanAuthoringScreen({
   planExists = true,
   refreshPlanStatus,
 }: PlanAuthoringScreenProps) {
-  const [roadmap, setRoadmap] = useState('')
+  const [epic, setEpic] = useState('')
   const [specs, setSpecs] = useState<string[]>([])
   const [newCodebase, setNewCodebase] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -82,7 +82,7 @@ export function PlanAuthoringScreen({
   // A continuation turn is streaming on the execution stream when, inside the decision phase, the
   // execution run is live again. While it streams the execution surface takes the foreground.
   const continuationRunning = decisionPhase && executionState.status === 'Running'
-  const canWrite = roadmap.trim().length > 0 && !inputsDisabled
+  const canWrite = epic.trim().length > 0 && !inputsDisabled
   const hasPlan = state.plan !== null
   const canRevise = feedback.trim().length > 0 && hasPlan && !inputsDisabled
   // Execute requires BOTH the in-memory streamed plan AND the backend's verified plan.md, so a turn
@@ -149,7 +149,7 @@ export function PlanAuthoringScreen({
     }
 
     void submitWrite({
-      roadmap,
+      epic,
       specs: specs.map((spec) => spec.trim()).filter((spec) => spec.length > 0),
       newCodebase,
     })
@@ -171,7 +171,7 @@ export function PlanAuthoringScreen({
         <p className="cc-plan-kicker">{repositoryName}</p>
         <h1 className="cc-plan-title">Author the implementation plan</h1>
         <p className="cc-plan-lede">
-          This repository has no plan yet. Draft a roadmap, watch the plan stream in, then revise or
+          This repository has no plan yet. Draft a epic, watch the plan stream in, then revise or
           execute it.
         </p>
       </header>
@@ -183,7 +183,7 @@ export function PlanAuthoringScreen({
       ) : null}
 
       <div className="cc-plan-authoring">
-        <RoadmapField value={roadmap} disabled={inputsDisabled} onChange={setRoadmap} />
+        <EpicField value={epic} disabled={inputsDisabled} onChange={setEpic} />
 
         <SpecList
           specs={specs}

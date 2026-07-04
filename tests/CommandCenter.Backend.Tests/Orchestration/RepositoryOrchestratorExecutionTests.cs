@@ -154,7 +154,7 @@ public sealed class RepositoryOrchestratorExecutionTests
         await store.WriteAsync(planPath, PlanBody); // a plan exists on disk
         runtime.OnTurn = () => store.WriteAsync(planPath, PlanBody);
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         Assert.True(orchestrator.IsPlanningTurnActive);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => orchestrator.BeginExecutePlanAsync(repository));
@@ -293,7 +293,7 @@ public sealed class RepositoryOrchestratorExecutionTests
         Assert.True(orchestrator.IsExecutionRunActive);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "again" }));
+            () => orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "again" }));
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => orchestrator.BeginRevisePlanAsync(repository, new PlanReviseRequest { Feedback = "now" }));
 
@@ -383,7 +383,7 @@ public sealed class RepositoryOrchestratorExecutionTests
     {
         string planPath = Resolve(repository, OrchestrationArtifactPaths.Plan);
         runtime.OnTurn = () => store.WriteAsync(planPath, PlanBody);
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
         runtime.OnTurn = null; // operational one-shots are driven by the OneShotTurns queue, not OnTurn
     }

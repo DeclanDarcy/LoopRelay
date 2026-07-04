@@ -24,8 +24,8 @@ public static class OrchestrationArtifactPaths
     /// </summary>
     public const string Details = ".agents/details.md";
 
-    /// <summary>Roadmap textarea, persisted before the initial planning prompt runs (m3).</summary>
-    public const string SpecsRoadmap = ".agents/specs/roadmap.md";
+    /// <summary>Epic textarea, persisted before the initial planning prompt runs (m3).</summary>
+    public const string SpecsEpic = ".agents/specs/epic.md";
 
     /// <summary>Repository-relative path of the <c>n</c>-th Spec textarea (1-based: <c>s1.md</c>, <c>s2.md</c>, ...).</summary>
     public static string Spec(int index) => $".agents/specs/s{index}.md";

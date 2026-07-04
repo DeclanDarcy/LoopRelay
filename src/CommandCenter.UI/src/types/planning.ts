@@ -8,7 +8,7 @@ export type PlanStatus = {
 }
 
 export type WritePlanRequest = {
-  roadmap: string
+  epic: string
   specs: string[]
   newCodebase: boolean
 }

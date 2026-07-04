@@ -475,7 +475,7 @@ public sealed class RepositoryOrchestratorContinuationTests
         Repository repository)
     {
         runtime.OnTurn = () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), Plan);
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
         runtime.OnTurn = null; // operational one-shots are driven by OneShotTurns, not OnTurn
     }

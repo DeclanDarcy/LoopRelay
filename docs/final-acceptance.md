@@ -26,7 +26,7 @@ landing points. Line numbers are indicative of the audited revision and may drif
 | # | Criterion | Verdict | Primary evidence |
 |---|-----------|---------|------------------|
 | FA-1 | No `.agents/plan.md` ⇒ Plan Authoring is shown | met | `App.tsx` gate `!planStatus.planExists || isAuthoringSessionActive`; `RepositoryOrchestrator.GetPlanStatusAsync`; `PlanStatusEndpoints` |
-| FA-2 | Roadmap and Specs written to `.agents/specs` | met | `RepositoryOrchestrator.BeginWritePlanAsync` → `PersistPlanInputsAsync` writes `roadmap.md` + `s{n}.md` **before** the turn |
+| FA-2 | Epic and Specs written to `.agents/specs` | met | `RepositoryOrchestrator.BeginWritePlanAsync` → `PersistPlanInputsAsync` writes `epic.md` + `s{n}.md` **before** the turn |
 | FA-3 | Write Plan uses the correct generated prompt; creates `.agents/plan.md` | met | `BuildWritePlan` renders `WritePlan.Text`; `FinishPlanningTurnAsync` verifies `plan.md` |
 | FA-4 | Revise Plan uses `RevisePlan.Render(feedback)` in the same planning process | met | `BeginRevisePlanAsync` → `RevisePlan.Render(feedback)` on the held-open planning `IAgentSession` (warm-session reuse) |
 | FA-5 | Execute Plan: close planning, copy operational context, cache plan, extract milestones, commit/push, set `ExecutingPlan`, start execution, rotate `handoff.0001.md` — in order | met *(default flags)* | `BeginExecutePlanAsync` → `RunExecutionAsync` runs the nine steps in order; **commit/push is gated by `AutomaticCommitPushAfterExecuteEnabled` (default ON)** — see nuance |
@@ -60,7 +60,7 @@ landing points. Line numbers are indicative of the audited revision and may drif
 | NG-1 | No Repository Knowledge platform in this flow | honored | The only conversation surface is `ConversationProjection` — an append-only narrow transcript (`Planning/OperationalOutput/DecisionOutput/Submit/Continuation`) read via `GET …/conversation`; no indexing, query, or cross-repository aggregation |
 | NG-2 | No adaptive engineering intelligence, opportunity discovery, recommendation generation, or platform-wide learning | honored | The loop adds none; see near-miss note |
 | NG-3 | No knowledge graph, lineage explorer, repository query surface, or trend analysis | honored | The loop adds none; see near-miss note |
-| NG-4 | UI does not infer lifecycle legality, decision validity, router behavior, prompt selection, or artifact authority | honored | `api/planning.ts`/`api/decisionRuntime.ts` send only commands (roadmap/specs/`newCodebase`/feedback/edited decisions); reducers transition on backend-published events; route is **received** via `event.route`, never decided |
+| NG-4 | UI does not infer lifecycle legality, decision validity, router behavior, prompt selection, or artifact authority | honored | `api/planning.ts`/`api/decisionRuntime.ts` send only commands (epic/specs/`newCodebase`/feedback/edited decisions); reducers transition on backend-published events; route is **received** via `event.route`, never decided |
 | NG-5 | Prompts are not semantic authority; they remain generated communication mechanisms | honored | `.prompt` files are pure text templates generated via Lib.Prompts `PromptSourceGenerator`; `PromptAuthorityTests` forbids hand-composed prompt bodies in production |
 | NG-6 | Orchestrator is not a domain service for Execution, Decisions, Continuity, Git, Workflow, or contracts | honored | `RepositoryOrchestrator` owns only transient run state and delegates to `IAgentRuntime`, `IArtifactStore`, `IPlanArtifactPublisher` (over `IGitService`), and `IDecisionSessionRouter` |
 
@@ -89,7 +89,7 @@ boundary so a future change that folds the reasoning/knowledge subsystem into th
 
 ## Completion Statement — satisfied
 
-> The design is complete when the user can stay on one repository screen from initial roadmap/spec authoring
+> The design is complete when the user can stay on one repository screen from initial epic/spec authoring
 > through repeated decision-mediated execution turns, with persistent planning and decision Codex processes
 > where required, faithful artifact writes under `.agents`, generated prompt provenance for every agent turn,
 > and router-driven reuse or transfer of the active Decision process.

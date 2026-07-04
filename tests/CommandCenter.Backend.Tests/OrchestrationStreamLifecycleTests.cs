@@ -37,7 +37,7 @@ public sealed class OrchestrationStreamLifecycleTests
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
         runtime.OnTurn = () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), "RENDERED PLAN");
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         List<OrchestratorStreamEvent> events = await DrainUntilAsync(orchestrator.PlanningStream, "completed", "failed");
@@ -62,7 +62,7 @@ public sealed class OrchestrationStreamLifecycleTests
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         List<OrchestratorStreamEvent> events = await DrainUntilAsync(orchestrator.PlanningStream, "completed", "failed");
@@ -273,7 +273,7 @@ public sealed class OrchestrationStreamLifecycleTests
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
         runtime.OnTurn = () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), "RENDERED PLAN");
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         List<OrchestratorStreamEvent> all = await DrainUntilAsync(orchestrator.PlanningStream, "completed", "failed");
@@ -359,7 +359,7 @@ public sealed class OrchestrationStreamLifecycleTests
         RepositoryOrchestrator orchestrator, FakeAgentRuntime runtime, FakeArtifactStore store, Repository repository)
     {
         runtime.OnTurn = () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), PlanBody);
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
         runtime.OnTurn = null;
     }

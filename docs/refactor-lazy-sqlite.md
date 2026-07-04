@@ -40,7 +40,7 @@ The deciding test is a single question: **who is the consumer?**
 
 The orchestrator `.md` plane enumerated in `OrchestrationArtifactPaths` (`src/CommandCenter.Orchestration/OrchestrationArtifactPaths.cs`):
 
-- `plan.md`, `specs/roadmap.md` + `s{n}.md`, `operational_context.md`, `operational_delta.md`, `decisions/decisions.md` (+ rotated `decisions.NNNN.md`), `milestones/m*.md`, `handoffs/handoff.md` (+ rotated).
+- `plan.md`, `specs/epic.md` + `s{n}.md`, `operational_context.md`, `operational_delta.md`, `decisions/decisions.md` (+ rotated `decisions.NNNN.md`), `milestones/m*.md`, `handoffs/handoff.md` (+ rotated).
 
 These are read/written directly by the orchestration loop and consumed by Codex provider turns. `decisions.md` is the canonical path every independent consumer reads (`ArtifactService.GetCurrentDecisionsAsync`, `DecisionContextService`, `ArtifactRotationService`, continuity). This is a **filesystem contract with the provider, not a cache.** `IArtifactStore`/`FileSystemArtifactStore` keeps its filesystem backing for this entire subset. **The migration boundary runs between the typed `.json` evidence and the `.md` projection/contract plane.**
 

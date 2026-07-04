@@ -55,7 +55,7 @@ public sealed class RepositoryOrchestratorFeatureFlagsTests
             Effect: () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), "RENDERED PLAN"),
             Chunks: new[] { "part A ", "part B" }));
 
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         // No held-open planning session was opened; the one-shot carried the WritePlan prompt.
@@ -91,7 +91,7 @@ public sealed class RepositoryOrchestratorFeatureFlagsTests
         // First a one-shot Write persists the plan.
         runtime.OneShotTurns.Enqueue(new FakeOneShotTurn(
             Effect: () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.Plan), "PLAN V1")));
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
 
         // Then a one-shot Revise re-runs RevisePlan against the persisted plan (rewrites plan.md).
@@ -312,7 +312,7 @@ public sealed class RepositoryOrchestratorFeatureFlagsTests
     {
         string planPath = Resolve(repository, OrchestrationArtifactPaths.Plan);
         runtime.OnTurn = () => store.WriteAsync(planPath, PlanBody);
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
+        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Epic = "r" });
         await orchestrator.PlanningTurnTask;
         runtime.OnTurn = null;
     }

@@ -18,10 +18,10 @@ public class PreflightGateTests
     private static string Resolve(Repository repo, string rel) => ArtifactPath.ResolveRepositoryPath(repo, rel);
 
     [Fact]
-    public async Task CheckAsync_CleanStateWithRoadmap_ReturnsNoViolations()
+    public async Task CheckAsync_CleanStateWithEpic_ReturnsNoViolations()
     {
         var (gate, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
 
         Assert.Empty(await gate.CheckAsync());
     }
@@ -30,7 +30,7 @@ public class PreflightGateTests
     public async Task CheckAsync_PlanAlreadyExists_ReportsViolation()
     {
         var (gate, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
 
         IReadOnlyList<string> violations = await gate.CheckAsync();
@@ -44,7 +44,7 @@ public class PreflightGateTests
     public async Task CheckAsync_OperationalContextAlreadyExists_ReportsViolation()
     {
         var (gate, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "CTX");
 
         IReadOnlyList<string> violations = await gate.CheckAsync();
@@ -58,7 +58,7 @@ public class PreflightGateTests
     public async Task CheckAsync_DetailsAlreadyExists_ReportsViolation()
     {
         var (gate, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Details), "DETAILS");
 
         IReadOnlyList<string> violations = await gate.CheckAsync();
@@ -72,7 +72,7 @@ public class PreflightGateTests
     public async Task CheckAsync_MilestonesDirectoryNotEmpty_ReportsViolation()
     {
         var (gate, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
         await store.WriteAsync(
             Resolve(repo, ArtifactPath.CombineRelative(OrchestrationArtifactPaths.MilestonesDirectory, "m1.md")),
             "- [ ] a");
@@ -84,14 +84,14 @@ public class PreflightGateTests
     }
 
     [Fact]
-    public async Task CheckAsync_RoadmapMissing_ReportsViolation()
+    public async Task CheckAsync_EpicMissing_ReportsViolation()
     {
         var (gate, _, _) = New();
 
         IReadOnlyList<string> violations = await gate.CheckAsync();
 
         string violation = Assert.Single(violations);
-        Assert.Contains(OrchestrationArtifactPaths.SpecsRoadmap, violation);
+        Assert.Contains(OrchestrationArtifactPaths.SpecsEpic, violation);
         Assert.Contains("not found", violation);
     }
 
@@ -99,7 +99,7 @@ public class PreflightGateTests
     public async Task CheckAsync_MultipleViolations_AllReportedTogether()
     {
         var (gate, store, repo) = New();
-        // No roadmap authored; plan and details already exist from a previous (uncleaned) run.
+        // No epic authored; plan and details already exist from a previous (uncleaned) run.
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Details), "DETAILS");
 
@@ -108,6 +108,6 @@ public class PreflightGateTests
         Assert.Equal(3, violations.Count);
         Assert.Contains(violations, v => v.Contains(OrchestrationArtifactPaths.Plan) && v.Contains("already exists"));
         Assert.Contains(violations, v => v.Contains(OrchestrationArtifactPaths.Details) && v.Contains("already exists"));
-        Assert.Contains(violations, v => v.Contains(OrchestrationArtifactPaths.SpecsRoadmap) && v.Contains("not found"));
+        Assert.Contains(violations, v => v.Contains(OrchestrationArtifactPaths.SpecsEpic) && v.Contains("not found"));
     }
 }

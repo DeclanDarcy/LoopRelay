@@ -11,9 +11,9 @@ namespace CommandCenter.Plan.Cli;
 /// </summary>
 internal sealed class PlanArtifacts(IArtifactStore store, Repository repository)
 {
-    // Derived from SpecsRoadmap rather than restated, per the plan's "never restate .agents/... literals" rule.
+    // Derived from SpecsEpic rather than restated, per the plan's "never restate .agents/... literals" rule.
     private static readonly string SpecsDirectory =
-        Path.GetDirectoryName(OrchestrationArtifactPaths.SpecsRoadmap)!.Replace('\\', '/');
+        Path.GetDirectoryName(OrchestrationArtifactPaths.SpecsEpic)!.Replace('\\', '/');
 
     public Task<bool> ExistsAsync(string relativePath) =>
         store.ExistsAsync(Resolve(relativePath));

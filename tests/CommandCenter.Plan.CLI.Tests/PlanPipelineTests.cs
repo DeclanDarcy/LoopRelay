@@ -67,7 +67,7 @@ public class PlanPipelineTests
     public async Task RunAsync_HappyPath_RunsAllStepsInOrder_AndProducesTheExpectedFinalArtifactState()
     {
         Harness h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
 
         string? seenPlanAtReview = null;
         string? reviewOutput = null;
@@ -169,7 +169,7 @@ public class PlanPipelineTests
     public async Task RunAsync_PreflightBlocked_MakesZeroCodexCalls()
     {
         Harness h = New();
-        // .agents/specs/roadmap.md is never written -> preflight reports a violation.
+        // .agents/specs/epic.md is never written -> preflight reports a violation.
 
         PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
@@ -184,7 +184,7 @@ public class PlanPipelineTests
     public async Task RunAsync_MidPipelineFailure_CollectDetailsFailed_ReturnsFailed_ClosesAllSessions_KeepsRevisedPlan()
     {
         Harness h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
 
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
@@ -217,7 +217,7 @@ public class PlanPipelineTests
     public async Task RunAsync_CancelledMidRun_ReturnsCancelled_AndDisposeAsyncStillClosesTheOpenPlanningSession()
     {
         Harness h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
 
         using var cts = new CancellationTokenSource();
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
@@ -252,7 +252,7 @@ public class PlanPipelineTests
         // handshake death, ...) must honor the exit-code contract: message on the console, outcome Failed —
         // never an unhandled crash with a stack trace.
         Harness h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
 
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             throw new InvalidOperationException("codex launcher exploded")));
@@ -271,7 +271,7 @@ public class PlanPipelineTests
         // An OperationCanceledException while the CALLER's token is not cancelled is not a cancellation the
         // operator asked for (e.g. an internal timeout) — it is a Failed run, and its message is surfaced.
         Harness h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
 
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             throw new OperationCanceledException("internal turn timeout")));
@@ -323,7 +323,7 @@ public class PlanPipelineTests
     {
         FakeProcessRunner git = DirtyGit();
         Harness h = New(git);
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
 
         string? contextAtCollectDetails = null;
         ScriptFullHappyRun(h, ctx => contextAtCollectDetails = ctx);
@@ -367,7 +367,7 @@ public class PlanPipelineTests
 
     /// <summary>Wires the fake so the only non-git invocation (new-epic) archives the previous workspace:
     /// plan.md, details.md, operational_context.md and the milestone file are removed. specs/ is NOT touched —
-    /// new-epic leaves it in place (whether or not a roadmap exists there).</summary>
+    /// new-epic leaves it in place (whether or not a epic exists there).</summary>
     private static void SimulateNewEpicArchive(FakeProcessRunner git, Harness h) =>
         git.OnRunAsync = (fileName, _, _) => fileName == "git"
             ? Task.CompletedTask
@@ -386,20 +386,20 @@ public class PlanPipelineTests
     }
 
     [Fact]
-    public async Task RunAsync_CompletePreviousWorkspace_ArchivesAndPublishesBeforePreflight_ThenPlansTheNextEpicFromTheSurvivingRoadmap()
+    public async Task RunAsync_CompletePreviousWorkspace_ArchivesAndPublishesBeforePreflight_ThenPlansTheNextEpicFromTheSurvivingEpic()
     {
         FakeProcessRunner git = DirtyGit();
         Harness h = New(git);
-        // A complete previous-epic workspace, plus the roadmap that new-epic leaves in place under specs/.
+        // A complete previous-epic workspace, plus the epic that new-epic leaves in place under specs/.
         await SeedCompletePreviousWorkspaceAsync(h);
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "NEXT ROADMAP");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "NEXT EPIC");
         SimulateNewEpicArchive(git, h);
         ScriptFullHappyRun(h);
 
         PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
         // The rollover ran BEFORE preflight, and preflight evaluated the POST-archive state: the old artifacts
-        // are gone (no "already exists") and specs/roadmap.md SURVIVED the archive — so the SAME run proceeds
+        // are gone (no "already exists") and specs/epic.md SURVIVED the archive — so the SAME run proceeds
         // to plan the next epic from it.
         Assert.Equal(PlanOutcome.Completed, outcome);
         Assert.Equal(
@@ -411,8 +411,8 @@ public class PlanPipelineTests
             PhaseSequence(h.Console));
         Assert.DoesNotContain(h.Console.Events, e => e.Kind == "error");
         Assert.Equal(
-            "NEXT ROADMAP",
-            await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap)));
+            "NEXT EPIC",
+            await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic)));
 
         // new-epic ran exactly once, against the provided directory, and BEFORE any publish (its archive is
         // what the first commit records). (Matched as the only non-git invocation — robust to the
@@ -446,24 +446,24 @@ public class PlanPipelineTests
     }
 
     [Fact]
-    public async Task RunAsync_CompletePreviousWorkspace_ButNoRoadmapEverExisted_ArchivesAndPublishes_ThenPreflightBlocks()
+    public async Task RunAsync_CompletePreviousWorkspace_ButNoEpicEverExisted_ArchivesAndPublishes_ThenPreflightBlocks()
     {
         FakeProcessRunner git = DirtyGit();
         Harness h = New(git);
-        // A complete previous-epic workspace but specs/roadmap.md was NEVER authored: the rollover still
-        // archives (and publishes) the old workspace, then preflight blocks on the missing roadmap.
+        // A complete previous-epic workspace but specs/epic.md was NEVER authored: the rollover still
+        // archives (and publishes) the old workspace, then preflight blocks on the missing epic.
         await SeedCompletePreviousWorkspaceAsync(h);
         SimulateNewEpicArchive(git, h);
 
         PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        // Preflight evaluated the POST-archive state: its only violation is the missing roadmap ("author the
+        // Preflight evaluated the POST-archive state: its only violation is the missing epic ("author the
         // next one and rerun"), never "already exists".
         Assert.Equal(PlanOutcome.PreflightBlocked, outcome);
         Assert.Equal(new[] { "Epic Rollover", "Preflight" }, PhaseSequence(h.Console));
         Assert.Contains(
             h.Console.Events,
-            e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.SpecsRoadmap) && e.Text.Contains("not found"));
+            e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.SpecsEpic) && e.Text.Contains("not found"));
         Assert.DoesNotContain(h.Console.Events, e => e.Kind == "error" && e.Text.Contains("already exists"));
 
         // new-epic ran exactly once, against the provided directory. (Matched as the only non-git invocation —
@@ -502,7 +502,7 @@ public class PlanPipelineTests
             e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.Plan) && e.Text.Contains("already exists"));
         Assert.Contains(
             h.Console.Events,
-            e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.SpecsRoadmap) && e.Text.Contains("not found"));
+            e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.SpecsEpic) && e.Text.Contains("not found"));
     }
 
     [Fact]
@@ -510,7 +510,7 @@ public class PlanPipelineTests
     {
         FakeProcessRunner git = DirtyGit();
         Harness h = New(git);
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsRoadmap), "ROADMAP");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "EPIC");
 
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {

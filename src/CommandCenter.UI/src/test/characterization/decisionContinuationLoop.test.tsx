@@ -19,7 +19,7 @@ async function renderToFirstReview() {
     <PlanAuthoringScreen repositoryId="repo-empty" repositoryName="EmptyRepo" />,
   )
 
-  fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+  fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
     target: { value: 'Ship the planning workflow.' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -111,7 +111,7 @@ describe('Decision submit and continuation loop', () => {
       />,
     )
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the planning workflow.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))

@@ -20,11 +20,11 @@ function renderScreen() {
 }
 
 describe('Plan authoring accessibility', () => {
-  it('labels the authoring controls: Roadmap, Specifications group, and New codebase checkbox', () => {
+  it('labels the authoring controls: Epic, Specifications group, and New codebase checkbox', () => {
     renderScreen()
 
-    // The Roadmap control is a labelled textbox.
-    expect(screen.getByRole('textbox', { name: 'Roadmap' })).toBeInTheDocument()
+    // The Epic control is a labelled textbox.
+    expect(screen.getByRole('textbox', { name: 'Epic' })).toBeInTheDocument()
     // The Specifications group carries an accessible name.
     expect(screen.getByLabelText('Specifications')).toBeInTheDocument()
     // The New codebase checkbox is labelled by its wrapping label text.
@@ -35,7 +35,7 @@ describe('Plan authoring accessibility', () => {
   it('exposes the Planning stream as a polite live region while a turn runs', async () => {
     renderScreen()
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
@@ -49,7 +49,7 @@ describe('Plan authoring accessibility', () => {
   it('labels the Feedback control and exposes the rendered-plan copy status as a live region', async () => {
     renderScreen()
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Epic' }), {
       target: { value: 'Ship the dashboard.' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
