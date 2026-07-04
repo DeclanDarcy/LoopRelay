@@ -18,8 +18,9 @@ namespace CommandCenter.Agents.Services;
 /// <item>each <b>turn</b> drains its own chunk channel to surface streaming deltas, so an untrusted
 /// <c>onChunk</c> callback runs on the caller's path and can never wedge the transport.</item>
 /// </list>
-/// The first turn lazily runs the <c>initialize</c> → <c>initialized</c> → <c>thread/start</c>
-/// handshake; later turns reuse the thread. Turns are serialized so the one process is never asked to
+/// The first turn lazily runs the <c>initialize</c> → <c>initialized</c> → <c>thread/start</c> (or
+/// <c>thread/resume</c> when the spec carries a ResumeThreadId; the resume path runs it eagerly via
+/// EnsureReadyAsync) handshake; later turns reuse the thread. Turns are serialized so the one process is never asked to
 /// interleave prompts. When the process exits the pump cancels the session so every awaiter is released.
 /// </summary>
 public sealed class CodexAppServerSession : IAgentSession
@@ -141,6 +142,29 @@ public sealed class CodexAppServerSession : IAgentSession
         }
     }
 
+    /// <summary>
+    /// Runs the handshake eagerly. Used by the resume path: the caller must know whether the resume succeeded
+    /// BEFORE composing its first prompt (priming is decided at prompt-build time). Normal sessions keep the
+    /// lazy first-turn handshake; calling this on one is a harmless no-op after the first time.
+    /// </summary>
+    public async Task EnsureReadyAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
+        using CancellationTokenSource linked =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, sessionCts.Token);
+
+        await turnGate.WaitAsync(linked.Token);
+        try
+        {
+            await EnsureHandshakeAsync(linked.Token);
+        }
+        finally
+        {
+            turnGate.Release();
+        }
+    }
+
     public async Task CancelAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -206,15 +230,34 @@ public sealed class CodexAppServerSession : IAgentSession
 
         Enqueue(CodexAppServerProtocol.Initialized());
 
-        long threadStartId = NextId();
-        CodexAppServerMessage threadResponse = await SendRequestAsync(
-            threadStartId,
-            CodexAppServerProtocol.ThreadStart(threadStartId, spec.WorkingDirectory, Sandbox(), ApprovalPolicy()),
-            cancellationToken);
+        long threadRequestId = NextId();
+        bool resuming = spec.ResumeThreadId is { Length: > 0 };
+        string threadFrame = resuming
+            ? CodexAppServerProtocol.ThreadResume(
+                threadRequestId, spec.ResumeThreadId!, spec.WorkingDirectory, Sandbox(), ApprovalPolicy())
+            : CodexAppServerProtocol.ThreadStart(threadRequestId, spec.WorkingDirectory, Sandbox(), ApprovalPolicy());
+        CodexAppServerMessage threadResponse = await SendRequestAsync(threadRequestId, threadFrame, cancellationToken);
+        if (resuming && threadResponse.ErrorMessage is { } resumeError)
+        {
+            // A rejected resume (rollout deleted, unknown thread, protocol drift) is RECOVERABLE: the typed
+            // exception lets the runtime tear this process down and the caller fall back to a fresh thread.
+            throw new AgentSessionResumeException($"Codex thread/resume failed: {resumeError}");
+        }
+
         ThrowIfError(threadResponse, "thread/start");
 
-        threadId = ExtractThreadId(threadResponse.Result)
-            ?? throw new InvalidOperationException("Codex thread/start response did not contain a thread id.");
+        string? extractedThreadId = ExtractThreadId(threadResponse.Result);
+        if (extractedThreadId is null)
+        {
+            if (resuming)
+            {
+                throw new AgentSessionResumeException("Codex thread/resume response did not contain a thread id.");
+            }
+
+            throw new InvalidOperationException("Codex thread/start response did not contain a thread id.");
+        }
+
+        threadId = extractedThreadId;
         initialized = true;
     }
 

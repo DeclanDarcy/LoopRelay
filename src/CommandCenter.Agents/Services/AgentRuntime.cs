@@ -24,6 +24,33 @@ public sealed class AgentRuntime(
                 $"An agent session already exists for repository '{spec.RepositoryId}' and session '{spec.SessionId}'.");
         }
 
+        if (spec.ResumeThreadId is not null)
+        {
+            // Resume verification is EAGER: the caller decides how to prime its first prompt based on whether
+            // the resume succeeded, so the outcome must be known before any turn runs. On failure the process is
+            // torn down through the single-sited CloseSessionAsync (deregister + dispose) and the typed exception
+            // surfaces so the caller can fall back to a fresh, non-resuming open. A normal open stays lazy.
+            try
+            {
+                await session.EnsureReadyAsync(cancellationToken);
+            }
+            catch (AgentSessionResumeException)
+            {
+                await CloseSessionAsync(session);
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                await CloseSessionAsync(session);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await CloseSessionAsync(session);
+                throw new AgentSessionResumeException($"Codex session resume failed: {ex.Message}", ex);
+            }
+        }
+
         return session;
     }
 

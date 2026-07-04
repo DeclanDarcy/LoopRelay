@@ -1,7 +1,4 @@
-using System.Runtime.CompilerServices;
 using System.Text.Json;
-using System.Threading.Channels;
-using CommandCenter.Agents.Abstractions;
 using CommandCenter.Agents.Models;
 using CommandCenter.Agents.Services;
 
@@ -346,204 +343,77 @@ public sealed class CodexAppServerSessionTests
         }
     }
 
-    /// <summary>
-    /// An in-memory IAgentProcess that speaks the app-server protocol: it reacts to written JSON-RPC
-    /// requests by emitting the canned response + notification stream a real codex app-server would.
-    /// </summary>
-    private sealed class ScriptedAppServerProcess : IAgentProcess
+    private static AgentSessionSpec ResumeSpec(string threadId) => new(
+        SessionIdentity.New(),
+        "repo-1",
+        SessionRole.Decision,
+        new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
+        new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
+        workingDirectory: "/repo",
+        resumeThreadId: threadId);
+
+    [Fact]
+    public async Task ResumeSpecSendsThreadResumeInsteadOfThreadStartAndAddressesTurnsAtTheResumedThread()
     {
-        private readonly Channel<string> output = Channel.CreateUnbounded<string>(
-            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
-        private readonly TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly TaskCompletionSource approvalDeclined = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int turnCounter;
+        var process = new ScriptedAppServerProcess();
+        await using var session = new CodexAppServerSession(ResumeSpec("thread-old"), process, new DeterministicAgentTokenEstimator());
 
-        public List<string> Writes { get; } = [];
-        public List<string> Methods { get; } = [];
-        public string TurnStatus { get; init; } = "completed";
+        await session.EnsureReadyAsync();
+        AgentTurnResult result = await session.RunTurnAsync("hello");
 
-        /// <summary>The error.message a failed turn/completed carries; null omits the error object entirely
-        /// (modeling a codex failure that reports no protocol-level message).</summary>
-        public string? TurnErrorMessage { get; init; } = "boom";
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Equal(["initialize", "initialized", "thread/resume", "turn/start"], process.Methods);
+        Assert.Equal("thread-old", session.ThreadId);
+        Assert.Equal("thread-old", ParamsOf(process, "turn/start").GetProperty("threadId").GetString());
+    }
 
-        /// <summary>The retained stderr tail the session's diagnostics fall back to when the protocol
-        /// carried no failure message (IAgentProcess.ErrorSnapshot; interface default is null).</summary>
-        public string? ErrorSnapshot { get; init; }
+    [Fact]
+    public async Task ResumeFrameCarriesTheSessionPostureAndExcludeTurns()
+    {
+        var process = new ScriptedAppServerProcess();
+        await using var session = new CodexAppServerSession(ResumeSpec("thread-old"), process, new DeterministicAgentTokenEstimator());
 
-        public bool EmitApprovalRequest { get; init; }
+        await session.EnsureReadyAsync();
 
-        /// <summary>m10 (B): how many item/agentMessage/delta notifications each turn emits (long-output stress).</summary>
-        public int DeltaCount { get; init; } = 1;
+        JsonElement p = ParamsOf(process, "thread/resume");
+        Assert.Equal("thread-old", p.GetProperty("threadId").GetString());
+        Assert.Equal("/repo", p.GetProperty("cwd").GetString());
+        Assert.Equal("read-only", p.GetProperty("sandbox").GetString());
+        Assert.Equal("never", p.GetProperty("approvalPolicy").GetString());
+        Assert.True(p.GetProperty("excludeTurns").GetBoolean());
+    }
 
-        /// <summary>m10 (B): when set, the turn emits its deltas then PARKS (never completes) until this task
-        /// completes — lets a test cancel the caller's token mid-turn and observe the turn-gate release.</summary>
-        public Task? HoldBeforeCompletion { get; set; }
+    [Fact]
+    public async Task RejectedResumeThrowsTheTypedExceptionFromEnsureReady()
+    {
+        var process = new ScriptedAppServerProcess { RejectResume = true };
+        await using var session = new CodexAppServerSession(ResumeSpec("thread-old"), process, new DeterministicAgentTokenEstimator());
 
-        /// <summary>m10 (B): when true, the process completes its OWN output channel mid-turn (after deltas, before
-        /// the turn/completed) — modeling the process dying under an in-flight turn.</summary>
-        public bool KillAfterDeltas { get; set; }
+        AgentSessionResumeException ex =
+            await Assert.ThrowsAsync<AgentSessionResumeException>(() => session.EnsureReadyAsync());
+        Assert.Contains("no rollout found", ex.Message);
+    }
 
-        /// <summary>Signaled once a turn has emitted its deltas and is about to park / die (so a test can act).</summary>
-        public Task TurnInFlight => turnInFlight.Task;
+    [Fact]
+    public async Task ThreadIdIsNullBeforeTheHandshakeAndSetAfterIt()
+    {
+        var process = new ScriptedAppServerProcess();
+        await using CodexAppServerSession session = NewSession(process);
 
-        private readonly TaskCompletionSource turnInFlight = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Assert.Null(session.ThreadId);
+        await session.RunTurnAsync("hello");
+        Assert.Equal("thread-xyz", session.ThreadId);
+    }
 
-        public Task ApprovalDeclined => approvalDeclined.Task;
+    [Fact]
+    public async Task NonResumeEnsureReadyRunsTheNormalHandshakeExactlyOnce()
+    {
+        var process = new ScriptedAppServerProcess();
+        await using CodexAppServerSession session = NewSession(process);
 
-        public int ProcessId => 4321;
-        public AgentProcessState State { get; private set; } = AgentProcessState.Running;
-        public int? ExitCode => null;
-        public bool HasExited => State != AgentProcessState.Running;
-        public Task Completion => completion.Task;
+        await session.EnsureReadyAsync();
+        await session.RunTurnAsync("hello");
 
-        public Task WritePromptAsync(string text, CancellationToken cancellationToken = default)
-        {
-            foreach (string raw in text.Split('\n'))
-            {
-                string line = raw.Trim();
-                if (line.Length == 0)
-                {
-                    continue;
-                }
-
-                lock (Writes)
-                {
-                    Writes.Add(line);
-                }
-
-                if (line.Contains("\"decline\"", StringComparison.Ordinal))
-                {
-                    approvalDeclined.TrySetResult();
-                }
-
-                React(line);
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task WriteStandardInputAsync(string standardInput, CancellationToken cancellationToken = default) =>
-            WritePromptAsync(standardInput, cancellationToken);
-
-        public Task CompleteInputAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-        public async IAsyncEnumerable<string> ReadOutputLinesAsync(
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
-        {
-            await foreach (string line in output.Reader.ReadAllAsync(cancellationToken))
-            {
-                yield return line;
-            }
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            State = AgentProcessState.Canceled;
-            output.Writer.TryComplete();
-            completion.TrySetResult();
-            return ValueTask.CompletedTask;
-        }
-
-        private void React(string line)
-        {
-            long id = 0;
-            string? method;
-            try
-            {
-                using JsonDocument document = JsonDocument.Parse(line);
-                JsonElement root = document.RootElement;
-                method = root.TryGetProperty("method", out JsonElement m) && m.ValueKind == JsonValueKind.String
-                    ? m.GetString()
-                    : null;
-                if (root.TryGetProperty("id", out JsonElement i) && i.ValueKind == JsonValueKind.Number)
-                {
-                    id = i.GetInt64();
-                }
-            }
-            catch (JsonException)
-            {
-                return;
-            }
-
-            if (method is null)
-            {
-                return; // a response we sent back (e.g. an approval reply) — nothing to react to
-            }
-
-            lock (Methods)
-            {
-                Methods.Add(method);
-            }
-
-            switch (method)
-            {
-                case "initialize":
-                    EmitResponse(id, new { userAgent = "x", codexHome = "h", platformFamily = "windows", platformOs = "windows" });
-                    break;
-
-                case "thread/start":
-                    EmitResponse(id, new { thread = new { id = "thread-xyz" } });
-                    break;
-
-                case "turn/start":
-                    int index = ++turnCounter;
-                    EmitResponse(id, new { turn = new { id = $"u{index}", status = "inProgress" } });
-                    if (EmitApprovalRequest)
-                    {
-                        EmitServerRequest("appr-1", "item/commandExecution/requestApproval", new { itemId = "i1" });
-                    }
-
-                    EmitNotification("turn/started", new { threadId = "thread-xyz", turn = new { id = $"u{index}", status = "inProgress" } });
-
-                    // m10 (B) long-output: emit DeltaCount deltas in order (default 1). The single-delta default keeps
-                    // the m4 reply "reply N" verbatim so existing tests are byte-unchanged.
-                    if (DeltaCount <= 1)
-                    {
-                        EmitNotification("item/agentMessage/delta", new { itemId = $"i{index}", delta = $"reply {index}" });
-                    }
-                    else
-                    {
-                        for (int d = 0; d < DeltaCount; d++)
-                        {
-                            EmitNotification("item/agentMessage/delta", new { itemId = $"i{index}", delta = $"d{d}|" });
-                        }
-                    }
-
-                    EmitNotification("thread/tokenUsage/updated", new { tokenUsage = new { last = new { inputTokens = 11, outputTokens = 5 } } });
-
-                    // m10 (B) cancel-mid-turn / process-death-mid-turn: optionally signal in-flight, then either PARK
-                    // (never completing the turn — the caller cancels), KILL the output stream (process death), or
-                    // emit the terminal turn/completed as normal.
-                    turnInFlight.TrySetResult();
-                    if (KillAfterDeltas)
-                    {
-                        output.Writer.TryComplete();
-                        break;
-                    }
-
-                    if (HoldBeforeCompletion is not null)
-                    {
-                        break; // never emit turn/completed; the caller's cancellation is what ends the turn
-                    }
-
-                    EmitNotification("turn/completed", TurnStatus == "completed"
-                        ? new { turn = new { id = $"u{index}", status = "completed" } }
-                        : TurnErrorMessage is { } errorMessage
-                            ? (object)new { turn = new { id = $"u{index}", status = "failed", error = new { message = errorMessage } } }
-                            : new { turn = new { id = $"u{index}", status = "failed" } });
-                    break;
-            }
-        }
-
-        private void EmitResponse(long id, object result) =>
-            Emit(new Dictionary<string, object?> { ["id"] = id, ["result"] = result });
-
-        private void EmitNotification(string method, object @params) =>
-            Emit(new Dictionary<string, object?> { ["method"] = method, ["params"] = @params });
-
-        private void EmitServerRequest(string requestId, string method, object @params) =>
-            Emit(new Dictionary<string, object?> { ["id"] = requestId, ["method"] = method, ["params"] = @params });
-
-        private void Emit(object frame) => output.Writer.TryWrite(JsonSerializer.Serialize(frame));
+        Assert.Equal(["initialize", "initialized", "thread/start", "turn/start"], process.Methods);
     }
 }
