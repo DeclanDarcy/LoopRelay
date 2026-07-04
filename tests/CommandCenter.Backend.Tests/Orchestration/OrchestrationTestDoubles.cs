@@ -158,6 +158,8 @@ internal sealed class FakeAgentSession : IAgentSession
 
     public AgentTokenUsage TotalUsage => AgentTokenUsage.Zero;
 
+    public string? ThreadId => null;
+
     public async Task<AgentTurnResult> RunTurnAsync(
         string prompt,
         Func<AgentStreamChunk, Task>? onChunk = null,

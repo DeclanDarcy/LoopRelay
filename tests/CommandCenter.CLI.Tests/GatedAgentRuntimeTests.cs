@@ -179,6 +179,22 @@ public class GatedAgentRuntimeTests
         Assert.Empty(f.Recorder.Calls);
     }
 
+    [Fact]
+    public void GatedSessionExposesTheInnerThreadId()
+    {
+        var log = new List<string>();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var gated = new GatedAgentSession(
+            new RecordingSession(log, AgentSpecs.Decision(repo)),
+            new RecordingGate(log),
+            new NullSessionTelemetryRecorder(),
+            "r", "/repo", DateTimeOffset.UtcNow);
+
+        // Persist-after-turn reads the thread id THROUGH the gate — a missing passthrough would silently
+        // disable resume in production (the gated wrapper is what DecisionSession actually holds).
+        Assert.Equal("thread-inner", gated.ThreadId);
+    }
+
     // --- local recording fakes ---
 
     private sealed class RecordingGate(List<string> log) : IUsageGate
@@ -248,6 +264,7 @@ public class GatedAgentRuntimeTests
         public AgentProcessState State => AgentProcessState.Running;
         public int CompletedTurns => 0;
         public AgentTokenUsage TotalUsage => new(0, 0);
+        public string? ThreadId => "thread-inner";
 
         public Task<AgentTurnResult> RunTurnAsync(
             string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken cancellationToken = default)

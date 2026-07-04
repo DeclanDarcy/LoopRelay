@@ -56,6 +56,8 @@ public sealed class AgentSession : IAgentSession
 
     public AgentTokenUsage TotalUsage => totalUsage;
 
+    public string? ThreadId => null; // one-shot/legacy path — no app-server thread exists
+
     public async Task<AgentTurnResult> RunTurnAsync(
         string prompt,
         Func<AgentStreamChunk, Task>? onChunk = null,

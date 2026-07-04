@@ -68,6 +68,7 @@ internal sealed class GatedAgentSession(
     public AgentProcessState State => inner.State;
     public int CompletedTurns => inner.CompletedTurns;
     public AgentTokenUsage TotalUsage => inner.TotalUsage;
+    public string? ThreadId => inner.ThreadId;
 
     public async Task<AgentTurnResult> RunTurnAsync(
         string prompt,

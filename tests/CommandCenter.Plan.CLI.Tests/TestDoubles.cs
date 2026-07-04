@@ -166,6 +166,7 @@ internal sealed class FakeAgentSession(FakeAgentRuntime runtime, AgentSessionSpe
     public AgentProcessState State => AgentProcessState.Running;
     public int CompletedTurns => 0;
     public AgentTokenUsage TotalUsage => new(0, 0);
+    public string? ThreadId => null;
 
     public Task<AgentTurnResult> RunTurnAsync(
         string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken ct = default) =>

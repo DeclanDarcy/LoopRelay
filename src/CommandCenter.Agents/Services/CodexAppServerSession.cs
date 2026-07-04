@@ -71,6 +71,8 @@ public sealed class CodexAppServerSession : IAgentSession
 
     public AgentTokenUsage TotalUsage => Volatile.Read(ref totalUsage);
 
+    public string? ThreadId => threadId;
+
     public async Task<AgentTurnResult> RunTurnAsync(
         string prompt,
         Func<AgentStreamChunk, Task>? onChunk = null,

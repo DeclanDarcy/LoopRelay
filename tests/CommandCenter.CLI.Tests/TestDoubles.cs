@@ -88,6 +88,11 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
     public int OpenSessions { get; private set; }
     public int ClosedSessions { get; private set; }
     public List<(AgentSessionSpec Spec, string Prompt)> OneShotCalls { get; } = new();
+    public List<AgentSessionSpec> OpenedSpecs { get; } = new();
+
+    /// <summary>When true, any open that ASKS to resume throws the typed resume failure (scripting the
+    /// rollout-gone / unknown-thread case); non-resume opens still succeed.</summary>
+    public bool FailResume { get; set; }
 
     public Task<AgentTurnResult> RunOneShotAsync(
         AgentSessionSpec spec, string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken ct = default)
@@ -99,6 +104,12 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
 
     public Task<IAgentSession> OpenSessionAsync(AgentSessionSpec spec, CancellationToken ct = default)
     {
+        OpenedSpecs.Add(spec);
+        if (spec.ResumeThreadId is not null && FailResume)
+        {
+            throw new AgentSessionResumeException("scripted resume failure");
+        }
+
         OpenSessions++;
         return Task.FromResult<IAgentSession>(new FakeAgentSession(this, spec));
     }
@@ -269,6 +280,8 @@ internal sealed class FakeAgentProcess(IEnumerable<string> lines, bool hangAfter
 
 internal sealed class FakeAgentSession(FakeAgentRuntime runtime, AgentSessionSpec spec) : IAgentSession
 {
+    private readonly string threadId = spec.ResumeThreadId ?? $"thread-{runtime.OpenSessions}";
+
     public SessionIdentity SessionId => spec.SessionId;
     public string RepositoryId => spec.RepositoryId;
     public SessionRole Role => spec.Role;
@@ -276,6 +289,7 @@ internal sealed class FakeAgentSession(FakeAgentRuntime runtime, AgentSessionSpe
     public AgentProcessState State => AgentProcessState.Running;
     public int CompletedTurns => 0;
     public AgentTokenUsage TotalUsage => new(0, 0);
+    public string? ThreadId => threadId;
 
     public Task<AgentTurnResult> RunTurnAsync(
         string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken ct = default) =>

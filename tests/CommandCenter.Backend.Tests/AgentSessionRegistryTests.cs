@@ -93,6 +93,8 @@ public sealed class AgentSessionRegistryTests
 
         public AgentTokenUsage TotalUsage => AgentTokenUsage.Zero;
 
+        public string? ThreadId => null;
+
         public Task<AgentTurnResult> RunTurnAsync(
             string prompt,
             Func<AgentStreamChunk, Task>? onChunk = null,
