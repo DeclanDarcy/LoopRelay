@@ -53,4 +53,26 @@ public class AgentSpecsTests
         Assert.Equal("xhigh", spec.Effort.Identifier);
         Assert.Equal(Repo.Path, spec.WorkingDirectory);
     }
+
+    [Fact]
+    public void Decision_WithResumeThreadId_CarriesItOnTheSpec()
+    {
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+
+        AgentSessionSpec spec = AgentSpecs.Decision(repo, "thread-old");
+
+        Assert.Equal("thread-old", spec.ResumeThreadId);
+        // The resume overload must not perturb the decision posture.
+        Assert.Equal("read-only", spec.Sandbox.Identifier);
+        Assert.Equal("xhigh", spec.Effort.Identifier);
+        Assert.Equal("/repo", spec.WorkingDirectory);
+    }
+
+    [Fact]
+    public void Decision_Default_HasNoResumeThreadId()
+    {
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+
+        Assert.Null(AgentSpecs.Decision(repo).ResumeThreadId);
+    }
 }

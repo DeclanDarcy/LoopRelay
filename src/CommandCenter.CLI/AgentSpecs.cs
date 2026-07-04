@@ -32,12 +32,13 @@ internal static class AgentSpecs
             // Stage 2: a Transfer's evolution one-shot passes a sandbox root so codex --cd scopes it there.
             workingDirectory ?? repository.Path);
 
-    public static AgentSessionSpec Decision(Repository repository) =>
+    public static AgentSessionSpec Decision(Repository repository, string? resumeThreadId = null) =>
         new(
             SessionIdentity.New(),
             repository.Id.ToString("N"),
             SessionRole.Decision,
             new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
             new EffortProfile(AgentEffortLevel.High, "xhigh"),
-            repository.Path);
+            repository.Path,
+            resumeThreadId: resumeThreadId);
 }
