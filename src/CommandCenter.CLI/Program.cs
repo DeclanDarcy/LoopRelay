@@ -49,7 +49,7 @@ var artifacts = new LoopArtifacts(store, repository);
 // and the warm decision session is reused across iterations), so it wraps the runtime rather than gating
 // once at the top of the loop.
 var usageProbe = new CodexUsageProbe(processRunner, executableResolver, repository);
-var usageGate = new UsageGate(usageProbe, new TaskDelayScheduler(), console);
+var usageGate = UsageGateComposition.Create(usageProbe, new TaskDelayScheduler(), console);
 var telemetryClock = new SystemClock();
 var telemetryRecorder = SessionTelemetryComposition.CreateRecorder(
     repository, SessionTelemetryComposition.IsEnabled(),

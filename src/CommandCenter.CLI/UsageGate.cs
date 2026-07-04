@@ -93,3 +93,12 @@ internal sealed class UsageGate(ICodexUsageProbe probe, IUsageDelay delay, ILoop
             : $"{duration.Hours}h {duration.Minutes}m";
     }
 }
+
+/// <summary>No-op stand-in for <see cref="UsageGate"/>, wired in by <see cref="UsageGateComposition"/> while the
+/// watermark gate is disabled. Never probes, never waits — turns proceed immediately with no usage snapshot for
+/// telemetry to attach.</summary>
+internal sealed class NullUsageGate : IUsageGate
+{
+    public Task<CodexUsageStatus?> WaitForCapacityAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<CodexUsageStatus?>(null);
+}
