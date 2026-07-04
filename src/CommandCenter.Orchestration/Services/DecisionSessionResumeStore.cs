@@ -82,6 +82,26 @@ public sealed class FileDecisionSessionResumeStore(Repository repository, Action
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Ensures <c>{repo}/.commandcenter</c> exists and is self-ignoring WITHOUT writing any state. Called
+    /// once at loop-CLI startup: the telemetry sink writes <c>.commandcenter/telemetry</c> on the first
+    /// execution turn, which can precede the first decision persist — without this, an un-gitignored target
+    /// repo would commit the ledger and corrupt the no-changes/stall gates before WriteAsync ever runs.
+    /// Fail-open like every other store operation.
+    /// </summary>
+    public void EnsureDirectoryProtection()
+    {
+        try
+        {
+            Directory.CreateDirectory(DirectoryPath);
+            EnsureSelfIgnore();
+        }
+        catch (Exception ex)
+        {
+            onWarning?.Invoke($"Could not protect {DirectoryPath}: {ex.Message}");
+        }
+    }
+
     private void TryDelete()
     {
         try

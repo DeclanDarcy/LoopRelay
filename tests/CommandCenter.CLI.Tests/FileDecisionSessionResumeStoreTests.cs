@@ -131,4 +131,30 @@ public sealed class FileDecisionSessionResumeStoreTests : IDisposable
         Assert.Contains("\"schemaVersion\":1", json);
         Assert.DoesNotContain("\n", json.TrimEnd());
     }
+
+    [Fact]
+    public async Task EnsureDirectoryProtection_CreatesTheSelfIgnoringDirectory_WithoutWritingState()
+    {
+        FileDecisionSessionResumeStore store = NewStore();
+
+        store.EnsureDirectoryProtection();
+
+        string gitignore = Path.Combine(root, ".commandcenter", ".gitignore");
+        Assert.Equal("*\n", await File.ReadAllTextAsync(gitignore));
+        Assert.False(File.Exists(FilePath));
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public async Task EnsureDirectoryProtection_NeverOverwritesAnExistingGitignore()
+    {
+        FileDecisionSessionResumeStore store = NewStore();
+        store.EnsureDirectoryProtection();
+        string gitignore = Path.Combine(root, ".commandcenter", ".gitignore");
+        await File.WriteAllTextAsync(gitignore, "custom");
+
+        store.EnsureDirectoryProtection();
+
+        Assert.Equal("custom", await File.ReadAllTextAsync(gitignore));
+    }
 }

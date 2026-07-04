@@ -63,6 +63,9 @@ var gate = new MilestoneGate(store, repository);
 var changeDetector = new WorkingTreeChangeDetector(processRunner, repository);
 // Cross-run decision-session resume state (spec: docs/superpowers/specs/2026-07-04-cli-decision-session-resume-design.md).
 var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);
+// Protect .commandcenter BEFORE any codex turn: telemetry writes there on the first execution turn,
+// which can precede the first decision persist (see FileDecisionSessionResumeStore.EnsureDirectoryProtection).
+resumeStore.EnsureDirectoryProtection();
 var execution = new ExecutionStep(gatedRuntime, artifacts, console, repository, changeDetector, gate);
 var decision = new DecisionSession(gatedRuntime, router, artifacts, console, repository,
     resumeStore: resumeStore, resumeEnabled: DecisionResumeComposition.IsEnabled());
