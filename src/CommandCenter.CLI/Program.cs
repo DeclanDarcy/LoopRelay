@@ -61,11 +61,14 @@ var gate = new MilestoneGate(store, repository);
 // loop's MilestoneGate is the SAME instance handed to ExecutionStep so the handoff-time unticked lookup
 // reuses the epic gate's parse cache instead of re-reading every milestone file.
 var changeDetector = new WorkingTreeChangeDetector(processRunner, repository);
+// Cross-run decision-session resume state (spec: docs/superpowers/specs/2026-07-04-cli-decision-session-resume-design.md).
+var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);
 var execution = new ExecutionStep(gatedRuntime, artifacts, console, repository, changeDetector, gate);
-var decision = new DecisionSession(gatedRuntime, router, artifacts, console, repository);
+var decision = new DecisionSession(gatedRuntime, router, artifacts, console, repository,
+    resumeStore: resumeStore, resumeEnabled: DecisionResumeComposition.IsEnabled());
 var submodulePublisher = new AgentsSubmodulePublisher(processRunner, repository, console);
 var commitGate = new CommitGate(changeDetector, processRunner, repository, console);
-var loop = new LoopRunner(gate, artifacts, execution, decision, submodulePublisher, commitGate, console);
+var loop = new LoopRunner(gate, artifacts, execution, decision, submodulePublisher, commitGate, resumeStore, console);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---
 using var cts = new CancellationTokenSource();

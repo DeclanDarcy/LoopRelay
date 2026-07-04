@@ -2,6 +2,7 @@ using CommandCenter.Cli;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Orchestration;
+using CommandCenter.Orchestration.Models;
 using CommandCenter.Orchestration.Services;
 using Xunit;
 
@@ -11,7 +12,7 @@ public class LoopRunnerTests
 {
     private sealed record Harness(
         LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con,
-        FakeProcessRunner Git);
+        FakeProcessRunner Git, FakeDecisionSessionResumeStore Resume);
 
     private static Harness New()
     {
@@ -35,8 +36,10 @@ public class LoopRunnerTests
         // CommitGate IGNORES `.agents`; the submodule is committed+pushed only by the publisher (pre-codex).
         var submodulePublisher = new AgentsSubmodulePublisher(git, repo, con);
         var commitGate = new CommitGate(detector, git, repo, con);
+        var resume = new FakeDecisionSessionResumeStore();
         return new Harness(
-            new LoopRunner(gate, art, exec, dec, submodulePublisher, commitGate, con), rt, store, repo, con, git);
+            new LoopRunner(gate, art, exec, dec, submodulePublisher, commitGate, resume, con),
+            rt, store, repo, con, git, resume);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
@@ -640,5 +643,19 @@ public class LoopRunnerTests
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.Failed, outcome);
+    }
+
+    [Fact]
+    public async Task Run_WhenEpicComplete_ClearsThePersistedDecisionSessionState()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");
+        h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(1, h.Resume.ClearCalls);   // idempotent: re-runs against a completed epic re-delete a no-op
+        Assert.Null(h.Resume.State);
     }
 }

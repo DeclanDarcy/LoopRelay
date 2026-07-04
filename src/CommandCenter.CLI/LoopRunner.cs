@@ -1,4 +1,5 @@
 using CommandCenter.Orchestration;
+using CommandCenter.Orchestration.Abstractions;
 
 namespace CommandCenter.Cli;
 
@@ -13,6 +14,7 @@ internal sealed class LoopRunner(
     DecisionSession decision,
     AgentsSubmodulePublisher submodulePublisher,
     CommitGate commitGate,
+    IDecisionSessionResumeStore resumeStore,
     ILoopConsole console) : IAsyncDisposable
 {
     public async Task<LoopOutcome> RunAsync(CancellationToken cancellationToken)
@@ -29,6 +31,11 @@ internal sealed class LoopRunner(
                 // blocks on a (potentially multi-day) quota reset.
                 if (await gate.IsEpicCompleteAsync())
                 {
+                    // A finished epic obsoletes the persisted decision-session resume state — the next epic must start
+                    // from a fresh decision process primed with its own operational context. Idempotent by design: this
+                    // fires again on every re-run against a completed epic, and deleting nothing is a no-op. (Plan.CLI's
+                    // epic rollover clears it too, covering the epic-rolled-over-without-this-gate-observing case.)
+                    await resumeStore.ClearAsync(cancellationToken);
                     return LoopOutcome.EpicCompleted;
                 }
 
