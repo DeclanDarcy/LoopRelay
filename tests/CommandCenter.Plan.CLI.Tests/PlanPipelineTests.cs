@@ -2,6 +2,7 @@ using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Prompts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Orchestration;
+using CommandCenter.Orchestration.Models;
 using CommandCenter.Plan.Cli;
 using Xunit;
 
@@ -21,7 +22,8 @@ public class PlanPipelineTests
         MemoryArtifactStore Store,
         Repository Repo,
         RecordingLoopConsole Console,
-        FakeProcessRunner Processes);
+        FakeProcessRunner Processes,
+        FakeDecisionSessionResumeStore Resume);
 
     private static Harness New(FakeProcessRunner? processes = null)
     {
@@ -32,6 +34,7 @@ public class PlanPipelineTests
         var runtime = new FakeAgentRuntime(store);
         var sandboxes = new FakeSandboxWorkspaceFactory();
         var git = processes ?? new FakeProcessRunner();
+        var resume = new FakeDecisionSessionResumeStore();
 
         var rollover = new EpicRolloverStep(git, artifacts, console, repo);
         var preflight = new PreflightGate(artifacts);
@@ -40,9 +43,9 @@ public class PlanPipelineTests
         var oneShot = new SandboxedPromptStep(runtime, sandboxes, artifacts, console, repo);
         var publisher = new AgentsSubmodulePublisher(git, repo, console);
         var pipeline = new PlanPipeline(
-            rollover, preflight, planSession, review, oneShot, publisher, artifacts, console);
+            rollover, preflight, planSession, review, oneShot, publisher, artifacts, resume, console);
 
-        return new Harness(pipeline, runtime, sandboxes, store, repo, console, git);
+        return new Harness(pipeline, runtime, sandboxes, store, repo, console, git, resume);
     }
 
     private static IReadOnlyList<string> PhaseSequence(RecordingLoopConsole console) =>
@@ -541,5 +544,49 @@ public class PlanPipelineTests
         // ...but the parent gitlink pointer is recorded only at the END of a successful run: a failed run
         // makes NO parent-repo git call whatsoever.
         Assert.DoesNotContain(git.Calls, c => !IsSubmodule(c.WorkingDirectory));
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenTheRolloverArchives_ClearsThePersistedDecisionSessionState()
+    {
+        Harness h = New();
+        // A COMPLETE previous workspace (presence-based criterion): plan + details + operational context +
+        // a non-empty milestones directory. The scripted new-epic invocation deletes plan.md so the
+        // rollover's post-gate passes; the run then stops at Preflight (no specs/epic.md) — which is fine,
+        // the clear must already have happened.
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Details), "DETAILS");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await h.Store.WriteAsync(Resolve(h.Repo, MilestonePath("m1.md")), "- [ ] t");
+        h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
+        h.Processes.Handler = (_, args) =>
+        {
+            if (args.Count == 0 || args.Contains("new-epic"))
+            {
+                h.Store.DeleteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan)).Wait();
+            }
+
+            return FakeProcessRunner.Ok();
+        };
+
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+
+        Assert.Equal(PlanOutcome.PreflightBlocked, outcome);
+        Assert.Equal(1, h.Resume.ClearCalls);
+        Assert.Null(h.Resume.State);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenNoRolloverHappens_LeavesThePersistedDecisionSessionStateAlone()
+    {
+        Harness h = New();
+        // An incomplete workspace: the rollover is skipped and preflight blocks. The resume state survives.
+        h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
+
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+
+        Assert.Equal(PlanOutcome.PreflightBlocked, outcome);
+        Assert.Equal(0, h.Resume.ClearCalls);
+        Assert.NotNull(h.Resume.State);
     }
 }

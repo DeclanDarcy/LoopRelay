@@ -1,4 +1,5 @@
 using CommandCenter.Orchestration;
+using CommandCenter.Orchestration.Abstractions;
 
 namespace CommandCenter.Plan.Cli;
 
@@ -21,6 +22,7 @@ internal sealed class PlanPipeline(
     SandboxedPromptStep oneShot,
     AgentsSubmodulePublisher publisher,
     PlanArtifacts artifacts,
+    IDecisionSessionResumeStore resumeStore,
     ILoopConsole console) : IAsyncDisposable
 {
     public async Task<PlanOutcome> RunAsync(CancellationToken cancellationToken)
@@ -30,6 +32,11 @@ internal sealed class PlanPipeline(
             console.Phase("Epic Rollover");
             if (await rollover.TryArchiveAsync(cancellationToken))
             {
+                // The epic boundary invalidates the loop CLI's persisted decision-session resume state — the next
+                // epic must start from a fresh decision process. Cleared here AS WELL AS in the loop's epic-complete
+                // gate: a rollover can happen without the loop ever re-running against the completed epic. Idempotent.
+                await resumeStore.ClearAsync(cancellationToken);
+
                 // The archive's parent gitlink is recorded IMMEDIATELY (not deferred to the end-of-run
                 // reconcile): new-epic leaves specs/ in place, so the run normally continues into planning
                 // the next epic from the surviving specs/epic.md — but it may still stop at the very next

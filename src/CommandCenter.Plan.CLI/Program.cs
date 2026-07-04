@@ -49,7 +49,9 @@ var review = new ReviewStep(runtime, artifacts, console, repository);
 var oneShot = new SandboxedPromptStep(runtime, sandboxFactory, artifacts, console, repository);
 var publisher = new AgentsSubmodulePublisher(processRunner, repository, console);
 var rollover = new EpicRolloverStep(processRunner, artifacts, console, repository);
-var pipeline = new PlanPipeline(rollover, preflight, planSession, review, oneShot, publisher, artifacts, console);
+// Shared with CommandCenter.CLI: the loop's decision-session resume state, cleared at the epic boundary.
+var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);
+var pipeline = new PlanPipeline(rollover, preflight, planSession, review, oneShot, publisher, artifacts, resumeStore, console);
 
 // --- Ctrl+C: cancel the pipeline AND let session disposal kill the codex child processes. ---
 using var cts = new CancellationTokenSource();
