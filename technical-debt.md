@@ -9,6 +9,37 @@ impact of leaving it, and the path to resolve it. Newest section first.
 
 ---
 
+## 2026-07-04 — CLI decision session resume across restarts
+
+Background: the CLI loop now persists its decision session's codex thread id and
+router accounting to `{repo}/.commandcenter/decision-session.json` and resumes it
+via app-server `thread/resume` (spec: docs/superpowers/specs/2026-07-04-cli-decision-session-resume-design.md).
+
+### TD-13 — Backend decision session does not resume across restarts
+
+**Deferred.** The legacy backend's `RepositoryOrchestrator` decision session (`IAgentSession? decisionSession`)
+does not persist and resume its thread id from `{repo}/.commandcenter/decision-session.json`
+(design spec: docs/superpowers/specs/2026-07-04-cli-decision-session-resume-design.md).
+Won't-fix-in-place per the backend-rewrite policy; carry the design into the rewrite instead.
+
+**Why deferred:** the CLI serial loop is the active execution path (see TD-1). The backend
+decision session machinery, like the orchestrator's overall execution path, is legacy in-process
+code the CLI superseded. Bringing parity requires persisting thread ids across process restarts,
+adding a store abstraction matching the CLI's `IDecisionSessionResumeStore`, and seeding it
+in the backend's `RepositoryOrchestrator` constructor — a scope change beyond a resume protocol
+fix and better deferred to the backend-rewrite plan.
+
+**Impact:** a backend restart (app-server crash, administrator stop) always loses thread
+continuity and starts a fresh decision session, even if a prior decision is mid-flight.
+The CLI loop already saves and resumes, so asymmetry in decision reliability.
+
+**Resolution:** when the backend execution paths are retained or migrated (decision: TD-1),
+wire the same `IDecisionSessionResumeStore` interface into `RepositoryOrchestrator` so it
+persists and resumes its decision thread id across process restarts, matching the CLI's
+behavior.
+
+---
+
 ## 2026-07-02 — WritePlan prompt consolidation (`WritePlanForNewCodebase`/`WritePlanAgainstCodebase` → `WritePlan`)
 
 Background: `RepositoryOrchestrator.BuildWritePlan` used to select between two near-identical
@@ -377,36 +408,3 @@ default change, and the two-turn execution change are uncommitted, alongside
 earlier unpushed commits on `next`. Commit/push is held pending explicit
 instruction.
 
----
-
-## 2026-07-04 — CLI decision session resume across restarts
-
-Background: the CLI loop now persists its decision session's codex thread id and
-router accounting to `{repo}/.commandcenter/decision-session.json` and resumes it
-via app-server `thread/resume` (spec: docs/superpowers/specs/2026-07-04-cli-decision-session-resume-design.md).
-
-### TD-13 — Backend decision session does not resume across restarts
-
-**Deferred.** The CLI loop persists its decision session's codex thread id + router
-accounting to `{repo}/.commandcenter/decision-session.json` and resumes it via app-server
-`thread/resume` (spec: docs/superpowers/specs/2026-07-04-cli-decision-session-resume-design.md).
-The legacy backend's `RepositoryOrchestrator` decision session (`IAgentSession? decisionSession`)
-has no equivalent — a backend restart always re-primes a fresh process. Won't-fix-in-place
-per the backend-rewrite policy; carry the CLI's store/spec-field/handshake design into the
-rewrite instead.
-
-**Why deferred:** the CLI serial loop is the active execution path (see TD-1). The backend
-decision session machinery, like the orchestrator's overall execution path, is legacy in-process
-code the CLI superseded. Bringing parity requires persisting thread ids across process restarts,
-adding a store abstraction matching the CLI's `IDecisionSessionResumeStore`, and seeding it
-in the backend's `RepositoryOrchestrator` constructor — a scope change beyond a resume protocol
-fix and better deferred to the backend-rewrite plan.
-
-**Impact:** a backend restart (app-server crash, administrator stop) always loses thread
-continuity and starts a fresh decision session, even if a prior decision is mid-flight.
-The CLI loop already saves and resumes, so asymmetry in decision reliability.
-
-**Resolution:** when the backend execution paths are retained or migrated (decision: TD-1),
-wire the same `IDecisionSessionResumeStore` interface into `RepositoryOrchestrator` so it
-persists and resumes its decision thread id across process restarts, matching the CLI's
-behavior.
