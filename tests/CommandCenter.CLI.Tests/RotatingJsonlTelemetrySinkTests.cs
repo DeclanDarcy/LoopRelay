@@ -13,7 +13,7 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
 
     private static SessionTelemetryRecord Rec(string repo) =>
         new(new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero), repo, null, "sid", "Decision", 1,
-            10, 5, 0, 15.0, 90, 89, 88, 88);
+            10, 5, 0, 15.0, 89, 88);
 
     public void Dispose() { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
 

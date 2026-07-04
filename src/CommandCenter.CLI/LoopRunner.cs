@@ -26,9 +26,9 @@ internal sealed class LoopRunner(
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // ---- LoopStart ----
-                // A finished epic needs no Codex work, so return immediately. The Codex usage gate now runs
+                // A finished epic needs no Codex work, so return immediately. Usage-limit handling runs
                 // per-turn inside GatedAgentRuntime, so a completed epic never opens a session and thus never
-                // blocks on a (potentially multi-day) quota reset.
+                // waits on a (potentially multi-day) quota reset.
                 if (await gate.IsEpicCompleteAsync())
                 {
                     // A finished epic obsoletes the persisted decision-session resume state — the next epic must start

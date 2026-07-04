@@ -18,7 +18,6 @@ internal interface ISessionTelemetryRecorder
         DateTimeOffset openedAtUtc,
         string? cachedLogPath,
         AgentTurnResult result,
-        CodexUsageStatus? preStatus,
         CancellationToken cancellationToken);
 }
 
@@ -44,7 +43,6 @@ internal sealed class SessionTelemetryRecorder(
         DateTimeOffset openedAtUtc,
         string? cachedLogPath,
         AgentTurnResult result,
-        CodexUsageStatus? preStatus,
         CancellationToken cancellationToken)
     {
         string? path = cachedLogPath;
@@ -65,9 +63,7 @@ internal sealed class SessionTelemetryRecorder(
                 usage.OutputTokens,
                 usage.CachedInputTokens,
                 costModel.Measure(usage),
-                preStatus?.FiveHourRemainingPercent,
                 post?.FiveHourRemainingPercent,
-                preStatus?.WeeklyRemainingPercent,
                 post?.WeeklyRemainingPercent);
 
             sink.Append(record);
@@ -109,6 +105,6 @@ internal sealed class NullSessionTelemetryRecorder : ISessionTelemetryRecorder
     public Task<string?> RecordTurnAsync(
         string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role,
         DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result,
-        CodexUsageStatus? preStatus, CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken) =>
         Task.FromResult(cachedLogPath);
 }

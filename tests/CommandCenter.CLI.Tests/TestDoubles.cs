@@ -191,7 +191,7 @@ internal sealed class FakeProcessRunner : IProcessRunner
         new() { ExitCode = 1, StandardOutput = string.Empty, StandardError = stderr, Duration = TimeSpan.Zero };
 }
 
-/// <summary>Returns scripted <see cref="CodexUsageStatus"/> snapshots for the usage gate (no real codex).</summary>
+/// <summary>Returns scripted <see cref="CodexUsageStatus"/> snapshots for the telemetry post-probe (no real codex).</summary>
 internal sealed class FakeCodexUsageProbe : ICodexUsageProbe
 {
     public Queue<CodexUsageStatus?> Results { get; } = new();

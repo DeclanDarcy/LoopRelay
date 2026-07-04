@@ -45,17 +45,18 @@ var processRunner = provider.GetRequiredService<IProcessRunner>();
 var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
 var artifacts = new LoopArtifacts(store, repository);
-// The Codex usage gate runs before EVERY codex turn/one-shot (a single iteration invokes codex many times
-// and the warm decision session is reused across iterations), so it wraps the runtime rather than gating
-// once at the top of the loop.
+// codex reports quota exhaustion only by FAILING the turn ("You've hit your usage limit ... try again at
+// <time>"), so an always-on detector watches every turn/one-shot (a single iteration invokes codex many
+// times and the warm decision session is reused across iterations), waits out the advertised retry time,
+// and reruns the turn in place — the loop survives quota exhaustion without any step above noticing.
 var usageProbe = new CodexUsageProbe(processRunner, executableResolver, repository);
-var usageGate = UsageGateComposition.Create(usageProbe, new TaskDelayScheduler(), console);
 var telemetryClock = new SystemClock();
+var usageLimit = new UsageLimitDetector(telemetryClock, new TaskDelayScheduler(), console);
 var telemetryRecorder = SessionTelemetryComposition.CreateRecorder(
     repository, SessionTelemetryComposition.IsEnabled(),
     usageProbe, new EffectiveTokenCostModel(), telemetryClock, console);
 var gatedRuntime = new GatedAgentRuntime(
-    runtime, usageGate, telemetryRecorder, telemetryClock, SessionTelemetryComposition.RepoName(repository));
+    runtime, usageLimit, telemetryRecorder, telemetryClock, SessionTelemetryComposition.RepoName(repository));
 var gate = new MilestoneGate(store, repository);
 // One detector serves both real-change consumers (handoff-prompt choice + commit/stall gate), and the
 // loop's MilestoneGate is the SAME instance handed to ExecutionStep so the handoff-time unticked lookup

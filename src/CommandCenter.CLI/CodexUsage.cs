@@ -16,8 +16,9 @@ internal sealed record CodexUsageStatus(
 
 /// <summary>
 /// Parses the codex app-server <c>account/rateLimits/read</c> response (JSON) into a
-/// <see cref="CodexUsageStatus"/>. The snapshot reports capacity USED (<c>usedPercent</c>); the gate
-/// tracks capacity REMAINING, so remaining = 100 - used. <c>primary</c> is the 5h window and
+/// <see cref="CodexUsageStatus"/>. The snapshot reports capacity USED (<c>usedPercent</c>); the telemetry
+/// post-turn probe (the sole remaining consumer since the watermark gate was replaced by
+/// <see cref="UsageLimitDetector"/>) tracks capacity REMAINING, so remaining = 100 - used. <c>primary</c> is the 5h window and
 /// <c>secondary</c> is the weekly window; <c>resetsAt</c> is a unix-seconds instant.
 /// <para>
 /// Returns null only when no usable rate-limit snapshot is present, so callers can fail open. A snapshot

@@ -32,7 +32,7 @@ public class SessionTelemetryCompositionTests : IDisposable
             new FakeClock(), new RecordingLoopConsole());
 
         await recorder.RecordTurnAsync("AxiomRepo", repoPath, new SessionIdentity(Guid.NewGuid()),
-            SessionRole.Decision, DateTimeOffset.UnixEpoch, null, Turn(), null, CancellationToken.None);
+            SessionRole.Decision, DateTimeOffset.UnixEpoch, null, Turn(), CancellationToken.None);
 
         string dir = Path.Combine(repoPath, ".commandcenter", "telemetry");
         Assert.True(Directory.Exists(dir));
@@ -57,7 +57,7 @@ public class SessionTelemetryCompositionTests : IDisposable
             new FakeClock(), new RecordingLoopConsole());
 
         await recorder.RecordTurnAsync("AxiomRepo", repoPath, new SessionIdentity(Guid.NewGuid()),
-            SessionRole.Decision, DateTimeOffset.UnixEpoch, null, Turn(), null, CancellationToken.None);
+            SessionRole.Decision, DateTimeOffset.UnixEpoch, null, Turn(), CancellationToken.None);
 
         Assert.False(Directory.Exists(Path.Combine(repoPath, ".commandcenter")));
         Assert.IsType<NullSessionTelemetryRecorder>(recorder);

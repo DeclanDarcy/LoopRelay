@@ -25,6 +25,13 @@ one JSONL row per codex turn.
 - **Never break the loop.** All telemetry work is best-effort / fail-open, matching the
   usage gate's existing philosophy (`UsageGate.cs:49`).
 
+> **Superseded (2026-07-04):** the watermark usage gate (`UsageGate`/`UsageGateComposition` and the
+> `COMMANDCENTER_USAGE_GATE` flag) was replaced by an always-on usage-limit error detector
+> (`UsageLimitDetector.cs`): failed turns whose diagnostics say "You've hit your usage limit … try again
+> at <time>" are waited out and retried at the `GatedAgentRuntime` seam. With the gate gone the pre-turn
+> capacity snapshot has no source, so `preFiveHourPercent`/`preWeeklyPercent` were dropped from the row;
+> `post*` fields (from the recorder's own post-turn probe) are unchanged.
+
 ## Non-goals
 
 - No pruning / retention policy — **keep all files**. A separate visualizer will manage

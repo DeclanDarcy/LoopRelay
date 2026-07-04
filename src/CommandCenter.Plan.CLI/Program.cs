@@ -29,7 +29,7 @@ if (!CliArguments.TryParse(args, out Repository repository, out string error))
 }
 
 // --- Composition: only the building blocks the planning pipeline needs (no Generic Host, no orchestrator/
-// registry, no usage gate/telemetry — see the plan's Non-Goals). ---
+// registry, no usage-limit retry/telemetry — see the plan's Non-Goals). ---
 var services = new ServiceCollection();
 services.AddAgents();                                                  // IAgentRuntime + codex runtime
 services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommandCenter.Agents.Abstractions;
@@ -14,23 +15,24 @@ public class GatedAgentRuntimeTests
 {
     private static Repository Repo() => new() { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
     private static AgentSessionSpec Spec() => AgentSpecs.Decision(Repo());
+    private static UsageLimitHit Hit() => new(TimeSpan.FromMinutes(5), null);
 
     private sealed record Fixture(
-        GatedAgentRuntime Runtime, RecordingRuntime Inner, RecordingGate Gate,
+        GatedAgentRuntime Runtime, RecordingRuntime Inner, RecordingDetector Detector,
         RecordingSessionTelemetryRecorder Recorder, List<string> Log);
 
     private static Fixture New()
     {
         var log = new List<string>();
         var inner = new RecordingRuntime(log);
-        var gate = new RecordingGate(log);
+        var detector = new RecordingDetector(log);
         var recorder = new RecordingSessionTelemetryRecorder();
-        var runtime = new GatedAgentRuntime(inner, gate, recorder, new FakeClock(), "myrepo");
-        return new Fixture(runtime, inner, gate, recorder, log);
+        var runtime = new GatedAgentRuntime(inner, detector, recorder, new FakeClock(), "myrepo");
+        return new Fixture(runtime, inner, detector, recorder, log);
     }
 
     [Fact]
-    public async Task RunTurn_RunsTheGateBeforeEveryTurn()
+    public async Task RunTurn_ChecksEveryTurnResultForAUsageLimitFailure()
     {
         var f = New();
         IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
@@ -38,31 +40,21 @@ public class GatedAgentRuntimeTests
         await session.RunTurnAsync("p1");
         await session.RunTurnAsync("p2");
 
-        // Each turn is preceded by a gate check — quota can drain between turns of the same warm session.
-        Assert.Equal(new[] { "gate", "turn", "gate", "turn" }, f.Log);
-        Assert.Equal(2, f.Gate.Calls);
+        // The limit can be hit by any turn of a warm session, so every result goes through the detector.
+        Assert.Equal(new[] { "turn", "detect", "turn", "detect" }, f.Log);
+        Assert.Equal(0, f.Detector.Waits);
     }
 
     [Fact]
-    public async Task OpenSession_DoesNotRunTheGate()
+    public async Task OpenSession_DoesNotDetectOrRecord()
     {
         var f = New();
 
         await f.Runtime.OpenSessionAsync(Spec());
 
-        // Opening a session spawns the app-server but spends no quota, so it must not gate (or block).
-        Assert.Equal(0, f.Gate.Calls);
-        Assert.DoesNotContain("gate", f.Log);
-    }
-
-    [Fact]
-    public async Task RunOneShot_RunsTheGateBeforeDelegating()
-    {
-        var f = New();
-
-        await f.Runtime.RunOneShotAsync(Spec(), "prompt");
-
-        Assert.Equal(new[] { "gate", "oneshot" }, f.Log);
+        // Opening a session spawns the app-server but spends no quota and cannot hit the usage limit.
+        Assert.Empty(f.Log);
+        Assert.Empty(f.Recorder.Calls);
     }
 
     [Fact]
@@ -76,6 +68,107 @@ public class GatedAgentRuntimeTests
 
         Assert.Equal("RESULT", result.Output);
         Assert.Contains("hello", f.Inner.LastSession.Prompts);
+    }
+
+    [Fact]
+    public async Task RunTurn_WhenTheTurnFailsOnTheUsageLimit_WaitsAndRetriesTheSamePrompt()
+    {
+        var f = New();
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+        f.Inner.LastSession!.TurnResults.Enqueue(Turns.Failed("limited", "usage limit"));
+        f.Inner.LastSession.TurnResults.Enqueue(Turns.Completed("ok"));
+        f.Detector.Hits.Enqueue(Hit());
+
+        AgentTurnResult result = await session.RunTurnAsync("p");
+
+        Assert.Equal("ok", result.Output);
+        // Failed attempt is recorded, waited out, then the SAME prompt reruns on the same warm session.
+        Assert.Equal(new[] { "turn", "detect", "wait", "turn", "detect" }, f.Log);
+        Assert.Equal(new[] { "p", "p" }, f.Inner.LastSession.Prompts);
+        Assert.Equal(2, f.Recorder.Calls.Count);
+    }
+
+    [Fact]
+    public async Task RunTurn_WhenTheLimitPersists_StopsRetryingAtTheCap()
+    {
+        var f = New();
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+        f.Inner.LastSession!.TurnResult = Turns.Failed("still limited", "usage limit");
+        f.Detector.Default = Hit();
+
+        AgentTurnResult result = await session.RunTurnAsync("p");
+
+        // A persistently failing codex must eventually surface loudly instead of waiting forever — and
+        // say WHY it gave up, or the operator cannot tell "capped on quota" from an unrelated crash.
+        Assert.Equal(AgentTurnState.Failed, result.State);
+        Assert.Equal(1 + GatedAgentSession.MaxUsageLimitRetriesPerTurn, f.Log.Count(e => e == "turn"));
+        Assert.Equal(GatedAgentSession.MaxUsageLimitRetriesPerTurn, f.Detector.Waits);
+        Assert.Equal(1 + GatedAgentSession.MaxUsageLimitRetriesPerTurn, f.Recorder.Calls.Count);
+        Assert.Equal("exhausted", f.Log.Last());
+    }
+
+    [Fact]
+    public async Task RunTurn_WhenTheFailureIsNotAUsageLimit_PropagatesWithoutRetry()
+    {
+        var f = New();
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+        f.Inner.LastSession!.TurnResult = Turns.Failed("boom", "unrelated crash");
+
+        AgentTurnResult result = await session.RunTurnAsync("p");
+
+        Assert.Equal(AgentTurnState.Failed, result.State);
+        Assert.Equal(new[] { "turn", "detect" }, f.Log);
+        Assert.Equal(0, f.Detector.Waits);
+    }
+
+    [Fact]
+    public async Task RunTurn_WhenTheCodexProcessDied_DoesNotRetry()
+    {
+        var f = New();
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+        f.Inner.LastSession!.TurnResults.Enqueue(Turns.Failed("limited", "usage limit"));
+        f.Detector.Hits.Enqueue(Hit());
+        f.Inner.LastSession.State = AgentProcessState.Exited;
+
+        AgentTurnResult result = await session.RunTurnAsync("p");
+
+        // A dead app-server cannot run another turn — a retry would surface as a spurious
+        // OperationCanceledException that LoopRunner misreads as user cancellation. Fail loudly instead.
+        Assert.Equal(AgentTurnState.Failed, result.State);
+        Assert.Equal(new[] { "turn", "detect" }, f.Log);
+        Assert.Equal(0, f.Detector.Waits);
+    }
+
+    [Fact]
+    public async Task RunTurn_WhenTheCodexProcessDiesDuringTheWait_DoesNotRetry()
+    {
+        var f = New();
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+        RecordingSession liveSession = f.Inner.LastSession!;
+        liveSession.TurnResults.Enqueue(Turns.Failed("limited", "usage limit"));
+        f.Detector.Hits.Enqueue(Hit());
+        f.Detector.OnWait = () => liveSession.State = AgentProcessState.Exited;
+
+        AgentTurnResult result = await session.RunTurnAsync("p");
+
+        // The wait can span days; the process may die in the meantime, so liveness is re-checked after it.
+        Assert.Equal(AgentTurnState.Failed, result.State);
+        Assert.Equal(new[] { "turn", "detect", "wait" }, f.Log);
+        Assert.Equal(1, f.Log.Count(e => e == "turn"));
+    }
+
+    [Fact]
+    public async Task RunTurn_WhenTheWaitIsCancelled_PropagatesAfterRecordingTheFailedAttempt()
+    {
+        var f = New();
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+        f.Inner.LastSession!.TurnResult = Turns.Failed("limited", "usage limit");
+        f.Detector.Default = Hit();
+        f.Detector.ThrowOnWait = new OperationCanceledException();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.RunTurnAsync("p"));
+
+        Assert.Single(f.Recorder.Calls);
     }
 
     [Fact]
@@ -103,18 +196,6 @@ public class GatedAgentRuntimeTests
     }
 
     [Fact]
-    public async Task RunTurn_WhenGateThrowsCancellation_DoesNotRunTheTurn()
-    {
-        var f = New();
-        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
-        f.Gate.Throw = new OperationCanceledException();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.RunTurnAsync("p"));
-
-        Assert.DoesNotContain("turn", f.Log);
-    }
-
-    [Fact]
     public async Task Dispose_DelegatesToInnerSession()
     {
         var f = New();
@@ -126,10 +207,9 @@ public class GatedAgentRuntimeTests
     }
 
     [Fact]
-    public async Task RunTurn_EmitsOneRecordPerTurnWithTheGatesPreStatus()
+    public async Task RunTurn_EmitsOneRecordPerTurn()
     {
         var f = New();
-        f.Gate.Status = new CodexUsageStatus(70, TimeSpan.FromHours(1), 90, TimeSpan.FromHours(5));
         IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
         f.Inner.LastSession!.TurnResult = new AgentTurnResult(1, AgentTurnState.Completed, "o", new AgentTokenUsage(1, 1));
 
@@ -139,7 +219,6 @@ public class GatedAgentRuntimeTests
         Assert.Equal(SessionRole.Decision, call.Role);
         Assert.Equal(1, call.TurnIndex);
         Assert.Null(call.CachedLogPath);                 // first turn: nothing cached yet
-        Assert.Equal(70, call.Pre!.FiveHourRemainingPercent);
     }
 
     [Fact]
@@ -158,25 +237,33 @@ public class GatedAgentRuntimeTests
     }
 
     [Fact]
-    public async Task RunOneShot_EmitsOneRecord()
+    public async Task RunOneShot_EmitsOneRecordAndReturnsTheResult()
     {
         var f = New();
 
-        await f.Runtime.RunOneShotAsync(Spec(), "prompt");
+        AgentTurnResult result = await f.Runtime.RunOneShotAsync(Spec(), "prompt");
 
+        Assert.Equal("oneshot", result.Output);
+        Assert.Equal(new[] { "oneshot" }, f.Log);
         Assert.Single(f.Recorder.Calls);
     }
 
     [Fact]
-    public async Task RunTurn_WhenGateThrows_EmitsNoRecord()
+    public async Task RunOneShot_WhenItFailsOnTheUsageLimit_DoesNotRetry()
     {
         var f = New();
-        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
-        f.Gate.Throw = new OperationCanceledException();
+        f.Inner.OneShotResult = Turns.Failed("limited", "usage limit");
+        f.Detector.Default = Hit();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.RunTurnAsync("p"));
+        AgentTurnResult result = await f.Runtime.RunOneShotAsync(Spec(), "prompt");
 
-        Assert.Empty(f.Recorder.Calls);
+        // One-shots run in caller-seeded sandboxes where the output often overwrites a seeded input; a
+        // failed attempt may have half-written it, so a blind rerun could read its predecessor's partial
+        // output as authoritative. Propagate instead — the caller owns re-seeding.
+        Assert.Equal(AgentTurnState.Failed, result.State);
+        Assert.Equal(new[] { "oneshot" }, f.Log);
+        Assert.Equal(0, f.Detector.Waits);
+        Assert.Single(f.Recorder.Calls);
     }
 
     [Fact]
@@ -186,7 +273,7 @@ public class GatedAgentRuntimeTests
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
         var gated = new GatedAgentSession(
             new RecordingSession(log, AgentSpecs.Decision(repo)),
-            new RecordingGate(log),
+            new RecordingDetector(log),
             new NullSessionTelemetryRecorder(),
             "r", "/repo", DateTimeOffset.UtcNow);
 
@@ -197,31 +284,47 @@ public class GatedAgentRuntimeTests
 
     // --- local recording fakes ---
 
-    private sealed class RecordingGate(List<string> log) : IUsageGate
+    private sealed class RecordingDetector(List<string> log) : IUsageLimitDetector
     {
-        public int Calls { get; private set; }
-        public Exception? Throw { get; set; }
-        public CodexUsageStatus? Status { get; set; }
+        public Queue<UsageLimitHit?> Hits { get; } = new();
+        public UsageLimitHit? Default { get; set; }
+        public Exception? ThrowOnWait { get; set; }
+        public Action? OnWait { get; set; }
+        public int Waits { get; private set; }
 
-        public Task<CodexUsageStatus?> WaitForCapacityAsync(CancellationToken cancellationToken)
+        public UsageLimitHit? Detect(AgentTurnResult result)
         {
-            Calls++;
-            log.Add("gate");
-            return Throw is not null ? throw Throw : Task.FromResult(Status);
+            log.Add("detect");
+            return Hits.Count > 0 ? Hits.Dequeue() : Default;
         }
+
+        public Task WaitOutAsync(UsageLimitHit hit, CancellationToken cancellationToken)
+        {
+            Waits++;
+            log.Add("wait");
+            if (ThrowOnWait is not null)
+            {
+                throw ThrowOnWait;
+            }
+
+            OnWait?.Invoke();
+            return Task.CompletedTask;
+        }
+
+        public void WarnRetriesExhausted(int retries) => log.Add("exhausted");
     }
 
     private sealed class RecordingSessionTelemetryRecorder : ISessionTelemetryRecorder
     {
-        public List<(SessionRole Role, int TurnIndex, string? CachedLogPath, CommandCenter.Cli.CodexUsageStatus? Pre)> Calls { get; } = new();
+        public List<(SessionRole Role, int TurnIndex, string? CachedLogPath)> Calls { get; } = new();
         public string? PathToReturn { get; set; } = "/log";
 
         public Task<string?> RecordTurnAsync(
             string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role,
             DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result,
-            CodexUsageStatus? preStatus, CancellationToken cancellationToken)
+            CancellationToken cancellationToken)
         {
-            Calls.Add((role, result.TurnIndex, cachedLogPath, preStatus));
+            Calls.Add((role, result.TurnIndex, cachedLogPath));
             return Task.FromResult(PathToReturn);
         }
     }
@@ -230,6 +333,7 @@ public class GatedAgentRuntimeTests
     {
         public RecordingSession? LastSession { get; private set; }
         public IAgentSession? ClosedSession { get; private set; }
+        public AgentTurnResult OneShotResult { get; set; } = Turns.Completed("oneshot");
 
         public Task<IAgentSession> OpenSessionAsync(AgentSessionSpec spec, CancellationToken cancellationToken = default)
         {
@@ -241,7 +345,7 @@ public class GatedAgentRuntimeTests
             AgentSessionSpec spec, string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken cancellationToken = default)
         {
             log.Add("oneshot");
-            return Task.FromResult(Turns.Completed("oneshot"));
+            return Task.FromResult(OneShotResult);
         }
 
         public ValueTask CloseSessionAsync(IAgentSession session)
@@ -254,6 +358,7 @@ public class GatedAgentRuntimeTests
     private sealed class RecordingSession(List<string> log, AgentSessionSpec spec) : IAgentSession
     {
         public List<string> Prompts { get; } = new();
+        public Queue<AgentTurnResult> TurnResults { get; } = new();
         public AgentTurnResult TurnResult { get; set; } = Turns.Completed("turn");
         public bool Disposed { get; private set; }
 
@@ -261,7 +366,7 @@ public class GatedAgentRuntimeTests
         public string RepositoryId => spec.RepositoryId;
         public SessionRole Role => spec.Role;
         public AgentSessionMode Mode => AgentSessionMode.Persistent;
-        public AgentProcessState State => AgentProcessState.Running;
+        public AgentProcessState State { get; set; } = AgentProcessState.Running;
         public int CompletedTurns => 0;
         public AgentTokenUsage TotalUsage => new(0, 0);
         public string? ThreadId => "thread-inner";
@@ -271,7 +376,7 @@ public class GatedAgentRuntimeTests
         {
             log.Add("turn");
             Prompts.Add(prompt);
-            return Task.FromResult(TurnResult);
+            return Task.FromResult(TurnResults.Count > 0 ? TurnResults.Dequeue() : TurnResult);
         }
 
         public Task CancelAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

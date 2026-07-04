@@ -29,8 +29,9 @@ public class LoopRunnerTests
         // the "Execution" phase prefix and the handoff file, both identical across the two handoff prompts).
         var git = new FakeProcessRunner { Handler = (_, _) => FakeProcessRunner.Ok() };
         var detector = new WorkingTreeChangeDetector(git, repo);
-        // These tests exercise loop orchestration only; the Codex usage gate is unit-tested separately
-        // (UsageGateTests) and its per-turn placement in GatedAgentRuntimeTests, so the loop runs ungated.
+        // These tests exercise loop orchestration only; usage-limit detection is unit-tested separately
+        // (UsageLimitDetectorTests) and its per-turn retry seam in GatedAgentRuntimeTests, so the loop
+        // runs unwatched.
         var exec = new ExecutionStep(rt, art, con, repo, detector, gate);
         var dec = new DecisionSession(rt, router, art, con, repo);
         // CommitGate IGNORES `.agents`; the submodule is committed+pushed only by the publisher (pre-codex).

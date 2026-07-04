@@ -4,15 +4,18 @@ using CommandCenter.Agents.Models;
 namespace CommandCenter.Cli;
 
 /// <summary>
-/// Wraps an <see cref="IAgentRuntime"/> so the Codex usage gate runs before EVERY codex turn/one-shot, and one
-/// telemetry row is emitted after each. A single iteration invokes codex many times and the warm decision
-/// session is reused across iterations, so quota can drain to zero mid-iteration; gating at each turn is the
-/// finest boundary we control. Opening a session spawns the app-server but spends no quota, so it is NOT gated
-/// or recorded — only turns and one-shots are.
+/// Wraps an <see cref="IAgentRuntime"/> so every codex turn/one-shot emits one telemetry row per attempt,
+/// and persistent-session turns that failed on the codex usage limit are waited out and retried in place.
+/// A single iteration invokes codex many times and the warm decision session is reused across iterations,
+/// so the limit can be hit by any turn mid-iteration; this per-turn seam is the finest boundary we
+/// control, and retrying here lets the loop survive quota exhaustion without the steps above ever
+/// noticing. One-shots are recorded but never retried (see <see cref="RunOneShotAsync"/>). Opening a
+/// session spawns the app-server but spends no quota and cannot hit the limit, so it is neither watched
+/// nor recorded.
 /// </summary>
 internal sealed class GatedAgentRuntime(
     IAgentRuntime inner,
-    IUsageGate usageGate,
+    IUsageLimitDetector usageLimit,
     ISessionTelemetryRecorder recorder,
     IClock clock,
     string repoName) : IAgentRuntime
@@ -22,7 +25,7 @@ internal sealed class GatedAgentRuntime(
     {
         IAgentSession session = await inner.OpenSessionAsync(spec, cancellationToken);
         return new GatedAgentSession(
-            session, usageGate, recorder, repoName, spec.WorkingDirectory ?? string.Empty, clock.UtcNow);
+            session, usageLimit, recorder, repoName, spec.WorkingDirectory ?? string.Empty, clock.UtcNow);
     }
 
     public async Task<AgentTurnResult> RunOneShotAsync(
@@ -31,12 +34,16 @@ internal sealed class GatedAgentRuntime(
         Func<AgentStreamChunk, Task>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
+        // One-shots are deliberately NOT retried on a usage-limit failure: they run in caller-seeded
+        // sandboxes where the output file often overwrites a seeded input (the operational-context
+        // evolution one-shot rewrites operational_context.md in place), so a failed attempt may have
+        // half-written the very file a rerun would read as authoritative. Only the caller can re-seed;
+        // the failure propagates loudly, exactly as it did before the detector existed.
         DateTimeOffset openedAt = clock.UtcNow;
-        CodexUsageStatus? pre = await usageGate.WaitForCapacityAsync(cancellationToken);
         AgentTurnResult result = await inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
         await recorder.RecordTurnAsync(
             repoName, spec.WorkingDirectory ?? string.Empty, spec.SessionId, spec.Role, openedAt,
-            cachedLogPath: null, result, pre, cancellationToken);
+            cachedLogPath: null, result, cancellationToken);
         return result;
     }
 
@@ -45,18 +52,24 @@ internal sealed class GatedAgentRuntime(
 }
 
 /// <summary>
-/// A session wrapper that runs the usage gate before each turn, delegates to <see cref="Inner"/>, then records
-/// one telemetry row. The codex rollout log path is resolved once (lazily, after the first turn) and cached for
-/// the session's remaining turns.
+/// A session wrapper that delegates each turn to <see cref="Inner"/>, records one telemetry row per
+/// attempt, and — when the turn failed because codex hit its usage limit — waits out the advertised reset
+/// and reruns the same prompt on the same warm session. The codex rollout log path is resolved once
+/// (lazily, after the first turn) and cached for the session's remaining turns.
 /// </summary>
 internal sealed class GatedAgentSession(
     IAgentSession inner,
-    IUsageGate usageGate,
+    IUsageLimitDetector usageLimit,
     ISessionTelemetryRecorder recorder,
     string repoName,
     string workingDirectory,
     DateTimeOffset openedAtUtc) : IAgentSession
 {
+    /// <summary>Wait-and-retry attempts per logical turn before the failure propagates. Covers cascading
+    /// windows (a 5h reset followed by a weekly limit) without masking a persistently broken codex. Lives
+    /// here — not on the detector — because the seam that runs the retry loop owns the retry policy.</summary>
+    internal const int MaxUsageLimitRetriesPerTurn = 3;
+
     private string? cachedLogPath;
 
     internal IAgentSession Inner => inner;
@@ -75,11 +88,43 @@ internal sealed class GatedAgentSession(
         Func<AgentStreamChunk, Task>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
-        CodexUsageStatus? pre = await usageGate.WaitForCapacityAsync(cancellationToken);
-        AgentTurnResult result = await inner.RunTurnAsync(prompt, onChunk, cancellationToken);
-        cachedLogPath = await recorder.RecordTurnAsync(
-            repoName, workingDirectory, inner.SessionId, inner.Role, openedAtUtc,
-            cachedLogPath, result, pre, cancellationToken);
+        AgentTurnResult result;
+        for (int attempt = 0; ; attempt++)
+        {
+            result = await inner.RunTurnAsync(prompt, onChunk, cancellationToken);
+            cachedLogPath = await recorder.RecordTurnAsync(
+                repoName, workingDirectory, inner.SessionId, inner.Role, openedAtUtc,
+                cachedLogPath, result, cancellationToken);
+
+            UsageLimitHit? hit = usageLimit.Detect(result);
+            if (hit is null)
+            {
+                break;
+            }
+
+            if (attempt >= MaxUsageLimitRetriesPerTurn)
+            {
+                usageLimit.WarnRetriesExhausted(MaxUsageLimitRetriesPerTurn);
+                break;
+            }
+
+            // A usage-limit failure normally leaves the app-server alive, but when the codex process
+            // died the session is unrecoverable: a retry would throw OperationCanceledException off the
+            // dead session's linked token, which LoopRunner misreads as user cancellation. Retry only a
+            // demonstrably live session, re-checking after the potentially multi-day wait.
+            if (inner.State != AgentProcessState.Running)
+            {
+                break;
+            }
+
+            await usageLimit.WaitOutAsync(hit, cancellationToken);
+
+            if (inner.State != AgentProcessState.Running)
+            {
+                break;
+            }
+        }
+
         return result;
     }
 

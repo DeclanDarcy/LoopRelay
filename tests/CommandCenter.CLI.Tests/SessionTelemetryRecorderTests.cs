@@ -29,16 +29,15 @@ public class SessionTelemetryRecorderTests
         new(index, AgentTurnState.Completed, "out", new AgentTokenUsage(100, 20, 30));
 
     [Fact]
-    public async Task RecordTurn_BuildsAFullRecordFromGatePreProbePostAndTurn()
+    public async Task RecordTurn_BuildsAFullRecordFromProbePostAndTurn()
     {
         var k = New();
-        var pre = new CodexUsageStatus(60, TimeSpan.FromHours(1), 80, TimeSpan.FromHours(5));
         k.Probe.Default = new CodexUsageStatus(58, TimeSpan.FromHours(1), 79, TimeSpan.FromHours(5)); // post
         k.Locator.Path = "/logs/rollout.jsonl";
 
         string? path = await k.Recorder.RecordTurnAsync(
             "myrepo", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
-            DateTimeOffset.UnixEpoch, cachedLogPath: null, Turn(index: 3), pre, CancellationToken.None);
+            DateTimeOffset.UnixEpoch, cachedLogPath: null, Turn(index: 3), CancellationToken.None);
 
         Assert.Equal("/logs/rollout.jsonl", path);
         SessionTelemetryRecord r = Assert.Single(k.Sink.Records);
@@ -50,9 +49,7 @@ public class SessionTelemetryRecorderTests
         Assert.Equal(20, r.OutputTokens);
         Assert.Equal(30, r.CachedTokens);
         Assert.Equal(42.0, r.EffectiveTokens);
-        Assert.Equal(60, r.PreFiveHourPercent);
         Assert.Equal(58, r.PostFiveHourPercent);
-        Assert.Equal(80, r.PreWeeklyPercent);
         Assert.Equal(79, r.PostWeeklyPercent);
     }
 
@@ -64,7 +61,7 @@ public class SessionTelemetryRecorderTests
 
         string? path = await k.Recorder.RecordTurnAsync(
             "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.OperationalExecution,
-            DateTimeOffset.UnixEpoch, cachedLogPath: "/cached.jsonl", Turn(), null, CancellationToken.None);
+            DateTimeOffset.UnixEpoch, cachedLogPath: "/cached.jsonl", Turn(), CancellationToken.None);
 
         Assert.Equal("/cached.jsonl", path);
         Assert.Equal(0, k.Locator.Calls);
@@ -72,19 +69,17 @@ public class SessionTelemetryRecorderTests
     }
 
     [Fact]
-    public async Task RecordTurn_WhenPreAndPostUnavailable_WritesNullCapacities()
+    public async Task RecordTurn_WhenPostProbeUnavailable_WritesNullCapacities()
     {
         var k = New();
         k.Probe.Default = null; // post-probe unreadable
 
         await k.Recorder.RecordTurnAsync(
             "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
-            DateTimeOffset.UnixEpoch, null, Turn(), preStatus: null, CancellationToken.None);
+            DateTimeOffset.UnixEpoch, null, Turn(), CancellationToken.None);
 
         SessionTelemetryRecord r = Assert.Single(k.Sink.Records);
-        Assert.Null(r.PreFiveHourPercent);
         Assert.Null(r.PostFiveHourPercent);
-        Assert.Null(r.PreWeeklyPercent);
         Assert.Null(r.PostWeeklyPercent);
     }
 
@@ -97,7 +92,7 @@ public class SessionTelemetryRecorderTests
 
         string? path = await k.Recorder.RecordTurnAsync(
             "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
-            DateTimeOffset.UnixEpoch, "/cached.jsonl", Turn(), null, CancellationToken.None);
+            DateTimeOffset.UnixEpoch, "/cached.jsonl", Turn(), CancellationToken.None);
 
         Assert.Equal("/cached.jsonl", path); // still returns the path
         Assert.Contains(k.Con.Events, e => e.Kind == "warn");
@@ -109,7 +104,7 @@ public class SessionTelemetryRecorderTests
         var sink = new FakeSessionTelemetrySink();
         string? path = await new NullSessionTelemetryRecorder().RecordTurnAsync(
             "r", "/w", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
-            DateTimeOffset.UnixEpoch, "/cached", Turn(), null, CancellationToken.None);
+            DateTimeOffset.UnixEpoch, "/cached", Turn(), CancellationToken.None);
 
         Assert.Equal("/cached", path);
         Assert.Empty(sink.Records);
@@ -128,7 +123,7 @@ public class SessionTelemetryRecorderTests
         // A caller cancellation is intent, not a telemetry fault — it must surface, not be swallowed.
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => recorder.RecordTurnAsync(
             "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
-            DateTimeOffset.UnixEpoch, cachedLogPath: null, Turn(), null, cts.Token));
+            DateTimeOffset.UnixEpoch, cachedLogPath: null, Turn(), cts.Token));
 
         Assert.Empty(sink.Records);
     }
