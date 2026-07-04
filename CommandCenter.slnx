@@ -6,17 +6,23 @@
     <Project Path="src/CommandCenter.DecisionSessions/CommandCenter.DecisionSessions.csproj" />
     <Project Path="src/CommandCenter.Decisions/CommandCenter.Decisions.csproj" />
     <Project Path="src/CommandCenter.Execution/CommandCenter.Execution.csproj" />
-    <Project Path="src/CommandCenter.Workflow/CommandCenter.Workflow.csproj" />
     <Project Path="src/CommandCenter.Reasoning/CommandCenter.Reasoning.csproj" />
-    <Project Path="src/CommandCenter.Middle/CommandCenter.Middle.csproj" />
     <Project Path="src/CommandCenter.Persistence.Sqlite/CommandCenter.Persistence.Sqlite.csproj" />
     <Project Path="src/CommandCenter.Orchestration/CommandCenter.Orchestration.csproj" />
-    <Project Path="src/CommandCenter.Backend/CommandCenter.Backend.csproj" />
     <Project Path="src/CommandCenter.CLI/CommandCenter.CLI.csproj" />
     <Project Path="src/CommandCenter.Plan.CLI/CommandCenter.Plan.CLI.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Agents.Tests/CommandCenter.Agents.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Architecture.Tests/CommandCenter.Architecture.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Continuity.Tests/CommandCenter.Continuity.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Core.Tests/CommandCenter.Core.Tests.csproj" />
+    <Project Path="tests/CommandCenter.DecisionSessions.Tests/CommandCenter.DecisionSessions.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Decisions.Tests/CommandCenter.Decisions.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Execution.Tests/CommandCenter.Execution.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Orchestration.Tests/CommandCenter.Orchestration.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Persistence.Sqlite.Tests/CommandCenter.Persistence.Sqlite.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Reasoning.Tests/CommandCenter.Reasoning.Tests.csproj" />
     <Project Path="tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj" />
     <Project Path="tests/CommandCenter.Plan.CLI.Tests/CommandCenter.Plan.CLI.Tests.csproj" />
   </Folder>
