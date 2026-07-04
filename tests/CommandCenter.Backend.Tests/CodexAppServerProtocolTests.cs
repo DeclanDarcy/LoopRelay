@@ -83,6 +83,33 @@ public sealed class CodexAppServerProtocolTests
         Assert.Equal(7, root.GetProperty("id").GetInt64());
         Assert.Equal("decline", root.GetProperty("result").GetProperty("decision").GetString());
     }
+
+    [Fact]
+    public void ThreadResumeFrameMapsThreadIdCwdSandboxApprovalAndExcludeTurns()
+    {
+        JsonElement root = Root(CodexAppServerProtocol.ThreadResume(4, "thread-old", "/repo", "read-only", "never"));
+
+        Assert.Equal("thread/resume", root.GetProperty("method").GetString());
+        JsonElement p = root.GetProperty("params");
+        Assert.Equal("thread-old", p.GetProperty("threadId").GetString());
+        Assert.Equal("/repo", p.GetProperty("cwd").GetString());
+        Assert.Equal("read-only", p.GetProperty("sandbox").GetString());
+        Assert.Equal("never", p.GetProperty("approvalPolicy").GetString());
+        // History replay is never needed (the CLI streams no prior turns) and can be huge — always excluded.
+        Assert.True(p.GetProperty("excludeTurns").GetBoolean());
+    }
+
+    [Fact]
+    public void ThreadResumeOmitsNullOptionals()
+    {
+        JsonElement p = Root(CodexAppServerProtocol.ThreadResume(4, "thread-old", cwd: null, sandbox: null, approvalPolicy: null))
+            .GetProperty("params");
+
+        Assert.Equal("thread-old", p.GetProperty("threadId").GetString());
+        Assert.False(p.TryGetProperty("cwd", out _));
+        Assert.False(p.TryGetProperty("sandbox", out _));
+        Assert.False(p.TryGetProperty("approvalPolicy", out _));
+    }
 }
 
 public sealed class CodexAppServerMessageTests
