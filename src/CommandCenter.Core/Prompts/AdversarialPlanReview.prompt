@@ -6,11 +6,76 @@ The plan will govern autonomous execution across multiple agents and milestones.
 
 Review the plan and milestones as an integrated operational system.
 
+## Review Authority
+
+The North-Star Projection is authoritative for:
+
+- desired strategic state
+- architectural invariants
+- capability semantics
+- authority boundaries
+- planning invariants
+- project-specific drift patterns
+- project-specific false-success patterns
+- project-specific veto conditions
+
+The plan is not authoritative.
+
+The plan must be judged against the projection.
+
+Do not reinterpret the projection in order to make the plan appear correct.
+
+If the projection and plan conflict, assume the projection is correct unless the conflict is explicitly identified as a projection limitation.
+
 Assume the plan is flawed until it survives scrutiny. Your job is to find material failure modes, not to summarize or praise the plan.
 
 Determine whether it provides a coherent, executable, decision-preserving contract for completing the epic.
 
-Attack the plan along these axes:
+Before reviewing the plan:
+
+1. Parse the projection.
+2. Extract:
+
+   - critical intent
+   - architectural invariants
+   - capability integrity rules
+   - authority boundaries
+   - planning invariants
+   - dangerous dependency patterns
+   - project-specific drift patterns
+   - false-success heuristics
+   - veto conditions
+   - canonical vocabulary
+
+3. Build an attack model from those items.
+4. Review the plan using that attack model.
+
+Do not begin reviewing until the attack model has been established.
+
+Attack the plan along two complementary dimensions.
+
+First, perform the generic adversarial review defined below.
+
+Second, use the North-Star Projection to perform project-specific attacks that generic planning review cannot detect.
+
+The projection should determine where the review spends most of its effort.
+
+If the projection identifies attack priorities, spend proportionally more review effort attacking those areas.
+
+The review should optimize for discovering project-specific catastrophic failures rather than producing an even distribution of findings.
+
+Prioritize attacks against:
+
+- Critical Intent
+- Architectural Invariants
+- Capability Integrity
+- Authority Boundaries
+- Dangerous Dependency Patterns
+- Project-Specific Drift Patterns
+- False-Success Heuristics
+- Project-Specific Veto Conditions
+
+Generic adversarial review axes:
 
 - Objective fidelity: Does the plan preserve the epic’s real intent, or only list work?
 - Sequencing: Are milestone dependencies, entry gates, exit gates, rollback points, and handoffs correct?
@@ -37,6 +102,11 @@ For each material issue, provide:
 Evidence:
 Quote or precisely reference the plan/milestone content that creates the issue.
 
+Projection Conflict:
+Identify exactly which projection rule, invariant, capability, authority boundary, drift pattern, or false-success heuristic the plan violates.
+
+If no projection rule is violated, explicitly state that the finding is based on generic planning quality rather than project-specific semantics.
+
 Failure mode:
 Explain how this will produce bad execution, bad decisions, drift, rework, false closure, or architectural regression.
 
@@ -53,19 +123,77 @@ After findings, include:
 
 ## Missing Decisions
 
-List decisions the plan must make now rather than delegating to future execution agents. Omit decisions that are genuinely unknowable until implementation produces evidence.
+List decisions the plan must make now rather than delegating to future execution agents.
+
+Prioritize decisions that the projection indicates must never be delegated to execution agents.
+
+Do not list optional decisions.
+
+List only decisions whose absence creates semantic drift, authority drift, architectural ambiguity, or false completion relative to the projection.
+
+Omit decisions that are genuinely unknowable until implementation produces evidence.
 
 ## False Closure Tests
 
-List specific ways a milestone could appear complete while failing its intended purpose. These should become exit criteria, tests, certification checks, or explicit non-goals.
+Use the projection's False-Success Heuristics as the primary source.
+
+Then identify any additional false-closure modes discovered during review.
+
+Each test should explain:
+
+- what appears complete
+- what actually remains incomplete
+- which projection capability or invariant is still violated
+- what exit criterion would prevent the false closure
 
 ## Authority Drift
 
-Identify duplicated, conflicting, stale, or misplaced authority across `plan.md` and milestone files. State which document should own each disputed responsibility.
+Use the projection's Authority Boundary section as the expected ownership model.
+
+Attack any location where:
+
+- authority is duplicated
+- authority is missing
+- authority moved to the wrong artifact
+- future execution agents must decide something the plan should own
+
+Explain which artifact should own the decision according to the projection.
+
+## Projection Blind Spots
+
+Identify places where the plan implicitly assumes information that is not present in the projection.
+
+For each blind spot determine:
+
+- should the plan change?
+- should the projection change?
+
+Only recommend changing the projection when the omission appears to be project-wide rather than plan-specific.
+
+## Silent Drift Risks
+
+Identify places where the plan could execute successfully while gradually diverging from the project's intended future state.
+
+Focus especially on:
+
+- capability drift
+- architectural drift
+- authority drift
+- semantic drift
+- dependency drift
+- validation drift
 
 ## Suggested Patch
 
 Provide concise patch-style edits: replacements, deletions, moved responsibilities, added gates, or tightened acceptance criteria. Do not rewrite the entire plan unless the structure itself is defective.
+
+## Final Adversarial Question
+
+Answer this question:
+
+If a highly capable autonomous implementation agent followed this plan exactly as written, where is the single most likely place it would produce a technically competent implementation that nevertheless violates the project's actual intent?
+
+If no such place exists, explicitly state why.
 
 ## Verdict
 
@@ -74,6 +202,14 @@ Choose exactly one:
 - FAIL: the plan should not drive autonomous execution until corrected.
 - CONDITIONAL PASS: the plan can drive execution after the listed blockers are fixed.
 - PASS: no material execution risks found.
+
+PASS may only be issued when:
+
+- no material generic planning failures remain
+- no projection invariant is violated
+- no project-specific false-success pattern is possible
+- no veto condition is triggered
+- the reviewer cannot identify a realistic path by which autonomous execution could silently diverge from the intended strategic outcome
 
 The verdict must be justified by the findings, not by general impressions.
 
@@ -87,4 +223,4 @@ The verdict must be justified by the findings, not by general impressions.
 
 <PLAN_TO_REVIEW>
 {{plan_to_review}}
-<PLAN_TO_REVIEW>
+</PLAN_TO_REVIEW>
