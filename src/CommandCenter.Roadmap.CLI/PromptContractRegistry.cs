@@ -12,9 +12,9 @@ internal sealed class PromptContractRegistry
             Contract("UpdateRoadmapCompletionContext", [RoadmapArtifactPaths.RoadmapCompletionContext, RoadmapArtifactPaths.ActiveEpic], [RoadmapArtifactPaths.RoadmapCompletionContext], ["Close Epic", "Close With Follow-Up"], "RoadmapCompletionContextWriter", StaleProjectionPolicy.Block, "None"),
             Contract("SelectNextEpic", [RoadmapArtifactPaths.RoadmapCompletionContext, RoadmapArtifactPaths.RoadmapFile], [RoadmapArtifactPaths.Selection], ["Select Existing Epic", "Select New Intermediary Epic", "Select Split Epic", "Strategic Investigation Required", "Roadmap Revision Required", "No Suitable Initiative"], "SelectionWriter", StaleProjectionPolicy.Block, "SelectionParser"),
             Contract("EpicPreparationAudit", [RoadmapArtifactPaths.Selection], [RoadmapArtifactPaths.AuditEvidenceDirectory], ["Realign", "Reimagine", "Retire", "Insufficient Evidence"], "AuditEvidenceWriter", StaleProjectionPolicy.Block, "EpicPreparationAuditParser"),
-            Contract("RealignEpic", [RoadmapArtifactPaths.ActiveEpic], [RoadmapArtifactPaths.ActiveEpic], ["Realign"], "ActiveEpicWriter", StaleProjectionPolicy.Block, "BundleFileExtractor"),
-            Contract("ReimagineEpic", [RoadmapArtifactPaths.ActiveEpic], [RoadmapArtifactPaths.ActiveEpic], ["Reimagine"], "ActiveEpicWriter", StaleProjectionPolicy.Block, "BundleFileExtractor"),
-            Contract("CreateNewEpic", [RoadmapArtifactPaths.Selection], [RoadmapArtifactPaths.ActiveEpic], ["Create Epic"], "ActiveEpicWriter", StaleProjectionPolicy.Block, "BundleFileExtractor"),
+            Contract("RealignEpic", [RoadmapArtifactPaths.ActiveEpic], [RoadmapArtifactPaths.ActiveEpic], ["Realign"], "ArtifactPromotionService", StaleProjectionPolicy.Block, "EpicAuthoringOutputClassifier+EpicArtifactValidator", ["# Epic Realignment Blocked"]),
+            Contract("ReimagineEpic", [RoadmapArtifactPaths.ActiveEpic], [RoadmapArtifactPaths.ActiveEpic], ["Reimagine"], "ArtifactPromotionService", StaleProjectionPolicy.Block, "EpicAuthoringOutputClassifier+EpicArtifactValidator", ["# Epic Reimagination Blocked"]),
+            Contract("CreateNewEpic", [RoadmapArtifactPaths.Selection], [RoadmapArtifactPaths.ActiveEpic], ["Create Epic"], "ArtifactPromotionService", StaleProjectionPolicy.Block, "EpicAuthoringOutputClassifier+EpicArtifactValidator", ["# Create New Epic Blocked"]),
             Contract("SplitEpic", [RoadmapArtifactPaths.Selection], [RoadmapArtifactPaths.SplitFamiliesDirectory], ["Split Epic"], "SplitFamilyWriter", StaleProjectionPolicy.Block, "BundleFileExtractor"),
             Contract("GenerateMilestoneDeepDivesForEpic", [RoadmapArtifactPaths.ActiveEpic], [RoadmapArtifactPaths.SpecsDirectory], ["Generate Specs"], "SpecBundleWriter", StaleProjectionPolicy.Block, "BundleFileExtractor"),
             Contract("EvaluateEpicCompletionAndDrift", [RoadmapArtifactPaths.ActiveEpic, RoadmapArtifactPaths.SpecsDirectory], [RoadmapArtifactPaths.EvaluationEvidenceDirectory], CompletionCertificationRouter.AllowedRecommendations, "EvaluationEvidenceWriter", StaleProjectionPolicy.Block, "CompletionEvaluationParser"),
@@ -63,7 +63,8 @@ internal sealed class PromptContractRegistry
         IReadOnlyList<string> allowedDecisions,
         string writer,
         StaleProjectionPolicy stalePolicy,
-        string parserName) =>
+        string parserName,
+        IReadOnlyList<string>? blockingOutputs = null) =>
         new(
             runtimePromptName,
             runtimePromptName,
@@ -71,7 +72,7 @@ internal sealed class PromptContractRegistry
             [],
             requiredOutputs,
             allowedDecisions,
-            [],
+            blockingOutputs ?? [],
             writer,
             stalePolicy,
             parserName);

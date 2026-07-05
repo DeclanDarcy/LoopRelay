@@ -25,6 +25,7 @@ public sealed class InvariantValidatorTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
         repo.Write(".agents/specs/a.md", "Epic Path: .agents/other-epic.md");
         ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
 
@@ -32,6 +33,27 @@ public sealed class InvariantValidatorTests
 
         Assert.False(result.IsValid);
         Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
+    }
+
+    [Fact]
+    public async Task Rejects_blocked_output_as_active_epic()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, """
+            # Create New Epic Blocked
+
+            ## Reason
+
+            The proposal requires strategic investigation.
+            """);
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.ActiveEpicReady, projectContext.Hash);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Contains("blocked", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

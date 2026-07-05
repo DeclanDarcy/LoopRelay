@@ -26,4 +26,19 @@ public sealed class PromptContractRegistryTests
 
         Assert.Contains("SelectNextEpic", repo.Read(RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Epic_authoring_contracts_declare_promotion_boundary_and_blocking_outputs()
+    {
+        var registry = new PromptContractRegistry(new ProjectionRegistry());
+
+        foreach (string prompt in new[] { "CreateNewEpic", "RealignEpic", "ReimagineEpic" })
+        {
+            PromptContract contract = registry.Get(prompt);
+
+            Assert.Equal("ArtifactPromotionService", contract.ArtifactWriter);
+            Assert.Equal("EpicAuthoringOutputClassifier+EpicArtifactValidator", contract.ParserName);
+            Assert.NotEmpty(contract.BlockingOutputs);
+        }
+    }
 }

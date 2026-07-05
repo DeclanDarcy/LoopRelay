@@ -173,11 +173,7 @@ public sealed class RoadmapStateMachineCompletionTests
         | Primary Reason | Exercise completion routing. |
         """;
 
-    private static string ActiveEpic() => """
-        # Routing Test Epic
-
-        Implement the completion routing test epic.
-        """;
+    private static string ActiveEpic() => RoadmapSamples.ValidEpic("Routing Test Epic", "EPIC-ROUTING");
 
     private static string MilestoneBundle() => """
         # FILE: .agents/specs/routing-test.md

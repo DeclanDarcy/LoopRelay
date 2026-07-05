@@ -45,6 +45,7 @@ var stateStore = new RoadmapStateStore(artifacts);
 var decisionLedger = new DecisionLedgerStore(artifacts);
 var journal = new TransitionJournalStore(artifacts);
 var lifecycle = new ArtifactLifecycleStore(artifacts);
+var promotion = new ArtifactPromotionService(artifacts, lifecycle);
 var bundleExtractor = new BundleFileExtractor();
 var bundleManifest = new BundleManifestWriter(artifacts);
 var splitFamilies = new SplitFamilyStore(artifacts);
@@ -67,6 +68,7 @@ var machine = new RoadmapStateMachine(
     decisionLedger,
     journal,
     lifecycle,
+    promotion,
     bundleExtractor,
     bundleManifest,
     splitFamilies,

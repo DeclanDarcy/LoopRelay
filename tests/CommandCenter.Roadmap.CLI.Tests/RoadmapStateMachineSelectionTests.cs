@@ -82,6 +82,7 @@ internal static class StateMachineFactory
             new DecisionLedgerStore(repo.Artifacts),
             new TransitionJournalStore(repo.Artifacts),
             lifecycle,
+            new ArtifactPromotionService(repo.Artifacts, lifecycle),
             new BundleFileExtractor(),
             new BundleManifestWriter(repo.Artifacts),
             split,

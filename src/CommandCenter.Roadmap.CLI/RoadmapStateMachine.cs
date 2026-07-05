@@ -15,6 +15,7 @@ internal sealed class RoadmapStateMachine(
     DecisionLedgerStore decisionLedger,
     TransitionJournalStore journalStore,
     ArtifactLifecycleStore lifecycleStore,
+    ArtifactPromotionService promotionService,
     BundleFileExtractor bundleExtractor,
     BundleManifestWriter bundleManifestWriter,
     SplitFamilyStore splitFamilyStore,
@@ -59,9 +60,19 @@ internal sealed class RoadmapStateMachine(
                         return RoadmapOutcome.Paused;
                     }
 
+                    if (preparation == EpicPreparationResult.Blocked)
+                    {
+                        return RoadmapOutcome.Paused;
+                    }
+
                     break;
                 case "Select New Intermediary Epic":
-                    await CreateNewEpicAsync(projectContext, cancellationToken);
+                    ArtifactPromotionResult createPromotion = await CreateNewEpicAsync(projectContext, cancellationToken);
+                    if (!createPromotion.Promoted)
+                    {
+                        return RoadmapOutcome.Paused;
+                    }
+
                     break;
                 case "Select Split Epic":
                     await SplitEpicAsync(projectContext, cancellationToken);
@@ -181,17 +192,15 @@ internal sealed class RoadmapStateMachine(
 
         if (decision.Disposition == "Realign")
         {
-            await RewriteActiveEpicAsync("RealignEpic", RoadmapState.RealignEpic, projectContext, auditPath, cancellationToken);
-        }
-        else
-        {
-            await RewriteActiveEpicAsync("ReimagineEpic", RoadmapState.ReimagineEpic, projectContext, auditPath, cancellationToken);
+            ArtifactPromotionResult promotion = await RewriteActiveEpicAsync("RealignEpic", RoadmapState.RealignEpic, projectContext, auditPath, cancellationToken);
+            return promotion.Promoted ? EpicPreparationResult.ActiveEpicReady : EpicPreparationResult.Blocked;
         }
 
-        return EpicPreparationResult.ActiveEpicReady;
+        ArtifactPromotionResult reimaginePromotion = await RewriteActiveEpicAsync("ReimagineEpic", RoadmapState.ReimagineEpic, projectContext, auditPath, cancellationToken);
+        return reimaginePromotion.Promoted ? EpicPreparationResult.ActiveEpicReady : EpicPreparationResult.Blocked;
     }
 
-    private async Task RewriteActiveEpicAsync(string runtimePrompt, RoadmapState state, ProjectContext projectContext, string auditPath, CancellationToken cancellationToken)
+    private async Task<ArtifactPromotionResult> RewriteActiveEpicAsync(string runtimePrompt, RoadmapState state, ProjectContext projectContext, string auditPath, CancellationToken cancellationToken)
     {
         console.Phase(runtimePrompt);
         string selectionOrEpic = await artifacts.ReadAsync(RoadmapArtifactPaths.ActiveEpic) ?? await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
@@ -199,12 +208,11 @@ internal sealed class RoadmapStateMachine(
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildRealignOrReimagineContext(projection.Content, selectionOrEpic, audit);
-        string output = await RunPromptTransitionAsync(state, RoadmapState.ActiveEpicReady, runtimePrompt, projection.Definition.ProjectionPath, context, audit, [RoadmapArtifactPaths.ActiveEpic], cancellationToken);
-        await artifacts.WriteAsync(RoadmapArtifactPaths.ActiveEpic, output);
-        await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready);
+        PromptTransitionCompletion completion = await RunPromptForPromotionAsync(state, RoadmapState.ActiveEpicReady, runtimePrompt, projection.Definition.ProjectionPath, context, audit, [RoadmapArtifactPaths.ActiveEpic], cancellationToken);
+        return await PromoteActiveEpicAsync(state, runtimePrompt, projection.Definition.ProjectionPath, completion);
     }
 
-    private async Task CreateNewEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)
+    private async Task<ArtifactPromotionResult> CreateNewEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "CreateNewEpic";
         console.Phase("Create new epic");
@@ -212,9 +220,8 @@ internal sealed class RoadmapStateMachine(
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
-        string output = await RunPromptTransitionAsync(RoadmapState.NewEpicProposed, RoadmapState.ActiveEpicReady, runtimePrompt, projection.Definition.ProjectionPath, context, selection, [RoadmapArtifactPaths.ActiveEpic], cancellationToken);
-        await artifacts.WriteAsync(RoadmapArtifactPaths.ActiveEpic, output);
-        await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready);
+        PromptTransitionCompletion completion = await RunPromptForPromotionAsync(RoadmapState.NewEpicProposed, RoadmapState.ActiveEpicReady, runtimePrompt, projection.Definition.ProjectionPath, context, selection, [RoadmapArtifactPaths.ActiveEpic], cancellationToken);
+        return await PromoteActiveEpicAsync(RoadmapState.NewEpicProposed, runtimePrompt, projection.Definition.ProjectionPath, completion);
     }
 
     private async Task SplitEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)
@@ -331,6 +338,123 @@ internal sealed class RoadmapStateMachine(
         await artifacts.WriteAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
         await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "roadmap-completion-update", output);
         await AppendDecisionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.RoadmapCompletionContext, "Roadmap Completion Context Updated", "Unclear", "Completion context updated after certification.");
+    }
+
+    private async Task<PromptTransitionCompletion> RunPromptForPromotionAsync(
+        RoadmapState from,
+        RoadmapState promotionTarget,
+        string prompt,
+        string projectionPath,
+        string projectContext,
+        string secondaryInput,
+        IReadOnlyList<string> outputs,
+        CancellationToken cancellationToken)
+    {
+        string correlationId = Guid.NewGuid().ToString("N");
+        DateTimeOffset started = DateTimeOffset.UtcNow;
+        var stopwatch = Stopwatch.StartNew();
+        string outputList = string.Join(", ", outputs);
+        await SaveStateAsync(from, TransitionStatus.Started, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Started", started, null, null, []);
+        await journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, promotionTarget, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, 0, "Started", "None", null));
+
+        try
+        {
+            string output = await promptRunner.RunRuntimePromptAsync(prompt, projectContext, secondaryInput, cancellationToken);
+            stopwatch.Stop();
+            DateTimeOffset completed = DateTimeOffset.UtcNow;
+            await journalStore.AppendAsync(new TransitionJournalRecord("PromptCompleted", correlationId, completed, from, promotionTarget, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "PromptCompleted", "Output produced", null));
+            await SaveStateAsync(from, TransitionStatus.PromptCompleted, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Completed", started, completed, null, []);
+            return new PromptTransitionCompletion(correlationId, started, completed, stopwatch.ElapsedMilliseconds, output);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            stopwatch.Stop();
+            DateTimeOffset failed = DateTimeOffset.UtcNow;
+            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, promotionTarget, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message));
+            await SaveStateAsync(RoadmapState.EvidenceBlocked, TransitionStatus.Failed, from, RoadmapState.EvidenceBlocked, prompt, projectionPath, outputList, "Runtime Failure", started, failed, null, [new BlockerRow(exception.Message, "Review the transition failure and rerun.")]);
+            throw;
+        }
+    }
+
+    private async Task<ArtifactPromotionResult> PromoteActiveEpicAsync(
+        RoadmapState from,
+        string prompt,
+        string projectionPath,
+        PromptTransitionCompletion completion)
+    {
+        ArtifactPromotionResult result = await promotionService.PromoteAsync(new ArtifactPromotionRequest(
+            RoadmapArtifactPaths.ActiveEpic,
+            completion.Output,
+            RoadmapArtifactPaths.BlockerEvidenceDirectory,
+            "active-epic-promotion",
+            "active epic",
+            new EpicAuthoringOutputClassifier(),
+            new EpicArtifactValidator(),
+            ArtifactLifecycleState.Ready,
+            $"Promoted by {prompt}."));
+
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        if (result.Promoted)
+        {
+            await journalStore.AppendAsync(new TransitionJournalRecord(
+                "ArtifactPromoted",
+                completion.CorrelationId,
+                completed,
+                from,
+                RoadmapState.ActiveEpicReady,
+                prompt,
+                projectionPath,
+                "ArtifactPromotionService",
+                await HashInputsAsync([]),
+                [RoadmapArtifactPaths.ActiveEpic],
+                completion.ElapsedMilliseconds,
+                "Promoted",
+                "Active epic promoted",
+                null));
+            await SaveStateAsync(RoadmapState.ActiveEpicReady, TransitionStatus.Completed, from, RoadmapState.ActiveEpicReady, prompt, projectionPath, RoadmapArtifactPaths.ActiveEpic, "Artifact Promoted", completion.Started, completed, null, []);
+            return result;
+        }
+
+        string evidencePath = result.EvidencePath ?? RoadmapArtifactPaths.BlockerEvidenceDirectory;
+        string decision = result.Status switch
+        {
+            ArtifactPromotionStatus.Blocked => "Artifact Promotion Blocked",
+            ArtifactPromotionStatus.Ambiguous => "Artifact Promotion Ambiguous",
+            ArtifactPromotionStatus.StructurallyInvalid => "Artifact Promotion Invalid",
+            _ => "Artifact Promotion Rejected",
+        };
+
+        await journalStore.AppendAsync(new TransitionJournalRecord(
+            "ArtifactPromotionBlocked",
+            completion.CorrelationId,
+            completed,
+            from,
+            RoadmapState.EvidenceBlocked,
+            prompt,
+            projectionPath,
+            "ArtifactPromotionService",
+            await HashInputsAsync([evidencePath]),
+            [evidencePath],
+            completion.ElapsedMilliseconds,
+            result.Status.ToString(),
+            decision,
+            result.Reason));
+        await SaveStateAsync(
+            RoadmapState.EvidenceBlocked,
+            TransitionStatus.Paused,
+            from,
+            RoadmapState.EvidenceBlocked,
+            prompt,
+            projectionPath,
+            evidencePath,
+            decision,
+            completion.Started,
+            completed,
+            null,
+            [new BlockerRow(result.Reason, $"Review {evidencePath} and rerun the roadmap CLI after resolving the blocker.")],
+            new RoadmapTransitionIntent("ResolveArtifactPromotionBlocker", RoadmapState.EvidenceBlocked, [evidencePath]),
+            ["Resolve blocker and rerun"]);
+        return result;
     }
 
     private async Task<string> RunPromptTransitionAsync(
@@ -529,5 +653,13 @@ internal sealed class RoadmapStateMachine(
     {
         ActiveEpicReady,
         Retired,
+        Blocked,
     }
+
+    private sealed record PromptTransitionCompletion(
+        string CorrelationId,
+        DateTimeOffset Started,
+        DateTimeOffset Completed,
+        long ElapsedMilliseconds,
+        string Output);
 }

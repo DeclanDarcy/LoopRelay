@@ -41,6 +41,7 @@ internal sealed record RoadmapTransitionIntent(
 internal enum TransitionStatus
 {
     Started,
+    PromptCompleted,
     Completed,
     Paused,
     Failed,

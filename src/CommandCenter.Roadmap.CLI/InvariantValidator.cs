@@ -9,6 +9,8 @@ internal sealed class InvariantValidator(
     ArtifactLifecycleStore lifecycleStore,
     SplitFamilyStore splitFamilyStore)
 {
+    private readonly EpicArtifactValidator epicValidator = new();
+
     public async Task<InvariantValidationResult> ValidateAsync(
         RoadmapState state,
         string expectedProjectContextHash,
@@ -57,6 +59,12 @@ internal sealed class InvariantValidator(
                 return await FailAsync(state, RoadmapState.Failed, "More than one epic is marked Ready or Executing.");
             }
 
+            InvariantValidationResult activeEpicResult = await ValidateActiveEpicAsync(state);
+            if (!activeEpicResult.IsValid)
+            {
+                return activeEpicResult;
+            }
+
             InvariantValidationResult specResult = await ValidateSpecsBelongToActiveEpicAsync(state);
             if (!specResult.IsValid)
             {
@@ -84,16 +92,61 @@ internal sealed class InvariantValidator(
 
     public async Task<InvariantValidationResult> ValidateSplitChildPromotionAsync(string childEpicPath)
     {
-        if (!childEpicPath.StartsWith(".agents/epic-", StringComparison.OrdinalIgnoreCase))
+        try
+        {
+            if (!childEpicPath.StartsWith(".agents/epic-", StringComparison.OrdinalIgnoreCase))
+            {
+                return InvariantValidationResult.Valid();
+            }
+
+            bool exists = await splitFamilyStore.ExistsForChildAsync(childEpicPath);
+            if (!exists)
+            {
+                return await FailAsync(RoadmapState.SplitChildSelection, RoadmapState.EvidenceBlocked, $"Split child {childEpicPath} has no split-family artifact.");
+            }
+
+            string content = await artifacts.ReadRequiredAsync(childEpicPath);
+            ArtifactValidationResult validation = epicValidator.Validate(content);
+            return validation.IsValid
+                ? InvariantValidationResult.Valid()
+                : await FailAsync(RoadmapState.SplitChildSelection, RoadmapState.EvidenceBlocked, validation.Error ?? $"Split child {childEpicPath} failed epic validation.");
+        }
+        catch (RoadmapStepException exception)
+        {
+            return await FailAsync(RoadmapState.SplitChildSelection, RoadmapState.EvidenceBlocked, exception.Message);
+        }
+    }
+
+    private async Task<InvariantValidationResult> ValidateActiveEpicAsync(RoadmapState state)
+    {
+        if (!RequiresActiveEpic(state))
         {
             return InvariantValidationResult.Valid();
         }
 
-        bool exists = await splitFamilyStore.ExistsForChildAsync(childEpicPath);
-        return exists
+        if (!await artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic))
+        {
+            return await FailAsync(state, RoadmapState.EvidenceBlocked, "Active epic is missing.");
+        }
+
+        string content = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
+        ArtifactValidationResult validation = epicValidator.Validate(content);
+        return validation.IsValid
             ? InvariantValidationResult.Valid()
-            : await FailAsync(RoadmapState.SplitChildSelection, RoadmapState.EvidenceBlocked, $"Split child {childEpicPath} has no split-family artifact.");
+            : await FailAsync(state, RoadmapState.EvidenceBlocked, validation.Error ?? "Active epic failed validation.");
     }
+
+    private static bool RequiresActiveEpic(RoadmapState state) =>
+        state is RoadmapState.ActiveEpicReady
+            or RoadmapState.GenerateMilestoneDeepDives
+            or RoadmapState.MilestoneSpecsReady
+            or RoadmapState.GenerateOperationalContext
+            or RoadmapState.OperationalContextReady
+            or RoadmapState.GenerateExecutionPrompt
+            or RoadmapState.ExecutionPromptReady
+            or RoadmapState.ExecutionLoop
+            or RoadmapState.EpicCompletionDetected
+            or RoadmapState.CompletionEvaluationAndContextUpdate;
 
     private async Task<InvariantValidationResult> ValidateSpecsBelongToActiveEpicAsync(RoadmapState state)
     {
