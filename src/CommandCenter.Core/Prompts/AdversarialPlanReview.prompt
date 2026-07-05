@@ -8,7 +8,7 @@ Review the plan and milestones as an integrated operational system.
 
 ## Review Authority
 
-The North-Star Projection is authoritative for:
+The Project Context Projection is authoritative for:
 
 - desired strategic state
 - architectural invariants
@@ -56,7 +56,7 @@ Attack the plan along two complementary dimensions.
 
 First, perform the generic adversarial review defined below.
 
-Second, use the North-Star Projection to perform project-specific attacks that generic planning review cannot detect.
+Second, use the Project Context Projection to perform project-specific attacks that generic planning review cannot detect.
 
 The projection should determine where the review spends most of its effort.
 

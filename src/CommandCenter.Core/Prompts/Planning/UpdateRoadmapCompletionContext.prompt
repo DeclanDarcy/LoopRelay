@@ -9,7 +9,7 @@
 You are a strategic state update agent for a projection-based AI engineering loop.
 
 Your job is to update:
-`.agents/north-star/roadmap-completion-context.md`
+`.agents/core/roadmap-completion-context.md`
 after a single epic has been marked complete.
 
 You must audit how the completed epic actually landed in the codebase and apply the smallest strategic update necessary to the roadmap completion context.
@@ -476,7 +476,7 @@ Before final output, verify:
 
 Output only the full updated Markdown content for:
 
-.agents/north-star/roadmap-completion-context.md
+.agents/core/roadmap-completion-context.md
 
 Do not include commentary.
 Do not include a preface.
@@ -515,7 +515,7 @@ It is not a changelog, roadmap, implementation summary, or source of project int
 
 ## Source Inputs
 
-### North-Star Projection
+### Project Context Projection
 
 - Projection name or identifier: {{projection_name_or_unknown}}
 - Projection date or version: {{projection_version_or_unknown}}
@@ -568,7 +568,7 @@ Avoid chronology.
 
 Update durable capabilities that are now realized or whose evidence has strengthened.
 
-| Capability | Status | North-Star Link | Evidence | Future Planning Implication |
+| Capability | Status | Project Context Link | Evidence | Future Planning Implication |
 |---|---|---|---|---|
 
 Status must be one of:
@@ -617,7 +617,7 @@ Update constraints future work must respect.
 
 Source must be one of:
 
-- North-Star Projection
+- Project Context Projection
 - Completed Epic
 - Projection + Completed Epic
 - Codebase Evidence
@@ -630,7 +630,7 @@ Avoid weak inferred constraints unless omitting them would risk future drift.
 
 Update gaps relative to the projection.
 
-| Gap | North-Star Link | Why It Matters | Evidence of Absence or Partiality | Suggested Planning Response |
+| Gap | Project Context Link | Why It Matters | Evidence of Absence or Partiality | Suggested Planning Response |
 |---|---|---|---|---|
 
 If a gap was closed by the completed epic, remove it or mark it closed only if the document has an explicit closed-gap convention.

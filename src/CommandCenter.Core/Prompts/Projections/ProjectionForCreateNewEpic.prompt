@@ -2,13 +2,13 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateNewEpicProjection
+# Create Project Context Projection For Create New Epic
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 CreateNewEpic
 
@@ -40,7 +40,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, authoring-oriented projection of the Core North-Star that answers:
+Create a deterministic, authoring-oriented projection of the Project Context that answers:
 
 How should a newly discovered strategic opportunity be transformed into the first authoritative epic for that initiative?
 
@@ -103,7 +103,7 @@ It is the strategic authoring frame, not the authored epic.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole source of project authority.
+Treat the Project Context as the sole source of project authority.
 
 Do not reinterpret it.
 
@@ -157,7 +157,7 @@ You may include generic projection-local authoring rules if they are necessary f
 
 ### 1. Authoring projection, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics required to author a new epic from a newly discovered strategic opportunity.
 
@@ -329,7 +329,7 @@ Those belong to downstream inputs or later prompts.
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Strategic Opportunity Preservation
 
@@ -528,7 +528,7 @@ Retain terms the downstream prompt must preserve when authoring new epics.
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects new epic authoring.
+Exclude Project Context content that belongs to these categories unless it directly affects new epic authoring.
 
 Exclude:
 
@@ -667,12 +667,12 @@ It exists to support:
 - strategic success conditions
 - blocking unsafe epic creation
 
-It is a projection of the Core North-Star, not an epic, proposal, roadmap, codebase audit, repository summary, or implementation plan.
+It is a projection of the Project Context, not an epic, proposal, roadmap, codebase audit, repository summary, or implementation plan.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific authoring view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific authoring view of the Project Context.
 - This projection defines how CreateNewEpic should author a new epic.
 - This projection does not include the new epic proposal.
 - This projection does not include repository state.
@@ -695,7 +695,7 @@ It is a projection of the Core North-Star, not an epic, proposal, roadmap, codeb
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -1053,7 +1053,7 @@ Before finalizing, verify:
 - No completed epic history is included.
 - No epic is authored.
 - Every retained statement helps author a first authoritative epic from a strategic opportunity.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Strategic opportunity preservation is explicit.
 - Desired capability semantics are explicit.
 - Repository grounding rules are explicit.

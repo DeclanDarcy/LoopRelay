@@ -2,13 +2,13 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateMilestoneDeepDiveProjection
+# Create Project Context Projection For Generate Milestone Deep Dives For Epic
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 GenerateMilestoneDeepDivesForEpic
 
@@ -39,7 +39,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, planning-oriented projection of the Core North-Star that answers:
+Create a deterministic, planning-oriented projection of the Project Context that answers:
 
 How should an epic’s milestones be transformed into durable execution-planning specifications while preserving the epic’s intent and architecture?
 
@@ -99,7 +99,7 @@ It is the execution-planning frame, not the planning output.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole source of project authority.
+Treat the Project Context as the sole source of project authority.
 
 Do not reinterpret it.
 
@@ -149,7 +149,7 @@ You may include generic projection-local planning rules if they are necessary fo
 
 ### 1. Planning projection, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics required to transform epic milestones into implementation-planning documents.
 
@@ -330,7 +330,7 @@ The downstream prompt should ensure:
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Epic Continuity Rules
 
@@ -500,7 +500,7 @@ Retain terms the downstream prompt must preserve when generating milestone deep 
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects milestone planning specification.
+Exclude Project Context content that belongs to these categories unless it directly affects milestone planning specification.
 
 Exclude:
 
@@ -637,12 +637,12 @@ It exists to support:
 - execution-readiness preparation
 - traceable milestone planning
 
-It is a projection of the Core North-Star, not an epic, milestone spec, execution prompt, repository audit, roadmap artifact, or implementation plan.
+It is a projection of the Project Context, not an epic, milestone spec, execution prompt, repository audit, roadmap artifact, or implementation plan.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific planning view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific planning view of the Project Context.
 - This projection defines how GenerateMilestoneDeepDivesForEpic should create milestone planning specifications.
 - This projection does not include selected epic content.
 - This projection does not include repository state.
@@ -664,7 +664,7 @@ It is a projection of the Core North-Star, not an epic, milestone spec, executio
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -977,7 +977,7 @@ Before finalizing, verify:
 - No roadmap completion state is included.
 - No implementation tasks are included.
 - Every retained statement helps transform epic milestones into planning specifications.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Epic continuity rules are explicit.
 - Capability-stage semantics are explicit.
 - Planning specification rules are explicit.

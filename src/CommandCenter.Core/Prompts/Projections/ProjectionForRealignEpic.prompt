@@ -2,13 +2,13 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateRealignEpicProjection
+# Create Project Context Projection For Realign Epic
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 RealignEpic
 
@@ -38,9 +38,9 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, transformation-oriented projection of the Core North-Star that answers:
+Create a deterministic, transformation-oriented projection of the Project Context that answers:
 
-How should a strategically valid epic be minimally transformed so that it is once again aligned with the Core North-Star?
+How should a strategically valid epic be minimally transformed so that it is once again aligned with the Project Context?
 
 The projection must define:
 
@@ -99,7 +99,7 @@ It is the transformation frame, not the transformation result.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole source of project authority.
+Treat the Project Context as the sole source of project authority.
 
 Do not reinterpret it.
 
@@ -144,7 +144,7 @@ You may include generic projection-local transformation rules if they are necess
 
 ### 1. Transformation projection, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics required to transform an already-valid epic through a minimal realignment patch.
 
@@ -327,7 +327,7 @@ Those belong to downstream inputs or later prompts.
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Protected Epic Identity
 
@@ -435,7 +435,7 @@ Retain terms the downstream prompt must preserve when realigning epics.
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects controlled epic realignment.
+Exclude Project Context content that belongs to these categories unless it directly affects controlled epic realignment.
 
 Exclude:
 
@@ -564,12 +564,12 @@ It exists to support:
 - internal consistency repair
 - escalation when a requested change exceeds Realign
 
-It is a projection of the Core North-Star, not an epic, audit, roadmap, changelog, or implementation plan.
+It is a projection of the Project Context, not an epic, audit, roadmap, changelog, or implementation plan.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific transformation view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific transformation view of the Project Context.
 - This projection defines how RealignEpic may transform an epic.
 - This projection does not include selected epic content.
 - This projection does not include audit findings.
@@ -592,7 +592,7 @@ It is a projection of the Core North-Star, not an epic, audit, roadmap, changelo
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -858,7 +858,7 @@ Before finalizing, verify:
 - No roadmap completion state is included.
 - No disposition is decided.
 - Every retained statement helps minimally realign an epic.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Protected identity is explicit.
 - Mutable regions are explicit.
 - Transformation rules are explicit.

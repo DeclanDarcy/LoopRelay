@@ -13,7 +13,7 @@
 You are a strategic state synthesis agent for a projection-based AI engineering loop.
 
 Your job is to create the initial:
-`.agents/north-star/roadmap-completion-context.md`
+`.agents/core/roadmap-completion-context.md`
 for a project that already has completed epic history.
 
 You are NOT creating a changelog.
@@ -299,7 +299,7 @@ Do not include analysis notes outside the file.
 
 Output only the full Markdown content for:
 
-.agents/north-star/roadmap-completion-context.md
+.agents/core/roadmap-completion-context.md
 
 Do not wrap the output in commentary.
 Do not include prefaces.
@@ -329,7 +329,7 @@ It is not a changelog, roadmap, implementation summary, or source of project int
 
 ## Source Inputs
 
-### North-Star Projection
+### Project Context Projection
 
 - Projection name or identifier: {{projection_name_or_unknown}}
 - Projection date or version: {{projection_version_or_unknown}}
@@ -372,7 +372,7 @@ Avoid chronology.
 
 List durable capabilities that appear to have been completed.
 
-| Capability | Status | North-Star Link | Evidence | Future Planning Implication |
+| Capability | Status | Project Context Link | Evidence | Future Planning Implication |
 |---|---|---|---|---|
 
 Status must be one of:
@@ -381,7 +381,7 @@ Status must be one of:
 - Partially Realized
 - Evidence Insufficient
 
-North-Star Link should reference the relevant projection concept, anchor, criterion, or constraint.
+Project Context Link should reference the relevant projection concept, anchor, criterion, or constraint.
 
 Evidence should cite completed epic IDs or names.
 
@@ -427,7 +427,7 @@ List constraints that future work must respect.
 
 Source must be one of:
 
-- North-Star Projection
+- Project Context Projection
 - Completed Epic
 - Projection + Completed Epic
 - Inferred — Evidence Weak
@@ -438,7 +438,7 @@ Avoid weak inferred constraints unless omitting them would risk future drift.
 
 List the most important gaps relative to the projection.
 
-| Gap | North-Star Link | Why It Matters | Evidence of Absence or Partiality | Suggested Planning Response |
+| Gap | Project Context Link | Why It Matters | Evidence of Absence or Partiality | Suggested Planning Response |
 |---|---|---|---|---|
 
 Suggested Planning Response should be directional, not a full roadmap.

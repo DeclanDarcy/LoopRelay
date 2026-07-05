@@ -2,13 +2,13 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateReimagineEpicProjection
+# Create Project Context Projection For Reimagine Epic
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 ReimagineEpic
 
@@ -40,7 +40,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, replacement-oriented projection of the Core North-Star that answers:
+Create a deterministic, replacement-oriented projection of the Project Context that answers:
 
 How should an obsolete epic framing be replaced while preserving the strategic need it was originally meant to serve?
 
@@ -52,7 +52,7 @@ The projection must define:
 - how obsolete assumptions should be discarded
 - how stale architecture, dependency, scope, and decomposition should be replaced
 - how repository discoveries summarized by the audit should inform replacement
-- how the replacement initiative should remain aligned with the Core North-Star
+- how the replacement initiative should remain aligned with the Project Context
 - what constraints must survive reimagination
 - when reimagination is no longer appropriate and escalation is required
 
@@ -104,7 +104,7 @@ It is the strategic replacement frame, not the replacement result.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole source of project authority.
+Treat the Project Context as the sole source of project authority.
 
 Do not reinterpret it.
 
@@ -155,7 +155,7 @@ You may include generic projection-local replacement rules if they are necessary
 
 ### 1. Replacement projection, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics required to replace an obsolete epic framing while preserving its strategic need.
 
@@ -336,7 +336,7 @@ Those belong to downstream inputs or later prompts.
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Preserved Strategic Need
 
@@ -502,7 +502,7 @@ Retain terms the downstream prompt must preserve when reimagining epics.
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects controlled epic reimagination.
+Exclude Project Context content that belongs to these categories unless it directly affects controlled epic reimagination.
 
 Exclude:
 
@@ -637,12 +637,12 @@ It exists to support:
 - traceable reimagined epic creation
 - escalation when reimagination is unsafe
 
-It is a projection of the Core North-Star, not an epic, audit, roadmap, changelog, repository summary, or implementation plan.
+It is a projection of the Project Context, not an epic, audit, roadmap, changelog, repository summary, or implementation plan.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific replacement view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific replacement view of the Project Context.
 - This projection defines how ReimagineEpic may replace an epic.
 - This projection does not include selected epic content.
 - This projection does not include audit findings.
@@ -666,7 +666,7 @@ It is a projection of the Core North-Star, not an epic, audit, roadmap, changelo
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -970,7 +970,7 @@ Before finalizing, verify:
 - No roadmap completion state is included.
 - No disposition is decided.
 - Every retained statement helps replace an obsolete epic framing while preserving strategic need.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Preserved strategic need is explicit.
 - Desired capability continuity is explicit.
 - Replacement principles are explicit.

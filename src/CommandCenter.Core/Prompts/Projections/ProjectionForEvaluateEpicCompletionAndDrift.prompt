@@ -2,13 +2,13 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateEpicCompletionEvaluationProjection
+# Create Project Context Projection For Evaluate Epic Completion And Drift
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 EvaluateEpicCompletionAndDrift
 
@@ -41,7 +41,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, certification-oriented projection of the Core North-Star that answers:
+Create a deterministic, certification-oriented projection of the Project Context that answers:
 
 How should implemented repository reality be certified against the intended strategic outcome?
 
@@ -116,7 +116,7 @@ It is the certification frame, not the certification result.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole source of project authority.
+Treat the Project Context as the sole source of project authority.
 
 Do not reinterpret it.
 
@@ -170,7 +170,7 @@ You may include generic projection-local certification rules if they are necessa
 
 ### 1. Certification projection, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics required to certify epic completion and identify strategic drift.
 
@@ -331,7 +331,7 @@ The projection should define this extraction as part of certification, not as ro
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Certification Layer Semantics
 
@@ -491,7 +491,7 @@ Retain terms the downstream evaluator must preserve when certifying completion a
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects completion certification or drift evaluation.
+Exclude Project Context content that belongs to these categories unless it directly affects completion certification or drift evaluation.
 
 Exclude:
 
@@ -622,7 +622,7 @@ Use this exact structure.
 
 ## Purpose
 
-This projection defines how implemented repository reality should be certified against an epic, its milestone specifications, and the Core North-Star.
+This projection defines how implemented repository reality should be certified against an epic, its milestone specifications, and the Project Context.
 
 It exists to support:
 
@@ -638,12 +638,12 @@ It exists to support:
 - strategic learning extraction
 - closure recommendation
 
-It is a projection of the Core North-Star, not an epic, milestone spec, repository audit, implementation summary, roadmap update, or completion report.
+It is a projection of the Project Context, not an epic, milestone spec, repository audit, implementation summary, roadmap update, or completion report.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific certification view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific certification view of the Project Context.
 - This projection defines how EvaluateEpicCompletionAndDrift should judge completion and drift.
 - This projection does not include `.agents/epic.md`.
 - This projection does not include `.agents/milestones/*.md`.
@@ -667,7 +667,7 @@ It is a projection of the Core North-Star, not an epic, milestone spec, reposito
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -1022,7 +1022,7 @@ Before finalizing, verify:
 - No completion findings are produced.
 - No drift findings are produced.
 - Every retained statement helps certify completion or classify drift.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Certification layer semantics are explicit.
 - Capability certification rules are explicit.
 - Milestone certification rules are explicit.

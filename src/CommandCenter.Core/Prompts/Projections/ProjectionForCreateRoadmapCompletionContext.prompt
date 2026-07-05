@@ -2,27 +2,27 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateRoadmapCompletionProjection
+# Create Project Context Projection For Create Roadmap Completion Context
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 CreateRoadmapCompletionContext
 
 That later prompt will combine this projection with completed epic history to create:
 
-.agents/north-star/roadmap-completion-context.md
+.agents/core/roadmap-completion-context.md
 
 Your job is NOT to create the roadmap completion context.
 
 Your job is to produce the stable strategic reference frame that roadmap completion context generation will use.
 
-You are given the Core North-Star.
+You are given the Project Context.
 
-You must extract, preserve, and organize only the subset of the Core North-Star needed to reason about:
+You must extract, preserve, and organize only the subset of the Project Context needed to reason about:
 
 - overall project strategic completion
 - roadmap completion audits
@@ -39,7 +39,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, task-specific projection of the Core North-Star that answers:
+Create a deterministic, task-specific projection of the Project Context that answers:
 
 What desired strategic future state should completed epic history be compared against?
 
@@ -55,7 +55,7 @@ It must not update the roadmap.
 
 It must not choose the next epic.
 
-It must preserve only the Core North-Star semantics required to later synthesize roadmap completion context.
+It must preserve only the Project Context semantics required to later synthesize roadmap completion context.
 
 ---
 
@@ -88,7 +88,7 @@ This projection defines only the Desired Strategic State.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole authority.
+Treat the Project Context as the sole authority.
 
 Do not reinterpret it.
 
@@ -129,7 +129,7 @@ Projection-local IDs must not pretend to be canonical Core IDs.
 
 ### 1. Projection, not summarization
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select the exact semantic slice required for roadmap completion reasoning.
 
@@ -231,7 +231,7 @@ If a Core item does not materially improve those decisions, exclude it.
 
 ### 7. Preserve canonical vocabulary
 
-Use the Core North-Star’s exact terminology for load-bearing concepts.
+Use the Project Context’s exact terminology for load-bearing concepts.
 
 Do not rename concepts.
 
@@ -245,7 +245,7 @@ If a term is load-bearing, include it in the canonical vocabulary section.
 
 ### 8. Deterministic output
 
-The same Core North-Star should produce effectively the same projection every time.
+The same Project Context should produce effectively the same projection every time.
 
 Avoid creative phrasing.
 
@@ -259,7 +259,7 @@ Use stable structure and concise assertions.
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Intent and Purpose Anchors
 
@@ -341,7 +341,7 @@ Retain terms that must be used consistently by:
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to one of these categories unless it is explicitly required for strategic completion reasoning.
+Exclude Project Context content that belongs to one of these categories unless it is explicitly required for strategic completion reasoning.
 
 Exclude:
 
@@ -454,12 +454,12 @@ It exists to support:
 - completion evaluation
 - strategic drift detection
 
-It is a projection of the Core North-Star, not a summary of project history.
+It is a projection of the Project Context, not a summary of project history.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific view of the Project Context.
 - This projection defines desired strategic state only.
 - This projection does not describe current progress.
 - This projection does not incorporate completed epic evidence.
@@ -478,7 +478,7 @@ It is a projection of the Core North-Star, not a summary of project history.
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -518,7 +518,7 @@ Examples:
 
 Define the desired strategic capabilities of the project.
 
-| ID | Desired Capability | North-Star Rationale | Completion Signal | Non-Completion Signal |
+| ID | Desired Capability | Project Context Rationale | Completion Signal | Non-Completion Signal |
 |---|---|---|---|---|
 
 Completion Signal should describe what kind of completed epic evidence would suggest this capability is realized.
@@ -529,7 +529,7 @@ Do not infer whether the capability is currently complete.
 
 ## Strategic Structure
 
-Describe the durable roadmap-level structure implied by the Core North-Star.
+Describe the durable roadmap-level structure implied by the Project Context.
 
 Use this table:
 
@@ -646,7 +646,7 @@ Before finalizing, verify:
 - No completed epic history is included.
 - No implementation state is inferred.
 - Every retained statement materially supports roadmap completion reasoning.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Canonical vocabulary is preserved.
 - Excluded operational and implementation details are not present.
 - The projection is compact enough to be passed into CreateRoadmapCompletionContext.

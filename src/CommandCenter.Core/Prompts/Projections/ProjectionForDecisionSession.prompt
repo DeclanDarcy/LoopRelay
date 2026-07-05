@@ -2,13 +2,13 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateExecutionAgentSystemPromptProjection
+# Create Project Context Projection For Decision Session / Generate System Prompt For Next Execution Agent
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 GenerateSystemPromptForNextExecutionAgent
 
@@ -39,7 +39,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, execution-oriented projection of the Core North-Star that answers:
+Create a deterministic, execution-oriented projection of the Project Context that answers:
 
 What strategic knowledge must remain continuously resident while execution agents implement the project?
 
@@ -106,7 +106,7 @@ It is the stable execution constitution, not the operational state.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole source of project authority.
+Treat the Project Context as the sole source of project authority.
 
 Do not reinterpret it.
 
@@ -157,7 +157,7 @@ You may include generic projection-local execution-governance rules if they are 
 
 ### 1. Execution constitution, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics that must remain resident during execution-session decision making.
 
@@ -350,7 +350,7 @@ Those belong to downstream inputs, not this projection.
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Strategic Purpose For Execution
 
@@ -499,7 +499,7 @@ Retain terms execution agents and handoff-processing prompts must preserve.
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects resident execution decision-making.
+Exclude Project Context content that belongs to these categories unless it directly affects resident execution decision-making.
 
 Exclude:
 
@@ -640,12 +640,12 @@ It exists to support:
 - drift prevention
 - strategic success preservation
 
-It is a projection of the Core North-Star, not operational context, execution history, implementation plan, codebase audit, handoff, or decisions.md.
+It is a projection of the Project Context, not operational context, execution history, implementation plan, codebase audit, handoff, or decisions.md.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of project authority.
-- This projection is a task-specific execution-governance view of the Core North-Star.
+- The Project Context remains the source of project authority.
+- This projection is a task-specific execution-governance view of the Project Context.
 - This projection defines what must remain strategically resident during execution-session prompt generation.
 - This projection does not include operational_context.
 - This projection does not include previous handoff content.
@@ -668,7 +668,7 @@ It is a projection of the Core North-Star, not operational context, execution hi
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -896,7 +896,7 @@ Before finalizing, verify:
 - No implementation plan is included.
 - No execution prompt is generated.
 - Every retained statement should improve execution decisions across sessions.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Strategic purpose for execution is explicit.
 - Execution invariants are explicit.
 - Capability integrity rules are explicit.

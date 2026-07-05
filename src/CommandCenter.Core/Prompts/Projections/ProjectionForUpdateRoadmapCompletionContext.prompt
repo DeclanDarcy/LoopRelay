@@ -2,20 +2,20 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateRoadmapCompletionUpdateProjection
+# Create Project Context Projection For Update Roadmap Completion Context
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 UpdateRoadmapCompletionContext
 
 That downstream prompt will receive:
 
 1. This projection.
-2. The current `.agents/north-star/roadmap-completion-context.md`.
+2. The current `.agents/core/roadmap-completion-context.md`.
 3. One completed epic.
 4. Codebase evidence or repository access.
 
@@ -31,7 +31,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, evaluation-oriented projection of the Core North-Star that answers:
+Create a deterministic, evaluation-oriented projection of the Project Context that answers:
 
 How should a completed epic’s actual codebase landing be interpreted relative to the project’s desired strategic state?
 
@@ -46,7 +46,7 @@ The projection must define:
 
 This projection exists to support incremental updates to:
 
-.agents/north-star/roadmap-completion-context.md
+.agents/core/roadmap-completion-context.md
 
 It must not describe current progress.
 
@@ -82,7 +82,7 @@ It is the evaluation lens, not the state itself.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole authority.
+Treat the Project Context as the sole authority.
 
 Do not reinterpret it.
 
@@ -124,7 +124,7 @@ Projection-local IDs must not pretend to be canonical Core IDs.
 
 ### 1. Evaluation projection, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics required to evaluate how one completed epic actually landed in the codebase.
 
@@ -250,7 +250,7 @@ If a Core item helps bootstrap roadmap completion context but does not help upda
 
 ### 9. Preserve canonical vocabulary
 
-Use the Core North-Star’s exact terminology for load-bearing concepts.
+Use the Project Context’s exact terminology for load-bearing concepts.
 
 Do not rename concepts.
 
@@ -264,7 +264,7 @@ If a term is load-bearing for evaluating epic landing, include it in the canonic
 
 ### 10. Deterministic output
 
-The same Core North-Star should produce effectively the same projection every time.
+The same Project Context should produce effectively the same projection every time.
 
 Avoid creative phrasing.
 
@@ -278,7 +278,7 @@ Use stable structure and concise assertions.
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Desired Capability Model
 
@@ -326,7 +326,7 @@ Examples:
 
 ### E. Drift Interpretation Rules
 
-Retain rules for detecting when implemented reality diverges from the Core North-Star.
+Retain rules for detecting when implemented reality diverges from the Project Context.
 
 Examples:
 
@@ -365,7 +365,7 @@ Retain terms the downstream update prompt must preserve when interpreting epic l
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects epic landing interpretation.
+Exclude Project Context content that belongs to these categories unless it directly affects epic landing interpretation.
 
 Exclude:
 
@@ -489,12 +489,12 @@ It exists to support:
 - strategic drift detection
 - outstanding question resolution
 
-It is a projection of the Core North-Star, not a summary of project history or implementation state.
+It is a projection of the Project Context, not a summary of project history or implementation state.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific evaluation view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific evaluation view of the Project Context.
 - This projection defines interpretation rules for implemented reality.
 - This projection does not describe current progress.
 - This projection does not include completed epic evidence.
@@ -514,7 +514,7 @@ It is a projection of the Core North-Star, not a summary of project history or i
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -768,7 +768,7 @@ Before finalizing, verify:
 - No codebase state is included.
 - No current roadmap completion state is included.
 - Every retained statement helps interpret epic landing or strategic state update.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Capability realization semantics are explicit where available.
 - Invariant preservation rules are explicit where available.
 - Drift interpretation rules are explicit where available.

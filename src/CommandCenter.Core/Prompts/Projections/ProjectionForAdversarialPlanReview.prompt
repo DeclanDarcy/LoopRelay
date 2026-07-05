@@ -2,13 +2,13 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateAdversarialPlanReviewProjection
+# Create Project Context Projection For Adversarial Plan Review
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 AdversarialPlanReview
 
@@ -33,7 +33,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, adversarial-oriented projection of the Core North-Star that answers:
+Create a deterministic, adversarial-oriented projection of the Project Context that answers:
 
 Where should an adversarial plan reviewer focus attacks so that weak execution plans cannot silently diverge from this project's intent?
 
@@ -102,7 +102,7 @@ It is not the review itself.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole source of project authority.
+Treat the Project Context as the sole source of project authority.
 
 Do not reinterpret it.
 
@@ -151,7 +151,7 @@ You may include generic projection-local adversarial rules only when necessary t
 
 ### 1. Adversarial projection, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics required to attack weak plans on behalf of this project.
 
@@ -170,7 +170,7 @@ The projection should answer:
 
 The downstream AdversarialPlanReview prompt already owns generic review methodology.
 
-Do not duplicate generic review axes such as sequencing, ambiguity, executability, or testability unless the Core North-Star gives them project-specific meaning.
+Do not duplicate generic review axes such as sequencing, ambiguity, executability, or testability unless the Project Context gives them project-specific meaning.
 
 Instead, identify what a generic reviewer would not know:
 
@@ -307,7 +307,7 @@ Include only project-specific semantic knowledge that improves adversarial revie
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Critical Intent
 
@@ -443,7 +443,7 @@ Retain terms the downstream prompt must preserve while attacking plan semantics.
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects adversarial plan review.
+Exclude Project Context content that belongs to these categories unless it directly affects adversarial plan review.
 
 Exclude:
 
@@ -565,14 +565,14 @@ Use this exact structure.
 
 This projection defines the project-specific attack surface for adversarial plan review.
 
-It exists to help AdversarialPlanReview identify how a plan could silently diverge from this project’s Core North-Star while appearing coherent, executable, or complete.
+It exists to help AdversarialPlanReview identify how a plan could silently diverge from this project’s Project Context while appearing coherent, executable, or complete.
 
-It is a projection of the Core North-Star, not a plan review, execution plan, milestone spec, implementation guide, or generic review rubric.
+It is a projection of the Project Context, not a plan review, execution plan, milestone spec, implementation guide, or generic review rubric.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific adversarial review view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific adversarial review view of the Project Context.
 - This projection defines project-specific attack surfaces.
 - This projection does not review any plan.
 - This projection does not define generic severity rules.
@@ -594,7 +594,7 @@ It is a projection of the Core North-Star, not a plan review, execution plan, mi
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -835,7 +835,7 @@ Before finalizing, verify:
 - No patch format is included.
 - No implementation guidance is included.
 - Every retained statement helps an adversarial reviewer find project-specific plan failures.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Critical intent is explicit.
 - Architectural invariants are explicit where available.
 - Capability integrity rules are explicit.

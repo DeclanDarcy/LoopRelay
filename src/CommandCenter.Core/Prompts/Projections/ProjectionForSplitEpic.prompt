@@ -2,13 +2,13 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateSplitEpicProjection
+# Create Project Context Projection For Split Epic
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 SplitEpic
 
@@ -36,7 +36,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, decomposition-oriented projection of the Core North-Star that answers:
+Create a deterministic, decomposition-oriented projection of the Project Context that answers:
 
 How should one strategic opportunity be partitioned into a complete set of strategically coherent initiatives?
 
@@ -102,7 +102,7 @@ It is the strategic decomposition frame, not the split result.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole source of project authority.
+Treat the Project Context as the sole source of project authority.
 
 Do not reinterpret it.
 
@@ -152,7 +152,7 @@ You may include generic projection-local decomposition rules if they are necessa
 
 ### 1. Decomposition projection, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics required to partition one strategic opportunity into multiple coherent initiatives.
 
@@ -330,7 +330,7 @@ For MVP, SplitEpic may output complete epic files, but those files should be tre
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Opportunity Conservation
 
@@ -478,7 +478,7 @@ Retain terms the downstream prompt must preserve when splitting initiatives.
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects strategic decomposition.
+Exclude Project Context content that belongs to these categories unless it directly affects strategic decomposition.
 
 Exclude:
 
@@ -617,12 +617,12 @@ It exists to support:
 - split blocking
 - handoff to standard new-epic authoring
 
-It is a projection of the Core North-Star, not a split proposal, roadmap, codebase audit, repository summary, or epic authoring guide.
+It is a projection of the Project Context, not a split proposal, roadmap, codebase audit, repository summary, or epic authoring guide.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific decomposition view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific decomposition view of the Project Context.
 - This projection defines how SplitEpic should partition strategic opportunities.
 - This projection does not include the split proposal.
 - This projection does not include repository state.
@@ -644,7 +644,7 @@ It is a projection of the Core North-Star, not a split proposal, roadmap, codeba
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -933,7 +933,7 @@ Before finalizing, verify:
 - No completed epic history is included.
 - No resulting epic is authored.
 - Every retained statement helps partition one strategic opportunity into coherent initiatives.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Opportunity conservation rules are explicit.
 - Capability partitioning rules are explicit.
 - Repository boundary discovery rules are explicit.

@@ -2,13 +2,13 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# CreateEpicPreparationAuditProjection
+# Create Project Context Projection For Epic Preparation Audit
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later prompt:
 
 EpicPreparationAudit
 
@@ -34,7 +34,7 @@ This is a projection, not a summary.
 
 ## Core Objective
 
-Create a deterministic, validation-oriented projection of the Core North-Star that answers:
+Create a deterministic, validation-oriented projection of the Project Context that answers:
 
 How should a selected epic be judged before further planning or execution investment?
 
@@ -95,7 +95,7 @@ It is the validation frame, not the audit result.
 
 ## Authority Rules
 
-Treat the Core North-Star as the sole authority.
+Treat the Project Context as the sole authority.
 
 Do not reinterpret it.
 
@@ -143,7 +143,7 @@ Projection-local IDs must not pretend to be canonical Core IDs.
 
 ### 1. Validation projection, not north-star summary
 
-Do not summarize the Core North-Star generally.
+Do not summarize the Project Context generally.
 
 Select only the Core semantics required to validate whether one selected epic remains the correct strategic initiative.
 
@@ -292,7 +292,7 @@ Those belong to downstream inputs, not this projection.
 
 ### 10. Deterministic output
 
-The same Core North-Star should produce effectively the same projection every time.
+The same Project Context should produce effectively the same projection every time.
 
 Avoid creative phrasing.
 
@@ -306,7 +306,7 @@ Use stable structure and concise assertions.
 
 ## Inclusion Criteria
 
-Retain Core North-Star content that belongs to one of these categories.
+Retain Project Context content that belongs to one of these categories.
 
 ### A. Desired Capability Semantics
 
@@ -419,7 +419,7 @@ Retain terms the downstream audit must preserve when interpreting epic validity.
 
 ## Exclusion Criteria
 
-Exclude Core North-Star content that belongs to these categories unless it directly affects epic preparation validation.
+Exclude Project Context content that belongs to these categories unless it directly affects epic preparation validation.
 
 Exclude:
 
@@ -548,12 +548,12 @@ It exists to support:
 - drift risk assessment
 - disposition selection: Realign, Reimagine, Retire, or Insufficient Evidence
 
-It is a projection of the Core North-Star, not an epic audit, roadmap, changelog, or repository summary.
+It is a projection of the Project Context, not an epic audit, roadmap, changelog, or repository summary.
 
 ## Authority Boundary
 
-- The Core North-Star remains the source of authority.
-- This projection is a task-specific validation view of the Core North-Star.
+- The Project Context remains the source of authority.
+- This projection is a task-specific validation view of the Project Context.
 - This projection defines how a selected epic should be judged.
 - This projection does not include selected epic content.
 - This projection does not include repository state.
@@ -575,7 +575,7 @@ It is a projection of the Core North-Star, not an epic audit, roadmap, changelog
 
 ## Source Coverage
 
-Briefly describe what parts of the Core North-Star were retained.
+Briefly describe what parts of the Project Context were retained.
 
 Use bullets.
 
@@ -843,7 +843,7 @@ Before finalizing, verify:
 - No completed epic history is included.
 - No epic disposition is decided.
 - Every retained statement helps validate a selected epic against repository reality.
-- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
 - Realign, Reimagine, Retire, and Insufficient Evidence are clearly distinguished.
 - Repository interpretation rules are explicit.
 - Retirement requires strong evidence.
