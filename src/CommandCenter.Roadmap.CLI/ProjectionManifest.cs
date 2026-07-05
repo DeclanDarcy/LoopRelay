@@ -1,0 +1,45 @@
+namespace CommandCenter.Roadmap.Cli;
+
+internal sealed record ProjectionManifest(IReadOnlyList<ProjectionManifestEntry> Entries)
+{
+    public static ProjectionManifest Empty { get; } = new([]);
+
+    public ProjectionManifestEntry? Find(string runtimePromptName) =>
+        Entries.FirstOrDefault(entry => string.Equals(entry.RuntimePromptName, runtimePromptName, StringComparison.Ordinal));
+
+    public ProjectionManifest Upsert(ProjectionManifestEntry entry)
+    {
+        var next = Entries
+            .Where(existing => !string.Equals(existing.RuntimePromptName, entry.RuntimePromptName, StringComparison.Ordinal))
+            .Append(entry)
+            .OrderBy(existing => existing.RuntimePromptName, StringComparer.Ordinal)
+            .ToList();
+        return new ProjectionManifest(next);
+    }
+}
+
+internal sealed record ProjectionManifestEntry(
+    string RuntimePromptName,
+    string ProjectionPromptName,
+    string ProjectionPath,
+    string ProjectionPromptSourceHash,
+    IReadOnlyList<string> NorthStarFiles,
+    string NorthStarHash,
+    string ProjectionHash,
+    DateTimeOffset GeneratedAt,
+    ProjectionValidationStatus ValidationStatus,
+    ProjectionStaleStatus StaleStatus,
+    string? LastValidationError);
+
+internal enum ProjectionValidationStatus
+{
+    Unknown,
+    Valid,
+    Invalid,
+}
+
+internal enum ProjectionStaleStatus
+{
+    Fresh,
+    Stale,
+}

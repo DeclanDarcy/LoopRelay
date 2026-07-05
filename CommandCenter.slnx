@@ -11,6 +11,7 @@
     <Project Path="src/CommandCenter.Orchestration/CommandCenter.Orchestration.csproj" />
     <Project Path="src/CommandCenter.CLI/CommandCenter.CLI.csproj" />
     <Project Path="src/CommandCenter.Plan.CLI/CommandCenter.Plan.CLI.csproj" />
+    <Project Path="src/CommandCenter.Roadmap.CLI/CommandCenter.Roadmap.CLI.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CommandCenter.Agents.Tests/CommandCenter.Agents.Tests.csproj" />
@@ -25,5 +26,6 @@
     <Project Path="tests/CommandCenter.Reasoning.Tests/CommandCenter.Reasoning.Tests.csproj" />
     <Project Path="tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj" />
     <Project Path="tests/CommandCenter.Plan.CLI.Tests/CommandCenter.Plan.CLI.Tests.csproj" />
+    <Project Path="tests/CommandCenter.Roadmap.CLI.Tests/CommandCenter.Roadmap.CLI.Tests.csproj" />
   </Folder>
 </Solution>

@@ -6,6 +6,28 @@
 
 Create a standalone .NET console app, `CommandCenter.Roadmap.CLI`, that executes the projection-based engineering roadmap state machine as a file-backed workflow.
 
+## Progress
+
+Updated 2026-07-05:
+
+- [x] Task 1: Project scaffold, solution entries, CLI argument parsing, and test project.
+- [x] Task 2: Roadmap artifact path catalog and repository IO helpers.
+- [x] Task 3: Fixed eight-file North-Star context loader and validation.
+- [x] Task 4: Projection registry, manifest store, validator, prompt contracts, and contract snapshot emission.
+- [x] Task 5: Projection cache and read-only prompt runner.
+- [x] Task 6: Runtime prompt context builder with raw North-Star boundary checks.
+- [x] Task 7: Markdown field-table parsers for selection, audit, and completion outputs.
+- [x] Task 8: Bundle extraction, bundle manifest writing, and split-family tracking.
+- [x] Task 9: Roadmap state document, decision ledger, transition journal, and artifact lifecycle stores.
+- [x] Task 10: Global invariant validator with orchestration evidence on failure.
+- [x] Task 11: Core state-machine flow through active epic preparation.
+- [x] Task 12: Milestone deep-dive bundle extraction and lifecycle integration.
+- [x] Task 13: Deterministic operational context and execution prompt generation.
+- [x] Task 14: Execution compatibility materialization and roadmap execution bridge abstraction.
+- [x] Task 15: Completion certification and roadmap-completion-context update routing.
+- [x] Task 16: CLI entrypoint, DI composition, cancellation, and exit-code mapping.
+- [x] Task 17: Verification completed with `dotnet build CommandCenter.slnx` and `dotnet test tests\CommandCenter.Roadmap.CLI.Tests\CommandCenter.Roadmap.CLI.Tests.csproj`.
+
 The CLI must:
 
 - Validate the fixed Core North-Star source files before doing any other work.

@@ -1,0 +1,70 @@
+namespace CommandCenter.Roadmap.Cli;
+
+internal sealed class OperationalContextGenerator(RoadmapArtifacts artifacts, ArtifactLifecycleStore lifecycleStore)
+{
+    public async Task<string> GenerateAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
+        IReadOnlyList<string> specs = await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md");
+        if (specs.Count == 0)
+        {
+            throw new RoadmapStepException("Cannot generate operational context without milestone specs.");
+        }
+
+        string ledger = await artifacts.ReadAsync(RoadmapArtifactPaths.DecisionLedger) ?? "No roadmap decisions recorded.";
+        IReadOnlyList<ArtifactLifecycleEntry> lifecycle = await lifecycleStore.LoadAsync();
+
+        var lines = new List<string>
+        {
+            "# Roadmap Operational Context",
+            string.Empty,
+            "## Active Epic",
+            string.Empty,
+            activeEpic,
+            string.Empty,
+            "## Ordered Milestone Specs",
+            string.Empty,
+        };
+
+        foreach (string spec in specs.Order(StringComparer.Ordinal))
+        {
+            lines.Add($"### {spec}");
+            lines.Add(string.Empty);
+            lines.Add(await artifacts.ReadRequiredAsync(spec));
+            lines.Add(string.Empty);
+        }
+
+        lines.AddRange(
+        [
+            "## Relevant Roadmap Decisions",
+            string.Empty,
+            ledger,
+            string.Empty,
+            "## Artifact Lifecycle",
+            string.Empty,
+            "| Path | State |",
+            "|---|---|",
+        ]);
+
+        foreach (ArtifactLifecycleEntry entry in lifecycle)
+        {
+            lines.Add($"| {entry.Path} | {entry.State} |");
+        }
+
+        string content = EnsureNoRawNorthStar(string.Join(Environment.NewLine, lines) + Environment.NewLine);
+        await artifacts.WriteAsync(RoadmapArtifactPaths.OperationalContext, content);
+        await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.OperationalContext, ArtifactLifecycleState.Ready);
+        return content;
+    }
+
+    private static string EnsureNoRawNorthStar(string content)
+    {
+        if (content.Contains("<!-- BEGIN NORTH-STAR FILE:", StringComparison.Ordinal))
+        {
+            throw new RoadmapStepException("Operational context contains raw Core North-Star markers.");
+        }
+
+        return content;
+    }
+}

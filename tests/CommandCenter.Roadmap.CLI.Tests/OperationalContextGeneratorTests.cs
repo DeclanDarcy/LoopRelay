@@ -1,0 +1,30 @@
+using CommandCenter.Roadmap.Cli;
+
+namespace CommandCenter.Roadmap.CLI.Tests;
+
+public sealed class OperationalContextGeneratorTests
+{
+    [Fact]
+    public async Task Operational_context_references_active_epic_and_ordered_specs()
+    {
+        using var repo = new TempRepo();
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "active epic");
+        repo.Write(".agents/specs/b.md", "spec b");
+        repo.Write(".agents/specs/a.md", "spec a");
+
+        string content = await new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts)).GenerateAsync();
+
+        Assert.Contains("active epic", content, StringComparison.Ordinal);
+        Assert.True(content.IndexOf(".agents/specs/a.md", StringComparison.Ordinal) < content.IndexOf(".agents/specs/b.md", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Operational_context_rejects_raw_core_markers()
+    {
+        using var repo = new TempRepo();
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "<!-- BEGIN NORTH-STAR FILE: 01-purpose.md -->");
+        repo.Write(".agents/specs/a.md", "spec");
+
+        await Assert.ThrowsAsync<RoadmapStepException>(() => new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts)).GenerateAsync());
+    }
+}
