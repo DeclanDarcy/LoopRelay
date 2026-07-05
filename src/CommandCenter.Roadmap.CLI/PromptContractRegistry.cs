@@ -37,6 +37,8 @@ internal sealed class PromptContractRegistry
             ? contract
             : throw new ArgumentOutOfRangeException(nameof(runtimePromptName), runtimePromptName, "No prompt contract registered.");
 
+    public bool Contains(string runtimePromptName) => contracts.ContainsKey(runtimePromptName);
+
     public async Task EmitSnapshotAsync(RoadmapArtifacts artifacts)
     {
         var lines = new List<string>

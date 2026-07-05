@@ -45,6 +45,7 @@ var stateStore = new RoadmapStateStore(artifacts);
 var decisionLedger = new DecisionLedgerStore(artifacts);
 var journal = new TransitionJournalStore(artifacts);
 var lifecycle = new ArtifactLifecycleStore(artifacts);
+var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle);
 var promotion = new ArtifactPromotionService(artifacts, lifecycle);
 var bundleExtractor = new BundleFileExtractor();
 var bundleManifest = new BundleManifestWriter(artifacts);
@@ -65,6 +66,7 @@ var machine = new RoadmapStateMachine(
     completionRouter,
     promptRunner,
     stateStore,
+    resumePlanner,
     decisionLedger,
     journal,
     lifecycle,

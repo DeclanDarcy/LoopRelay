@@ -14,11 +14,11 @@ public sealed class RoadmapStateStoreTests
             RoadmapState.ActiveEpicReady,
             [new ArtifactStateRow("Epic", RoadmapArtifactPaths.ActiveEpic, "Ready")],
             new RoadmapTransitionSummary(RoadmapState.CreateNewEpic, RoadmapState.ActiveEpicReady, "CreateNewEpic", "projection", RoadmapArtifactPaths.ActiveEpic, "Created", TransitionStatus.Completed, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
-            [],
+            [new BlockerRow("Historical blocker", "Keep for recovery")],
             "D0001",
             1,
-            0,
-            new ProjectionManifestCounts(1, 0, 0),
+            2,
+            new ProjectionManifestCounts(1, 2, 3),
             new RoadmapTransitionIntent("CreateEpic", RoadmapState.ActiveEpicReady, [RoadmapArtifactPaths.ActiveEpic]),
             ["GenerateMilestoneDeepDives"],
             [new RetiredEpic("EPIC-001", "Retired Epic", "Already satisfied.", ".agents/evidence/audits/epic-preparation-audit.0001.md", DateTimeOffset.UtcNow)]));
@@ -29,8 +29,18 @@ public sealed class RoadmapStateStoreTests
         Assert.Contains("## Transition Intent", content, StringComparison.Ordinal);
         RoadmapStateDocument? loaded = await store.LoadAsync();
         Assert.Equal(RoadmapState.ActiveEpicReady, loaded?.CurrentState);
+        Assert.Equal(RoadmapState.CreateNewEpic, loaded?.LastTransition.From);
+        Assert.Equal(RoadmapState.ActiveEpicReady, loaded?.LastTransition.To);
+        Assert.Equal(TransitionStatus.Completed, loaded?.LastTransition.Status);
+        Assert.Equal("D0001", loaded?.LastDecisionId);
+        Assert.Equal(2, loaded?.SplitFamiliesCount);
+        Assert.Equal(new ProjectionManifestCounts(1, 2, 3), loaded?.ProjectionManifestCounts);
+        Assert.Contains(loaded!.ActiveArtifacts, row => row.Path == RoadmapArtifactPaths.ActiveEpic && row.Status == "Ready");
+        BlockerRow blocker = Assert.Single(loaded.Blockers);
+        Assert.Equal("Historical blocker", blocker.Blocker);
         Assert.Equal("CreateEpic", loaded?.TransitionIntent.Intent);
         Assert.Contains(RoadmapArtifactPaths.ActiveEpic, loaded!.TransitionIntent.EvidencePaths);
+        Assert.Contains("GenerateMilestoneDeepDives", loaded.NextValidTransitions);
         RetiredEpic retired = Assert.Single(loaded!.RetiredEpics);
         Assert.Equal("EPIC-001", retired.EpicId);
         Assert.Equal("Retired Epic", retired.EpicName);

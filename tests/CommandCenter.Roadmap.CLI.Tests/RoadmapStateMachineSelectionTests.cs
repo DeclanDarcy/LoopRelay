@@ -64,6 +64,7 @@ internal static class StateMachineFactory
         var contracts = new PromptContractRegistry(projections);
         var manifest = new ProjectionManifestStore(repo.Artifacts);
         var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
+        var stateStore = new RoadmapStateStore(repo.Artifacts);
         var split = new SplitFamilyStore(repo.Artifacts);
         var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new RoadmapPromptRunner(runtime, repo.Repository, new TestConsole());
@@ -78,7 +79,8 @@ internal static class StateMachineFactory
             new RoadmapPromptContextBuilder(repo.Artifacts),
             new CompletionCertificationRouter(),
             runner,
-            new RoadmapStateStore(repo.Artifacts),
+            stateStore,
+            new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle),
             new DecisionLedgerStore(repo.Artifacts),
             new TransitionJournalStore(repo.Artifacts),
             lifecycle,

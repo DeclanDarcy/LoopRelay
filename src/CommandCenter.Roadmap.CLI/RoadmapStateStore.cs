@@ -134,24 +134,43 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             state = parsed;
         }
 
+        IReadOnlyList<ArtifactStateRow> activeArtifacts = ParseActiveArtifacts(content);
         IReadOnlyList<RetiredEpic> retired = ParseRetiredEpics(content);
         RoadmapTransitionSummary transition = ParseLastTransition(content, state);
         RoadmapTransitionIntent transitionIntent = ParseTransitionIntent(content, state);
         IReadOnlyList<BlockerRow> blockers = ParseBlockers(content);
         IReadOnlyList<string> nextTransitions = ParseNextValidTransitions(content);
+        DecisionLedgerSummary ledgerSummary = ParseDecisionLedgerSummary(content, retired.Count);
+        ProjectionManifestCounts projectionCounts = ParseProjectionManifestCounts(content);
 
         return new RoadmapStateDocument(
             state,
-            [],
+            activeArtifacts,
             transition,
             blockers,
-            "None",
-            retired.Count,
-            0,
-            new ProjectionManifestCounts(0, 0, 0),
+            ledgerSummary.LastDecisionId,
+            ledgerSummary.RetiredEpicsCount,
+            ledgerSummary.SplitFamiliesCount,
+            projectionCounts,
             transitionIntent,
             nextTransitions,
             retired);
+    }
+
+    private static IReadOnlyList<ArtifactStateRow> ParseActiveArtifacts(string content)
+    {
+        try
+        {
+            return MarkdownTableParser.ParseTables(MarkdownTableParser.ExtractSection(content, "## Active Artifacts"))
+                .Where(row => row.ContainsKey("Artifact") && row.ContainsKey("Path") && row.ContainsKey("Status"))
+                .Select(row => new ArtifactStateRow(row["Artifact"], row["Path"], row["Status"]))
+                .Where(row => !string.IsNullOrWhiteSpace(row.Path))
+                .ToArray();
+        }
+        catch (MarkdownParseException)
+        {
+            return [];
+        }
     }
 
     private static RoadmapTransitionSummary ParseLastTransition(string content, RoadmapState fallbackState)
@@ -241,6 +260,38 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             .ToArray();
     }
 
+    private static DecisionLedgerSummary ParseDecisionLedgerSummary(string content, int retiredCount)
+    {
+        try
+        {
+            IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(content, "## Decision Ledger Summary");
+            return new DecisionLedgerSummary(
+                Field(fields, "Last Decision ID", "None"),
+                ParseInt(Field(fields, "Retired Epics", retiredCount.ToString(CultureInfo.InvariantCulture)), retiredCount),
+                ParseInt(Field(fields, "Split Families", "0"), 0));
+        }
+        catch (MarkdownParseException)
+        {
+            return new DecisionLedgerSummary("None", retiredCount, 0);
+        }
+    }
+
+    private static ProjectionManifestCounts ParseProjectionManifestCounts(string content)
+    {
+        try
+        {
+            IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(content, "## Projection Manifest Summary");
+            return new ProjectionManifestCounts(
+                ParseInt(Field(fields, "Valid Projections", "0"), 0),
+                ParseInt(Field(fields, "Stale Projections", "0"), 0),
+                ParseInt(Field(fields, "Invalid Projections", "0"), 0));
+        }
+        catch (MarkdownParseException)
+        {
+            return new ProjectionManifestCounts(0, 0, 0);
+        }
+    }
+
     private static IReadOnlyList<RetiredEpic> ParseRetiredEpics(string content)
     {
         int start = content.IndexOf("### Retired Epics", StringComparison.Ordinal);
@@ -313,6 +364,11 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
     private static RoadmapState ParseState(string value, RoadmapState fallback) =>
         Enum.TryParse(value, out RoadmapState state) ? state : fallback;
 
+    private static int ParseInt(string value, int fallback) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
+            ? parsed
+            : fallback;
+
     private static DateTimeOffset? ParseTimestamp(string value) =>
         DateTimeOffset.TryParse(
             value,
@@ -328,4 +384,9 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
 
     [GeneratedRegex(@"## Current State\s+(?<state>[A-Za-z0-9]+)", RegexOptions.CultureInvariant)]
     private static partial Regex CurrentStateRegex();
+
+    private sealed record DecisionLedgerSummary(
+        string LastDecisionId,
+        int RetiredEpicsCount,
+        int SplitFamiliesCount);
 }

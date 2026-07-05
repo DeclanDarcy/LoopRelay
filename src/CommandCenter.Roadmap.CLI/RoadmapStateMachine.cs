@@ -12,6 +12,7 @@ internal sealed class RoadmapStateMachine(
     CompletionCertificationRouter completionRouter,
     RoadmapPromptRunner promptRunner,
     RoadmapStateStore stateStore,
+    RoadmapResumePlanner resumePlanner,
     DecisionLedgerStore decisionLedger,
     TransitionJournalStore journalStore,
     ArtifactLifecycleStore lifecycleStore,
@@ -28,13 +29,13 @@ internal sealed class RoadmapStateMachine(
 {
     public async Task<RoadmapOutcome> RunAsync(CancellationToken cancellationToken)
     {
+        RoadmapStateDocument? persistedState = await stateStore.LoadAsync();
         ProjectContext projectContext;
         try
         {
             console.Phase("Project Context preflight");
             projectContext = await projectContextLoader.LoadAsync(cancellationToken);
             await contractRegistry.EmitSnapshotAsync(artifacts);
-            await SaveStateAsync(RoadmapState.CoreReady, TransitionStatus.Completed, RoadmapState.CoreReady, RoadmapState.CoreReady, "Preflight", "None", "None", "CoreReady", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, []);
         }
         catch (RoadmapStepException exception)
         {
@@ -45,58 +46,13 @@ internal sealed class RoadmapStateMachine(
 
         try
         {
-            if (!await artifacts.ExistsAsync(RoadmapArtifactPaths.RoadmapCompletionContext))
-            {
-                await BootstrapRoadmapCompletionContextAsync(projectContext, cancellationToken);
-            }
-
-            SelectionDecision selection = await SelectNextInitiativeAsync(projectContext, cancellationToken);
-            switch (selection.RecommendedOutcome)
-            {
-                case "Select Existing Epic":
-                    EpicPreparationResult preparation = await AuditAndPrepareExistingEpicAsync(selection, projectContext, cancellationToken);
-                    if (preparation == EpicPreparationResult.Retired)
-                    {
-                        return RoadmapOutcome.Paused;
-                    }
-
-                    if (preparation == EpicPreparationResult.Blocked)
-                    {
-                        return RoadmapOutcome.Paused;
-                    }
-
-                    break;
-                case "Select New Intermediary Epic":
-                    ArtifactPromotionResult createPromotion = await CreateNewEpicAsync(projectContext, cancellationToken);
-                    if (!createPromotion.Promoted)
-                    {
-                        return RoadmapOutcome.Paused;
-                    }
-
-                    break;
-                case "Select Split Epic":
-                    await SplitEpicAsync(projectContext, cancellationToken);
-                    break;
-                case "Strategic Investigation Required":
-                    await AppendDecisionAsync(RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
-                    await SaveStateAsync(RoadmapState.StrategicInvestigationRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, []);
-                    return RoadmapOutcome.Paused;
-                case "Roadmap Revision Required":
-                    await AppendDecisionAsync(RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
-                    await SaveStateAsync(RoadmapState.RoadmapRevisionRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, []);
-                    return RoadmapOutcome.Paused;
-                default:
-                    await AppendDecisionAsync(RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
-                    await SaveStateAsync(RoadmapState.NoSuitableInitiative, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, []);
-                    return RoadmapOutcome.Paused;
-            }
-
-            await GenerateMilestonesAndExecutionContextAsync(projectContext, cancellationToken);
-            return await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
+            RoadmapResumePlan resumePlan = await resumePlanner.PlanAsync(persistedState, projectContext, cancellationToken);
+            console.Info($"Resume plan: {resumePlan.Action} from {resumePlan.SourceState}. {resumePlan.Reason}");
+            return await ExecuteResumePlanAsync(resumePlan, projectContext, cancellationToken);
         }
         catch (OperationCanceledException)
         {
-            await SaveStateAsync(RoadmapState.Cancelled, TransitionStatus.Cancelled, RoadmapState.CoreReady, RoadmapState.Cancelled, "Cancellation", "None", "None", "Cancelled", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, [new BlockerRow("Cancelled", "Rerun the roadmap CLI when ready.")]);
+            await WriteCancelledStateAsync();
             return RoadmapOutcome.Cancelled;
         }
         catch (RoadmapStepException exception)
@@ -105,6 +61,144 @@ internal sealed class RoadmapStateMachine(
             console.Error(exception.Message);
             return RoadmapOutcome.Failed;
         }
+    }
+
+    private async Task<RoadmapOutcome> ExecuteResumePlanAsync(
+        RoadmapResumePlan resumePlan,
+        ProjectContext projectContext,
+        CancellationToken cancellationToken)
+    {
+        switch (resumePlan.Action)
+        {
+            case RoadmapResumeAction.ContinueFromCoreReady:
+                if (resumePlan.ShouldPersistCoreReady)
+                {
+                    DateTimeOffset completed = DateTimeOffset.UtcNow;
+                    await SaveStateAsync(
+                        RoadmapState.CoreReady,
+                        TransitionStatus.Completed,
+                        RoadmapState.CoreReady,
+                        RoadmapState.CoreReady,
+                        "Preflight",
+                        "None",
+                        "None",
+                        "CoreReady",
+                        completed,
+                        completed,
+                        null,
+                        null);
+                }
+
+                return await RunFromCoreReadyAsync(projectContext, cancellationToken);
+
+            case RoadmapResumeAction.SelectNextStrategicInitiative:
+                return await RunSelectionAndFollowingAsync(projectContext, cancellationToken);
+
+            case RoadmapResumeAction.ContinueSelectionDecision:
+            {
+                string selectionOutput = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
+                SelectionDecision selection = new SelectionParser().Parse(selectionOutput);
+                return await ContinueAfterSelectionAsync(selection, projectContext, cancellationToken);
+            }
+
+            case RoadmapResumeAction.PrepareExecutionFromActiveEpic:
+                await GenerateMilestoneSpecsAsync(projectContext, cancellationToken);
+                await EnsureExecutionReadinessAsync(RoadmapState.MilestoneSpecsReady, cancellationToken);
+                return await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
+
+            case RoadmapResumeAction.PrepareExecutionFromMilestoneSpecs:
+                await EnsureExecutionReadinessAsync(RoadmapState.MilestoneSpecsReady, cancellationToken);
+                return await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
+
+            case RoadmapResumeAction.PrepareExecutionFromOperationalContext:
+                await EnsureExecutionReadinessAsync(RoadmapState.OperationalContextReady, cancellationToken);
+                return await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
+
+            case RoadmapResumeAction.RunExecution:
+                await executionMaterializer.MaterializeAsync(cancellationToken);
+                return await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
+
+            case RoadmapResumeAction.Terminal:
+                return resumePlan.TerminalOutcome ?? RoadmapOutcome.Paused;
+
+            case RoadmapResumeAction.Block:
+                console.Warn(resumePlan.Reason);
+                await WriteBlockedStateAsync(RoadmapState.EvidenceBlocked, "ResumePlanning", resumePlan.Reason);
+                return RoadmapOutcome.Paused;
+
+            default:
+                throw new RoadmapStepException($"Unsupported resume action: {resumePlan.Action}.");
+        }
+    }
+
+    private async Task<RoadmapOutcome> RunFromCoreReadyAsync(
+        ProjectContext projectContext,
+        CancellationToken cancellationToken)
+    {
+        if (await artifacts.GetStatusAsync(RoadmapArtifactPaths.RoadmapCompletionContext) != ArtifactStatus.Present)
+        {
+            await BootstrapRoadmapCompletionContextAsync(projectContext, cancellationToken);
+        }
+
+        return await RunSelectionAndFollowingAsync(projectContext, cancellationToken);
+    }
+
+    private async Task<RoadmapOutcome> RunSelectionAndFollowingAsync(
+        ProjectContext projectContext,
+        CancellationToken cancellationToken)
+    {
+        SelectionDecision selection = await SelectNextInitiativeAsync(projectContext, cancellationToken);
+        return await ContinueAfterSelectionAsync(selection, projectContext, cancellationToken);
+    }
+
+    private async Task<RoadmapOutcome> ContinueAfterSelectionAsync(
+        SelectionDecision selection,
+        ProjectContext projectContext,
+        CancellationToken cancellationToken)
+    {
+        switch (selection.RecommendedOutcome)
+        {
+            case "Select Existing Epic":
+                EpicPreparationResult preparation = await AuditAndPrepareExistingEpicAsync(selection, projectContext, cancellationToken);
+                if (preparation == EpicPreparationResult.Retired)
+                {
+                    return RoadmapOutcome.Paused;
+                }
+
+                if (preparation == EpicPreparationResult.Blocked)
+                {
+                    return RoadmapOutcome.Paused;
+                }
+
+                break;
+            case "Select New Intermediary Epic":
+                ArtifactPromotionResult createPromotion = await CreateNewEpicAsync(projectContext, cancellationToken);
+                if (!createPromotion.Promoted)
+                {
+                    return RoadmapOutcome.Paused;
+                }
+
+                break;
+            case "Select Split Epic":
+                await SplitEpicAsync(projectContext, cancellationToken);
+                break;
+            case "Strategic Investigation Required":
+                await AppendDecisionAsync(RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
+                await SaveStateAsync(RoadmapState.StrategicInvestigationRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
+                return RoadmapOutcome.Paused;
+            case "Roadmap Revision Required":
+                await AppendDecisionAsync(RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
+                await SaveStateAsync(RoadmapState.RoadmapRevisionRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
+                return RoadmapOutcome.Paused;
+            default:
+                await AppendDecisionAsync(RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
+                await SaveStateAsync(RoadmapState.NoSuitableInitiative, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
+                return RoadmapOutcome.Paused;
+        }
+
+        await GenerateMilestoneSpecsAsync(projectContext, cancellationToken);
+        await EnsureExecutionReadinessAsync(RoadmapState.MilestoneSpecsReady, cancellationToken);
+        return await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
     }
 
     private async Task BootstrapRoadmapCompletionContextAsync(ProjectContext projectContext, CancellationToken cancellationToken)
@@ -181,7 +275,7 @@ internal sealed class RoadmapStateMachine(
             RetiredEpic retired = RetiredEpic.FromSelectionAndAudit(selectionDecision, decision, auditPath, retiredAt);
             IReadOnlyList<RetiredEpic> retiredEpics = RetiredEpic.Upsert(existing?.RetiredEpics ?? [], retired);
             await AppendDecisionAsync(RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", decision.Confidence, $"{retired.IdentityKind} {retired.StableIdentity}: {decision.PrimaryReason}");
-            await SaveStateAsync(RoadmapState.RetireEpic, TransitionStatus.Completed, RoadmapState.EpicPreparationAudit, RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", retiredAt, retiredAt, retiredEpics, []);
+            await SaveStateAsync(RoadmapState.RetireEpic, TransitionStatus.Completed, RoadmapState.EpicPreparationAudit, RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", retiredAt, retiredAt, retiredEpics, null);
             return EpicPreparationResult.Retired;
         }
 
@@ -248,9 +342,23 @@ internal sealed class RoadmapStateMachine(
 
         await artifacts.WriteAsync(RoadmapArtifactPaths.ActiveEpic, await artifacts.ReadRequiredAsync(selectedChild));
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready, selectedChild);
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        await SaveStateAsync(
+            RoadmapState.ActiveEpicReady,
+            TransitionStatus.Completed,
+            RoadmapState.SplitChildSelection,
+            RoadmapState.ActiveEpicReady,
+            runtimePrompt,
+            projection.Definition.ProjectionPath,
+            RoadmapArtifactPaths.ActiveEpic,
+            "Split Child Promoted",
+            completed,
+            completed,
+            null,
+            null);
     }
 
-    private async Task GenerateMilestonesAndExecutionContextAsync(ProjectContext projectContext, CancellationToken cancellationToken)
+    private async Task GenerateMilestoneSpecsAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "GenerateMilestoneDeepDivesForEpic";
         console.Phase("Generate milestone deep dives");
@@ -276,11 +384,120 @@ internal sealed class RoadmapStateMachine(
         {
             throw new RoadmapStepException(invariant.Error ?? "Invariant validation failed after milestone generation.");
         }
+    }
 
-        console.Phase("Generate operational context");
-        await operationalContextGenerator.GenerateAsync(cancellationToken);
-        console.Phase("Generate execution prompt");
-        await executionPromptGenerator.GenerateAsync(cancellationToken);
+    private async Task EnsureExecutionReadinessAsync(
+        RoadmapState sourceState,
+        CancellationToken cancellationToken)
+    {
+        if (await artifacts.GetStatusAsync(RoadmapArtifactPaths.OperationalContext) != ArtifactStatus.Present)
+        {
+            DateTimeOffset started = DateTimeOffset.UtcNow;
+            await SaveStateAsync(
+                RoadmapState.GenerateOperationalContext,
+                TransitionStatus.Started,
+                sourceState,
+                RoadmapState.GenerateOperationalContext,
+                "GenerateOperationalContext",
+                "None",
+                RoadmapArtifactPaths.OperationalContext,
+                "Started",
+                started,
+                null,
+                null,
+                null);
+
+            console.Phase("Generate operational context");
+            await operationalContextGenerator.GenerateAsync(cancellationToken);
+            DateTimeOffset completed = DateTimeOffset.UtcNow;
+            await SaveStateAsync(
+                RoadmapState.OperationalContextReady,
+                TransitionStatus.Completed,
+                RoadmapState.GenerateOperationalContext,
+                RoadmapState.OperationalContextReady,
+                "GenerateOperationalContext",
+                "None",
+                RoadmapArtifactPaths.OperationalContext,
+                "Completed",
+                started,
+                completed,
+                null,
+                null);
+        }
+        else if (sourceState is RoadmapState.MilestoneSpecsReady or RoadmapState.GenerateOperationalContext)
+        {
+            DateTimeOffset completed = DateTimeOffset.UtcNow;
+            await SaveStateAsync(
+                RoadmapState.OperationalContextReady,
+                TransitionStatus.Completed,
+                sourceState,
+                RoadmapState.OperationalContextReady,
+                "GenerateOperationalContext",
+                "None",
+                RoadmapArtifactPaths.OperationalContext,
+                "Artifact Ready",
+                completed,
+                completed,
+                null,
+                null);
+        }
+
+        if (await artifacts.GetStatusAsync(RoadmapArtifactPaths.ExecutionPrompt) != ArtifactStatus.Present)
+        {
+            DateTimeOffset started = DateTimeOffset.UtcNow;
+            await SaveStateAsync(
+                RoadmapState.GenerateExecutionPrompt,
+                TransitionStatus.Started,
+                RoadmapState.OperationalContextReady,
+                RoadmapState.GenerateExecutionPrompt,
+                "GenerateExecutionPrompt",
+                "None",
+                RoadmapArtifactPaths.ExecutionPrompt,
+                "Started",
+                started,
+                null,
+                null,
+                null);
+
+            console.Phase("Generate execution prompt");
+            await executionPromptGenerator.GenerateAsync(cancellationToken);
+            DateTimeOffset completed = DateTimeOffset.UtcNow;
+            await SaveStateAsync(
+                RoadmapState.ExecutionPromptReady,
+                TransitionStatus.Completed,
+                RoadmapState.GenerateExecutionPrompt,
+                RoadmapState.ExecutionPromptReady,
+                "GenerateExecutionPrompt",
+                "None",
+                RoadmapArtifactPaths.ExecutionPrompt,
+                "Completed",
+                started,
+                completed,
+                null,
+                null,
+                new RoadmapTransitionIntent("ContinueExecution", RoadmapState.ExecutionPromptReady, [RoadmapArtifactPaths.ExecutionPrompt]),
+                ["ExecutionLoop", "ContinueExecution"]);
+        }
+        else if (sourceState is not (RoadmapState.ExecutionPromptReady or RoadmapState.ExecutionLoop))
+        {
+            DateTimeOffset completed = DateTimeOffset.UtcNow;
+            await SaveStateAsync(
+                RoadmapState.ExecutionPromptReady,
+                TransitionStatus.Completed,
+                RoadmapState.OperationalContextReady,
+                RoadmapState.ExecutionPromptReady,
+                "GenerateExecutionPrompt",
+                "None",
+                RoadmapArtifactPaths.ExecutionPrompt,
+                "Artifact Ready",
+                completed,
+                completed,
+                null,
+                null,
+                new RoadmapTransitionIntent("ContinueExecution", RoadmapState.ExecutionPromptReady, [RoadmapArtifactPaths.ExecutionPrompt]),
+                ["ExecutionLoop", "ContinueExecution"]);
+        }
+
         await executionMaterializer.MaterializeAsync(cancellationToken);
     }
 
@@ -292,12 +509,46 @@ internal sealed class RoadmapStateMachine(
             throw new RoadmapStepException(invariant.Error ?? "Invariant validation failed before execution.");
         }
 
+        DateTimeOffset executionStarted = DateTimeOffset.UtcNow;
+        await SaveStateAsync(
+            RoadmapState.ExecutionLoop,
+            TransitionStatus.Started,
+            RoadmapState.ExecutionPromptReady,
+            RoadmapState.ExecutionLoop,
+            "ExecutionLoop",
+            "None",
+            RoadmapArtifactPaths.ExecutionPrompt,
+            "Execution Started",
+            executionStarted,
+            null,
+            null,
+            null,
+            new RoadmapTransitionIntent("ContinueExecution", RoadmapState.ExecutionLoop, [RoadmapArtifactPaths.ExecutionPrompt]),
+            ["ContinueExecution"]);
+
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Executing);
         RoadmapExecutionBridgeResult bridge = await executionBridge.RunAsync(cancellationToken);
         if (!bridge.EpicCompleted)
         {
             throw new RoadmapStepException(bridge.Message);
         }
+
+        DateTimeOffset executionCompleted = DateTimeOffset.UtcNow;
+        await SaveStateAsync(
+            RoadmapState.EpicCompletionDetected,
+            TransitionStatus.Completed,
+            RoadmapState.ExecutionLoop,
+            RoadmapState.EpicCompletionDetected,
+            "ExecutionLoop",
+            "None",
+            RoadmapArtifactPaths.ActiveEpic,
+            "Epic Completed",
+            executionStarted,
+            executionCompleted,
+            null,
+            null,
+            new RoadmapTransitionIntent("EvaluateEpicCompletionAndDrift", RoadmapState.EpicCompletionDetected, [RoadmapArtifactPaths.ActiveEpic]),
+            ["EvaluateEpicCompletionAndDrift"]);
 
         const string runtimePrompt = "EvaluateEpicCompletionAndDrift";
         console.Phase("Evaluate epic completion and drift");
@@ -354,7 +605,7 @@ internal sealed class RoadmapStateMachine(
         DateTimeOffset started = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
         string outputList = string.Join(", ", outputs);
-        await SaveStateAsync(from, TransitionStatus.Started, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Started", started, null, null, []);
+        await SaveStateAsync(from, TransitionStatus.Started, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Started", started, null, null, null);
         await journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, promotionTarget, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, 0, "Started", "None", null));
 
         try
@@ -363,7 +614,7 @@ internal sealed class RoadmapStateMachine(
             stopwatch.Stop();
             DateTimeOffset completed = DateTimeOffset.UtcNow;
             await journalStore.AppendAsync(new TransitionJournalRecord("PromptCompleted", correlationId, completed, from, promotionTarget, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "PromptCompleted", "Output produced", null));
-            await SaveStateAsync(from, TransitionStatus.PromptCompleted, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Completed", started, completed, null, []);
+            await SaveStateAsync(from, TransitionStatus.PromptCompleted, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Completed", started, completed, null, null);
             return new PromptTransitionCompletion(correlationId, started, completed, stopwatch.ElapsedMilliseconds, output);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -371,7 +622,21 @@ internal sealed class RoadmapStateMachine(
             stopwatch.Stop();
             DateTimeOffset failed = DateTimeOffset.UtcNow;
             await journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, promotionTarget, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message));
-            await SaveStateAsync(RoadmapState.EvidenceBlocked, TransitionStatus.Failed, from, RoadmapState.EvidenceBlocked, prompt, projectionPath, outputList, "Runtime Failure", started, failed, null, [new BlockerRow(exception.Message, "Review the transition failure and rerun.")]);
+            await SaveStateAsync(
+                RoadmapState.EvidenceBlocked,
+                TransitionStatus.Failed,
+                from,
+                RoadmapState.EvidenceBlocked,
+                prompt,
+                projectionPath,
+                outputList,
+                "Runtime Failure",
+                started,
+                failed,
+                null,
+                [new BlockerRow(exception.Message, "Review the transition failure and rerun.")],
+                new RoadmapTransitionIntent("ResolveTransitionFailure", RoadmapState.EvidenceBlocked, outputs),
+                ["Resolve blocker and rerun"]);
             throw;
         }
     }
@@ -411,7 +676,7 @@ internal sealed class RoadmapStateMachine(
                 "Promoted",
                 "Active epic promoted",
                 null));
-            await SaveStateAsync(RoadmapState.ActiveEpicReady, TransitionStatus.Completed, from, RoadmapState.ActiveEpicReady, prompt, projectionPath, RoadmapArtifactPaths.ActiveEpic, "Artifact Promoted", completion.Started, completed, null, []);
+            await SaveStateAsync(RoadmapState.ActiveEpicReady, TransitionStatus.Completed, from, RoadmapState.ActiveEpicReady, prompt, projectionPath, RoadmapArtifactPaths.ActiveEpic, "Artifact Promoted", completion.Started, completed, null, null);
             return result;
         }
 
@@ -470,7 +735,7 @@ internal sealed class RoadmapStateMachine(
         string correlationId = Guid.NewGuid().ToString("N");
         DateTimeOffset started = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
-        await SaveStateAsync(to, TransitionStatus.Started, from, to, prompt, projectionPath, string.Join(", ", outputs), "Pending", started, null, null, []);
+        await SaveStateAsync(to, TransitionStatus.Started, from, to, prompt, projectionPath, string.Join(", ", outputs), "Pending", started, null, null, null);
         await journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, to, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, 0, "Started", "None", null));
 
         try
@@ -479,7 +744,7 @@ internal sealed class RoadmapStateMachine(
             stopwatch.Stop();
             DateTimeOffset completed = DateTimeOffset.UtcNow;
             await journalStore.AppendAsync(new TransitionJournalRecord("TransitionCompleted", correlationId, completed, from, to, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "Completed", "None", null));
-            await SaveStateAsync(to, TransitionStatus.Completed, from, to, prompt, projectionPath, string.Join(", ", outputs), "Completed", started, completed, null, []);
+            await SaveStateAsync(to, TransitionStatus.Completed, from, to, prompt, projectionPath, string.Join(", ", outputs), "Completed", started, completed, null, null);
             return output;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -487,7 +752,21 @@ internal sealed class RoadmapStateMachine(
             stopwatch.Stop();
             DateTimeOffset failed = DateTimeOffset.UtcNow;
             await journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, to, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message));
-            await SaveStateAsync(RoadmapState.EvidenceBlocked, TransitionStatus.Failed, from, to, prompt, projectionPath, string.Join(", ", outputs), "Failed", started, failed, null, [new BlockerRow(exception.Message, "Review the transition failure and rerun.")]);
+            await SaveStateAsync(
+                RoadmapState.EvidenceBlocked,
+                TransitionStatus.Failed,
+                from,
+                RoadmapState.EvidenceBlocked,
+                prompt,
+                projectionPath,
+                string.Join(", ", outputs),
+                "Failed",
+                started,
+                failed,
+                null,
+                [new BlockerRow(exception.Message, "Review the transition failure and rerun.")],
+                new RoadmapTransitionIntent("ResolveTransitionFailure", RoadmapState.EvidenceBlocked, outputs),
+                ["Resolve blocker and rerun"]);
             throw;
         }
     }
@@ -529,7 +808,7 @@ internal sealed class RoadmapStateMachine(
             completed,
             completed,
             null,
-            [],
+            null,
             route.ToRoadmapTransitionIntent(evaluationPath),
             route.NextTransitions);
     }
@@ -563,20 +842,22 @@ internal sealed class RoadmapStateMachine(
         DateTimeOffset started,
         DateTimeOffset? completed,
         IReadOnlyList<RetiredEpic>? retiredEpics,
-        IReadOnlyList<BlockerRow> blockers,
+        IReadOnlyList<BlockerRow>? blockers,
         RoadmapTransitionIntent? transitionIntent = null,
         IReadOnlyList<string>? nextTransitions = null)
     {
+        RoadmapStateDocument? existing = await stateStore.LoadAsync();
         ProjectionManifest manifest = await manifestStore.LoadAsync();
         IReadOnlyList<ArtifactStateRow> activeArtifacts = await ActiveArtifactRowsAsync();
         string lastDecision = await decisionLedger.LastDecisionIdAsync();
-        IReadOnlyList<RetiredEpic> effectiveRetiredEpics = retiredEpics ?? (await stateStore.LoadAsync())?.RetiredEpics ?? [];
+        IReadOnlyList<RetiredEpic> effectiveRetiredEpics = retiredEpics ?? existing?.RetiredEpics ?? [];
+        IReadOnlyList<BlockerRow> effectiveBlockers = blockers ?? existing?.Blockers ?? [];
         int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md")).Count;
         await stateStore.SaveAsync(new RoadmapStateDocument(
             current,
             activeArtifacts,
             new RoadmapTransitionSummary(from, to, prompt, projection, output, decision, status, started, completed),
-            blockers,
+            effectiveBlockers,
             lastDecision,
             effectiveRetiredEpics.Count,
             splitFamilyCount,
@@ -584,7 +865,7 @@ internal sealed class RoadmapStateMachine(
                 manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Valid),
                 manifest.Entries.Count(entry => entry.StaleStatus == ProjectionStaleStatus.Stale),
                 manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Invalid)),
-            transitionIntent ?? RoadmapTransitionIntent.Empty(current),
+            transitionIntent ?? existing?.TransitionIntent ?? RoadmapTransitionIntent.Empty(current),
             nextTransitions ?? NextTransitions(current),
             effectiveRetiredEpics));
     }
@@ -646,7 +927,70 @@ internal sealed class RoadmapStateMachine(
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "roadmap-transition-blocked",
             RoadmapBlockedArtifact.Render(state, transition, reason, "Address the blocker and rerun the roadmap CLI.", "None", reason, DateTimeOffset.UtcNow));
-        await SaveStateAsync(state, TransitionStatus.Failed, RoadmapState.CoreReady, state, transition, "None", path, "Blocked", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, [new BlockerRow(reason, "Address the blocker and rerun the roadmap CLI.")]);
+        await SaveStateAsync(
+            state,
+            TransitionStatus.Failed,
+            RoadmapState.CoreReady,
+            state,
+            transition,
+            "None",
+            path,
+            "Blocked",
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            null,
+            [new BlockerRow(reason, "Address the blocker and rerun the roadmap CLI.")],
+            new RoadmapTransitionIntent("ResolveBlocker", state, [path]),
+            ["Resolve blocker and rerun"]);
+    }
+
+    private async Task WriteCancelledStateAsync()
+    {
+        RoadmapStateDocument? existing = await stateStore.LoadAsync();
+        RoadmapTransitionSummary interrupted = existing?.LastTransition ?? new RoadmapTransitionSummary(
+            RoadmapState.CoreReady,
+            RoadmapState.Cancelled,
+            "Cancellation",
+            "None",
+            "None",
+            "Cancelled",
+            TransitionStatus.Cancelled,
+            DateTimeOffset.UtcNow,
+            null);
+
+        RoadmapState recoveryState = existing?.CurrentState is { } current && current != RoadmapState.Cancelled
+            ? current
+            : interrupted.From;
+        DateTimeOffset cancelledAt = DateTimeOffset.UtcNow;
+        await SaveStateAsync(
+            RoadmapState.Cancelled,
+            TransitionStatus.Cancelled,
+            interrupted.From,
+            RoadmapState.Cancelled,
+            interrupted.Prompt,
+            interrupted.Projection,
+            interrupted.Output,
+            "Cancelled",
+            interrupted.StartedAt == DateTimeOffset.MinValue ? cancelledAt : interrupted.StartedAt,
+            cancelledAt,
+            null,
+            [new BlockerRow("Cancelled", "Rerun the roadmap CLI when ready.")],
+            new RoadmapTransitionIntent("ResumeCancelledTransition", recoveryState, OutputEvidencePaths(interrupted.Output)),
+            ["Resume cancelled transition"]);
+    }
+
+    private static IReadOnlyList<string> OutputEvidencePaths(string output)
+    {
+        if (string.IsNullOrWhiteSpace(output) ||
+            string.Equals(output.Trim(), "None", StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        return output
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(path => !string.Equals(path, "None", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
     }
 
     private enum EpicPreparationResult
