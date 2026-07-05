@@ -85,6 +85,7 @@ internal static class StateMachineFactory
             new CompletionCertificationRouter(),
             runner,
             stateStore,
+            new RoadmapStartupPlanner(),
             new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections)),
             new DecisionLedgerStore(repo.Artifacts),
             new TransitionJournalStore(repo.Artifacts),

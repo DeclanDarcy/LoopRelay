@@ -25,36 +25,12 @@ internal sealed class RoadmapResumePlanner(
             return RoadmapResumePlan.InitializeCoreReady("No persisted roadmap state exists.");
         }
 
-        if (persistedState.CurrentState == RoadmapState.EvidenceBlocked)
+        if (RoadmapWorkflowStateClassifier.IsReportOnlyState(persistedState.CurrentState))
         {
             return RoadmapResumePlan.Terminal(
-                RoadmapOutcome.Paused,
+                RoadmapWorkflowStateClassifier.ReportOutcome(persistedState.CurrentState),
                 persistedState.CurrentState,
-                "Persisted roadmap state is blocked and requires intervention.");
-        }
-
-        if (IsTerminalPauseState(persistedState.CurrentState))
-        {
-            return RoadmapResumePlan.Terminal(
-                RoadmapOutcome.Paused,
-                persistedState.CurrentState,
-                $"Persisted roadmap state is paused at {persistedState.CurrentState}.");
-        }
-
-        if (persistedState.CurrentState == RoadmapState.Completed)
-        {
-            return RoadmapResumePlan.Terminal(
-                RoadmapOutcome.Completed,
-                persistedState.CurrentState,
-                "Persisted roadmap state is already completed.");
-        }
-
-        if (persistedState.CurrentState == RoadmapState.Failed)
-        {
-            return RoadmapResumePlan.Terminal(
-                RoadmapOutcome.Failed,
-                persistedState.CurrentState,
-                "Persisted roadmap state is failed and requires repair.");
+                RoadmapWorkflowStateClassifier.ReportReason(persistedState.CurrentState));
         }
 
         if (persistedState.CurrentState == RoadmapState.Cancelled)
@@ -428,13 +404,6 @@ internal sealed class RoadmapResumePlanner(
             ? RoadmapState.CoreReady
             : persistedState.LastTransition.From;
     }
-
-    private static bool IsTerminalPauseState(RoadmapState state) =>
-        state is RoadmapState.StrategicInvestigationRequired
-            or RoadmapState.RoadmapRevisionRequired
-            or RoadmapState.NoSuitableInitiative
-            or RoadmapState.EvidenceGathering
-            or RoadmapState.ExecutionBlocked;
 
     private static IReadOnlyList<string> ParseOutputPaths(string output)
     {

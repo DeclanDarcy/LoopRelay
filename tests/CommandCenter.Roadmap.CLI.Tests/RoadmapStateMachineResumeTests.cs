@@ -25,6 +25,111 @@ public sealed class RoadmapStateMachineResumeTests
     }
 
     [Fact]
+    public async Task Existing_blocked_state_survives_project_context_preflight_failure()
+    {
+        using var repo = new TempRepo();
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(
+            RoadmapState.EvidenceBlocked,
+            blockers: [new BlockerRow("Missing evidence", "Add the evidence")]));
+        var runtime = new ScriptedAgentRuntime();
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        Assert.Equal(0, runtime.OneShotCalls);
+        string state = repo.Read(RoadmapArtifactPaths.State);
+        Assert.Contains("EvidenceBlocked", state, StringComparison.Ordinal);
+        Assert.Contains("Missing evidence", state, StringComparison.Ordinal);
+        Assert.DoesNotContain("Project Context source contract violation", state, StringComparison.Ordinal);
+        Assert.DoesNotContain("| Prompt | Preflight |", state, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData((int)RoadmapState.StrategicInvestigationRequired, (int)RoadmapOutcome.Paused)]
+    [InlineData((int)RoadmapState.RoadmapRevisionRequired, (int)RoadmapOutcome.Paused)]
+    [InlineData((int)RoadmapState.NoSuitableInitiative, (int)RoadmapOutcome.Paused)]
+    [InlineData((int)RoadmapState.EvidenceGathering, (int)RoadmapOutcome.Paused)]
+    [InlineData((int)RoadmapState.ExecutionBlocked, (int)RoadmapOutcome.Paused)]
+    [InlineData((int)RoadmapState.Completed, (int)RoadmapOutcome.Completed)]
+    [InlineData((int)RoadmapState.Failed, (int)RoadmapOutcome.Failed)]
+    public async Task Report_only_state_skips_project_context_preflight_failure(
+        int persistedStateValue,
+        int expectedOutcomeValue)
+    {
+        RoadmapState persistedState = (RoadmapState)persistedStateValue;
+        RoadmapOutcome expectedOutcome = (RoadmapOutcome)expectedOutcomeValue;
+        using var repo = new TempRepo();
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(persistedState));
+        var runtime = new ScriptedAgentRuntime();
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(expectedOutcome, outcome);
+        Assert.Equal(0, runtime.OneShotCalls);
+        string state = repo.Read(RoadmapArtifactPaths.State);
+        Assert.Contains(persistedState.ToString(), state, StringComparison.Ordinal);
+        Assert.DoesNotContain("Project Context source contract violation", state, StringComparison.Ordinal);
+        Assert.DoesNotContain("| Prompt | Preflight |", state, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Fresh_repository_missing_project_context_writes_preflight_blocker()
+    {
+        using var repo = new TempRepo();
+        var runtime = new ScriptedAgentRuntime();
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.PreflightBlocked, outcome);
+        Assert.Equal(0, runtime.OneShotCalls);
+        RoadmapStateDocument? state = await new RoadmapStateStore(repo.Artifacts).LoadAsync();
+        Assert.NotNull(state);
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal("Preflight", state.LastTransition.Prompt);
+        Assert.Equal("ResolveBlocker", state.TransitionIntent.Intent);
+        Assert.Contains(state.Blockers, blocker => blocker.Blocker.Contains("Project Context source contract violation", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Active_resume_project_context_failure_preserves_interrupted_context()
+    {
+        using var repo = new TempRepo();
+        RoadmapTransitionIntent intent = new(
+            "ResumeMilestoneGeneration",
+            RoadmapState.ActiveEpicReady,
+            [".agents/evidence/original.md"]);
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(
+            RoadmapState.ActiveEpicReady,
+            from: RoadmapState.CreateNewEpic,
+            prompt: "CreateNewEpic",
+            output: RoadmapArtifactPaths.ActiveEpic,
+            blockers: [new BlockerRow("Original blocker", "Resolve original blocker")],
+            intent: intent,
+            nextTransitions: ["GenerateMilestoneDeepDives"]));
+        var runtime = new ScriptedAgentRuntime();
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.PreflightBlocked, outcome);
+        Assert.Equal(0, runtime.OneShotCalls);
+        RoadmapStateDocument? state = await new RoadmapStateStore(repo.Artifacts).LoadAsync();
+        Assert.NotNull(state);
+        Assert.Equal(RoadmapState.ActiveEpicReady, state.CurrentState);
+        Assert.Equal(RoadmapState.CreateNewEpic, state.LastTransition.From);
+        Assert.Equal(RoadmapState.ActiveEpicReady, state.LastTransition.To);
+        Assert.Equal("CreateNewEpic", state.LastTransition.Prompt);
+        Assert.Equal(RoadmapArtifactPaths.ActiveEpic, state.LastTransition.Output);
+        Assert.Equal("ResumeMilestoneGeneration", state.TransitionIntent.Intent);
+        Assert.Equal(RoadmapState.ActiveEpicReady, state.TransitionIntent.DispatchState);
+        Assert.Contains(".agents/evidence/original.md", state.TransitionIntent.EvidencePaths);
+        Assert.Contains(state.Blockers, blocker => blocker.Blocker == "Original blocker");
+        Assert.Contains(state.Blockers, blocker => blocker.Blocker.Contains("Project Context source contract violation", StringComparison.Ordinal));
+        Assert.Contains("GenerateMilestoneDeepDives", state.NextValidTransitions);
+        Assert.Contains("Repair Project Context and rerun", state.NextValidTransitions);
+        Assert.DoesNotContain("| Prompt | Preflight |", repo.Read(RoadmapArtifactPaths.State), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Existing_terminal_paused_state_is_not_restarted()
     {
         using var repo = new TempRepo();
@@ -69,20 +174,23 @@ public sealed class RoadmapStateMachineResumeTests
     private static RoadmapStateDocument State(
         RoadmapState state,
         RoadmapState? from = null,
+        RoadmapState? to = null,
         string prompt = "None",
         string output = "None",
-        IReadOnlyList<BlockerRow>? blockers = null) =>
+        IReadOnlyList<BlockerRow>? blockers = null,
+        RoadmapTransitionIntent? intent = null,
+        IReadOnlyList<string>? nextTransitions = null) =>
         new(
             state,
             [],
-            new RoadmapTransitionSummary(from ?? state, state, prompt, "None", output, "Completed", TransitionStatus.Completed, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            new RoadmapTransitionSummary(from ?? state, to ?? state, prompt, "None", output, "Completed", TransitionStatus.Completed, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
             blockers ?? [],
             "None",
             0,
             0,
             new ProjectionManifestCounts(0, 0, 0),
-            RoadmapTransitionIntent.Empty(state),
-            [],
+            intent ?? RoadmapTransitionIntent.Empty(state),
+            nextTransitions ?? [],
             []);
 
     private static string MilestoneBundle() => """
