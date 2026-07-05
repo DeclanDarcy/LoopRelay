@@ -1,3 +1,4 @@
+using CommandCenter.Agents.Abstractions;
 using CommandCenter.Roadmap.Cli;
 
 namespace CommandCenter.Roadmap.CLI.Tests;
@@ -58,7 +59,7 @@ public sealed class RoadmapStateMachineSelectionTests
 
 internal static class StateMachineFactory
 {
-    public static RoadmapStateMachine Create(TempRepo repo, ScriptedAgentRuntime runtime)
+    public static RoadmapStateMachine Create(TempRepo repo, IAgentRuntime runtime)
     {
         var projections = new ProjectionRegistry();
         var contracts = new PromptContractRegistry(projections);
@@ -77,6 +78,7 @@ internal static class StateMachineFactory
             manifest,
             new ProjectionCache(repo.Artifacts, projections, manifest, new ProjectionValidator(), runner),
             new RoadmapPromptContextBuilder(repo.Artifacts),
+            new TransitionInputResolver(repo.Artifacts),
             new CompletionCertificationRouter(),
             runner,
             stateStore,

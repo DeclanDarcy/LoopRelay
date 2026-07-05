@@ -14,4 +14,5 @@ internal sealed record TransitionJournalRecord(
     long DurationMilliseconds,
     string Result,
     string ParserDecision,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    TransitionInputSnapshot? InputSnapshot = null);

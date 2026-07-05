@@ -9,6 +9,7 @@ internal sealed class RoadmapStateMachine(
     ProjectionManifestStore manifestStore,
     ProjectionCache projectionCache,
     RoadmapPromptContextBuilder contextBuilder,
+    TransitionInputResolver inputResolver,
     CompletionCertificationRouter completionRouter,
     RoadmapPromptRunner promptRunner,
     RoadmapStateStore stateStore,
@@ -302,7 +303,16 @@ internal sealed class RoadmapStateMachine(
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildRealignOrReimagineContext(projection.Content, selectionOrEpic, audit);
-        PromptTransitionCompletion completion = await RunPromptForPromotionAsync(state, RoadmapState.ActiveEpicReady, runtimePrompt, projection.Definition.ProjectionPath, context, audit, [RoadmapArtifactPaths.ActiveEpic], cancellationToken);
+        PromptTransitionCompletion completion = await RunPromptForPromotionAsync(
+            state,
+            RoadmapState.ActiveEpicReady,
+            runtimePrompt,
+            projection.Definition.ProjectionPath,
+            context,
+            audit,
+            [RoadmapArtifactPaths.ActiveEpic],
+            cancellationToken,
+            TransitionInputContext.AuditEvidence(auditPath));
         return await PromoteActiveEpicAsync(state, runtimePrompt, projection.Definition.ProjectionPath, completion);
     }
 
@@ -585,7 +595,16 @@ internal sealed class RoadmapStateMachine(
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = await contextBuilder.BuildCompletionUpdateContextAsync(projection.Content, evaluationPath);
-        string output = await RunPromptTransitionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, RoadmapState.SelectNextStrategicInitiative, runtimePrompt, projection.Definition.ProjectionPath, context, string.Empty, [RoadmapArtifactPaths.RoadmapCompletionContext], cancellationToken);
+        string output = await RunPromptTransitionAsync(
+            RoadmapState.CompletionEvaluationAndContextUpdate,
+            RoadmapState.SelectNextStrategicInitiative,
+            runtimePrompt,
+            projection.Definition.ProjectionPath,
+            context,
+            string.Empty,
+            [RoadmapArtifactPaths.RoadmapCompletionContext],
+            cancellationToken,
+            TransitionInputContext.CompletionEvaluation(evaluationPath));
         await artifacts.WriteAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
         await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "roadmap-completion-update", output);
         await AppendDecisionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.RoadmapCompletionContext, "Roadmap Completion Context Updated", "Unclear", "Completion context updated after certification.");
@@ -599,29 +618,36 @@ internal sealed class RoadmapStateMachine(
         string projectContext,
         string secondaryInput,
         IReadOnlyList<string> outputs,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TransitionInputContext? inputContext = null)
     {
+        TransitionInputSnapshot inputSnapshot = await inputResolver.ResolveAsync(new TransitionInputRequest(
+            prompt,
+            projectionPath,
+            projectContext,
+            secondaryInput,
+            inputContext ?? TransitionInputContext.Empty));
         string correlationId = Guid.NewGuid().ToString("N");
         DateTimeOffset started = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
         string outputList = string.Join(", ", outputs);
         await SaveStateAsync(from, TransitionStatus.Started, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Started", started, null, null, null);
-        await journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, promotionTarget, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, 0, "Started", "None", null));
+        await journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, promotionTarget, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, 0, "Started", "None", null, inputSnapshot));
 
         try
         {
             string output = await promptRunner.RunRuntimePromptAsync(prompt, projectContext, secondaryInput, cancellationToken);
             stopwatch.Stop();
             DateTimeOffset completed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord("PromptCompleted", correlationId, completed, from, promotionTarget, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "PromptCompleted", "Output produced", null));
+            await journalStore.AppendAsync(new TransitionJournalRecord("PromptCompleted", correlationId, completed, from, promotionTarget, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "PromptCompleted", "Output produced", null, inputSnapshot));
             await SaveStateAsync(from, TransitionStatus.PromptCompleted, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Completed", started, completed, null, null);
-            return new PromptTransitionCompletion(correlationId, started, completed, stopwatch.ElapsedMilliseconds, output);
+            return new PromptTransitionCompletion(correlationId, started, completed, stopwatch.ElapsedMilliseconds, output, inputSnapshot);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             stopwatch.Stop();
             DateTimeOffset failed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, promotionTarget, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message));
+            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, promotionTarget, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message, inputSnapshot));
             await SaveStateAsync(
                 RoadmapState.EvidenceBlocked,
                 TransitionStatus.Failed,
@@ -670,12 +696,13 @@ internal sealed class RoadmapStateMachine(
                 prompt,
                 projectionPath,
                 "ArtifactPromotionService",
-                await HashInputsAsync([]),
+                completion.InputSnapshot.ToInputArtifactHashes(),
                 [RoadmapArtifactPaths.ActiveEpic],
                 completion.ElapsedMilliseconds,
                 "Promoted",
                 "Active epic promoted",
-                null));
+                null,
+                completion.InputSnapshot));
             await SaveStateAsync(RoadmapState.ActiveEpicReady, TransitionStatus.Completed, from, RoadmapState.ActiveEpicReady, prompt, projectionPath, RoadmapArtifactPaths.ActiveEpic, "Artifact Promoted", completion.Started, completed, null, null);
             return result;
         }
@@ -698,12 +725,13 @@ internal sealed class RoadmapStateMachine(
             prompt,
             projectionPath,
             "ArtifactPromotionService",
-            await HashInputsAsync([evidencePath]),
+            completion.InputSnapshot.ToInputArtifactHashes(),
             [evidencePath],
             completion.ElapsedMilliseconds,
             result.Status.ToString(),
             decision,
-            result.Reason));
+            result.Reason,
+            completion.InputSnapshot));
         await SaveStateAsync(
             RoadmapState.EvidenceBlocked,
             TransitionStatus.Paused,
@@ -730,20 +758,27 @@ internal sealed class RoadmapStateMachine(
         string projectContext,
         string secondaryInput,
         IReadOnlyList<string> outputs,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TransitionInputContext? inputContext = null)
     {
+        TransitionInputSnapshot inputSnapshot = await inputResolver.ResolveAsync(new TransitionInputRequest(
+            prompt,
+            projectionPath,
+            projectContext,
+            secondaryInput,
+            inputContext ?? TransitionInputContext.Empty));
         string correlationId = Guid.NewGuid().ToString("N");
         DateTimeOffset started = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
         await SaveStateAsync(to, TransitionStatus.Started, from, to, prompt, projectionPath, string.Join(", ", outputs), "Pending", started, null, null, null);
-        await journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, to, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, 0, "Started", "None", null));
+        await journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, 0, "Started", "None", null, inputSnapshot));
 
         try
         {
             string output = await promptRunner.RunRuntimePromptAsync(prompt, projectContext, secondaryInput, cancellationToken);
             stopwatch.Stop();
             DateTimeOffset completed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionCompleted", correlationId, completed, from, to, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "Completed", "None", null));
+            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionCompleted", correlationId, completed, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Completed", "None", null, inputSnapshot));
             await SaveStateAsync(to, TransitionStatus.Completed, from, to, prompt, projectionPath, string.Join(", ", outputs), "Completed", started, completed, null, null);
             return output;
         }
@@ -751,7 +786,7 @@ internal sealed class RoadmapStateMachine(
         {
             stopwatch.Stop();
             DateTimeOffset failed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, to, prompt, projectionPath, prompt, await HashInputsAsync([]), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message));
+            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message, inputSnapshot));
             await SaveStateAsync(
                 RoadmapState.EvidenceBlocked,
                 TransitionStatus.Failed,
@@ -781,6 +816,21 @@ internal sealed class RoadmapStateMachine(
         IReadOnlyList<string> outputs = route.RequiresRoadmapCompletionContextUpdate
             ? [evaluationPath, RoadmapArtifactPaths.RoadmapCompletionContext]
             : [evaluationPath];
+        string routingContext = string.Join(
+            Environment.NewLine,
+            [
+                $"Closure Recommendation: {decision.ClosureRecommendation}",
+                $"Overall Completion Status: {decision.OverallCompletionStatus}",
+                $"Overall Drift Classification: {decision.OverallDriftClassification}",
+                $"Target State: {route.TargetState}",
+                $"Transition Status: {route.TransitionStatus}",
+            ]);
+        TransitionInputSnapshot inputSnapshot = await inputResolver.ResolveAsync(new TransitionInputRequest(
+            "CompletionCertificationRouting",
+            projectionPath,
+            routingContext,
+            string.Empty,
+            TransitionInputContext.CompletionEvaluation(evaluationPath)));
         await journalStore.AppendAsync(new TransitionJournalRecord(
             "TransitionCompleted",
             Guid.NewGuid().ToString("N"),
@@ -790,12 +840,13 @@ internal sealed class RoadmapStateMachine(
             "CompletionCertificationRouting",
             projectionPath,
             "CompletionCertificationRouter",
-            await HashInputsAsync([evaluationPath]),
+            inputSnapshot.ToInputArtifactHashes(),
             outputs,
             0,
             route.TransitionStatus.ToString(),
             decision.ClosureRecommendation,
-            null));
+            null,
+            inputSnapshot));
         await SaveStateAsync(
             route.TargetState,
             route.TransitionStatus,
@@ -906,21 +957,6 @@ internal sealed class RoadmapStateMachine(
             _ => [],
         };
 
-    private async Task<IReadOnlyDictionary<string, string>> HashInputsAsync(IReadOnlyList<string> inputs)
-    {
-        var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (string input in inputs)
-        {
-            string? content = await artifacts.ReadAsync(input);
-            if (content is not null)
-            {
-                hashes[input] = RoadmapHash.Sha256(content);
-            }
-        }
-
-        return hashes;
-    }
-
     private async Task WriteBlockedStateAsync(RoadmapState state, string transition, string reason)
     {
         string path = await artifacts.WriteNumberedEvidenceAsync(
@@ -1005,5 +1041,6 @@ internal sealed class RoadmapStateMachine(
         DateTimeOffset Started,
         DateTimeOffset Completed,
         long ElapsedMilliseconds,
-        string Output);
+        string Output,
+        TransitionInputSnapshot InputSnapshot);
 }

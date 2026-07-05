@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CommandCenter.Agents.Models;
 using CommandCenter.Roadmap.Cli;
 
@@ -106,6 +107,43 @@ public sealed class RoadmapStateMachineCompletionTests
         }
     }
 
+    [Fact]
+    public async Task Runtime_transitions_record_causal_input_snapshots()
+    {
+        CompletionRunResult result = await RunCompletionAsync("Close Epic");
+
+        TransitionJournalRecord[] records = JournalRecords(result.TransitionJournal);
+
+        AssertPromptSnapshot(records, "SelectNextEpic", [
+            RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"],
+            RoadmapArtifactPaths.RoadmapCompletionContext,
+            RoadmapArtifactPaths.RoadmapFile,
+        ]);
+        AssertPromptSnapshot(records, "GenerateMilestoneDeepDivesForEpic", [
+            RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"],
+            RoadmapArtifactPaths.ActiveEpic,
+        ]);
+        AssertPromptSnapshot(records, "EvaluateEpicCompletionAndDrift", [
+            RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"],
+            RoadmapArtifactPaths.ActiveEpic,
+            ".agents/specs/routing-test.md",
+        ]);
+        AssertPromptSnapshot(records, "UpdateRoadmapCompletionContext", [
+            RoadmapArtifactPaths.ProjectionPaths["UpdateRoadmapCompletionContext"],
+            RoadmapArtifactPaths.RoadmapCompletionContext,
+            RoadmapArtifactPaths.ActiveEpic,
+        ]);
+
+        TransitionJournalRecord updateStarted = records.Single(record =>
+            record.Prompt == "UpdateRoadmapCompletionContext" &&
+            record.Event == "TransitionStarted");
+        Assert.Contains(updateStarted.InputArtifactHashes.Keys, path => path.StartsWith(RoadmapArtifactPaths.EvaluationEvidenceDirectory, StringComparison.Ordinal));
+
+        TransitionJournalRecord routing = records.Single(record => record.Prompt == "CompletionCertificationRouting");
+        Assert.NotNull(routing.InputSnapshot);
+        Assert.Contains(routing.InputArtifactHashes.Keys, path => path.StartsWith(RoadmapArtifactPaths.EvaluationEvidenceDirectory, StringComparison.Ordinal));
+    }
+
     private static async Task<CompletionRunResult> RunCompletionAsync(string recommendation)
     {
         using var repo = SeedRepo();
@@ -156,6 +194,32 @@ public sealed class RoadmapStateMachineCompletionTests
         {
             yield return ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("UpdateRoadmapCompletionContext"));
             yield return ScriptedAgentRuntime.Completed("# Updated Roadmap Completion Context");
+        }
+    }
+
+    private static TransitionJournalRecord[] JournalRecords(string journal) =>
+        journal
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => JsonSerializer.Deserialize<TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
+            .ToArray();
+
+    private static void AssertPromptSnapshot(
+        IReadOnlyList<TransitionJournalRecord> records,
+        string prompt,
+        IReadOnlyList<string> expectedInputPaths)
+    {
+        TransitionJournalRecord started = records.Single(record => record.Prompt == prompt && record.Event == "TransitionStarted");
+        TransitionJournalRecord completed = records.Single(record =>
+            record.Prompt == prompt &&
+            (record.Event == "TransitionCompleted" || record.Event == "PromptCompleted"));
+
+        Assert.NotNull(started.InputSnapshot);
+        Assert.NotNull(completed.InputSnapshot);
+        Assert.Equal(started.InputSnapshot.SnapshotHash, completed.InputSnapshot.SnapshotHash);
+        Assert.Equal(started.InputArtifactHashes, completed.InputArtifactHashes);
+        foreach (string path in expectedInputPaths)
+        {
+            Assert.Contains(path, started.InputArtifactHashes.Keys);
         }
     }
 
