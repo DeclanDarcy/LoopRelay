@@ -57,7 +57,18 @@ internal sealed class RoadmapStateMachine(
             await WriteCancelledStateAsync();
             return RoadmapOutcome.Cancelled;
         }
+        catch (RoadmapStepException exception) when (exception.Persistence == RoadmapFailurePersistence.AlreadyPersisted)
+        {
+            console.Error(exception.Message);
+            return RoadmapOutcome.Failed;
+        }
         catch (RoadmapStepException exception)
+        {
+            await WriteBlockedStateAsync(RoadmapState.EvidenceBlocked, "RoadmapStateMachine", exception.Message);
+            console.Error(exception.Message);
+            return RoadmapOutcome.Failed;
+        }
+        catch (Exception exception)
         {
             await WriteBlockedStateAsync(RoadmapState.EvidenceBlocked, "RoadmapStateMachine", exception.Message);
             console.Error(exception.Message);
@@ -794,7 +805,7 @@ internal sealed class RoadmapStateMachine(
                 RoadmapState.EvidenceBlocked,
                 TransitionStatus.Failed,
                 from,
-                RoadmapState.EvidenceBlocked,
+                promotionTarget,
                 prompt,
                 projectionPath,
                 outputList,
@@ -805,7 +816,7 @@ internal sealed class RoadmapStateMachine(
                 [new BlockerRow(exception.Message, "Review the transition failure and rerun.")],
                 new RoadmapTransitionIntent("ResolveTransitionFailure", RoadmapState.EvidenceBlocked, outputs),
                 ["Resolve blocker and rerun"]);
-            throw;
+            throw RoadmapStepException.AlreadyPersisted(exception);
         }
     }
 
@@ -864,7 +875,7 @@ internal sealed class RoadmapStateMachine(
             completion.CorrelationId,
             completed,
             from,
-            RoadmapState.EvidenceBlocked,
+            RoadmapState.ActiveEpicReady,
             prompt,
             projectionPath,
             "ArtifactPromotionService",
@@ -879,7 +890,7 @@ internal sealed class RoadmapStateMachine(
             RoadmapState.EvidenceBlocked,
             TransitionStatus.Paused,
             from,
-            RoadmapState.EvidenceBlocked,
+            RoadmapState.ActiveEpicReady,
             prompt,
             projectionPath,
             evidencePath,
@@ -958,7 +969,7 @@ internal sealed class RoadmapStateMachine(
                 RoadmapState.EvidenceBlocked,
                 TransitionStatus.Failed,
                 from,
-                RoadmapState.EvidenceBlocked,
+                to,
                 prompt,
                 projectionPath,
                 string.Join(", ", outputs),
@@ -969,7 +980,7 @@ internal sealed class RoadmapStateMachine(
                 [new BlockerRow(exception.Message, "Review the transition failure and rerun.")],
                 new RoadmapTransitionIntent("ResolveTransitionFailure", RoadmapState.EvidenceBlocked, outputs),
                 ["Resolve blocker and rerun"]);
-            throw;
+            throw RoadmapStepException.AlreadyPersisted(exception);
         }
     }
 

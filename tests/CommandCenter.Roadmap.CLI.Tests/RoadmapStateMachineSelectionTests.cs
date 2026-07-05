@@ -59,7 +59,10 @@ public sealed class RoadmapStateMachineSelectionTests
 
 internal static class StateMachineFactory
 {
-    public static RoadmapStateMachine Create(TempRepo repo, IAgentRuntime runtime)
+    public static RoadmapStateMachine Create(
+        TempRepo repo,
+        IAgentRuntime runtime,
+        IRoadmapExecutionBridge? bridge = null)
     {
         var projections = new ProjectionRegistry();
         var contracts = new PromptContractRegistry(projections);
@@ -69,7 +72,7 @@ internal static class StateMachineFactory
         var split = new SplitFamilyStore(repo.Artifacts);
         var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new RoadmapPromptRunner(runtime, repo.Repository, new TestConsole());
-        var bridge = new FakeRoadmapExecutionBridge();
+        IRoadmapExecutionBridge executionBridge = bridge ?? new FakeRoadmapExecutionBridge();
         var invariants = new InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split);
         return new RoadmapStateMachine(
             repo.Artifacts,
@@ -94,7 +97,7 @@ internal static class StateMachineFactory
             new OperationalContextGenerator(repo.Artifacts, lifecycle),
             new ExecutionPromptGenerator(repo.Artifacts, lifecycle),
             new ExecutionCompatibilityMaterializer(repo.Artifacts),
-            bridge,
+            executionBridge,
             invariants,
             new TestConsole());
     }
