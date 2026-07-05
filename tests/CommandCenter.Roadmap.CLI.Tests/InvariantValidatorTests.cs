@@ -78,6 +78,17 @@ public sealed class InvariantValidatorTests
         Assert.False(result.IsValid);
     }
 
+    [Fact]
+    public async Task Rejects_non_child_split_promotion_target()
+    {
+        using var repo = new TempRepo();
+
+        InvariantValidationResult result = await CreateValidator(repo).ValidateSplitChildPromotionAsync(".agents/specs/not-a-child.md");
+
+        Assert.False(result.IsValid);
+        Assert.Contains("not a valid split child", result.Error, StringComparison.Ordinal);
+    }
+
     private static InvariantValidator CreateValidator(TempRepo repo, ArtifactLifecycleStore? lifecycle = null)
     {
         var projections = new ProjectionRegistry();

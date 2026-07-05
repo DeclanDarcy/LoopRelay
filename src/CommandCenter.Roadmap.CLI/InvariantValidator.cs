@@ -94,9 +94,12 @@ internal sealed class InvariantValidator(
     {
         try
         {
-            if (!childEpicPath.StartsWith(".agents/epic-", StringComparison.OrdinalIgnoreCase))
+            if (!SplitEpicBundleInterpreter.IsChildEpicPath(childEpicPath))
             {
-                return InvariantValidationResult.Valid();
+                return await FailAsync(
+                    RoadmapState.SplitChildSelection,
+                    RoadmapState.EvidenceBlocked,
+                    $"Split child promotion target is not a valid split child epic path: {childEpicPath}.");
             }
 
             bool exists = await splitFamilyStore.ExistsForChildAsync(childEpicPath);

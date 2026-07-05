@@ -19,6 +19,7 @@ internal sealed class RoadmapStateMachine(
     ArtifactLifecycleStore lifecycleStore,
     ArtifactPromotionService promotionService,
     BundleFileExtractor bundleExtractor,
+    SplitEpicBundleInterpreter splitBundleInterpreter,
     BundleManifestWriter bundleManifestWriter,
     SplitFamilyStore splitFamilyStore,
     OperationalContextGenerator operationalContextGenerator,
@@ -181,7 +182,12 @@ internal sealed class RoadmapStateMachine(
 
                 break;
             case "Select Split Epic":
-                await SplitEpicAsync(projectContext, cancellationToken);
+                ArtifactPromotionResult splitPromotion = await SplitEpicAsync(projectContext, cancellationToken);
+                if (!splitPromotion.Promoted)
+                {
+                    return RoadmapOutcome.Paused;
+                }
+
                 break;
             case "Strategic Investigation Required":
                 await AppendDecisionAsync(RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
@@ -328,7 +334,7 @@ internal sealed class RoadmapStateMachine(
         return await PromoteActiveEpicAsync(RoadmapState.NewEpicProposed, runtimePrompt, projection.Definition.ProjectionPath, completion);
     }
 
-    private async Task SplitEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)
+    private async Task<ArtifactPromotionResult> SplitEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "SplitEpic";
         console.Phase("Split epic");
@@ -336,36 +342,172 @@ internal sealed class RoadmapStateMachine(
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
-        string output = await RunPromptTransitionAsync(RoadmapState.SplitEpicProposed, RoadmapState.SplitChildSelection, runtimePrompt, projection.Definition.ProjectionPath, context, selection, [RoadmapArtifactPaths.SplitFamiliesDirectory], cancellationToken);
-        BundleExtractionResult bundle = bundleExtractor.Extract(output);
-        await bundleExtractor.WriteExtractedFilesAsync(artifacts, bundle);
-        await bundleManifestWriter.WriteAsync(BundleManifestWriter.DefaultManifestPath(bundle.Files), runtimePrompt, projection.Definition.ProjectionPath, bundle, "Valid");
-
-        string selectedChild = bundle.Files.OrderBy(file => file.Path, StringComparer.Ordinal).First().Path;
-        var family = new SplitFamily(Guid.NewGuid().ToString("N")[..8], selection, bundle.Files.Select(file => file.Path).ToList(), bundle.Files.Select(file => file.Path).ToList(), selectedChild, "First child selected by deterministic MVP ordering.", DateTimeOffset.UtcNow);
-        await splitFamilyStore.WriteAsync(family);
-        InvariantValidationResult promotion = await invariantValidator.ValidateSplitChildPromotionAsync(selectedChild);
-        if (!promotion.IsValid)
-        {
-            throw new RoadmapStepException(promotion.Error ?? "Split child promotion failed invariant validation.");
-        }
-
-        await artifacts.WriteAsync(RoadmapArtifactPaths.ActiveEpic, await artifacts.ReadRequiredAsync(selectedChild));
-        await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready, selectedChild);
-        DateTimeOffset completed = DateTimeOffset.UtcNow;
-        await SaveStateAsync(
-            RoadmapState.ActiveEpicReady,
-            TransitionStatus.Completed,
+        PromptTransitionCompletion completion = await RunPromptTransitionWithCompletionAsync(
+            RoadmapState.SplitEpicProposed,
             RoadmapState.SplitChildSelection,
-            RoadmapState.ActiveEpicReady,
             runtimePrompt,
             projection.Definition.ProjectionPath,
-            RoadmapArtifactPaths.ActiveEpic,
-            "Split Child Promoted",
+            context,
+            selection,
+            [RoadmapArtifactPaths.SplitFamiliesDirectory],
+            cancellationToken);
+
+        BundleExtractionResult bundle;
+        try
+        {
+            bundle = bundleExtractor.Extract(completion.Output, BundleExtractionPolicy.RepositorySafe);
+        }
+        catch (RoadmapStepException exception)
+        {
+            SplitEpicBundleInterpretation extractionFailure = SplitEpicBundleInterpretation.Invalid(
+                exception.Message,
+                [new SplitEpicBundleRejection("SplitEpic output", exception.Message)]);
+            return await BlockSplitEpicAsync(runtimePrompt, projection.Definition.ProjectionPath, completion, extractionFailure);
+        }
+
+        SplitEpicBundleInterpretation interpretation = splitBundleInterpreter.Interpret(bundle, completion.Output);
+        if (!interpretation.IsValid)
+        {
+            return await BlockSplitEpicAsync(runtimePrompt, projection.Definition.ProjectionPath, completion, interpretation);
+        }
+
+        BundleExtractionResult validatedBundle = BundleExtractionResult.Extracted(interpretation.ValidatedChildEpics);
+        await bundleExtractor.WriteExtractedFilesAsync(artifacts, validatedBundle);
+        await bundleManifestWriter.WriteAsync(BundleManifestWriter.DefaultManifestPath(interpretation.ValidatedChildEpics), runtimePrompt, projection.Definition.ProjectionPath, validatedBundle, "Valid");
+        foreach (ExtractedBundleFile child in interpretation.ValidatedChildEpics)
+        {
+            await lifecycleStore.UpsertAsync(child.Path, ArtifactLifecycleState.Draft, "Validated split child epic.");
+        }
+
+        ExtractedBundleFile selectedChild = interpretation.SelectedChild
+            ?? throw new RoadmapStepException("Validated SplitEpic bundle did not select a child epic.");
+        var family = new SplitFamily(
+            Guid.NewGuid().ToString("N")[..8],
+            selection,
+            interpretation.ValidatedChildEpics.Select(file => file.Path).ToList(),
+            interpretation.ValidatedChildEpics.Select(file => file.Path).ToList(),
+            selectedChild.Path,
+            interpretation.SelectedChildRationale,
+            DateTimeOffset.UtcNow);
+        await splitFamilyStore.WriteAsync(family);
+
+        PromptTransitionCompletion childPromotionCompletion = completion with { Output = selectedChild.Content };
+        return await PromoteActiveEpicAsync(
+            RoadmapState.SplitChildSelection,
+            runtimePrompt,
+            projection.Definition.ProjectionPath,
+            childPromotionCompletion,
+            $"Promoted split child {selectedChild.Path} by {runtimePrompt}.");
+    }
+
+    private async Task<ArtifactPromotionResult> BlockSplitEpicAsync(
+        string runtimePrompt,
+        string projectionPath,
+        PromptTransitionCompletion completion,
+        SplitEpicBundleInterpretation interpretation)
+    {
+        string reason = DescribeSplitInterpretation(interpretation);
+        string evidencePath = await artifacts.WriteNumberedEvidenceAsync(
+            RoadmapArtifactPaths.BlockerEvidenceDirectory,
+            "split-epic-output",
+            RenderSplitInterpretationEvidence(interpretation, completion.Output));
+        await lifecycleStore.UpsertAsync(evidencePath, ArtifactLifecycleState.Blocked, reason);
+
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        string decision = interpretation.Status == SplitEpicBundleInterpretationStatus.Blocked
+            ? "Split Epic Blocked"
+            : "Split Bundle Rejected";
+        ArtifactPromotionStatus status = interpretation.Status == SplitEpicBundleInterpretationStatus.Blocked
+            ? ArtifactPromotionStatus.Blocked
+            : ArtifactPromotionStatus.StructurallyInvalid;
+
+        await journalStore.AppendAsync(new TransitionJournalRecord(
+            "SplitBundleRejected",
+            completion.CorrelationId,
             completed,
+            RoadmapState.SplitChildSelection,
+            RoadmapState.EvidenceBlocked,
+            runtimePrompt,
+            projectionPath,
+            "SplitEpicBundleInterpreter",
+            completion.InputSnapshot.ToInputArtifactHashes(),
+            [evidencePath],
+            completion.ElapsedMilliseconds,
+            status.ToString(),
+            decision,
+            reason,
+            completion.InputSnapshot));
+        await SaveStateAsync(
+            RoadmapState.EvidenceBlocked,
+            TransitionStatus.Paused,
+            RoadmapState.SplitChildSelection,
+            RoadmapState.EvidenceBlocked,
+            runtimePrompt,
+            projectionPath,
+            evidencePath,
+            decision,
+            completion.Started,
             completed,
             null,
-            null);
+            [new BlockerRow(reason, $"Review {evidencePath} and rerun the roadmap CLI after resolving the split output.")],
+            new RoadmapTransitionIntent("ResolveSplitEpicBlocker", RoadmapState.EvidenceBlocked, [evidencePath]),
+            ["Resolve blocker and rerun"]);
+
+        return ArtifactPromotionResult.NotPromoted(status, RoadmapArtifactPaths.ActiveEpic, evidencePath, reason);
+    }
+
+    private static string DescribeSplitInterpretation(SplitEpicBundleInterpretation interpretation)
+    {
+        if (interpretation.Rejections.Count == 0)
+        {
+            return interpretation.Reason;
+        }
+
+        string rejected = string.Join(
+            "; ",
+            interpretation.Rejections.Select(rejection => $"{rejection.Path}: {rejection.Reason}"));
+        return $"{interpretation.Reason} {rejected}";
+    }
+
+    private static string RenderSplitInterpretationEvidence(
+        SplitEpicBundleInterpretation interpretation,
+        string rawOutput)
+    {
+        var lines = new List<string>
+        {
+            "# Split Epic Output Blocked",
+            string.Empty,
+            "## Reason",
+            string.Empty,
+            DescribeSplitInterpretation(interpretation),
+            string.Empty,
+            "## Rejected Files",
+            string.Empty,
+        };
+
+        if (interpretation.Rejections.Count == 0)
+        {
+            lines.Add("- None");
+        }
+        else
+        {
+            foreach (SplitEpicBundleRejection rejection in interpretation.Rejections)
+            {
+                lines.Add($"- `{rejection.Path}`: {rejection.Reason}");
+            }
+        }
+
+        lines.AddRange(
+        [
+            string.Empty,
+            "## Raw Output",
+            string.Empty,
+            "```markdown",
+            rawOutput,
+            "```",
+        ]);
+
+        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 
     private async Task GenerateMilestoneSpecsAsync(ProjectContext projectContext, CancellationToken cancellationToken)
@@ -671,7 +813,8 @@ internal sealed class RoadmapStateMachine(
         RoadmapState from,
         string prompt,
         string projectionPath,
-        PromptTransitionCompletion completion)
+        PromptTransitionCompletion completion,
+        string? lifecycleNotes = null)
     {
         ArtifactPromotionResult result = await promotionService.PromoteAsync(new ArtifactPromotionRequest(
             RoadmapArtifactPaths.ActiveEpic,
@@ -682,7 +825,7 @@ internal sealed class RoadmapStateMachine(
             new EpicAuthoringOutputClassifier(),
             new EpicArtifactValidator(),
             ArtifactLifecycleState.Ready,
-            $"Promoted by {prompt}."));
+            lifecycleNotes ?? $"Promoted by {prompt}."));
 
         DateTimeOffset completed = DateTimeOffset.UtcNow;
         if (result.Promoted)
@@ -761,6 +904,30 @@ internal sealed class RoadmapStateMachine(
         CancellationToken cancellationToken,
         TransitionInputContext? inputContext = null)
     {
+        PromptTransitionCompletion completion = await RunPromptTransitionWithCompletionAsync(
+            from,
+            to,
+            prompt,
+            projectionPath,
+            projectContext,
+            secondaryInput,
+            outputs,
+            cancellationToken,
+            inputContext);
+        return completion.Output;
+    }
+
+    private async Task<PromptTransitionCompletion> RunPromptTransitionWithCompletionAsync(
+        RoadmapState from,
+        RoadmapState to,
+        string prompt,
+        string projectionPath,
+        string projectContext,
+        string secondaryInput,
+        IReadOnlyList<string> outputs,
+        CancellationToken cancellationToken,
+        TransitionInputContext? inputContext = null)
+    {
         TransitionInputSnapshot inputSnapshot = await inputResolver.ResolveAsync(new TransitionInputRequest(
             prompt,
             projectionPath,
@@ -780,7 +947,7 @@ internal sealed class RoadmapStateMachine(
             DateTimeOffset completed = DateTimeOffset.UtcNow;
             await journalStore.AppendAsync(new TransitionJournalRecord("TransitionCompleted", correlationId, completed, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Completed", "None", null, inputSnapshot));
             await SaveStateAsync(to, TransitionStatus.Completed, from, to, prompt, projectionPath, string.Join(", ", outputs), "Completed", started, completed, null, null);
-            return output;
+            return new PromptTransitionCompletion(correlationId, started, completed, stopwatch.ElapsedMilliseconds, output, inputSnapshot);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

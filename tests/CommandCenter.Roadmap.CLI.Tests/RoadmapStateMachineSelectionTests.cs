@@ -88,6 +88,7 @@ internal static class StateMachineFactory
             lifecycle,
             new ArtifactPromotionService(repo.Artifacts, lifecycle),
             new BundleFileExtractor(),
+            new SplitEpicBundleInterpreter(),
             new BundleManifestWriter(repo.Artifacts),
             split,
             new OperationalContextGenerator(repo.Artifacts, lifecycle),

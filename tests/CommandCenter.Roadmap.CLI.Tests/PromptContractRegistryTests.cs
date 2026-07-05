@@ -41,4 +41,18 @@ public sealed class PromptContractRegistryTests
             Assert.NotEmpty(contract.BlockingOutputs);
         }
     }
+
+    [Fact]
+    public void SplitEpic_contract_declares_interpretation_and_promotion_boundaries()
+    {
+        var registry = new PromptContractRegistry(new ProjectionRegistry());
+
+        PromptContract contract = registry.Get("SplitEpic");
+
+        Assert.Contains("SplitEpicBundleInterpreter", contract.ArtifactWriter, StringComparison.Ordinal);
+        Assert.Contains("ArtifactPromotionService", contract.ArtifactWriter, StringComparison.Ordinal);
+        Assert.Contains("SplitEpicBundleInterpreter", contract.ParserName, StringComparison.Ordinal);
+        Assert.Contains(RoadmapArtifactPaths.ActiveEpic, contract.RequiredOutputs);
+        Assert.NotEmpty(contract.BlockingOutputs);
+    }
 }

@@ -4,7 +4,10 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal sealed partial class BundleFileExtractor
 {
-    public BundleExtractionResult Extract(string markdown)
+    public BundleExtractionResult Extract(string markdown) =>
+        Extract(markdown, BundleExtractionPolicy.RoadmapBundle);
+
+    public BundleExtractionResult Extract(string markdown, BundleExtractionPolicy policy)
     {
         MatchCollection matches = FileMarkerRegex().Matches(markdown);
         if (matches.Count == 0)
@@ -18,7 +21,7 @@ internal sealed partial class BundleFileExtractor
         {
             Match current = matches[index];
             string path = NormalizePath(current.Groups["path"].Value.Trim());
-            ValidateTargetPath(path);
+            ValidateTargetPath(path, policy);
 
             if (!seen.Add(path))
             {
@@ -49,21 +52,16 @@ internal sealed partial class BundleFileExtractor
 
     private static string NormalizePath(string path) => path.Replace('\\', '/');
 
-    private static void ValidateTargetPath(string path)
+    private static void ValidateTargetPath(string path, BundleExtractionPolicy policy)
     {
         if (Path.IsPathRooted(path) || path.Contains("..", StringComparison.Ordinal))
         {
             throw new RoadmapStepException($"Bundle target path is not repository-safe: {path}");
         }
 
-        bool allowed =
-            path.StartsWith(".agents/specs/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal) ||
-            path.StartsWith(".agents/epic-", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal) ||
-            string.Equals(path, RoadmapArtifactPaths.ActiveEpic, StringComparison.Ordinal);
-
-        if (!allowed)
+        if (!policy.IsAllowed(path))
         {
-            throw new RoadmapStepException($"Bundle target path is not allowed for roadmap bundle extraction: {path}");
+            throw new RoadmapStepException(policy.RejectionMessage(path));
         }
     }
 
@@ -81,3 +79,40 @@ internal sealed record BundleExtractionResult(bool IsBlocked, IReadOnlyList<Extr
 }
 
 internal sealed record ExtractedBundleFile(string Path, string Content, string Hash);
+
+internal sealed class BundleExtractionPolicy
+{
+    private readonly Func<string, bool> isAllowed;
+    private readonly Func<string, string> rejectionMessage;
+
+    private BundleExtractionPolicy(
+        string name,
+        Func<string, bool> isAllowed,
+        Func<string, string> rejectionMessage)
+    {
+        Name = name;
+        this.isAllowed = isAllowed;
+        this.rejectionMessage = rejectionMessage;
+    }
+
+    public string Name { get; }
+
+    public static BundleExtractionPolicy RoadmapBundle { get; } = new(
+        nameof(RoadmapBundle),
+        IsRoadmapBundleTarget,
+        path => $"Bundle target path is not allowed for roadmap bundle extraction: {path}");
+
+    public static BundleExtractionPolicy RepositorySafe { get; } = new(
+        nameof(RepositorySafe),
+        _ => true,
+        path => $"Bundle target path is not allowed for repository-safe extraction: {path}");
+
+    public bool IsAllowed(string path) => isAllowed(path);
+
+    public string RejectionMessage(string path) => rejectionMessage(path);
+
+    private static bool IsRoadmapBundleTarget(string path) =>
+        path.StartsWith(".agents/specs/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal) ||
+        path.StartsWith(".agents/epic-", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal) ||
+        string.Equals(path, RoadmapArtifactPaths.ActiveEpic, StringComparison.Ordinal);
+}

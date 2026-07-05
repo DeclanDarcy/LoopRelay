@@ -49,6 +49,7 @@ var lifecycle = new ArtifactLifecycleStore(artifacts);
 var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle);
 var promotion = new ArtifactPromotionService(artifacts, lifecycle);
 var bundleExtractor = new BundleFileExtractor();
+var splitBundleInterpreter = new SplitEpicBundleInterpreter();
 var bundleManifest = new BundleManifestWriter(artifacts);
 var splitFamilies = new SplitFamilyStore(artifacts);
 var projectContextLoader = new ProjectContextLoader(artifacts);
@@ -74,6 +75,7 @@ var machine = new RoadmapStateMachine(
     lifecycle,
     promotion,
     bundleExtractor,
+    splitBundleInterpreter,
     bundleManifest,
     splitFamilies,
     operationalContext,

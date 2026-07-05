@@ -52,4 +52,18 @@ public sealed class BundleFileExtractorTests
 
         Assert.True(result.IsBlocked);
     }
+
+    [Fact]
+    public void Repository_safe_policy_extracts_candidates_without_roadmap_allowlist_semantics()
+    {
+        string markdown = """
+        # FILE: docs/split-output.md
+        A
+        """;
+
+        BundleExtractionResult result = new BundleFileExtractor().Extract(markdown, BundleExtractionPolicy.RepositorySafe);
+
+        Assert.False(result.IsBlocked);
+        Assert.Equal("docs/split-output.md", Assert.Single(result.Files).Path);
+    }
 }
