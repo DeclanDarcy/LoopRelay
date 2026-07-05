@@ -114,6 +114,24 @@ If roadmap revision is required, say so explicitly and explain why.
 
 ---
 
+## Retired Epic Rules
+
+The runtime context may include a `## Retired Epics` section.
+
+Those rows are durable retirement facts from prior epic-preparation audits.
+
+Do not select an existing roadmap epic whose stable identity matches a retired epic.
+
+Match by Epic ID first.
+
+If Epic ID is unknown or absent, match by Epic Name.
+
+Retired epics may still be mentioned as context for why roadmap revision may be needed, but they are not eligible for selection as the next existing roadmap epic.
+
+Do not copy retired-epic rows into durable state.
+
+---
+
 ## Strategic Selection Principle
 
 Select the initiative that most improves long-horizon convergence by balancing:

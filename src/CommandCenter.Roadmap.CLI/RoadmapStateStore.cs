@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace CommandCenter.Roadmap.Cli;
@@ -62,7 +63,7 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             "|---|---|",
             $"| Ledger Path | {RoadmapArtifactPaths.DecisionLedger} |",
             $"| Last Decision ID | {document.LastDecisionId} |",
-            $"| Retired Exclusions | {document.RetiredExclusionsCount} |",
+            $"| Retired Epics | {document.RetiredEpicsCount} |",
             $"| Split Families | {document.SplitFamiliesCount} |",
             string.Empty,
             "## Projection Manifest Summary",
@@ -88,19 +89,22 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             string.Empty,
             "## Runtime State",
             string.Empty,
-            "### Retired Epic Exclusions",
+            "### Retired Epics",
             string.Empty,
         ]);
 
-        if (document.RetiredEpicExclusions.Count == 0)
+        if (document.RetiredEpics.Count == 0)
         {
             lines.Add("None");
         }
         else
         {
-            foreach (string exclusion in document.RetiredEpicExclusions)
+            lines.Add("| Epic ID | Epic Name | Retired At | Audit Evidence | Primary Reason |");
+            lines.Add("|---|---|---|---|---|");
+            foreach (RetiredEpic retired in document.RetiredEpics)
             {
-                lines.Add($"- {exclusion}");
+                lines.Add(
+                    $"| {Escape(retired.EpicId)} | {Escape(retired.EpicName)} | {retired.RetiredAt:O} | {Escape(retired.AuditEvidencePath)} | {Escape(retired.PrimaryReason)} |");
             }
         }
 
@@ -122,7 +126,7 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             state = parsed;
         }
 
-        IReadOnlyList<string> retired = ParseRetiredExclusions(content);
+        IReadOnlyList<RetiredEpic> retired = ParseRetiredEpics(content);
         var transition = new RoadmapTransitionSummary(
             state,
             state,
@@ -147,7 +151,40 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             retired);
     }
 
-    private static IReadOnlyList<string> ParseRetiredExclusions(string content)
+    private static IReadOnlyList<RetiredEpic> ParseRetiredEpics(string content)
+    {
+        int start = content.IndexOf("### Retired Epics", StringComparison.Ordinal);
+        if (start >= 0)
+        {
+            string section = ExtractSubsection(content, start, "### Retired Epics".Length);
+            return MarkdownTableParser.ParseTables(section)
+                .Select(ParseRetiredEpicRow)
+                .Where(retired => retired.HasStableIdentity)
+                .ToList();
+        }
+
+        return ParseLegacyRetiredExclusions(content);
+    }
+
+    private static RetiredEpic ParseRetiredEpicRow(IReadOnlyDictionary<string, string> row)
+    {
+        string epicId = Field(row, "Epic ID", "Unknown");
+        string epicName = Field(row, "Epic Name", "Unknown");
+        string reason = Field(row, "Primary Reason", "Legacy retired epic record.");
+        string evidence = Field(row, "Audit Evidence", "Unknown");
+        string retiredAtValue = Field(row, "Retired At", string.Empty);
+        DateTimeOffset retiredAt = DateTimeOffset.TryParse(
+            retiredAtValue,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out DateTimeOffset parsed)
+            ? parsed
+            : DateTimeOffset.MinValue;
+
+        return new RetiredEpic(epicId, epicName, reason, evidence, retiredAt);
+    }
+
+    private static IReadOnlyList<RetiredEpic> ParseLegacyRetiredExclusions(string content)
     {
         int start = content.IndexOf("### Retired Epic Exclusions", StringComparison.Ordinal);
         if (start < 0)
@@ -155,16 +192,35 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             return [];
         }
 
-        string tail = content[start..];
-        int next = tail.IndexOf("\n### ", "### Retired Epic Exclusions".Length, StringComparison.Ordinal);
-        string section = next < 0 ? tail : tail[..next];
+        string section = ExtractSubsection(content, start, "### Retired Epic Exclusions".Length);
         return section.Split('\n')
             .Select(line => line.Trim())
             .Where(line => line.StartsWith("- ", StringComparison.Ordinal))
             .Select(line => line[2..].Trim())
             .Where(line => line.Length > 0)
+            .Where(value => !RetiredEpic.IsWorkflowCommand(value))
+            .Select(value => new RetiredEpic(
+                "Unknown",
+                value,
+                "Imported from legacy retired epic exclusion state.",
+                RoadmapArtifactPaths.State,
+                DateTimeOffset.MinValue))
             .ToList();
     }
+
+    private static string ExtractSubsection(string content, int start, int headingLength)
+    {
+        string tail = content[start..];
+        int next = tail.IndexOf("\n### ", headingLength, StringComparison.Ordinal);
+        return next < 0 ? tail : tail[..next];
+    }
+
+    private static string Field(IReadOnlyDictionary<string, string> row, string field, string fallback) =>
+        row.TryGetValue(field, out string? value) && !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : fallback;
+
+    private static string Escape(string value) => value.Replace("|", "\\|", StringComparison.Ordinal);
 
     [GeneratedRegex(@"## Current State\s+(?<state>[A-Za-z0-9]+)", RegexOptions.CultureInvariant)]
     private static partial Regex CurrentStateRegex();

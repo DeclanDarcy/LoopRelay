@@ -6,11 +6,11 @@ internal sealed record RoadmapStateDocument(
     RoadmapTransitionSummary LastTransition,
     IReadOnlyList<BlockerRow> Blockers,
     string LastDecisionId,
-    int RetiredExclusionsCount,
+    int RetiredEpicsCount,
     int SplitFamiliesCount,
     ProjectionManifestCounts ProjectionManifestCounts,
     IReadOnlyList<string> NextValidTransitions,
-    IReadOnlyList<string> RetiredEpicExclusions);
+    IReadOnlyList<RetiredEpic> RetiredEpics);
 
 internal sealed record ArtifactStateRow(string Artifact, string Path, string Status);
 

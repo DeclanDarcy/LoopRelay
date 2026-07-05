@@ -5,19 +5,23 @@ namespace CommandCenter.Roadmap.CLI.Tests;
 public sealed class RoadmapPromptContextBuilderTests
 {
     [Fact]
-    public async Task Selection_context_contains_projection_completion_roadmap_and_exclusions()
+    public async Task Selection_context_contains_projection_completion_roadmap_and_retired_epics()
     {
         using var repo = new TempRepo();
         repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "current strategic state");
         repo.Write(RoadmapArtifactPaths.RoadmapFile, "roadmap root");
         repo.Write(".agents/roadmap/b.md", "roadmap b");
 
-        string context = await new RoadmapPromptContextBuilder(repo.Artifacts).BuildSelectionContextAsync("projection", ["retired epic"]);
+        string context = await new RoadmapPromptContextBuilder(repo.Artifacts).BuildSelectionContextAsync(
+            "projection",
+            [new RetiredEpic("EPIC-001", "Retired Epic", "Already satisfied.", ".agents/evidence/audits/epic-preparation-audit.0001.md", DateTimeOffset.UtcNow)]);
 
         Assert.Contains("projection", context, StringComparison.Ordinal);
         Assert.Contains("current strategic state", context, StringComparison.Ordinal);
         Assert.Contains("roadmap root", context, StringComparison.Ordinal);
-        Assert.Contains("retired epic", context, StringComparison.Ordinal);
+        Assert.Contains("## Retired Epics", context, StringComparison.Ordinal);
+        Assert.Contains("EPIC-001", context, StringComparison.Ordinal);
+        Assert.Contains("Retired Epic", context, StringComparison.Ordinal);
     }
 
     [Fact]

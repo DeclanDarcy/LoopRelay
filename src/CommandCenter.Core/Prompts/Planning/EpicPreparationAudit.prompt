@@ -473,6 +473,20 @@ Use this exact structure.
 
 ---
 
+## Identity Preservation Rules
+
+The `## Selected Epic` table is durable state input for downstream retirement handling.
+
+Copy the strongest selected epic identity available from the selected-epic context.
+
+Use Epic ID when the selected initiative output supplies one.
+
+Use Epic Name as a fallback only when Epic ID is unavailable or unknown.
+
+Do not place routing commands such as `Retire Epic`, `Realign Epic`, or `Gather More Evidence` in Epic ID or Epic Name.
+
+---
+
 # Epic Preparation Audit
 
 ## Purpose

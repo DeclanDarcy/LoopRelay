@@ -17,12 +17,21 @@ public sealed class MarkdownParserTests
         | Initiative Type | Existing Roadmap Epic |
         | Confidence | High |
         | Primary Reason | Best leverage |
+
+        ## If Existing Roadmap Epic Selected
+
+        | Field | Value |
+        |---|---|
+        | Epic ID | EPIC-001 |
+        | Epic Name | Epic A |
         """;
 
         SelectionDecision decision = new SelectionParser().Parse(markdown);
 
         Assert.Equal("Select Existing Epic", decision.RecommendedOutcome);
         Assert.Equal("Epic A", decision.RecommendedInitiative);
+        Assert.Equal("EPIC-001", decision.ExistingEpicId);
+        Assert.Equal("Epic A", decision.ExistingEpicName);
     }
 
     [Fact]
@@ -31,17 +40,43 @@ public sealed class MarkdownParserTests
         foreach (string disposition in new[] { "Realign", "Reimagine", "Retire", "Insufficient Evidence" })
         {
             string markdown = $$"""
+            ## Selected Epic
+
+            | Field | Value |
+            |---|---|
+            | Epic ID | EPIC-001 |
+            | Epic Name | Epic A |
+
             ## Audit Disposition
 
             | Field | Value |
             |---|---|
             | Disposition | {{disposition}} |
             | Confidence | Medium |
+            | Primary Reason | Test reason |
+            | Evidence Strength | Moderate |
             | Recommended Next Step | Gather More Evidence |
             """;
 
             Assert.Equal(disposition, new EpicPreparationAuditParser().Parse(markdown).Disposition);
         }
+    }
+
+    [Fact]
+    public void Selection_parser_rejects_existing_epic_without_identity_section()
+    {
+        string markdown = """
+        ## Recommendation Summary
+
+        | Field | Value |
+        |---|---|
+        | Recommended Outcome | Select Existing Epic |
+        | Recommended Initiative | Epic A |
+        | Initiative Type | Existing Roadmap Epic |
+        | Confidence | High |
+        """;
+
+        Assert.Throws<MarkdownParseException>(() => new SelectionParser().Parse(markdown));
     }
 
     [Fact]

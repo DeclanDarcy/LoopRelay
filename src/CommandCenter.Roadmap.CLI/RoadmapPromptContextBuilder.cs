@@ -6,7 +6,7 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
 {
     private const string NorthStarMarker = "<!-- BEGIN NORTH-STAR FILE:";
 
-    public async Task<string> BuildSelectionContextAsync(string projectionContent, IReadOnlyList<string> retiredEpicExclusions)
+    public async Task<string> BuildSelectionContextAsync(string projectionContent, IReadOnlyList<RetiredEpic> retiredEpics)
     {
         string completion = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
         string roadmap = await artifacts.ReadRoadmapSourceAsync();
@@ -14,7 +14,7 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
             Section("Projection Content", projectionContent),
             Section("Current Roadmap Completion Context", completion),
             Section("Roadmap Source", roadmap),
-            Section("Retired Epic Exclusions", retiredEpicExclusions.Count == 0 ? "None" : string.Join(Environment.NewLine, retiredEpicExclusions.Select(item => "- " + item))),
+            Section("Retired Epics", RenderRetiredEpics(retiredEpics)),
         ]));
     }
 
@@ -94,6 +94,37 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
     }
 
     private static ContextSection Section(string title, string content) => new(title, content);
+
+    private static string RenderRetiredEpics(IReadOnlyList<RetiredEpic> retiredEpics)
+    {
+        if (retiredEpics.Count == 0)
+        {
+            return "None";
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("| Identity Kind | Stable Identity | Epic Name | Audit Evidence | Primary Reason |");
+        builder.AppendLine("|---|---|---|---|---|");
+        foreach (RetiredEpic retired in retiredEpics)
+        {
+            builder
+                .Append("| ")
+                .Append(Escape(retired.IdentityKind))
+                .Append(" | ")
+                .Append(Escape(retired.StableIdentity))
+                .Append(" | ")
+                .Append(Escape(retired.DisplayName))
+                .Append(" | ")
+                .Append(Escape(retired.AuditEvidencePath))
+                .Append(" | ")
+                .Append(Escape(retired.PrimaryReason))
+                .AppendLine(" |");
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string Escape(string value) => value.Replace("|", "\\|", StringComparison.Ordinal);
 
     private static string ValidateNoRawNorthStar(string context)
     {

@@ -29,7 +29,26 @@ internal sealed class SelectionParser
         string initiativeType = RequiredAllowed(fields, "Initiative Type", AllowedInitiativeTypes);
         string confidence = RequiredAllowed(fields, "Confidence", CommonAllowedValues.Confidence);
         string primaryReason = fields.TryGetValue("Primary Reason", out string? reason) ? reason : string.Empty;
-        return new SelectionDecision(outcome, initiative, initiativeType, confidence, primaryReason);
+        (string? existingEpicId, string? existingEpicName) = ParseExistingEpicIdentity(markdown, outcome);
+        return new SelectionDecision(outcome, initiative, initiativeType, confidence, primaryReason, existingEpicId, existingEpicName);
+    }
+
+    private static (string? EpicId, string? EpicName) ParseExistingEpicIdentity(string markdown, string outcome)
+    {
+        if (!string.Equals(outcome, "Select Existing Epic", StringComparison.Ordinal))
+        {
+            return (null, null);
+        }
+
+        IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(markdown, "## If Existing Roadmap Epic Selected");
+        string epicId = Required(fields, "Epic ID");
+        string epicName = Required(fields, "Epic Name");
+        if (!RetiredEpic.IsKnown(epicId) && !RetiredEpic.IsKnown(epicName))
+        {
+            throw new MarkdownParseException("Existing roadmap epic selection must include Epic ID or Epic Name.");
+        }
+
+        return (epicId, epicName);
     }
 
     private static string Required(IReadOnlyDictionary<string, string> fields, string field)
@@ -55,4 +74,6 @@ internal sealed record SelectionDecision(
     string RecommendedInitiative,
     string InitiativeType,
     string Confidence,
-    string PrimaryReason);
+    string PrimaryReason,
+    string? ExistingEpicId,
+    string? ExistingEpicName);

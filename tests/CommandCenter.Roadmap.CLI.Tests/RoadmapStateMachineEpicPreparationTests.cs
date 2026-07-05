@@ -1,12 +1,179 @@
+using CommandCenter.Roadmap.Cli;
+
 namespace CommandCenter.Roadmap.CLI.Tests;
 
 public sealed class RoadmapStateMachineEpicPreparationTests
 {
     [Fact]
-    public void Placeholder_documents_epic_preparation_coverage()
+    public async Task Retire_disposition_is_successful_transition_and_persists_selected_identity()
     {
-        // The end-to-end state-machine selection tests exercise prompt transition state/journal persistence.
-        // Epic preparation routing is covered through parser, lifecycle, bundle, and invariant tests in this suite.
-        Assert.True(true);
+        using var repo = SeedRepo();
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(ExistingEpicSelection()),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EpicPreparationAudit")),
+            ScriptedAgentRuntime.Completed(RetireAudit()));
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.RetireEpic, state.CurrentState);
+        Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
+        Assert.Equal(RoadmapState.RetireEpic, state.LastTransition.To);
+        RetiredEpic retired = Assert.Single(state.RetiredEpics);
+        Assert.Equal("EPIC-001", retired.EpicId);
+        Assert.Equal("Epic A", retired.EpicName);
+        Assert.DoesNotContain("- Retire Epic", repo.Read(RoadmapArtifactPaths.State), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task Restart_after_retire_derives_selection_context_from_retired_epic_record()
+    {
+        using var repo = SeedRepo();
+        await RetireEpicAsync(repo);
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        string prompt = Assert.Single(runtime.Prompts);
+        Assert.Contains("## Retired Epics", prompt, StringComparison.Ordinal);
+        Assert.Contains("EPIC-001", prompt, StringComparison.Ordinal);
+        Assert.Contains("Epic A", prompt, StringComparison.Ordinal);
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Single(state.RetiredEpics);
+    }
+
+    [Fact]
+    public async Task Duplicate_retirement_is_deduplicated_by_stable_identity()
+    {
+        using var repo = SeedRepo();
+        await RetireEpicAsync(repo);
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ExistingEpicSelection()),
+            ScriptedAgentRuntime.Completed(RetireAudit()));
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RetiredEpic retired = Assert.Single(state.RetiredEpics);
+        Assert.Equal("EPIC-001", retired.EpicId);
+    }
+
+    [Fact]
+    public async Task Later_blocked_persistence_preserves_retired_epic_records()
+    {
+        using var repo = SeedRepo();
+        await RetireEpicAsync(repo);
+        var runtime = new ScriptedAgentRuntime(ScriptedAgentRuntime.Failed("selection failed"));
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
+        RetiredEpic retired = Assert.Single(state.RetiredEpics);
+        Assert.Equal("EPIC-001", retired.EpicId);
+    }
+
+    [Fact]
+    public async Task Runtime_prompt_failure_remains_failed_transition()
+    {
+        using var repo = SeedRepo();
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Failed("selection failed"));
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
+        string state = repo.Read(RoadmapArtifactPaths.State);
+        Assert.Contains("EvidenceBlocked", state, StringComparison.Ordinal);
+        Assert.Contains("| Status | Failed |", state, StringComparison.Ordinal);
+    }
+
+    private static TempRepo SeedRepo()
+    {
+        var repo = new TempRepo();
+        repo.SeedNorthStar();
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");
+        repo.Write(RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        return repo;
+    }
+
+    private static async Task RetireEpicAsync(TempRepo repo)
+    {
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(ExistingEpicSelection()),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EpicPreparationAudit")),
+            ScriptedAgentRuntime.Completed(RetireAudit()));
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+    }
+
+    private static string ExistingEpicSelection() => """
+        # Next Strategic Initiative Selection
+
+        ## Recommendation Summary
+
+        | Field | Value |
+        |---|---|
+        | Recommended Outcome | Select Existing Epic |
+        | Recommended Initiative | Epic A |
+        | Initiative Type | Existing Roadmap Epic |
+        | Confidence | High |
+        | Primary Reason | Best leverage |
+
+        ## If Existing Roadmap Epic Selected
+
+        | Field | Value |
+        |---|---|
+        | Epic ID | EPIC-001 |
+        | Epic Name | Epic A |
+        | Why This Epic Now | It is the next obsolete item to verify. |
+        | Dependencies Satisfied? | Yes |
+        | Required Pre-Implementation Follow-Up | None |
+        """;
+
+    private static string RetireAudit() => """
+        # Epic Preparation Audit
+
+        ## Selected Epic
+
+        | Field | Value |
+        |---|---|
+        | Epic ID | EPIC-001 |
+        | Epic Name | Epic A |
+        | Claimed Strategic Purpose | Old capability |
+        | Apparent Projection Link | Capability A |
+
+        ## Audit Disposition
+
+        | Field | Value |
+        |---|---|
+        | Disposition | Retire |
+        | Confidence | High |
+        | Primary Reason | Repository evidence shows the capability is already satisfied. |
+        | Evidence Strength | Strong |
+        | Recommended Next Step | Retire Epic |
+        """;
+
+    private static string StrategicInvestigationSelection() => """
+        # Next Strategic Initiative Selection
+
+        ## Recommendation Summary
+
+        | Field | Value |
+        |---|---|
+        | Recommended Outcome | Strategic Investigation Required |
+        | Recommended Initiative | Investigate A |
+        | Initiative Type | Strategic Investigation |
+        | Confidence | Medium |
+        | Primary Reason | Evidence is insufficient |
+        """;
 }
