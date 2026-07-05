@@ -16,6 +16,8 @@ public sealed class ExecutionPromptGeneratorTests
         string content = await new ExecutionPromptGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts)).GenerateAsync();
 
         Assert.Contains("Start with `.agents/specs/a.md`", content, StringComparison.Ordinal);
+        Assert.Contains("## Required Execution Disposition", content, StringComparison.Ordinal);
+        Assert.Contains("| Status | Epic Complete OR Continue Required OR Execution Blocked |", content, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -69,6 +69,7 @@ internal sealed class TransitionInputResolver(RoadmapArtifacts artifacts)
                 break;
             case "EvaluateEpicCompletionAndDrift":
                 inputs.AddRequired(RoadmapArtifactPaths.ActiveEpic, TransitionInputRole.ActiveEpic);
+                inputs.AddRequired(RequirePath(request.Context.ExecutionEvidencePath, request.RuntimePromptName), TransitionInputRole.ExecutionEvidence);
                 await AddMilestoneSpecInputsAsync(inputs);
                 break;
             case "UpdateRoadmapCompletionContext":
@@ -187,7 +188,8 @@ internal sealed record TransitionInputRequest(
 
 internal sealed record TransitionInputContext(
     string? AuditEvidencePath = null,
-    string? CompletionEvaluationPath = null)
+    string? CompletionEvaluationPath = null,
+    string? ExecutionEvidencePath = null)
 {
     public static TransitionInputContext Empty { get; } = new();
 
@@ -196,6 +198,9 @@ internal sealed record TransitionInputContext(
 
     public static TransitionInputContext CompletionEvaluation(string path) =>
         new(CompletionEvaluationPath: path);
+
+    public static TransitionInputContext ExecutionEvidence(string path) =>
+        new(ExecutionEvidencePath: path);
 }
 
 internal sealed record TransitionInputSnapshot(
@@ -242,6 +247,7 @@ internal static class TransitionInputRole
     public const string ActiveEpic = "ActiveEpic";
     public const string AuditEvidence = "AuditEvidence";
     public const string MilestoneSpec = "MilestoneSpec";
+    public const string ExecutionEvidence = "ExecutionEvidence";
     public const string CompletionEvaluation = "CompletionEvaluation";
 }
 

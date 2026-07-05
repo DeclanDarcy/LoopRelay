@@ -6,7 +6,7 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal interface IRoadmapExecutionBridge
 {
-    Task<RoadmapExecutionBridgeResult> RunAsync(CancellationToken cancellationToken);
+    Task<RoadmapExecutionTransportResult> RunAsync(CancellationToken cancellationToken);
 }
 
 internal sealed class RoadmapExecutionBridge(
@@ -15,7 +15,7 @@ internal sealed class RoadmapExecutionBridge(
     Repository repository,
     ILoopConsole console) : IRoadmapExecutionBridge
 {
-    public async Task<RoadmapExecutionBridgeResult> RunAsync(CancellationToken cancellationToken)
+    public async Task<RoadmapExecutionTransportResult> RunAsync(CancellationToken cancellationToken)
     {
         string prompt = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ExecutionPrompt);
         var renderer = new ConsoleTurnRenderer(console);
@@ -27,16 +27,29 @@ internal sealed class RoadmapExecutionBridge(
 
         renderer.EchoIfSilent(result.Output);
         return result.State == AgentTurnState.Completed
-            ? RoadmapExecutionBridgeResult.Completed(result.Output)
-            : RoadmapExecutionBridgeResult.Failed(result.Diagnostics ?? $"Execution bridge ended in state {result.State}.");
+            ? RoadmapExecutionTransportResult.Completed(result.Output)
+            : RoadmapExecutionTransportResult.Failed(
+                result.State.ToString(),
+                result.Diagnostics ?? $"Execution bridge ended in state {result.State}.",
+                result.Output);
     }
 }
 
-internal sealed record RoadmapExecutionBridgeResult(bool EpicCompleted, bool Blocked, string Message)
+internal sealed record RoadmapExecutionTransportResult(
+    ExecutionTransportStatus Status,
+    string AgentState,
+    string Output,
+    string Diagnostics)
 {
-    public static RoadmapExecutionBridgeResult Completed(string message) => new(true, false, message);
+    public static RoadmapExecutionTransportResult Completed(string output) =>
+        new(ExecutionTransportStatus.Completed, AgentTurnState.Completed.ToString(), output, string.Empty);
 
-    public static RoadmapExecutionBridgeResult BlockedResult(string message) => new(false, true, message);
+    public static RoadmapExecutionTransportResult Failed(string agentState, string diagnostics, string output = "") =>
+        new(ExecutionTransportStatus.Failed, agentState, output, diagnostics);
+}
 
-    public static RoadmapExecutionBridgeResult Failed(string message) => new(false, false, message);
+internal enum ExecutionTransportStatus
+{
+    Completed,
+    Failed,
 }

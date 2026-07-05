@@ -20,6 +20,7 @@ internal static class RoadmapArtifactPaths
     public const string SplitFamiliesDirectory = ".agents/splits";
     public const string SelectionEvidenceDirectory = ".agents/evidence/selection";
     public const string AuditEvidenceDirectory = ".agents/evidence/audits";
+    public const string ExecutionEvidenceDirectory = ".agents/evidence/execution";
     public const string EvaluationEvidenceDirectory = ".agents/evidence/evaluations";
     public const string BlockerEvidenceDirectory = ".agents/evidence/blockers";
     public const string OrchestrationEvidenceDirectory = ".agents/evidence/orchestration";

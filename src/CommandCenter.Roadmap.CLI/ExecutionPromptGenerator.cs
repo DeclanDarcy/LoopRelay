@@ -36,6 +36,25 @@ internal sealed class ExecutionPromptGenerator(RoadmapArtifacts artifacts, Artif
             ## Operational Context
 
             {operationalContext}
+
+            ## Required Execution Disposition
+
+            End your response with this exact section. The roadmap runtime will parse it to decide the next workflow transition. Do not omit it.
+
+            ```markdown
+            ## Execution Disposition
+
+            | Field | Value |
+            |---|---|
+            | Status | Epic Complete OR Continue Required OR Execution Blocked |
+            | Confidence | High OR Medium OR Low OR Unclear |
+            | Evidence Summary | Concise implementation evidence, continuation reason, or blocker summary. |
+            | Next Step | EvaluateEpicCompletionAndDrift OR ContinueExecution OR ResolveExecutionBlocker |
+            ```
+
+            Use `Epic Complete` only when you explicitly claim the active epic implementation is complete and ready for independent completion certification.
+            Use `Continue Required` when the execution turn finished successfully but more implementation work remains.
+            Use `Execution Blocked` when execution cannot proceed without resolving a domain blocker or required human intervention.
             """;
 
         if (content.Contains("<!-- BEGIN PROJECT-CONTEXT FILE:", StringComparison.Ordinal))

@@ -123,7 +123,7 @@ public sealed class RoadmapFailurePersistenceTests
     }
 
     [Fact]
-    public async Task Execution_bridge_failure_uses_generic_safety_net_when_no_lower_layer_persisted_state()
+    public async Task Execution_bridge_failure_is_persisted_as_runtime_failure()
     {
         using var repo = SeedRepo(includeCompletionContext: true);
         var runtime = new ScriptedAgentRuntime(
@@ -141,8 +141,20 @@ public sealed class RoadmapFailurePersistenceTests
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
         RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        AssertGenericBlockedState(repo, state, "RoadmapStateMachine");
+        Assert.Equal(RoadmapState.Failed, state.CurrentState);
+        Assert.Equal(TransitionStatus.Failed, state.LastTransition.Status);
+        Assert.Equal(RoadmapState.ExecutionLoop, state.LastTransition.From);
+        Assert.Equal(RoadmapState.Failed, state.LastTransition.To);
+        Assert.Equal("ExecutionLoop", state.LastTransition.Prompt);
+        Assert.Equal("None", state.LastTransition.Projection);
+        Assert.Equal("Runtime Failure", state.LastTransition.Decision);
+        Assert.StartsWith(RoadmapArtifactPaths.ExecutionEvidenceDirectory, state.LastTransition.Output, StringComparison.Ordinal);
+        Assert.Equal("RepairExecutionRuntimeFailure", state.TransitionIntent.Intent);
+        Assert.Equal(RoadmapState.Failed, state.TransitionIntent.DispatchState);
+        Assert.Equal([state.LastTransition.Output], state.TransitionIntent.EvidencePaths);
         Assert.Contains("execution bridge unavailable", Assert.Single(state.Blockers).Blocker, StringComparison.Ordinal);
+        Assert.Contains("Runtime Failure", repo.Read(state.LastTransition.Output), StringComparison.Ordinal);
+        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
     }
 
     private static TempRepo SeedRepo(bool includeCompletionContext)
@@ -400,7 +412,7 @@ public sealed class RoadmapFailurePersistenceTests
 
     private sealed class FailingExecutionBridge(string message) : IRoadmapExecutionBridge
     {
-        public Task<RoadmapExecutionBridgeResult> RunAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(RoadmapExecutionBridgeResult.Failed(message));
+        public Task<RoadmapExecutionTransportResult> RunAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(RoadmapExecutionTransportResult.Failed("Failed", message));
     }
 }

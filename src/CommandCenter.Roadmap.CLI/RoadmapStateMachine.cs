@@ -26,6 +26,7 @@ internal sealed class RoadmapStateMachine(
     ExecutionPromptGenerator executionPromptGenerator,
     ExecutionCompatibilityMaterializer executionMaterializer,
     IRoadmapExecutionBridge executionBridge,
+    RoadmapExecutionOutcomeInterpreter executionInterpreter,
     InvariantValidator invariantValidator,
     ILoopConsole console)
 {
@@ -130,6 +131,14 @@ internal sealed class RoadmapStateMachine(
             case RoadmapResumeAction.RunExecution:
                 await executionMaterializer.MaterializeAsync(cancellationToken);
                 return await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
+
+            case RoadmapResumeAction.EvaluateCompletionClaim:
+                return await RunCompletionCertificationAsync(
+                    projectContext,
+                    DateTimeOffset.UtcNow,
+                    await ReadPersistedExecutionEvidencePathAsync(),
+                    cancellationToken,
+                    persistCompletionClaim: false);
 
             case RoadmapResumeAction.Terminal:
                 return resumePlan.TerminalOutcome ?? RoadmapOutcome.Paused;
@@ -690,35 +699,79 @@ internal sealed class RoadmapStateMachine(
             ["ContinueExecution"]);
 
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Executing);
-        RoadmapExecutionBridgeResult bridge = await executionBridge.RunAsync(cancellationToken);
-        if (!bridge.EpicCompleted)
-        {
-            throw new RoadmapStepException(bridge.Message);
-        }
+        RoadmapExecutionTransportResult transport = await executionBridge.RunAsync(cancellationToken);
+        RoadmapExecutionOutcome executionOutcome = executionInterpreter.Interpret(transport);
+        string executionEvidencePath = await PersistExecutionEvidenceAsync(transport, executionOutcome);
 
+        return executionOutcome.Kind switch
+        {
+            RoadmapExecutionOutcomeKind.EpicComplete => await RunCompletionCertificationAsync(
+                projectContext,
+                executionStarted,
+                executionEvidencePath,
+                cancellationToken),
+            RoadmapExecutionOutcomeKind.ContinueRequired => await PersistExecutionContinuationAsync(
+                executionOutcome,
+                executionStarted,
+                executionEvidencePath),
+            RoadmapExecutionOutcomeKind.ExecutionBlocked => await PersistExecutionBlockedAsync(
+                executionOutcome,
+                executionStarted,
+                executionEvidencePath),
+            RoadmapExecutionOutcomeKind.MalformedOutput => await PersistMalformedExecutionOutputAsync(
+                executionOutcome,
+                executionStarted,
+                executionEvidencePath),
+            RoadmapExecutionOutcomeKind.RuntimeFailure => await PersistExecutionRuntimeFailureAsync(
+                executionOutcome,
+                executionStarted,
+                executionEvidencePath),
+            _ => throw new RoadmapStepException($"Unsupported execution outcome: {executionOutcome.Kind}."),
+        };
+    }
+
+    private async Task<RoadmapOutcome> RunCompletionCertificationAsync(
+        ProjectContext projectContext,
+        DateTimeOffset executionStarted,
+        string executionEvidencePath,
+        CancellationToken cancellationToken,
+        bool persistCompletionClaim = true)
+    {
         DateTimeOffset executionCompleted = DateTimeOffset.UtcNow;
-        await SaveStateAsync(
-            RoadmapState.EpicCompletionDetected,
-            TransitionStatus.Completed,
-            RoadmapState.ExecutionLoop,
-            RoadmapState.EpicCompletionDetected,
-            "ExecutionLoop",
-            "None",
-            RoadmapArtifactPaths.ActiveEpic,
-            "Epic Completed",
-            executionStarted,
-            executionCompleted,
-            null,
-            null,
-            new RoadmapTransitionIntent("EvaluateEpicCompletionAndDrift", RoadmapState.EpicCompletionDetected, [RoadmapArtifactPaths.ActiveEpic]),
-            ["EvaluateEpicCompletionAndDrift"]);
+        if (persistCompletionClaim)
+        {
+            await SaveStateAsync(
+                RoadmapState.EpicCompletionDetected,
+                TransitionStatus.Completed,
+                RoadmapState.ExecutionLoop,
+                RoadmapState.EpicCompletionDetected,
+                "ExecutionOutcomeInterpretation",
+                "None",
+                executionEvidencePath,
+                "Epic Complete",
+                executionStarted,
+                executionCompleted,
+                null,
+                null,
+                new RoadmapTransitionIntent("EvaluateEpicCompletionAndDrift", RoadmapState.EpicCompletionDetected, [executionEvidencePath]),
+                ["EvaluateEpicCompletionAndDrift"]);
+        }
 
         const string runtimePrompt = "EvaluateEpicCompletionAndDrift";
         console.Phase("Evaluate epic completion and drift");
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = await contextBuilder.BuildCompletionEvaluationContextAsync(projection.Content);
-        string output = await RunPromptTransitionAsync(RoadmapState.EpicCompletionDetected, RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, context, string.Empty, [RoadmapArtifactPaths.EvaluationEvidenceDirectory], cancellationToken);
+        string context = await contextBuilder.BuildCompletionEvaluationContextAsync(projection.Content, executionEvidencePath);
+        string output = await RunPromptTransitionAsync(
+            RoadmapState.EpicCompletionDetected,
+            RoadmapState.CompletionEvaluationAndContextUpdate,
+            runtimePrompt,
+            projection.Definition.ProjectionPath,
+            context,
+            string.Empty,
+            [RoadmapArtifactPaths.EvaluationEvidenceDirectory],
+            cancellationToken,
+            TransitionInputContext.ExecutionEvidence(executionEvidencePath));
         string evaluationPath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "epic-completion-and-drift", output);
         CompletionEvaluationDecision decision = new CompletionEvaluationParser().Parse(output);
         CompletionCertificationRoute route = completionRouter.Route(decision);
@@ -739,6 +792,152 @@ internal sealed class RoadmapStateMachine(
 
         await PersistCompletionRouteAsync(route, decision, projection.Definition.ProjectionPath, evaluationPath);
         return route.CliOutcome;
+    }
+
+    private async Task<string> ReadPersistedExecutionEvidencePathAsync()
+    {
+        RoadmapStateDocument? state = await stateStore.LoadAsync();
+        IReadOnlyList<string> candidates = (state?.TransitionIntent.EvidencePaths ?? [])
+            .Concat(OutputEvidencePaths(state?.LastTransition.Output ?? string.Empty))
+            .Where(path => path.StartsWith(RoadmapArtifactPaths.ExecutionEvidenceDirectory, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (string path in candidates)
+        {
+            if (await artifacts.GetStatusAsync(path) == ArtifactStatus.Present)
+            {
+                return path;
+            }
+        }
+
+        throw new RoadmapStepException("Cannot resume completion certification because execution evidence is missing.");
+    }
+
+    private async Task<string> PersistExecutionEvidenceAsync(
+        RoadmapExecutionTransportResult transport,
+        RoadmapExecutionOutcome outcome)
+    {
+        DateTimeOffset createdAt = DateTimeOffset.UtcNow;
+        string evidencePath = await artifacts.WriteNumberedEvidenceAsync(
+            RoadmapArtifactPaths.ExecutionEvidenceDirectory,
+            "execution-turn",
+            RoadmapExecutionEvidenceArtifact.Render(transport, outcome, createdAt));
+        await lifecycleStore.UpsertAsync(
+            evidencePath,
+            outcome.Kind is RoadmapExecutionOutcomeKind.EpicComplete or RoadmapExecutionOutcomeKind.ContinueRequired
+                ? ArtifactLifecycleState.Ready
+                : ArtifactLifecycleState.Blocked,
+            $"Execution outcome: {outcome.DecisionText}");
+        return evidencePath;
+    }
+
+    private async Task<RoadmapOutcome> PersistExecutionContinuationAsync(
+        RoadmapExecutionOutcome outcome,
+        DateTimeOffset executionStarted,
+        string executionEvidencePath)
+    {
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        await lifecycleStore.UpsertAsync(
+            RoadmapArtifactPaths.ActiveEpic,
+            ArtifactLifecycleState.Executing,
+            "Execution requested continuation.");
+        await SaveStateAsync(
+            RoadmapState.ExecutionLoop,
+            TransitionStatus.Paused,
+            RoadmapState.ExecutionLoop,
+            RoadmapState.ExecutionLoop,
+            "ExecutionOutcomeInterpretation",
+            "None",
+            executionEvidencePath,
+            outcome.DecisionText,
+            executionStarted,
+            completed,
+            null,
+            null,
+            new RoadmapTransitionIntent("ContinueExecution", RoadmapState.ExecutionLoop, [RoadmapArtifactPaths.ExecutionPrompt, executionEvidencePath]),
+            ["ExecutionLoop", "ContinueExecution"]);
+        return RoadmapOutcome.Paused;
+    }
+
+    private async Task<RoadmapOutcome> PersistExecutionBlockedAsync(
+        RoadmapExecutionOutcome outcome,
+        DateTimeOffset executionStarted,
+        string executionEvidencePath)
+    {
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        await lifecycleStore.UpsertAsync(
+            RoadmapArtifactPaths.ActiveEpic,
+            ArtifactLifecycleState.Executing,
+            "Execution blocked; active epic remains in execution lifecycle.");
+        await SaveStateAsync(
+            RoadmapState.ExecutionBlocked,
+            TransitionStatus.Paused,
+            RoadmapState.ExecutionLoop,
+            RoadmapState.ExecutionBlocked,
+            "ExecutionOutcomeInterpretation",
+            "None",
+            executionEvidencePath,
+            outcome.DecisionText,
+            executionStarted,
+            completed,
+            null,
+            [new BlockerRow(outcome.Message, $"Review {executionEvidencePath}, resolve the execution blocker, and rerun.")],
+            new RoadmapTransitionIntent("ResolveExecutionBlocker", RoadmapState.ExecutionBlocked, [executionEvidencePath]),
+            ["Resolve execution blocker and rerun"]);
+        return RoadmapOutcome.Paused;
+    }
+
+    private async Task<RoadmapOutcome> PersistMalformedExecutionOutputAsync(
+        RoadmapExecutionOutcome outcome,
+        DateTimeOffset executionStarted,
+        string executionEvidencePath)
+    {
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        await lifecycleStore.UpsertAsync(
+            RoadmapArtifactPaths.ActiveEpic,
+            ArtifactLifecycleState.Executing,
+            "Execution output was malformed; active epic remains executing.");
+        await SaveStateAsync(
+            RoadmapState.EvidenceBlocked,
+            TransitionStatus.Paused,
+            RoadmapState.ExecutionLoop,
+            RoadmapState.EvidenceBlocked,
+            "ExecutionOutcomeInterpretation",
+            "None",
+            executionEvidencePath,
+            outcome.DecisionText,
+            executionStarted,
+            completed,
+            null,
+            [new BlockerRow(outcome.Message, $"Review {executionEvidencePath}, repair the execution disposition output, and rerun.")],
+            new RoadmapTransitionIntent("ResolveMalformedExecutionOutput", RoadmapState.EvidenceBlocked, [executionEvidencePath]),
+            ["Resolve malformed execution output and rerun"]);
+        return RoadmapOutcome.Paused;
+    }
+
+    private async Task<RoadmapOutcome> PersistExecutionRuntimeFailureAsync(
+        RoadmapExecutionOutcome outcome,
+        DateTimeOffset executionStarted,
+        string executionEvidencePath)
+    {
+        DateTimeOffset failed = DateTimeOffset.UtcNow;
+        await SaveStateAsync(
+            RoadmapState.Failed,
+            TransitionStatus.Failed,
+            RoadmapState.ExecutionLoop,
+            RoadmapState.Failed,
+            "ExecutionLoop",
+            "None",
+            executionEvidencePath,
+            outcome.DecisionText,
+            executionStarted,
+            failed,
+            null,
+            [new BlockerRow(outcome.Message, $"Review {executionEvidencePath}, repair the execution runtime failure, and rerun.")],
+            new RoadmapTransitionIntent("RepairExecutionRuntimeFailure", RoadmapState.Failed, [executionEvidencePath]),
+            ["Repair execution runtime failure and rerun"]);
+        return RoadmapOutcome.Failed;
     }
 
     private async Task UpdateRoadmapCompletionContextAsync(ProjectContext projectContext, string evaluationPath, CancellationToken cancellationToken)

@@ -98,13 +98,25 @@ internal static class StateMachineFactory
             new ExecutionPromptGenerator(repo.Artifacts, lifecycle),
             new ExecutionCompatibilityMaterializer(repo.Artifacts),
             executionBridge,
+            new RoadmapExecutionOutcomeInterpreter(),
             invariants,
             new TestConsole());
     }
 
     private sealed class FakeRoadmapExecutionBridge : IRoadmapExecutionBridge
     {
-        public Task<RoadmapExecutionBridgeResult> RunAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(RoadmapExecutionBridgeResult.Completed("done"));
+        public Task<RoadmapExecutionTransportResult> RunAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(RoadmapExecutionTransportResult.Completed("""
+                # Execution Report
+
+                ## Execution Disposition
+
+                | Field | Value |
+                |---|---|
+                | Status | Epic Complete |
+                | Confidence | High |
+                | Evidence Summary | Test bridge explicitly claims epic completion. |
+                | Next Step | EvaluateEpicCompletionAndDrift |
+                """));
     }
 }

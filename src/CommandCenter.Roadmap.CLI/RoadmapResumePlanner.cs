@@ -217,6 +217,11 @@ internal sealed class RoadmapResumePlanner(
                     : RoadmapResumePlan.Block(state, safety.Reason);
             }
 
+            case RoadmapState.EpicCompletionDetected:
+                return RoadmapResumePlan.EvaluateCompletionClaim(
+                    state,
+                    "Execution completion claim is persisted; continue completion certification.");
+
             case RoadmapState.StrategicInvestigationRequired:
             case RoadmapState.RoadmapRevisionRequired:
             case RoadmapState.NoSuitableInitiative:
@@ -495,6 +500,9 @@ internal sealed record RoadmapResumePlan(
     public static RoadmapResumePlan RunExecution(RoadmapState sourceState, string reason) =>
         new(RoadmapResumeAction.RunExecution, sourceState, reason);
 
+    public static RoadmapResumePlan EvaluateCompletionClaim(RoadmapState sourceState, string reason) =>
+        new(RoadmapResumeAction.EvaluateCompletionClaim, sourceState, reason);
+
     public static RoadmapResumePlan Terminal(RoadmapOutcome outcome, RoadmapState sourceState, string reason) =>
         new(RoadmapResumeAction.Terminal, sourceState, reason, outcome);
 
@@ -511,6 +519,7 @@ internal enum RoadmapResumeAction
     PrepareExecutionFromMilestoneSpecs,
     PrepareExecutionFromOperationalContext,
     RunExecution,
+    EvaluateCompletionClaim,
     Terminal,
     Block,
 }
@@ -595,6 +604,7 @@ internal sealed class RoadmapArtifactSnapshot
             [RoadmapArtifactPaths.SpecsDirectory] = specs.Count,
             [RoadmapArtifactPaths.SelectionEvidenceDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.SelectionEvidenceDirectory, "*.md")).Count,
             [RoadmapArtifactPaths.AuditEvidenceDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.AuditEvidenceDirectory, "*.md")).Count,
+            [RoadmapArtifactPaths.ExecutionEvidenceDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.ExecutionEvidenceDirectory, "*.md")).Count,
             [RoadmapArtifactPaths.EvaluationEvidenceDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "*.md")).Count,
             [RoadmapArtifactPaths.BlockerEvidenceDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md")).Count,
             [RoadmapArtifactPaths.SplitFamiliesDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "*.md")).Count,

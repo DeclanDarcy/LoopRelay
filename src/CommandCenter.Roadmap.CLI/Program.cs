@@ -57,6 +57,7 @@ var operationalContext = new OperationalContextGenerator(artifacts, lifecycle);
 var executionPrompt = new ExecutionPromptGenerator(artifacts, lifecycle);
 var materializer = new ExecutionCompatibilityMaterializer(artifacts);
 IRoadmapExecutionBridge executionBridge = new RoadmapExecutionBridge(runtime, artifacts, repository, console);
+var executionInterpreter = new RoadmapExecutionOutcomeInterpreter();
 var invariants = new InvariantValidator(artifacts, projectContextLoader, projectionRegistry, contractRegistry, manifestStore, lifecycle, splitFamilies);
 var machine = new RoadmapStateMachine(
     artifacts,
@@ -82,6 +83,7 @@ var machine = new RoadmapStateMachine(
     executionPrompt,
     materializer,
     executionBridge,
+    executionInterpreter,
     invariants,
     console);
 

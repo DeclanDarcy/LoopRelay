@@ -49,9 +49,10 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
         ]));
     }
 
-    public async Task<string> BuildCompletionEvaluationContextAsync(string projectionContent)
+    public async Task<string> BuildCompletionEvaluationContextAsync(string projectionContent, string executionEvidencePath)
     {
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
+        string executionEvidence = await artifacts.ReadRequiredAsync(executionEvidencePath);
         IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
             .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
             .ToArray();
@@ -59,6 +60,7 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
         {
             Section("Projection Content", projectionContent),
             Section("Active Epic", activeEpic),
+            Section($"Execution Evidence: {executionEvidencePath}", executionEvidence),
             Section("Repository Inspection Instructions", "Inspect the repository in read-only mode and verify implementation reality before certifying completion."),
         };
 
