@@ -52,7 +52,9 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
     public async Task<string> BuildCompletionEvaluationContextAsync(string projectionContent)
     {
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        IReadOnlyList<string> specs = await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md");
+        IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
+            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
+            .ToArray();
         var sections = new List<ContextSection>
         {
             Section("Projection Content", projectionContent),

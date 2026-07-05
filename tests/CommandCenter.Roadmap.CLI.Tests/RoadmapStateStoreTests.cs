@@ -19,14 +19,18 @@ public sealed class RoadmapStateStoreTests
             1,
             0,
             new ProjectionManifestCounts(1, 0, 0),
+            new RoadmapTransitionIntent("CreateEpic", RoadmapState.ActiveEpicReady, [RoadmapArtifactPaths.ActiveEpic]),
             ["GenerateMilestoneDeepDives"],
             [new RetiredEpic("EPIC-001", "Retired Epic", "Already satisfied.", ".agents/evidence/audits/epic-preparation-audit.0001.md", DateTimeOffset.UtcNow)]));
 
         string content = repo.Read(RoadmapArtifactPaths.State);
         Assert.Contains("## Current State", content, StringComparison.Ordinal);
         Assert.Contains("## Last Transition", content, StringComparison.Ordinal);
+        Assert.Contains("## Transition Intent", content, StringComparison.Ordinal);
         RoadmapStateDocument? loaded = await store.LoadAsync();
         Assert.Equal(RoadmapState.ActiveEpicReady, loaded?.CurrentState);
+        Assert.Equal("CreateEpic", loaded?.TransitionIntent.Intent);
+        Assert.Contains(RoadmapArtifactPaths.ActiveEpic, loaded!.TransitionIntent.EvidencePaths);
         RetiredEpic retired = Assert.Single(loaded!.RetiredEpics);
         Assert.Equal("EPIC-001", retired.EpicId);
         Assert.Equal("Retired Epic", retired.EpicName);

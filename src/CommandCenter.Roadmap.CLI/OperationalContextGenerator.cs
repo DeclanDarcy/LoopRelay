@@ -6,7 +6,9 @@ internal sealed class OperationalContextGenerator(RoadmapArtifacts artifacts, Ar
     {
         cancellationToken.ThrowIfCancellationRequested();
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        IReadOnlyList<string> specs = await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md");
+        IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
+            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
+            .ToArray();
         if (specs.Count == 0)
         {
             throw new RoadmapStepException("Cannot generate operational context without milestone specs.");

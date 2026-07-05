@@ -68,7 +68,7 @@ internal sealed class InvariantValidator(
                 if (!await artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic) ||
                     !await artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext) ||
                     !await artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt) ||
-                    (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md")).Count == 0)
+                    (await MilestoneSpecPathsAsync()).Count == 0)
                 {
                     return await FailAsync(state, RoadmapState.EvidenceBlocked, "Execution bridge prerequisites are incomplete.");
                 }
@@ -97,7 +97,7 @@ internal sealed class InvariantValidator(
 
     private async Task<InvariantValidationResult> ValidateSpecsBelongToActiveEpicAsync(RoadmapState state)
     {
-        IReadOnlyList<string> specs = await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md");
+        IReadOnlyList<string> specs = await MilestoneSpecPathsAsync();
         foreach (string spec in specs)
         {
             string content = await artifacts.ReadRequiredAsync(spec);
@@ -131,6 +131,11 @@ internal sealed class InvariantValidator(
 
         return null;
     }
+
+    private async Task<IReadOnlyList<string>> MilestoneSpecPathsAsync() =>
+        (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
+            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
+            .ToArray();
 
     private async Task<InvariantValidationResult> FailAsync(RoadmapState currentState, RoadmapState failureState, string message)
     {

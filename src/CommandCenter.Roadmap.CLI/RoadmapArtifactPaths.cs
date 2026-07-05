@@ -51,5 +51,10 @@ internal static class RoadmapArtifactPaths
             ["EvaluateEpicCompletionAndDrift"] = ".agents/projections/epic-completion-evaluation.md",
         };
 
+    public static bool IsMilestoneSpecPath(string path) =>
+        path.StartsWith($"{SpecsDirectory}/", StringComparison.OrdinalIgnoreCase) &&
+        path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(Path.GetFileName(path), "bundle-manifest.md", StringComparison.OrdinalIgnoreCase);
+
     public static string SplitFamily(string familyId) => $".agents/splits/split-family-{familyId}.md";
 }

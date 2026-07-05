@@ -9,6 +9,7 @@ internal sealed class RoadmapStateMachine(
     ProjectionManifestStore manifestStore,
     ProjectionCache projectionCache,
     RoadmapPromptContextBuilder contextBuilder,
+    CompletionCertificationRouter completionRouter,
     RoadmapPromptRunner promptRunner,
     RoadmapStateStore stateStore,
     DecisionLedgerStore decisionLedger,
@@ -80,8 +81,7 @@ internal sealed class RoadmapStateMachine(
             }
 
             await GenerateMilestonesAndExecutionContextAsync(projectContext, cancellationToken);
-            await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
-            return RoadmapOutcome.Completed;
+            return await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -277,7 +277,7 @@ internal sealed class RoadmapStateMachine(
         await executionMaterializer.MaterializeAsync(cancellationToken);
     }
 
-    private async Task RunExecutionAndCertificationAsync(ProjectContext projectContext, CancellationToken cancellationToken)
+    private async Task<RoadmapOutcome> RunExecutionAndCertificationAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.ExecutionPromptReady, projectContext.Hash, cancellationToken);
         if (!invariant.IsValid)
@@ -300,15 +300,24 @@ internal sealed class RoadmapStateMachine(
         string output = await RunPromptTransitionAsync(RoadmapState.EpicCompletionDetected, RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, context, string.Empty, [RoadmapArtifactPaths.EvaluationEvidenceDirectory], cancellationToken);
         string evaluationPath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "epic-completion-and-drift", output);
         CompletionEvaluationDecision decision = new CompletionEvaluationParser().Parse(output);
+        CompletionCertificationRoute route = completionRouter.Route(decision);
         await AppendDecisionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, evaluationPath, decision.ClosureRecommendation, "Unclear", decision.OverallCompletionStatus);
 
-        if (decision.ClosureRecommendation is not ("Close Epic" or "Close With Follow-Up"))
+        if (route.RequiresRoadmapCompletionContextUpdate)
         {
-            throw new RoadmapStepException($"Completion certification routed to {decision.ClosureRecommendation}.");
+            await UpdateRoadmapCompletionContextAsync(projectContext, evaluationPath, cancellationToken);
         }
 
-        await UpdateRoadmapCompletionContextAsync(projectContext, evaluationPath, cancellationToken);
-        await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Completed);
+        if (route.ActiveEpicLifecycleState is { } activeEpicLifecycleState)
+        {
+            await lifecycleStore.UpsertAsync(
+                RoadmapArtifactPaths.ActiveEpic,
+                activeEpicLifecycleState,
+                $"Completion certification route: {route.ClosureRecommendation}");
+        }
+
+        await PersistCompletionRouteAsync(route, decision, projection.Definition.ProjectionPath, evaluationPath);
+        return route.CliOutcome;
     }
 
     private async Task UpdateRoadmapCompletionContextAsync(ProjectContext projectContext, string evaluationPath, CancellationToken cancellationToken)
@@ -359,6 +368,48 @@ internal sealed class RoadmapStateMachine(
         }
     }
 
+    private async Task PersistCompletionRouteAsync(
+        CompletionCertificationRoute route,
+        CompletionEvaluationDecision decision,
+        string projectionPath,
+        string evaluationPath)
+    {
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        IReadOnlyList<string> outputs = route.RequiresRoadmapCompletionContextUpdate
+            ? [evaluationPath, RoadmapArtifactPaths.RoadmapCompletionContext]
+            : [evaluationPath];
+        await journalStore.AppendAsync(new TransitionJournalRecord(
+            "TransitionCompleted",
+            Guid.NewGuid().ToString("N"),
+            completed,
+            RoadmapState.CompletionEvaluationAndContextUpdate,
+            route.TargetState,
+            "CompletionCertificationRouting",
+            projectionPath,
+            "CompletionCertificationRouter",
+            await HashInputsAsync([evaluationPath]),
+            outputs,
+            0,
+            route.TransitionStatus.ToString(),
+            decision.ClosureRecommendation,
+            null));
+        await SaveStateAsync(
+            route.TargetState,
+            route.TransitionStatus,
+            RoadmapState.CompletionEvaluationAndContextUpdate,
+            route.TargetState,
+            "CompletionCertificationRouting",
+            projectionPath,
+            string.Join(", ", outputs),
+            decision.ClosureRecommendation,
+            completed,
+            completed,
+            null,
+            [],
+            route.ToRoadmapTransitionIntent(evaluationPath),
+            route.NextTransitions);
+    }
+
     private async Task AppendDecisionAsync(RoadmapState state, string transition, string projectionPath, string outputPath, string decision, string confidence, string rationale)
     {
         string id = await decisionLedger.NextDecisionIdAsync();
@@ -388,7 +439,9 @@ internal sealed class RoadmapStateMachine(
         DateTimeOffset started,
         DateTimeOffset? completed,
         IReadOnlyList<RetiredEpic>? retiredEpics,
-        IReadOnlyList<BlockerRow> blockers)
+        IReadOnlyList<BlockerRow> blockers,
+        RoadmapTransitionIntent? transitionIntent = null,
+        IReadOnlyList<string>? nextTransitions = null)
     {
         ProjectionManifest manifest = await manifestStore.LoadAsync();
         IReadOnlyList<ArtifactStateRow> activeArtifacts = await ActiveArtifactRowsAsync();
@@ -407,7 +460,8 @@ internal sealed class RoadmapStateMachine(
                 manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Valid),
                 manifest.Entries.Count(entry => entry.StaleStatus == ProjectionStaleStatus.Stale),
                 manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Invalid)),
-            NextTransitions(current),
+            transitionIntent ?? RoadmapTransitionIntent.Empty(current),
+            nextTransitions ?? NextTransitions(current),
             effectiveRetiredEpics));
     }
 
@@ -435,10 +489,14 @@ internal sealed class RoadmapStateMachine(
         {
             RoadmapState.CoreReady => ["BootstrapRoadmapCompletionContext", "SelectNextStrategicInitiative"],
             RoadmapState.RoadmapCompletionContextReady => ["SelectNextStrategicInitiative"],
+            RoadmapState.SelectNextStrategicInitiative => ["SelectNextEpic"],
             RoadmapState.ActiveEpicReady => ["GenerateMilestoneDeepDives"],
             RoadmapState.MilestoneSpecsReady => ["GenerateOperationalContext"],
             RoadmapState.ExecutionPromptReady => ["ExecutionLoop"],
+            RoadmapState.ExecutionLoop => ["ContinueExecution"],
+            RoadmapState.EpicPreparationAudit => ["EpicPreparationAudit"],
             RoadmapState.RetireEpic => ["SelectNextStrategicInitiative"],
+            RoadmapState.EvidenceGathering => ["GatherAdditionalEvidence", "EvaluateEpicCompletionAndDrift"],
             RoadmapState.EvidenceBlocked => ["Resolve blocker and rerun"],
             _ => [],
         };

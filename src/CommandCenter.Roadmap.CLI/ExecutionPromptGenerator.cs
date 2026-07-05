@@ -7,7 +7,9 @@ internal sealed class ExecutionPromptGenerator(RoadmapArtifacts artifacts, Artif
         cancellationToken.ThrowIfCancellationRequested();
         string operationalContext = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.OperationalContext);
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        IReadOnlyList<string> specs = await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md");
+        IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
+            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
+            .ToArray();
         if (specs.Count == 0)
         {
             throw new RoadmapStepException("Cannot generate execution prompt without milestone specs.");

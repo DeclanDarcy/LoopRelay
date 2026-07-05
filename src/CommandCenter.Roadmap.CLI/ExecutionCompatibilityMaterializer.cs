@@ -10,7 +10,9 @@ internal sealed partial class ExecutionCompatibilityMaterializer(RoadmapArtifact
         string operationalContext = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.OperationalContext);
         string executionPrompt = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ExecutionPrompt);
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        IReadOnlyList<string> specs = await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md");
+        IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
+            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
+            .ToArray();
         if (specs.Count == 0)
         {
             throw new RoadmapStepException("Cannot materialize execution compatibility artifacts without specs.");

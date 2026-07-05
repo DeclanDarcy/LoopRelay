@@ -40,6 +40,7 @@ var validator = new ProjectionValidator();
 var promptRunner = new RoadmapPromptRunner(runtime, repository, console);
 var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
 var contextBuilder = new RoadmapPromptContextBuilder(artifacts);
+var completionRouter = new CompletionCertificationRouter();
 var stateStore = new RoadmapStateStore(artifacts);
 var decisionLedger = new DecisionLedgerStore(artifacts);
 var journal = new TransitionJournalStore(artifacts);
@@ -60,6 +61,7 @@ var machine = new RoadmapStateMachine(
     manifestStore,
     projectionCache,
     contextBuilder,
+    completionRouter,
     promptRunner,
     stateStore,
     decisionLedger,

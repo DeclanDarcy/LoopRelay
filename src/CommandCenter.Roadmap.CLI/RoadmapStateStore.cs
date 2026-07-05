@@ -43,6 +43,14 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             $"| Started At | {document.LastTransition.StartedAt:O} |",
             $"| Completed At | {(document.LastTransition.CompletedAt is { } completed ? completed.ToString("O") : string.Empty)} |",
             string.Empty,
+            "## Transition Intent",
+            string.Empty,
+            "| Field | Value |",
+            "|---|---|",
+            $"| Intent | {Escape(document.TransitionIntent.Intent)} |",
+            $"| Dispatch State | {document.TransitionIntent.DispatchState} |",
+            $"| Evidence Paths | {Join(document.TransitionIntent.EvidencePaths)} |",
+            string.Empty,
             "## Blockers",
             string.Empty,
             "| Blocker | Required Next Step |",
@@ -127,28 +135,110 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
         }
 
         IReadOnlyList<RetiredEpic> retired = ParseRetiredEpics(content);
-        var transition = new RoadmapTransitionSummary(
-            state,
-            state,
-            "None",
-            "None",
-            "None",
-            "None",
-            TransitionStatus.Completed,
-            DateTimeOffset.MinValue,
-            null);
+        RoadmapTransitionSummary transition = ParseLastTransition(content, state);
+        RoadmapTransitionIntent transitionIntent = ParseTransitionIntent(content, state);
+        IReadOnlyList<BlockerRow> blockers = ParseBlockers(content);
+        IReadOnlyList<string> nextTransitions = ParseNextValidTransitions(content);
 
         return new RoadmapStateDocument(
             state,
             [],
             transition,
-            [],
+            blockers,
             "None",
             retired.Count,
             0,
             new ProjectionManifestCounts(0, 0, 0),
-            [],
+            transitionIntent,
+            nextTransitions,
             retired);
+    }
+
+    private static RoadmapTransitionSummary ParseLastTransition(string content, RoadmapState fallbackState)
+    {
+        try
+        {
+            IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(content, "## Last Transition");
+            return new RoadmapTransitionSummary(
+                ParseState(Field(fields, "From", fallbackState.ToString()), fallbackState),
+                ParseState(Field(fields, "To", fallbackState.ToString()), fallbackState),
+                Field(fields, "Prompt", "None"),
+                Field(fields, "Projection", "None"),
+                Field(fields, "Output", "None"),
+                Field(fields, "Decision", "None"),
+                Enum.TryParse(Field(fields, "Status", TransitionStatus.Completed.ToString()), out TransitionStatus status)
+                    ? status
+                    : TransitionStatus.Completed,
+                ParseTimestamp(Field(fields, "Started At", string.Empty)) ?? DateTimeOffset.MinValue,
+                ParseTimestamp(Field(fields, "Completed At", string.Empty)));
+        }
+        catch (MarkdownParseException)
+        {
+            return new RoadmapTransitionSummary(
+                fallbackState,
+                fallbackState,
+                "None",
+                "None",
+                "None",
+                "None",
+                TransitionStatus.Completed,
+                DateTimeOffset.MinValue,
+                null);
+        }
+    }
+
+    private static RoadmapTransitionIntent ParseTransitionIntent(string content, RoadmapState fallbackState)
+    {
+        try
+        {
+            IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(content, "## Transition Intent");
+            string evidenceValue = Field(fields, "Evidence Paths", "None");
+            IReadOnlyList<string> evidencePaths = evidenceValue
+                .Split("<br>", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(path => !string.Equals(path, "None", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            return new RoadmapTransitionIntent(
+                Field(fields, "Intent", "None"),
+                ParseState(Field(fields, "Dispatch State", fallbackState.ToString()), fallbackState),
+                evidencePaths);
+        }
+        catch (MarkdownParseException)
+        {
+            return RoadmapTransitionIntent.Empty(fallbackState);
+        }
+    }
+
+    private static IReadOnlyList<BlockerRow> ParseBlockers(string content)
+    {
+        try
+        {
+            return MarkdownTableParser.ParseTables(MarkdownTableParser.ExtractSection(content, "## Blockers"))
+                .Where(row => row.ContainsKey("Blocker") && row.ContainsKey("Required Next Step"))
+                .Select(row => new BlockerRow(row["Blocker"], row["Required Next Step"]))
+                .Where(row => !string.IsNullOrWhiteSpace(row.Blocker))
+                .ToArray();
+        }
+        catch (MarkdownParseException)
+        {
+            return [];
+        }
+    }
+
+    private static IReadOnlyList<string> ParseNextValidTransitions(string content)
+    {
+        int start = content.IndexOf("## Next Valid Transitions", StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return [];
+        }
+
+        string section = ExtractSubsection(content, start, "## Next Valid Transitions".Length);
+        return section.Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("- ", StringComparison.Ordinal))
+            .Select(line => line[2..].Trim())
+            .Where(line => line.Length > 0)
+            .ToArray();
     }
 
     private static IReadOnlyList<RetiredEpic> ParseRetiredEpics(string content)
@@ -219,6 +309,20 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
         row.TryGetValue(field, out string? value) && !string.IsNullOrWhiteSpace(value)
             ? value.Trim()
             : fallback;
+
+    private static RoadmapState ParseState(string value, RoadmapState fallback) =>
+        Enum.TryParse(value, out RoadmapState state) ? state : fallback;
+
+    private static DateTimeOffset? ParseTimestamp(string value) =>
+        DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out DateTimeOffset parsed)
+            ? parsed
+            : null;
+
+    private static string Join(IReadOnlyList<string> values) => values.Count == 0 ? "None" : string.Join("<br>", values.Select(Escape));
 
     private static string Escape(string value) => value.Replace("|", "\\|", StringComparison.Ordinal);
 

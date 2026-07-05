@@ -20,22 +20,13 @@ internal sealed class CompletionEvaluationParser
         "Unknown",
     ];
 
-    private static readonly string[] AllowedClosureRecommendations =
-    [
-        "Close Epic",
-        "Close With Follow-Up",
-        "Continue Epic",
-        "Reopen Epic",
-        "Gather More Evidence",
-    ];
-
     public CompletionEvaluationDecision Parse(string markdown)
     {
         IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(markdown, "## Evaluation Summary");
         return new CompletionEvaluationDecision(
             RequiredAllowed(fields, "Overall Completion Status", AllowedCompletionStatuses),
             RequiredAllowed(fields, "Overall Drift Classification", AllowedDriftClassifications),
-            RequiredAllowed(fields, "Closure Recommendation", AllowedClosureRecommendations));
+            RequiredAllowed(fields, "Closure Recommendation", CompletionCertificationRouter.AllowedRecommendations));
     }
 
     private static string RequiredAllowed(IReadOnlyDictionary<string, string> fields, string field, IReadOnlyList<string> allowed)

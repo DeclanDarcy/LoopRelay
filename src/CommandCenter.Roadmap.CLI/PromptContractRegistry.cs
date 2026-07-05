@@ -17,7 +17,7 @@ internal sealed class PromptContractRegistry
             Contract("CreateNewEpic", [RoadmapArtifactPaths.Selection], [RoadmapArtifactPaths.ActiveEpic], ["Create Epic"], "ActiveEpicWriter", StaleProjectionPolicy.Block, "BundleFileExtractor"),
             Contract("SplitEpic", [RoadmapArtifactPaths.Selection], [RoadmapArtifactPaths.SplitFamiliesDirectory], ["Split Epic"], "SplitFamilyWriter", StaleProjectionPolicy.Block, "BundleFileExtractor"),
             Contract("GenerateMilestoneDeepDivesForEpic", [RoadmapArtifactPaths.ActiveEpic], [RoadmapArtifactPaths.SpecsDirectory], ["Generate Specs"], "SpecBundleWriter", StaleProjectionPolicy.Block, "BundleFileExtractor"),
-            Contract("EvaluateEpicCompletionAndDrift", [RoadmapArtifactPaths.ActiveEpic, RoadmapArtifactPaths.SpecsDirectory], [RoadmapArtifactPaths.EvaluationEvidenceDirectory], ["Close Epic", "Close With Follow-Up", "Continue Epic", "Reopen Epic", "Gather More Evidence"], "EvaluationEvidenceWriter", StaleProjectionPolicy.Block, "CompletionEvaluationParser"),
+            Contract("EvaluateEpicCompletionAndDrift", [RoadmapArtifactPaths.ActiveEpic, RoadmapArtifactPaths.SpecsDirectory], [RoadmapArtifactPaths.EvaluationEvidenceDirectory], CompletionCertificationRouter.AllowedRecommendations, "EvaluationEvidenceWriter", StaleProjectionPolicy.Block, "CompletionEvaluationParser"),
         }.ToDictionary(contract => contract.RuntimePromptName, StringComparer.Ordinal);
 
         string[] missing = projectionRegistry.All

@@ -9,6 +9,7 @@ internal sealed record RoadmapStateDocument(
     int RetiredEpicsCount,
     int SplitFamiliesCount,
     ProjectionManifestCounts ProjectionManifestCounts,
+    RoadmapTransitionIntent TransitionIntent,
     IReadOnlyList<string> NextValidTransitions,
     IReadOnlyList<RetiredEpic> RetiredEpics);
 
@@ -29,10 +30,19 @@ internal sealed record RoadmapTransitionSummary(
     DateTimeOffset StartedAt,
     DateTimeOffset? CompletedAt);
 
+internal sealed record RoadmapTransitionIntent(
+    string Intent,
+    RoadmapState DispatchState,
+    IReadOnlyList<string> EvidencePaths)
+{
+    public static RoadmapTransitionIntent Empty(RoadmapState dispatchState) => new("None", dispatchState, []);
+}
+
 internal enum TransitionStatus
 {
     Started,
     Completed,
+    Paused,
     Failed,
     Cancelled,
 }
