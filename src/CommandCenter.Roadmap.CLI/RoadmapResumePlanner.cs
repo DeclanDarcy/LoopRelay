@@ -5,7 +5,8 @@ internal sealed class RoadmapResumePlanner(
     PromptContractRegistry contractRegistry,
     ProjectionManifestStore manifestStore,
     ArtifactLifecycleStore lifecycleStore,
-    ProjectionProvenanceFactory provenanceFactory)
+    ProjectionProvenanceFactory provenanceFactory,
+    ExecutionPreparationProvenanceService executionPreparation)
 {
     private readonly EpicArtifactValidator epicValidator = new();
 
@@ -18,7 +19,8 @@ internal sealed class RoadmapResumePlanner(
         RoadmapArtifactSnapshot snapshot = await RoadmapArtifactSnapshot.CaptureAsync(
             artifacts,
             manifestStore,
-            lifecycleStore);
+            lifecycleStore,
+            executionPreparation);
 
         if (persistedState is null)
         {
@@ -346,39 +348,51 @@ internal sealed class RoadmapResumePlanner(
             return ResumeSafety.Unsafe(epicValidation.Error ?? "Active epic failed validation.");
         }
 
+        if (requireSpecs || requireOperationalContext || requireExecutionPrompt)
+        {
+            ExecutionPreparationReadiness readiness = await executionPreparation.EvaluateReadinessAsync(
+                requireSpecs,
+                requireOperationalContext,
+                requireExecutionPrompt,
+                requireCompatibilityArtifacts: false,
+                cancellationToken);
+            if (!readiness.IsFresh)
+            {
+                return ResumeSafety.Unsafe(readiness.Reason);
+            }
+        }
+
         if (requireSpecs)
         {
-            ResumeSafety specSafety = await ValidateSpecsAsync(snapshot, cancellationToken);
+            ResumeSafety specSafety = await ValidateSpecsAsync(cancellationToken);
             if (!specSafety.IsSafe)
             {
                 return specSafety;
             }
         }
 
-        if (requireOperationalContext && !snapshot.HasUsableFile(RoadmapArtifactPaths.OperationalContext))
-        {
-            return ResumeSafety.Unsafe("Operational context is missing or its lifecycle state is not usable.");
-        }
-
-        if (requireExecutionPrompt && !snapshot.HasUsableFile(RoadmapArtifactPaths.ExecutionPrompt))
-        {
-            return ResumeSafety.Unsafe("Execution prompt is missing or its lifecycle state is not usable.");
-        }
-
         return ResumeSafety.Safe($"{state} artifacts are ready.");
     }
 
-    private async Task<ResumeSafety> ValidateSpecsAsync(
-        RoadmapArtifactSnapshot snapshot,
-        CancellationToken cancellationToken)
+    private async Task<ResumeSafety> ValidateSpecsAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (snapshot.MilestoneSpecPaths.Count == 0)
+        IReadOnlyList<string> milestoneSpecPaths;
+        try
+        {
+            milestoneSpecPaths = await executionPreparation.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
+        }
+        catch (RoadmapStepException exception)
+        {
+            return ResumeSafety.Unsafe(exception.Message);
+        }
+
+        if (milestoneSpecPaths.Count == 0)
         {
             return ResumeSafety.Unsafe("Milestone specs are missing.");
         }
 
-        foreach (string spec in snapshot.MilestoneSpecPaths)
+        foreach (string spec in milestoneSpecPaths)
         {
             string content = await artifacts.ReadRequiredAsync(spec);
             string? declaredEpicPath = FindDeclaredEpicPath(content);
@@ -533,7 +547,8 @@ internal sealed class RoadmapArtifactSnapshot
     public static async Task<RoadmapArtifactSnapshot> CaptureAsync(
         RoadmapArtifacts artifacts,
         ProjectionManifestStore manifestStore,
-        ArtifactLifecycleStore lifecycleStore)
+        ArtifactLifecycleStore lifecycleStore,
+        ExecutionPreparationProvenanceService executionPreparation)
     {
         string[] knownPaths =
         [
@@ -553,9 +568,7 @@ internal sealed class RoadmapArtifactSnapshot
             statuses[path] = await artifacts.GetStatusAsync(path);
         }
 
-        IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
-            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
-            .ToArray();
+        IReadOnlyList<string> specs = await FreshMilestoneSpecPathsOrEmptyAsync(executionPreparation);
         foreach (string spec in specs)
         {
             statuses[spec] = await artifacts.GetStatusAsync(spec);
@@ -591,6 +604,19 @@ internal sealed class RoadmapArtifactSnapshot
             specs,
             roadmapSourceAvailable,
             await manifestStore.LoadAsync());
+    }
+
+    private static async Task<IReadOnlyList<string>> FreshMilestoneSpecPathsOrEmptyAsync(
+        ExecutionPreparationProvenanceService executionPreparation)
+    {
+        try
+        {
+            return await executionPreparation.RequireFreshMilestoneSpecPathsAsync();
+        }
+        catch (RoadmapStepException)
+        {
+            return [];
+        }
     }
 
     public bool HasRequiredInput(string path)

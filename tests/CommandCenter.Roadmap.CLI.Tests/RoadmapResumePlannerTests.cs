@@ -213,6 +213,7 @@ public sealed class RoadmapResumePlannerTests
 
             - [ ] Do the work.
             """);
+        await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/mismatch.md");
 
         RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(RoadmapState.MilestoneSpecsReady, output: RoadmapArtifactPaths.SpecsDirectory), context, CancellationToken.None);
 
@@ -242,7 +243,8 @@ public sealed class RoadmapResumePlannerTests
         var contracts = new PromptContractRegistry(projections);
         var manifest = new ProjectionManifestStore(repo.Artifacts);
         var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
-        return new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections));
+        ExecutionPreparationProvenanceService executionPreparation = ExecutionPreparationTestSupport.CreateProvenance(repo);
+        return new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections), executionPreparation);
     }
 
     private static async Task<ProjectContext> SeedProjectAsync(TempRepo repo)
@@ -275,14 +277,16 @@ public sealed class RoadmapResumePlannerTests
             - [ ] Do the work.
             """);
         await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(".agents/specs/test.md", ArtifactLifecycleState.Ready);
+        await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/test.md");
     }
 
     private static async Task SeedExecutionReadyAsync(TempRepo repo)
     {
         await SeedActiveEpicAsync(repo);
         await SeedSpecAsync(repo);
-        repo.Write(RoadmapArtifactPaths.OperationalContext, "# Operational Context");
-        repo.Write(RoadmapArtifactPaths.ExecutionPrompt, "# Execution Prompt");
+        ExecutionPreparationProvenanceService provenance = ExecutionPreparationTestSupport.CreateProvenance(repo);
+        await ExecutionPreparationTestSupport.SeedOperationalContextAsync(provenance, repo, "# Operational Context");
+        await ExecutionPreparationTestSupport.SeedExecutionPromptAsync(provenance, repo, "# Execution Prompt");
         var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
         await lifecycle.UpsertAsync(RoadmapArtifactPaths.OperationalContext, ArtifactLifecycleState.Ready);
         await lifecycle.UpsertAsync(RoadmapArtifactPaths.ExecutionPrompt, ArtifactLifecycleState.Ready);

@@ -67,27 +67,29 @@ internal static class StateMachineFactory
         var projections = new ProjectionRegistry();
         var contracts = new PromptContractRegistry(projections);
         var manifest = new ProjectionManifestStore(repo.Artifacts);
+        var executionPreparationManifest = new ExecutionPreparationManifestStore(repo.Artifacts);
+        var executionPreparation = new ExecutionPreparationProvenanceService(repo.Artifacts, executionPreparationManifest);
         var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
         var stateStore = new RoadmapStateStore(repo.Artifacts);
         var split = new SplitFamilyStore(repo.Artifacts);
         var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new RoadmapPromptRunner(runtime, repo.Repository, new TestConsole());
         IRoadmapExecutionBridge executionBridge = bridge ?? new FakeRoadmapExecutionBridge();
-        var invariants = new InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split);
+        var invariants = new InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
         return new RoadmapStateMachine(
             repo.Artifacts,
             loader,
             contracts,
             manifest,
             new ProjectionCache(repo.Artifacts, projections, manifest, new ProjectionValidator(), runner),
-            new RoadmapPromptContextBuilder(repo.Artifacts),
-            new TransitionInputResolver(repo.Artifacts),
+            new RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation),
+            new TransitionInputResolver(repo.Artifacts, executionPreparation),
             new CompletionCertificationPolicy(),
             new CompletionCertificationRouter(),
             runner,
             stateStore,
             new RoadmapStartupPlanner(),
-            new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections)),
+            new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections), executionPreparation),
             new DecisionLedgerStore(repo.Artifacts),
             new TransitionJournalStore(repo.Artifacts),
             lifecycle,
@@ -96,9 +98,10 @@ internal static class StateMachineFactory
             new SplitEpicBundleInterpreter(),
             new BundleManifestWriter(repo.Artifacts),
             split,
-            new OperationalContextGenerator(repo.Artifacts, lifecycle),
-            new ExecutionPromptGenerator(repo.Artifacts, lifecycle),
-            new ExecutionCompatibilityMaterializer(repo.Artifacts),
+            executionPreparation,
+            new OperationalContextGenerator(repo.Artifacts, lifecycle, executionPreparation),
+            new ExecutionPromptGenerator(repo.Artifacts, lifecycle, executionPreparation),
+            new ExecutionCompatibilityMaterializer(repo.Artifacts, executionPreparation),
             executionBridge,
             new RoadmapExecutionOutcomeInterpreter(),
             invariants,

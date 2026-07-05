@@ -119,6 +119,28 @@ public sealed class TransitionInputResolverTests
         Assert.Contains(evaluationPath, snapshot.ToInputArtifactHashes().Keys);
     }
 
+    [Fact]
+    public async Task Completion_evaluation_resolves_manifest_active_milestone_specs_only()
+    {
+        using var repo = new TempRepo();
+        string projectionPath = SeedProjection(repo, "EvaluateEpicCompletionAndDrift");
+        string evidencePath = ".agents/evidence/execution/execution.0001.md";
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
+        repo.Write(evidencePath, "execution evidence");
+        repo.Write(".agents/specs/active.md", "Epic Path: .agents/epic.md");
+        repo.Write(".agents/specs/stale.md", "Epic Path: .agents/epic.md");
+        await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/active.md");
+
+        TransitionInputSnapshot snapshot = await ResolveAsync(
+            repo,
+            "EvaluateEpicCompletionAndDrift",
+            projectionPath,
+            context: TransitionInputContext.ExecutionEvidence(evidencePath));
+
+        Assert.Contains(snapshot.ArtifactInputs, input => input.Path == ".agents/specs/active.md" && input.Roles == TransitionInputRole.MilestoneSpec);
+        Assert.DoesNotContain(snapshot.ArtifactInputs, input => input.Path == ".agents/specs/stale.md");
+    }
+
     private static async Task<TransitionInputSnapshot> ResolveAsync(
         TempRepo repo,
         string runtimePromptName,
@@ -127,7 +149,7 @@ public sealed class TransitionInputResolverTests
         string secondaryInput = "",
         TransitionInputContext? context = null)
     {
-        return await new TransitionInputResolver(repo.Artifacts).ResolveAsync(new TransitionInputRequest(
+        return await new TransitionInputResolver(repo.Artifacts, ExecutionPreparationTestSupport.CreateProvenance(repo)).ResolveAsync(new TransitionInputRequest(
             runtimePromptName,
             projectionPath,
             renderedContext,

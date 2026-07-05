@@ -2,7 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace CommandCenter.Roadmap.Cli;
 
-internal sealed partial class ExecutionCompatibilityMaterializer(RoadmapArtifacts artifacts)
+internal sealed partial class ExecutionCompatibilityMaterializer(
+    RoadmapArtifacts artifacts,
+    ExecutionPreparationProvenanceService provenanceService)
 {
     public async Task MaterializeAsync(CancellationToken cancellationToken = default)
     {
@@ -10,9 +12,7 @@ internal sealed partial class ExecutionCompatibilityMaterializer(RoadmapArtifact
         string operationalContext = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.OperationalContext);
         string executionPrompt = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ExecutionPrompt);
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
-            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
-            .ToArray();
+        IReadOnlyList<string> specs = await provenanceService.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
         if (specs.Count == 0)
         {
             throw new RoadmapStepException("Cannot materialize execution compatibility artifacts without specs.");
@@ -39,6 +39,7 @@ internal sealed partial class ExecutionCompatibilityMaterializer(RoadmapArtifact
         };
 
         int index = 1;
+        var milestonePaths = new List<string>();
         foreach (string spec in specs.Order(StringComparer.Ordinal))
         {
             string specContent = await artifacts.ReadRequiredAsync(spec);
@@ -48,7 +49,8 @@ internal sealed partial class ExecutionCompatibilityMaterializer(RoadmapArtifact
                 throw new RoadmapStepException($"No auditable checklist could be derived from {spec}.");
             }
 
-            string milestonePath = $".agents/milestones/m{index:000}.md";
+            string milestonePath = $"{RoadmapArtifactPaths.ExecutionMilestonesDirectory}/m{index:000}.md";
+            milestonePaths.Add(milestonePath);
             plan.Add($"- [ ] {milestonePath} from {spec}");
 
             var milestone = new List<string>
@@ -71,7 +73,8 @@ internal sealed partial class ExecutionCompatibilityMaterializer(RoadmapArtifact
             index++;
         }
 
-        await artifacts.WriteAsync(".agents/plan.md", string.Join(Environment.NewLine, plan) + Environment.NewLine);
+        await artifacts.WriteAsync(RoadmapArtifactPaths.ExecutionPlan, string.Join(Environment.NewLine, plan) + Environment.NewLine);
+        await provenanceService.RecordCompatibilityArtifactsAsync(milestonePaths, cancellationToken);
     }
 
     private static IReadOnlyList<string> DeriveChecklist(string specContent)

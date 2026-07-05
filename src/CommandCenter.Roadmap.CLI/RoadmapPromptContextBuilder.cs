@@ -2,7 +2,9 @@ using System.Text;
 
 namespace CommandCenter.Roadmap.Cli;
 
-internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
+internal sealed class RoadmapPromptContextBuilder(
+    RoadmapArtifacts artifacts,
+    ExecutionPreparationProvenanceService executionPreparation)
 {
     private const string ProjectContextMarker = "<!-- BEGIN PROJECT-CONTEXT FILE:";
 
@@ -53,9 +55,7 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
     {
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
         string executionEvidence = await artifacts.ReadRequiredAsync(executionEvidencePath);
-        IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
-            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
-            .ToArray();
+        IReadOnlyList<string> specs = await executionPreparation.RequireFreshMilestoneSpecPathsAsync();
         var sections = new List<ContextSection>
         {
             Section("Projection Content", projectionContent),

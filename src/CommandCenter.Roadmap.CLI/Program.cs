@@ -37,11 +37,13 @@ var projectionRegistry = new ProjectionRegistry();
 var provenanceFactory = new ProjectionProvenanceFactory(projectionRegistry);
 var contractRegistry = new PromptContractRegistry(projectionRegistry);
 var manifestStore = new ProjectionManifestStore(artifacts);
+var executionPreparationManifest = new ExecutionPreparationManifestStore(artifacts);
+var executionPreparation = new ExecutionPreparationProvenanceService(artifacts, executionPreparationManifest);
 var validator = new ProjectionValidator();
 var promptRunner = new RoadmapPromptRunner(runtime, repository, console);
 var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
-var contextBuilder = new RoadmapPromptContextBuilder(artifacts);
-var inputResolver = new TransitionInputResolver(artifacts);
+var contextBuilder = new RoadmapPromptContextBuilder(artifacts, executionPreparation);
+var inputResolver = new TransitionInputResolver(artifacts, executionPreparation);
 var completionPolicy = new CompletionCertificationPolicy();
 var completionRouter = new CompletionCertificationRouter();
 var stateStore = new RoadmapStateStore(artifacts);
@@ -49,19 +51,19 @@ var decisionLedger = new DecisionLedgerStore(artifacts);
 var journal = new TransitionJournalStore(artifacts);
 var lifecycle = new ArtifactLifecycleStore(artifacts);
 var startupPlanner = new RoadmapStartupPlanner();
-var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle, provenanceFactory);
+var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle, provenanceFactory, executionPreparation);
 var promotion = new ArtifactPromotionService(artifacts, lifecycle);
 var bundleExtractor = new BundleFileExtractor();
 var splitBundleInterpreter = new SplitEpicBundleInterpreter();
 var bundleManifest = new BundleManifestWriter(artifacts);
 var splitFamilies = new SplitFamilyStore(artifacts);
 var projectContextLoader = new ProjectContextLoader(artifacts);
-var operationalContext = new OperationalContextGenerator(artifacts, lifecycle);
-var executionPrompt = new ExecutionPromptGenerator(artifacts, lifecycle);
-var materializer = new ExecutionCompatibilityMaterializer(artifacts);
+var operationalContext = new OperationalContextGenerator(artifacts, lifecycle, executionPreparation);
+var executionPrompt = new ExecutionPromptGenerator(artifacts, lifecycle, executionPreparation);
+var materializer = new ExecutionCompatibilityMaterializer(artifacts, executionPreparation);
 IRoadmapExecutionBridge executionBridge = new RoadmapExecutionBridge(runtime, artifacts, repository, console);
 var executionInterpreter = new RoadmapExecutionOutcomeInterpreter();
-var invariants = new InvariantValidator(artifacts, projectContextLoader, projectionRegistry, contractRegistry, manifestStore, lifecycle, splitFamilies);
+var invariants = new InvariantValidator(artifacts, projectContextLoader, projectionRegistry, contractRegistry, manifestStore, lifecycle, splitFamilies, executionPreparation);
 var machine = new RoadmapStateMachine(
     artifacts,
     projectContextLoader,
@@ -84,6 +86,7 @@ var machine = new RoadmapStateMachine(
     splitBundleInterpreter,
     bundleManifest,
     splitFamilies,
+    executionPreparation,
     operationalContext,
     executionPrompt,
     materializer,

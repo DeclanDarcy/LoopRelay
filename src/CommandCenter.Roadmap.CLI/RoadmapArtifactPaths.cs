@@ -13,6 +13,9 @@ internal static class RoadmapArtifactPaths
     public const string SpecsDirectory = ".agents/specs";
     public const string OperationalContext = ".agents/operational_context.md";
     public const string ExecutionPrompt = ".agents/execution-prompt.md";
+    public const string ExecutionPreparationManifest = ".agents/execution-preparation-manifest.json";
+    public const string ExecutionPlan = ".agents/plan.md";
+    public const string ExecutionMilestonesDirectory = ".agents/milestones";
     public const string RoadmapCompletionContext = ".agents/core/roadmap-completion-context.md";
     public const string ProjectionsManifest = ".agents/projections/manifest.md";
     public const string PromptContracts = ".agents/contracts/prompt-contracts.md";

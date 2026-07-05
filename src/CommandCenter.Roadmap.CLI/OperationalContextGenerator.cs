@@ -1,14 +1,15 @@
 namespace CommandCenter.Roadmap.Cli;
 
-internal sealed class OperationalContextGenerator(RoadmapArtifacts artifacts, ArtifactLifecycleStore lifecycleStore)
+internal sealed class OperationalContextGenerator(
+    RoadmapArtifacts artifacts,
+    ArtifactLifecycleStore lifecycleStore,
+    ExecutionPreparationProvenanceService provenanceService)
 {
     public async Task<string> GenerateAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
-            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
-            .ToArray();
+        IReadOnlyList<string> specs = await provenanceService.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
         if (specs.Count == 0)
         {
             throw new RoadmapStepException("Cannot generate operational context without milestone specs.");
@@ -56,6 +57,7 @@ internal sealed class OperationalContextGenerator(RoadmapArtifacts artifacts, Ar
 
         string content = EnsureNoRawProjectContext(string.Join(Environment.NewLine, lines) + Environment.NewLine);
         await artifacts.WriteAsync(RoadmapArtifactPaths.OperationalContext, content);
+        await provenanceService.RecordOperationalContextAsync(content, cancellationToken);
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.OperationalContext, ArtifactLifecycleState.Ready);
         return content;
     }

@@ -27,6 +27,7 @@ public sealed class InvariantValidatorTests
         repo.SeedProjectContext();
         repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
         repo.Write(".agents/specs/a.md", "Epic Path: .agents/other-epic.md");
+        await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/a.md");
         ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
 
         InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.MilestoneSpecsReady, projectContext.Hash);
@@ -114,6 +115,7 @@ public sealed class InvariantValidatorTests
             new PromptContractRegistry(projections),
             new ProjectionManifestStore(repo.Artifacts),
             lifecycle ?? new ArtifactLifecycleStore(repo.Artifacts),
-            new SplitFamilyStore(repo.Artifacts));
+            new SplitFamilyStore(repo.Artifacts),
+            ExecutionPreparationTestSupport.CreateProvenance(repo));
     }
 }

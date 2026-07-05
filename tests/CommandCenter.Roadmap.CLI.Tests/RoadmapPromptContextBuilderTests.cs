@@ -12,7 +12,7 @@ public sealed class RoadmapPromptContextBuilderTests
         repo.Write(RoadmapArtifactPaths.RoadmapFile, "roadmap root");
         repo.Write(".agents/roadmap/b.md", "roadmap b");
 
-        string context = await new RoadmapPromptContextBuilder(repo.Artifacts).BuildSelectionContextAsync(
+        string context = await new RoadmapPromptContextBuilder(repo.Artifacts, ExecutionPreparationTestSupport.CreateProvenance(repo)).BuildSelectionContextAsync(
             "projection",
             [new RetiredEpic("EPIC-001", "Retired Epic", "Already satisfied.", ".agents/evidence/audits/epic-preparation-audit.0001.md", DateTimeOffset.UtcNow)]);
 
@@ -27,7 +27,8 @@ public sealed class RoadmapPromptContextBuilderTests
     [Fact]
     public void Runtime_context_rejects_raw_project_context_markers()
     {
-        var builder = new RoadmapPromptContextBuilder(new TempRepo().Artifacts);
+        using var repo = new TempRepo();
+        var builder = new RoadmapPromptContextBuilder(repo.Artifacts, ExecutionPreparationTestSupport.CreateProvenance(repo));
 
         Assert.Throws<RoadmapStepException>(() => builder.BuildAuditContext("<!-- BEGIN PROJECT-CONTEXT FILE: 01-purpose.md -->", "epic"));
     }

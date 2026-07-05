@@ -2,7 +2,9 @@ using System.Text;
 
 namespace CommandCenter.Roadmap.Cli;
 
-internal sealed class TransitionInputResolver(RoadmapArtifacts artifacts)
+internal sealed class TransitionInputResolver(
+    RoadmapArtifacts artifacts,
+    ExecutionPreparationProvenanceService executionPreparation)
 {
     public async Task<TransitionInputSnapshot> ResolveAsync(TransitionInputRequest request)
     {
@@ -115,10 +117,8 @@ internal sealed class TransitionInputResolver(RoadmapArtifacts artifacts)
 
     private async Task AddMilestoneSpecInputsAsync(TransitionInputAccumulator inputs)
     {
-        IReadOnlyList<string> specs = await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md");
-        foreach (string path in specs
-            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
-            .Order(StringComparer.Ordinal))
+        IReadOnlyList<string> specs = await executionPreparation.RequireFreshMilestoneSpecPathsAsync();
+        foreach (string path in specs.Order(StringComparer.Ordinal))
         {
             inputs.AddRequired(path, TransitionInputRole.MilestoneSpec);
         }

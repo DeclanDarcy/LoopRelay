@@ -7,7 +7,8 @@ internal sealed class InvariantValidator(
     PromptContractRegistry contractRegistry,
     ProjectionManifestStore manifestStore,
     ArtifactLifecycleStore lifecycleStore,
-    SplitFamilyStore splitFamilyStore)
+    SplitFamilyStore splitFamilyStore,
+    ExecutionPreparationProvenanceService executionPreparation)
 {
     private readonly EpicArtifactValidator epicValidator = new();
     private readonly ProjectionProvenanceFactory provenanceFactory = new(projectionRegistry);
@@ -77,6 +78,12 @@ internal sealed class InvariantValidator(
                 return activeEpicResult;
             }
 
+            InvariantValidationResult executionPreparationResult = await ValidateExecutionPreparationFreshnessAsync(state, cancellationToken);
+            if (!executionPreparationResult.IsValid)
+            {
+                return executionPreparationResult;
+            }
+
             InvariantValidationResult specResult = await ValidateSpecsBelongToActiveEpicAsync(state);
             if (!specResult.IsValid)
             {
@@ -87,8 +94,7 @@ internal sealed class InvariantValidator(
             {
                 if (!await artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic) ||
                     !await artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext) ||
-                    !await artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt) ||
-                    (await MilestoneSpecPathsAsync()).Count == 0)
+                    !await artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt))
                 {
                     return await FailAsync(state, RoadmapState.EvidenceBlocked, "Execution bridge prerequisites are incomplete.");
                 }
@@ -163,9 +169,55 @@ internal sealed class InvariantValidator(
             or RoadmapState.EpicCompletionDetected
             or RoadmapState.CompletionEvaluationAndContextUpdate;
 
+    private async Task<InvariantValidationResult> ValidateExecutionPreparationFreshnessAsync(
+        RoadmapState state,
+        CancellationToken cancellationToken)
+    {
+        bool requireSpecs = RequiresMilestoneSpecs(state);
+        bool requireOperationalContext = state is RoadmapState.OperationalContextReady
+            or RoadmapState.GenerateExecutionPrompt
+            or RoadmapState.ExecutionPromptReady
+            or RoadmapState.ExecutionLoop
+            or RoadmapState.EpicCompletionDetected
+            or RoadmapState.CompletionEvaluationAndContextUpdate;
+        bool requireExecutionPrompt = state is RoadmapState.ExecutionPromptReady
+            or RoadmapState.ExecutionLoop
+            or RoadmapState.EpicCompletionDetected
+            or RoadmapState.CompletionEvaluationAndContextUpdate;
+        bool requireCompatibilityArtifacts = state is RoadmapState.ExecutionPromptReady
+            or RoadmapState.ExecutionLoop;
+
+        if (!requireSpecs && !requireOperationalContext && !requireExecutionPrompt && !requireCompatibilityArtifacts)
+        {
+            return InvariantValidationResult.Valid();
+        }
+
+        ExecutionPreparationReadiness readiness = await executionPreparation.EvaluateReadinessAsync(
+            requireSpecs,
+            requireOperationalContext,
+            requireExecutionPrompt,
+            requireCompatibilityArtifacts,
+            cancellationToken);
+        return readiness.IsFresh
+            ? InvariantValidationResult.Valid()
+            : await FailAsync(state, RoadmapState.EvidenceBlocked, readiness.Reason);
+    }
+
+    private static bool RequiresMilestoneSpecs(RoadmapState state) =>
+        state is RoadmapState.MilestoneSpecsReady
+            or RoadmapState.GenerateOperationalContext
+            or RoadmapState.OperationalContextReady
+            or RoadmapState.GenerateExecutionPrompt
+            or RoadmapState.ExecutionPromptReady
+            or RoadmapState.ExecutionLoop
+            or RoadmapState.EpicCompletionDetected
+            or RoadmapState.CompletionEvaluationAndContextUpdate;
+
     private async Task<InvariantValidationResult> ValidateSpecsBelongToActiveEpicAsync(RoadmapState state)
     {
-        IReadOnlyList<string> specs = await MilestoneSpecPathsAsync();
+        IReadOnlyList<string> specs = RequiresMilestoneSpecs(state)
+            ? await executionPreparation.RequireFreshMilestoneSpecPathsAsync()
+            : [];
         foreach (string spec in specs)
         {
             string content = await artifacts.ReadRequiredAsync(spec);
@@ -199,11 +251,6 @@ internal sealed class InvariantValidator(
 
         return null;
     }
-
-    private async Task<IReadOnlyList<string>> MilestoneSpecPathsAsync() =>
-        (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
-            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
-            .ToArray();
 
     private async Task<InvariantValidationResult> FailAsync(RoadmapState currentState, RoadmapState failureState, string message)
     {

@@ -24,6 +24,7 @@ internal sealed class RoadmapStateMachine(
     SplitEpicBundleInterpreter splitBundleInterpreter,
     BundleManifestWriter bundleManifestWriter,
     SplitFamilyStore splitFamilyStore,
+    ExecutionPreparationProvenanceService executionPreparation,
     OperationalContextGenerator operationalContextGenerator,
     ExecutionPromptGenerator executionPromptGenerator,
     ExecutionCompatibilityMaterializer executionMaterializer,
@@ -568,6 +569,9 @@ internal sealed class RoadmapStateMachine(
         {
             await lifecycleStore.UpsertAsync(file.Path, ArtifactLifecycleState.Ready);
         }
+        await executionPreparation.RecordMilestoneSpecsAsync(
+            bundle.Files.Select(file => file.Path).ToArray(),
+            cancellationToken);
 
         InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.MilestoneSpecsReady, projectContext.Hash, cancellationToken);
         if (!invariant.IsValid)
@@ -580,7 +584,8 @@ internal sealed class RoadmapStateMachine(
         RoadmapState sourceState,
         CancellationToken cancellationToken)
     {
-        if (await artifacts.GetStatusAsync(RoadmapArtifactPaths.OperationalContext) != ArtifactStatus.Present)
+        DerivedArtifactFreshness operationalContextFreshness = await executionPreparation.EvaluateOperationalContextFreshnessAsync(cancellationToken);
+        if (!operationalContextFreshness.IsFresh)
         {
             DateTimeOffset started = DateTimeOffset.UtcNow;
             await SaveStateAsync(
@@ -632,7 +637,8 @@ internal sealed class RoadmapStateMachine(
                 null);
         }
 
-        if (await artifacts.GetStatusAsync(RoadmapArtifactPaths.ExecutionPrompt) != ArtifactStatus.Present)
+        DerivedArtifactFreshness executionPromptFreshness = await executionPreparation.EvaluateExecutionPromptFreshnessAsync(cancellationToken);
+        if (!executionPromptFreshness.IsFresh)
         {
             DateTimeOffset started = DateTimeOffset.UtcNow;
             await SaveStateAsync(
@@ -688,7 +694,11 @@ internal sealed class RoadmapStateMachine(
                 ["ExecutionLoop", ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution)]);
         }
 
-        await executionMaterializer.MaterializeAsync(cancellationToken);
+        DerivedArtifactFreshness compatibilityFreshness = await executionPreparation.EvaluateCompatibilityFreshnessAsync(cancellationToken);
+        if (!compatibilityFreshness.IsFresh)
+        {
+            await executionMaterializer.MaterializeAsync(cancellationToken);
+        }
     }
 
     private async Task<RoadmapOutcome> RunExecutionAndCertificationAsync(ProjectContext projectContext, CancellationToken cancellationToken)

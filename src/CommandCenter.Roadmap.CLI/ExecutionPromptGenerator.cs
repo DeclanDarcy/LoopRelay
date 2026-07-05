@@ -1,15 +1,16 @@
 namespace CommandCenter.Roadmap.Cli;
 
-internal sealed class ExecutionPromptGenerator(RoadmapArtifacts artifacts, ArtifactLifecycleStore lifecycleStore)
+internal sealed class ExecutionPromptGenerator(
+    RoadmapArtifacts artifacts,
+    ArtifactLifecycleStore lifecycleStore,
+    ExecutionPreparationProvenanceService provenanceService)
 {
     public async Task<string> GenerateAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string operationalContext = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.OperationalContext);
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        IReadOnlyList<string> specs = (await artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"))
-            .Where(RoadmapArtifactPaths.IsMilestoneSpecPath)
-            .ToArray();
+        IReadOnlyList<string> specs = await provenanceService.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
         if (specs.Count == 0)
         {
             throw new RoadmapStepException("Cannot generate execution prompt without milestone specs.");
@@ -73,6 +74,7 @@ internal sealed class ExecutionPromptGenerator(RoadmapArtifacts artifacts, Artif
         }
 
         await artifacts.WriteAsync(RoadmapArtifactPaths.ExecutionPrompt, content);
+        await provenanceService.RecordExecutionPromptAsync(content, cancellationToken);
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ExecutionPrompt, ArtifactLifecycleState.Ready);
         return content;
     }
