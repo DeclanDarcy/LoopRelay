@@ -665,8 +665,8 @@ internal sealed class RoadmapStateMachine(
                 completed,
                 null,
                 null,
-                new RoadmapTransitionIntent("ContinueExecution", RoadmapState.ExecutionPromptReady, [RoadmapArtifactPaths.ExecutionPrompt]),
-                ["ExecutionLoop", "ContinueExecution"]);
+                new RoadmapTransitionIntent(ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution), RoadmapState.ExecutionPromptReady, [RoadmapArtifactPaths.ExecutionPrompt]),
+                ["ExecutionLoop", ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution)]);
         }
         else if (sourceState is not (RoadmapState.ExecutionPromptReady or RoadmapState.ExecutionLoop))
         {
@@ -684,8 +684,8 @@ internal sealed class RoadmapStateMachine(
                 completed,
                 null,
                 null,
-                new RoadmapTransitionIntent("ContinueExecution", RoadmapState.ExecutionPromptReady, [RoadmapArtifactPaths.ExecutionPrompt]),
-                ["ExecutionLoop", "ContinueExecution"]);
+                new RoadmapTransitionIntent(ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution), RoadmapState.ExecutionPromptReady, [RoadmapArtifactPaths.ExecutionPrompt]),
+                ["ExecutionLoop", ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution)]);
         }
 
         await executionMaterializer.MaterializeAsync(cancellationToken);
@@ -713,8 +713,8 @@ internal sealed class RoadmapStateMachine(
             null,
             null,
             null,
-            new RoadmapTransitionIntent("ContinueExecution", RoadmapState.ExecutionLoop, [RoadmapArtifactPaths.ExecutionPrompt]),
-            ["ContinueExecution"]);
+            new RoadmapTransitionIntent(ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution), RoadmapState.ExecutionLoop, [RoadmapArtifactPaths.ExecutionPrompt]),
+            [ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution)]);
 
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Executing);
         RoadmapExecutionTransportResult transport = await executionBridge.RunAsync(cancellationToken);
@@ -727,7 +727,8 @@ internal sealed class RoadmapStateMachine(
                 projectContext,
                 executionStarted,
                 executionEvidencePath,
-                cancellationToken),
+                cancellationToken,
+                completionRoute: executionOutcome.RequireValidatedRoute()),
             RoadmapExecutionOutcomeKind.ContinueRequired => await PersistExecutionContinuationAsync(
                 executionOutcome,
                 executionStarted,
@@ -753,29 +754,32 @@ internal sealed class RoadmapStateMachine(
         DateTimeOffset executionStarted,
         string executionEvidencePath,
         CancellationToken cancellationToken,
-        bool persistCompletionClaim = true)
+        bool persistCompletionClaim = true,
+        ExecutionDispositionRoute? completionRoute = null)
     {
         DateTimeOffset executionCompleted = DateTimeOffset.UtcNow;
         if (persistCompletionClaim)
         {
+            ExecutionDispositionRoute completionClaimRoute = completionRoute
+                ?? throw new RoadmapStepException("Completion certification requires a validated execution completion route.");
             await SaveStateAsync(
-                RoadmapState.EpicCompletionDetected,
+                completionClaimRoute.TargetState,
                 TransitionStatus.Completed,
                 RoadmapState.ExecutionLoop,
-                RoadmapState.EpicCompletionDetected,
+                completionClaimRoute.TargetState,
                 "ExecutionOutcomeInterpretation",
                 "None",
                 executionEvidencePath,
-                "Epic Complete",
+                ExecutionDispositionProtocol.StatusText(completionClaimRoute.Status),
                 executionStarted,
                 executionCompleted,
                 null,
                 null,
-                new RoadmapTransitionIntent("EvaluateEpicCompletionAndDrift", RoadmapState.EpicCompletionDetected, [executionEvidencePath]),
-                ["EvaluateEpicCompletionAndDrift"]);
+                new RoadmapTransitionIntent(completionClaimRoute.WorkflowTransition, completionClaimRoute.TargetState, [executionEvidencePath]),
+                [completionClaimRoute.WorkflowTransition]);
         }
 
-        const string runtimePrompt = "EvaluateEpicCompletionAndDrift";
+        string runtimePrompt = ExecutionDispositionProtocol.CommandText(ExecutionDispositionCommand.EvaluateEpicCompletionAndDrift);
         console.Phase("Evaluate epic completion and drift");
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
@@ -864,16 +868,17 @@ internal sealed class RoadmapStateMachine(
         DateTimeOffset executionStarted,
         string executionEvidencePath)
     {
+        ExecutionDispositionRoute route = outcome.RequireValidatedRoute();
         DateTimeOffset completed = DateTimeOffset.UtcNow;
         await lifecycleStore.UpsertAsync(
             RoadmapArtifactPaths.ActiveEpic,
             ArtifactLifecycleState.Executing,
             "Execution requested continuation.");
         await SaveStateAsync(
-            RoadmapState.ExecutionLoop,
+            route.TargetState,
             TransitionStatus.Paused,
             RoadmapState.ExecutionLoop,
-            RoadmapState.ExecutionLoop,
+            route.TargetState,
             "ExecutionOutcomeInterpretation",
             "None",
             executionEvidencePath,
@@ -882,8 +887,8 @@ internal sealed class RoadmapStateMachine(
             completed,
             null,
             null,
-            new RoadmapTransitionIntent("ContinueExecution", RoadmapState.ExecutionLoop, [RoadmapArtifactPaths.ExecutionPrompt, executionEvidencePath]),
-            ["ExecutionLoop", "ContinueExecution"]);
+            new RoadmapTransitionIntent(route.WorkflowTransition, route.TargetState, [RoadmapArtifactPaths.ExecutionPrompt, executionEvidencePath]),
+            ["ExecutionLoop", route.WorkflowTransition]);
         return RoadmapOutcome.Paused;
     }
 
@@ -892,16 +897,17 @@ internal sealed class RoadmapStateMachine(
         DateTimeOffset executionStarted,
         string executionEvidencePath)
     {
+        ExecutionDispositionRoute route = outcome.RequireValidatedRoute();
         DateTimeOffset completed = DateTimeOffset.UtcNow;
         await lifecycleStore.UpsertAsync(
             RoadmapArtifactPaths.ActiveEpic,
             ArtifactLifecycleState.Executing,
             "Execution blocked; active epic remains in execution lifecycle.");
         await SaveStateAsync(
-            RoadmapState.ExecutionBlocked,
+            route.TargetState,
             TransitionStatus.Paused,
             RoadmapState.ExecutionLoop,
-            RoadmapState.ExecutionBlocked,
+            route.TargetState,
             "ExecutionOutcomeInterpretation",
             "None",
             executionEvidencePath,
@@ -910,7 +916,7 @@ internal sealed class RoadmapStateMachine(
             completed,
             null,
             [new BlockerRow(outcome.Message, $"Review {executionEvidencePath}, resolve the execution blocker, and rerun.")],
-            new RoadmapTransitionIntent("ResolveExecutionBlocker", RoadmapState.ExecutionBlocked, [executionEvidencePath]),
+            new RoadmapTransitionIntent(route.WorkflowTransition, route.TargetState, [executionEvidencePath]),
             ["Resolve execution blocker and rerun"]);
         return RoadmapOutcome.Paused;
     }
@@ -1456,13 +1462,16 @@ internal sealed class RoadmapStateMachine(
             RoadmapState.ActiveEpicReady => ["GenerateMilestoneDeepDives"],
             RoadmapState.MilestoneSpecsReady => ["GenerateOperationalContext"],
             RoadmapState.ExecutionPromptReady => ["ExecutionLoop"],
-            RoadmapState.ExecutionLoop => ["ContinueExecution"],
+            RoadmapState.ExecutionLoop => [ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution)],
             RoadmapState.EpicPreparationAudit => ["EpicPreparationAudit"],
             RoadmapState.RetireEpic => ["SelectNextStrategicInitiative"],
-            RoadmapState.EvidenceGathering => ["GatherAdditionalEvidence", "EvaluateEpicCompletionAndDrift"],
+            RoadmapState.EvidenceGathering => ["GatherAdditionalEvidence", ExecutionCommandText(ExecutionDispositionCommand.EvaluateEpicCompletionAndDrift)],
             RoadmapState.EvidenceBlocked => ["Resolve blocker and rerun"],
             _ => [],
         };
+
+    private static string ExecutionCommandText(ExecutionDispositionCommand command) =>
+        ExecutionDispositionProtocol.CommandText(command);
 
     private async Task WriteBlockedStateAsync(RoadmapState state, string transition, string reason)
     {

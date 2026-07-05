@@ -17,6 +17,12 @@ internal sealed class ExecutionPromptGenerator(RoadmapArtifacts artifacts, Artif
 
         string firstSpecPath = specs.Order(StringComparer.Ordinal).First();
         string firstSpec = await artifacts.ReadRequiredAsync(firstSpecPath);
+        string validProtocolPairs = string.Join(
+            Environment.NewLine,
+            ExecutionDispositionProtocol.ValidPairDescriptions.Select(pair => $"- `{pair}`"));
+        string epicComplete = ExecutionDispositionProtocol.StatusText(ExecutionDispositionStatus.EpicComplete);
+        string continueRequired = ExecutionDispositionProtocol.StatusText(ExecutionDispositionStatus.ContinueRequired);
+        string executionBlocked = ExecutionDispositionProtocol.StatusText(ExecutionDispositionStatus.ExecutionBlocked);
         string content =
             $"""
             # Roadmap Execution Prompt
@@ -46,15 +52,19 @@ internal sealed class ExecutionPromptGenerator(RoadmapArtifacts artifacts, Artif
 
             | Field | Value |
             |---|---|
-            | Status | Epic Complete OR Continue Required OR Execution Blocked |
+            | Status | {ExecutionDispositionProtocol.StatusOptionsText} |
             | Confidence | High OR Medium OR Low OR Unclear |
             | Evidence Summary | Concise implementation evidence, continuation reason, or blocker summary. |
-            | Next Step | EvaluateEpicCompletionAndDrift OR ContinueExecution OR ResolveExecutionBlocker |
+            | Next Step | {ExecutionDispositionProtocol.CommandOptionsText} |
             ```
 
-            Use `Epic Complete` only when you explicitly claim the active epic implementation is complete and ready for independent completion certification.
-            Use `Continue Required` when the execution turn finished successfully but more implementation work remains.
-            Use `Execution Blocked` when execution cannot proceed without resolving a domain blocker or required human intervention.
+            The execution disposition is a protocol message. Use only these valid state/command pairs:
+
+            {validProtocolPairs}
+
+            Use `{epicComplete}` only when you explicitly claim the active epic implementation is complete and ready for independent completion certification.
+            Use `{continueRequired}` when the execution turn finished successfully but more implementation work remains.
+            Use `{executionBlocked}` when execution cannot proceed without resolving a domain blocker or required human intervention.
             """;
 
         if (content.Contains("<!-- BEGIN PROJECT-CONTEXT FILE:", StringComparison.Ordinal))

@@ -5,6 +5,7 @@ namespace CommandCenter.Roadmap.Cli;
 internal sealed class RoadmapExecutionOutcomeInterpreter
 {
     private readonly ExecutionDispositionParser dispositionParser = new();
+    private readonly ExecutionDispositionPolicy dispositionPolicy = new();
 
     public RoadmapExecutionOutcome Interpret(RoadmapExecutionTransportResult transport)
     {
@@ -19,13 +20,10 @@ internal sealed class RoadmapExecutionOutcomeInterpreter
         try
         {
             ExecutionDisposition disposition = dispositionParser.Parse(transport.Output);
-            return disposition.Status switch
-            {
-                ExecutionDispositionStatus.EpicComplete => RoadmapExecutionOutcome.EpicComplete(disposition),
-                ExecutionDispositionStatus.ContinueRequired => RoadmapExecutionOutcome.ContinueRequired(disposition),
-                ExecutionDispositionStatus.ExecutionBlocked => RoadmapExecutionOutcome.ExecutionBlocked(disposition),
-                _ => RoadmapExecutionOutcome.MalformedOutput($"Unsupported execution disposition: {disposition.Status}."),
-            };
+            ExecutionDispositionValidationResult validation = dispositionPolicy.Validate(disposition);
+            return validation.IsValid
+                ? RoadmapExecutionOutcome.Validated(validation)
+                : RoadmapExecutionOutcome.MalformedOutput(validation.ViolationReason!, disposition, validation);
         }
         catch (MarkdownParseException exception)
         {
@@ -36,14 +34,6 @@ internal sealed class RoadmapExecutionOutcomeInterpreter
 
 internal sealed class ExecutionDispositionParser
 {
-    private static readonly IReadOnlyDictionary<string, ExecutionDispositionStatus> Statuses =
-        new Dictionary<string, ExecutionDispositionStatus>(StringComparer.Ordinal)
-        {
-            ["Epic Complete"] = ExecutionDispositionStatus.EpicComplete,
-            ["Continue Required"] = ExecutionDispositionStatus.ContinueRequired,
-            ["Execution Blocked"] = ExecutionDispositionStatus.ExecutionBlocked,
-        };
-
     public ExecutionDisposition Parse(string markdown)
     {
         IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(markdown, "## Execution Disposition");
@@ -51,15 +41,23 @@ internal sealed class ExecutionDispositionParser
             RequiredStatus(fields),
             RequiredAllowed(fields, "Confidence", CommonAllowedValues.Confidence),
             Required(fields, "Evidence Summary"),
-            Required(fields, "Next Step"));
+            RequiredCommand(fields));
     }
 
     private static ExecutionDispositionStatus RequiredStatus(IReadOnlyDictionary<string, string> fields)
     {
         string value = Required(fields, "Status");
-        return Statuses.TryGetValue(value, out ExecutionDispositionStatus status)
+        return ExecutionDispositionProtocol.TryParseStatus(value, out ExecutionDispositionStatus status)
             ? status
             : throw new MarkdownParseException($"Execution disposition status has unsupported value `{value}`.");
+    }
+
+    private static ExecutionDispositionCommand RequiredCommand(IReadOnlyDictionary<string, string> fields)
+    {
+        string value = Required(fields, "Next Step");
+        return ExecutionDispositionProtocol.TryParseCommand(value, out ExecutionDispositionCommand command)
+            ? command
+            : throw new MarkdownParseException($"Execution disposition command has unsupported value `{value}`.");
     }
 
     private static string RequiredAllowed(IReadOnlyDictionary<string, string> fields, string field, IReadOnlyList<string> allowed)
@@ -80,53 +78,40 @@ internal sealed class ExecutionDispositionParser
     }
 }
 
-internal sealed record ExecutionDisposition(
-    ExecutionDispositionStatus Status,
-    string Confidence,
-    string EvidenceSummary,
-    string NextStep)
-{
-    public string StatusText => Status switch
-    {
-        ExecutionDispositionStatus.EpicComplete => "Epic Complete",
-        ExecutionDispositionStatus.ContinueRequired => "Continue Required",
-        ExecutionDispositionStatus.ExecutionBlocked => "Execution Blocked",
-        _ => Status.ToString(),
-    };
-}
-
-internal enum ExecutionDispositionStatus
-{
-    EpicComplete,
-    ContinueRequired,
-    ExecutionBlocked,
-}
-
 internal sealed record RoadmapExecutionOutcome(
     RoadmapExecutionOutcomeKind Kind,
     string Message,
-    ExecutionDisposition? Disposition)
+    ExecutionDisposition? Disposition,
+    ExecutionDispositionValidationResult? ProtocolValidation)
 {
-    public static RoadmapExecutionOutcome EpicComplete(ExecutionDisposition disposition) =>
-        new(RoadmapExecutionOutcomeKind.EpicComplete, disposition.EvidenceSummary, disposition);
+    public static RoadmapExecutionOutcome Validated(ExecutionDispositionValidationResult validation)
+    {
+        if (!validation.IsValid || validation.Route is null)
+        {
+            throw new ArgumentException("A valid execution protocol validation result is required.", nameof(validation));
+        }
 
-    public static RoadmapExecutionOutcome ContinueRequired(ExecutionDisposition disposition) =>
-        new(RoadmapExecutionOutcomeKind.ContinueRequired, disposition.EvidenceSummary, disposition);
-
-    public static RoadmapExecutionOutcome ExecutionBlocked(ExecutionDisposition disposition) =>
-        new(RoadmapExecutionOutcomeKind.ExecutionBlocked, disposition.EvidenceSummary, disposition);
+        return new(validation.Route.OutcomeKind, validation.Disposition.EvidenceSummary, validation.Disposition, validation);
+    }
 
     public static RoadmapExecutionOutcome RuntimeFailure(string message) =>
-        new(RoadmapExecutionOutcomeKind.RuntimeFailure, message, null);
+        new(RoadmapExecutionOutcomeKind.RuntimeFailure, message, null, null);
 
-    public static RoadmapExecutionOutcome MalformedOutput(string message) =>
-        new(RoadmapExecutionOutcomeKind.MalformedOutput, message, null);
+    public static RoadmapExecutionOutcome MalformedOutput(
+        string message,
+        ExecutionDisposition? disposition = null,
+        ExecutionDispositionValidationResult? protocolValidation = null) =>
+        new(RoadmapExecutionOutcomeKind.MalformedOutput, message, disposition, protocolValidation);
+
+    public ExecutionDispositionRoute RequireValidatedRoute() =>
+        ProtocolValidation?.Route
+        ?? throw new InvalidOperationException($"Execution outcome `{Kind}` does not have a validated execution protocol route.");
 
     public string DecisionText => Kind switch
     {
-        RoadmapExecutionOutcomeKind.EpicComplete => "Epic Complete",
-        RoadmapExecutionOutcomeKind.ContinueRequired => "Continue Required",
-        RoadmapExecutionOutcomeKind.ExecutionBlocked => "Execution Blocked",
+        RoadmapExecutionOutcomeKind.EpicComplete => ExecutionDispositionProtocol.StatusText(ExecutionDispositionStatus.EpicComplete),
+        RoadmapExecutionOutcomeKind.ContinueRequired => ExecutionDispositionProtocol.StatusText(ExecutionDispositionStatus.ContinueRequired),
+        RoadmapExecutionOutcomeKind.ExecutionBlocked => ExecutionDispositionProtocol.StatusText(ExecutionDispositionStatus.ExecutionBlocked),
         RoadmapExecutionOutcomeKind.RuntimeFailure => "Runtime Failure",
         RoadmapExecutionOutcomeKind.MalformedOutput => "Malformed Execution Output",
         _ => Kind.ToString(),
@@ -177,7 +162,30 @@ internal static class RoadmapExecutionEvidenceArtifact
             builder.AppendLine($"| Status | {Escape(disposition.StatusText)} |");
             builder.AppendLine($"| Confidence | {Escape(disposition.Confidence)} |");
             builder.AppendLine($"| Evidence Summary | {Escape(disposition.EvidenceSummary)} |");
-            builder.AppendLine($"| Next Step | {Escape(disposition.NextStep)} |");
+            builder.AppendLine($"| Next Step | {Escape(disposition.NextStepText)} |");
+        }
+
+        if (outcome.ProtocolValidation is { } validation)
+        {
+            builder.AppendLine();
+            builder.AppendLine("## Execution Protocol Validation");
+            builder.AppendLine();
+            builder.AppendLine("| Field | Value |");
+            builder.AppendLine("|---|---|");
+            builder.AppendLine($"| Result | {(validation.IsValid ? "Valid" : "Invalid")} |");
+            builder.AppendLine($"| Required Recovery Path | {Escape(validation.RequiredRecoveryPath)} |");
+
+            if (validation.Route is { } route)
+            {
+                builder.AppendLine($"| Validated Command | {Escape(ExecutionDispositionProtocol.CommandText(route.Command))} |");
+                builder.AppendLine($"| Workflow Route | {Escape(route.WorkflowTransition)} |");
+                builder.AppendLine($"| Target State | {Escape(route.TargetState.ToString())} |");
+            }
+
+            if (!string.IsNullOrWhiteSpace(validation.ViolationReason))
+            {
+                builder.AppendLine($"| Protocol Violation Reason | {Escape(validation.ViolationReason)} |");
+            }
         }
 
         builder.AppendLine();

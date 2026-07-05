@@ -86,6 +86,35 @@ public sealed class RoadmapStateMachineExecutionRoutingTests
         Assert.Contains("Malformed Execution Output", result.ExecutionEvidence, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("Epic Complete", "ContinueExecution")]
+    [InlineData("Continue Required", "EvaluateEpicCompletionAndDrift")]
+    [InlineData("Execution Blocked", "ContinueExecution")]
+    public async Task Contradictory_execution_protocol_blocks_safely_and_bypasses_certification(
+        string status,
+        string nextStep)
+    {
+        ExecutionRouteRun result = await RunExecutionRouteAsync(
+            RoadmapExecutionTransportResult.Completed(ExecutionDisposition(status, nextStep)),
+            includeCompletionEvaluation: false);
+
+        Assert.Equal(RoadmapOutcome.Paused, result.Outcome);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.State.CurrentState);
+        Assert.Equal(TransitionStatus.Paused, result.State.LastTransition.Status);
+        Assert.Equal("Malformed Execution Output", result.State.LastTransition.Decision);
+        Assert.Equal("ResolveMalformedExecutionOutput", result.State.TransitionIntent.Intent);
+        Assert.Single(result.ExecutionEvidencePaths);
+        Assert.Empty(result.EvaluationEvidencePaths);
+        Assert.Equal(6, result.AgentCalls);
+        Assert.Equal(ArtifactLifecycleState.Executing, result.ActiveEpicLifecycle);
+        Assert.Contains("## Execution Disposition", result.ExecutionEvidence, StringComparison.Ordinal);
+        Assert.Contains($"| Status | {status} |", result.ExecutionEvidence, StringComparison.Ordinal);
+        Assert.Contains($"| Next Step | {nextStep} |", result.ExecutionEvidence, StringComparison.Ordinal);
+        Assert.Contains("## Execution Protocol Validation", result.ExecutionEvidence, StringComparison.Ordinal);
+        Assert.Contains("| Result | Invalid |", result.ExecutionEvidence, StringComparison.Ordinal);
+        Assert.Contains("Protocol Violation Reason", result.ExecutionEvidence, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Runtime_failure_remains_infrastructure_failure_and_bypasses_certification()
     {
