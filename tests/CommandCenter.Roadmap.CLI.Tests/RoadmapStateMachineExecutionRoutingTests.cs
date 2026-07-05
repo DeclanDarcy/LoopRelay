@@ -213,7 +213,7 @@ public sealed class RoadmapStateMachineExecutionRoutingTests
 
         | Field | Value |
         |---|---|
-        | Overall Completion Status | Functionally Complete |
+        | Overall Completion Status | Partially Complete |
         | Overall Drift Classification | None |
         | Closure Recommendation | {{recommendation}} |
         """;

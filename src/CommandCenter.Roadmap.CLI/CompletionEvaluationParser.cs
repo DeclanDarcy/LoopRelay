@@ -2,23 +2,11 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal sealed class CompletionEvaluationParser
 {
-    private static readonly string[] AllowedCompletionStatuses =
-    [
-        "Fully Complete",
-        "Functionally Complete",
-        "Partially Complete",
-        "Not Complete",
-        "Inconclusive",
-    ];
+    public static IReadOnlyList<string> AllowedCompletionStatuses =>
+        CompletionCertificationVocabulary.CompletionStatuses;
 
-    private static readonly string[] AllowedDriftClassifications =
-    [
-        "None",
-        "Positive",
-        "Negative",
-        "Mixed",
-        "Unknown",
-    ];
+    public static IReadOnlyList<string> AllowedDriftClassifications =>
+        CompletionCertificationVocabulary.DriftClassifications;
 
     public CompletionEvaluationDecision Parse(string markdown)
     {
@@ -26,7 +14,7 @@ internal sealed class CompletionEvaluationParser
         return new CompletionEvaluationDecision(
             RequiredAllowed(fields, "Overall Completion Status", AllowedCompletionStatuses),
             RequiredAllowed(fields, "Overall Drift Classification", AllowedDriftClassifications),
-            RequiredAllowed(fields, "Closure Recommendation", CompletionCertificationRouter.AllowedRecommendations));
+            RequiredAllowed(fields, "Closure Recommendation", CompletionCertificationVocabulary.ClosureRecommendations));
     }
 
     private static string RequiredAllowed(IReadOnlyDictionary<string, string> fields, string field, IReadOnlyList<string> allowed)

@@ -65,7 +65,7 @@ internal sealed class CompletionCertificationRouter
     }
 
     public static IReadOnlyList<string> AllowedRecommendations =>
-        DefaultRoutes.Select(route => route.ClosureRecommendation).ToArray();
+        CompletionCertificationVocabulary.ClosureRecommendations;
 
     public IReadOnlyCollection<CompletionCertificationRoute> All => this.routes.Values.ToList();
 
@@ -84,6 +84,16 @@ internal sealed class CompletionCertificationRouter
         if (missing.Length > 0)
         {
             throw new InvalidOperationException("Completion certification route table is missing routes for: " + string.Join(", ", missing));
+        }
+
+        string[] unexpected = registered
+            .Where(recommendation => !AllowedRecommendations.Contains(recommendation, StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (unexpected.Length > 0)
+        {
+            throw new InvalidOperationException("Completion certification route table contains unsupported routes: " + string.Join(", ", unexpected));
         }
     }
 }

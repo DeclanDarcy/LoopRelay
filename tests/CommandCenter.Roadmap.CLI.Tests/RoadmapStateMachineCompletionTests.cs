@@ -34,35 +34,34 @@ public sealed class RoadmapStateMachineCompletionTests
     }
 
     [Fact]
-    public void Completion_router_can_be_extended_with_future_routes()
+    public void Completion_router_rejects_future_routes_without_policy_coverage()
     {
         var complete = new CompletionCertificationRouter();
-        var extended = new CompletionCertificationRouter(complete.All.Append(new CompletionCertificationRoute(
-            "Suspend Epic",
-            CompletionTransitionIntent.GatherAdditionalEvidence,
-            RoadmapState.EvidenceGathering,
-            TransitionStatus.Paused,
-            RoadmapOutcome.Paused,
-            RequiresRoadmapCompletionContextUpdate: false,
-            ActiveEpicLifecycleState: ArtifactLifecycleState.Ready,
-            NextTransitions: ["SuspendEpic"])));
+        IEnumerable<CompletionCertificationRoute> extended = complete.All.Append(new CompletionCertificationRoute(
+                "Suspend Epic",
+                CompletionTransitionIntent.GatherAdditionalEvidence,
+                RoadmapState.EvidenceGathering,
+                TransitionStatus.Paused,
+                RoadmapOutcome.Paused,
+                RequiresRoadmapCompletionContextUpdate: false,
+                ActiveEpicLifecycleState: ArtifactLifecycleState.Ready,
+                NextTransitions: ["SuspendEpic"]));
 
-        CompletionCertificationRoute route = extended.Route(new CompletionEvaluationDecision(
-            "Inconclusive",
-            "Unknown",
-            "Suspend Epic"));
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => new CompletionCertificationRouter(extended));
 
-        Assert.Equal("Suspend Epic", route.ClosureRecommendation);
-        Assert.Equal(RoadmapState.EvidenceGathering, route.TargetState);
+        Assert.Contains("Suspend Epic", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData("Close Epic", "Completed", "SelectNextStrategicInitiative", "Completed", "UpdateRoadmapCompletionContext", "Completed", true)]
-    [InlineData("Close With Follow-Up", "Completed", "SelectNextStrategicInitiative", "Completed", "UpdateRoadmapCompletionContext", "Completed", true)]
-    [InlineData("Continue Epic", "Paused", "ExecutionLoop", "Paused", "ContinueExecution", "Executing", false)]
-    [InlineData("Reopen Epic", "Paused", "EpicPreparationAudit", "Paused", "ReturnToEpicPreparationAudit", "Ready", false)]
-    [InlineData("Gather More Evidence", "Paused", "EvidenceGathering", "Paused", "GatherAdditionalEvidence", "Ready", false)]
-    public async Task Completion_recommendations_route_as_domain_transitions(
+    [InlineData("Fully Complete", "None", "Close Epic", "Completed", "SelectNextStrategicInitiative", "Completed", "UpdateRoadmapCompletionContext", "Completed", true)]
+    [InlineData("Functionally Complete", "Mixed", "Close With Follow-Up", "Completed", "SelectNextStrategicInitiative", "Completed", "UpdateRoadmapCompletionContext", "Completed", true)]
+    [InlineData("Partially Complete", "Negative", "Continue Epic", "Paused", "ExecutionLoop", "Paused", "ContinueExecution", "Executing", false)]
+    [InlineData("Functionally Complete", "Negative", "Reopen Epic", "Paused", "EpicPreparationAudit", "Paused", "ReturnToEpicPreparationAudit", "Ready", false)]
+    [InlineData("Inconclusive", "Unknown", "Gather More Evidence", "Paused", "EvidenceGathering", "Paused", "GatherAdditionalEvidence", "Ready", false)]
+    public async Task Validated_completion_decisions_route_as_domain_transitions(
+        string completionStatus,
+        string driftClassification,
         string recommendation,
         string expectedOutcome,
         string expectedState,
@@ -71,7 +70,7 @@ public sealed class RoadmapStateMachineCompletionTests
         string expectedActiveEpicLifecycle,
         bool updatesCompletionContext)
     {
-        CompletionRunResult result = await RunCompletionAsync(recommendation);
+        CompletionRunResult result = await RunCompletionAsync(completionStatus, driftClassification, recommendation);
 
         RoadmapOutcome outcome = Enum.Parse<RoadmapOutcome>(expectedOutcome);
         RoadmapState state = Enum.Parse<RoadmapState>(expectedState);
@@ -89,8 +88,10 @@ public sealed class RoadmapStateMachineCompletionTests
         Assert.DoesNotContain("| Status | Failed |", result.StateMarkdown, StringComparison.Ordinal);
         Assert.DoesNotContain("RoadmapStateMachine", result.StateMarkdown, StringComparison.Ordinal);
 
-        string evidencePath = Assert.Single(result.State.TransitionIntent.EvidencePaths);
+        string evidencePath = Assert.Single(result.EvidencePaths);
         Assert.StartsWith(RoadmapArtifactPaths.EvaluationEvidenceDirectory, evidencePath, StringComparison.Ordinal);
+        Assert.Contains(completionStatus, result.EvaluationEvidence, StringComparison.Ordinal);
+        Assert.Contains(driftClassification, result.EvaluationEvidence, StringComparison.Ordinal);
         Assert.Contains(recommendation, result.EvaluationEvidence, StringComparison.Ordinal);
         Assert.Contains("CompletionCertificationRouting", result.TransitionJournal, StringComparison.Ordinal);
         Assert.Contains(recommendation, result.TransitionJournal, StringComparison.Ordinal);
@@ -110,7 +111,7 @@ public sealed class RoadmapStateMachineCompletionTests
     [Fact]
     public async Task Runtime_transitions_record_causal_input_snapshots()
     {
-        CompletionRunResult result = await RunCompletionAsync("Close Epic");
+        CompletionRunResult result = await RunCompletionAsync("Fully Complete", "None", "Close Epic");
 
         TransitionJournalRecord[] records = JournalRecords(result.TransitionJournal);
 
@@ -144,17 +145,53 @@ public sealed class RoadmapStateMachineCompletionTests
         Assert.Contains(routing.InputArtifactHashes.Keys, path => path.StartsWith(RoadmapArtifactPaths.EvaluationEvidenceDirectory, StringComparison.Ordinal));
     }
 
-    private static async Task<CompletionRunResult> RunCompletionAsync(string recommendation)
+    [Fact]
+    public async Task Invalid_completion_certification_preserves_evidence_and_pauses_without_lifecycle_mutation()
+    {
+        CompletionRunResult result = await RunCompletionAsync("Not Complete", "None", "Close Epic");
+
+        Assert.Equal(RoadmapOutcome.Paused, result.Outcome);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.State.CurrentState);
+        Assert.Equal(TransitionStatus.Paused, result.State.LastTransition.Status);
+        Assert.Equal(RoadmapState.CompletionEvaluationAndContextUpdate, result.State.LastTransition.From);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.State.LastTransition.To);
+        Assert.Equal("CompletionCertificationRouting", result.State.LastTransition.Prompt);
+        Assert.Equal("Invalid Completion Certification", result.State.LastTransition.Decision);
+        Assert.Equal("ResolveInvalidCompletionCertification", result.State.TransitionIntent.Intent);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.State.TransitionIntent.DispatchState);
+        Assert.Equal(2, result.EvidencePaths.Count);
+        Assert.Contains(result.EvidencePaths, path => path.StartsWith(RoadmapArtifactPaths.EvaluationEvidenceDirectory, StringComparison.Ordinal));
+        Assert.Contains(result.EvidencePaths, path => path.StartsWith(RoadmapArtifactPaths.BlockerEvidenceDirectory, StringComparison.Ordinal));
+        Assert.Equal("existing completion context", result.CompletionContext);
+        Assert.Equal(ArtifactLifecycleState.Executing, result.ActiveEpicLifecycle);
+        Assert.Equal(8, result.AgentCalls);
+        Assert.Contains("Not Complete", result.EvaluationEvidence, StringComparison.Ordinal);
+        Assert.Contains("Close Epic", result.EvaluationEvidence, StringComparison.Ordinal);
+        Assert.NotNull(result.BlockerEvidence);
+        Assert.Contains("Raw Certification Artifact", result.BlockerEvidence!, StringComparison.Ordinal);
+        Assert.Contains("Not Complete", result.BlockerEvidence!, StringComparison.Ordinal);
+        Assert.Contains("does not allow completion status `Not Complete`", result.BlockerEvidence!, StringComparison.Ordinal);
+        Assert.Contains("CompletionCertificationRejected", result.TransitionJournal, StringComparison.Ordinal);
+        Assert.Contains("CompletionCertificationPolicy", result.TransitionJournal, StringComparison.Ordinal);
+        Assert.DoesNotContain("# Updated Roadmap Completion Context", result.CompletionContext, StringComparison.Ordinal);
+    }
+
+    private static async Task<CompletionRunResult> RunCompletionAsync(
+        string completionStatus,
+        string driftClassification,
+        string recommendation)
     {
         using var repo = SeedRepo();
-        var runtime = new ScriptedAgentRuntime(BuildTurns(recommendation).ToArray());
+        var runtime = new ScriptedAgentRuntime(BuildTurns(completionStatus, driftClassification, recommendation).ToArray());
 
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
         RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string stateMarkdown = repo.Read(RoadmapArtifactPaths.State);
-        Assert.True(state.TransitionIntent.EvidencePaths.Count == 1, stateMarkdown);
-        string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
-        string evaluationEvidence = repo.Read(evidencePath);
+        IReadOnlyList<string> evidencePaths = state.TransitionIntent.EvidencePaths;
+        string evaluationPath = evidencePaths.Single(path => path.StartsWith(RoadmapArtifactPaths.EvaluationEvidenceDirectory, StringComparison.Ordinal));
+        string evaluationEvidence = repo.Read(evaluationPath);
+        string? blockerPath = evidencePaths.FirstOrDefault(path => path.StartsWith(RoadmapArtifactPaths.BlockerEvidenceDirectory, StringComparison.Ordinal));
+        string? blockerEvidence = blockerPath is null ? null : repo.Read(blockerPath);
         IReadOnlyList<ArtifactLifecycleEntry> lifecycle = await new ArtifactLifecycleStore(repo.Artifacts).LoadAsync();
         ArtifactLifecycleState activeEpicLifecycle = lifecycle.Single(entry => entry.Path == RoadmapArtifactPaths.ActiveEpic).State;
         string transitionJournal = repo.Read(RoadmapArtifactPaths.TransitionJournal);
@@ -165,6 +202,8 @@ public sealed class RoadmapStateMachineCompletionTests
             stateMarkdown,
             repo.Read(RoadmapArtifactPaths.RoadmapCompletionContext),
             evaluationEvidence,
+            blockerEvidence,
+            evidencePaths,
             activeEpicLifecycle,
             runtime.OneShotCalls,
             transitionJournal);
@@ -179,7 +218,10 @@ public sealed class RoadmapStateMachineCompletionTests
         return repo;
     }
 
-    private static IEnumerable<AgentTurnResult> BuildTurns(string recommendation)
+    private static IEnumerable<AgentTurnResult> BuildTurns(
+        string completionStatus,
+        string driftClassification,
+        string recommendation)
     {
         yield return ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic"));
         yield return ScriptedAgentRuntime.Completed(NewEpicSelection());
@@ -188,7 +230,7 @@ public sealed class RoadmapStateMachineCompletionTests
         yield return ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("GenerateMilestoneDeepDivesForEpic"));
         yield return ScriptedAgentRuntime.Completed(MilestoneBundle());
         yield return ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EvaluateEpicCompletionAndDrift"));
-        yield return ScriptedAgentRuntime.Completed(CompletionEvaluation(recommendation));
+        yield return ScriptedAgentRuntime.Completed(CompletionEvaluation(completionStatus, driftClassification, recommendation));
 
         if (recommendation is "Close Epic" or "Close With Follow-Up")
         {
@@ -252,15 +294,18 @@ public sealed class RoadmapStateMachineCompletionTests
         - [ ] Completion routing is explicit.
         """;
 
-    private static string CompletionEvaluation(string recommendation) => $$"""
+    private static string CompletionEvaluation(
+        string completionStatus,
+        string driftClassification,
+        string recommendation) => $$"""
         # Epic Completion Evaluation
 
         ## Evaluation Summary
 
         | Field | Value |
         |---|---|
-        | Overall Completion Status | Functionally Complete |
-        | Overall Drift Classification | None |
+        | Overall Completion Status | {{completionStatus}} |
+        | Overall Drift Classification | {{driftClassification}} |
         | Closure Recommendation | {{recommendation}} |
         """;
 
@@ -270,6 +315,8 @@ public sealed class RoadmapStateMachineCompletionTests
         string StateMarkdown,
         string CompletionContext,
         string EvaluationEvidence,
+        string? BlockerEvidence,
+        IReadOnlyList<string> EvidencePaths,
         ArtifactLifecycleState ActiveEpicLifecycle,
         int AgentCalls,
         string TransitionJournal);

@@ -82,6 +82,7 @@ internal static class StateMachineFactory
             new ProjectionCache(repo.Artifacts, projections, manifest, new ProjectionValidator(), runner),
             new RoadmapPromptContextBuilder(repo.Artifacts),
             new TransitionInputResolver(repo.Artifacts),
+            new CompletionCertificationPolicy(),
             new CompletionCertificationRouter(),
             runner,
             stateStore,

@@ -80,7 +80,7 @@ public sealed class MarkdownParserTests
     }
 
     [Fact]
-    public void Completion_parser_parses_closure_recommendation()
+    public void Completion_parser_parses_completion_status_drift_and_closure_recommendation()
     {
         string markdown = """
         ## Evaluation Summary
@@ -94,7 +94,47 @@ public sealed class MarkdownParserTests
 
         CompletionEvaluationDecision decision = new CompletionEvaluationParser().Parse(markdown);
 
+        Assert.Equal("Fully Complete", decision.OverallCompletionStatus);
+        Assert.Equal("None", decision.OverallDriftClassification);
         Assert.Equal("Close Epic", decision.ClosureRecommendation);
+    }
+
+    [Theory]
+    [InlineData("Overall Completion Status", "Deferred")]
+    [InlineData("Overall Drift Classification", "Ambiguous")]
+    [InlineData("Closure Recommendation", "Close Now")]
+    public void Completion_parser_rejects_unknown_completion_values(string field, string value)
+    {
+        Dictionary<string, string> fields = new(StringComparer.Ordinal)
+        {
+            ["Overall Completion Status"] = "Fully Complete",
+            ["Overall Drift Classification"] = "None",
+            ["Closure Recommendation"] = "Close Epic",
+        };
+        fields[field] = value;
+        string markdown = $$"""
+        ## Evaluation Summary
+
+        | Field | Value |
+        |---|---|
+        | Overall Completion Status | {{fields["Overall Completion Status"]}} |
+        | Overall Drift Classification | {{fields["Overall Drift Classification"]}} |
+        | Closure Recommendation | {{fields["Closure Recommendation"]}} |
+        """;
+
+        Assert.Throws<MarkdownParseException>(() => new CompletionEvaluationParser().Parse(markdown));
+    }
+
+    [Fact]
+    public void Completion_parser_rejects_malformed_completion_structure()
+    {
+        string markdown = """
+        ## Evaluation Summary
+
+        This section does not contain the required field table.
+        """;
+
+        Assert.Throws<MarkdownParseException>(() => new CompletionEvaluationParser().Parse(markdown));
     }
 
     [Fact]

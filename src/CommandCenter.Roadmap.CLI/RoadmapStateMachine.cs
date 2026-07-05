@@ -10,6 +10,7 @@ internal sealed class RoadmapStateMachine(
     ProjectionCache projectionCache,
     RoadmapPromptContextBuilder contextBuilder,
     TransitionInputResolver inputResolver,
+    CompletionCertificationPolicy completionPolicy,
     CompletionCertificationRouter completionRouter,
     RoadmapPromptRunner promptRunner,
     RoadmapStateStore stateStore,
@@ -791,9 +792,18 @@ internal sealed class RoadmapStateMachine(
             TransitionInputContext.ExecutionEvidence(executionEvidencePath));
         string evaluationPath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "epic-completion-and-drift", output);
         CompletionEvaluationDecision decision = new CompletionEvaluationParser().Parse(output);
-        CompletionCertificationRoute route = completionRouter.Route(decision);
+        CompletionCertificationPolicyResult certification = completionPolicy.Validate(decision);
         await AppendDecisionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, evaluationPath, decision.ClosureRecommendation, "Unclear", decision.OverallCompletionStatus);
 
+        if (!certification.IsValid)
+        {
+            return await PersistInvalidCompletionCertificationAsync(
+                certification,
+                projection.Definition.ProjectionPath,
+                evaluationPath);
+        }
+
+        CompletionCertificationRoute route = completionRouter.Route(certification.Decision);
         if (route.RequiresRoadmapCompletionContextUpdate)
         {
             await UpdateRoadmapCompletionContextAsync(projectContext, evaluationPath, cancellationToken);
@@ -1256,6 +1266,109 @@ internal sealed class RoadmapStateMachine(
             null,
             route.ToRoadmapTransitionIntent(evaluationPath),
             route.NextTransitions);
+    }
+
+    private async Task<RoadmapOutcome> PersistInvalidCompletionCertificationAsync(
+        CompletionCertificationPolicyResult certification,
+        string projectionPath,
+        string evaluationPath)
+    {
+        DateTimeOffset blockedAt = DateTimeOffset.UtcNow;
+        string reason = certification.RejectionReason ?? "Completion certification failed semantic policy validation.";
+        string requiredNextStep = $"Review {evaluationPath}, preserve the certification evidence, correct the certification decision, and rerun the roadmap CLI.";
+        string blockedTransition = $"Rejected closure recommendation: {certification.Decision.ClosureRecommendation}";
+        string details = $"""
+            Completion certification was parsed successfully, but the parsed decision failed semantic policy validation.
+
+            ## Parsed Decision
+
+            | Field | Value |
+            |---|---|
+            | Overall Completion Status | {certification.Decision.OverallCompletionStatus} |
+            | Overall Drift Classification | {certification.Decision.OverallDriftClassification} |
+            | Closure Recommendation | {certification.Decision.ClosureRecommendation} |
+
+            ## Validation Failure
+
+            {reason}
+
+            ## Blocked Transition
+
+            | Field | Value |
+            |---|---|
+            | Rejected Closure Recommendation | {certification.Decision.ClosureRecommendation} |
+            | Route Selection | Blocked before workflow routing |
+            | Lifecycle Mutation | Blocked before mutation |
+            | Roadmap Completion Context Update | Blocked before mutation |
+
+            ## Preserved Evidence
+
+            | Field | Value |
+            |---|---|
+            | Raw Certification Artifact | {evaluationPath} |
+            | Blocked Transition | {blockedTransition} |
+            | Required Next Step | {requiredNextStep} |
+            """;
+        string blockerPath = await artifacts.WriteNumberedEvidenceAsync(
+            RoadmapArtifactPaths.BlockerEvidenceDirectory,
+            "invalid-completion-certification",
+            RoadmapBlockedArtifact.Render(
+                RoadmapState.EvidenceBlocked,
+                "CompletionCertificationRouting",
+                OneLine(reason),
+                requiredNextStep,
+                evaluationPath,
+                details,
+                blockedAt));
+        string routingContext = string.Join(
+            Environment.NewLine,
+            [
+                $"Closure Recommendation: {certification.Decision.ClosureRecommendation}",
+                $"Overall Completion Status: {certification.Decision.OverallCompletionStatus}",
+                $"Overall Drift Classification: {certification.Decision.OverallDriftClassification}",
+                $"Blocked Transition: {blockedTransition}",
+                $"Validation Failure: {reason}",
+            ]);
+        TransitionInputSnapshot inputSnapshot = await inputResolver.ResolveAsync(new TransitionInputRequest(
+            "CompletionCertificationRouting",
+            projectionPath,
+            routingContext,
+            string.Empty,
+            TransitionInputContext.CompletionEvaluation(evaluationPath)));
+        IReadOnlyList<string> outputs = [evaluationPath, blockerPath];
+        await journalStore.AppendAsync(new TransitionJournalRecord(
+            "CompletionCertificationRejected",
+            Guid.NewGuid().ToString("N"),
+            blockedAt,
+            RoadmapState.CompletionEvaluationAndContextUpdate,
+            RoadmapState.EvidenceBlocked,
+            "CompletionCertificationRouting",
+            projectionPath,
+            "CompletionCertificationPolicy",
+            inputSnapshot.ToInputArtifactHashes(),
+            outputs,
+            0,
+            TransitionStatus.Paused.ToString(),
+            "Invalid Completion Certification",
+            reason,
+            inputSnapshot));
+        await SaveStateAsync(
+            RoadmapState.EvidenceBlocked,
+            TransitionStatus.Paused,
+            RoadmapState.CompletionEvaluationAndContextUpdate,
+            RoadmapState.EvidenceBlocked,
+            "CompletionCertificationRouting",
+            projectionPath,
+            string.Join(", ", outputs),
+            "Invalid Completion Certification",
+            blockedAt,
+            blockedAt,
+            null,
+            [new BlockerRow(OneLine(reason), requiredNextStep)],
+            new RoadmapTransitionIntent("ResolveInvalidCompletionCertification", RoadmapState.EvidenceBlocked, outputs),
+            ["Resolve invalid completion certification and rerun"]);
+
+        return RoadmapOutcome.Paused;
     }
 
     private async Task AppendDecisionAsync(RoadmapState state, string transition, string projectionPath, string outputPath, string decision, string confidence, string rationale)
