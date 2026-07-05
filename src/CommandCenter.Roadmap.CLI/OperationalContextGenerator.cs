@@ -52,17 +52,17 @@ internal sealed class OperationalContextGenerator(RoadmapArtifacts artifacts, Ar
             lines.Add($"| {entry.Path} | {entry.State} |");
         }
 
-        string content = EnsureNoRawNorthStar(string.Join(Environment.NewLine, lines) + Environment.NewLine);
+        string content = EnsureNoRawProjectContext(string.Join(Environment.NewLine, lines) + Environment.NewLine);
         await artifacts.WriteAsync(RoadmapArtifactPaths.OperationalContext, content);
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.OperationalContext, ArtifactLifecycleState.Ready);
         return content;
     }
 
-    private static string EnsureNoRawNorthStar(string content)
+    private static string EnsureNoRawProjectContext(string content)
     {
-        if (content.Contains("<!-- BEGIN NORTH-STAR FILE:", StringComparison.Ordinal))
+        if (content.Contains("<!-- BEGIN PROJECT-CONTEXT FILE:", StringComparison.Ordinal))
         {
-            throw new RoadmapStepException("Operational context contains raw Core North-Star markers.");
+            throw new RoadmapStepException("Operational context contains raw Project Context markers.");
         }
 
         return content;

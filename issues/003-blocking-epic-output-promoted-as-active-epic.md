@@ -57,7 +57,7 @@ Existing defenses do not catch this:
 
 - `RoadmapPromptRunner` only verifies that the agent turn completed. It does not inspect output semantics.
 - `BundleFileExtractor` can treat missing `# FILE:` markers as blocked for multi-file bundle prompts, but these epic authoring prompts are single-file outputs and do not go through bundle extraction.
-- `InvariantValidator` checks north-star hash, projection manifest state, active epic lifecycle counts, spec ownership, and execution prerequisites. It does not validate that `.agents/epic.md` has epic structure.
+- `InvariantValidator` checks Project Context hash, projection manifest state, active epic lifecycle counts, spec ownership, and execution prerequisites. It does not validate that `.agents/epic.md` has epic structure.
 - The current state machine does not run an `ActiveEpicReady` invariant check immediately after create/realign/reimagine.
 
 ## Impact

@@ -98,7 +98,7 @@ public sealed class RoadmapStateMachineEpicPreparationTests
     private static TempRepo SeedRepo()
     {
         var repo = new TempRepo();
-        repo.SeedNorthStar();
+        repo.SeedProjectContext();
         repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");
         repo.Write(RoadmapArtifactPaths.RoadmapFile, "roadmap");
         return repo;

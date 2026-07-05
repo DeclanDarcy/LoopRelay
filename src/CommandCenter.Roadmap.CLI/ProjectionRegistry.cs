@@ -37,6 +37,6 @@ internal sealed record ProjectionDefinition(
     string ProjectionPromptName,
     string ProjectionPath)
 {
-    public string RenderPrompt(string northStarContext) =>
-        RoadmapPromptCatalog.RenderProjection(ProjectionPromptName, northStarContext);
+    public string RenderPrompt(string projectContext) =>
+        RoadmapPromptCatalog.RenderProjection(ProjectionPromptName, projectContext);
 }

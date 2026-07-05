@@ -99,7 +99,7 @@ Example shape:
 private async Task<RoadmapOutcome> RouteCompletionEvaluationAsync(
     CompletionEvaluationDecision decision,
     string evaluationPath,
-    NorthStarContext northStar,
+    ProjectContext projectContext,
     CancellationToken cancellationToken)
 ```
 

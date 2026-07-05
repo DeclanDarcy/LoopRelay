@@ -47,15 +47,15 @@ var lifecycle = new ArtifactLifecycleStore(artifacts);
 var bundleExtractor = new BundleFileExtractor();
 var bundleManifest = new BundleManifestWriter(artifacts);
 var splitFamilies = new SplitFamilyStore(artifacts);
-var northStarLoader = new NorthStarContextLoader(artifacts);
+var projectContextLoader = new ProjectContextLoader(artifacts);
 var operationalContext = new OperationalContextGenerator(artifacts, lifecycle);
 var executionPrompt = new ExecutionPromptGenerator(artifacts, lifecycle);
 var materializer = new ExecutionCompatibilityMaterializer(artifacts);
 IRoadmapExecutionBridge executionBridge = new RoadmapExecutionBridge(runtime, artifacts, repository, console);
-var invariants = new InvariantValidator(artifacts, northStarLoader, projectionRegistry, contractRegistry, manifestStore, lifecycle, splitFamilies);
+var invariants = new InvariantValidator(artifacts, projectContextLoader, projectionRegistry, contractRegistry, manifestStore, lifecycle, splitFamilies);
 var machine = new RoadmapStateMachine(
     artifacts,
-    northStarLoader,
+    projectContextLoader,
     contractRegistry,
     manifestStore,
     projectionCache,

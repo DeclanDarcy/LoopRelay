@@ -8,10 +8,10 @@ internal sealed class RoadmapPromptRunner(IAgentRuntime runtime, Repository repo
 {
     public async Task<string> RunProjectionPromptAsync(
         ProjectionDefinition projection,
-        string northStarContext,
+        string projectContext,
         CancellationToken cancellationToken)
     {
-        string prompt = projection.RenderPrompt(northStarContext);
+        string prompt = projection.RenderPrompt(projectContext);
         return await RunOneShotAsync(projection.ProjectionPromptName, prompt, cancellationToken);
     }
 

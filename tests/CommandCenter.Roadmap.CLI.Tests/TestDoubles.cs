@@ -37,12 +37,12 @@ internal sealed class TempRepo : IDisposable
     public string Read(string relativePath) =>
         File.ReadAllText(Path.Combine(Root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
 
-    public void SeedNorthStar()
+    public void SeedProjectContext()
     {
         int index = 1;
-        foreach (string path in RoadmapArtifactPaths.NorthStarSourceFiles)
+        foreach (string path in RoadmapArtifactPaths.ProjectContextSourceFiles)
         {
-            Write(path, $"north star {index:00}");
+            Write(path, $"project context {index:00}");
             index++;
         }
     }

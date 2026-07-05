@@ -4,7 +4,7 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal sealed class RoadmapStateMachine(
     RoadmapArtifacts artifacts,
-    NorthStarContextLoader northStarLoader,
+    ProjectContextLoader projectContextLoader,
     PromptContractRegistry contractRegistry,
     ProjectionManifestStore manifestStore,
     ProjectionCache projectionCache,
@@ -26,11 +26,11 @@ internal sealed class RoadmapStateMachine(
 {
     public async Task<RoadmapOutcome> RunAsync(CancellationToken cancellationToken)
     {
-        NorthStarContext northStar;
+        ProjectContext projectContext;
         try
         {
-            console.Phase("Core preflight");
-            northStar = await northStarLoader.LoadAsync(cancellationToken);
+            console.Phase("Project Context preflight");
+            projectContext = await projectContextLoader.LoadAsync(cancellationToken);
             await contractRegistry.EmitSnapshotAsync(artifacts);
             await SaveStateAsync(RoadmapState.CoreReady, TransitionStatus.Completed, RoadmapState.CoreReady, RoadmapState.CoreReady, "Preflight", "None", "None", "CoreReady", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, []);
         }
@@ -45,14 +45,14 @@ internal sealed class RoadmapStateMachine(
         {
             if (!await artifacts.ExistsAsync(RoadmapArtifactPaths.RoadmapCompletionContext))
             {
-                await BootstrapRoadmapCompletionContextAsync(northStar, cancellationToken);
+                await BootstrapRoadmapCompletionContextAsync(projectContext, cancellationToken);
             }
 
-            SelectionDecision selection = await SelectNextInitiativeAsync(northStar, cancellationToken);
+            SelectionDecision selection = await SelectNextInitiativeAsync(projectContext, cancellationToken);
             switch (selection.RecommendedOutcome)
             {
                 case "Select Existing Epic":
-                    EpicPreparationResult preparation = await AuditAndPrepareExistingEpicAsync(selection, northStar, cancellationToken);
+                    EpicPreparationResult preparation = await AuditAndPrepareExistingEpicAsync(selection, projectContext, cancellationToken);
                     if (preparation == EpicPreparationResult.Retired)
                     {
                         return RoadmapOutcome.Paused;
@@ -60,10 +60,10 @@ internal sealed class RoadmapStateMachine(
 
                     break;
                 case "Select New Intermediary Epic":
-                    await CreateNewEpicAsync(northStar, cancellationToken);
+                    await CreateNewEpicAsync(projectContext, cancellationToken);
                     break;
                 case "Select Split Epic":
-                    await SplitEpicAsync(northStar, cancellationToken);
+                    await SplitEpicAsync(projectContext, cancellationToken);
                     break;
                 case "Strategic Investigation Required":
                     await AppendDecisionAsync(RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
@@ -79,8 +79,8 @@ internal sealed class RoadmapStateMachine(
                     return RoadmapOutcome.Paused;
             }
 
-            await GenerateMilestonesAndExecutionContextAsync(northStar, cancellationToken);
-            await RunExecutionAndCertificationAsync(northStar, cancellationToken);
+            await GenerateMilestonesAndExecutionContextAsync(projectContext, cancellationToken);
+            await RunExecutionAndCertificationAsync(projectContext, cancellationToken);
             return RoadmapOutcome.Completed;
         }
         catch (OperationCanceledException)
@@ -96,12 +96,12 @@ internal sealed class RoadmapStateMachine(
         }
     }
 
-    private async Task BootstrapRoadmapCompletionContextAsync(NorthStarContext northStar, CancellationToken cancellationToken)
+    private async Task BootstrapRoadmapCompletionContextAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "CreateRoadmapCompletionContext";
         console.Phase("Bootstrap roadmap completion context");
         PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, northStar, contract, cancellationToken);
+        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = "# Roadmap Completion Bootstrap\n\n## Projection Content\n\n" + projection.Content;
         string output = await RunPromptTransitionAsync(
             RoadmapState.CoreReady,
@@ -116,12 +116,12 @@ internal sealed class RoadmapStateMachine(
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.RoadmapCompletionContext, ArtifactLifecycleState.Ready);
     }
 
-    private async Task<SelectionDecision> SelectNextInitiativeAsync(NorthStarContext northStar, CancellationToken cancellationToken)
+    private async Task<SelectionDecision> SelectNextInitiativeAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "SelectNextEpic";
         console.Phase("Select next strategic initiative");
         PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, northStar, contract, cancellationToken);
+        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         RoadmapStateDocument? existing = await stateStore.LoadAsync();
         string context = await contextBuilder.BuildSelectionContextAsync(projection.Content, existing?.RetiredEpics ?? []);
         string output = await RunPromptTransitionAsync(
@@ -142,13 +142,13 @@ internal sealed class RoadmapStateMachine(
         return decision;
     }
 
-    private async Task<EpicPreparationResult> AuditAndPrepareExistingEpicAsync(SelectionDecision selectionDecision, NorthStarContext northStar, CancellationToken cancellationToken)
+    private async Task<EpicPreparationResult> AuditAndPrepareExistingEpicAsync(SelectionDecision selectionDecision, ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "EpicPreparationAudit";
         console.Phase("Audit selected epic");
         string selection = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, northStar, contract, cancellationToken);
+        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildAuditContext(projection.Content, selection);
         string output = await RunPromptTransitionAsync(
             RoadmapState.ExistingEpicSelected,
@@ -181,49 +181,49 @@ internal sealed class RoadmapStateMachine(
 
         if (decision.Disposition == "Realign")
         {
-            await RewriteActiveEpicAsync("RealignEpic", RoadmapState.RealignEpic, northStar, auditPath, cancellationToken);
+            await RewriteActiveEpicAsync("RealignEpic", RoadmapState.RealignEpic, projectContext, auditPath, cancellationToken);
         }
         else
         {
-            await RewriteActiveEpicAsync("ReimagineEpic", RoadmapState.ReimagineEpic, northStar, auditPath, cancellationToken);
+            await RewriteActiveEpicAsync("ReimagineEpic", RoadmapState.ReimagineEpic, projectContext, auditPath, cancellationToken);
         }
 
         return EpicPreparationResult.ActiveEpicReady;
     }
 
-    private async Task RewriteActiveEpicAsync(string runtimePrompt, RoadmapState state, NorthStarContext northStar, string auditPath, CancellationToken cancellationToken)
+    private async Task RewriteActiveEpicAsync(string runtimePrompt, RoadmapState state, ProjectContext projectContext, string auditPath, CancellationToken cancellationToken)
     {
         console.Phase(runtimePrompt);
         string selectionOrEpic = await artifacts.ReadAsync(RoadmapArtifactPaths.ActiveEpic) ?? await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
         string audit = await artifacts.ReadRequiredAsync(auditPath);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, northStar, contract, cancellationToken);
+        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildRealignOrReimagineContext(projection.Content, selectionOrEpic, audit);
         string output = await RunPromptTransitionAsync(state, RoadmapState.ActiveEpicReady, runtimePrompt, projection.Definition.ProjectionPath, context, audit, [RoadmapArtifactPaths.ActiveEpic], cancellationToken);
         await artifacts.WriteAsync(RoadmapArtifactPaths.ActiveEpic, output);
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready);
     }
 
-    private async Task CreateNewEpicAsync(NorthStarContext northStar, CancellationToken cancellationToken)
+    private async Task CreateNewEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "CreateNewEpic";
         console.Phase("Create new epic");
         string selection = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, northStar, contract, cancellationToken);
+        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
         string output = await RunPromptTransitionAsync(RoadmapState.NewEpicProposed, RoadmapState.ActiveEpicReady, runtimePrompt, projection.Definition.ProjectionPath, context, selection, [RoadmapArtifactPaths.ActiveEpic], cancellationToken);
         await artifacts.WriteAsync(RoadmapArtifactPaths.ActiveEpic, output);
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready);
     }
 
-    private async Task SplitEpicAsync(NorthStarContext northStar, CancellationToken cancellationToken)
+    private async Task SplitEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "SplitEpic";
         console.Phase("Split epic");
         string selection = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, northStar, contract, cancellationToken);
+        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
         string output = await RunPromptTransitionAsync(RoadmapState.SplitEpicProposed, RoadmapState.SplitChildSelection, runtimePrompt, projection.Definition.ProjectionPath, context, selection, [RoadmapArtifactPaths.SplitFamiliesDirectory], cancellationToken);
         BundleExtractionResult bundle = bundleExtractor.Extract(output);
@@ -243,12 +243,12 @@ internal sealed class RoadmapStateMachine(
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready, selectedChild);
     }
 
-    private async Task GenerateMilestonesAndExecutionContextAsync(NorthStarContext northStar, CancellationToken cancellationToken)
+    private async Task GenerateMilestonesAndExecutionContextAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "GenerateMilestoneDeepDivesForEpic";
         console.Phase("Generate milestone deep dives");
         PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, northStar, contract, cancellationToken);
+        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = await contextBuilder.BuildMilestoneContextAsync(projection.Content);
         string output = await RunPromptTransitionAsync(RoadmapState.ActiveEpicReady, RoadmapState.MilestoneSpecsReady, runtimePrompt, projection.Definition.ProjectionPath, context, string.Empty, [RoadmapArtifactPaths.SpecsDirectory], cancellationToken);
         BundleExtractionResult bundle = bundleExtractor.Extract(output);
@@ -264,7 +264,7 @@ internal sealed class RoadmapStateMachine(
             await lifecycleStore.UpsertAsync(file.Path, ArtifactLifecycleState.Ready);
         }
 
-        InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.MilestoneSpecsReady, northStar.Hash, cancellationToken);
+        InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.MilestoneSpecsReady, projectContext.Hash, cancellationToken);
         if (!invariant.IsValid)
         {
             throw new RoadmapStepException(invariant.Error ?? "Invariant validation failed after milestone generation.");
@@ -277,9 +277,9 @@ internal sealed class RoadmapStateMachine(
         await executionMaterializer.MaterializeAsync(cancellationToken);
     }
 
-    private async Task RunExecutionAndCertificationAsync(NorthStarContext northStar, CancellationToken cancellationToken)
+    private async Task RunExecutionAndCertificationAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
-        InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.ExecutionPromptReady, northStar.Hash, cancellationToken);
+        InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.ExecutionPromptReady, projectContext.Hash, cancellationToken);
         if (!invariant.IsValid)
         {
             throw new RoadmapStepException(invariant.Error ?? "Invariant validation failed before execution.");
@@ -295,7 +295,7 @@ internal sealed class RoadmapStateMachine(
         const string runtimePrompt = "EvaluateEpicCompletionAndDrift";
         console.Phase("Evaluate epic completion and drift");
         PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, northStar, contract, cancellationToken);
+        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = await contextBuilder.BuildCompletionEvaluationContextAsync(projection.Content);
         string output = await RunPromptTransitionAsync(RoadmapState.EpicCompletionDetected, RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, context, string.Empty, [RoadmapArtifactPaths.EvaluationEvidenceDirectory], cancellationToken);
         string evaluationPath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "epic-completion-and-drift", output);
@@ -307,16 +307,16 @@ internal sealed class RoadmapStateMachine(
             throw new RoadmapStepException($"Completion certification routed to {decision.ClosureRecommendation}.");
         }
 
-        await UpdateRoadmapCompletionContextAsync(northStar, evaluationPath, cancellationToken);
+        await UpdateRoadmapCompletionContextAsync(projectContext, evaluationPath, cancellationToken);
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Completed);
     }
 
-    private async Task UpdateRoadmapCompletionContextAsync(NorthStarContext northStar, string evaluationPath, CancellationToken cancellationToken)
+    private async Task UpdateRoadmapCompletionContextAsync(ProjectContext projectContext, string evaluationPath, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "UpdateRoadmapCompletionContext";
         console.Phase("Update roadmap completion context");
         PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, northStar, contract, cancellationToken);
+        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = await contextBuilder.BuildCompletionUpdateContextAsync(projection.Content, evaluationPath);
         string output = await RunPromptTransitionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, RoadmapState.SelectNextStrategicInitiative, runtimePrompt, projection.Definition.ProjectionPath, context, string.Empty, [RoadmapArtifactPaths.RoadmapCompletionContext], cancellationToken);
         await artifacts.WriteAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);

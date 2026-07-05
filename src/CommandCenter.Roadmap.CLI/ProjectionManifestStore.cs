@@ -60,7 +60,7 @@ internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
         {
             "# Projection Manifest",
             string.Empty,
-            "| Runtime Prompt | Projection Prompt | Path | Projection Prompt Source Hash | North-Star Files | North-Star Hash | Projection Hash | Generated At | Validation Status | Stale Status | Last Validation Error |",
+            "| Runtime Prompt | Projection Prompt | Path | Projection Prompt Source Hash | Project Context Files | Project Context Hash | Projection Hash | Generated At | Validation Status | Stale Status | Last Validation Error |",
             "|---|---|---|---|---|---|---|---|---|---|---|",
         };
 
@@ -72,8 +72,8 @@ internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
                 EscapeCell(entry.ProjectionPromptName),
                 EscapeCell(entry.ProjectionPath),
                 EscapeCell(entry.ProjectionPromptSourceHash),
-                EscapeCell(string.Join(';', entry.NorthStarFiles)),
-                EscapeCell(entry.NorthStarHash),
+                EscapeCell(string.Join(';', entry.ProjectContextFiles)),
+                EscapeCell(entry.ProjectContextHash),
                 EscapeCell(entry.ProjectionHash),
                 EscapeCell(entry.GeneratedAt.ToString("O")),
                 EscapeCell(entry.ValidationStatus.ToString()),

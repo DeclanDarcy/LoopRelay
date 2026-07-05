@@ -19,10 +19,10 @@ public sealed class OperationalContextGeneratorTests
     }
 
     [Fact]
-    public async Task Operational_context_rejects_raw_core_markers()
+    public async Task Operational_context_rejects_raw_project_context_markers()
     {
         using var repo = new TempRepo();
-        repo.Write(RoadmapArtifactPaths.ActiveEpic, "<!-- BEGIN NORTH-STAR FILE: 01-purpose.md -->");
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "<!-- BEGIN PROJECT-CONTEXT FILE: 01-purpose.md -->");
         repo.Write(".agents/specs/a.md", "spec");
 
         await Assert.ThrowsAsync<RoadmapStepException>(() => new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts)).GenerateAsync());

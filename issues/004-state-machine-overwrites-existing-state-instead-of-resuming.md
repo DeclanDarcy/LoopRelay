@@ -9,7 +9,7 @@ Verified. `RoadmapStateMachine.RunAsync` always writes `CoreReady` immediately a
 
 There is no `RoadmapStateStore.LoadAsync` before this write. The current startup order is:
 
-1. Load north-star context.
+1. Load Project Context.
 2. Emit prompt contract snapshot.
 3. Save `.agents/state.md` as `CoreReady` with empty blockers and empty retired exclusions.
 4. If the roadmap completion context is missing, bootstrap it.
@@ -106,7 +106,7 @@ The planner should be conservative and artifact-aware:
 - If state is `Cancelled`, resume from the last safe transition boundary only when required inputs still exist.
 - If state is terminal paused (`StrategicInvestigationRequired`, `RoadmapRevisionRequired`, `NoSuitableInitiative`), do not proceed automatically.
 
-Separate preflight from state mutation. Preflight should validate north-star files and emit prompt contracts, but it should not overwrite `.agents/state.md` unless the planner chooses a transition that starts at `CoreReady`.
+Separate preflight from state mutation. Preflight should validate Project Context files and emit prompt contracts, but it should not overwrite `.agents/state.md` unless the planner chooses a transition that starts at `CoreReady`.
 
 Required supporting changes:
 

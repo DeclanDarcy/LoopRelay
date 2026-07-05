@@ -13,7 +13,7 @@ internal static class RoadmapArtifactPaths
     public const string SpecsDirectory = ".agents/specs";
     public const string OperationalContext = ".agents/operational_context.md";
     public const string ExecutionPrompt = ".agents/execution-prompt.md";
-    public const string RoadmapCompletionContext = ".agents/north-star/roadmap-completion-context.md";
+    public const string RoadmapCompletionContext = ".agents/core/roadmap-completion-context.md";
     public const string ProjectionsManifest = ".agents/projections/manifest.md";
     public const string PromptContracts = ".agents/contracts/prompt-contracts.md";
     public const string TransitionJournal = ".agents/journal/transitions.jsonl";
@@ -24,16 +24,16 @@ internal static class RoadmapArtifactPaths
     public const string BlockerEvidenceDirectory = ".agents/evidence/blockers";
     public const string OrchestrationEvidenceDirectory = ".agents/evidence/orchestration";
 
-    public static readonly IReadOnlyList<string> NorthStarSourceFiles =
+    public static readonly IReadOnlyList<string> ProjectContextSourceFiles =
     [
-        ".agents/north-star/01-purpose.md",
-        ".agents/north-star/02-capability-model.md",
-        ".agents/north-star/03-invariants.md",
-        ".agents/north-star/04-strategic-structure.md",
-        ".agents/north-star/05-authority-model.md",
-        ".agents/north-star/06-evaluation-model.md",
-        ".agents/north-star/07-drift-and-false-success.md",
-        ".agents/north-star/08-vocabulary.md",
+        ".agents/core/01-purpose.md",
+        ".agents/core/02-capability-model.md",
+        ".agents/core/03-invariants.md",
+        ".agents/core/04-strategic-structure.md",
+        ".agents/core/05-authority-model.md",
+        ".agents/core/06-evaluation-model.md",
+        ".agents/core/07-drift-and-false-success.md",
+        ".agents/core/08-vocabulary.md",
     ];
 
     public static readonly IReadOnlyDictionary<string, string> ProjectionPaths =

@@ -8,7 +8,7 @@ public sealed class RoadmapStateMachineSelectionTests
     public async Task Missing_completion_context_triggers_bootstrap_before_selection()
     {
         using var repo = new TempRepo();
-        repo.SeedNorthStar();
+        repo.SeedProjectContext();
         repo.Write(RoadmapArtifactPaths.RoadmapFile, "roadmap");
         var runtime = new ScriptedAgentRuntime(
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("CreateRoadmapCompletionContext")),
@@ -27,7 +27,7 @@ public sealed class RoadmapStateMachineSelectionTests
     public async Task Existing_completion_context_skips_bootstrap()
     {
         using var repo = new TempRepo();
-        repo.SeedNorthStar();
+        repo.SeedProjectContext();
         repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
         repo.Write(RoadmapArtifactPaths.RoadmapFile, "roadmap");
         var runtime = new ScriptedAgentRuntime(
@@ -65,7 +65,7 @@ internal static class StateMachineFactory
         var manifest = new ProjectionManifestStore(repo.Artifacts);
         var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
         var split = new SplitFamilyStore(repo.Artifacts);
-        var loader = new NorthStarContextLoader(repo.Artifacts);
+        var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new RoadmapPromptRunner(runtime, repo.Repository, new TestConsole());
         var bridge = new FakeRoadmapExecutionBridge();
         var invariants = new InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split);

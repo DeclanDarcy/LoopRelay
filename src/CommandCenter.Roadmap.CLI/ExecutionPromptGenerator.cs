@@ -36,9 +36,9 @@ internal sealed class ExecutionPromptGenerator(RoadmapArtifacts artifacts, Artif
             {operationalContext}
             """;
 
-        if (content.Contains("<!-- BEGIN NORTH-STAR FILE:", StringComparison.Ordinal))
+        if (content.Contains("<!-- BEGIN PROJECT-CONTEXT FILE:", StringComparison.Ordinal))
         {
-            throw new RoadmapStepException("Execution prompt contains raw Core North-Star markers.");
+            throw new RoadmapStepException("Execution prompt contains raw Project Context markers.");
         }
 
         await artifacts.WriteAsync(RoadmapArtifactPaths.ExecutionPrompt, content);

@@ -25,10 +25,10 @@ public sealed class RoadmapPromptContextBuilderTests
     }
 
     [Fact]
-    public void Runtime_context_rejects_raw_north_star_markers()
+    public void Runtime_context_rejects_raw_project_context_markers()
     {
         var builder = new RoadmapPromptContextBuilder(new TempRepo().Artifacts);
 
-        Assert.Throws<RoadmapStepException>(() => builder.BuildAuditContext("<!-- BEGIN NORTH-STAR FILE: 01-purpose.md -->", "epic"));
+        Assert.Throws<RoadmapStepException>(() => builder.BuildAuditContext("<!-- BEGIN PROJECT-CONTEXT FILE: 01-purpose.md -->", "epic"));
     }
 }

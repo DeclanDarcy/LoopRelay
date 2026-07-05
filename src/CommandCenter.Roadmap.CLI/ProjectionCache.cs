@@ -9,7 +9,7 @@ internal sealed class ProjectionCache(
 {
     public async Task<ProjectionCacheResult> EnsureAsync(
         string runtimePromptName,
-        NorthStarContext northStarContext,
+        ProjectContext projectContext,
         PromptContract contract,
         CancellationToken cancellationToken)
     {
@@ -19,7 +19,7 @@ internal sealed class ProjectionCache(
 
         if (string.IsNullOrWhiteSpace(content))
         {
-            content = await promptRunner.RunProjectionPromptAsync(projection, northStarContext.Content, cancellationToken);
+            content = await promptRunner.RunProjectionPromptAsync(projection, projectContext.Content, cancellationToken);
             if (string.IsNullOrWhiteSpace(content))
             {
                 throw new RoadmapStepException($"{projection.ProjectionPromptName} returned empty projection content.");
@@ -33,7 +33,7 @@ internal sealed class ProjectionCache(
         ProjectionManifest manifest = await manifestStore.LoadAsync();
         ProjectionManifestEntry? previous = manifest.Find(runtimePromptName);
         ProjectionStaleStatus staleStatus = !generated && previous is not null &&
-            !string.Equals(previous.NorthStarHash, northStarContext.Hash, StringComparison.Ordinal)
+            !string.Equals(previous.ProjectContextHash, projectContext.Hash, StringComparison.Ordinal)
                 ? ProjectionStaleStatus.Stale
                 : ProjectionStaleStatus.Fresh;
 
@@ -42,8 +42,8 @@ internal sealed class ProjectionCache(
             projection.ProjectionPromptName,
             projection.ProjectionPath,
             RoadmapHash.Sha256(projection.ProjectionPromptName),
-            northStarContext.SourceFiles,
-            generated || previous is null ? northStarContext.Hash : previous.NorthStarHash,
+            projectContext.SourceFiles,
+            generated || previous is null ? projectContext.Hash : previous.ProjectContextHash,
             projectionHash,
             generated || previous is null ? DateTimeOffset.UtcNow : previous.GeneratedAt,
             validation.IsValid ? ProjectionValidationStatus.Valid : ProjectionValidationStatus.Invalid,
@@ -72,8 +72,8 @@ internal sealed class ProjectionCache(
             string blockedPath = await WriteBlockedAsync(
                 runtimePromptName,
                 "Projection refresh recommended",
-                $"Delete {projection.ProjectionPath} to regenerate it from the current Core North-Star.",
-                $"Manifest northStarHash differs from the current north-star hash for {runtimePromptName}.");
+                $"Delete {projection.ProjectionPath} to regenerate it from the current Project Context.",
+                $"Manifest Project Context hash differs from the current Project Context hash for {runtimePromptName}.");
             throw new RoadmapStepException($"Projection is stale for {runtimePromptName}. Blocked artifact: {blockedPath}");
         }
 

@@ -2,7 +2,7 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal sealed class InvariantValidator(
     RoadmapArtifacts artifacts,
-    NorthStarContextLoader northStarLoader,
+    ProjectContextLoader projectContextLoader,
     ProjectionRegistry projectionRegistry,
     PromptContractRegistry contractRegistry,
     ProjectionManifestStore manifestStore,
@@ -11,15 +11,15 @@ internal sealed class InvariantValidator(
 {
     public async Task<InvariantValidationResult> ValidateAsync(
         RoadmapState state,
-        string expectedNorthStarHash,
+        string expectedProjectContextHash,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            NorthStarContext northStar = await northStarLoader.LoadAsync(cancellationToken);
-            if (!string.Equals(northStar.Hash, expectedNorthStarHash, StringComparison.Ordinal))
+            ProjectContext projectContext = await projectContextLoader.LoadAsync(cancellationToken);
+            if (!string.Equals(projectContext.Hash, expectedProjectContextHash, StringComparison.Ordinal))
             {
-                return await FailAsync(state, RoadmapState.Failed, "Core North-Star hash changed during the run.");
+                return await FailAsync(state, RoadmapState.Failed, "Project Context hash changed during the run.");
             }
 
             foreach (ProjectionDefinition projection in projectionRegistry.All)

@@ -8,13 +8,13 @@ public sealed class InvariantValidatorTests
     public async Task Rejects_multiple_active_ready_epics()
     {
         using var repo = new TempRepo();
-        repo.SeedNorthStar();
+        repo.SeedProjectContext();
         var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
         await lifecycle.UpsertAsync(".agents/epic.md", ArtifactLifecycleState.Ready);
         await lifecycle.UpsertAsync(".agents/epic-1.md", ArtifactLifecycleState.Executing);
-        NorthStarContext northStar = await new NorthStarContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        InvariantValidationResult result = await CreateValidator(repo, lifecycle).ValidateAsync(RoadmapState.ActiveEpicReady, northStar.Hash);
+        InvariantValidationResult result = await CreateValidator(repo, lifecycle).ValidateAsync(RoadmapState.ActiveEpicReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
         Assert.Equal(RoadmapState.Failed, result.FailureState);
@@ -24,11 +24,11 @@ public sealed class InvariantValidatorTests
     public async Task Rejects_specs_that_belong_to_another_epic()
     {
         using var repo = new TempRepo();
-        repo.SeedNorthStar();
+        repo.SeedProjectContext();
         repo.Write(".agents/specs/a.md", "Epic Path: .agents/other-epic.md");
-        NorthStarContext northStar = await new NorthStarContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.MilestoneSpecsReady, northStar.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.MilestoneSpecsReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
         Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
@@ -38,10 +38,10 @@ public sealed class InvariantValidatorTests
     public async Task Rejects_execution_without_required_artifacts()
     {
         using var repo = new TempRepo();
-        repo.SeedNorthStar();
-        NorthStarContext northStar = await new NorthStarContextLoader(repo.Artifacts).LoadAsync();
+        repo.SeedProjectContext();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.ExecutionLoop, northStar.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.ExecutionLoop, projectContext.Hash);
 
         Assert.False(result.IsValid);
     }
@@ -61,7 +61,7 @@ public sealed class InvariantValidatorTests
         var projections = new ProjectionRegistry();
         return new InvariantValidator(
             repo.Artifacts,
-            new NorthStarContextLoader(repo.Artifacts),
+            new ProjectContextLoader(repo.Artifacts),
             projections,
             new PromptContractRegistry(projections),
             new ProjectionManifestStore(repo.Artifacts),

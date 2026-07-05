@@ -3,15 +3,15 @@ using System.Text.RegularExpressions;
 
 namespace CommandCenter.Roadmap.Cli;
 
-internal sealed partial class NorthStarContextLoader(RoadmapArtifacts artifacts)
+internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
 {
-    public async Task<NorthStarContext> LoadAsync(CancellationToken cancellationToken = default)
+    public async Task<ProjectContext> LoadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var missing = new List<string>();
         var contents = new List<(string Path, string FileName, string Content)>();
-        foreach (string path in RoadmapArtifactPaths.NorthStarSourceFiles)
+        foreach (string path in RoadmapArtifactPaths.ProjectContextSourceFiles)
         {
             string? content = await artifacts.ReadAsync(path);
             if (content is null)
@@ -24,16 +24,16 @@ internal sealed partial class NorthStarContextLoader(RoadmapArtifacts artifacts)
             }
         }
 
-        IReadOnlyList<string> numberedFiles = await artifacts.ListAsync(".agents/north-star", "*.md");
+        IReadOnlyList<string> numberedFiles = await artifacts.ListAsync(".agents/core", "*.md");
         string[] extras = numberedFiles
-            .Where(path => NumberedNorthStarFileRegex().IsMatch(Path.GetFileName(path)))
-            .Where(path => !RoadmapArtifactPaths.NorthStarSourceFiles.Contains(path, StringComparer.Ordinal))
+            .Where(path => NumberedProjectContextFileRegex().IsMatch(Path.GetFileName(path)))
+            .Where(path => !RoadmapArtifactPaths.ProjectContextSourceFiles.Contains(path, StringComparer.Ordinal))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
         if (missing.Count > 0 || extras.Length > 0)
         {
-            var message = new StringBuilder("North-star source contract violation.");
+            var message = new StringBuilder("Project Context source contract violation.");
             if (missing.Count > 0)
             {
                 message.Append("\nMissing required files:");
@@ -45,7 +45,7 @@ internal sealed partial class NorthStarContextLoader(RoadmapArtifacts artifacts)
 
             if (extras.Length > 0)
             {
-                message.Append("\nUnexpected numbered north-star source files were found. ")
+                message.Append("\nUnexpected numbered Project Context source files were found. ")
                     .Append("The Core contract is exactly 01 through 08:");
                 foreach (string path in extras)
                 {
@@ -64,19 +64,19 @@ internal sealed partial class NorthStarContextLoader(RoadmapArtifacts artifacts)
                 builder.AppendLine().AppendLine();
             }
 
-            builder.Append("<!-- BEGIN NORTH-STAR FILE: ").Append(fileName).AppendLine(" -->")
+            builder.Append("<!-- BEGIN PROJECT-CONTEXT FILE: ").Append(fileName).AppendLine(" -->")
                 .AppendLine()
                 .AppendLine(content.TrimEnd())
                 .AppendLine()
-                .Append("<!-- END NORTH-STAR FILE: ").Append(fileName).Append(" -->");
+                .Append("<!-- END PROJECT-CONTEXT FILE: ").Append(fileName).Append(" -->");
         }
 
         string result = builder.ToString();
-        return new NorthStarContext(RoadmapArtifactPaths.NorthStarSourceFiles, result, RoadmapHash.Sha256(result));
+        return new ProjectContext(RoadmapArtifactPaths.ProjectContextSourceFiles, result, RoadmapHash.Sha256(result));
     }
 
     [GeneratedRegex(@"^\d{2}-.+\.md$", RegexOptions.CultureInvariant)]
-    private static partial Regex NumberedNorthStarFileRegex();
+    private static partial Regex NumberedProjectContextFileRegex();
 }
 
-internal sealed record NorthStarContext(IReadOnlyList<string> SourceFiles, string Content, string Hash);
+internal sealed record ProjectContext(IReadOnlyList<string> SourceFiles, string Content, string Hash);

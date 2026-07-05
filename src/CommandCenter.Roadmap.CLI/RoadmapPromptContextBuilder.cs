@@ -4,13 +4,13 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
 {
-    private const string NorthStarMarker = "<!-- BEGIN NORTH-STAR FILE:";
+    private const string ProjectContextMarker = "<!-- BEGIN PROJECT-CONTEXT FILE:";
 
     public async Task<string> BuildSelectionContextAsync(string projectionContent, IReadOnlyList<RetiredEpic> retiredEpics)
     {
         string completion = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
         string roadmap = await artifacts.ReadRoadmapSourceAsync();
-        return ValidateNoRawNorthStar(Build([
+        return ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
             Section("Current Roadmap Completion Context", completion),
             Section("Roadmap Source", roadmap),
@@ -19,14 +19,14 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
     }
 
     public string BuildAuditContext(string projectionContent, string selectedEpicContent) =>
-        ValidateNoRawNorthStar(Build([
+        ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
             Section("Selected Epic", selectedEpicContent),
             Section("Repository Inspection Instructions", "Inspect the repository in read-only mode and report only evidence relevant to the selected epic audit."),
         ]));
 
     public string BuildRealignOrReimagineContext(string projectionContent, string activeEpicContent, string auditContent) =>
-        ValidateNoRawNorthStar(Build([
+        ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
             Section("Current Epic", activeEpicContent),
             Section("Audit Output", auditContent),
@@ -34,7 +34,7 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
         ]));
 
     public string BuildCreateOrSplitContext(string projectionContent, string selectionProposalContent) =>
-        ValidateNoRawNorthStar(Build([
+        ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
             Section("Selection Proposal", selectionProposalContent),
             Section("Repository Inspection Instructions", "Inspect the repository in read-only mode only where the prompt requires codebase reality."),
@@ -43,7 +43,7 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
     public async Task<string> BuildMilestoneContextAsync(string projectionContent)
     {
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        return ValidateNoRawNorthStar(Build([
+        return ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
             Section("Active Epic", activeEpic),
         ]));
@@ -65,7 +65,7 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
             sections.Add(Section($"Milestone Spec: {spec}", await artifacts.ReadRequiredAsync(spec)));
         }
 
-        return ValidateNoRawNorthStar(Build(sections));
+        return ValidateNoRawProjectContext(Build(sections));
     }
 
     public async Task<string> BuildCompletionUpdateContextAsync(string projectionContent, string latestEvaluationPath)
@@ -73,7 +73,7 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
         string completion = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
         string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
         string evaluation = await artifacts.ReadRequiredAsync(latestEvaluationPath);
-        return ValidateNoRawNorthStar(Build([
+        return ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
             Section("Current Roadmap Completion Context", completion),
             Section("Completed Epic", activeEpic),
@@ -126,11 +126,11 @@ internal sealed class RoadmapPromptContextBuilder(RoadmapArtifacts artifacts)
 
     private static string Escape(string value) => value.Replace("|", "\\|", StringComparison.Ordinal);
 
-    private static string ValidateNoRawNorthStar(string context)
+    private static string ValidateNoRawProjectContext(string context)
     {
-        if (context.Contains(NorthStarMarker, StringComparison.Ordinal))
+        if (context.Contains(ProjectContextMarker, StringComparison.Ordinal))
         {
-            throw new RoadmapStepException("Runtime prompt context contains raw Core North-Star markers.");
+            throw new RoadmapStepException("Runtime prompt context contains raw Project Context markers.");
         }
 
         return context;

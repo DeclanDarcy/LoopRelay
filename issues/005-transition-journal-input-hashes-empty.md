@@ -38,7 +38,7 @@ The issue is not just a missing argument at one call site. The current shape mak
 
 Concrete examples:
 
-- `BuildSelectionContextAsync` reads `.agents/north-star/roadmap-completion-context.md`, the roadmap source, and retired exclusions from `.agents/state.md`.
+- `BuildSelectionContextAsync` reads `.agents/core/roadmap-completion-context.md`, the roadmap source, and retired exclusions from `.agents/state.md`.
 - `ReadRoadmapSourceAsync` can combine `.agents/roadmap.md` and every `.agents/roadmap/*.md` file, so hashing only `.agents/roadmap.md` is incomplete.
 - `BuildCompletionEvaluationContextAsync` reads `.agents/epic.md` plus every `.agents/specs/*.md` file.
 - `BuildCompletionUpdateContextAsync` reads the current completion context, active epic, and the latest numbered evaluation evidence path.
@@ -59,7 +59,7 @@ Minimum durable inputs to capture:
 | Runtime prompt | Durable inputs to hash |
 |---|---|
 | `CreateRoadmapCompletionContext` | Projection file, or separate projection hash. |
-| `SelectNextEpic` | Projection file, `.agents/north-star/roadmap-completion-context.md`, `.agents/roadmap.md` if present, ordered `.agents/roadmap/*.md`, `.agents/state.md` when retired exclusions are present. |
+| `SelectNextEpic` | Projection file, `.agents/core/roadmap-completion-context.md`, `.agents/roadmap.md` if present, ordered `.agents/roadmap/*.md`, `.agents/state.md` when retired exclusions are present. |
 | `EpicPreparationAudit` | Projection file, `.agents/selection.md`. |
 | `RealignEpic` | Projection file, selected audit evidence path, and `.agents/epic.md` if present, otherwise `.agents/selection.md`. |
 | `ReimagineEpic` | Projection file, selected audit evidence path, and `.agents/epic.md` if present, otherwise `.agents/selection.md`. |
@@ -67,7 +67,7 @@ Minimum durable inputs to capture:
 | `SplitEpic` | Projection file, `.agents/selection.md`. |
 | `GenerateMilestoneDeepDivesForEpic` | Projection file, `.agents/epic.md`. |
 | `EvaluateEpicCompletionAndDrift` | Projection file, `.agents/epic.md`, ordered `.agents/specs/*.md`. |
-| `UpdateRoadmapCompletionContext` | Projection file, `.agents/north-star/roadmap-completion-context.md`, `.agents/epic.md`, latest evaluation evidence path. |
+| `UpdateRoadmapCompletionContext` | Projection file, `.agents/core/roadmap-completion-context.md`, `.agents/epic.md`, latest evaluation evidence path. |
 
 Artifact hashes alone still do not capture everything. Several prompts instruct the agent to inspect repository reality in read-only mode. If exact audit replay matters, the journal also needs a repository source fingerprint, such as git commit plus dirty diff hash, or a declared statement that repository inspection is outside transition input hashing.
 
