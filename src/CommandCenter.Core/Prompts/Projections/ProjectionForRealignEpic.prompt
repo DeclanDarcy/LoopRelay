@@ -1,0 +1,870 @@
+<PROJECT_CONTEXT>
+{projectContext}
+</PROJECT_CONTEXT>
+
+# CreateRealignEpicProjection
+
+## Role
+
+You are a projection compiler for a projection-based AI engineering loop.
+
+Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+
+RealignEpic
+
+That downstream prompt will receive:
+
+1. This projection.
+2. An EpicPreparationAudit whose disposition is expected to be Realign.
+3. The current selected epic document.
+
+The downstream prompt will apply the smallest audit-driven semantic patch necessary to update:
+
+.agents/epic.md
+
+Your job is NOT to realign an epic.
+
+Your job is NOT to inspect an audit.
+
+Your job is NOT to inspect a selected epic.
+
+Your job is NOT to decide whether Realign is the correct disposition.
+
+Your job is to create the stable transformation frame that allows the downstream prompt to minimally realign a strategically valid epic while preserving its identity.
+
+This is a projection, not a summary.
+
+---
+
+## Core Objective
+
+Create a deterministic, transformation-oriented projection of the Core North-Star that answers:
+
+How should a strategically valid epic be minimally transformed so that it is once again aligned with the Core North-Star?
+
+The projection must define:
+
+- what parts of an epic’s identity must be preserved
+- what parts of an epic may be changed during realignment
+- what transformations are allowed
+- what transformations are prohibited
+- how to preserve strategic purpose and desired capability
+- how audit findings should constrain changes
+- how to maintain internal consistency after a semantic patch
+- when a requested change exceeds Realign and should be escalated to Reimagine, Retire, or Insufficient Evidence
+
+This projection exists to support:
+
+RealignEpic
+
+It must not include a selected epic.
+
+It must not include audit findings.
+
+It must not include repository state.
+
+It must not decide a disposition.
+
+It must not rewrite any epic.
+
+It must not create milestones.
+
+It must not generate implementation tasks.
+
+---
+
+## Consumer
+
+This projection will be consumed by:
+
+RealignEpic
+
+That downstream prompt will compute:
+
+Projection
++
+Current Epic
++
+EpicPreparationAudit
+=
+Minimal Semantic Patch
+=
+Realigned Epic
+
+This projection defines how the semantic patch should behave.
+
+It is the transformation frame, not the transformation result.
+
+---
+
+## Authority Rules
+
+Treat the Core North-Star as the sole source of project authority.
+
+Do not reinterpret it.
+
+Do not extend it with project-specific content not present in the Core.
+
+Do not infer missing project intent.
+
+Do not invent desired capabilities.
+
+Do not invent project-specific constraints.
+
+Do not convert audit or repository concepts into Core authority.
+
+Do not convert roadmap ordering into authority.
+
+If the Core contains ambiguity, preserve the ambiguity as a projection limitation.
+
+If the Core contains conflicting guidance, preserve the conflict and identify the conflicting source items.
+
+If the Core contains assertion IDs, retain them.
+
+If the Core does not contain assertion IDs, create stable projection-local IDs using the following format:
+
+- IDENTITY-001
+- MUTABLE-001
+- TRANSFORM-001
+- PATCH-001
+- CONSISTENCY-001
+- ALIGNMENT-001
+- ESCALATION-001
+- TRACE-001
+- TERM-001
+- LIMITATION-001
+
+Projection-local IDs must not pretend to be canonical Core IDs.
+
+You may include generic projection-local transformation rules if they are necessary for RealignEpic to operate and do not alter Core intent. Mark them clearly as projection-local.
+
+---
+
+## Projection Principles
+
+### 1. Transformation projection, not north-star summary
+
+Do not summarize the Core North-Star generally.
+
+Select only the Core semantics required to transform an already-valid epic through a minimal realignment patch.
+
+The projection should answer:
+
+- What must be preserved?
+- What may be changed?
+- What kinds of edits are safe?
+- What kinds of edits are unsafe?
+- How small should the patch be?
+- When does realignment become reimagination?
+
+---
+
+### 2. Identity preservation first
+
+The projection must define the protected semantic identity of an epic.
+
+Protected identity may include:
+
+- strategic purpose
+- intended capability
+- core problem
+- projection link
+- reason for existence
+- non-negotiable constraints
+- canonical vocabulary
+
+The downstream prompt must preserve these unless the audit proves that the epic cannot be realigned.
+
+If protected identity must change, the correct disposition is probably Reimagine, not Realign.
+
+---
+
+### 3. Minimal semantic patch
+
+The projection must strongly prefer small, targeted edits over rewrites.
+
+Realignment should behave like a maintainer applying a careful semantic patch.
+
+Allowed transformation style:
+
+- adjust
+- clarify
+- narrow
+- constrain
+- normalize
+- update
+- remove stale content
+- merge duplicates
+
+Disallowed transformation style:
+
+- invent
+- expand opportunistically
+- redesign
+- generalize
+- create a new initiative
+- alter the epic’s fundamental purpose
+
+---
+
+### 4. Audit traceability
+
+The downstream prompt must change the epic only when the EpicPreparationAudit justifies the change.
+
+The projection should define traceability expectations.
+
+Every material edit should map to an audit finding.
+
+No speculative improvements.
+
+No generic cleanup unless required to apply the audit findings cleanly.
+
+---
+
+### 5. Alignment restoration
+
+The projection should define how realignment restores alignment with the Core.
+
+Realignment should correct:
+
+- stale assumptions
+- imprecise scope
+- outdated dependencies
+- missing constraints
+- ambiguous acceptance criteria
+- drift-prone wording
+- terminology mismatch
+- incomplete success conditions
+
+It should not introduce a new strategic direction.
+
+---
+
+### 6. Mutable regions
+
+The projection should define which areas of an epic may be changed during realignment.
+
+Common mutable regions include:
+
+- title, only if terminology or scope requires it
+- strategic purpose, only to clarify
+- desired capability, only to preserve the same meaning more accurately
+- projection links
+- scope
+- non-goals
+- assumptions
+- dependencies
+- constraints
+- acceptance criteria
+- success conditions
+- risks / watchpoints
+- required follow-up
+- traceability notes
+
+---
+
+### 7. Transformation boundaries
+
+The projection must define when Realign is no longer appropriate.
+
+A change exceeds Realign when it would:
+
+- change the epic’s strategic purpose
+- change the desired capability into a different capability
+- introduce a new initiative
+- require splitting or merging epics
+- replace the epic’s core abstraction
+- retire the strategic need
+- require roadmap revision before the epic can be safely updated
+- require evidence not present in the audit
+
+---
+
+### 8. Structural integrity
+
+The projection should favor preserving the current epic structure.
+
+The downstream prompt should update only affected sections.
+
+It should add sections only when necessary for alignment.
+
+It should remove contradictions and stale claims.
+
+It should not rewrite unaffected sections for style.
+
+---
+
+### 9. Strategic compression
+
+The projection should prevent audit details from being copied into the epic.
+
+The realigned epic should become clearer, not bloated.
+
+Audit findings should be compressed into durable epic guidance.
+
+Raw repository observations belong in the audit, not in the realigned epic.
+
+---
+
+### 10. Projection purity
+
+Do not include:
+
+- selected epic content
+- EpicPreparationAudit findings
+- repository facts
+- current roadmap completion state
+- completed epic history
+- roadmap prioritization
+- implementation guidance
+- execution instructions
+- milestone plans
+- operational workflow
+
+Those belong to downstream inputs or later prompts.
+
+---
+
+## Inclusion Criteria
+
+Retain Core North-Star content that belongs to one of these categories.
+
+### A. Protected Epic Identity
+
+Retain semantics that define what must remain stable when an epic is realigned.
+
+Examples:
+
+- strategic purpose
+- intended capability
+- core problem
+- projection link semantics
+- canonical capability language
+- non-negotiable constraints
+
+### B. Mutable Epic Regions
+
+Retain rules or concepts that define which parts of an epic may be adjusted during realignment.
+
+Examples:
+
+- scope
+- non-goals
+- assumptions
+- dependencies
+- constraints
+- acceptance criteria
+- success conditions
+- risks
+- traceability
+
+### C. Transformation Rules
+
+Retain rules that define how safe realignment should occur.
+
+Examples:
+
+- preserve identity
+- change only audit-supported content
+- prefer narrowing to expansion
+- preserve vocabulary
+- remove stale assumptions
+- update criteria to match realigned scope
+- maintain internal consistency
+
+### D. Patch Constraints
+
+Retain constraints that keep the realignment minimal and safe.
+
+Examples:
+
+- no new initiative
+- no milestone expansion
+- no implementation plan
+- no roadmap mutation
+- no speculative improvements
+- no repository re-audit
+- no raw audit dumping
+
+### E. Alignment Rules
+
+Retain semantics that define how the realigned epic should remain aligned with the Core.
+
+Examples:
+
+- capability alignment
+- invariant preservation
+- strategic purpose preservation
+- evaluation compatibility
+- semantic consistency
+- commitment preservation
+
+### F. Consistency Rules
+
+Retain rules that help keep the updated epic internally coherent.
+
+Examples:
+
+- if scope changes, acceptance criteria must change
+- if dependencies change, assumptions must change
+- if constraints are added, success conditions must reflect them
+- if stale claims are removed, related risks or notes must be updated
+- if terminology changes, it must change consistently
+
+### G. Escalation Boundaries
+
+Retain rules for recognizing when a requested realignment is not safe.
+
+Examples:
+
+- identity change requires Reimagine
+- obsolete capability requires Retire
+- missing evidence requires Insufficient Evidence
+- roadmap structure change requires roadmap process
+- split / merge requires a different prompt
+
+### H. Traceability Requirements
+
+Retain rules that require every material change to trace to audit findings and Core semantics.
+
+### I. Canonical Vocabulary
+
+Retain terms the downstream prompt must preserve when realigning epics.
+
+---
+
+## Exclusion Criteria
+
+Exclude Core North-Star content that belongs to these categories unless it directly affects controlled epic realignment.
+
+Exclude:
+
+- selected epic content
+- audit findings
+- current repository facts
+- completed epic history
+- current roadmap completion state
+- roadmap prioritization semantics
+- next-epic selection logic
+- repository interpretation rules
+- epic validation / disposition logic
+- implementation instructions
+- execution guidance
+- developer commands
+- tool use instructions
+- operational workflow
+- prompt templates
+- detailed milestone plans
+- detailed ADR history
+- broad historical rationale essays
+- full governance workflow
+- belief revision mechanics
+- reasoning architecture
+- information flow architecture
+- research citations
+- task-level plans
+
+If excluded information may matter elsewhere, mention it only in Projection Exclusion Notes.
+
+Do not include the excluded content itself.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the projection.
+
+### Step 1 — Identify candidate Core assertions
+
+Extract all Core statements relevant to minimally transforming a strategically valid epic.
+
+Classify each as:
+
+- Protected Epic Identity
+- Mutable Epic Region
+- Transformation Rule
+- Patch Constraint
+- Alignment Rule
+- Consistency Rule
+- Escalation Boundary
+- Traceability Requirement
+- Vocabulary
+- Exclude
+
+### Step 2 — Apply realignment-projection admission test
+
+For each candidate, ask:
+
+1. Would this help preserve the epic’s identity during realignment?
+2. Would this help determine what may safely change?
+3. Would this help constrain the patch to the minimum audit-supported changes?
+4. Would this help distinguish Realign from Reimagine, Retire, or Insufficient Evidence?
+5. Would this help maintain alignment with the Core after the patch?
+6. Is this stable and non-regenerable from the audit or current epic?
+
+Retain only candidates that pass.
+
+### Step 3 — Convert retained items into transformation semantics
+
+For each retained identity rule, mutable region, constraint, or boundary, express how it should affect realignment.
+
+Do not apply it to any actual epic.
+
+Do not inspect or infer audit findings.
+
+Define transformation rules only.
+
+### Step 4 — Normalize vocabulary
+
+Preserve canonical terms from the Core.
+
+If the Core has overlapping terms, select the term with strongest authority and note aliases only if necessary.
+
+### Step 5 — Remove operational noise
+
+Aggressively remove anything that would distract the downstream prompt from minimal audit-driven semantic patching.
+
+### Step 6 — Organize into the required output structure
+
+Output only the projection Markdown.
+
+Do not include your analysis.
+
+---
+
+## Required Output
+
+Output only the full Markdown content for the projection.
+
+Do not wrap the output in commentary.
+
+Do not include prefaces.
+
+Do not include explanations after the document.
+
+Use this exact structure.
+
+---
+
+# Epic Realignment Projection
+
+## Purpose
+
+This projection defines how a strategically valid selected epic should be minimally transformed during realignment.
+
+It exists to support:
+
+- identity-preserving epic updates
+- audit-driven semantic patching
+- scope correction
+- dependency correction
+- assumption correction
+- constraint alignment
+- acceptance criteria refinement
+- internal consistency repair
+- escalation when a requested change exceeds Realign
+
+It is a projection of the Core North-Star, not an epic, audit, roadmap, changelog, or implementation plan.
+
+## Authority Boundary
+
+- The Core North-Star remains the source of authority.
+- This projection is a task-specific transformation view of the Core North-Star.
+- This projection defines how RealignEpic may transform an epic.
+- This projection does not include selected epic content.
+- This projection does not include audit findings.
+- This projection does not include repository state.
+- This projection does not decide whether Realign is appropriate.
+- This projection does not rewrite any epic.
+- This projection does not create milestones.
+- This projection does not generate implementation tasks.
+
+## Projection Metadata
+
+| Field | Value |
+|---|---|
+| Projection Name | {{projection_name_or_default}} |
+| Projection Version | {{projection_version_or_default}} |
+| Projection Date | {{projection_date_or_default}} |
+| Source Core Version | {{core_version_or_unknown}} |
+| Intended Consumer | RealignEpic |
+| Projection Family | Epic Realignment / Controlled Strategic Transformation |
+
+## Source Coverage
+
+Briefly describe what parts of the Core North-Star were retained.
+
+Use bullets.
+
+Then briefly describe what parts were intentionally excluded.
+
+Use bullets.
+
+## Protected Epic Identity
+
+Define the semantic identity that must be preserved during realignment.
+
+| ID | Protected Identity Element | Source Reference | Realignment Consequence |
+|---|---|---|---|
+
+Examples of Protected Identity Element:
+
+- strategic purpose
+- desired capability
+- core problem
+- projection link
+- canonical domain concept
+- invariant boundary
+- intended user or system outcome
+
+Realignment Consequence should explain what the downstream prompt must preserve.
+
+## Mutable Epic Regions
+
+Define which regions of an epic may be changed during realignment.
+
+| ID | Mutable Region | Allowed Changes | Required Guardrail |
+|---|---|---|---|
+
+Examples of Mutable Region:
+
+- title
+- strategic purpose wording
+- desired capability wording
+- projection link
+- scope
+- non-goals
+- assumptions
+- dependencies
+- constraints
+- acceptance criteria
+- success conditions
+- risks / watchpoints
+- required follow-up
+- traceability
+
+Required Guardrail should explain how the region may change without altering epic identity.
+
+## Transformation Rules
+
+Define how the realignment patch should be applied.
+
+| ID | Transformation Rule | Meaning | Required Behavior |
+|---|---|---|---|
+
+Include rules for:
+
+- minimal semantic patching
+- audit-supported changes only
+- identity preservation
+- projection vocabulary preservation
+- no speculative expansion
+- no repository re-audit
+- no implementation planning
+- preserve unaffected sections
+- remove stale or contradicted content
+- merge duplicates
+
+## Patch Constraints
+
+Define what the downstream prompt must not do while realigning.
+
+| ID | Constraint | Reason | Violation Indicates |
+|---|---|---|---|
+
+Violation Indicates should say whether the violation suggests:
+
+- Reimagine required
+- Retire required
+- Insufficient Evidence
+- Different prompt required
+- Governance / roadmap process required
+
+Examples of constraints:
+
+- do not change strategic purpose
+- do not create a new initiative
+- do not split the epic
+- do not generate milestones
+- do not produce implementation tasks
+- do not modify roadmap
+- do not copy raw audit detail
+- do not add unsupported scope
+
+## Alignment Rules
+
+Define how the realigned epic should remain aligned with the Core.
+
+| ID | Alignment Rule | Applies To | Realignment Implication |
+|---|---|---|---|
+
+Applies To may include:
+
+- strategic purpose
+- desired capability
+- scope
+- dependencies
+- constraints
+- acceptance criteria
+- success conditions
+- terminology
+- risks
+
+## Consistency Rules
+
+Define internal consistency requirements after realignment.
+
+| ID | Consistency Rule | Trigger | Required Update |
+|---|---|---|---|
+
+Examples:
+
+- If scope is narrowed, acceptance criteria must be narrowed.
+- If dependency is added, assumptions and risks must reflect it.
+- If constraint is added, success conditions must preserve it.
+- If terminology is normalized, all affected sections must use the canonical term.
+- If stale content is removed, related references must be removed or corrected.
+- If a non-goal is added, scope must not contradict it.
+
+## Escalation Boundaries
+
+Define when a requested change exceeds Realign.
+
+| ID | Boundary | Indicates | Required Handling |
+|---|---|---|---|
+
+Indicates must be one of:
+
+- Reimagine
+- Retire
+- Insufficient Evidence
+- Roadmap Revision
+- Different Prompt Required
+
+Examples:
+
+- protected identity would change
+- desired capability would become a different capability
+- epic would need to split or merge
+- strategic purpose is no longer valid
+- audit evidence is insufficient for a safe patch
+- roadmap sequencing must change before the epic can be updated
+- implementation planning is being requested
+
+## Traceability Requirements
+
+Define how changes must trace to audit findings and Core semantics.
+
+| ID | Traceability Requirement | Required Evidence | Failure Handling |
+|---|---|---|---|
+
+Examples:
+
+- every material change must cite an audit finding
+- every preserved identity element must trace to the Core or projection
+- every new constraint must trace to projection or audit
+- every dependency change must trace to audit
+- every removed claim must be contradicted or superseded by audit evidence
+
+Failure Handling should explain whether to omit the change, flag uncertainty, or block realignment.
+
+## Canonical Vocabulary
+
+List load-bearing terms that downstream prompts must preserve.
+
+| Term | Definition | Notes / Banned Synonyms |
+|---|---|---|
+
+Rules:
+
+- Include only terms relevant to epic realignment.
+- Use Core definitions where available.
+- If a term is undefined in the Core but required for this projection, mark definition as “Projection-local; confirm against Core if promoted.”
+
+## Projection Exclusion Notes
+
+List important Core content intentionally excluded from this projection.
+
+| Excluded Content Type | Reason Excluded | Where It Should Be Used Instead |
+|---|---|---|
+
+Examples:
+
+- epic validation criteria
+- selected epic content
+- EpicPreparationAudit findings
+- repository facts
+- roadmap prioritization semantics
+- milestone planning
+- implementation guidance
+- execution workflow
+- detailed governance procedure
+- historical rationale
+
+## Known Projection Limitations
+
+List ambiguities or missing Core information that may limit RealignEpic.
+
+| Limitation | Why It Matters | Recommended Handling |
+|---|---|---|
+
+Examples:
+
+- protected identity is not explicit
+- mutable regions are not clearly defined
+- escalation boundaries are ambiguous
+- canonical vocabulary is underspecified
+- constraints are not prioritized
+- acceptance criteria semantics are unclear
+- strategic purpose language is broad or ambiguous
+
+Do not invent missing information to fix these limitations.
+
+## Downstream Use Instructions
+
+When this projection is used by RealignEpic:
+
+- Treat this projection as the controlled transformation frame.
+- Treat EpicPreparationAudit as the source of required corrections.
+- Treat the current epic as the artifact to patch.
+- Verify that the audit disposition is Realign before editing.
+- Preserve protected epic identity.
+- Apply only audit-supported changes.
+- Make the smallest semantic patch necessary.
+- Preserve current epic structure where possible.
+- Update only affected sections.
+- Remove stale or contradicted content.
+- Maintain internal consistency after every change.
+- Preserve canonical vocabulary.
+- Do not re-audit the repository.
+- Do not re-decide the disposition.
+- Do not reimagine the epic.
+- Do not retire the epic.
+- Do not split or merge the epic.
+- Do not create milestones.
+- Do not generate implementation tasks.
+- Do not modify the roadmap.
+- Do not update roadmap completion context.
+- Block realignment if the requested transformation would change the epic’s protected identity.
+
+## Projection Integrity Checklist
+
+Before finalizing, verify:
+
+- The projection contains transformation semantics only.
+- No selected epic content is included.
+- No audit findings are included.
+- No repository state is included.
+- No roadmap completion state is included.
+- No disposition is decided.
+- Every retained statement helps minimally realign an epic.
+- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Protected identity is explicit.
+- Mutable regions are explicit.
+- Transformation rules are explicit.
+- Patch constraints are explicit.
+- Escalation boundaries are explicit.
+- Traceability requirements are explicit.
+- Canonical vocabulary is preserved.
+- Excluded operational, implementation, validation, and prioritization details are not present.
+- The projection is compact enough to be passed into RealignEpic.

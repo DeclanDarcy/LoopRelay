@@ -1,2132 +1,1297 @@
-# CommandCenter.CLI Implementation Plan
+# CommandCenter.Roadmap.CLI Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> For agentic workers: implement this plan task-by-task. Use checkbox (`- [ ]`) tracking and keep changes scoped to the files named in each task.
 
-**Goal:** Build a standalone .NET console app, `CommandCenter.CLI`, that takes a repository directory path and runs the orchestration loop (execution codex session → decision codex session, with handoff/decision rotation) **fully automated** until every checkbox across `.agents/plan.md` and `.agents/milestones/m*.md` is checked, terminating cleanly on Ctrl+C by killing the codex child processes.
+## Goal
 
-**Architecture:** The CLI does **not** reuse `RepositoryOrchestrator` (which is built for the HTTP/UI human-gated model with background tasks and an internal lifetime token). Instead it builds its **own serial loop** that reuses the real low-level building blocks unchanged: the codex runtime (`IAgentRuntime` / `IAgentSession` from `CommandCenter.Agents`), the source-generated prompt catalog (`CommandCenter.Core.Prompts.*`), the artifact path catalog + filesystem store (`OrchestrationArtifactPaths`, `ArtifactPath`, `IArtifactStore`/`FileSystemArtifactStore`), and the pure token-pressure router (`IDecisionSessionRouter`/`DecisionSessionRouter`). Every codex turn is `await`ed inline on one `CancellationToken` wired to `Console.CancelKeyPress`; on cancel the in-flight one-shot session disposes itself (killing codex) and the CLI explicitly closes the warm decision session (killing codex), so Ctrl+C terminates the whole codex process tree.
+Create a standalone .NET console app, `CommandCenter.Roadmap.CLI`, that executes the projection-based engineering roadmap state machine as a file-backed workflow.
 
-**Tech Stack:** C# / .NET 10 (`net10.0`), `Microsoft.NET.Sdk` console app, `Microsoft.Extensions.DependencyInjection` for composition, xUnit for tests. Reuses `CommandCenter.Agents`, `CommandCenter.Core`, `CommandCenter.Orchestration`.
+The CLI must:
 
----
+- Validate the fixed Core North-Star source files before doing any other work.
+- Create task-specific projections only when their deterministic projection file is missing.
+- Assemble every runtime prompt from a cached projection plus only the artifacts required for that transition.
+- Never pass raw Core North-Star content directly to runtime prompts.
+- Persist `.agents/state.md`, a transition journal, and a decision ledger around every major transition.
+- Maintain projection manifests with Core hashes, prompt provenance, projection hashes, stale detection, and validation results.
+- Validate projection structure, prompt contracts, global invariants, and artifact lifecycle metadata before trusting generated artifacts.
+- Drive roadmap-completion bootstrap, next-initiative selection, epic preparation, epic creation/transformation/splitting, milestone deep-dive generation, execution bridging, completion certification, and roadmap-completion-context update.
+
+## Architectural Position
+
+`CommandCenter.Roadmap.CLI` is a new console app, not a replacement for `CommandCenter.Plan.CLI` or `CommandCenter.CLI`.
+
+It reuses existing low-level building blocks:
+
+- `CommandCenter.Agents`: `IAgentRuntime`, `AgentSessionSpec`, streaming turn rendering.
+- `CommandCenter.Core`: source-generated prompt classes from `.prompt` files.
+- `CommandCenter.Core.Artifacts`: `IArtifactStore`, `FileSystemArtifactStore`, `ArtifactPath`.
+- `CommandCenter.Orchestration`: existing artifact constants where they match current paths.
+
+It owns roadmap-state-machine concerns:
+
+- North-star context loading and validation.
+- Projection registry and projection cache.
+- Projection manifest and projection integrity validation.
+- Prompt contract registry.
+- Runtime prompt context assembly.
+- State transition parsing.
+- State document persistence.
+- Transition journal and decision ledger persistence.
+- Global invariant validation.
+- Artifact lifecycle metadata.
+- Roadmap-specific artifact paths.
+- Bundle extraction for multi-file prompt outputs.
 
 ## Global Constraints
 
-These apply to every task. Exact values copied from the existing codebase:
+- Target framework: `net10.0`.
+- Enable nullable and implicit usings in every new project.
+- Set `<UseExecutionContextAlias>false</UseExecutionContextAlias>` in the CLI and test csproj because the CLI does not reference `CommandCenter.Execution`.
+- Do not use `Microsoft.Extensions.Hosting`; use an explicit `Program.cs` composition like the existing CLIs.
+- Use `Microsoft.Extensions.DependencyInjection` for composition.
+- Run Codex turns through `IAgentRuntime`.
+- Use read-only planning turns for projection/runtime prompt generation. The CLI writes artifacts after successful turns; agents should not mutate the repo directly during planning transitions.
+- Thread one `CancellationTokenSource` from `Console.CancelKeyPress` through every async operation.
+- Write transition-started state before every long-running Codex or execution-bridge operation, then write transition-completed state after output validation succeeds.
+- After any failed or cancelled transition, write `.agents/state.md`, transition journal failure details, and a canonical blocked artifact when possible.
+- Resolve all repository-relative paths through `ArtifactPath.ResolveRepositoryPath(repository, relativePath)`.
+- Treat existing user changes as authoritative. Do not revert unrelated files.
 
-- **Target framework:** `net10.0`. **`<Nullable>enable</Nullable>`**, **`<ImplicitUsings>enable</ImplicitUsings>`** — set per-csproj (there is NO `Directory.Packages.props` and `Directory.Build.props` does NOT set these centrally).
-- **Project SDK:** `Microsoft.NET.Sdk` (NOT `Microsoft.NET.Sdk.Web`). Single explicit `PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0"` (brings `IServiceCollection`, `BuildServiceProvider`, `TryAdd*`). No `Microsoft.Extensions.Hosting` — the CLI runs an explicit loop, not a Generic Host.
-- **`<UseExecutionContextAlias>false</UseExecutionContextAlias>`** in the CLI csproj. `Directory.Build.props` injects a `global using ExecutionContext = …` alias gated on this flag; it only resolves for projects that reference `CommandCenter.Execution`. The CLI does **not** reference `CommandCenter.Execution`, so it MUST opt out (exactly as `CommandCenter.Agents` and `CommandCenter.Decisions` do).
-- **Codex executable:** resolved by `EnvironmentAgentExecutableResolver` from env var `CODEX_EXECUTABLE`, defaulting to the literal `"codex"` (PATH lookup). The codex binary must be `codex-cli ≈ 0.139` (app-server v2 protocol).
-- **All artifact paths are repository-relative and resolved through `ArtifactPath.ResolveRepositoryPath(repository, relativePath)`** (root-confinement guarded). The canonical paths (from `OrchestrationArtifactPaths`, verified against the codebase):
-  - Plan: `.agents/plan.md`
-  - Milestones dir: `.agents/milestones`, glob `m*.md`
-  - Live handoff: `.agents/handoffs/handoff.md` (**plural** `handoffs` dir), rotated → `.agents/handoffs/handoff.{N:0000}.md`
-  - Live decisions: `.agents/decisions/decisions.md` (**nested** under `decisions/`), rotated → `.agents/decisions/decisions.{N:0000}.md`
-  - Operational context: `.agents/operational_context.md`; operational delta: `.agents/operational_delta.md`
-- **Sandbox/effort postures (copied verbatim from `RepositoryOrchestrator.BuildOperationalSpec`/`BuildDecisionSpec`):**
-  - Execution turns: `SessionRole.OperationalExecution`, `SandboxProfile("workspace-write", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false)`, `EffortProfile(AgentEffortLevel.Medium, Identifier: null)` for **both** Start and Continue.
-  - Decision turns: `SessionRole.Decision`, `SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false)`, `EffortProfile(AgentEffortLevel.High, Identifier: "xhigh")`.
-  - Transfer's `UpdateOperationalContext` one-shot: operational spec at `EffortProfile(AgentEffortLevel.High, Identifier: "xhigh")`.
-  - `RequiresApproval: false` → codex approval policy `never` (no interactive prompt can wedge the automated run).
-- **Prompts are source-generated** into `CommandCenter.Core.Prompts.<Name>` by `Lib.Prompts`. NEVER hardcode template text. Use the generated `Render(...)`/`.Text` members so `SourceHash` provenance stays aligned:
-  - `StartExecution.Render(string? plan)`
-  - `ContinueExecution.Render(string? plan, string? handoff, string? decisions)` — argument order is **(plan, handoff, decisions)**.
-  - `StartDecisionSession.Render(string? operationalContext)`
-  - `GetNextDecisions.Render(string? handoff)`
-  - `StartDecisionSessionFromTransfer.Render(string? operationalContext)`
-  - `ProduceOperationalDelta.Text` (static, no holes)
-  - `UpdateOperationalContext.Text` (static, no holes)
-- **Verify-after-write discipline (the loop's correctness anchors):** every codex turn must check `AgentTurnResult.State == AgentTurnState.Completed` before proceeding; after each execution turn assert `.agents/handoffs/handoff.md` exists; after each decision submit assert `.agents/decisions/decisions.md` exists. Any failed gate stops the loop with an error (never an infinite retry).
-- **Cancellation:** ONE `CancellationTokenSource`, cancelled by `Console.CancelKeyPress` (with `e.Cancel = true` so the runtime does not hard-kill the CLI before codex teardown). The token is threaded into every `RunOneShotAsync`/`RunTurnAsync`. Killing codex happens via session disposal (`AgentProcess.DisposeAsync` → `process.Kill(entireProcessTree: true)`), reached automatically for one-shot turns (their `await using` session disposes on cancel) and explicitly for the warm decision session (`IAgentRuntime.CloseSessionAsync`).
+## Fixed North-Star Source Context
 
-## Preconditions / Assumptions (MVP scope)
+At the very start of the state machine, before any projection lookup or agent call, validate these eight files exist under `.agents/north-star/`:
 
-The CLI implements exactly the loop in the spec and assumes the repository is already **planned**:
-
-- `.agents/plan.md` exists.
-- `.agents/milestones/m*.md` exist (authored by the prior planning flow). The CLI does **not** run plan authoring or `ExtractMilestones`. The epic-complete gate **aggregates** checkboxes from **both** `.agents/plan.md` (if present) and every `.agents/milestones/m*.md`; the epic is complete only when ≥1 checkbox exists across them and every one is checked (files with zero checkboxes contribute nothing and never block, so a zero-checkbox repo proceeds to run execution). **Caveat:** if a repo's `.agents/plan.md` still carries its own task checkboxes that are never meant to be checked (i.e. it was *not* rewritten into a milestone-pointer index by `ExtractMilestones`), those unchecked boxes will hold the epic open forever — confirm your repos' `plan.md` checkbox shape before relying on this.
-- `.agents/operational_context.md` is required by the decision-session seed. The backend creates it during Execute Plan by copying `plan.md`. The CLI replicates this safety net: at the top of every iteration, if `.agents/operational_context.md` is missing it is created by copying `.agents/plan.md`.
-- **Transfer recycling** (the router's `Transfer` branch) is implemented (Task 9) to keep the SessionRouter meaningful, but a deployment may keep the decision session in steady-state `Continue` indefinitely — `Continue` (warm reuse) is the documented steady state.
-
-## Control Flow (the loop the CLI runs — mirrors the spec exactly)
-
-```
-RunAsync(ct):
-  loop:
-    ct.ThrowIfCancellationRequested()
-    # ---- LoopStart ----
-    if IsEpicComplete(.agents/plan.md + .agents/milestones/m*.md):  # all checkboxes (aggregated) checked, >=1 exists
-        return EpicCompleted                                # caller prints "Epic completed. Press any key to exit."
-    EnsureOperationalContext()                              # copy plan.md -> operational_context.md if missing
-    decisionsExist = exists(.agents/decisions/decisions.md)
-    handoffExists  = exists(.agents/handoffs/handoff.md)
-
-    if decisionsExist OR NOT handoffExists:                 # ---- Branch A: execution then decision ----
-        if decisionsExist: rotate(decisions.md)            # read + archive decisions.{N:0000}.md + delete live
-        if handoffExists:  rotate(handoff.md)              # read + archive handoff.{N:0000}.md + delete live
-        ExecutionStep.Run(ct)                              # Start/ContinueExecution one-shot; print Output; verify NEW handoff.md
-        DecisionSession.Run(ct)                            # via SessionRouter; print Output; persist + verify NEW decisions.md
-    else:                                                  # ---- Branch B: decision only (resume after interrupted execution) ----
-        rotate(handoff.md)
-        DecisionSession.Run(ct)                            # via SessionRouter; print Output; persist + verify NEW decisions.md
-    # goto LoopStart
+```text
+.agents/north-star/01-purpose.md
+.agents/north-star/02-capability-model.md
+.agents/north-star/03-invariants.md
+.agents/north-star/04-strategic-structure.md
+.agents/north-star/05-authority-model.md
+.agents/north-star/06-evaluation-model.md
+.agents/north-star/07-drift-and-false-success.md
+.agents/north-star/08-vocabulary.md
 ```
 
-Notes on faithfulness:
-- `rotate()` = read live content + write a numbered archive `{base}.{N:0000}.md` (N = max existing 4-digit sequence on disk + 1, abort if target exists) + delete the live file. This is the orchestrator's loop-path rotation (write-numbered + delete-live), deferred to loop-start per the spec (the orchestrator rotates immediately after each write; the artifact effect is identical).
-- The execution prompt's `handoff`/`decisions` inputs and the decision prompt's `handoff` input are resolved via **"latest = live file if present else highest numbered archive"** (mirrors `RepositoryOrchestrator.ReadLatestHandoffAsync`), so the post-rotation state still feeds the correct prior content, and `continuing = (latest handoff != null)` decides Start vs Continue execution.
+The `northStarContext` injected into projection prompts is one string formed by concatenating exactly those files in the order above.
+
+Use this format for each file in the concatenation:
+
+```markdown
+<!-- BEGIN NORTH-STAR FILE: 01-purpose.md -->
+
+{file content}
+
+<!-- END NORTH-STAR FILE: 01-purpose.md -->
+```
+
+Important boundary:
+
+- These eight files are the only Core North-Star source context files.
+- `.agents/north-star/roadmap-completion-context.md` is a runtime strategic-state artifact and must never be included in `northStarContext`.
+- Projection files must be written under `.agents/projections/`, not under `.agents/north-star/projections/`.
+- Runtime prompts receive cached projection content, never the raw eight-file Core concatenation.
+
+## Artifact Paths
+
+Add a roadmap artifact path catalog instead of scattering string literals.
+
+```text
+.agents/state.md
+.agents/decision-ledger.md
+.agents/artifacts/lifecycle.md
+.agents/roadmap.md
+.agents/roadmap/*.md
+.agents/selection.md
+.agents/epic.md
+.agents/epic-*.md
+.agents/specs/*.md
+.agents/operational_context.md
+.agents/execution-prompt.md
+.agents/north-star/roadmap-completion-context.md
+.agents/projections/manifest.md
+.agents/projections/roadmap-completion.md
+.agents/projections/roadmap-completion-update.md
+.agents/projections/select-next-epic.md
+.agents/projections/epic-preparation-audit.md
+.agents/projections/realign-epic.md
+.agents/projections/reimagine-epic.md
+.agents/projections/create-new-epic.md
+.agents/projections/split-epic.md
+.agents/projections/milestone-deep-dive.md
+.agents/projections/epic-completion-evaluation.md
+.agents/contracts/prompt-contracts.md
+.agents/journal/transitions.jsonl
+.agents/splits/split-family-*.md
+.agents/evidence/selection/*.md
+.agents/evidence/audits/*.md
+.agents/evidence/evaluations/*.md
+.agents/evidence/blockers/*.md
+.agents/evidence/orchestration/*.md
+```
+
+Roadmap input can be either `.agents/roadmap.md` or `.agents/roadmap/*.md`. If both exist, concatenate `.agents/roadmap.md` first and then `.agents/roadmap/*.md` sorted by repository-relative path.
+
+Separate evidence categories:
+
+- Domain evidence: selections, audits, split bundles, completion evaluations, and roadmap-completion updates.
+- Orchestration evidence: transition timing, prompt/projection provenance, retries, failures, stale projection warnings, invariant failures, and blocked-transition records.
+
+Canonical blocked artifacts must use this shape:
+
+```markdown
+# Roadmap Transition Blocked
+
+| Field | Value |
+|---|---|
+| State | {{state}} |
+| Transition | {{transition_name}} |
+| Reason | {{reason}} |
+| Required Next Step | {{next_step}} |
+| Evidence Path | {{evidence_path_or_none}} |
+| Created At | {{utc_timestamp}} |
+
+## Details
+
+{{details}}
+```
+
+## Projection Registry
+
+Create a registry that maps each runtime prompt to one cached projection path and one projection creation prompt.
+
+| Runtime prompt | Projection prompt file | Cached path |
+|---|---|---|
+| `CreateRoadmapCompletionContext` | `ProjectionForCreateRoadmapCompletionContext` | `.agents/projections/roadmap-completion.md` |
+| `UpdateRoadmapCompletionContext` | `ProjectionForUpdateRoadmapCompletionContext` | `.agents/projections/roadmap-completion-update.md` |
+| `SelectNextEpic` | `ProjectionForSelectNextEpic` | `.agents/projections/select-next-epic.md` |
+| `EpicPreparationAudit` | `ProjectionForEpicPreparationAudit` | `.agents/projections/epic-preparation-audit.md` |
+| `RealignEpic` | `ProjectionForRealignEpic` | `.agents/projections/realign-epic.md` |
+| `ReimagineEpic` | `ProjectionForReimagineEpic` | `.agents/projections/reimagine-epic.md` |
+| `CreateNewEpic` | `ProjectionForCreateNewEpic` | `.agents/projections/create-new-epic.md` |
+| `SplitEpic` | `ProjectionForSplitEpic` | `.agents/projections/split-epic.md` |
+| `GenerateMilestoneDeepDivesForEpic` | `ProjectionForGenerateMilestoneDeepDivesForEpic` | `.agents/projections/milestone-deep-dive.md` |
+| `EvaluateEpicCompletionAndDrift` | `ProjectionForEvaluateEpicCompletionAndDrift` | `.agents/projections/epic-completion-evaluation.md` |
+
+Projection cache rule:
+
+- If the cached file exists and is non-whitespace, read it and do not call Codex.
+- If it does not exist, render the projection prompt with `projectContext = northStarContext`, run a read-only one-shot, require `AgentTurnState.Completed`, and write the output to the cached path.
+- Do not regenerate projections automatically when the Core files change. For MVP, deleting a projection file is the refresh mechanism.
+- Even when reusing a cached projection, compare its manifest `northStarHash` to the current eight-file Core hash. If hashes differ, mark the projection `Stale` in `.agents/projections/manifest.md`, emit an orchestration warning, and continue only when the prompt contract allows stale projections for that transition. Default behavior is to pause in `EvidenceBlocked` with "Projection refresh recommended" rather than silently proceeding.
+
+Projection manifest rule:
+
+- Maintain `.agents/projections/manifest.md` as the authoritative cache index.
+- Each projection entry records:
+  - runtime prompt name
+  - projection prompt name
+  - projection path
+  - projection prompt source hash, when available from generated prompt provenance
+  - ordered north-star file list
+  - `northStarHash`
+  - projection content hash
+  - generated timestamp
+  - validation status
+  - stale status
+  - last validation error, if any
+- The manifest is orchestration metadata; runtime prompts do not consume it unless a prompt contract explicitly requires provenance.
+
+Projection validation rule:
+
+- Before a new or cached projection can be used, run `ProjectionValidator`.
+- Validation checks:
+  - required top-level title and required sections for that projection type
+  - intended consumer matches the runtime prompt
+  - no forbidden runtime state sections are present, such as current roadmap completion state, selected epic content, completed epic history, or codebase facts
+  - canonical vocabulary section exists when required by the projection prompt
+  - downstream-use instructions exist
+  - projection integrity checklist exists
+- Validation failure writes a blocked artifact and enters `EvidenceBlocked`; do not cache invalid newly generated projections as valid.
+
+## Runtime Prompt Context Assembly
+
+Create `PromptContractRegistry`.
+
+Each runtime prompt contract must define:
+
+| Field | Meaning |
+|---|---|
+| Runtime Prompt | Generated prompt class or prompt adapter name |
+| Required Projection | Projection registry key |
+| Required Inputs | Artifact paths or derived context sections that must exist before execution |
+| Optional Inputs | Artifact paths that may be included when present |
+| Required Outputs | Artifact paths or parser result fields expected after execution |
+| Allowed Decisions | Exact allowed selection, disposition, completion, or blocking values |
+| Blocking Outputs | Output markers that intentionally pause the machine |
+| Artifact Writer | The only component allowed to write the output artifact |
+| Stale Projection Policy | `Block`, `WarnOnly`, or `Allow` |
+
+Prompt contracts are code-level definitions, with `.agents/contracts/prompt-contracts.md` emitted as a human-readable snapshot during startup. The state machine must validate the contract before every prompt run:
+
+- required projection exists, is validated, and is not stale under the contract policy
+- required inputs exist and are non-whitespace
+- expected output parser exists
+- output writer is authorized for the target artifact
+
+Create `RoadmapPromptContextBuilder`.
+
+It assembles a structured `projectContext` string for each runtime prompt. The string must include only the required projection and artifact state for that transition.
+
+Required context sections:
+
+- Projection content.
+- Current roadmap completion context when required.
+- Roadmap source when selecting.
+- Selected epic or active epic when required.
+- Selection proposal when creating or splitting.
+- Audit output when realigning or reimagining.
+- Milestone specs and active epic when certifying completion.
+- Repository inspection instructions for prompts that must audit codebase reality.
+
+Do not include:
+
+- Raw north-star source files.
+- Unrelated projections.
+- Unrelated old evidence files.
+- Full operational history unless the specific prompt requires it.
+
+## State Model
+
+Implement a `RoadmapState` enum containing:
+
+```text
+CoreReady
+BootstrapRoadmapCompletionContext
+RoadmapCompletionContextReady
+SelectNextStrategicInitiative
+ExistingEpicSelected
+NewEpicProposed
+SplitEpicProposed
+EpicPreparationAudit
+RealignEpic
+ReimagineEpic
+RetireEpic
+EvidenceBlocked
+EvidenceGathering
+CreateNewEpic
+SplitEpic
+SplitChildSelection
+ActiveEpicReady
+GenerateMilestoneDeepDives
+MilestoneSpecsReady
+GenerateOperationalContext
+OperationalContextReady
+GenerateExecutionPrompt
+ExecutionPromptReady
+ExecutionLoop
+ExecutionBlocked
+EpicCompletionDetected
+CompletionEvaluationAndContextUpdate
+StrategicInvestigationRequired
+RoadmapRevisionRequired
+NoSuitableInitiative
+Completed
+Failed
+Cancelled
+```
+
+Persist `.agents/state.md` after every transition using the shape in the requirements:
+
+```markdown
+# Engineering Loop State
+
+## Current State
+
+{{state_name}}
+
+## Active Artifacts
+
+| Artifact | Path | Status |
+|---|---|---|
+
+## Last Transition
+
+| Field | Value |
+|---|---|
+| From | {{previous_state}} |
+| To | {{current_state}} |
+| Prompt | {{prompt_name}} |
+| Projection | {{projection_name}} |
+| Output | {{artifact_path}} |
+| Decision | {{decision_or_disposition}} |
+| Status | Started / Completed / Failed / Cancelled |
+| Started At | {{utc_timestamp}} |
+| Completed At | {{utc_timestamp_or_blank}} |
+
+## Blockers
+
+| Blocker | Required Next Step |
+|---|---|
+
+## Decision Ledger Summary
+
+| Field | Value |
+|---|---|
+| Ledger Path | .agents/decision-ledger.md |
+| Last Decision ID | {{decision_id_or_none}} |
+| Retired Exclusions | {{count}} |
+| Split Families | {{count}} |
+
+## Projection Manifest Summary
+
+| Field | Value |
+|---|---|
+| Manifest Path | .agents/projections/manifest.md |
+| Valid Projections | {{count}} |
+| Stale Projections | {{count}} |
+| Invalid Projections | {{count}} |
+
+## Next Valid Transitions
+
+- {{transition_1}}
+```
+
+Also track runtime-only state needed to avoid loops:
+
+- Retired epic IDs/names excluded for the current selection cycle.
+- Last selection artifact path.
+- Last audit artifact path.
+- Current active epic path.
+- Current milestone spec set hash or timestamp summary.
+
+Decision ledger rule:
+
+- Maintain `.agents/decision-ledger.md` as durable orchestration history, not operational context.
+- Append one compact entry for every selection, audit disposition, split child choice, completion certification routing decision, roadmap-completion update, and terminal pause.
+- Each entry records decision ID, timestamp, state, transition, prompt, projection path, input artifact paths, output artifact paths, decision/disposition, confidence, and rationale excerpt.
+- `.agents/state.md` contains only a summary and pointers; the ledger contains the durable "why" history.
+
+Transition journal rule:
+
+- Maintain `.agents/journal/transitions.jsonl`.
+- Write a `TransitionStarted` record before any long-running prompt or execution-bridge operation.
+- Write a `TransitionCompleted`, `TransitionFailed`, or `TransitionCancelled` record afterward.
+- Each record includes previous state, next or attempted state, prompt, projection, prompt contract key, input artifact paths with content hashes, output paths, duration, result, parser decision, error message, and correlation ID.
+- Do not put domain reasoning in the journal; put domain findings in evidence artifacts and decision rationale summaries in the ledger.
+
+Artifact lifecycle rule:
+
+- Maintain `.agents/artifacts/lifecycle.md`.
+- Track lifecycle for projections, roadmap-completion context, active epic, split children, specs, operational context, execution prompt, and evaluation artifacts.
+- Allowed lifecycle values:
+  - `Missing`
+  - `Draft`
+  - `Ready`
+  - `Executing`
+  - `Completed`
+  - `Archived`
+  - `Superseded`
+  - `Blocked`
+- State transitions must update lifecycle metadata when they create, promote, supersede, archive, or block an artifact.
+
+## Global Invariants
+
+Create `InvariantValidator` and run it after every completed transition and before entering execution.
+
+Required invariants:
+
+- The eight Core North-Star source files exist and match the current north-star hash recorded for the run.
+- The Core North-Star source files are never included in runtime prompt contexts.
+- Exactly one roadmap-completion context path is active: `.agents/north-star/roadmap-completion-context.md`.
+- Every runtime prompt has exactly one required projection in the projection registry.
+- Every cached projection has a manifest entry and a validation result.
+- Every prompt run has a prompt contract entry.
+- Only authorized transition components write their owned artifacts.
+- At most one active epic is `Ready` or `Executing`.
+- Every `.agents/specs/*.md` file belongs to the active epic, based on metadata or current generation correlation ID.
+- No execution bridge invocation happens without active epic, milestone specs, operational context, and execution prompt.
+- Every completed epic certification that allows closure is followed by `UpdateRoadmapCompletionContext` before the next selection cycle.
+- Split child epics must reference a split-family artifact before any child is promoted to active epic.
+- Blocked transitions must write a canonical blocked artifact.
+
+Invariant failures:
+
+- Write an orchestration evidence artifact under `.agents/evidence/orchestration/`.
+- Append a failed transition journal entry.
+- Enter `Failed` for internal corruption or `EvidenceBlocked` for missing/ambiguous evidence that a human can resolve.
+
+## Prompt Output Parsing
+
+Implement small markdown parsers with deterministic failure behavior.
+
+Parsers:
+
+- `MarkdownTableParser`: parse simple pipe tables by header name.
+- `SelectionParser`: read `## Recommendation Summary` and extract `Recommended Outcome`, `Recommended Initiative`, `Initiative Type`, `Confidence`.
+- `EpicPreparationAuditParser`: read `## Audit Disposition` and extract `Disposition`, `Confidence`, `Recommended Next Step`.
+- `CompletionEvaluationParser`: read `## Evaluation Summary` and extract `Overall Completion Status`, `Overall Drift Classification`, `Closure Recommendation`.
+- `BundleFileExtractor`: parse `# FILE: .agents/specs/*.md` and `# FILE: .agents/epic-*.md` blocks.
+- `BundleManifestWriter`: write a manifest next to extracted bundle files with source prompt, projection, expected file count, extracted file paths, file hashes, and validation result.
+
+Failure rules:
+
+- If a required field is missing or outside the allowed vocabulary, stop with `EvidenceBlocked` or `Failed` depending on whether more evidence could resolve it.
+- Do not guess dispositions from vague prose unless the required table is absent and the final statement contains an exact allowed value.
+- Bundle extraction must reject paths outside the allowed target directory.
+- Bundle extraction must reject duplicate target paths.
+- Bundle extraction must write a manifest before downstream stages consume extracted files.
+
+## Execution Integration
+
+The roadmap state machine defines an execution loop, but the existing execution CLI is built around `.agents/plan.md` and `.agents/milestones/m*.md`, while this roadmap machine produces `.agents/epic.md` and `.agents/specs/*.md`.
+
+For MVP, implement explicit grounding and bridge stages:
+
+1. `GenerateOperationalContext`: create `.agents/operational_context.md` from active epic, ordered specs, latest accepted decisions, and execution-relevant artifact lifecycle metadata.
+2. `OperationalContextReady`: verify operational context exists, is non-whitespace, and references the active epic/spec set.
+3. `GenerateExecutionPrompt`: create `.agents/execution-prompt.md` from operational context plus current milestone/spec readiness.
+4. `ExecutionPromptReady`: verify execution prompt exists and does not include raw Core North-Star source content.
+5. `ExecutionCompatibilityMaterializer`: materialize execution-compatible `.agents/plan.md` and `.agents/milestones/mNNN.md` from `.agents/epic.md`, `.agents/specs/*.md`, `.agents/operational_context.md`, and `.agents/execution-prompt.md`.
+6. Write `.agents/plan.md` as a generated execution index containing the active epic, the ordered spec list, and the execution prompt pointer.
+7. Write `.agents/milestones/mNNN.md` files derived from specs, preserving the full spec content and adding strict checkbox items for auditable execution progress.
+8. Invoke the existing execution loop through an `IRoadmapExecutionBridge` abstraction.
+9. When the execution bridge reports epic completion, transition to `EpicCompletionDetected`.
+10. Always run `EvaluateEpicCompletionAndDrift` before updating roadmap completion context. Existing execution completion is only a detection signal, not certification.
+
+Operational-context generation is not roadmap-completion-context update. It is execution memory and handoff state for the current active epic only.
+
+Execution-prompt generation is not execution. It produces the bounded instruction artifact consumed by the bridge and recorded for auditability.
+
+Keep the bridge behind an interface so tests do not run the real execution CLI.
+
+Bridge output mapping:
+
+| Bridge result | Roadmap transition |
+|---|---|
+| Epic completed | `EpicCompletionDetected` |
+| Cancelled | `Cancelled` |
+| Failed with strategic blocker marker | `ExecutionBlocked` |
+| Failed otherwise | `Failed` |
+| Stalled | `ExecutionBlocked` |
+
+If the execution-compatible materializer cannot produce at least one checkbox-backed milestone file from the specs, transition to `EvidenceBlocked` with a blocker explaining that execution readiness could not be derived from milestone specs.
+
+## Control Flow
+
+Implement `RoadmapStateMachine.RunAsync`.
+
+High-level flow:
+
+```text
+ValidateNorthStarSourceContext
+CoreReady
+
+if roadmap-completion-context missing:
+  EnsureProjection(roadmap-completion)
+  Run CreateRoadmapCompletionContext
+  write roadmap-completion-context
+
+RoadmapCompletionContextReady
+
+while not terminal:
+  Run SelectNextEpic
+  branch by Recommended Outcome
+
+  Select Existing Epic:
+    load selected roadmap epic
+    Run EpicPreparationAudit
+    branch by Disposition
+
+  Select New Intermediary Epic:
+    Run CreateNewEpic
+    write .agents/epic.md
+
+  Select Split Epic:
+    Run SplitEpic
+    write .agents/epic-*.md
+    select dependency-root child or pause for roadmap revision
+
+  ActiveEpicReady:
+    Run GenerateMilestoneDeepDivesForEpic
+    write .agents/specs/*.md
+
+  MilestoneSpecsReady:
+    Generate .agents/operational_context.md
+    Generate .agents/execution-prompt.md
+    Run execution bridge
+
+  EpicCompletionDetected:
+    Run EvaluateEpicCompletionAndDrift
+    if closure recommendation allows close:
+      Run UpdateRoadmapCompletionContext
+      loop back to selection
+    else:
+      route to ExecutionLoop, EpicPreparationAudit, or EvidenceBlocked
+```
+
+Every `Run ...` line above is implemented as:
+
+```text
+Validate prompt contract
+Validate required inputs
+Write TransitionStarted to state + journal
+Run prompt or bridge
+Validate output
+Write domain/orchestration evidence
+Append decision ledger entry when a decision was made
+Update artifact lifecycle
+Run invariant validator
+Write TransitionCompleted to state + journal
+```
+
+Terminal or paused states:
+
+- `StrategicInvestigationRequired`
+- `RoadmapRevisionRequired`
+- `NoSuitableInitiative`
+- `EvidenceBlocked`
+- `Cancelled`
+- `Failed`
+- `Completed`
+
+## Transition Definition Model
+
+Avoid baking all orchestration behavior into one large `switch` statement.
+
+Represent each transition with a `TransitionDefinition`:
+
+| Field | Meaning |
+|---|---|
+| Name | Stable transition name used by state, journal, and ledger |
+| From State | Required current state |
+| To State Candidates | Allowed next states |
+| Guard | Predicate that checks state, artifact lifecycle, prompt contract, and required inputs |
+| Executor | Prompt runner, deterministic generator, parser, bundle extractor, or execution bridge |
+| Output Validator | Parser and artifact validation for the transition result |
+| Lifecycle Updates | Artifact lifecycle changes applied after success |
+| Decision Ledger Policy | Whether the transition appends a decision entry |
+| Invariant Scope | Which invariants must be checked before and after |
+
+The MVP may still dispatch definitions procedurally, but all transition metadata should live in data structures that can evolve toward a table-driven state machine. This keeps future projection types, audit types, and execution loops additive instead of requiring state-machine rewrites.
+
+## Transition Details
+
+### Bootstrap Roadmap Completion Context
+
+Inputs:
+
+- `.agents/projections/roadmap-completion.md`
+- Completed epic history from `.agents/archive/`, `.agents/completed/`, and any configured completed-epic source files.
+
+Output:
+
+- `.agents/north-star/roadmap-completion-context.md`
+
+If completed epic history is missing, write a blocker and enter `EvidenceBlocked`; do not fabricate current strategic state.
+
+### Select Next Strategic Initiative
+
+Inputs:
+
+- `.agents/projections/select-next-epic.md`
+- `.agents/north-star/roadmap-completion-context.md`
+- roadmap source
+- retired epic exclusions from current state
+
+Output:
+
+- `.agents/selection.md`
+- numbered evidence copy under `.agents/evidence/selection/`
+
+Allowed outcomes:
+
+- `Select Existing Epic`
+- `Select New Intermediary Epic`
+- `Select Split Epic`
+- `Strategic Investigation Required`
+- `Roadmap Revision Required`
+- `No Suitable Initiative`
+
+### Existing Epic Preparation
+
+Inputs:
+
+- `.agents/projections/epic-preparation-audit.md`
+- selected epic
+- repository reality via read-only codebase inspection
+
+Output:
+
+- `.agents/evidence/audits/epic-preparation-audit.{N:0000}.md`
+
+Allowed dispositions:
+
+- `Realign`
+- `Reimagine`
+- `Retire`
+- `Insufficient Evidence`
+
+### Realign Epic
+
+Inputs:
+
+- `.agents/projections/realign-epic.md`
+- selected epic
+- latest preparation audit
+
+Output:
+
+- `.agents/epic.md`
+
+The parser must require the audit disposition to be `Realign` before running this prompt.
+
+### Reimagine Epic
+
+Inputs:
+
+- `.agents/projections/reimagine-epic.md`
+- selected epic
+- latest preparation audit
+
+Output:
+
+- `.agents/epic.md`
+
+The parser must require the audit disposition to be `Reimagine` before running this prompt.
+
+### Retire Epic
+
+Output:
+
+- retirement evidence under `.agents/evidence/audits/retire-epic.{N:0000}.md`
+- updated `.agents/state.md` retired-exclusion list
+
+If retirement appears local, return to selection with the epic excluded. If retirement implies roadmap structure is stale, transition to `RoadmapRevisionRequired`.
+
+### Create New Epic
+
+Inputs:
+
+- `.agents/projections/create-new-epic.md`
+- new epic proposal extracted from selection
+- repository reality via read-only codebase inspection
+
+Output:
+
+- `.agents/epic.md`
+
+If the prompt returns a blocking document rather than an epic, enter `EvidenceBlocked`.
+
+### Split Epic
+
+Inputs:
+
+- `.agents/projections/split-epic.md`
+- split proposal extracted from selection
+- selected source epic when applicable
+- repository reality via read-only codebase inspection
+
+Output:
+
+- `.agents/epic-*.md`
+- `.agents/splits/split-family-{N:0000}.md`
+
+Split family artifact:
+
+- Preserve the original selection split proposal.
+- List every generated child epic path and hash.
+- Record source roadmap epic path when applicable.
+- Record dependency relationships among children.
+- Record selected child path and selection rationale when a child is promoted.
+- Record remaining children as deferred roadmap candidates or roadmap-revision inputs.
+
+After bundle extraction, select a dependency-root child only when exactly one child is clearly marked first executable. If not, enter `SplitChildSelection` and then either `RoadmapRevisionRequired` or `SelectNextStrategicInitiative`. A child epic cannot be promoted to `.agents/epic.md` unless its split-family artifact exists and is referenced in the decision ledger.
+
+### Generate Milestone Deep Dives
+
+Inputs:
+
+- `.agents/projections/milestone-deep-dive.md`
+- `.agents/epic.md`
+
+Output:
+
+- `.agents/specs/*.md`
+
+Extract files only from `# FILE: .agents/specs/*.md` markers. Require at least one spec. Reject blocked output unless state transitions to `EvidenceBlocked`.
+
+### Generate Operational Context
+
+Inputs:
+
+- `.agents/epic.md`
+- `.agents/specs/*.md`
+- `.agents/artifacts/lifecycle.md`
+- latest relevant decision ledger entries
+
+Output:
+
+- `.agents/operational_context.md`
+
+Purpose:
+
+- Create execution memory for the active epic.
+- Preserve current spec ordering, dependency assumptions, active constraints, blocked or deferred work, and handoff-relevant decisions.
+- Keep execution memory separate from roadmap-completion context.
+
+The generator may be deterministic for MVP. If a prompt-backed version is added later, it must receive an execution-grounding projection and follow the same projection/cache/contract rules.
+
+### Generate Execution Prompt
+
+Inputs:
+
+- `.agents/operational_context.md`
+- `.agents/epic.md`
+- ordered `.agents/specs/*.md`
+
+Output:
+
+- `.agents/execution-prompt.md`
+
+Purpose:
+
+- Produce the bounded instruction artifact for the execution bridge.
+- Identify the current first executable spec or milestone.
+- Preserve constraints and validation expectations without redefining roadmap intent.
+
+The execution prompt must not include raw Core North-Star source content. It may reference cached projections only if a future execution-grounding projection contract explicitly allows that input.
+
+### Epic Completion Detection and Certification
+
+Execution bridge completion is only a detection signal.
+
+After detection:
+
+1. Ensure `.agents/projections/epic-completion-evaluation.md`.
+2. Run `EvaluateEpicCompletionAndDrift`.
+3. Persist evaluation under `.agents/evidence/evaluations/epic-completion-and-drift.{N:0000}.md`.
+4. Route based on `Closure Recommendation`.
+
+Routing:
+
+| Closure recommendation | Next state |
+|---|---|
+| `Close Epic` | `CompletionEvaluationAndContextUpdate` |
+| `Close With Follow-Up` | `CompletionEvaluationAndContextUpdate` |
+| `Continue Epic` | `ExecutionLoop` |
+| `Reopen Epic` | `EpicPreparationAudit` |
+| `Gather More Evidence` | `EvidenceBlocked` |
+
+### Roadmap Completion Context Update
+
+Inputs:
+
+- `.agents/projections/roadmap-completion-update.md`
+- current `.agents/north-star/roadmap-completion-context.md`
+- `.agents/epic.md`
+- latest completion evaluation
+- repository reality via read-only inspection
+
+Output:
+
+- updated `.agents/north-star/roadmap-completion-context.md`
+- evidence copy under `.agents/evidence/evaluations/roadmap-completion-update.{N:0000}.md`
+
+After a successful update, clear active epic/spec execution state as appropriate and return to `SelectNextStrategicInitiative`.
 
 ## File Structure
 
-```
-src/CommandCenter.CLI/
-  CommandCenter.CLI.csproj          # Microsoft.NET.Sdk console app; refs Agents, Core, Orchestration
-  Program.cs                        # entrypoint: args -> DI -> CTS+CancelKeyPress -> LoopRunner -> outcome message
-  CliArguments.cs                   # parse/validate REPO_DIR -> Repository
-  LoopConsole.cs                    # ILoopConsole + ConsoleLoopConsole (print phase/message/delta/info/error)
-  MilestoneGate.cs                  # epic-complete check (ports CountCheckboxes verbatim)
-  LoopArtifacts.cs                  # rotation, ReadLatest{Handoff,Decisions}, PersistDecisions, EnsureOperationalContext
-  AgentSpecs.cs                     # BuildOperationalSpec / BuildDecisionSpec
-  ExecutionStep.cs                  # run Start/ContinueExecution one-shot + verify handoff
-  DecisionSession.cs               # warm read-only session: router + seed-once + GetNextDecisions + persist + verify + Transfer
-  LoopRunner.cs                     # the LoopStart state machine (Branch A/B); IAsyncDisposable owns DecisionSession
-  LoopOutcome.cs                    # enum { EpicCompleted, Cancelled, Failed } + LoopStepException
+```text
+src/CommandCenter.Roadmap.CLI/
+  CommandCenter.Roadmap.CLI.csproj
+  Program.cs
+  CliArguments.cs
+  LoopConsole.cs
+  AgentSpecs.cs
+  RoadmapOutcome.cs
+  RoadmapStepException.cs
+  RoadmapArtifactPaths.cs
+  RoadmapArtifacts.cs
+  NorthStarContextLoader.cs
+  ProjectionRegistry.cs
+  ProjectionManifest.cs
+  ProjectionManifestStore.cs
+  ProjectionValidator.cs
+  ProjectionCache.cs
+  PromptContractRegistry.cs
+  RoadmapPromptRunner.cs
+  RoadmapPromptContextBuilder.cs
+  RoadmapState.cs
+  RoadmapStateDocument.cs
+  RoadmapStateStore.cs
+  DecisionLedger.cs
+  DecisionLedgerStore.cs
+  TransitionJournal.cs
+  TransitionJournalStore.cs
+  ArtifactLifecycle.cs
+  ArtifactLifecycleStore.cs
+  InvariantValidator.cs
+  RoadmapStateMachine.cs
+  MarkdownTableParser.cs
+  SelectionParser.cs
+  EpicPreparationAuditParser.cs
+  CompletionEvaluationParser.cs
+  BundleFileExtractor.cs
+  BundleManifestWriter.cs
+  SplitFamily.cs
+  SplitFamilyStore.cs
+  OperationalContextGenerator.cs
+  ExecutionPromptGenerator.cs
+  ExecutionCompatibilityMaterializer.cs
+  RoadmapExecutionBridge.cs
 
-tests/CommandCenter.CLI.Tests/
-  CommandCenter.CLI.Tests.csproj    # xUnit; refs CommandCenter.CLI, CommandCenter.Core, CommandCenter.Agents
-  TestDoubles.cs                    # FakeAgentRuntime, FakeAgentSession, RecordingLoopConsole
+tests/CommandCenter.Roadmap.CLI.Tests/
+  CommandCenter.Roadmap.CLI.Tests.csproj
+  TestDoubles.cs
   CliArgumentsTests.cs
-  MilestoneGateTests.cs
-  LoopArtifactsTests.cs
-  AgentSpecsTests.cs
-  ExecutionStepTests.cs
-  DecisionSessionTests.cs
-  LoopRunnerTests.cs
+  NorthStarContextLoaderTests.cs
+  ProjectionManifestTests.cs
+  ProjectionCacheTests.cs
+  ProjectionValidatorTests.cs
+  PromptContractRegistryTests.cs
+  RoadmapPromptContextBuilderTests.cs
+  MarkdownParserTests.cs
+  BundleFileExtractorTests.cs
+  BundleManifestWriterTests.cs
+  RoadmapStateStoreTests.cs
+  DecisionLedgerTests.cs
+  TransitionJournalTests.cs
+  ArtifactLifecycleTests.cs
+  InvariantValidatorTests.cs
+  RoadmapStateMachineSelectionTests.cs
+  RoadmapStateMachineEpicPreparationTests.cs
+  OperationalContextGeneratorTests.cs
+  ExecutionPromptGeneratorTests.cs
+  ExecutionCompatibilityMaterializerTests.cs
 ```
 
-Each file has one responsibility; files that change together live together. The testable core (`MilestoneGate`, `LoopArtifacts`, `ExecutionStep`, `DecisionSession`, `LoopRunner`) takes its dependencies as constructor parameters (`IArtifactStore`, `IAgentRuntime`, `IDecisionSessionRouter`, `ILoopConsole`, `Repository`) so tests drive the whole loop with an in-memory store and a fake runtime — no real codex process required.
+## Task 1: Project Scaffold
 
----
+Files:
 
-### Task 1: Project scaffold + solution registration
+- Create `src/CommandCenter.Roadmap.CLI/CommandCenter.Roadmap.CLI.csproj`
+- Create `src/CommandCenter.Roadmap.CLI/Program.cs`
+- Create `tests/CommandCenter.Roadmap.CLI.Tests/CommandCenter.Roadmap.CLI.Tests.csproj`
+- Modify `CommandCenter.slnx`
 
-**Files:**
-- Create: `src/CommandCenter.CLI/CommandCenter.CLI.csproj`
-- Create: `src/CommandCenter.CLI/Program.cs` (temporary stub)
-- Modify: `CommandCenter.slnx`
+Requirements:
 
-**Interfaces:**
-- Produces: a buildable `CommandCenter.CLI` console project referencing `CommandCenter.Agents`, `CommandCenter.Core`, `CommandCenter.Orchestration`.
+- CLI references `CommandCenter.Agents`, `CommandCenter.Core`, `CommandCenter.Orchestration`.
+- Test project references the CLI and `CommandCenter.Core`.
+- Add `InternalsVisibleTo` for the test project.
+- Program parses one required `REPO_DIR`.
 
-- [ ] **Step 1: Create the csproj**
+Acceptance:
 
-Create `src/CommandCenter.CLI/CommandCenter.CLI.csproj`:
+- `dotnet build CommandCenter.slnx` discovers both projects.
 
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
+## Task 2: Artifact Path and Repository IO Layer
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>CommandCenter.Cli</RootNamespace>
-    <!-- The CLI does not reference CommandCenter.Execution, so it must opt out of the
-         ExecutionContext using-alias injected by Directory.Build.props (same as Agents/Decisions). -->
-    <UseExecutionContextAlias>false</UseExecutionContextAlias>
-  </PropertyGroup>
+Files:
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
-  </ItemGroup>
+- Create `RoadmapArtifactPaths.cs`
+- Create `RoadmapArtifacts.cs`
 
-  <ItemGroup>
-    <ProjectReference Include="..\CommandCenter.Agents\CommandCenter.Agents.csproj" />
-    <ProjectReference Include="..\CommandCenter.Core\CommandCenter.Core.csproj" />
-    <ProjectReference Include="..\CommandCenter.Orchestration\CommandCenter.Orchestration.csproj" />
-  </ItemGroup>
+Requirements:
 
-  <!-- The loop's components are `internal`; the test project drives them directly. -->
-  <ItemGroup>
-    <InternalsVisibleTo Include="CommandCenter.CLI.Tests" />
-  </ItemGroup>
+- Centralize all roadmap-specific paths.
+- Wrap `IArtifactStore`.
+- Provide helpers for exists/read/write/list, numbered evidence writes, roadmap source concatenation, and active artifact status.
+- Reject path traversal through `ArtifactPath`.
 
-</Project>
+Tests:
+
+- Roadmap source concatenates `.agents/roadmap.md` before sorted `.agents/roadmap/*.md`.
+- Numbered evidence paths increment without overwriting.
+
+## Task 3: North-Star Context Loader
+
+Files:
+
+- Create `NorthStarContextLoader.cs`
+- Create `NorthStarContextLoaderTests.cs`
+
+Requirements:
+
+- Validate all eight required source files before any state-machine work.
+- Return a single ordered concatenation string.
+- Exclude `roadmap-completion-context.md` from the Core concatenation.
+- Error message must list every missing required file.
+- If extra numbered north-star source files are found, fail with a message explaining the exact eight-file contract.
+
+Tests:
+
+- Concatenates in fixed order.
+- Fails on missing file.
+- Ignores runtime completion context.
+- Fails on `09-something.md`.
+
+## Task 4: Projection Manifest, Projection Validator, and Prompt Contracts
+
+Files:
+
+- Create `ProjectionRegistry.cs`
+- Create `ProjectionManifest.cs`
+- Create `ProjectionManifestStore.cs`
+- Create `ProjectionValidator.cs`
+- Create `PromptContractRegistry.cs`
+- Create `ProjectionManifestTests.cs`
+- Create `ProjectionValidatorTests.cs`
+- Create `PromptContractRegistryTests.cs`
+
+Requirements:
+
+- Registry maps runtime prompts to cached paths and generated projection prompt classes.
+- Projection manifest records prompt provenance, north-star hash, projection hash, validation status, and stale status.
+- Projection validator enforces required sections and forbidden content rules before any projection is trusted.
+- Prompt contract registry defines required projection, required inputs, allowed outputs, stale projection policy, parser, and authorized writer for every runtime prompt.
+- Emit `.agents/contracts/prompt-contracts.md` as a startup snapshot of prompt contracts.
+
+Tests:
+
+- Manifest entry records hashes and validation status.
+- Stale detection compares manifest `northStarHash` to current Core hash.
+- Projection validator accepts a structurally valid projection.
+- Projection validator rejects missing required sections and forbidden runtime-state content.
+- Prompt contract registry has one contract for every runtime prompt in the projection registry.
+
+## Task 5: Projection Cache and Prompt Runner
+
+Files:
+
+- Create `ProjectionCache.cs`
+- Create `RoadmapPromptRunner.cs`
+- Create `ProjectionCacheTests.cs`
+
+Requirements:
+
+- Cache checks file existence before running Codex.
+- Projection prompt receives `projectContext = northStarContext`.
+- Existing non-whitespace projection is reused.
+- New projection is written only after completed agent turn.
+- Every cached projection is validated before use.
+- Every cache read/write updates `.agents/projections/manifest.md`.
+- Stale projections follow the prompt contract stale policy.
+
+Tests:
+
+- Existing projection does not call runtime.
+- Missing projection calls runtime once and writes output.
+- Failed turn does not write projection.
+- Invalid generated projection writes a blocked artifact and is not marked valid.
+- Stale projection blocks when contract policy is `Block`.
+
+## Task 6: Runtime Prompt Context Builder
+
+Files:
+
+- Create `RoadmapPromptContextBuilder.cs`
+- Create `RoadmapPromptContextBuilderTests.cs`
+
+Requirements:
+
+- Build per-transition `projectContext` strings from projection plus required artifacts.
+- Never include raw `northStarContext` in runtime prompt contexts.
+- Include repository-audit instructions for audit, create, split, completion, and update prompts.
+- Include retired epic exclusions for selection.
+
+Tests:
+
+- Selection context contains projection, completion context, roadmap, and exclusions.
+- Audit context contains projection and selected epic only.
+- Realign/reimagine context contains projection, current epic, and audit.
+- Raw Core file markers never appear in runtime contexts.
+
+## Task 7: Markdown Parsers
+
+Files:
+
+- Create `MarkdownTableParser.cs`
+- Create `SelectionParser.cs`
+- Create `EpicPreparationAuditParser.cs`
+- Create `CompletionEvaluationParser.cs`
+- Create parser tests.
+
+Requirements:
+
+- Parse required tables and fields.
+- Normalize allowed values with exact vocabulary.
+- Return structured records with confidence/reason fields where available.
+- Produce actionable parse errors.
+
+Tests:
+
+- Parses valid selection outcomes.
+- Parses all audit dispositions.
+- Parses completion closure recommendations.
+- Rejects unknown values.
+
+## Task 8: Bundle Extraction and Split Family Tracking
+
+Files:
+
+- Create `BundleFileExtractor.cs`
+- Create `BundleManifestWriter.cs`
+- Create `SplitFamily.cs`
+- Create `SplitFamilyStore.cs`
+- Create `BundleFileExtractorTests.cs`
+- Create `BundleManifestWriterTests.cs`
+
+Requirements:
+
+- Extract multi-file bundles from `# FILE: ...` markers.
+- Support `.agents/specs/*.md` and `.agents/epic-*.md`.
+- Reject output outside allowed paths.
+- Reject duplicate file markers.
+- Preserve file content exactly between markers, trimmed only for leading/trailing blank separator noise.
+- Write bundle manifests with extracted path hashes and source prompt/projection provenance.
+- For split epic bundles, write a split-family artifact before any child is promoted.
+
+Tests:
+
+- Extracts multiple spec files.
+- Rejects `../` paths.
+- Rejects duplicate paths.
+- Handles blocked bundle with no files as a typed result.
+- Writes bundle manifest for extracted specs.
+- Writes split-family artifact preserving proposal, children, dependency order, and selected child rationale.
+
+## Task 9: State Store, Decision Ledger, Transition Journal, and Artifact Lifecycle
+
+Files:
+
+- Create `RoadmapState.cs`
+- Create `RoadmapStateDocument.cs`
+- Create `RoadmapStateStore.cs`
+- Create `DecisionLedger.cs`
+- Create `DecisionLedgerStore.cs`
+- Create `TransitionJournal.cs`
+- Create `TransitionJournalStore.cs`
+- Create `ArtifactLifecycle.cs`
+- Create `ArtifactLifecycleStore.cs`
+- Create `RoadmapStateStoreTests.cs`
+- Create `DecisionLedgerTests.cs`
+- Create `TransitionJournalTests.cs`
+- Create `ArtifactLifecycleTests.cs`
+
+Requirements:
+
+- Write `.agents/state.md` when transitions start and when transitions complete, fail, or cancel.
+- Include active artifact status and next valid transitions.
+- Preserve retired epic exclusions.
+- Provide a load method for resuming from existing state.
+- Append decision entries to `.agents/decision-ledger.md`.
+- Append transition-started/completed/failed/cancelled records to `.agents/journal/transitions.jsonl`.
+- Track lifecycle state in `.agents/artifacts/lifecycle.md`.
+
+Tests:
+
+- Writes required sections.
+- Round-trips current state and retired exclusions.
+- Marks missing active artifacts correctly.
+- Journal records started and completed correlation IDs.
+- Decision ledger records selections, dispositions, split choices, and completion routing.
+- Lifecycle store records active epic and specs as `Ready`, `Executing`, `Completed`, or `Superseded`.
+
+## Task 10: Invariant Validator
+
+Files:
+
+- Create `InvariantValidator.cs`
+- Create `InvariantValidatorTests.cs`
+
+Requirements:
+
+- Implement the global invariants listed above.
+- Run after every completed transition and before execution bridge invocation.
+- Distinguish internal corruption (`Failed`) from missing evidence or human-resolvable ambiguity (`EvidenceBlocked`).
+- Write orchestration evidence on invariant failure.
+
+Tests:
+
+- Rejects multiple active ready/executing epics.
+- Rejects specs that do not belong to the active epic.
+- Rejects execution without specs, operational context, or execution prompt.
+- Rejects a prompt contract missing for a runtime prompt.
+- Rejects a split child promotion without a split-family artifact.
+
+## Task 11: Core State Machine Through Active Epic
+
+Files:
+
+- Create `RoadmapStateMachine.cs`
+- Add selection and epic-preparation tests.
+
+Requirements:
+
+- Implement bootstrap, selection, existing-epic audit, realign, reimagine, retire, create-new, split, and active-epic transitions.
+- Persist durable evidence for selection and audits.
+- Validate prompt contracts before every prompt run.
+- Write transition-started and transition-completed journal/state records around every Codex call.
+- Append decision ledger entries for selections, dispositions, retirements, split choices, and terminal pauses.
+- Update artifact lifecycle when active epic, split children, or evidence artifacts are created or superseded.
+- Run invariant validation after each completed transition.
+- Write `.agents/epic.md` only from CreateNewEpic, RealignEpic, ReimagineEpic, or split-child adoption.
+- Never modify roadmap from selection.
+
+Tests:
+
+- Missing completion context triggers bootstrap.
+- Existing completion context skips bootstrap.
+- Existing epic selected routes to audit.
+- Realign writes active epic.
+- Reimagine writes active epic.
+- Retire excludes epic and returns to selection.
+- Transition-started state survives a simulated prompt failure.
+- Decision ledger records why a retired epic is excluded.
+- Split child promotion requires a split-family artifact.
+- Strategic investigation and roadmap revision enter terminal paused states.
+
+## Task 12: Milestone Deep Dive Generation
+
+Files:
+
+- Extend `RoadmapStateMachine.cs`
+- Add bundle extraction integration tests.
+
+Requirements:
+
+- Ensure `.agents/projections/milestone-deep-dive.md`.
+- Run `GenerateMilestoneDeepDivesForEpic`.
+- Extract `.agents/specs/*.md`.
+- Write a bundle manifest for extracted specs.
+- Mark specs as `Ready` in lifecycle metadata.
+- Run invariant validation to prove every spec belongs to the active epic.
+- Require one spec per detected epic milestone when the epic has a parseable milestone roadmap; otherwise require at least one spec.
+- Transition to `MilestoneSpecsReady`.
+
+Tests:
+
+- Valid bundle writes specs.
+- Blocked output enters `EvidenceBlocked`.
+- Bundle manifest includes every extracted spec path and hash.
+- Missing specs fails before execution bridge.
+
+## Task 13: Operational Context and Execution Prompt Generation
+
+Files:
+
+- Create `OperationalContextGenerator.cs`
+- Create `ExecutionPromptGenerator.cs`
+- Create `OperationalContextGeneratorTests.cs`
+- Create `ExecutionPromptGeneratorTests.cs`
+
+Requirements:
+
+- Generate `.agents/operational_context.md` from active epic, ordered specs, relevant ledger entries, and lifecycle metadata.
+- Generate `.agents/execution-prompt.md` from operational context, active epic, and ordered specs.
+- Ensure neither artifact includes raw Core North-Star file markers.
+- Mark operational context and execution prompt lifecycle as `Ready`.
+- Transition through `GenerateOperationalContext`, `OperationalContextReady`, `GenerateExecutionPrompt`, and `ExecutionPromptReady`.
+
+Tests:
+
+- Operational context references active epic and all ordered specs.
+- Execution prompt identifies first executable spec or clearly blocks when none is executable.
+- Raw Core file markers are absent.
+- Missing specs enters `EvidenceBlocked`.
+
+## Task 14: Execution Bridge
+
+Files:
+
+- Create `ExecutionCompatibilityMaterializer.cs`
+- Create `RoadmapExecutionBridge.cs`
+- Create execution bridge tests.
+
+Requirements:
+
+- Materialize `.agents/plan.md` and `.agents/milestones/mNNN.md` from active epic and specs.
+- Require `.agents/operational_context.md` and `.agents/execution-prompt.md` before materialization.
+- Preserve the full source spec in each materialized milestone file.
+- Add checkbox-backed execution items derived from acceptance criteria or completion evidence.
+- If no auditable checklist can be derived, enter `EvidenceBlocked`.
+- Write transition-started state before invoking the execution bridge and transition-completed/failed state afterward.
+- Mark active epic and current execution artifacts as `Executing` while the bridge runs.
+- Run invariant validation immediately before bridge invocation.
+- Invoke the existing execution loop through `IRoadmapExecutionBridge`.
+- Tests must use a fake bridge and must not run real Codex.
+
+Acceptance:
+
+- `MilestoneSpecsReady` can transition to `EpicCompletionDetected` when fake bridge reports epic completion.
+- Bridge failures route according to the mapping table above.
+
+## Task 15: Completion Certification and Context Update
+
+Files:
+
+- Extend `RoadmapStateMachine.cs`
+- Add completion tests.
+
+Requirements:
+
+- Run `EvaluateEpicCompletionAndDrift` after execution completion detection.
+- Persist evaluation evidence.
+- Route by `Closure Recommendation`.
+- Run `UpdateRoadmapCompletionContext` only for `Close Epic` and `Close With Follow-Up`.
+- Write updated `.agents/north-star/roadmap-completion-context.md`.
+- Append decision ledger entries for completion routing and roadmap-completion-context update.
+- Mark completed active epic/specs as `Completed` only after roadmap completion context is updated.
+- Enforce the invariant that the machine cannot return to selection after closable completion until roadmap completion context update succeeds.
+- Return to `SelectNextStrategicInitiative` after successful update.
+
+Tests:
+
+- Close Epic updates completion context and loops.
+- Continue Epic returns to execution.
+- Reopen Epic returns to audit.
+- Gather More Evidence enters `EvidenceBlocked`.
+
+## Task 16: CLI Entrypoint and Cancellation
+
+Files:
+
+- Complete `Program.cs`
+- Create `CliArguments.cs`
+- Create `LoopConsole.cs`
+- Create `AgentSpecs.cs`
+
+Requirements:
+
+- `CommandCenter.Roadmap.CLI <REPO_DIR>`
+- Print phase markers for each state.
+- Surface Codex executable path like existing CLIs.
+- Ctrl+C cancels the current turn and writes final cancelled state.
+- Exit codes:
+  - `0`: completed or paused in an intentional terminal state.
+  - `1`: failed.
+  - `2`: CLI argument error.
+  - `4`: preflight blocked.
+  - `130`: cancelled.
+
+Tests:
+
+- Argument parsing validates repo path.
+- Cancelled state maps to exit code 130 through testable runner wrapper.
+
+## Task 17: Verification
+
+Run:
+
+```powershell
+dotnet build CommandCenter.slnx
+dotnet test tests\CommandCenter.Roadmap.CLI.Tests\CommandCenter.Roadmap.CLI.Tests.csproj
 ```
 
-> Note: the test assembly name is `CommandCenter.CLI.Tests` (the csproj file name), so `InternalsVisibleTo Include="CommandCenter.CLI.Tests"` matches. If you set a custom `<AssemblyName>` on the test project, use that value instead.
-
-- [ ] **Step 2: Create a temporary Program.cs stub**
-
-Create `src/CommandCenter.CLI/Program.cs`:
-
-```csharp
-namespace CommandCenter.Cli;
-
-internal static class Program
-{
-    private static int Main(string[] args)
-    {
-        System.Console.WriteLine("CommandCenter.CLI scaffold");
-        return 0;
-    }
-}
-```
-
-- [ ] **Step 3: Register the project in the solution**
-
-In `CommandCenter.slnx`, add this line inside the existing `<Folder Name="/src/">` element (the `.slnx` is the XML solution format; no GUIDs required):
-
-```xml
-<Project Path="src/CommandCenter.CLI/CommandCenter.CLI.csproj" />
-```
-
-- [ ] **Step 4: Build to verify the scaffold compiles**
-
-Run: `dotnet build src/CommandCenter.CLI/CommandCenter.CLI.csproj -c Debug`
-Expected: `Build succeeded`. If you get `CS0246: ExecutionContext` or an alias error, confirm `<UseExecutionContextAlias>false</UseExecutionContextAlias>` is present.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/CommandCenter.CLI/ CommandCenter.slnx
-git commit -m "feat(cli): scaffold CommandCenter.CLI console project"
-```
-
----
-
-### Task 2: CLI argument parsing → Repository
-
-**Files:**
-- Create: `src/CommandCenter.CLI/CliArguments.cs`
-- Create: `tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj`
-- Create: `tests/CommandCenter.CLI.Tests/CliArgumentsTests.cs`
-- Modify: `CommandCenter.slnx`
-
-**Interfaces:**
-- Produces: `static CliArguments.TryParse(string[] args, out Repository repository, out string error)` returning `bool`. `Repository` is `CommandCenter.Core.Repositories.Repository { Guid Id; string Name; string Path; }`.
-
-- [ ] **Step 1: Create the test project**
-
-Create `tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj` (mirror the existing `tests/CommandCenter.Backend.Tests` package versions — adjust versions to match that csproj if they differ):
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <IsPackable>false</IsPackable>
-    <UseExecutionContextAlias>false</UseExecutionContextAlias>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\CommandCenter.CLI\CommandCenter.CLI.csproj" />
-    <ProjectReference Include="..\..\src\CommandCenter.Core\CommandCenter.Core.csproj" />
-    <ProjectReference Include="..\..\src\CommandCenter.Agents\CommandCenter.Agents.csproj" />
-  </ItemGroup>
-
-</Project>
-```
-
-Add to `CommandCenter.slnx` inside the `<Folder Name="/tests/">` element:
-
-```xml
-<Project Path="tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj" />
-```
-
-- [ ] **Step 2: Write the failing test**
-
-Create `tests/CommandCenter.CLI.Tests/CliArgumentsTests.cs`:
-
-```csharp
-using CommandCenter.Cli;
-using Xunit;
-
-namespace CommandCenter.Cli.Tests;
-
-public class CliArgumentsTests
-{
-    [Fact]
-    public void TryParse_WithExistingDirectory_ReturnsRepositoryWithAbsolutePath()
-    {
-        string dir = Directory.CreateTempSubdirectory("cc-cli-args").FullName;
-
-        bool ok = CliArguments.TryParse(new[] { dir }, out var repository, out string error);
-
-        Assert.True(ok, error);
-        Assert.Equal(Path.GetFullPath(dir), repository.Path);
-        Assert.Equal(Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar)), repository.Name);
-        Assert.NotEqual(Guid.Empty, repository.Id);
-    }
-
-    [Fact]
-    public void TryParse_WithNoArgs_Fails()
-    {
-        bool ok = CliArguments.TryParse(Array.Empty<string>(), out _, out string error);
-
-        Assert.False(ok);
-        Assert.Contains("REPO_DIR", error);
-    }
-
-    [Fact]
-    public void TryParse_WithMissingDirectory_Fails()
-    {
-        bool ok = CliArguments.TryParse(new[] { "Z:/does/not/exist/cc-cli" }, out _, out string error);
-
-        Assert.False(ok);
-        Assert.Contains("does not exist", error);
-    }
-}
-```
-
-- [ ] **Step 3: Run the test to verify it fails**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests -c Debug`
-Expected: FAIL — `CliArguments` does not exist (compile error).
-
-- [ ] **Step 4: Implement CliArguments**
-
-Create `src/CommandCenter.CLI/CliArguments.cs`:
-
-```csharp
-using CommandCenter.Core.Repositories;
-
-namespace CommandCenter.Cli;
-
-/// <summary>Parses and validates the single REPO_DIR positional argument into a <see cref="Repository"/>.</summary>
-internal static class CliArguments
-{
-    public static bool TryParse(string[] args, out Repository repository, out string error)
-    {
-        repository = new Repository();
-
-        if (args.Length < 1 || string.IsNullOrWhiteSpace(args[0]))
-        {
-            error = "Usage: CommandCenter.CLI <REPO_DIR>  (REPO_DIR is required)";
-            return false;
-        }
-
-        string path = Path.GetFullPath(args[0]);
-        if (!Directory.Exists(path))
-        {
-            error = $"Repository directory does not exist: {path}";
-            return false;
-        }
-
-        repository = new Repository
-        {
-            Id = Guid.NewGuid(),
-            Name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
-            Path = path,
-        };
-        error = string.Empty;
-        return true;
-    }
-}
-```
-
-- [ ] **Step 5: Run the test to verify it passes**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests -c Debug`
-Expected: PASS (3 tests).
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/CommandCenter.CLI/CliArguments.cs tests/CommandCenter.CLI.Tests/ CommandCenter.slnx
-git commit -m "feat(cli): parse and validate REPO_DIR argument into Repository"
-```
-
----
-
-### Task 3: Console abstraction
-
-**Files:**
-- Create: `src/CommandCenter.CLI/LoopConsole.cs`
-- Create: `tests/CommandCenter.CLI.Tests/TestDoubles.cs` (start the shared test-doubles file here)
-
-**Interfaces:**
-- Produces: `interface ILoopConsole { void Phase(string phase); void Message(string content); void Delta(string text); void Info(string text); void Warn(string text); void Error(string text); }` and `ConsoleLoopConsole : ILoopConsole`.
-- Produces (test): `RecordingLoopConsole : ILoopConsole` capturing all calls for assertions.
-
-- [ ] **Step 1: Implement the console abstraction**
-
-Create `src/CommandCenter.CLI/LoopConsole.cs`:
-
-```csharp
-namespace CommandCenter.Cli;
-
-/// <summary>Sink for everything the loop prints. Abstracted so tests can capture output.</summary>
-internal interface ILoopConsole
-{
-    void Phase(string phase);
-    void Message(string content);
-    void Delta(string text);
-    void Info(string text);
-    void Warn(string text);
-    void Error(string text);
-}
-
-/// <summary>Writes loop progress to the real console. Deltas stream inline; messages/info/warn/error get prefixes.</summary>
-internal sealed class ConsoleLoopConsole : ILoopConsole
-{
-    public void Phase(string phase) => Console.WriteLine($"\n=== {phase} ===");
-    public void Message(string content) => Console.WriteLine(content);
-    public void Delta(string text) => Console.Write(text);
-    public void Info(string text) => Console.WriteLine($"[ok] {text}");
-    public void Warn(string text) => Console.WriteLine($"[warn] {text}");
-    public void Error(string text) => Console.Error.WriteLine($"[error] {text}");
-}
-```
-
-- [ ] **Step 2: Add the recording test double**
-
-Create `tests/CommandCenter.CLI.Tests/TestDoubles.cs` (this file is extended in later tasks):
-
-```csharp
-using System.Collections.Concurrent;
-using CommandCenter.Cli;
-
-namespace CommandCenter.Cli.Tests;
-
-internal sealed class RecordingLoopConsole : ILoopConsole
-{
-    public ConcurrentQueue<(string Kind, string Text)> Events { get; } = new();
-    public void Phase(string phase) => Events.Enqueue(("phase", phase));
-    public void Message(string content) => Events.Enqueue(("message", content));
-    public void Delta(string text) => Events.Enqueue(("delta", text));
-    public void Info(string text) => Events.Enqueue(("info", text));
-    public void Warn(string text) => Events.Enqueue(("warn", text));
-    public void Error(string text) => Events.Enqueue(("error", text));
-
-    public IReadOnlyList<string> Messages =>
-        Events.Where(e => e.Kind == "message").Select(e => e.Text).ToList();
-}
-```
-
-- [ ] **Step 3: Build to verify it compiles**
-
-Run: `dotnet build tests/CommandCenter.CLI.Tests -c Debug`
-Expected: `Build succeeded`.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/CommandCenter.CLI/LoopConsole.cs tests/CommandCenter.CLI.Tests/TestDoubles.cs
-git commit -m "feat(cli): add ILoopConsole abstraction and recording test double"
-```
-
----
-
-### Task 4: Milestone epic-complete gate
-
-**Files:**
-- Create: `src/CommandCenter.CLI/MilestoneGate.cs`
-- Create: `tests/CommandCenter.CLI.Tests/MilestoneGateTests.cs`
-
-**Interfaces:**
-- Consumes: `IArtifactStore` (`CommandCenter.Core.Artifacts`), `Repository`, `OrchestrationArtifactPaths` (`CommandCenter.Orchestration`).
-- Produces: `MilestoneGate(IArtifactStore store, Repository repository)` with `Task<bool> IsEpicCompleteAsync()` that **aggregates** checkboxes from `.agents/plan.md` (if present) and every `.agents/milestones/m*.md`. Internal `static (int total, int completed) CountCheckboxes(string content)` ported verbatim from `RepositoryProjectionService`.
-
-- [ ] **Step 1: Write the failing test**
-
-Create `tests/CommandCenter.CLI.Tests/MilestoneGateTests.cs`:
-
-```csharp
-using CommandCenter.Cli;
-using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration;
-using Xunit;
-
-namespace CommandCenter.Cli.Tests;
-
-public class MilestoneGateTests
-{
-    private static (MilestoneGate Gate, IArtifactStore Store, Repository Repo) NewGate()
-    {
-        var store = new MemoryArtifactStore();
-        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        return (new MilestoneGate(store, repo), store, repo);
-    }
-
-    private static string Resolve(Repository repo, string rel) =>
-        ArtifactPath.ResolveRepositoryPath(repo, rel);
-
-    [Theory]
-    [InlineData("- [x] a\n- [x] b", 2, 2)]
-    [InlineData("- [ ] a\n- [x] b", 2, 1)]
-    [InlineData("- [X] a", 1, 1)]
-    [InlineData("* [x] a\n+ [x] b", 0, 0)]              // non-hyphen bullets ignored
-    [InlineData("```\n- [ ] fenced\n```\n- [x] real", 1, 1)] // fenced lines ignored
-    [InlineData("- [-] partial\n- [/] partial", 0, 0)]  // unknown marks ignored
-    public void CountCheckboxes_MatchesBackendRule(string content, int total, int completed)
-    {
-        var (t, c) = MilestoneGate.CountCheckboxes(content);
-        Assert.Equal(total, t);
-        Assert.Equal(completed, c);
-    }
-
-    [Fact]
-    public async Task IsEpicComplete_AllMilestonesFullyChecked_ReturnsTrue()
-    {
-        var (gate, store, repo) = NewGate();
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [x] a\n- [x] b");
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m2.md"), "- [x] c");
-
-        Assert.True(await gate.IsEpicCompleteAsync());
-    }
-
-    [Fact]
-    public async Task IsEpicComplete_OneMilestoneIncomplete_ReturnsFalse()
-    {
-        var (gate, store, repo) = NewGate();
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [x] a");
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m2.md"), "- [ ] c");
-
-        Assert.False(await gate.IsEpicCompleteAsync());
-    }
-
-    [Fact]
-    public async Task IsEpicComplete_NoMilestoneFiles_ReturnsFalse()
-    {
-        var (gate, _, _) = NewGate();
-        Assert.False(await gate.IsEpicCompleteAsync());
-    }
-
-    [Fact]
-    public async Task IsEpicComplete_MilestoneWithZeroCheckboxes_ReturnsFalse()
-    {
-        var (gate, store, repo) = NewGate();
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "# heading only, no tasks");
-        Assert.False(await gate.IsEpicCompleteAsync());
-    }
-
-    [Fact]
-    public async Task IsEpicComplete_UncheckedPlanBox_BlocksEvenWhenMilestonesComplete()
-    {
-        var (gate, store, repo) = NewGate();
-        await store.WriteAsync(Resolve(repo, ".agents/plan.md"), "- [ ] open item in the plan");
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [x] a");
-
-        Assert.False(await gate.IsEpicCompleteAsync());   // aggregate: plan.md still has an unchecked box
-    }
-
-    [Fact]
-    public async Task IsEpicComplete_PlanAndMilestonesAllChecked_ReturnsTrue()
-    {
-        var (gate, store, repo) = NewGate();
-        await store.WriteAsync(Resolve(repo, ".agents/plan.md"), "- [x] plan item");
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [x] a");
-
-        Assert.True(await gate.IsEpicCompleteAsync());
-    }
-
-    [Fact]
-    public async Task IsEpicComplete_PointerIndexPlanWithNoCheckboxes_DoesNotBlock()
-    {
-        var (gate, store, repo) = NewGate();
-        // plan.md rewritten into a milestone-pointer index by ExtractMilestones => zero checkboxes.
-        await store.WriteAsync(Resolve(repo, ".agents/plan.md"), "# Plan\n(See ./milestones/m1.md)");
-        await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [x] a");
-
-        Assert.True(await gate.IsEpicCompleteAsync());
-    }
-}
-```
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter MilestoneGateTests -c Debug`
-Expected: FAIL — `MilestoneGate` does not exist.
-
-- [ ] **Step 3: Implement MilestoneGate**
-
-Create `src/CommandCenter.CLI/MilestoneGate.cs`:
-
-```csharp
-using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration;
-
-namespace CommandCenter.Cli;
-
-/// <summary>
-/// LoopStart epic-complete gate. Aggregates GitHub task-list checkboxes (parsed with the canonical
-/// RepositoryProjectionService.CountCheckboxes rule) across .agents/plan.md (if present) and every
-/// .agents/milestones/m*.md. The epic is complete only when at least one checkbox exists across them
-/// and every checkbox is checked. Files with zero checkboxes contribute nothing and never block.
-/// </summary>
-internal sealed class MilestoneGate(IArtifactStore store, Repository repository)
-{
-    public async Task<bool> IsEpicCompleteAsync()
-    {
-        int total = 0;
-        int completed = 0;
-
-        // .agents/plan.md (if present) contributes its checkboxes alongside the milestones.
-        string? plan = await store.ReadAsync(
-            ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan));
-        if (plan is not null)
-        {
-            Accumulate(plan, ref total, ref completed);
-        }
-
-        string dir = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.MilestonesDirectory);
-        IReadOnlyList<string> files = await store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);
-        foreach (string file in files)
-        {
-            string content = await store.ReadAsync(file) ?? string.Empty;
-            Accumulate(content, ref total, ref completed);
-        }
-
-        return total > 0 && completed == total;
-    }
-
-    private static void Accumulate(string content, ref int total, ref int completed)
-    {
-        (int t, int c) = CountCheckboxes(content);
-        total += t;
-        completed += c;
-    }
-
-    // Ported verbatim from RepositoryProjectionService.CountCheckboxes (the canonical, authoritative rule).
-    internal static (int total, int completed) CountCheckboxes(string content)
-    {
-        int total = 0;
-        int completed = 0;
-        bool insideFence = false;
-
-        foreach (ReadOnlySpan<char> rawLine in content.AsSpan().EnumerateLines())
-        {
-            ReadOnlySpan<char> line = rawLine.TrimStart();
-            if (line.StartsWith("```"))
-            {
-                insideFence = !insideFence;
-                continue;
-            }
-
-            if (insideFence || line.Length < 6)
-            {
-                continue;
-            }
-
-            if (line[0] != '-' || line[1] != ' ' || line[2] != '[' || line[4] != ']' || line[5] != ' ')
-            {
-                continue;
-            }
-
-            char mark = line[3];
-            if (mark == ' ')
-            {
-                total++;
-            }
-            else if (mark is 'x' or 'X')
-            {
-                total++;
-                completed++;
-            }
-        }
-
-        return (total, completed);
-    }
-}
-```
-
-- [ ] **Step 4: Run the test to verify it passes**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter MilestoneGateTests -c Debug`
-Expected: PASS (all theory cases + facts).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/CommandCenter.CLI/MilestoneGate.cs tests/CommandCenter.CLI.Tests/MilestoneGateTests.cs
-git commit -m "feat(cli): epic-complete gate ported from backend checkbox parser"
-```
-
----
-
-### Task 5: Artifact rotation + latest-read + persist helpers
-
-**Files:**
-- Create: `src/CommandCenter.CLI/LoopArtifacts.cs`
-- Create: `tests/CommandCenter.CLI.Tests/LoopArtifactsTests.cs`
-
-**Interfaces:**
-- Consumes: `IArtifactStore`, `Repository`, `OrchestrationArtifactPaths`, `ArtifactPath`.
-- Produces: `LoopArtifacts(IArtifactStore store, Repository repository)` with:
-  - `Task<bool> ExistsAsync(string relativePath)`
-  - `Task<string?> ReadAsync(string relativePath)`
-  - `Task<string?> RotateLiveHandoffAsync()` / `Task<string?> RotateLiveDecisionsAsync()` — read+archive(numbered)+delete-live, returns rotated content or null.
-  - `Task<(string? Content, string? RelativePath)> ReadLatestHandoffAsync()` / `ReadLatestDecisionsAsync()` — live else highest numbered.
-  - `Task PersistDecisionsAsync(string decisions)` — write numbered archive + canonical `decisions.md`.
-  - `Task EnsureOperationalContextAsync()` — copy `plan.md` → `operational_context.md` if missing.
-  - `Task<string?> ReadPlanAsync()`, `Task WriteAsync(string rel, string content)`.
-
-- [ ] **Step 1: Write the failing test**
-
-Create `tests/CommandCenter.CLI.Tests/LoopArtifactsTests.cs`:
-
-```csharp
-using CommandCenter.Cli;
-using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration;
-using Xunit;
-
-namespace CommandCenter.Cli.Tests;
-
-public class LoopArtifactsTests
-{
-    private static (LoopArtifacts Art, IArtifactStore Store, Repository Repo) New()
-    {
-        var store = new MemoryArtifactStore();
-        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        return (new LoopArtifacts(store, repo), store, repo);
-    }
-
-    private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
-
-    [Fact]
-    public async Task RotateLiveHandoff_ArchivesNumberedAndDeletesLive()
-    {
-        var (art, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-
-        string? rotated = await art.RotateLiveHandoffAsync();
-
-        Assert.Equal("H1", rotated);
-        Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff)));
-        Assert.Equal("H1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));
-    }
-
-    [Fact]
-    public async Task RotateLiveHandoff_WhenAbsent_ReturnsNull()
-    {
-        var (art, _, _) = New();
-        Assert.Null(await art.RotateLiveHandoffAsync());
-    }
-
-    [Fact]
-    public async Task RotateLiveHandoff_SequenceIsDiskMaxPlusOne()
-    {
-        var (art, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(1)), "old");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(2)), "old2");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H3");
-
-        await art.RotateLiveHandoffAsync();
-
-        Assert.Equal("H3", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(3))));
-    }
-
-    [Fact]
-    public async Task ReadLatestHandoff_PrefersLiveThenHighestNumbered()
-    {
-        var (art, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(1)), "n1");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(2)), "n2");
-
-        var numbered = await art.ReadLatestHandoffAsync();
-        Assert.Equal("n2", numbered.Content);
-
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "live");
-        var live = await art.ReadLatestHandoffAsync();
-        Assert.Equal("live", live.Content);
-    }
-
-    [Fact]
-    public async Task PersistDecisions_WritesNumberedAndCanonical()
-    {
-        var (art, store, repo) = New();
-        await art.PersistDecisionsAsync("D1");
-
-        Assert.Equal("D1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
-        Assert.Equal("D1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
-    }
-
-    [Fact]
-    public async Task EnsureOperationalContext_CopiesPlanWhenMissing()
-    {
-        var (art, store, repo) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
-
-        await art.EnsureOperationalContextAsync();
-
-        Assert.Equal("PLAN", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
-    }
-}
-```
-
-> Verification sub-step before implementing: open `src/CommandCenter.Orchestration/OrchestrationArtifactPaths.cs` and confirm the member names `Plan`, `OperationalContext`, `OperationalDelta`, `Decisions`, `DecisionsDirectory`, `HistoricalDecision(int)`, `HistoricalDecisionSearchPattern`, `HandoffsDirectory`, `LiveHandoff`, `HistoricalHandoff(int)`, `HistoricalHandoffSearchPattern`, `MilestonesDirectory`, `MilestoneSearchPattern`. If `Plan`/`OperationalContext`/`OperationalDelta` are named differently, use the actual member (the path strings are `.agents/plan.md`, `.agents/operational_context.md`, `.agents/operational_delta.md`).
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter LoopArtifactsTests -c Debug`
-Expected: FAIL — `LoopArtifacts` does not exist.
-
-- [ ] **Step 3: Implement LoopArtifacts**
-
-Create `src/CommandCenter.CLI/LoopArtifacts.cs`:
-
-```csharp
-using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration;
-
-namespace CommandCenter.Cli;
-
-/// <summary>
-/// All .agents/* disk effects for the loop: rotation (read+archive numbered+delete live), restart-safe
-/// latest reads (live or highest numbered), decision persistence (numbered + canonical), and the
-/// operational_context safety copy. Rotation is move-semantics (matches RepositoryOrchestrator's loop path).
-/// </summary>
-internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
-{
-    public Task<bool> ExistsAsync(string relativePath) =>
-        store.ExistsAsync(Resolve(relativePath));
-
-    public Task<string?> ReadAsync(string relativePath) =>
-        store.ReadAsync(Resolve(relativePath));
-
-    public Task WriteAsync(string relativePath, string content) =>
-        store.WriteAsync(Resolve(relativePath), content);
-
-    public Task<string?> ReadPlanAsync() => ReadAsync(OrchestrationArtifactPaths.Plan);
-
-    public Task<string?> RotateLiveHandoffAsync() => RotateAsync(
-        OrchestrationArtifactPaths.LiveHandoff,
-        OrchestrationArtifactPaths.HandoffsDirectory,
-        OrchestrationArtifactPaths.HistoricalHandoffSearchPattern,
-        "handoff",
-        OrchestrationArtifactPaths.HistoricalHandoff);
-
-    public Task<string?> RotateLiveDecisionsAsync() => RotateAsync(
-        OrchestrationArtifactPaths.Decisions,
-        OrchestrationArtifactPaths.DecisionsDirectory,
-        OrchestrationArtifactPaths.HistoricalDecisionSearchPattern,
-        "decisions",
-        OrchestrationArtifactPaths.HistoricalDecision);
-
-    public Task<(string? Content, string? RelativePath)> ReadLatestHandoffAsync() => ReadLatestAsync(
-        OrchestrationArtifactPaths.LiveHandoff,
-        OrchestrationArtifactPaths.HandoffsDirectory,
-        OrchestrationArtifactPaths.HistoricalHandoffSearchPattern,
-        "handoff",
-        OrchestrationArtifactPaths.HistoricalHandoff);
-
-    public Task<(string? Content, string? RelativePath)> ReadLatestDecisionsAsync() => ReadLatestAsync(
-        OrchestrationArtifactPaths.Decisions,
-        OrchestrationArtifactPaths.DecisionsDirectory,
-        OrchestrationArtifactPaths.HistoricalDecisionSearchPattern,
-        "decisions",
-        OrchestrationArtifactPaths.HistoricalDecision);
-
-    public async Task PersistDecisionsAsync(string decisions)
-    {
-        int sequence = await NextSequenceAsync(
-            OrchestrationArtifactPaths.DecisionsDirectory,
-            OrchestrationArtifactPaths.HistoricalDecisionSearchPattern,
-            "decisions");
-        await store.WriteAsync(Resolve(OrchestrationArtifactPaths.HistoricalDecision(sequence)), decisions);
-        await store.WriteAsync(Resolve(OrchestrationArtifactPaths.Decisions), decisions);
-    }
-
-    public async Task EnsureOperationalContextAsync()
-    {
-        if (await ExistsAsync(OrchestrationArtifactPaths.OperationalContext))
-        {
-            return;
-        }
-
-        string? plan = await ReadPlanAsync();
-        if (plan is not null)
-        {
-            await WriteAsync(OrchestrationArtifactPaths.OperationalContext, plan);
-        }
-    }
-
-    private string Resolve(string relativePath) =>
-        ArtifactPath.ResolveRepositoryPath(repository, relativePath);
-
-    private async Task<string?> RotateAsync(
-        string liveRelative, string directoryRelative, string searchPattern, string baseName, Func<int, string> historical)
-    {
-        string? content = await store.ReadAsync(Resolve(liveRelative));
-        if (content is null)
-        {
-            return null;
-        }
-
-        int sequence = await NextSequenceAsync(directoryRelative, searchPattern, baseName);
-        string target = Resolve(historical(sequence));
-        if (await store.ExistsAsync(target))
-        {
-            throw new IOException($"Historical artifact already exists: {historical(sequence)}");
-        }
-
-        await store.WriteAsync(target, content);
-        await store.DeleteAsync(Resolve(liveRelative));
-        return content;
-    }
-
-    private async Task<(string? Content, string? RelativePath)> ReadLatestAsync(
-        string liveRelative, string directoryRelative, string searchPattern, string baseName, Func<int, string> historical)
-    {
-        string? live = await store.ReadAsync(Resolve(liveRelative));
-        if (live is not null)
-        {
-            return (live, liveRelative);
-        }
-
-        int highest = await HighestSequenceAsync(directoryRelative, searchPattern, baseName);
-        if (highest == 0)
-        {
-            return (null, null);
-        }
-
-        string rel = historical(highest);
-        return (await store.ReadAsync(Resolve(rel)), rel);
-    }
-
-    private async Task<int> NextSequenceAsync(string directoryRelative, string searchPattern, string baseName) =>
-        await HighestSequenceAsync(directoryRelative, searchPattern, baseName) + 1;
-
-    private async Task<int> HighestSequenceAsync(string directoryRelative, string searchPattern, string baseName)
-    {
-        IReadOnlyList<string> files = await store.ListAsync(Resolve(directoryRelative), searchPattern);
-        int max = 0;
-        foreach (string file in files)
-        {
-            string[] parts = Path.GetFileName(file).Split('.');
-            if (parts.Length < 3 || !string.Equals(parts[0], baseName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            string segment = parts[^2];
-            if (segment.Length == 4 && int.TryParse(segment, out int parsed) && parsed > 0)
-            {
-                max = Math.Max(max, parsed);
-            }
-        }
-
-        return max;
-    }
-}
-```
-
-- [ ] **Step 4: Run the test to verify it passes**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter LoopArtifactsTests -c Debug`
-Expected: PASS (6 tests).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/CommandCenter.CLI/LoopArtifacts.cs tests/CommandCenter.CLI.Tests/LoopArtifactsTests.cs
-git commit -m "feat(cli): artifact rotation, latest-read, decision persistence helpers"
-```
-
----
-
-### Task 6: Agent session specs
-
-**Files:**
-- Create: `src/CommandCenter.CLI/AgentSpecs.cs`
-- Create: `tests/CommandCenter.CLI.Tests/AgentSpecsTests.cs`
-
-**Interfaces:**
-- Consumes: `AgentSessionSpec, SessionIdentity, SessionRole, SandboxProfile, EffortProfile, AgentEffortLevel` (`CommandCenter.Agents.Models`), `Repository`.
-- Produces: `static AgentSessionSpec AgentSpecs.Operational(Repository repo, AgentEffortLevel level, string? identifier)` and `static AgentSessionSpec AgentSpecs.Decision(Repository repo)`.
-
-- [ ] **Step 1: Write the failing test**
-
-Create `tests/CommandCenter.CLI.Tests/AgentSpecsTests.cs`:
-
-```csharp
-using CommandCenter.Cli;
-using CommandCenter.Agents.Models;
-using CommandCenter.Core.Repositories;
-using Xunit;
-
-namespace CommandCenter.Cli.Tests;
-
-public class AgentSpecsTests
-{
-    private static readonly Repository Repo = new() { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-
-    [Fact]
-    public void Operational_IsWorkspaceWriteNoApprovalAtGivenEffort()
-    {
-        AgentSessionSpec spec = AgentSpecs.Operational(Repo, AgentEffortLevel.Medium, identifier: null);
-
-        Assert.Equal(SessionRole.OperationalExecution, spec.Role);
-        Assert.Equal("workspace-write", spec.Sandbox.Identifier);
-        Assert.True(spec.Sandbox.CanWriteWorkspace);
-        Assert.False(spec.Sandbox.CanAccessNetwork);
-        Assert.False(spec.Sandbox.RequiresApproval);
-        Assert.Equal(AgentEffortLevel.Medium, spec.Effort.Level);
-        Assert.Null(spec.Effort.Identifier);
-        Assert.Equal(Repo.Path, spec.WorkingDirectory);
-    }
-
-    [Fact]
-    public void Decision_IsReadOnlyHighXhigh()
-    {
-        AgentSessionSpec spec = AgentSpecs.Decision(Repo);
-
-        Assert.Equal(SessionRole.Decision, spec.Role);
-        Assert.Equal("read-only", spec.Sandbox.Identifier);
-        Assert.False(spec.Sandbox.CanWriteWorkspace);
-        Assert.False(spec.Sandbox.RequiresApproval);
-        Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
-        Assert.Equal("xhigh", spec.Effort.Identifier);
-        Assert.Equal(Repo.Path, spec.WorkingDirectory);
-    }
-}
-```
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter AgentSpecsTests -c Debug`
-Expected: FAIL — `AgentSpecs` does not exist.
-
-- [ ] **Step 3: Implement AgentSpecs**
-
-Create `src/CommandCenter.CLI/AgentSpecs.cs`:
-
-```csharp
-using CommandCenter.Agents.Models;
-using CommandCenter.Core.Repositories;
-
-namespace CommandCenter.Cli;
-
-/// <summary>
-/// The two codex session postures copied verbatim from RepositoryOrchestrator.BuildOperationalSpec /
-/// BuildDecisionSpec. RepositoryId namespaces the session registry; WorkingDirectory is the repo dir.
-/// </summary>
-internal static class AgentSpecs
-{
-    public static AgentSessionSpec Operational(Repository repository, AgentEffortLevel level, string? identifier) =>
-        new(
-            SessionIdentity.New(),
-            repository.Id.ToString("N"),
-            SessionRole.OperationalExecution,
-            new SandboxProfile("workspace-write", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(level, identifier),
-            repository.Path);
-
-    public static AgentSessionSpec Decision(Repository repository) =>
-        new(
-            SessionIdentity.New(),
-            repository.Id.ToString("N"),
-            SessionRole.Decision,
-            new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.High, "xhigh"),
-            repository.Path);
-}
-```
-
-> Verification sub-step: confirm `SessionIdentity.New()` exists and the `AgentSessionSpec` positional ctor order is `(SessionIdentity, string repositoryId, SessionRole, SandboxProfile, EffortProfile, string? workingDirectory, IReadOnlyDictionary<string,string>? startupOptions)` in `src/CommandCenter.Agents/Models/AgentSessionSpec.cs`. Confirm `EffortProfile(AgentEffortLevel Level, string? Identifier = null)` parameter names.
-
-- [ ] **Step 4: Run the test to verify it passes**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter AgentSpecsTests -c Debug`
-Expected: PASS (2 tests).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/CommandCenter.CLI/AgentSpecs.cs tests/CommandCenter.CLI.Tests/AgentSpecsTests.cs
-git commit -m "feat(cli): operational and decision codex session specs"
-```
-
----
-
-### Task 7: Execution step + shared agent test doubles
-
-**Files:**
-- Create: `src/CommandCenter.CLI/LoopOutcome.cs`
-- Create: `src/CommandCenter.CLI/ExecutionStep.cs`
-- Modify: `tests/CommandCenter.CLI.Tests/TestDoubles.cs` (add `FakeAgentRuntime`, `FakeAgentSession`)
-- Create: `tests/CommandCenter.CLI.Tests/ExecutionStepTests.cs`
-
-**Interfaces:**
-- Consumes: `IAgentRuntime` (`CommandCenter.Agents.Abstractions`), `LoopArtifacts`, `ILoopConsole`, `Repository`, the prompt catalog (`StartExecution`, `ContinueExecution`).
-- Produces:
-  - `enum LoopOutcome { EpicCompleted, Cancelled, Failed }` and `sealed class LoopStepException(string message) : Exception(message)`.
-  - `ExecutionStep(IAgentRuntime runtime, LoopArtifacts artifacts, ILoopConsole console, Repository repository)` with `Task RunAsync(CancellationToken ct)`. Resolves latest handoff/decisions, renders Start/Continue, runs a one-shot operational turn, prints `Output`, verifies a new `handoff.md`, throws `LoopStepException` on any failed gate.
-- Produces (test): `FakeAgentRuntime` implementing `IAgentRuntime` with a scripted turn queue; each scripted turn gets `(spec, prompt)` and may mutate an `IArtifactStore` (to simulate the agent writing `handoff.md`) then returns an `AgentTurnResult`.
-
-- [ ] **Step 1: Implement LoopOutcome (no test needed — type-only)**
-
-Create `src/CommandCenter.CLI/LoopOutcome.cs`:
-
-```csharp
-namespace CommandCenter.Cli;
-
-internal enum LoopOutcome
-{
-    EpicCompleted,
-    Cancelled,
-    Failed,
-}
-
-/// <summary>A verify/agent gate failed; aborts the loop (never retried).</summary>
-internal sealed class LoopStepException(string message) : Exception(message);
-```
-
-- [ ] **Step 2: Add the agent test doubles**
-
-Append to `tests/CommandCenter.CLI.Tests/TestDoubles.cs`:
-
-```csharp
-// --- appended ---
-using CommandCenter.Agents.Abstractions;
-using CommandCenter.Agents.Models;
-using CommandCenter.Core.Artifacts;
-
-namespace CommandCenter.Cli.Tests;
-
-/// <summary>A scripted codex turn: inspect (spec, prompt), optionally mutate the store, return a result.</summary>
-internal sealed record ScriptedTurn(Func<AgentSessionSpec, string, IArtifactStore, AgentTurnResult> Handler);
-
-internal static class Turns
-{
-    public static AgentTurnResult Completed(string output) =>
-        new(0, AgentTurnState.Completed, output, new AgentTokenUsage(0, 0));
-
-    public static AgentTurnResult Failed(string output = "boom") =>
-        new(0, AgentTurnState.Failed, output, new AgentTokenUsage(0, 0));
-}
-
-internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
-{
-    public Queue<ScriptedTurn> OneShotTurns { get; } = new();
-    public Queue<ScriptedTurn> SessionTurns { get; } = new();
-    public int OpenSessions { get; private set; }
-    public int ClosedSessions { get; private set; }
-    public List<(AgentSessionSpec Spec, string Prompt)> OneShotCalls { get; } = new();
-
-    public Task<AgentTurnResult> RunOneShotAsync(
-        AgentSessionSpec spec, string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken ct = default)
-    {
-        OneShotCalls.Add((spec, prompt));
-        ScriptedTurn turn = OneShotTurns.Dequeue();
-        return Task.FromResult(turn.Handler(spec, prompt, store));
-    }
-
-    public Task<IAgentSession> OpenSessionAsync(AgentSessionSpec spec, CancellationToken ct = default)
-    {
-        OpenSessions++;
-        return Task.FromResult<IAgentSession>(new FakeAgentSession(this, spec, store));
-    }
-
-    public ValueTask CloseSessionAsync(IAgentSession session)
-    {
-        ClosedSessions++;
-        return ValueTask.CompletedTask;
-    }
-
-    internal AgentTurnResult RunSessionTurn(AgentSessionSpec spec, string prompt) =>
-        SessionTurns.Dequeue().Handler(spec, prompt, store);
-}
-
-internal sealed class FakeAgentSession(FakeAgentRuntime runtime, AgentSessionSpec spec, IArtifactStore store) : IAgentSession
-{
-    public SessionIdentity SessionId => spec.SessionId;
-    public string RepositoryId => spec.RepositoryId;
-    public SessionRole Role => spec.Role;
-    public AgentSessionMode Mode => AgentSessionMode.Persistent;
-    public AgentProcessState State => AgentProcessState.Running;
-    public int CompletedTurns => 0;
-    public AgentTokenUsage TotalUsage => new(0, 0);
-
-    public Task<AgentTurnResult> RunTurnAsync(
-        string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken ct = default) =>
-        Task.FromResult(runtime.RunSessionTurn(spec, prompt));
-
-    public Task CancelAsync(CancellationToken ct = default) => Task.CompletedTask;
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-}
-```
-
-> Verification sub-step: confirm `AgentTokenUsage` ctor shape (`AgentTokenUsage(int PromptTokens, int OutputTokens)`) and the `IAgentSession` member set (`SessionId, RepositoryId, Role, Mode, State, CompletedTurns, TotalUsage, RunTurnAsync, CancelAsync, DisposeAsync`) against `src/CommandCenter.Agents/Abstractions/IAgentSession.cs` and `Models/AgentTokenUsage.cs`; adjust the fake to match.
-
-- [ ] **Step 3: Write the failing test**
-
-Create `tests/CommandCenter.CLI.Tests/ExecutionStepTests.cs`:
-
-```csharp
-using CommandCenter.Cli;
-using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration;
-using Xunit;
-
-namespace CommandCenter.Cli.Tests;
-
-public class ExecutionStepTests
-{
-    private static (ExecutionStep Step, FakeAgentRuntime Rt, MemoryArtifactStore Store, LoopArtifacts Art, Repository Repo, RecordingLoopConsole Con) New()
-    {
-        var store = new MemoryArtifactStore();
-        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new LoopArtifacts(store, repo);
-        var con = new RecordingLoopConsole();
-        var rt = new FakeAgentRuntime(store);
-        return (new ExecutionStep(rt, art, con, repo), rt, store, art, repo, con);
-    }
-
-    private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
-
-    [Fact]
-    public async Task Run_FirstIteration_UsesStartExecution_WritesHandoff_Verifies()
-    {
-        var (step, rt, store, _, repo, con) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
-        {
-            Assert.Contains("PLAN", prompt);               // StartExecution.Render(plan) includes the plan
-            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF-1").Wait();
-            return Turns.Completed("execution done");
-        }));
-
-        await step.RunAsync(CancellationToken.None);
-
-        Assert.True(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff)));
-        Assert.Contains("execution done", con.Messages);
-    }
-
-    [Fact]
-    public async Task Run_WhenAgentDoesNotWriteHandoff_Throws()
-    {
-        var (step, rt, store, _, repo, _) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("did nothing")));
-
-        await Assert.ThrowsAsync<LoopStepException>(() => step.RunAsync(CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Run_WhenTurnNotCompleted_Throws()
-    {
-        var (step, rt, store, _, repo, _) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
-
-        await Assert.ThrowsAsync<LoopStepException>(() => step.RunAsync(CancellationToken.None));
-    }
-}
-```
-
-- [ ] **Step 4: Run the test to verify it fails**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter ExecutionStepTests -c Debug`
-Expected: FAIL — `ExecutionStep` does not exist.
-
-- [ ] **Step 5: Implement ExecutionStep**
-
-Create `src/CommandCenter.CLI/ExecutionStep.cs`:
-
-```csharp
-using CommandCenter.Agents.Abstractions;
-using CommandCenter.Agents.Models;
-using CommandCenter.Core.Prompts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration;
-
-namespace CommandCenter.Cli;
-
-/// <summary>
-/// One execution codex turn. Mirrors RepositoryOrchestrator.RunExecutionAsync/RunContinuationAsync:
-/// render Start/ContinueExecution, run a one-shot workspace-write Medium turn, print the assistant
-/// message, then verify the agent wrote a new .agents/handoffs/handoff.md.
-/// </summary>
-internal sealed class ExecutionStep(
-    IAgentRuntime runtime, LoopArtifacts artifacts, ILoopConsole console, Repository repository)
-{
-    public async Task RunAsync(CancellationToken cancellationToken)
-    {
-        string? plan = await artifacts.ReadPlanAsync();
-        (string? handoff, _) = await artifacts.ReadLatestHandoffAsync();
-        (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
-
-        bool continuing = handoff is not null;
-        string phase = continuing ? "ContinueExecution" : "StartExecution";
-        string prompt = continuing
-            ? ContinueExecution.Render(plan, handoff, decisions)
-            : StartExecution.Render(plan);
-
-        console.Phase($"Execution: {phase}");
-        AgentTurnResult result = await runtime.RunOneShotAsync(
-            AgentSpecs.Operational(repository, AgentEffortLevel.Medium, identifier: null),
-            prompt,
-            StreamToConsole,
-            cancellationToken);
-
-        if (result.State != AgentTurnState.Completed)
-        {
-            throw new LoopStepException($"Execution turn ended in state {result.State}.");
-        }
-
-        console.Message(result.Output);
-
-        if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.LiveHandoff))
-        {
-            throw new LoopStepException(
-                "Execution completed but .agents/handoffs/handoff.md was not written.");
-        }
-
-        console.Info("New handoff.md verified.");
-    }
-
-    private Task StreamToConsole(AgentStreamChunk chunk)
-    {
-        if (chunk.Stream == AgentProcessOutputStream.StandardOutput)
-        {
-            console.Delta(chunk.Content);
-        }
-
-        return Task.CompletedTask;
-    }
-}
-```
-
-- [ ] **Step 6: Run the test to verify it passes**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter ExecutionStepTests -c Debug`
-Expected: PASS (3 tests).
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add src/CommandCenter.CLI/LoopOutcome.cs src/CommandCenter.CLI/ExecutionStep.cs tests/CommandCenter.CLI.Tests/
-git commit -m "feat(cli): execution step with handoff verification + agent test doubles"
-```
-
----
-
-### Task 8: Decision session (router-driven Continue path)
-
-**Files:**
-- Create: `src/CommandCenter.CLI/DecisionSession.cs`
-- Create: `tests/CommandCenter.CLI.Tests/DecisionSessionTests.cs`
-
-**Interfaces:**
-- Consumes: `IAgentRuntime`, `IDecisionSessionRouter` (`CommandCenter.Orchestration.Abstractions`), `RouterInputs` (`CommandCenter.Orchestration.Models`), `DecisionRoute`, `LoopArtifacts`, `ILoopConsole`, `Repository`, prompts (`StartDecisionSession`, `GetNextDecisions`).
-- Produces: `sealed class DecisionSession(...) : IAsyncDisposable` with `Task RunAsync(CancellationToken ct)`. Owns ONE warm read-only `IAgentSession` reused across iterations; consults the router each round; seeds once with `StartDecisionSession`; proposes with `GetNextDecisions(latestHandoff)`; prints `Output`; persists decisions (numbered + canonical); verifies `decisions.md`; accumulates per-process token pressure for the router; resets on close. (Transfer branch added in Task 9.)
-
-- [ ] **Step 1: Write the failing test**
-
-Create `tests/CommandCenter.CLI.Tests/DecisionSessionTests.cs`:
-
-```csharp
-using CommandCenter.Cli;
-using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration;
-using CommandCenter.Orchestration.Services;
-using Xunit;
-
-namespace CommandCenter.Cli.Tests;
-
-public class DecisionSessionTests
-{
-    private static (DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con)
-        New(int transferThreshold = 200_000)
-    {
-        var store = new MemoryArtifactStore();
-        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new LoopArtifacts(store, repo);
-        var con = new RecordingLoopConsole();
-        var rt = new FakeAgentRuntime(store);
-        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(transferThreshold));
-        return (new DecisionSession(rt, router, art, con, repo), rt, store, repo, con);
-    }
-
-    private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
-
-    [Fact]
-    public async Task Run_SeedsOnce_Proposes_PersistsAndVerifiesDecisions()
-    {
-        var (session, rt, store, repo, con) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // seed
-        {
-            Assert.Contains("OPCTX", prompt);
-            return Turns.Completed("seeded");
-        }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // propose
-        {
-            Assert.Contains("HANDOFF", prompt);
-            return Turns.Completed("DECISIONS-TEXT");
-        }));
-
-        await session.RunAsync(CancellationToken.None);
-
-        Assert.Equal("DECISIONS-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
-        Assert.Equal("DECISIONS-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
-        Assert.Contains("DECISIONS-TEXT", con.Messages);
-        Assert.Equal(1, rt.OpenSessions);
-    }
-
-    [Fact]
-    public async Task Run_SecondRound_ReusesWarmSession_NoReseed()
-    {
-        var (session, rt, store, repo, _) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D1")));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));  // no second seed
-
-        await session.RunAsync(CancellationToken.None);
-        await session.RunAsync(CancellationToken.None);
-
-        Assert.Equal(1, rt.OpenSessions);     // warm reuse: only one process opened
-        Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
-    }
-
-    [Fact]
-    public async Task Run_WhenProposeNotCompleted_ClosesSessionAndThrows()
-    {
-        var (session, rt, store, repo, _) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
-
-        await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
-        Assert.Equal(1, rt.ClosedSessions);
-    }
-
-    [Fact]
-    public async Task Dispose_ClosesWarmSession()
-    {
-        var (session, rt, store, repo, _) = New();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D1")));
-
-        await session.RunAsync(CancellationToken.None);
-        await session.DisposeAsync();
-
-        Assert.Equal(1, rt.ClosedSessions);
-    }
-}
-```
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter DecisionSessionTests -c Debug`
-Expected: FAIL — `DecisionSession` does not exist.
-
-- [ ] **Step 3: Implement DecisionSession (Continue path only; Transfer stub throws)**
-
-Create `src/CommandCenter.CLI/DecisionSession.cs`:
-
-```csharp
-using CommandCenter.Agents.Abstractions;
-using CommandCenter.Agents.Models;
-using CommandCenter.Core.Prompts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration;
-using CommandCenter.Orchestration.Abstractions;
-using CommandCenter.Orchestration.Models;
-
-namespace CommandCenter.Cli;
-
-/// <summary>
-/// The decision-making codex session, routed by the SessionRouter. Mirrors RepositoryOrchestrator's
-/// RunDecisionAsync + the auto-submit half of BeginSubmitDecisionsAsync (a fully-automated CLI submits
-/// the agent's proposal verbatim). Owns ONE warm read-only process reused across iterations; seeds once
-/// with StartDecisionSession(operationalContext); proposes with GetNextDecisions(latestHandoff); persists
-/// the proposal to decisions.{N:0000}.md AND canonical decisions.md; verifies decisions.md exists.
-/// </summary>
-internal sealed class DecisionSession(
-    IAgentRuntime runtime,
-    IDecisionSessionRouter router,
-    LoopArtifacts artifacts,
-    ILoopConsole console,
-    Repository repository) : IAsyncDisposable
-{
-    private IAgentSession? session;
-    private bool seeded;
-    private int decisionTokens;
-
-    public async Task RunAsync(CancellationToken cancellationToken)
-    {
-        DecisionRoute route = router.Evaluate(new RouterInputs(decisionTokens, 0));
-        // Eligibility downgrade: a Transfer needs a primed warm process to extract a delta from.
-        if (route == DecisionRoute.Transfer && !seeded)
-        {
-            route = DecisionRoute.Continue;
-        }
-
-        console.Phase($"Decision (route={route})");
-
-        if (route == DecisionRoute.Transfer)
-        {
-            await TransferAsync(cancellationToken);
-        }
-
-        await EnsureSeededAsync(cancellationToken);
-
-        (string? handoff, _) = await artifacts.ReadLatestHandoffAsync();
-        if (handoff is null)
-        {
-            throw new LoopStepException("No handoff available for the decision session.");
-        }
-
-        AgentTurnResult proposed = await session!.RunTurnAsync(
-            GetNextDecisions.Render(handoff), StreamToConsole, cancellationToken);
-
-        if (proposed.State != AgentTurnState.Completed)
-        {
-            await CloseAsync();
-            throw new LoopStepException($"Decision turn ended in state {proposed.State}.");
-        }
-
-        decisionTokens += proposed.Usage.PromptTokens + proposed.Usage.OutputTokens;
-        console.Message(proposed.Output);
-
-        // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
-        await artifacts.PersistDecisionsAsync(proposed.Output);
-
-        if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions))
-        {
-            throw new LoopStepException(".agents/decisions/decisions.md was not written.");
-        }
-
-        console.Info("New decisions.md verified.");
-    }
-
-    private async Task EnsureSeededAsync(CancellationToken cancellationToken)
-    {
-        session ??= await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
-        if (seeded)
-        {
-            return;
-        }
-
-        await artifacts.EnsureOperationalContextAsync();
-        string operationalContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
-
-        AgentTurnResult seed = await session.RunTurnAsync(
-            StartDecisionSession.Render(operationalContext), onChunk: null, cancellationToken);
-
-        if (seed.State != AgentTurnState.Completed)
-        {
-            await CloseAsync();
-            throw new LoopStepException($"Decision seed turn ended in state {seed.State}.");
-        }
-
-        seeded = true;
-    }
-
-    // Implemented in Task 9. Throwing keeps the Continue-only build honest until then.
-    private Task TransferAsync(CancellationToken cancellationToken) =>
-        throw new NotImplementedException("Transfer recycle is implemented in Task 9.");
-
-    private async Task CloseAsync()
-    {
-        if (session is not null)
-        {
-            await runtime.CloseSessionAsync(session);
-            session = null;
-            seeded = false;
-            decisionTokens = 0;
-        }
-    }
-
-    private Task StreamToConsole(AgentStreamChunk chunk)
-    {
-        if (chunk.Stream == AgentProcessOutputStream.StandardOutput)
-        {
-            console.Delta(chunk.Content);
-        }
-
-        return Task.CompletedTask;
-    }
-
-    public async ValueTask DisposeAsync() => await CloseAsync();
-}
-```
-
-- [ ] **Step 4: Run the test to verify it passes**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter DecisionSessionTests -c Debug`
-Expected: PASS (4 tests). The default router threshold (200k) keeps every round on `Continue`, so `TransferAsync` is never hit.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/CommandCenter.CLI/DecisionSession.cs tests/CommandCenter.CLI.Tests/DecisionSessionTests.cs
-git commit -m "feat(cli): router-driven decision session (Continue path) with auto-submit"
-```
-
----
-
-### Task 9: Decision session Transfer recycle path
-
-**Files:**
-- Modify: `src/CommandCenter.CLI/DecisionSession.cs`
-- Modify: `tests/CommandCenter.CLI.Tests/DecisionSessionTests.cs`
-
-**Interfaces:**
-- Consumes: prompts `ProduceOperationalDelta.Text`, `UpdateOperationalContext.Text`, `StartDecisionSessionFromTransfer.Render(operationalContext)`; `OrchestrationArtifactPaths.OperationalDelta`/`.OperationalContext`.
-- Produces: a real `TransferAsync` that recycles the decision process when the router elects `Transfer` (decision-session token pressure ≥ threshold). Mirrors `RepositoryOrchestrator.PrepareTransferAsync`.
-
-- [ ] **Step 1: Write the failing test**
-
-Append to `tests/CommandCenter.CLI.Tests/DecisionSessionTests.cs`:
-
-```csharp
-    [Fact]
-    public async Task Run_WhenTokensExceedThreshold_RecyclesViaTransfer()
-    {
-        // Threshold 1 forces Transfer on the SECOND round (round 1 seeds & accrues tokens).
-        var (session, rt, store, repo, con) = New(transferThreshold: 1);
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-
-        // Round 1: seed + propose (propose accrues tokens so round 2 routes Transfer).
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
-            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
-        await session.RunAsync(CancellationToken.None);
-
-        // Round 2: Transfer => produce-delta (warm) + close + update-context (one-shot) + reseed-from-transfer + propose.
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) => Turns.Completed("DELTA-TEXT")));      // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                            // UpdateOperationalContext
-        {
-            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
-            return Turns.Completed("updated context");
-        }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                       // reseed from transfer
-        {
-            Assert.Contains("OPCTX-1", prompt);
-            return Turns.Completed("reseeded");
-        }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));                   // propose
-
-        await session.RunAsync(CancellationToken.None);
-
-        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
-        Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
-        Assert.Equal(2, rt.OpenSessions);   // original + recycled
-        Assert.Equal(1, rt.ClosedSessions); // original closed during recycle
-    }
-```
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter DecisionSessionTests -c Debug`
-Expected: FAIL — `Run_WhenTokensExceedThreshold_RecyclesViaTransfer` throws `NotImplementedException`.
-
-- [ ] **Step 3: Implement TransferAsync**
-
-In `src/CommandCenter.CLI/DecisionSession.cs`, replace the stub `TransferAsync` with:
-
-```csharp
-    /// <summary>
-    /// Transfer recycle, mirroring RepositoryOrchestrator.PrepareTransferAsync: extract an operational delta
-    /// from the warm process, close it, rewrite operational_context.md via a one-shot operational turn, then
-    /// open a FRESH decision process and seed it from the rewritten context.
-    /// </summary>
-    private async Task TransferAsync(CancellationToken cancellationToken)
-    {
-        console.Phase("Decision: Transfer/ProduceOperationalDelta");
-        AgentTurnResult delta = await session!.RunTurnAsync(
-            ProduceOperationalDelta.Text, StreamToConsole, cancellationToken);
-        if (delta.State != AgentTurnState.Completed)
-        {
-            await CloseAsync();
-            throw new LoopStepException($"Operational-delta turn ended in state {delta.State}.");
-        }
-
-        await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, delta.Output);
-
-        // Close the old process (resets seeded + token pressure).
-        await CloseAsync();
-
-        console.Phase("Decision: Transfer/UpdateOperationalContext");
-        AgentTurnResult update = await runtime.RunOneShotAsync(
-            AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh"),
-            UpdateOperationalContext.Text,
-            StreamToConsole,
-            cancellationToken);
-        if (update.State != AgentTurnState.Completed)
-        {
-            throw new LoopStepException($"Update-operational-context turn ended in state {update.State}.");
-        }
-
-        // Open a fresh decision process and seed from the rewritten context.
-        session = await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
-        string newContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
-
-        console.Phase("Decision: Transfer/StartDecisionSessionFromTransfer");
-        AgentTurnResult reseed = await session.RunTurnAsync(
-            StartDecisionSessionFromTransfer.Render(newContext), onChunk: null, cancellationToken);
-        if (reseed.State != AgentTurnState.Completed)
-        {
-            await CloseAsync();
-            throw new LoopStepException($"Transfer reseed turn ended in state {reseed.State}.");
-        }
-
-        seeded = true;
-    }
-```
-
-Also add `using CommandCenter.Agents.Models;` is already present (for `AgentEffortLevel`). Confirm `AgentEffortLevel` import resolves.
-
-- [ ] **Step 4: Run the test to verify it passes**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter DecisionSessionTests -c Debug`
-Expected: PASS (5 tests, including the Transfer case).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/CommandCenter.CLI/DecisionSession.cs tests/CommandCenter.CLI.Tests/DecisionSessionTests.cs
-git commit -m "feat(cli): decision-session Transfer recycle mirroring PrepareTransferAsync"
-```
-
----
-
-### Task 10: Loop runner (LoopStart state machine)
-
-**Files:**
-- Create: `src/CommandCenter.CLI/LoopRunner.cs`
-- Create: `tests/CommandCenter.CLI.Tests/LoopRunnerTests.cs`
-
-**Interfaces:**
-- Consumes: `MilestoneGate`, `LoopArtifacts`, `ExecutionStep`, `DecisionSession`, `ILoopConsole`.
-- Produces: `sealed class LoopRunner(MilestoneGate gate, LoopArtifacts artifacts, ExecutionStep execution, DecisionSession decision, ILoopConsole console) : IAsyncDisposable` with `Task<LoopOutcome> RunAsync(CancellationToken ct)`. Implements the exact control flow: epic-complete → `EpicCompleted`; else ensure operational context, branch on `decisionsExist || !handoffExists`, rotate, run execution (Branch A only) + decision. Catches `OperationCanceledException` → `Cancelled`; `LoopStepException` → prints error → `Failed`. `DisposeAsync` disposes the owned `DecisionSession`.
-
-- [ ] **Step 1: Write the failing test**
-
-Create `tests/CommandCenter.CLI.Tests/LoopRunnerTests.cs`:
-
-```csharp
-using CommandCenter.Cli;
-using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration;
-using CommandCenter.Orchestration.Services;
-using Xunit;
-
-namespace CommandCenter.Cli.Tests;
-
-public class LoopRunnerTests
-{
-    private sealed record Harness(
-        LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con);
-
-    private static Harness New()
-    {
-        var store = new MemoryArtifactStore();
-        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new LoopArtifacts(store, repo);
-        var con = new RecordingLoopConsole();
-        var rt = new FakeAgentRuntime(store);
-        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions());
-        var gate = new MilestoneGate(store, repo);
-        var exec = new ExecutionStep(rt, art, con, repo);
-        var dec = new DecisionSession(rt, router, art, con, repo);
-        return new Harness(new LoopRunner(gate, art, exec, dec, con), rt, store, repo, con);
-    }
-
-    private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
-
-    [Fact]
-    public async Task Run_WhenEpicAlreadyComplete_ReturnsEpicCompletedImmediately()
-    {
-        var h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");
-
-        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
-
-        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        Assert.Equal(0, h.Rt.OneShotCalls.Count);   // no codex run at all
-    }
-
-    [Fact]
-    public async Task Run_FirstIterationBranchA_RunsExecutionThenDecision_ThenCompletes()
-    {
-        var h = New();
-        // milestone incomplete at first, becomes complete after the execution agent "checks the box".
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] task");
-
-        // Execution one-shot: writes handoff.md AND checks the milestone box (epic completes next LoopStart).
-        h.Rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
-        {
-            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF-1").Wait();
-            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] task").Wait();
-            return Turns.Completed("executed");
-        }));
-        // Decision session: seed then propose.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
-
-        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
-
-        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        Assert.Equal("DECISIONS-1", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
-        // After one Branch-A iteration: live handoff present (written by execution, rotated next loop only).
-        Assert.True(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff)));
-    }
-
-    [Fact]
-    public async Task Run_BranchB_DecisionsAbsentHandoffPresent_RunsDecisionOnly()
-    {
-        var h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-RESUME");
-
-        // Decision-only: seed + propose. After it, mark milestone done so the loop stops.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
-        {
-            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
-            return Turns.Completed("DEC-B");
-        }));
-
-        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
-
-        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        Assert.Equal(0, h.Rt.OneShotCalls.Count);   // Branch B never runs execution
-        // handoff rotated away (archived + live deleted) in Branch B.
-        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff)));
-        Assert.Equal("H-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));
-    }
-
-    [Fact]
-    public async Task Run_WhenStepFails_ReturnsFailed()
-    {
-        var h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
-        h.Rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("no handoff written")));
-
-        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
-
-        Assert.Equal(LoopOutcome.Failed, outcome);
-    }
-
-    [Fact]
-    public async Task Run_WhenCancelled_ReturnsCancelled()
-    {
-        var h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
-        using var cts = new CancellationTokenSource();
-        h.Rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) =>
-        {
-            cts.Cancel();
-            throw new OperationCanceledException(cts.Token);
-        }));
-
-        LoopOutcome outcome = await h.Runner.RunAsync(cts.Token);
-
-        Assert.Equal(LoopOutcome.Cancelled, outcome);
-    }
-}
-```
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter LoopRunnerTests -c Debug`
-Expected: FAIL — `LoopRunner` does not exist.
-
-- [ ] **Step 3: Implement LoopRunner**
-
-Create `src/CommandCenter.CLI/LoopRunner.cs`:
-
-```csharp
-using CommandCenter.Orchestration;
-
-namespace CommandCenter.Cli;
-
-/// <summary>
-/// The LoopStart state machine. Runs serially until the epic completes, a step fails, or cancellation
-/// is requested. Owns the warm DecisionSession and disposes it on exit.
-/// </summary>
-internal sealed class LoopRunner(
-    MilestoneGate gate,
-    LoopArtifacts artifacts,
-    ExecutionStep execution,
-    DecisionSession decision,
-    ILoopConsole console) : IAsyncDisposable
-{
-    public async Task<LoopOutcome> RunAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (true)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                // ---- LoopStart ----
-                if (await gate.IsEpicCompleteAsync())
-                {
-                    return LoopOutcome.EpicCompleted;
-                }
-
-                await artifacts.EnsureOperationalContextAsync();
-
-                bool decisionsExist = await artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions);
-                bool handoffExists = await artifacts.ExistsAsync(OrchestrationArtifactPaths.LiveHandoff);
-
-                if (decisionsExist || !handoffExists)
-                {
-                    // ---- Branch A: execution then decision ----
-                    if (decisionsExist)
-                    {
-                        await artifacts.RotateLiveDecisionsAsync();
-                    }
-
-                    if (handoffExists)
-                    {
-                        await artifacts.RotateLiveHandoffAsync();
-                    }
-
-                    await execution.RunAsync(cancellationToken);
-                    await decision.RunAsync(cancellationToken);
-                }
-                else
-                {
-                    // ---- Branch B: decision only (resume after an interrupted execution) ----
-                    await artifacts.RotateLiveHandoffAsync();
-                    await decision.RunAsync(cancellationToken);
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            console.Warn("Cancellation requested — stopping the loop.");
-            return LoopOutcome.Cancelled;
-        }
-        catch (LoopStepException ex)
-        {
-            console.Error(ex.Message);
-            return LoopOutcome.Failed;
-        }
-    }
-
-    public async ValueTask DisposeAsync() => await decision.DisposeAsync();
-}
-```
-
-- [ ] **Step 4: Run the test to verify it passes**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests --filter LoopRunnerTests -c Debug`
-Expected: PASS (5 tests).
-
-- [ ] **Step 5: Run the full test suite**
-
-Run: `dotnet test tests/CommandCenter.CLI.Tests -c Debug`
-Expected: PASS (all CLI tests across tasks 2–10).
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/CommandCenter.CLI/LoopRunner.cs tests/CommandCenter.CLI.Tests/LoopRunnerTests.cs
-git commit -m "feat(cli): LoopStart state machine with Branch A/B, cancellation, and failure handling"
-```
-
----
-
-### Task 11: Program composition — DI, Ctrl+C wiring, run, teardown
-
-**Files:**
-- Modify: `src/CommandCenter.CLI/Program.cs` (replace the stub)
-
-**Interfaces:**
-- Consumes: `CliArguments`, `AddAgents()` (`CommandCenter.Agents.Extensions`), `IArtifactStore`/`FileSystemArtifactStore`, `IDecisionSessionRouter`/`DecisionSessionRouter`, `IAgentRuntime`, `AgentSessionRegistry`, all loop types.
-- Produces: `Program.Main` — async entrypoint returning an exit code (0 = epic complete, 1 = failed, 130 = cancelled).
-
-- [ ] **Step 1: Implement Program.cs**
-
-Replace `src/CommandCenter.CLI/Program.cs`:
-
-```csharp
-using CommandCenter.Agents.Extensions;
-using CommandCenter.Agents.Services;
-using CommandCenter.Cli;
-using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration.Abstractions;
-using CommandCenter.Orchestration.Services;
-using Microsoft.Extensions.DependencyInjection;
-
-if (!CliArguments.TryParse(args, out Repository repository, out string error))
-{
-    Console.Error.WriteLine(error);
-    return 2;
-}
-
-// --- Composition: only the building blocks the serial loop needs (no Generic Host, no orchestrator/registry). ---
-var services = new ServiceCollection();
-services.AddAgents();                                                  // IAgentRuntime + codex runtime
-services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();
-services.AddSingleton<DecisionSessionRouterOptions>();
-services.AddSingleton<IDecisionSessionRouter, DecisionSessionRouter>();
-await using ServiceProvider provider = services.BuildServiceProvider();
-
-var console = new ConsoleLoopConsole();
-var store = provider.GetRequiredService<IArtifactStore>();
-var runtime = provider.GetRequiredService<IAgentRuntime>();
-var router = provider.GetRequiredService<IDecisionSessionRouter>();
-
-var artifacts = new LoopArtifacts(store, repository);
-var gate = new MilestoneGate(store, repository);
-var execution = new ExecutionStep(runtime, artifacts, console, repository);
-var decision = new DecisionSession(runtime, router, artifacts, console, repository);
-await using var loop = new LoopRunner(gate, artifacts, execution, decision, console);
-
-// --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---
-using var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) =>
-{
-    e.Cancel = true;                 // do not let the runtime hard-kill us before codex teardown
-    console.Warn("Ctrl+C received — terminating codex sessions...");
-    cts.Cancel();
-};
-
-console.Info($"CommandCenter.CLI starting for {repository.Path}");
-
-LoopOutcome outcome;
-try
-{
-    outcome = await loop.RunAsync(cts.Token);
-}
-finally
-{
-    // Explicitly close the warm decision session (kills its codex process tree); also dispose the
-    // AgentSessionRegistry via the provider as a belt-and-suspenders teardown for any straggler.
-    await loop.DisposeAsync();
-    if (provider.GetService<AgentSessionRegistry>() is { } registry)
-    {
-        await registry.DisposeAsync();
-    }
-}
-
-switch (outcome)
-{
-    case LoopOutcome.EpicCompleted:
-        Console.WriteLine("Epic completed. Press any key to exit.");
-        Console.ReadKey(intercept: true);
-        return 0;
-    case LoopOutcome.Cancelled:
-        console.Warn("Run cancelled. Codex sessions terminated.");
-        return 130;
-    default:
-        console.Error("Run failed. See the error above.");
-        return 1;
-}
-```
-
-> Verification sub-step: confirm `AgentSessionRegistry` is registered by `AddAgents()` as a concrete singleton (it is — `TryAddSingleton<AgentSessionRegistry>()`) so `provider.GetService<AgentSessionRegistry>()` resolves. Confirm `DecisionSessionRouterOptions` has a parameterless-friendly registration (it has a default ctor `DecisionSessionRouterOptions(int ModelContextWindowTokens = 256_000, double TransferOccupancyFraction = 0.80)`; `AddSingleton<DecisionSessionRouterOptions>()` activates it with the default). If activation fails, register `new DecisionSessionRouterOptions()` instead.
-
-- [ ] **Step 2: Build the whole solution**
-
-Run: `dotnet build CommandCenter.slnx -c Debug`
-Expected: `Build succeeded` (CLI + tests + all referenced projects compile).
-
-- [ ] **Step 3: Smoke-run the executable's argument handling (no codex)**
-
-Run: `dotnet run --project src/CommandCenter.CLI -c Debug -- ./nonexistent-dir-xyz`
-Expected: prints `Repository directory does not exist: …` and exits non-zero (2). This exercises composition + arg validation without launching codex.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/CommandCenter.CLI/Program.cs
-git commit -m "feat(cli): wire DI, Ctrl+C cancellation, loop run, and codex teardown in Program"
-```
-
----
-
-### Task 12: Full build + test verification + manual end-to-end check
-
-**Files:** none (verification only)
-
-- [ ] **Step 1: Run the full CLI test suite in Release**
-
-Per repo convention (tests run reliably against the running Debug app when invoked with `-c Release`):
-Run: `dotnet test tests/CommandCenter.CLI.Tests -c Release`
-Expected: PASS, 0 failures across `CliArgumentsTests`, `MilestoneGateTests`, `LoopArtifactsTests`, `AgentSpecsTests`, `ExecutionStepTests`, `DecisionSessionTests`, `LoopRunnerTests`.
-
-- [ ] **Step 2: Confirm the existing backend suite is unaffected**
-
-Run: `dotnet build CommandCenter.slnx -c Release`
-Expected: `Build succeeded`. (The CLI is additive — new project + new test project only; no existing file changed except `CommandCenter.slnx`.)
-
-- [ ] **Step 3: Manual end-to-end check against a real planned repo (requires a working `codex` binary)**
-
-Prereqs: a scratch repo `REPO` that already has `.agents/plan.md` and `.agents/milestones/m*.md` (with unchecked boxes), and `codex` on PATH (or `CODEX_EXECUTABLE` set). Then:
-
-Run: `dotnet run --project src/CommandCenter.CLI -c Release -- <REPO>`
-Expected behavior to observe:
-- Branch A on the first iteration: `=== Execution: StartExecution ===`, streamed deltas, the assistant message, then `[ok] New handoff.md verified.`
-- `=== Decision (route=Continue) ===`, the proposed decisions message, then `[ok] New decisions.md verified.`
-- The loop repeats; `.agents/handoffs/handoff.{0001,0002,…}.md` and `.agents/decisions/decisions.{0001,0002,…}.md` accumulate; live `handoff.md`/`decisions.md` are present between iterations.
-- Pressing **Ctrl+C** prints `Ctrl+C received — terminating codex sessions...`, the in-flight codex process is killed (verify no orphan `codex` process remains in Task Manager / `Get-Process codex`), and the app exits with code 130.
-- When every milestone's boxes are checked, it prints exactly `Epic completed. Press any key to exit.` and waits for a key.
-
-- [ ] **Step 4: Commit any fixups discovered during the manual check**
-
-```bash
-git add -A
-git commit -m "test(cli): verify end-to-end loop, rotation, and Ctrl+C codex teardown"
-```
-
----
-
-## Self-Review (run before handing off)
-
-1. **Spec coverage**
-   - "parse `.agents/plan.md` and `.agents/milestones/m*.md`; if all checkboxes (aggregated) checked, stop + print message" → Task 4 (`MilestoneGate` aggregates plan.md + milestones) + Task 10 (`LoopRunner` returns `EpicCompleted`) + Task 11 (prints `"Epic completed. Press any key to exit."`). ✓
-   - "if decisions.md exists OR handoff.md missing: rotate decisions (if present), rotate handoff (if present), run execution + print + verify handoff, then via SessionRouter run decision + print + verify decisions, goto LoopStart" → Task 10 Branch A + Task 7 (execution) + Task 8/9 (decision via router). ✓
-   - "else (no decisions.md AND handoff.md exists): rotate handoff, via SessionRouter run decision + print + verify decisions, goto LoopStart" → Task 10 Branch B. ✓
-   - "mirror the backend" → prompt catalog, sandbox/effort specs, rotation, ReadLatest, router all reused/ported verbatim (Tasks 4–9). ✓
-   - "100% automated" → decision auto-submit (Task 8) replaces the human review gate. ✓
-   - "CancellationTokenSource integrated with console cancel key press, propagated to codex to terminate them" → Task 11 (`Console.CancelKeyPress` → `cts.Cancel()`; one-shot turns dispose-on-cancel; warm session `CloseSessionAsync`; registry dispose) reaching `AgentProcess.Kill(entireProcessTree: true)`. ✓
-
-2. **Placeholder scan** — no `TBD`/`add error handling`/`similar to Task N`; every code step contains complete code and the verify gates are explicit. ✓
-
-3. **Type consistency** — `LoopArtifacts`, `MilestoneGate`, `AgentSpecs`, `ExecutionStep`, `DecisionSession`, `LoopRunner` signatures match across consumer/producer blocks; `OrchestrationArtifactPaths` members are cited consistently; prompt `Render` arities match Global Constraints. The two "Verification sub-steps" (OrchestrationArtifactPaths member names; `AgentSessionSpec`/`AgentTokenUsage`/`IAgentSession` shapes) flag the only signatures that must be confirmed against source at implementation time.
-
-## Risks & Notes
-
-- **`MemoryArtifactStore.ListAsync` glob semantics:** the rotation/latest tests assume `ListAsync(dir, "handoff.*.md")` matches numbered files but not the single-dot live file, matching `FileSystemArtifactStore`. If `MemoryArtifactStore`'s pattern matching differs, adjust the test store or use a temp-dir `FileSystemArtifactStore` in `LoopArtifactsTests`.
-- **Transfer is exercised only under token pressure** (≥ 200k decision-session tokens by default). The default deployment stays on `Continue` indefinitely; Transfer (Task 9) exists for long-horizon runs and to keep the SessionRouter meaningful per the spec.
-- **`ExtractMilestones` / plan authoring are out of scope** — the CLI assumes a pre-planned repo (see Preconditions). If a future iteration must bootstrap milestones, add an `ExtractMilestones.Text` one-shot (operational, High/`xhigh`) before the first execution, mirroring `RepositoryOrchestrator.RunExecutionAsync`.
-- **No git commit/push** — the backend optionally commits plan+milestones after the first Execute Plan (`AutomaticCommitPushAfterExecuteEnabled`). The CLI omits all git side effects; add a publisher step if per-iteration commits are wanted.
-
-## Execution Handoff
-
-**Plan complete and saved to `plan.md`. Two execution options:**
-
-**1. Subagent-Driven (recommended)** — dispatch a fresh subagent per task, review between tasks, fast iteration. REQUIRED SUB-SKILL: superpowers:subagent-driven-development.
-
-**2. Inline Execution** — execute tasks in this session with checkpoints. REQUIRED SUB-SKILL: superpowers:executing-plans.
+If generated prompt signatures differ from the assumed render calls, update only the prompt invocation adapter and tests. Do not hardcode prompt template text in the CLI.
+
+## Implementation Notes
+
+- Existing prompt files under `src/CommandCenter.Core/Prompts/Planning` and `src/CommandCenter.Core/Prompts/Projections` are already the correct source of agent instructions. The CLI should render generated prompt classes rather than duplicating prompt bodies.
+- The planning prompt classes may have signatures such as `Render(projectContext)`, `Render(projectContext, completedEpics)`, `Render(projectContext, epic)`, `Render(projectContext, newEpicProposal)`, or `Render(projectContext, codebaseAudit)`. Confirm exact generated signatures during build and isolate them behind `RoadmapPromptCatalog`.
+- Multi-file prompt outputs are not trusted until parsed and validated.
+- The state machine should stop on explicit uncertainty rather than inventing missing evidence.
+- Completion context update must happen after certification, never directly after execution bridge completion.
+- Runtime prompt context assembly is the main correctness boundary. Keep it small, explicit, and covered by tests.

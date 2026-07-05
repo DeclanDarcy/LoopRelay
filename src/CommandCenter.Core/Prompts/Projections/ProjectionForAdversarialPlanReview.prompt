@@ -1,0 +1,849 @@
+<PROJECT_CONTEXT>
+{projectContext}
+</PROJECT_CONTEXT>
+
+# CreateAdversarialPlanReviewProjection
+
+## Role
+
+You are a projection compiler for a projection-based AI engineering loop.
+
+Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+
+AdversarialPlanReview
+
+That downstream prompt will receive:
+
+1. This projection.
+2. A plan or milestone plan bundle to review.
+
+The downstream prompt will adversarially review the plan and determine whether it provides a coherent, executable, decision-preserving contract for completing the epic.
+
+Your job is NOT to review a plan.
+
+Your job is NOT to inspect a specific plan.
+
+Your job is NOT to produce findings, patches, severity labels, or verdicts.
+
+Your job is to create the stable project-specific adversarial frame that tells the downstream reviewer what this project is most vulnerable to losing, violating, misrepresenting, duplicating, overconstraining, underconstraining, or falsely completing.
+
+This is a projection, not a summary.
+
+---
+
+## Core Objective
+
+Create a deterministic, adversarial-oriented projection of the Core North-Star that answers:
+
+Where should an adversarial plan reviewer focus attacks so that weak execution plans cannot silently diverge from this project's intent?
+
+The projection must define:
+
+- critical intent that plans must preserve
+- architectural invariants plans must protect
+- capability integrity rules plans must not weaken
+- authority boundaries plans must not blur
+- dependency mistakes that are dangerous for this project
+- planning invariants that must hold across plan and milestone files
+- project-specific drift patterns
+- project-specific false-success patterns
+- project-specific veto conditions
+- canonical vocabulary the reviewer must preserve
+
+This projection exists to support:
+
+AdversarialPlanReview
+
+It must not include a plan.
+
+It must not review a plan.
+
+It must not produce adversarial findings.
+
+It must not duplicate generic review methodology.
+
+It must not include severity rules, output formatting, or patch instructions.
+
+It must not generate implementation guidance.
+
+---
+
+## Consumer
+
+This projection will be consumed by:
+
+AdversarialPlanReview
+
+That downstream prompt will compute:
+
+Generic Adversarial Review Method
++
+Project-Specific Attack Surface
++
+Plan To Review
+=
+Adversarial Findings
++
+Missing Decisions
++
+False Closure Tests
++
+Authority Drift Findings
++
+Suggested Patch
++
+Verdict
+
+This projection defines the project-specific attack surface.
+
+It is not the review itself.
+
+---
+
+## Authority Rules
+
+Treat the Core North-Star as the sole source of project authority.
+
+Do not reinterpret it.
+
+Do not extend it with project-specific content not present in the Core.
+
+Do not infer missing project intent.
+
+Do not invent desired capabilities.
+
+Do not invent architecture.
+
+Do not invent implementation constraints.
+
+Do not convert generic review methodology into Core authority.
+
+Do not convert implementation preferences into strategic intent.
+
+If the Core contains ambiguity, preserve the ambiguity as a projection limitation.
+
+If the Core contains conflicting guidance, preserve the conflict and identify the conflicting source items.
+
+If the Core contains assertion IDs, retain them.
+
+If the Core does not contain assertion IDs, create stable projection-local IDs using the following format:
+
+- INTENT-001
+- INVARIANT-001
+- CAPABILITY-001
+- AUTHORITY-001
+- DEPENDENCY-001
+- PLANNING-001
+- DRIFT-001
+- FALSE-CLOSURE-001
+- VETO-001
+- ATTACK-001
+- TERM-001
+- LIMITATION-001
+
+Projection-local IDs must not pretend to be canonical Core IDs.
+
+You may include generic projection-local adversarial rules only when necessary to make the projection usable and only if they do not alter Core intent. Mark them clearly as projection-local.
+
+---
+
+## Projection Principles
+
+### 1. Adversarial projection, not north-star summary
+
+Do not summarize the Core North-Star generally.
+
+Select only the Core semantics required to attack weak plans on behalf of this project.
+
+The projection should answer:
+
+- What must every plan preserve?
+- What kinds of plan failures would matter most for this project?
+- What false completion patterns are dangerous?
+- What authority boundaries are easy to blur?
+- What drift patterns are likely?
+- What project-specific veto conditions should the reviewer enforce?
+
+---
+
+### 2. Project-specific attack surface
+
+The downstream AdversarialPlanReview prompt already owns generic review methodology.
+
+Do not duplicate generic review axes such as sequencing, ambiguity, executability, or testability unless the Core North-Star gives them project-specific meaning.
+
+Instead, identify what a generic reviewer would not know:
+
+- this project's critical intent
+- this project's non-negotiable invariants
+- this project's fragile capability boundaries
+- this project's authority structure
+- this project's likely drift patterns
+- this project's specific false-success traps
+
+---
+
+### 3. Intent preservation under attack
+
+The projection should make it easy for the downstream reviewer to detect plans that appear complete but betray the project’s actual purpose.
+
+Prioritize intent that can be superficially preserved while semantically violated.
+
+Examples:
+
+- plan lists work but does not preserve the real capability
+- plan satisfies a local milestone but weakens the system’s intended model
+- plan preserves vocabulary while changing meaning
+- plan defers a decision that should be made before execution
+- plan allows execution agents to choose architecture implicitly
+
+---
+
+### 4. Architectural invariant protection
+
+Retain architectural invariants and constraints that plans must protect with gates, validation, tests, certification, or explicit boundaries.
+
+The projection should help the reviewer attack plans that:
+
+- hide architecture decisions in milestone execution
+- defer architectural decisions to future agents
+- split architecture responsibility ambiguously
+- violate dependency direction
+- weaken compatibility or semantic boundaries
+- make false closure possible by omitting architecture validation
+
+---
+
+### 5. Capability integrity
+
+Retain capability semantics that must survive planning and execution.
+
+The projection should help the reviewer attack plans that:
+
+- fragment a capability across milestones without ownership
+- duplicate capability ownership
+- treat a capability as a task list
+- deliver supporting machinery without realizing the capability
+- validate pieces but not the capability outcome
+- enable local completion while global capability remains incomplete
+
+---
+
+### 6. Authority boundary defense
+
+Retain authority expectations that plans must preserve.
+
+The projection should help the reviewer detect:
+
+- duplicated authority between plan and milestone specs
+- milestone files redefining plan-level decisions
+- operational context owning strategic decisions
+- code or implementation detail overriding projection constraints
+- acceptance criteria appearing in multiple inconsistent places
+- future execution agents being forced to decide what the plan should decide
+
+---
+
+### 7. Project-specific drift patterns
+
+Retain recurring or likely drift patterns implied by the Core.
+
+The projection should help the reviewer attack plans that create drift through:
+
+- implementation-first decomposition
+- feature-centric milestones instead of capability stages
+- architectural fragmentation
+- semantic inconsistency
+- duplicated planning authority
+- unclear completion gates
+- postponed validation
+- ambiguous milestone ownership
+- over-preservation of obsolete detail
+- under-specification where deterministic direction is required
+
+---
+
+### 8. False-success heuristics
+
+Define what "appears complete but is not complete" looks like for this project.
+
+The projection should help the downstream reviewer identify milestone and plan structures that could pass without delivering the intended capability, preserving constraints, or enabling downstream work.
+
+False-success heuristics are among the highest-value parts of this projection.
+
+---
+
+### 9. Veto conditions
+
+The projection should identify conditions under which a plan should not be allowed to drive autonomous execution.
+
+Examples:
+
+- violates a non-negotiable invariant
+- leaves architectural ownership ambiguous
+- omits required validation gates
+- duplicates authority across files
+- allows false milestone closure
+- delegates a strategic decision to execution agents
+- creates capability overlap
+- obscures dependency order
+- makes acceptance criteria non-falsifiable
+
+---
+
+### 10. Compactness and non-duplication
+
+This projection should be small.
+
+Do not reproduce the downstream review prompt.
+
+Do not include generic adversarial planning theory.
+
+Do not include plan output structure.
+
+Include only project-specific semantic knowledge that improves adversarial review quality.
+
+---
+
+## Inclusion Criteria
+
+Retain Core North-Star content that belongs to one of these categories.
+
+### A. Critical Intent
+
+Retain intent that every plan must preserve.
+
+Examples:
+
+- project purpose
+- durable user or system outcome
+- essential capability meaning
+- core problem being solved
+- success condition that cannot be weakened
+- semantic identity that must survive execution
+
+### B. Architectural Invariants
+
+Retain architectural constraints and properties that plans must protect.
+
+Examples:
+
+- architecture boundary
+- dependency direction
+- ownership boundary
+- compatibility boundary
+- domain model constraint
+- semantic layer constraint
+- determinism or observability requirement
+- validation or certification requirement
+
+### C. Capability Integrity Rules
+
+Retain rules that define when a capability has actually been preserved or delivered.
+
+Examples:
+
+- capability must have single ownership
+- capability must not be fragmented without dependency clarity
+- capability realization must be validated as a whole
+- supporting infrastructure alone is not capability completion
+- milestone completion must enable the next capability stage
+- final completion must satisfy epic-level outcome
+
+### D. Authority Boundaries
+
+Retain rules that define which artifacts may own which decisions.
+
+Examples:
+
+- plan owns sequencing and gates
+- milestone specs own milestone-local planning detail
+- operational context owns execution session state
+- code owns implementation reality but not intent
+- projection owns desired state and constraints
+- acceptance criteria must not be duplicated inconsistently
+
+### E. Dangerous Dependency Patterns
+
+Retain dependency mistakes that are especially dangerous for this project.
+
+Examples:
+
+- consumers planned before foundations
+- validation planned after dependent implementation
+- migrations sequenced too late
+- compatibility gates missing before integration
+- shared foundations hidden inside feature milestones
+- circular milestone dependencies
+- architecture decisions postponed past their dependency point
+
+### F. Planning Invariants
+
+Retain rules that every plan and milestone bundle must obey.
+
+Examples:
+
+- milestones are capability stages
+- dependencies are explicit
+- entry and exit gates are explicit
+- acceptance criteria are falsifiable
+- rollback or recovery gates exist where relevant
+- deferred work is explicit
+- future execution agents are not forced to make strategic decisions
+
+### G. Project-Specific Drift Patterns
+
+Retain ways this project is likely to drift.
+
+Examples:
+
+- implementation detail becoming authority
+- milestone specs redefining plan intent
+- capability duplication
+- architectural fragmentation
+- semantic vocabulary drift
+- validation deferred until too late
+- ambiguous ownership
+- false closure through incomplete evidence
+
+### H. False-Success Heuristics
+
+Retain project-specific patterns where work can appear complete while failing the intended purpose.
+
+Examples:
+
+- passing tests without validating capability outcome
+- completing milestone tasks without preserving architecture
+- implementing API surface without semantic behavior
+- delivering integration without compatibility proof
+- producing documentation without executable validation
+- finishing infrastructure without enabling dependent capability
+
+### I. Veto Conditions
+
+Retain conditions that should force the downstream review toward FAIL or blocker-level findings.
+
+Examples:
+
+- invariant violation
+- missing architecture gate
+- missing validation gate
+- impossible sequencing
+- duplicated authority
+- non-falsifiable acceptance criteria
+- hidden dependency that blocks execution
+- plan delegates critical decisions to future agents
+- milestone can falsely close
+
+### J. Canonical Vocabulary
+
+Retain terms the downstream prompt must preserve while attacking plan semantics.
+
+---
+
+## Exclusion Criteria
+
+Exclude Core North-Star content that belongs to these categories unless it directly affects adversarial plan review.
+
+Exclude:
+
+- generic adversarial review methodology
+- severity definitions
+- output structure
+- patch format
+- current roadmap completion state
+- completed epic history
+- current roadmap progress
+- selected epic content
+- milestone spec content
+- implementation instructions
+- execution guidance
+- developer commands
+- tool use instructions
+- operational workflow
+- prompt templates
+- codebase facts
+- repository inventory
+- detailed ADR history
+- historical rationale essays
+- full governance workflow
+- belief revision mechanics
+- reasoning architecture
+- information flow architecture
+- research citations
+- task-level plans
+
+If excluded information may matter elsewhere, mention it only in Projection Exclusion Notes.
+
+Do not include the excluded content itself.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the projection.
+
+### Step 1 — Identify candidate Core assertions
+
+Extract all Core statements relevant to adversarially reviewing plans.
+
+Classify each as:
+
+- Critical Intent
+- Architectural Invariant
+- Capability Integrity Rule
+- Authority Boundary
+- Dangerous Dependency Pattern
+- Planning Invariant
+- Project-Specific Drift Pattern
+- False-Success Heuristic
+- Veto Condition
+- Vocabulary
+- Exclude
+
+### Step 2 — Apply adversarial-projection admission test
+
+For each candidate, ask:
+
+1. Would this help a reviewer find a plan failure specific to this project?
+2. Would this help detect semantic divergence that generic review might miss?
+3. Would this help identify false closure?
+4. Would this help protect an invariant or critical capability?
+5. Would this help detect misplaced or duplicated authority?
+6. Would this help identify dangerous dependency or sequencing failure?
+7. Is this stable and non-regenerable from the plan itself?
+
+Retain only candidates that pass.
+
+### Step 3 — Convert retained items into attack semantics
+
+For each retained item, express how it should affect adversarial review.
+
+Do not apply it to any actual plan.
+
+Do not produce findings.
+
+Define attack surfaces only.
+
+### Step 4 — Normalize vocabulary
+
+Preserve canonical terms from the Core.
+
+If the Core has overlapping terms, select the term with strongest authority and note aliases only if necessary.
+
+### Step 5 — Remove generic review noise
+
+Aggressively remove anything already owned by the downstream AdversarialPlanReview prompt.
+
+This projection should supply project-specific attack targets, not review procedure.
+
+### Step 6 — Organize into the required output structure
+
+Output only the projection Markdown.
+
+Do not include your analysis.
+
+---
+
+## Required Output
+
+Output only the full Markdown content for the projection.
+
+Do not wrap the output in commentary.
+
+Do not include prefaces.
+
+Do not include explanations after the document.
+
+Use this exact structure.
+
+---
+
+# Adversarial Plan Review Projection
+
+## Purpose
+
+This projection defines the project-specific attack surface for adversarial plan review.
+
+It exists to help AdversarialPlanReview identify how a plan could silently diverge from this project’s Core North-Star while appearing coherent, executable, or complete.
+
+It is a projection of the Core North-Star, not a plan review, execution plan, milestone spec, implementation guide, or generic review rubric.
+
+## Authority Boundary
+
+- The Core North-Star remains the source of authority.
+- This projection is a task-specific adversarial review view of the Core North-Star.
+- This projection defines project-specific attack surfaces.
+- This projection does not review any plan.
+- This projection does not define generic severity rules.
+- This projection does not define the downstream output format.
+- This projection does not generate patches.
+- This projection does not include implementation tasks.
+- This projection does not modify plan, epic, roadmap, or operational context.
+
+## Projection Metadata
+
+| Field | Value |
+|---|---|
+| Projection Name | {{projection_name_or_default}} |
+| Projection Version | {{projection_version_or_default}} |
+| Projection Date | {{projection_date_or_default}} |
+| Source Core Version | {{core_version_or_unknown}} |
+| Intended Consumer | AdversarialPlanReview |
+| Projection Family | Adversarial Review / Project-Specific Attack Surface |
+
+## Source Coverage
+
+Briefly describe what parts of the Core North-Star were retained.
+
+Use bullets.
+
+Then briefly describe what parts were intentionally excluded.
+
+Use bullets.
+
+## Critical Intent To Defend
+
+List intent that plans must preserve and that the reviewer should attack for semantic erosion.
+
+| ID | Critical Intent | Source Reference | How A Plan Might Betray It |
+|---|---|---|---|
+
+Rules:
+
+- Include only intent that matters to plan correctness.
+- Focus on how a plan could preserve wording while violating meaning.
+- Do not include broad vision prose unless it changes adversarial review.
+
+## Architectural Invariants To Attack Against
+
+List architectural or structural invariants that plans must protect.
+
+| ID | Invariant | Source Reference | Plan Failure To Look For |
+|---|---|---|---|
+
+Examples of Plan Failure To Look For:
+
+- missing gate
+- hidden dependency
+- ambiguous ownership
+- milestone can close without preserving invariant
+- future agent forced to decide architecture
+- duplicated authority across plan and milestone specs
+
+## Capability Integrity Rules
+
+Define how the reviewer should protect capability meaning.
+
+| ID | Capability / Rule | Integrity Requirement | Weak Plan Pattern |
+|---|---|---|---|
+
+Weak Plan Pattern should describe how a plan might appear to deliver the capability while leaving the intended capability incomplete, fragmented, duplicated, or semantically wrong.
+
+## Authority Boundaries
+
+Define artifact authority expectations relevant to adversarial review.
+
+| ID | Authority Boundary | Correct Ownership | Drift / Duplication Risk |
+|---|---|---|---|
+
+Correct Ownership may refer to:
+
+- plan.md
+- milestone spec
+- operational context
+- code / implementation
+- projection
+- epic
+- tests / validation
+- other project-specific artifact
+
+Use project vocabulary where available.
+
+## Dangerous Dependency Patterns
+
+Define dependency or sequencing failures the reviewer should search for.
+
+| ID | Dependency Pattern | Why It Is Dangerous | Review Attack |
+|---|---|---|---|
+
+Examples:
+
+- foundation planned after consumer
+- validation sequenced too late
+- integration before compatibility boundary
+- migration after dependent feature work
+- circular milestone dependency
+- hidden cross-milestone prerequisite
+- certification surface omitted
+
+## Planning Invariants
+
+Define rules every plan and milestone bundle must obey for this project.
+
+| ID | Planning Invariant | Required Plan Behavior | Failure Signal |
+|---|---|---|---|
+
+Examples:
+
+- milestones represent capability stages
+- entry gates are explicit
+- exit gates are falsifiable
+- dependencies are deterministic
+- deferred work is explicit
+- acceptance criteria are not duplicated inconsistently
+- future execution agents are not forced to make strategic decisions
+
+## Project-Specific Drift Patterns
+
+List ways plans for this project are likely to drift.
+
+| ID | Drift Pattern | How It Appears In A Plan | Why It Matters |
+|---|---|---|---|
+
+Examples:
+
+- implementation detail becomes authority
+- feature milestones replace capability milestones
+- semantic vocabulary changes meaning
+- architecture responsibility diffuses across files
+- validation appears but does not prove capability
+- optionality preserved where decision is required
+- stale constraints are copied forward
+
+## False-Success Heuristics
+
+Define ways a plan could appear complete while failing the intended purpose.
+
+| ID | False Success Pattern | What Would Appear To Pass | What Would Still Be Missing |
+|---|---|---|---|
+
+Examples:
+
+- tests pass but capability semantics are not validated
+- milestone exits without architecture certification
+- public interface exists but behavior is incomplete
+- documentation exists but implementation is not constrained
+- integration works only for happy path
+- dependent milestone can start before prerequisite is actually proven
+
+## Project-Specific Veto Conditions
+
+List conditions that should cause the reviewer to treat the plan as unsafe for autonomous execution.
+
+| ID | Veto Condition | Why It Is Unacceptable | Expected Review Response |
+|---|---|---|---|
+
+Expected Review Response should be phrased as review guidance, not a final verdict.
+
+Examples:
+
+- identify as blocker
+- require explicit gate
+- require plan ownership correction
+- require milestone boundary correction
+- require acceptance criteria rewrite
+- require missing decision to be made before execution
+
+## Attack Priorities
+
+Rank the project-specific areas the adversarial reviewer should attack first.
+
+| Priority | Attack Area | Reason |
+|---|---|---|
+
+Use this section to bias the downstream review toward the failures most likely to cause semantic divergence for this project.
+
+Do not include generic review priorities unless project-specific.
+
+## Canonical Vocabulary
+
+List load-bearing terms that downstream prompts must preserve when reviewing plan semantics.
+
+| Term | Definition | Notes / Banned Synonyms |
+|---|---|---|
+
+Rules:
+
+- Include only terms relevant to adversarial plan review.
+- Use Core definitions where available.
+- If a term is undefined in the Core but required for this projection, mark definition as “Projection-local; confirm against Core if promoted.”
+
+## Projection Exclusion Notes
+
+List important Core content intentionally excluded from this projection.
+
+| Excluded Content Type | Reason Excluded | Where It Should Be Used Instead |
+|---|---|---|
+
+Examples:
+
+- generic review methodology
+- severity definitions
+- patch format
+- milestone authoring rules
+- implementation guidance
+- execution workflow
+- roadmap completion state
+- repository facts
+- completed epic history
+
+## Known Projection Limitations
+
+List ambiguities or missing Core information that may limit AdversarialPlanReview.
+
+| Limitation | Why It Matters | Recommended Handling |
+|---|---|---|
+
+Examples:
+
+- architectural invariants are implicit
+- capability integrity rules are underspecified
+- authority ownership is unclear
+- false-success patterns are not defined
+- validation expectations are ambiguous
+- canonical vocabulary is incomplete
+
+Do not invent missing information to fix these limitations.
+
+## Downstream Use Instructions
+
+When this projection is used by AdversarialPlanReview:
+
+- Treat this projection as the project-specific attack surface.
+- Treat the plan being reviewed as suspect until it survives scrutiny.
+- Use this projection to bias review toward this project’s unique failure modes.
+- Attack plans that preserve wording while violating meaning.
+- Attack plans that allow false milestone closure.
+- Attack plans that blur authority across plan, milestone specs, operational context, code, or validation.
+- Attack plans that defer decisions future execution agents should not make.
+- Attack plans that duplicate capability ownership or acceptance authority.
+- Attack plans that omit gates needed to protect invariants.
+- Attack plans that hide dependencies or sequence validation too late.
+- Use canonical vocabulary when describing findings.
+- Do not let generic plan quality compensate for violating project-specific invariants.
+- Do not modify this projection.
+
+## Projection Integrity Checklist
+
+Before finalizing, verify:
+
+- The projection contains adversarial attack semantics only.
+- No plan is reviewed.
+- No findings are produced.
+- No severity definitions are included.
+- No patch format is included.
+- No implementation guidance is included.
+- Every retained statement helps an adversarial reviewer find project-specific plan failures.
+- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Critical intent is explicit.
+- Architectural invariants are explicit where available.
+- Capability integrity rules are explicit.
+- Authority boundaries are explicit.
+- Dangerous dependency patterns are explicit.
+- Planning invariants are explicit.
+- False-success heuristics are explicit.
+- Veto conditions are explicit.
+- Canonical vocabulary is preserved.
+- Generic review methodology has not been duplicated.
+- The projection is compact enough to be passed into AdversarialPlanReview.

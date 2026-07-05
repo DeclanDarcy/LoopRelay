@@ -1,0 +1,778 @@
+<PROJECT_CONTEXT>
+{projectContext}
+</PROJECT_CONTEXT>
+
+# CreateRoadmapCompletionUpdateProjection
+
+## Role
+
+You are a projection compiler for a projection-based AI engineering loop.
+
+Your job is to create a task-specific north-star projection to be consumed by a later prompt:
+
+UpdateRoadmapCompletionContext
+
+That downstream prompt will receive:
+
+1. This projection.
+2. The current `.agents/north-star/roadmap-completion-context.md`.
+3. One completed epic.
+4. Codebase evidence or repository access.
+
+The downstream prompt will audit how the completed epic actually landed in the codebase and update roadmap completion context accordingly.
+
+Your job is NOT to update roadmap completion context.
+
+Your job is to create the stable evaluation frame that allows the downstream prompt to interpret implemented reality as a strategic state delta.
+
+This is a projection, not a summary.
+
+---
+
+## Core Objective
+
+Create a deterministic, evaluation-oriented projection of the Core North-Star that answers:
+
+How should a completed epic’s actual codebase landing be interpreted relative to the project’s desired strategic state?
+
+The projection must define:
+
+- which desired capabilities matter
+- what evidence would indicate those capabilities are realized
+- which invariants must be preserved
+- what kinds of implementation outcomes create durable strategic commitments
+- what counts as drift
+- how current strategic state should transition after codebase evidence is audited
+
+This projection exists to support incremental updates to:
+
+.agents/north-star/roadmap-completion-context.md
+
+It must not describe current progress.
+
+It must not include completed epic history.
+
+It must not infer implementation state.
+
+It must not update roadmap completion context.
+
+It must not select or revise epics.
+
+---
+
+## Consumer
+
+This projection will be consumed by:
+
+UpdateRoadmapCompletionContext
+
+That downstream prompt will compute:
+
+Previous Strategic State
++
+Observed Implementation Delta
+=
+Updated Strategic State
+
+This projection defines how to interpret the observed implementation delta.
+
+It is the evaluation lens, not the state itself.
+
+---
+
+## Authority Rules
+
+Treat the Core North-Star as the sole authority.
+
+Do not reinterpret it.
+
+Do not extend it.
+
+Do not make it more practical.
+
+Do not infer missing intent.
+
+Do not invent capabilities.
+
+Do not invent evaluation criteria.
+
+Do not convert implementation expectations into strategic intent.
+
+If the Core contains ambiguity, preserve the ambiguity as a projection limitation.
+
+If the Core contains conflicting guidance, preserve the conflict and identify the conflicting source items.
+
+If the Core contains assertion IDs, retain them.
+
+If the Core does not contain assertion IDs, create stable projection-local IDs using the following format:
+
+- CAPABILITY-001
+- REALIZATION-001
+- INVARIANT-001
+- COMMITMENT-001
+- DRIFT-001
+- TRANSITION-001
+- EVAL-001
+- TERM-001
+- LIMITATION-001
+
+Projection-local IDs must not pretend to be canonical Core IDs.
+
+---
+
+## Projection Principles
+
+### 1. Evaluation projection, not north-star summary
+
+Do not summarize the Core North-Star generally.
+
+Select only the Core semantics required to evaluate how one completed epic actually landed in the codebase.
+
+The projection should answer:
+
+What should the update agent check?
+How should it interpret evidence?
+How should it update current strategic state?
+
+---
+
+### 2. Desired interpretation, not current state
+
+The projection must describe how completed work should be interpreted.
+
+It must not describe:
+
+- what has already been completed
+- what is currently implemented
+- which gaps currently remain
+- whether a specific epic is complete
+- whether the codebase is aligned
+- which epic should come next
+
+Those are downstream determinations.
+
+---
+
+### 3. Delta-friendly
+
+This projection exists to support strategic state transitions.
+
+Retain information that helps classify whether the completed epic caused:
+
+- a capability transition
+- a new realized capability
+- an unexpected capability
+- a durable commitment
+- a confirmed or introduced constraint
+- a closed gap
+- a narrowed or split gap
+- a drift signal
+- a resolved question
+- a new strategic question
+- a retirement signal
+
+Exclude information that does not help compute the strategic delta.
+
+---
+
+### 4. Codebase-audit oriented
+
+The downstream prompt will compare the completed epic against actual codebase evidence.
+
+Therefore this projection must define what kinds of evidence matter.
+
+Examples:
+
+- source behavior
+- tests
+- public interfaces
+- data models
+- configuration
+- documented runtime behavior
+- architectural boundaries
+- user-visible flows
+- compatibility surfaces
+
+Do not include actual codebase facts.
+
+---
+
+### 5. Capability realization semantics
+
+For every retained desired capability, define what kind of evidence would indicate:
+
+- Realized
+- Partially Realized
+- Evidence Insufficient
+- Misaligned / Drift Suspected
+
+Do not determine current status.
+
+Only define interpretation criteria.
+
+---
+
+### 6. Invariant preservation
+
+Retain all Core constraints and invariants that completed implementation must preserve.
+
+The projection should make it obvious when a completed epic appears to violate a constraint.
+
+---
+
+### 7. Strategic consequences only
+
+Retain implementation interpretation rules only if they affect future roadmap state.
+
+The projection should help the downstream prompt decide whether implementation produced:
+
+- durable strategic state
+- durable architectural commitment
+- durable product commitment
+- compatibility boundary
+- semantic boundary
+- future planning constraint
+- drift signal
+
+Temporary implementation detail should not appear.
+
+---
+
+### 8. Compact and task-specific
+
+This projection should be narrower than a full roadmap-completion projection.
+
+It should not include broad roadmap-generation context unless that context directly affects incremental state updates.
+
+If a Core item helps bootstrap roadmap completion context but does not help update it from one completed epic, exclude it.
+
+---
+
+### 9. Preserve canonical vocabulary
+
+Use the Core North-Star’s exact terminology for load-bearing concepts.
+
+Do not rename concepts.
+
+Do not replace domain terms with synonyms.
+
+Do not simplify terms in a way that changes meaning.
+
+If a term is load-bearing for evaluating epic landing, include it in the canonical vocabulary section.
+
+---
+
+### 10. Deterministic output
+
+The same Core North-Star should produce effectively the same projection every time.
+
+Avoid creative phrasing.
+
+Avoid speculative interpretation.
+
+Avoid rhetorical style.
+
+Use stable structure and concise assertions.
+
+---
+
+## Inclusion Criteria
+
+Retain Core North-Star content that belongs to one of these categories.
+
+### A. Desired Capability Model
+
+Retain capabilities that completed implementation may advance, realize, partially realize, or drift from.
+
+### B. Capability Realization Semantics
+
+Retain or derive from the Core the evidence semantics needed to judge whether a capability appears realized.
+
+Examples:
+
+- required user-visible behavior
+- required system behavior
+- required integration behavior
+- required quality or completeness signal
+- required preservation of a semantic concept
+
+### C. Invariants and Constraints
+
+Retain constraints that completed work must preserve.
+
+Examples:
+
+- architectural invariants
+- semantic invariants
+- compatibility constraints
+- product constraints
+- security, privacy, safety, or legal constraints
+- workflow constraints
+- user-experience constraints
+
+### D. Strategic Commitment Semantics
+
+Retain rules for identifying when implementation creates a durable commitment future work must respect.
+
+Examples:
+
+- public API boundaries
+- data ownership boundaries
+- compatibility contracts
+- durable workflow commitments
+- domain model commitments
+- user experience commitments
+- architectural direction commitments
+
+### E. Drift Interpretation Rules
+
+Retain rules for detecting when implemented reality diverges from the Core North-Star.
+
+Examples:
+
+- violates an invariant
+- implements a capability with the wrong semantics
+- closes a gap in a way that undermines the purpose
+- introduces an unplanned dependency
+- creates a brittle or misleading strategic state
+- satisfies an epic locally while diverging globally
+
+### F. State Transition Rules
+
+Retain rules that help update roadmap completion context.
+
+Examples:
+
+- when a partial capability becomes realized
+- when a gap should be closed
+- when a gap should be narrowed
+- when a gap should be split
+- when a new commitment should be recorded
+- when a drift signal should be added
+- when a question should be resolved
+- when a new question should be introduced
+- when retirement may be suspected but not enacted
+
+### G. Evaluation Criteria
+
+Retain evaluation criteria that affect completion, alignment, drift, or strategic state.
+
+### H. Canonical Vocabulary
+
+Retain terms the downstream update prompt must preserve when interpreting epic landing.
+
+---
+
+## Exclusion Criteria
+
+Exclude Core North-Star content that belongs to these categories unless it directly affects epic landing interpretation.
+
+Exclude:
+
+- completed epic history
+- current roadmap progress
+- current roadmap completion state
+- codebase status
+- implementation details
+- execution instructions
+- developer commands
+- tool use instructions
+- operational workflow
+- prompt templates
+- agent behavior details
+- detailed milestone plans
+- historical rationale essays
+- full ADR history
+- detailed governance procedure
+- belief revision mechanics
+- reasoning architecture
+- information flow architecture
+- research citations
+- broad vision prose that does not change update semantics
+- next-epic selection guidance
+- roadmap generation guidance
+- task-level plans
+- temporary assumptions
+
+If excluded information may matter elsewhere, mention it only in Projection Exclusion Notes.
+
+Do not include the excluded content itself.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the projection.
+
+### Step 1 — Identify candidate Core assertions
+
+Extract all Core statements relevant to evaluating how completed implementation should update strategic state.
+
+Classify each as:
+
+- Desired Capability
+- Capability Realization Semantics
+- Invariant / Constraint
+- Strategic Commitment Semantics
+- Drift Interpretation
+- State Transition Rule
+- Evaluation Criterion
+- Vocabulary
+- Exclude
+
+### Step 2 — Apply update-projection admission test
+
+For each candidate, ask:
+
+1. Would this help interpret how one completed epic actually landed?
+2. Would this help compare epic intention against codebase reality?
+3. Would this help decide whether strategic state changed?
+4. Would this help update a capability, commitment, constraint, gap, drift signal, or question?
+5. Is this stable and non-regenerable from the completed epic or codebase?
+
+Retain only candidates that pass.
+
+### Step 3 — Convert retained items into evaluation semantics
+
+For each retained capability or constraint, express how it should be evaluated from codebase evidence.
+
+Do not evaluate current codebase state.
+
+Define interpretation rules only.
+
+### Step 4 — Normalize vocabulary
+
+Preserve canonical terms from the Core.
+
+If the Core has overlapping terms, select the term with strongest authority and note aliases only if necessary.
+
+### Step 5 — Remove operational noise
+
+Aggressively remove anything that would distract the downstream update agent from computing a strategic state delta.
+
+### Step 6 — Organize into the required output structure
+
+Output only the projection Markdown.
+
+Do not include your analysis.
+
+---
+
+## Required Output
+
+Output only the full Markdown content for the projection.
+
+Do not wrap the output in commentary.
+
+Do not include prefaces.
+
+Do not include explanations after the document.
+
+Use this exact structure.
+
+---
+
+# Roadmap Completion Update Projection
+
+## Purpose
+
+This projection defines how completed epic implementation should be interpreted when updating roadmap completion context.
+
+It exists to support:
+
+- codebase-based epic landing audits
+- incremental roadmap completion context updates
+- capability status transitions
+- gap closure or refinement
+- commitment detection
+- constraint preservation checks
+- strategic drift detection
+- outstanding question resolution
+
+It is a projection of the Core North-Star, not a summary of project history or implementation state.
+
+## Authority Boundary
+
+- The Core North-Star remains the source of authority.
+- This projection is a task-specific evaluation view of the Core North-Star.
+- This projection defines interpretation rules for implemented reality.
+- This projection does not describe current progress.
+- This projection does not include completed epic evidence.
+- This projection does not include codebase state.
+- This projection must not be used as a roadmap, changelog, or implementation summary.
+
+## Projection Metadata
+
+| Field | Value |
+|---|---|
+| Projection Name | {{projection_name_or_default}} |
+| Projection Version | {{projection_version_or_default}} |
+| Projection Date | {{projection_date_or_default}} |
+| Source Core Version | {{core_version_or_unknown}} |
+| Intended Consumer | UpdateRoadmapCompletionContext |
+| Projection Family | Roadmap Completion Update / Strategic Delta Evaluation |
+
+## Source Coverage
+
+Briefly describe what parts of the Core North-Star were retained.
+
+Use bullets.
+
+Then briefly describe what parts were intentionally excluded.
+
+Use bullets.
+
+## Desired Capability Model
+
+List the desired capabilities that completed implementation may advance, realize, or drift from.
+
+| ID | Desired Capability | Source Reference | Why It Matters for Strategic State Updates |
+|---|---|---|---|
+
+Rules:
+
+- Use exact Core terminology.
+- Include only capabilities that may affect roadmap completion context.
+- Do not infer whether any capability is currently complete.
+
+## Capability Realization Semantics
+
+Define how codebase evidence should be interpreted for each desired capability.
+
+| ID | Capability | Realized Evidence | Partial Evidence | Evidence Insufficient When | Drift / Misalignment Signal |
+|---|---|---|---|---|---|
+
+Rules:
+
+- Realized Evidence describes what kind of codebase or implementation evidence would support marking the capability Realized.
+- Partial Evidence describes what kind of evidence would support Partially Realized.
+- Evidence Insufficient When describes when the downstream prompt should refuse to mark completion.
+- Drift / Misalignment Signal describes evidence that implementation moved away from the intended capability semantics.
+
+Do not evaluate actual evidence.
+
+## Invariants and Constraint Preservation Rules
+
+List constraints that completed implementation must preserve.
+
+| ID | Invariant or Constraint | Source Reference | Preservation Rule | Violation Signal |
+|---|---|---|---|---|
+
+Preservation Rule should state what future implementation must maintain.
+
+Violation Signal should describe what kind of codebase evidence should trigger drift or gap updates.
+
+## Strategic Commitment Detection Rules
+
+Define when implementation should be treated as creating a durable commitment future roadmap work must respect.
+
+| ID | Commitment Type | Detection Signal | When To Record It | When Not To Record It |
+|---|---|---|---|---|
+
+Commitment Type must be one of:
+
+- Architectural
+- Product
+- Compatibility
+- Semantic
+- Workflow
+- User Experience
+- Operational
+- Other
+
+Rules:
+
+- Record durable commitments only.
+- Do not record temporary implementation choices.
+- Do not record low-level implementation details unless they constrain future strategic work.
+
+## Drift Interpretation Rules
+
+Define what kinds of divergence should be recorded as drift signals.
+
+| ID | Drift Pattern | Projection Expectation | Evidence Pattern | Severity Guidance | Recommended Follow-Up |
+|---|---|---|---|---|---|
+
+Severity Guidance should explain when severity should be:
+
+- Low
+- Medium
+- High
+- Unclear
+
+Rules:
+
+- Drift must be evidence-backed.
+- Do not classify mere incompletion as drift.
+- Do not treat alternative implementation as drift unless it violates intent, invariant, semantics, or durable evaluation criteria.
+
+## State Transition Rules
+
+Define how roadmap completion context should change when new evidence is found.
+
+| ID | Prior State | Evidence Pattern | New State / Update | Required Consistency Update |
+|---|---|---|---|---|
+
+Prior State may include:
+
+- Not Yet Addressed
+- Partially Realized
+- Realized
+- Evidence Insufficient
+- Remaining Gap
+- Outstanding Question
+- Drift Signal
+- Established Commitment
+
+Required Consistency Update should specify related changes.
+
+Examples:
+
+- remove closed gap
+- narrow remaining gap
+- move partial capability to realized
+- add drift signal
+- add planning note
+- resolve outstanding question
+- add constraint
+- downgrade realized capability if contradicted
+
+## Gap Update Rules
+
+Define when gaps should be closed, narrowed, split, retained, or escalated.
+
+| ID | Gap Update Case | Evidence Required | Update Behavior |
+|---|---|---|---|
+
+Include cases for:
+
+- gap fully closed
+- gap partially closed
+- gap split into sub-gaps
+- gap unchanged
+- gap made more urgent
+- gap revealed as obsolete
+- evidence insufficient
+
+## Retirement and Obsolescence Rules
+
+Define when completed implementation may suggest strategic work is obsolete.
+
+| ID | Retirement Case | Evidence Required | Confidence Rule | Required Follow-Up |
+|---|---|---|---|---|
+
+Rules:
+
+- Retirement requires strong evidence.
+- Do not retire anything solely because it was not touched.
+- Do not retire anything solely because implementation chose another path.
+- Retirement suggestions should usually require follow-up unless the Core clearly supports the retirement.
+
+## Evidence Quality Rules
+
+Define how the downstream prompt should classify evidence quality.
+
+| ID | Evidence Quality | Criteria |
+|---|---|---|
+
+Include these evidence qualities:
+
+- Strong
+- Moderate
+- Weak
+- Unclear
+
+Rules should account for:
+
+- direct code evidence
+- tests
+- public interface evidence
+- documentation generated from implementation
+- runtime evidence if available
+- epic text without code evidence
+- ambiguous or missing evidence
+
+## Canonical Vocabulary
+
+List load-bearing terms that downstream prompts must preserve.
+
+| Term | Definition | Notes / Banned Synonyms |
+|---|---|---|
+
+Rules:
+
+- Include only terms relevant to epic landing interpretation and strategic state updates.
+- Use Core definitions where available.
+- If a term is undefined in the Core but required for this projection, mark definition as “Projection-local; confirm against Core if promoted.”
+
+## Projection Exclusion Notes
+
+List important Core content intentionally excluded from this projection.
+
+| Excluded Content Type | Reason Excluded | Where It Should Be Used Instead |
+|---|---|---|
+
+Examples:
+
+- broad roadmap generation context
+- next-epic selection criteria
+- operational context
+- execution guidance
+- detailed governance procedure
+- historical rationale
+- milestone detail
+- codebase facts
+
+## Known Projection Limitations
+
+List ambiguities or missing Core information that may limit UpdateRoadmapCompletionContext.
+
+| Limitation | Why It Matters | Recommended Handling |
+|---|---|---|
+
+Examples:
+
+- capability realization semantics are implicit
+- constraints lack violation signals
+- drift criteria are underspecified
+- commitment boundaries are unclear
+- retirement rules are underspecified
+- canonical vocabulary is ambiguous
+
+Do not invent missing information to fix these limitations.
+
+## Downstream Use Instructions
+
+When this projection is used by UpdateRoadmapCompletionContext:
+
+- Treat this projection as the evaluation frame for epic landing.
+- Treat the current roadmap completion context as the previous strategic state.
+- Treat the completed epic as intended change evidence.
+- Treat the codebase as authoritative evidence of implemented reality.
+- Do not allow completed epic text to override codebase evidence.
+- Do not allow codebase reality to redefine this projection.
+- Convert observed implementation reality into a strategic state delta.
+- Update capabilities, commitments, constraints, gaps, drift signals, questions, and planning notes only when evidence supports the change.
+- Preserve compression.
+- Do not record implementation detail unless it creates durable strategic consequence.
+- Do not select the next epic.
+- Do not rewrite the roadmap.
+- Do not modify this projection.
+
+## Projection Integrity Checklist
+
+Before finalizing, verify:
+
+- The projection contains evaluation semantics only.
+- No completed epic history is included.
+- No codebase state is included.
+- No current roadmap completion state is included.
+- Every retained statement helps interpret epic landing or strategic state update.
+- Every major retained statement traces to the Core North-Star or is clearly marked projection-local.
+- Capability realization semantics are explicit where available.
+- Invariant preservation rules are explicit where available.
+- Drift interpretation rules are explicit where available.
+- State transition rules support incremental updates.
+- Canonical vocabulary is preserved.
+- Excluded operational and implementation details are not present.
+- The projection is compact enough to be passed into UpdateRoadmapCompletionContext.
