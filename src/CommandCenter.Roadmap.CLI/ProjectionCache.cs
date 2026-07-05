@@ -14,6 +14,8 @@ internal sealed class ProjectionCache(
         CancellationToken cancellationToken)
     {
         ProjectionDefinition projection = registry.Get(runtimePromptName);
+        var provenanceFactory = new ProjectionProvenanceFactory(registry);
+        ProjectionProvenance currentProvenance = provenanceFactory.Create(projection, projectContext);
         string? content = await artifacts.ReadAsync(projection.ProjectionPath);
         bool generated = false;
 
@@ -32,23 +34,24 @@ internal sealed class ProjectionCache(
         string projectionHash = RoadmapHash.Sha256(content);
         ProjectionManifest manifest = await manifestStore.LoadAsync();
         ProjectionManifestEntry? previous = manifest.Find(runtimePromptName);
-        ProjectionStaleStatus staleStatus = !generated && previous is not null &&
-            !string.Equals(previous.ProjectContextHash, projectContext.Hash, StringComparison.Ordinal)
-                ? ProjectionStaleStatus.Stale
-                : ProjectionStaleStatus.Fresh;
-
-        var entry = new ProjectionManifestEntry(
-            runtimePromptName,
-            projection.ProjectionPromptName,
-            projection.ProjectionPath,
-            RoadmapHash.Sha256(projection.ProjectionPromptName),
-            projectContext.SourceFiles,
-            generated || previous is null ? projectContext.Hash : previous.ProjectContextHash,
-            projectionHash,
-            generated || previous is null ? DateTimeOffset.UtcNow : previous.GeneratedAt,
-            validation.IsValid ? ProjectionValidationStatus.Valid : ProjectionValidationStatus.Invalid,
-            staleStatus,
-            validation.Error);
+        ProjectionValidationStatus validationStatus = validation.IsValid
+            ? ProjectionValidationStatus.Valid
+            : ProjectionValidationStatus.Invalid;
+        ProjectionFreshness freshness = generated
+            ? ProjectionFreshness.Fresh
+            : ProjectionFreshnessEvaluator.Evaluate(currentProvenance, previous);
+        DateTimeOffset observedAt = DateTimeOffset.UtcNow;
+        ProjectionManifestEntry entry = generated || freshness.IsFresh
+            ? ProjectionManifestEntry.FromTrustedProvenance(
+                currentProvenance,
+                projectionHash,
+                generated || previous is null ? observedAt : previous.GeneratedAt,
+                validationStatus,
+                freshness,
+                validation.Error)
+            : previous is null
+                ? CreateUnknownEntry(projection, projectionHash, observedAt, validationStatus, freshness, validation.Error)
+                : previous.WithFreshness(freshness, projectionHash, validationStatus, validation.Error);
 
         await manifestStore.UpsertAsync(entry);
 
@@ -67,18 +70,46 @@ internal sealed class ProjectionCache(
             await artifacts.WriteAsync(projection.ProjectionPath, content);
         }
 
-        if (staleStatus == ProjectionStaleStatus.Stale && contract.StaleProjectionPolicy == StaleProjectionPolicy.Block)
+        if (!freshness.IsFresh && contract.StaleProjectionPolicy == StaleProjectionPolicy.Block)
         {
             string blockedPath = await WriteBlockedAsync(
                 runtimePromptName,
                 "Projection refresh recommended",
                 $"Delete {projection.ProjectionPath} to regenerate it from the current Project Context.",
-                $"Manifest Project Context hash differs from the current Project Context hash for {runtimePromptName}.");
-            throw new RoadmapStepException($"Projection is stale for {runtimePromptName}. Blocked artifact: {blockedPath}");
+                $"Projection provenance is not fresh for {runtimePromptName}: {FormatReasons(freshness.Reasons)}.");
+            throw new RoadmapStepException($"Projection is stale for {runtimePromptName}: {FormatReasons(freshness.Reasons)}. Blocked artifact: {blockedPath}");
         }
 
-        return new ProjectionCacheResult(projection, content, generated, staleStatus);
+        return new ProjectionCacheResult(projection, content, generated, freshness.Status, freshness.Reasons);
     }
+
+    private static ProjectionManifestEntry CreateUnknownEntry(
+        ProjectionDefinition projection,
+        string projectionHash,
+        DateTimeOffset observedAt,
+        ProjectionValidationStatus validationStatus,
+        ProjectionFreshness freshness,
+        string? validationError) =>
+        new(
+            projection.RuntimePromptName,
+            projection.ProjectionPromptName,
+            projection.ProjectionPath,
+            string.Empty,
+            [],
+            string.Empty,
+            projectionHash,
+            observedAt,
+            validationStatus,
+            freshness.Status,
+            validationError,
+            ProjectionProvenanceStatus.Unknown,
+            projection.RuntimePromptName,
+            string.Empty,
+            [],
+            freshness.Reasons);
+
+    private static string FormatReasons(IReadOnlyList<ProjectionStaleReason> reasons) =>
+        reasons.Count == 0 ? "UnknownProvenance" : string.Join(", ", reasons);
 
     private async Task<string> WriteBlockedAsync(string runtimePromptName, string reason, string nextStep, string details)
     {
@@ -101,4 +132,5 @@ internal sealed record ProjectionCacheResult(
     ProjectionDefinition Definition,
     string Content,
     bool Generated,
-    ProjectionStaleStatus StaleStatus);
+    ProjectionStaleStatus StaleStatus,
+    IReadOnlyList<ProjectionStaleReason> StaleReasons);

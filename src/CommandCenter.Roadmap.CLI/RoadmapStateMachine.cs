@@ -1291,7 +1291,7 @@ internal sealed class RoadmapStateMachine(
             splitFamilyCount,
             new ProjectionManifestCounts(
                 manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Valid),
-                manifest.Entries.Count(entry => entry.StaleStatus == ProjectionStaleStatus.Stale),
+                manifest.Entries.Count(entry => entry.StaleStatus != ProjectionStaleStatus.Fresh),
                 manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Invalid)),
             transitionIntent ?? existing?.TransitionIntent ?? RoadmapTransitionIntent.Empty(current),
             nextTransitions ?? NextTransitions(current),

@@ -69,6 +69,21 @@ public sealed class InvariantValidatorTests
     }
 
     [Fact]
+    public async Task Rejects_existing_projection_with_unknown_provenance()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.CoreReady, projectContext.Hash);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(RoadmapState.Failed, result.FailureState);
+        Assert.Contains("manifest entry", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Rejects_split_child_promotion_without_split_family()
     {
         using var repo = new TempRepo();

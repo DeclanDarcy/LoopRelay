@@ -10,6 +10,7 @@ internal sealed class InvariantValidator(
     SplitFamilyStore splitFamilyStore)
 {
     private readonly EpicArtifactValidator epicValidator = new();
+    private readonly ProjectionProvenanceFactory provenanceFactory = new(projectionRegistry);
 
     public async Task<InvariantValidationResult> ValidateAsync(
         RoadmapState state,
@@ -46,6 +47,17 @@ internal sealed class InvariantValidator(
                 if (entry.ValidationStatus == ProjectionValidationStatus.Invalid)
                 {
                     return await FailAsync(state, RoadmapState.EvidenceBlocked, $"Projection {projection.ProjectionPath} is marked invalid.");
+                }
+
+                ProjectionFreshness freshness = ProjectionFreshnessEvaluator.Evaluate(
+                    provenanceFactory.Create(projection, projectContext),
+                    entry);
+                if (!freshness.IsFresh)
+                {
+                    return await FailAsync(
+                        state,
+                        RoadmapState.EvidenceBlocked,
+                        $"Projection {projection.ProjectionPath} provenance is not fresh: {FormatReasons(freshness.Reasons)}.");
                 }
             }
 
@@ -209,6 +221,9 @@ internal sealed class InvariantValidator(
             content);
         return InvariantValidationResult.Invalid(failureState, message, path);
     }
+
+    private static string FormatReasons(IReadOnlyList<ProjectionStaleReason> reasons) =>
+        reasons.Count == 0 ? "UnknownProvenance" : string.Join(", ", reasons);
 }
 
 internal sealed record InvariantValidationResult(

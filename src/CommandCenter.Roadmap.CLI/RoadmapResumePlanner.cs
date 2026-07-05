@@ -4,7 +4,8 @@ internal sealed class RoadmapResumePlanner(
     RoadmapArtifacts artifacts,
     PromptContractRegistry contractRegistry,
     ProjectionManifestStore manifestStore,
-    ArtifactLifecycleStore lifecycleStore)
+    ArtifactLifecycleStore lifecycleStore,
+    ProjectionProvenanceFactory provenanceFactory)
 {
     private readonly EpicArtifactValidator epicValidator = new();
 
@@ -294,12 +295,13 @@ internal sealed class RoadmapResumePlanner(
                 $"Projection manifest entry for {runtimePrompt} is invalid: {entry.LastValidationError ?? "no validation detail"}.");
         }
 
-        if (contract.StaleProjectionPolicy == StaleProjectionPolicy.Block &&
-            (entry.StaleStatus == ProjectionStaleStatus.Stale ||
-             !string.Equals(entry.ProjectContextHash, projectContext.Hash, StringComparison.Ordinal)))
+        ProjectionFreshness freshness = ProjectionFreshnessEvaluator.Evaluate(
+            provenanceFactory.Create(runtimePrompt, projectContext),
+            entry);
+        if (contract.StaleProjectionPolicy == StaleProjectionPolicy.Block && !freshness.IsFresh)
         {
             return ResumeSafety.Unsafe(
-                $"Projection manifest entry for {runtimePrompt} is stale for the current Project Context.");
+                $"Projection manifest entry for {runtimePrompt} is stale: {FormatReasons(freshness.Reasons)}.");
         }
 
         return ResumeSafety.Safe($"{runtimePrompt} projection manifest entry is usable.");
@@ -467,6 +469,9 @@ internal sealed class RoadmapResumePlanner(
 
         return null;
     }
+
+    private static string FormatReasons(IReadOnlyList<ProjectionStaleReason> reasons) =>
+        reasons.Count == 0 ? "UnknownProvenance" : string.Join(", ", reasons);
 }
 
 internal sealed record RoadmapResumePlan(

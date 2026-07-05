@@ -242,7 +242,7 @@ public sealed class RoadmapResumePlannerTests
         var contracts = new PromptContractRegistry(projections);
         var manifest = new ProjectionManifestStore(repo.Artifacts);
         var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
-        return new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle);
+        return new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections));
     }
 
     private static async Task<ProjectContext> SeedProjectAsync(TempRepo repo)

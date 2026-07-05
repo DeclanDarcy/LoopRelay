@@ -2,6 +2,62 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal static class RoadmapPromptCatalog
 {
+    public static ProjectionPromptMetadata GetProjectionMetadata(string projectionPromptName) =>
+        projectionPromptName switch
+        {
+            "ProjectionForCreateRoadmapCompletionContext" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForCreateRoadmapCompletionContext).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForCreateRoadmapCompletionContext.SourceHash),
+            "ProjectionForUpdateRoadmapCompletionContext" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForUpdateRoadmapCompletionContext).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForUpdateRoadmapCompletionContext.SourceHash),
+            "ProjectionForSelectNextEpic" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForSelectNextEpic).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForSelectNextEpic.SourceHash),
+            "ProjectionForEpicPreparationAudit" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForEpicPreparationAudit).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForEpicPreparationAudit.SourceHash),
+            "ProjectionForRealignEpic" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForRealignEpic).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForRealignEpic.SourceHash),
+            "ProjectionForReimagineEpic" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForReimagineEpic).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForReimagineEpic.SourceHash),
+            "ProjectionForCreateNewEpic" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForCreateNewEpic).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForCreateNewEpic.SourceHash),
+            "ProjectionForSplitEpic" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForSplitEpic).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForSplitEpic.SourceHash),
+            "ProjectionForGenerateMilestoneDeepDivesForEpic" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForGenerateMilestoneDeepDivesForEpic).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForGenerateMilestoneDeepDivesForEpic.SourceHash),
+            "ProjectionForEvaluateEpicCompletionAndDrift" =>
+                Metadata(
+                    projectionPromptName,
+                    typeof(CommandCenter.Core.Prompts.Projections.ProjectionForEvaluateEpicCompletionAndDrift).FullName,
+                    CommandCenter.Core.Prompts.Projections.ProjectionForEvaluateEpicCompletionAndDrift.SourceHash),
+            _ => throw new ArgumentOutOfRangeException(nameof(projectionPromptName), projectionPromptName, "Unknown projection prompt."),
+        };
+
     public static string RenderProjection(string projectionPromptName, string projectContext) =>
         projectionPromptName switch
         {
@@ -53,4 +109,7 @@ internal static class RoadmapPromptCatalog
                 CommandCenter.Core.Prompts.Planning.EvaluateEpicCompletionAndDrift.Render(projectContext),
             _ => throw new ArgumentOutOfRangeException(nameof(runtimePromptName), runtimePromptName, "Unknown runtime prompt."),
         };
+
+    private static ProjectionPromptMetadata Metadata(string promptName, string? promptType, string sourceHash) =>
+        new(promptName, promptType ?? promptName, sourceHash);
 }

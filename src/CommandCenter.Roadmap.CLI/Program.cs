@@ -34,6 +34,7 @@ var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>()
 
 var artifacts = new RoadmapArtifacts(store, repository);
 var projectionRegistry = new ProjectionRegistry();
+var provenanceFactory = new ProjectionProvenanceFactory(projectionRegistry);
 var contractRegistry = new PromptContractRegistry(projectionRegistry);
 var manifestStore = new ProjectionManifestStore(artifacts);
 var validator = new ProjectionValidator();
@@ -46,7 +47,7 @@ var stateStore = new RoadmapStateStore(artifacts);
 var decisionLedger = new DecisionLedgerStore(artifacts);
 var journal = new TransitionJournalStore(artifacts);
 var lifecycle = new ArtifactLifecycleStore(artifacts);
-var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle);
+var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle, provenanceFactory);
 var promotion = new ArtifactPromotionService(artifacts, lifecycle);
 var bundleExtractor = new BundleFileExtractor();
 var splitBundleInterpreter = new SplitEpicBundleInterpreter();
