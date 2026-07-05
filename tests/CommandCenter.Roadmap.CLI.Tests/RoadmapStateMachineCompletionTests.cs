@@ -146,6 +146,23 @@ public sealed class RoadmapStateMachineCompletionTests
     }
 
     [Fact]
+    public async Task Close_epic_supersedes_active_selection_without_removing_historical_evidence()
+    {
+        CompletionRunResult result = await RunCompletionAsync("Fully Complete", "None", "Close Epic");
+
+        Assert.Empty(result.SelectionManifest.ActiveSelections);
+        Assert.Contains(
+            result.SelectionManifest.Selections,
+            entry => entry.ProvenanceStatus == DerivedArtifactProvenanceStatus.Superseded);
+        Assert.Equal(ArtifactLifecycleState.Superseded, result.SelectionLifecycle);
+        string evidencePath = Assert.Single(result.SelectionEvidencePaths);
+        Assert.StartsWith(RoadmapArtifactPaths.SelectionEvidenceDirectory, evidencePath, StringComparison.Ordinal);
+        Assert.Contains("Build routing test epic", result.SelectionContent, StringComparison.Ordinal);
+        Assert.Contains(evidencePath, result.SelectionEvidenceContent, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Build routing test epic", result.SelectionEvidenceContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Invalid_completion_certification_preserves_evidence_and_pauses_without_lifecycle_mutation()
     {
         CompletionRunResult result = await RunCompletionAsync("Not Complete", "None", "Close Epic");
@@ -194,7 +211,14 @@ public sealed class RoadmapStateMachineCompletionTests
         string? blockerEvidence = blockerPath is null ? null : repo.Read(blockerPath);
         IReadOnlyList<ArtifactLifecycleEntry> lifecycle = await new ArtifactLifecycleStore(repo.Artifacts).LoadAsync();
         ArtifactLifecycleState activeEpicLifecycle = lifecycle.Single(entry => entry.Path == RoadmapArtifactPaths.ActiveEpic).State;
+        ArtifactLifecycleState selectionLifecycle = lifecycle.Single(entry => entry.Path == RoadmapArtifactPaths.Selection).State;
         string transitionJournal = repo.Read(RoadmapArtifactPaths.TransitionJournal);
+        SelectionProvenanceManifest selectionManifest = await new SelectionProvenanceManifestStore(repo.Artifacts).LoadAsync();
+        IReadOnlyList<string> selectionEvidencePaths = await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SelectionEvidenceDirectory, "*.md");
+        string selectionContent = repo.Read(RoadmapArtifactPaths.Selection);
+        string selectionEvidenceContent = string.Join(
+            Environment.NewLine,
+            selectionEvidencePaths.Order(StringComparer.Ordinal).Select(path => $"{path}\n{repo.Read(path)}"));
 
         return new CompletionRunResult(
             outcome,
@@ -206,7 +230,12 @@ public sealed class RoadmapStateMachineCompletionTests
             evidencePaths,
             activeEpicLifecycle,
             runtime.OneShotCalls,
-            transitionJournal);
+            transitionJournal,
+            selectionManifest,
+            selectionLifecycle,
+            selectionEvidencePaths,
+            selectionContent,
+            selectionEvidenceContent);
     }
 
     private static TempRepo SeedRepo()
@@ -319,5 +348,10 @@ public sealed class RoadmapStateMachineCompletionTests
         IReadOnlyList<string> EvidencePaths,
         ArtifactLifecycleState ActiveEpicLifecycle,
         int AgentCalls,
-        string TransitionJournal);
+        string TransitionJournal,
+        SelectionProvenanceManifest SelectionManifest,
+        ArtifactLifecycleState SelectionLifecycle,
+        IReadOnlyList<string> SelectionEvidencePaths,
+        string SelectionContent,
+        string SelectionEvidenceContent);
 }

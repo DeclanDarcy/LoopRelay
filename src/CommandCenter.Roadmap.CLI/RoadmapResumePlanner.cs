@@ -6,6 +6,7 @@ internal sealed class RoadmapResumePlanner(
     ProjectionManifestStore manifestStore,
     ArtifactLifecycleStore lifecycleStore,
     ProjectionProvenanceFactory provenanceFactory,
+    SelectionProvenanceService selectionProvenance,
     ExecutionPreparationProvenanceService executionPreparation)
 {
     private readonly EpicArtifactValidator epicValidator = new();
@@ -42,6 +43,7 @@ internal sealed class RoadmapResumePlanner(
                 recoveryState,
                 snapshot,
                 projectContext,
+                persistedState.RetiredEpics,
                 cancellationToken);
             return recovery with
             {
@@ -70,6 +72,7 @@ internal sealed class RoadmapResumePlanner(
             persistedState.CurrentState,
             snapshot,
             projectContext,
+            persistedState.RetiredEpics,
             cancellationToken);
     }
 
@@ -77,6 +80,7 @@ internal sealed class RoadmapResumePlanner(
         RoadmapState state,
         RoadmapArtifactSnapshot snapshot,
         ProjectContext projectContext,
+        IReadOnlyList<RetiredEpic> retiredEpics,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -104,16 +108,47 @@ internal sealed class RoadmapResumePlanner(
 
             case RoadmapState.SelectNextStrategicInitiative:
             {
-                if (snapshot.HasUsableFile(RoadmapArtifactPaths.Selection))
+                if (snapshot.HasPresentFile(RoadmapArtifactPaths.Selection))
                 {
-                    ResumeSafety completedSelection = ValidatePromptReadiness(
+                    ResumeSafety activeSelection = await ValidateActiveSelectionFreshnessAsync(
+                        retiredEpics,
+                        cancellationToken);
+                    if (activeSelection.IsSafe)
+                    {
+                        if (!snapshot.HasUsableFile(RoadmapArtifactPaths.Selection))
+                        {
+                            ResumeSafety archivedSelectionReadiness = ValidatePromptReadiness(
+                                "SelectNextEpic",
+                                snapshot,
+                                projectContext,
+                                requireOutputs: false);
+                            return archivedSelectionReadiness.IsSafe
+                                ? RoadmapResumePlan.SelectNextStrategicInitiative(
+                                    state,
+                                    "Active selection provenance is current, but the selection artifact lifecycle is not usable. A fresh selection will be generated.")
+                                : RoadmapResumePlan.Block(state, archivedSelectionReadiness.Reason);
+                        }
+
+                        ResumeSafety completedSelection = ValidatePromptReadiness(
+                            "SelectNextEpic",
+                            snapshot,
+                            projectContext,
+                            requireOutputs: true);
+                        return completedSelection.IsSafe
+                            ? RoadmapResumePlan.ContinueSelectionDecision(state, completedSelection.Reason)
+                            : RoadmapResumePlan.Block(state, completedSelection.Reason);
+                    }
+
+                    ResumeSafety regenerationReadiness = ValidatePromptReadiness(
                         "SelectNextEpic",
                         snapshot,
                         projectContext,
-                        requireOutputs: true);
-                    return completedSelection.IsSafe
-                        ? RoadmapResumePlan.ContinueSelectionDecision(state, completedSelection.Reason)
-                        : RoadmapResumePlan.Block(state, completedSelection.Reason);
+                        requireOutputs: false);
+                    return regenerationReadiness.IsSafe
+                        ? RoadmapResumePlan.SelectNextStrategicInitiative(
+                            state,
+                            $"{activeSelection.Reason} A fresh selection will be generated.")
+                        : RoadmapResumePlan.Block(state, regenerationReadiness.Reason);
                 }
 
                 ResumeSafety selectionReadiness = ValidatePromptReadiness(
@@ -285,6 +320,29 @@ internal sealed class RoadmapResumePlanner(
         return ResumeSafety.Safe($"{runtimePrompt} projection manifest entry is usable.");
     }
 
+    private async Task<ResumeSafety> ValidateActiveSelectionFreshnessAsync(
+        IReadOnlyList<RetiredEpic> retiredEpics,
+        CancellationToken cancellationToken)
+    {
+        string? projectionContent = await artifacts.ReadAsync(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"]);
+        if (string.IsNullOrWhiteSpace(projectionContent))
+        {
+            return ResumeSafety.Unsafe("Active selection cannot be reused because the SelectNextEpic projection is missing.");
+        }
+
+        TransitionInputSnapshot currentCycle = await selectionProvenance.CaptureCurrentCycleAsync(
+            projectionContent,
+            retiredEpics,
+            cancellationToken);
+        DerivedArtifactFreshness freshness = await selectionProvenance.EvaluateActiveSelectionFreshnessAsync(
+            currentCycle,
+            retiredEpics,
+            cancellationToken);
+        return freshness.IsFresh
+            ? ResumeSafety.Safe("Active selection belongs to the current selection cycle.")
+            : ResumeSafety.Unsafe($"Active selection does not belong to the current selection cycle: {FormatDerivedReasons(freshness.Reasons)}.");
+    }
+
     private ResumeSafety ValidateProjectionForLastTransition(
         RoadmapStateDocument persistedState,
         RoadmapArtifactSnapshot snapshot,
@@ -454,6 +512,9 @@ internal sealed class RoadmapResumePlanner(
     }
 
     private static string FormatReasons(IReadOnlyList<ProjectionStaleReason> reasons) =>
+        reasons.Count == 0 ? "UnknownProvenance" : string.Join(", ", reasons);
+
+    private static string FormatDerivedReasons(IReadOnlyList<DerivedArtifactStaleReason> reasons) =>
         reasons.Count == 0 ? "UnknownProvenance" : string.Join(", ", reasons);
 }
 
@@ -667,7 +728,7 @@ internal sealed class RoadmapArtifactSnapshot
     public bool HasUsableFile(string path) =>
         HasPresentFile(path) && LifecycleAllowsUse(path);
 
-    private bool HasPresentFile(string path) =>
+    public bool HasPresentFile(string path) =>
         Statuses.TryGetValue(path, out ArtifactStatus status) && status == ArtifactStatus.Present;
 
     private bool LifecycleAllowsUse(string path)

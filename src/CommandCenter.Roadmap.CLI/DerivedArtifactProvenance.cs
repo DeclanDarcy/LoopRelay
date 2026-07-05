@@ -199,6 +199,13 @@ internal static class DerivedArtifactFreshnessEvaluator
             ExecutionPreparationProvenanceService.DecisionLedgerInputKind => DerivedArtifactStaleReason.DecisionLedgerDrift,
             ExecutionPreparationProvenanceService.OperationalContextInputKind => DerivedArtifactStaleReason.OperationalContextDrift,
             ExecutionPreparationProvenanceService.ExecutionPromptInputKind => DerivedArtifactStaleReason.ExecutionPromptDrift,
+            SelectionProvenanceService.SelectionCycleInputKind => DerivedArtifactStaleReason.SelectionCycleDrift,
+            SelectionProvenanceService.SelectionProjectionInputKind => DerivedArtifactStaleReason.SelectionProjectionDrift,
+            SelectionProvenanceService.SelectionPromptContextInputKind => DerivedArtifactStaleReason.SelectionPromptContextDrift,
+            SelectionProvenanceService.SelectionSecondaryInputKind => DerivedArtifactStaleReason.SelectionSecondaryInputDrift,
+            SelectionProvenanceService.RoadmapCompletionContextInputKind => DerivedArtifactStaleReason.RoadmapCompletionContextDrift,
+            SelectionProvenanceService.RoadmapSourceInputKind => DerivedArtifactStaleReason.RoadmapSourceDrift,
+            SelectionProvenanceService.RetiredEpicStateInputKind => DerivedArtifactStaleReason.RetiredEpicStateDrift,
             _ => DerivedArtifactStaleReason.CausalInputDrift,
         };
 
@@ -236,4 +243,11 @@ internal enum DerivedArtifactStaleReason
     ExecutionPromptDrift,
     CausalInputDrift,
     UnexpectedActiveArtifact,
+    SelectionCycleDrift,
+    SelectionProjectionDrift,
+    SelectionPromptContextDrift,
+    SelectionSecondaryInputDrift,
+    RoadmapCompletionContextDrift,
+    RoadmapSourceDrift,
+    RetiredEpicStateDrift,
 }

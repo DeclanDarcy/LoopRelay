@@ -44,6 +44,8 @@ var promptRunner = new RoadmapPromptRunner(runtime, repository, console);
 var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
 var contextBuilder = new RoadmapPromptContextBuilder(artifacts, executionPreparation);
 var inputResolver = new TransitionInputResolver(artifacts, executionPreparation);
+var selectionProvenanceManifest = new SelectionProvenanceManifestStore(artifacts);
+var selectionProvenance = new SelectionProvenanceService(artifacts, selectionProvenanceManifest, contextBuilder, inputResolver);
 var completionPolicy = new CompletionCertificationPolicy();
 var completionRouter = new CompletionCertificationRouter();
 var stateStore = new RoadmapStateStore(artifacts);
@@ -51,7 +53,7 @@ var decisionLedger = new DecisionLedgerStore(artifacts);
 var journal = new TransitionJournalStore(artifacts);
 var lifecycle = new ArtifactLifecycleStore(artifacts);
 var startupPlanner = new RoadmapStartupPlanner();
-var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle, provenanceFactory, executionPreparation);
+var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle, provenanceFactory, selectionProvenance, executionPreparation);
 var promotion = new ArtifactPromotionService(artifacts, lifecycle);
 var bundleExtractor = new BundleFileExtractor();
 var splitBundleInterpreter = new SplitEpicBundleInterpreter();
@@ -78,6 +80,7 @@ var machine = new RoadmapStateMachine(
     stateStore,
     startupPlanner,
     resumePlanner,
+    selectionProvenance,
     decisionLedger,
     journal,
     lifecycle,

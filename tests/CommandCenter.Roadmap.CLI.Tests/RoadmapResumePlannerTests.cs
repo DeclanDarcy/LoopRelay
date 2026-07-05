@@ -46,11 +46,73 @@ public sealed class RoadmapResumePlannerTests
         using var repo = new TempRepo();
         ProjectContext context = await SeedProjectAsync(repo);
         SeedCompletionContext(repo);
-        repo.Write(RoadmapArtifactPaths.Selection, StrategicInvestigationSelection());
+        await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, StrategicInvestigationSelection());
 
         RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(RoadmapState.SelectNextStrategicInitiative, prompt: "SelectNextEpic", output: RoadmapArtifactPaths.Selection), context, CancellationToken.None);
 
         Assert.Equal(RoadmapResumeAction.ContinueSelectionDecision, plan.Action);
+    }
+
+    [Fact]
+    public async Task Select_next_strategic_initiative_with_missing_selection_provenance_regenerates_selection()
+    {
+        using var repo = new TempRepo();
+        ProjectContext context = await SeedProjectAsync(repo);
+        SeedCompletionContext(repo);
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
+        repo.Write(RoadmapArtifactPaths.Selection, StrategicInvestigationSelection());
+
+        RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(RoadmapState.SelectNextStrategicInitiative, prompt: "SelectNextEpic", output: RoadmapArtifactPaths.Selection), context, CancellationToken.None);
+
+        Assert.Equal(RoadmapResumeAction.SelectNextStrategicInitiative, plan.Action);
+        Assert.Contains("current selection cycle", plan.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Select_next_strategic_initiative_with_stale_selection_provenance_regenerates_selection()
+    {
+        using var repo = new TempRepo();
+        ProjectContext context = await SeedProjectAsync(repo);
+        SeedCompletionContext(repo);
+        await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, StrategicInvestigationSelection());
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "# Changed Completion Context");
+
+        RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(RoadmapState.SelectNextStrategicInitiative, prompt: "SelectNextEpic", output: RoadmapArtifactPaths.Selection), context, CancellationToken.None);
+
+        Assert.Equal(RoadmapResumeAction.SelectNextStrategicInitiative, plan.Action);
+        Assert.Contains(nameof(DerivedArtifactStaleReason.RoadmapCompletionContextDrift), plan.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Select_next_strategic_initiative_with_archived_selection_regenerates_selection()
+    {
+        using var repo = new TempRepo();
+        ProjectContext context = await SeedProjectAsync(repo);
+        SeedCompletionContext(repo);
+        await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, StrategicInvestigationSelection());
+        await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(RoadmapArtifactPaths.Selection, ArtifactLifecycleState.Archived);
+
+        RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(RoadmapState.SelectNextStrategicInitiative, prompt: "SelectNextEpic", output: RoadmapArtifactPaths.Selection), context, CancellationToken.None);
+
+        Assert.Equal(RoadmapResumeAction.SelectNextStrategicInitiative, plan.Action);
+    }
+
+    [Theory]
+    [InlineData("Select New Intermediary Epic")]
+    [InlineData("Select Split Epic")]
+    [InlineData("Select Existing Epic")]
+    public async Task Stale_completed_selection_never_resumes_downstream_planning(string staleOutcome)
+    {
+        using var repo = new TempRepo();
+        ProjectContext context = await SeedProjectAsync(repo);
+        SeedCompletionContext(repo);
+        await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, SelectionForOutcome(staleOutcome));
+        repo.Write(RoadmapArtifactPaths.RoadmapFile, "changed roadmap");
+
+        RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(RoadmapState.SelectNextStrategicInitiative, prompt: "SelectNextEpic", output: RoadmapArtifactPaths.Selection), context, CancellationToken.None);
+
+        Assert.Equal(RoadmapResumeAction.SelectNextStrategicInitiative, plan.Action);
+        Assert.Contains(nameof(DerivedArtifactStaleReason.RoadmapSourceDrift), plan.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -244,7 +306,14 @@ public sealed class RoadmapResumePlannerTests
         var manifest = new ProjectionManifestStore(repo.Artifacts);
         var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
         ExecutionPreparationProvenanceService executionPreparation = ExecutionPreparationTestSupport.CreateProvenance(repo);
-        return new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections), executionPreparation);
+        var contextBuilder = new RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation);
+        var inputResolver = new TransitionInputResolver(repo.Artifacts, executionPreparation);
+        var selectionProvenance = new SelectionProvenanceService(
+            repo.Artifacts,
+            new SelectionProvenanceManifestStore(repo.Artifacts),
+            contextBuilder,
+            inputResolver);
+        return new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
     }
 
     private static async Task<ProjectContext> SeedProjectAsync(TempRepo repo)
@@ -327,4 +396,27 @@ public sealed class RoadmapResumePlannerTests
         | Confidence | Medium |
         | Primary Reason | Evidence is insufficient |
         """;
+
+    private static string SelectionForOutcome(string outcome)
+    {
+        string initiativeType = outcome switch
+        {
+            "Select Existing Epic" => "Existing Roadmap Epic",
+            "Select Split Epic" => "Split Epic Proposal",
+            _ => "New Intermediary Epic",
+        };
+        return $$"""
+            # Next Strategic Initiative Selection
+
+            ## Recommendation Summary
+
+            | Field | Value |
+            |---|---|
+            | Recommended Outcome | {{outcome}} |
+            | Recommended Initiative | Stale Initiative |
+            | Initiative Type | {{initiativeType}} |
+            | Confidence | High |
+            | Primary Reason | This stale selection must not drive downstream planning. |
+            """;
+    }
 }

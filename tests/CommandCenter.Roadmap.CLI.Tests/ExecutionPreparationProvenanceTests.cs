@@ -225,12 +225,20 @@ public sealed class ExecutionPreparationProvenanceTests
         ExecutionPreparationProvenanceService provenance)
     {
         var projections = new ProjectionRegistry();
+        var contextBuilder = new RoadmapPromptContextBuilder(repo.Artifacts, provenance);
+        var inputResolver = new TransitionInputResolver(repo.Artifacts, provenance);
+        var selectionProvenance = new SelectionProvenanceService(
+            repo.Artifacts,
+            new SelectionProvenanceManifestStore(repo.Artifacts),
+            contextBuilder,
+            inputResolver);
         return new RoadmapResumePlanner(
             repo.Artifacts,
             new PromptContractRegistry(projections),
             new ProjectionManifestStore(repo.Artifacts),
             new ArtifactLifecycleStore(repo.Artifacts),
             new ProjectionProvenanceFactory(projections),
+            selectionProvenance,
             provenance);
     }
 

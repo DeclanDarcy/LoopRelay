@@ -52,7 +52,6 @@ internal sealed class TransitionInputResolver(
             case "SelectNextEpic":
                 inputs.AddRequired(RoadmapArtifactPaths.RoadmapCompletionContext, TransitionInputRole.RoadmapCompletionContext);
                 await AddRoadmapSourceInputsAsync(inputs);
-                await AddRetiredEpicStateInputAsync(inputs);
                 break;
             case "EpicPreparationAudit":
                 inputs.AddRequired(RoadmapArtifactPaths.Selection, TransitionInputRole.Selection);
@@ -92,15 +91,6 @@ internal sealed class TransitionInputResolver(
         foreach (string path in roadmapFiles.Order(StringComparer.Ordinal))
         {
             inputs.AddRequired(path, TransitionInputRole.RoadmapSource);
-        }
-    }
-
-    private async Task AddRetiredEpicStateInputAsync(TransitionInputAccumulator inputs)
-    {
-        RoadmapStateDocument? state = await new RoadmapStateStore(artifacts).LoadAsync();
-        if (state?.RetiredEpics.Count > 0)
-        {
-            inputs.AddRequired(RoadmapArtifactPaths.State, TransitionInputRole.RetiredEpicState);
         }
     }
 
@@ -242,7 +232,6 @@ internal static class TransitionInputRole
     public const string Projection = "Projection";
     public const string RoadmapCompletionContext = "RoadmapCompletionContext";
     public const string RoadmapSource = "RoadmapSource";
-    public const string RetiredEpicState = "RetiredEpicState";
     public const string Selection = "Selection";
     public const string ActiveEpic = "ActiveEpic";
     public const string AuditEvidence = "AuditEvidence";

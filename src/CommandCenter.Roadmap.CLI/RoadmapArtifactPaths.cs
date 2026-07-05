@@ -9,6 +9,7 @@ internal static class RoadmapArtifactPaths
     public const string RoadmapFile = ".agents/roadmap.md";
     public const string RoadmapDirectory = ".agents/roadmap";
     public const string Selection = ".agents/selection.md";
+    public const string SelectionProvenanceManifest = ".agents/selection-provenance-manifest.json";
     public const string ActiveEpic = ".agents/epic.md";
     public const string SpecsDirectory = ".agents/specs";
     public const string OperationalContext = ".agents/operational_context.md";

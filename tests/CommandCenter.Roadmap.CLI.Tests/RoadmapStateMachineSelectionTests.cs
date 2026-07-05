@@ -74,6 +74,13 @@ internal static class StateMachineFactory
         var split = new SplitFamilyStore(repo.Artifacts);
         var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new RoadmapPromptRunner(runtime, repo.Repository, new TestConsole());
+        var contextBuilder = new RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation);
+        var inputResolver = new TransitionInputResolver(repo.Artifacts, executionPreparation);
+        var selectionProvenance = new SelectionProvenanceService(
+            repo.Artifacts,
+            new SelectionProvenanceManifestStore(repo.Artifacts),
+            contextBuilder,
+            inputResolver);
         IRoadmapExecutionBridge executionBridge = bridge ?? new FakeRoadmapExecutionBridge();
         var invariants = new InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
         return new RoadmapStateMachine(
@@ -82,14 +89,15 @@ internal static class StateMachineFactory
             contracts,
             manifest,
             new ProjectionCache(repo.Artifacts, projections, manifest, new ProjectionValidator(), runner),
-            new RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation),
-            new TransitionInputResolver(repo.Artifacts, executionPreparation),
+            contextBuilder,
+            inputResolver,
             new CompletionCertificationPolicy(),
             new CompletionCertificationRouter(),
             runner,
             stateStore,
             new RoadmapStartupPlanner(),
-            new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections), executionPreparation),
+            new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation),
+            selectionProvenance,
             new DecisionLedgerStore(repo.Artifacts),
             new TransitionJournalStore(repo.Artifacts),
             lifecycle,

@@ -16,6 +16,7 @@ internal sealed class RoadmapStateMachine(
     RoadmapStateStore stateStore,
     RoadmapStartupPlanner startupPlanner,
     RoadmapResumePlanner resumePlanner,
+    SelectionProvenanceService selectionProvenance,
     DecisionLedgerStore decisionLedger,
     TransitionJournalStore journalStore,
     ArtifactLifecycleStore lifecycleStore,
@@ -129,7 +130,7 @@ internal sealed class RoadmapStateMachine(
 
             case RoadmapResumeAction.ContinueSelectionDecision:
             {
-                string selectionOutput = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
+                string selectionOutput = await ReadCurrentSelectionAsync(cancellationToken);
                 SelectionDecision selection = new SelectionParser().Parse(selectionOutput);
                 return await ContinueAfterSelectionAsync(selection, projectContext, cancellationToken);
             }
@@ -275,7 +276,7 @@ internal sealed class RoadmapStateMachine(
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         RoadmapStateDocument? existing = await stateStore.LoadAsync();
         string context = await contextBuilder.BuildSelectionContextAsync(projection.Content, existing?.RetiredEpics ?? []);
-        string output = await RunPromptTransitionAsync(
+        PromptTransitionCompletion completion = await RunPromptTransitionWithCompletionAsync(
             RoadmapState.RoadmapCompletionContextReady,
             RoadmapState.SelectNextStrategicInitiative,
             runtimePrompt,
@@ -284,11 +285,16 @@ internal sealed class RoadmapStateMachine(
             string.Empty,
             [RoadmapArtifactPaths.Selection],
             cancellationToken);
-        await artifacts.WriteAsync(RoadmapArtifactPaths.Selection, output);
-        string evidencePath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.SelectionEvidenceDirectory, "selection", output);
+        await artifacts.WriteAsync(RoadmapArtifactPaths.Selection, completion.Output);
+        string evidencePath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.SelectionEvidenceDirectory, "selection", completion.Output);
+        await selectionProvenance.RecordActiveSelectionAsync(
+            completion.Output,
+            completion.InputSnapshot,
+            existing?.RetiredEpics ?? [],
+            cancellationToken);
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.Selection, ArtifactLifecycleState.Ready, evidencePath);
 
-        SelectionDecision decision = new SelectionParser().Parse(output);
+        SelectionDecision decision = new SelectionParser().Parse(completion.Output);
         await AppendDecisionAsync(RoadmapState.SelectNextStrategicInitiative, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.Selection, decision.RecommendedOutcome, decision.Confidence, decision.PrimaryReason);
         return decision;
     }
@@ -297,7 +303,7 @@ internal sealed class RoadmapStateMachine(
     {
         const string runtimePrompt = "EpicPreparationAudit";
         console.Phase("Audit selected epic");
-        string selection = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
+        string selection = await ReadCurrentSelectionAsync(cancellationToken);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildAuditContext(projection.Content, selection);
@@ -322,6 +328,9 @@ internal sealed class RoadmapStateMachine(
             IReadOnlyList<RetiredEpic> retiredEpics = RetiredEpic.Upsert(existing?.RetiredEpics ?? [], retired);
             await AppendDecisionAsync(RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", decision.Confidence, $"{retired.IdentityKind} {retired.StableIdentity}: {decision.PrimaryReason}");
             await SaveStateAsync(RoadmapState.RetireEpic, TransitionStatus.Completed, RoadmapState.EpicPreparationAudit, RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", retiredAt, retiredAt, retiredEpics, null);
+            await SupersedeActiveSelectionAsync(
+                [DerivedArtifactStaleReason.RetiredEpicStateDrift],
+                "Retired epic state changed after EpicPreparationAudit.");
             return EpicPreparationResult.Retired;
         }
 
@@ -343,7 +352,7 @@ internal sealed class RoadmapStateMachine(
     private async Task<ArtifactPromotionResult> RewriteActiveEpicAsync(string runtimePrompt, RoadmapState state, ProjectContext projectContext, string auditPath, CancellationToken cancellationToken)
     {
         console.Phase(runtimePrompt);
-        string selectionOrEpic = await artifacts.ReadAsync(RoadmapArtifactPaths.ActiveEpic) ?? await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
+        string selectionOrEpic = await artifacts.ReadAsync(RoadmapArtifactPaths.ActiveEpic) ?? await ReadCurrentSelectionAsync(cancellationToken);
         string audit = await artifacts.ReadRequiredAsync(auditPath);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
@@ -365,7 +374,7 @@ internal sealed class RoadmapStateMachine(
     {
         const string runtimePrompt = "CreateNewEpic";
         console.Phase("Create new epic");
-        string selection = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
+        string selection = await ReadCurrentSelectionAsync(cancellationToken);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
@@ -377,7 +386,7 @@ internal sealed class RoadmapStateMachine(
     {
         const string runtimePrompt = "SplitEpic";
         console.Phase("Split epic");
-        string selection = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
+        string selection = await ReadCurrentSelectionAsync(cancellationToken);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
@@ -1002,6 +1011,9 @@ internal sealed class RoadmapStateMachine(
             TransitionInputContext.CompletionEvaluation(evaluationPath));
         await artifacts.WriteAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
         await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "roadmap-completion-update", output);
+        await SupersedeActiveSelectionAsync(
+            [DerivedArtifactStaleReason.RoadmapCompletionContextDrift],
+            "Roadmap completion context changed after completion certification.");
         await AppendDecisionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.RoadmapCompletionContext, "Roadmap Completion Context Updated", "Unclear", "Completion context updated after certification.");
     }
 
@@ -1404,6 +1416,46 @@ internal sealed class RoadmapStateMachine(
             rationale));
     }
 
+    private async Task<string> ReadCurrentSelectionAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string selection = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
+        string projectionPath = RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
+        string? selectionProjection = await artifacts.ReadAsync(projectionPath);
+        if (string.IsNullOrWhiteSpace(selectionProjection))
+        {
+            throw new RoadmapStepException("Active selection cannot be used because its SelectNextEpic projection is missing.");
+        }
+
+        RoadmapStateDocument? state = await stateStore.LoadAsync();
+        TransitionInputSnapshot currentCycle = await selectionProvenance.CaptureCurrentCycleAsync(
+            selectionProjection,
+            state?.RetiredEpics ?? [],
+            cancellationToken);
+        DerivedArtifactFreshness freshness = await selectionProvenance.EvaluateActiveSelectionFreshnessAsync(
+            currentCycle,
+            state?.RetiredEpics ?? [],
+            cancellationToken);
+        if (!freshness.IsFresh)
+        {
+            throw new RoadmapStepException(
+                $"Active selection cannot be used because it does not belong to the current selection cycle: {FormatReasons(freshness.Reasons)}.");
+        }
+
+        return selection;
+    }
+
+    private async Task SupersedeActiveSelectionAsync(
+        IReadOnlyList<DerivedArtifactStaleReason> reasons,
+        string lifecycleNotes)
+    {
+        await selectionProvenance.SupersedeActiveSelectionAsync(reasons);
+        await lifecycleStore.UpsertAsync(
+            RoadmapArtifactPaths.Selection,
+            ArtifactLifecycleState.Superseded,
+            lifecycleNotes);
+    }
+
     private async Task SaveStateAsync(
         RoadmapState current,
         TransitionStatus status,
@@ -1661,6 +1713,9 @@ internal sealed class RoadmapStateMachine(
 
     private static string OneLine(string value) =>
         string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    private static string FormatReasons(IReadOnlyList<DerivedArtifactStaleReason> reasons) =>
+        reasons.Count == 0 ? "UnknownProvenance" : string.Join(", ", reasons);
 
     private enum EpicPreparationResult
     {
