@@ -6,23 +6,23 @@
 
 **Architecture:** All capture happens at the one chokepoint every gated turn already passes through — `GatedAgentSession`/`GatedAgentRuntime`. The usage gate is widened to *return* the capacity snapshot it already probes (pre-run); a `SessionTelemetryRecorder` adds one post-turn probe, resolves the codex rollout file, computes effective tokens via the router's cost model, and appends a record through a per-day/size-hybrid rotating sink. Everything is fail-open — telemetry never breaks a turn.
 
-**Tech Stack:** C# / .NET 10, xUnit, System.Text.Json. Project: `src/CommandCenter.CLI` (namespace `CommandCenter.Cli`), tests in `tests/CommandCenter.CLI.Tests` (namespace `CommandCenter.Cli.Tests`).
+**Tech Stack:** C# / .NET 10, xUnit, System.Text.Json. Project: `src/LoopRelay.CLI` (namespace `LoopRelay.Cli`), tests in `tests/LoopRelay.CLI.Tests` (namespace `LoopRelay.Cli.Tests`).
 
 ## Global Constraints
 
-- All new production types are `internal` in namespace `CommandCenter.Cli` (match the existing CLI files).
-- Tests are `public` classes in namespace `CommandCenter.Cli.Tests`, xUnit `[Fact]`.
+- All new production types are `internal` in namespace `LoopRelay.Cli` (match the existing CLI files).
+- Tests are `public` classes in namespace `LoopRelay.Cli.Tests`, xUnit `[Fact]`.
 - **Fail-open:** no telemetry path (probe, locator, sink, serialization) may throw out of a turn. On failure, `ILoopConsole.Warn(...)` and continue.
 - Capacity is a **remaining percent (0–100)**, from `CodexUsageStatus` (`CodexUsage.cs`). Never a token budget.
 - Effective tokens = `IDecisionCostModel.Measure(usage)` — reuse `EffectiveTokenCostModel` (`(prompt−cached) + cached×0.10 + output`). Do not re-derive the formula.
 - Rotation size cap constant: **5 MiB = 5,242,880 bytes**.
-- Log directory: `<repository.Path>/.commandcenter/telemetry/`, git-ignored. Files: `sessions.<yyyy-MM-dd>.<NNNN>.jsonl`.
+- Log directory: `<repository.Path>/.LoopRelay/telemetry/`, git-ignored. Files: `sessions.<yyyy-MM-dd>.<NNNN>.jsonl`.
 - SDK-style csproj globs `.cs` files — new files need no csproj edits.
-- Build: `dotnet build CommandCenter.sln -c Debug`. Test one project: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug`.
+- Build: `dotnet build LoopRelay.sln -c Debug`. Test one project: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug`.
 
 ## File Structure
 
-**Create (production, `src/CommandCenter.CLI/`):**
+**Create (production, `src/LoopRelay.CLI/`):**
 - `SessionTelemetryRecord.cs` — the 14-field record + `SessionTelemetryJson.Options`.
 - `Clock.cs` — `IClock` + `SystemClock`.
 - `SessionTelemetrySink.cs` — `ISessionTelemetrySink`, `RotatingJsonlTelemetrySink`, `NullSessionTelemetrySink`.
@@ -34,9 +34,9 @@
 - `UsageGate.cs` — `IUsageGate.WaitForCapacityAsync` returns `Task<CodexUsageStatus?>`; re-probe after a wait.
 - `GatedAgentRuntime.cs` — thread recorder/clock/repoName; emit a record per turn and one-shot; cache the log path per session.
 - `Program.cs` — build the recorder via the factory; pass to `GatedAgentRuntime`.
-- `.gitignore` (repo root) — add `.commandcenter/`.
+- `.gitignore` (repo root) — add `.LoopRelay/`.
 
-**Modify (tests, `tests/CommandCenter.CLI.Tests/`):**
+**Modify (tests, `tests/LoopRelay.CLI.Tests/`):**
 - `TestDoubles.cs` — add `FakeClock`, `FakeSessionTelemetrySink`, `FakeCodexRolloutLocator`, `RecordingSessionTelemetryRecorder`.
 - `GatedAgentRuntimeTests.cs` — update `RecordingGate` return type + `New()` ctor; add emission tests.
 - New: `SessionTelemetryRecordTests.cs`, `RotatingJsonlTelemetrySinkTests.cs`, `FileSystemCodexRolloutLocatorTests.cs`, `SessionTelemetryRecorderTests.cs`, `SessionTelemetryCompositionTests.cs`.
@@ -47,8 +47,8 @@
 ### Task 1: `SessionTelemetryRecord` + JSON options
 
 **Files:**
-- Create: `src/CommandCenter.CLI/SessionTelemetryRecord.cs`
-- Test: `tests/CommandCenter.CLI.Tests/SessionTelemetryRecordTests.cs`
+- Create: `src/LoopRelay.CLI/SessionTelemetryRecord.cs`
+- Test: `tests/LoopRelay.CLI.Tests/SessionTelemetryRecordTests.cs`
 
 **Interfaces:**
 - Produces: `SessionTelemetryRecord(DateTimeOffset Timestamp, string RepoName, string? CodexLogPath, string SessionId, string SessionType, int TurnIndex, int PromptTokens, int OutputTokens, int CachedTokens, double EffectiveTokens, int? PreFiveHourPercent, int? PostFiveHourPercent, int? PreWeeklyPercent, int? PostWeeklyPercent)` and `SessionTelemetryJson.Options` (`JsonSerializerOptions`, camelCase, compact).
@@ -58,10 +58,10 @@
 ```csharp
 using System;
 using System.Text.Json;
-using CommandCenter.Cli;
+using LoopRelay.Cli;
 using Xunit;
 
-namespace CommandCenter.Cli.Tests;
+namespace LoopRelay.Cli.Tests;
 
 public class SessionTelemetryRecordTests
 {
@@ -106,7 +106,7 @@ public class SessionTelemetryRecordTests
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter SessionTelemetryRecordTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter SessionTelemetryRecordTests`
 Expected: FAIL — `SessionTelemetryRecord` / `SessionTelemetryJson` do not exist (compile error).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -115,7 +115,7 @@ Expected: FAIL — `SessionTelemetryRecord` / `SessionTelemetryJson` do not exis
 using System;
 using System.Text.Json;
 
-namespace CommandCenter.Cli;
+namespace LoopRelay.Cli;
 
 /// <summary>
 /// One row of the per-turn session telemetry log. Capacity fields are a remaining PERCENT (0–100) or null
@@ -152,13 +152,13 @@ internal static class SessionTelemetryJson
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter SessionTelemetryRecordTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter SessionTelemetryRecordTests`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/SessionTelemetryRecord.cs tests/CommandCenter.CLI.Tests/SessionTelemetryRecordTests.cs
+git add src/LoopRelay.CLI/SessionTelemetryRecord.cs tests/LoopRelay.CLI.Tests/SessionTelemetryRecordTests.cs
 git commit -m "feat(cli): SessionTelemetryRecord + canonical JSON options"
 ```
 
@@ -167,14 +167,14 @@ git commit -m "feat(cli): SessionTelemetryRecord + canonical JSON options"
 ### Task 2: `IClock` / `SystemClock`
 
 **Files:**
-- Create: `src/CommandCenter.CLI/Clock.cs`
-- Modify: `tests/CommandCenter.CLI.Tests/TestDoubles.cs` (add `FakeClock`)
+- Create: `src/LoopRelay.CLI/Clock.cs`
+- Modify: `tests/LoopRelay.CLI.Tests/TestDoubles.cs` (add `FakeClock`)
 - Test: covered by `RotatingJsonlTelemetrySinkTests` (Task 3); add a smoke test here.
 
 **Interfaces:**
 - Produces: `IClock { DateTimeOffset UtcNow { get; } }`, `SystemClock : IClock`. Test double `FakeClock : IClock { DateTimeOffset UtcNow { get; set; } }`.
 
-- [ ] **Step 1: Write the failing test** — append to `tests/CommandCenter.CLI.Tests/TestDoubles.cs` (inside the `namespace CommandCenter.Cli.Tests;`):
+- [ ] **Step 1: Write the failing test** — append to `tests/LoopRelay.CLI.Tests/TestDoubles.cs` (inside the `namespace LoopRelay.Cli.Tests;`):
 
 ```csharp
 /// <summary>A clock a test can set to any instant (drives day-rotation + record timestamps).</summary>
@@ -184,14 +184,14 @@ internal sealed class FakeClock : IClock
 }
 ```
 
-And create `tests/CommandCenter.CLI.Tests/ClockTests.cs`:
+And create `tests/LoopRelay.CLI.Tests/ClockTests.cs`:
 
 ```csharp
 using System;
-using CommandCenter.Cli;
+using LoopRelay.Cli;
 using Xunit;
 
-namespace CommandCenter.Cli.Tests;
+namespace LoopRelay.Cli.Tests;
 
 public class ClockTests
 {
@@ -207,15 +207,15 @@ public class ClockTests
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter ClockTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter ClockTests`
 Expected: FAIL — `IClock` / `SystemClock` do not exist.
 
-- [ ] **Step 3: Write minimal implementation** — `src/CommandCenter.CLI/Clock.cs`:
+- [ ] **Step 3: Write minimal implementation** — `src/LoopRelay.CLI/Clock.cs`:
 
 ```csharp
 using System;
 
-namespace CommandCenter.Cli;
+namespace LoopRelay.Cli;
 
 /// <summary>Wall clock, abstracted so telemetry timestamps and day-rotation are deterministic under test.</summary>
 internal interface IClock
@@ -231,13 +231,13 @@ internal sealed class SystemClock : IClock
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter ClockTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter ClockTests`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/Clock.cs tests/CommandCenter.CLI.Tests/Clock*.cs tests/CommandCenter.CLI.Tests/TestDoubles.cs
+git add src/LoopRelay.CLI/Clock.cs tests/LoopRelay.CLI.Tests/Clock*.cs tests/LoopRelay.CLI.Tests/TestDoubles.cs
 git commit -m "feat(cli): IClock/SystemClock + FakeClock test double"
 ```
 
@@ -246,8 +246,8 @@ git commit -m "feat(cli): IClock/SystemClock + FakeClock test double"
 ### Task 3: `RotatingJsonlTelemetrySink` (per-day/size hybrid, keep-all)
 
 **Files:**
-- Create: `src/CommandCenter.CLI/SessionTelemetrySink.cs`
-- Test: `tests/CommandCenter.CLI.Tests/RotatingJsonlTelemetrySinkTests.cs`
+- Create: `src/LoopRelay.CLI/SessionTelemetrySink.cs`
+- Test: `tests/LoopRelay.CLI.Tests/RotatingJsonlTelemetrySinkTests.cs`
 
 **Interfaces:**
 - Consumes: `SessionTelemetryRecord`, `SessionTelemetryJson.Options` (Task 1), `IClock` (Task 2).
@@ -260,10 +260,10 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using CommandCenter.Cli;
+using LoopRelay.Cli;
 using Xunit;
 
-namespace CommandCenter.Cli.Tests;
+namespace LoopRelay.Cli.Tests;
 
 public class RotatingJsonlTelemetrySinkTests : IDisposable
 {
@@ -333,17 +333,17 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter RotatingJsonlTelemetrySinkTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter RotatingJsonlTelemetrySinkTests`
 Expected: FAIL — sink types do not exist.
 
-- [ ] **Step 3: Write minimal implementation** — `src/CommandCenter.CLI/SessionTelemetrySink.cs`:
+- [ ] **Step 3: Write minimal implementation** — `src/LoopRelay.CLI/SessionTelemetrySink.cs`:
 
 ```csharp
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
 
-namespace CommandCenter.Cli;
+namespace LoopRelay.Cli;
 
 /// <summary>Appends telemetry rows. Implementations must never throw out of <see cref="Append"/> in a way
 /// that could reach a turn — the recorder wraps calls, but keep sink work simple and self-contained.</summary>
@@ -407,13 +407,13 @@ internal sealed class NullSessionTelemetrySink : ISessionTelemetrySink
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter RotatingJsonlTelemetrySinkTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter RotatingJsonlTelemetrySinkTests`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/SessionTelemetrySink.cs tests/CommandCenter.CLI.Tests/RotatingJsonlTelemetrySinkTests.cs
+git add src/LoopRelay.CLI/SessionTelemetrySink.cs tests/LoopRelay.CLI.Tests/RotatingJsonlTelemetrySinkTests.cs
 git commit -m "feat(cli): per-day/size rotating JSONL telemetry sink"
 ```
 
@@ -422,8 +422,8 @@ git commit -m "feat(cli): per-day/size rotating JSONL telemetry sink"
 ### Task 4: `FileSystemCodexRolloutLocator`
 
 **Files:**
-- Create: `src/CommandCenter.CLI/CodexRolloutLocator.cs`
-- Test: `tests/CommandCenter.CLI.Tests/FileSystemCodexRolloutLocatorTests.cs`
+- Create: `src/LoopRelay.CLI/CodexRolloutLocator.cs`
+- Test: `tests/LoopRelay.CLI.Tests/FileSystemCodexRolloutLocatorTests.cs`
 
 **Interfaces:**
 - Produces: `ICodexRolloutLocator { string? Resolve(string workingDirectory, DateTimeOffset openedAtUtc); }`, `FileSystemCodexRolloutLocator(string sessionsRoot)`, static `FileSystemCodexRolloutLocator.ResolveDefaultSessionsRoot()`.
@@ -433,10 +433,10 @@ git commit -m "feat(cli): per-day/size rotating JSONL telemetry sink"
 ```csharp
 using System;
 using System.IO;
-using CommandCenter.Cli;
+using LoopRelay.Cli;
 using Xunit;
 
-namespace CommandCenter.Cli.Tests;
+namespace LoopRelay.Cli.Tests;
 
 public class FileSystemCodexRolloutLocatorTests : IDisposable
 {
@@ -517,17 +517,17 @@ public class FileSystemCodexRolloutLocatorTests : IDisposable
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter FileSystemCodexRolloutLocatorTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter FileSystemCodexRolloutLocatorTests`
 Expected: FAIL — locator types do not exist.
 
-- [ ] **Step 3: Write minimal implementation** — `src/CommandCenter.CLI/CodexRolloutLocator.cs`:
+- [ ] **Step 3: Write minimal implementation** — `src/LoopRelay.CLI/CodexRolloutLocator.cs`:
 
 ```csharp
 using System;
 using System.IO;
 using System.Text.Json;
 
-namespace CommandCenter.Cli;
+namespace LoopRelay.Cli;
 
 /// <summary>Resolves the on-disk codex rollout JSONL for a session's process, or null when it cannot.</summary>
 internal interface ICodexRolloutLocator
@@ -539,7 +539,7 @@ internal interface ICodexRolloutLocator
 
 /// <summary>
 /// Finds codex's own rollout log under <c>~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl</c>. Codex never tells
-/// CommandCenter its session id, so we match on the rollout's first-line <c>session_meta</c> (cwd == the session's
+/// LoopRelay its session id, so we match on the rollout's first-line <c>session_meta</c> (cwd == the session's
 /// working directory) and pick the newest whose start timestamp is at/after the session opened. Fails to null —
 /// the log row is still valuable without the path.
 /// </summary>
@@ -678,13 +678,13 @@ internal sealed class FileSystemCodexRolloutLocator : ICodexRolloutLocator
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter FileSystemCodexRolloutLocatorTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter FileSystemCodexRolloutLocatorTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/CodexRolloutLocator.cs tests/CommandCenter.CLI.Tests/FileSystemCodexRolloutLocatorTests.cs
+git add src/LoopRelay.CLI/CodexRolloutLocator.cs tests/LoopRelay.CLI.Tests/FileSystemCodexRolloutLocatorTests.cs
 git commit -m "feat(cli): locate codex rollout jsonl by cwd + open time"
 ```
 
@@ -693,10 +693,10 @@ git commit -m "feat(cli): locate codex rollout jsonl by cwd + open time"
 ### Task 5: Widen `IUsageGate` to return the capacity snapshot (re-probe after a wait)
 
 **Files:**
-- Modify: `src/CommandCenter.CLI/UsageGate.cs`
-- Modify: `src/CommandCenter.CLI/GatedAgentRuntime.cs` (callers must compile against the new return type)
-- Modify: `tests/CommandCenter.CLI.Tests/GatedAgentRuntimeTests.cs` (local `RecordingGate` return type)
-- Test: `tests/CommandCenter.CLI.Tests/UsageGateTests.cs` (add one test)
+- Modify: `src/LoopRelay.CLI/UsageGate.cs`
+- Modify: `src/LoopRelay.CLI/GatedAgentRuntime.cs` (callers must compile against the new return type)
+- Modify: `tests/LoopRelay.CLI.Tests/GatedAgentRuntimeTests.cs` (local `RecordingGate` return type)
+- Test: `tests/LoopRelay.CLI.Tests/UsageGateTests.cs` (add one test)
 
 **Interfaces:**
 - Changes: `IUsageGate.WaitForCapacityAsync(CancellationToken) : Task<CodexUsageStatus?>` (was `Task`). Returns the capacity the turn will start with (re-probed after any reset-wait); null when unreadable.
@@ -733,7 +733,7 @@ git commit -m "feat(cli): locate codex rollout jsonl by cwd + open time"
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter UsageGateTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter UsageGateTests`
 Expected: FAIL to compile — `WaitForCapacityAsync` returns `Task`, not `Task<CodexUsageStatus?>`.
 
 - [ ] **Step 3a: Change the interface + implementation** in `UsageGate.cs`.
@@ -825,13 +825,13 @@ and in `GatedAgentSession.RunTurnAsync` change `await usageGate.WaitForCapacityA
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter "UsageGateTests|GatedAgentRuntimeTests"`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter "UsageGateTests|GatedAgentRuntimeTests"`
 Expected: PASS — all existing UsageGate/GatedAgentRuntime tests plus the 2 new ones. (The existing `WaitForCapacity_QueriesTheProbeExactlyOnce` stays green: it uses a no-wait scenario.)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/UsageGate.cs src/CommandCenter.CLI/GatedAgentRuntime.cs tests/CommandCenter.CLI.Tests/UsageGateTests.cs tests/CommandCenter.CLI.Tests/GatedAgentRuntimeTests.cs
+git add src/LoopRelay.CLI/UsageGate.cs src/LoopRelay.CLI/GatedAgentRuntime.cs tests/LoopRelay.CLI.Tests/UsageGateTests.cs tests/LoopRelay.CLI.Tests/GatedAgentRuntimeTests.cs
 git commit -m "feat(cli): usage gate returns turn-start capacity snapshot"
 ```
 
@@ -840,12 +840,12 @@ git commit -m "feat(cli): usage gate returns turn-start capacity snapshot"
 ### Task 6: `SessionTelemetryRecorder` (post-probe + resolve + effective + append, fail-open)
 
 **Files:**
-- Create: `src/CommandCenter.CLI/SessionTelemetryRecorder.cs`
-- Modify: `tests/CommandCenter.CLI.Tests/TestDoubles.cs` (add `FakeSessionTelemetrySink`, `FakeCodexRolloutLocator`)
-- Test: `tests/CommandCenter.CLI.Tests/SessionTelemetryRecorderTests.cs`
+- Create: `src/LoopRelay.CLI/SessionTelemetryRecorder.cs`
+- Modify: `tests/LoopRelay.CLI.Tests/TestDoubles.cs` (add `FakeSessionTelemetrySink`, `FakeCodexRolloutLocator`)
+- Test: `tests/LoopRelay.CLI.Tests/SessionTelemetryRecorderTests.cs`
 
 **Interfaces:**
-- Consumes: `ICodexUsageProbe` (post-probe), `ICodexRolloutLocator`, `ISessionTelemetrySink`, `IDecisionCostModel` (`Measure`), `IClock`, `ILoopConsole`; `AgentTurnResult`/`AgentTokenUsage`/`SessionIdentity`/`SessionRole` from `CommandCenter.Agents.Models`; `CodexUsageStatus`.
+- Consumes: `ICodexUsageProbe` (post-probe), `ICodexRolloutLocator`, `ISessionTelemetrySink`, `IDecisionCostModel` (`Measure`), `IClock`, `ILoopConsole`; `AgentTurnResult`/`AgentTokenUsage`/`SessionIdentity`/`SessionRole` from `LoopRelay.Agents.Models`; `CodexUsageStatus`.
 - Produces: `ISessionTelemetryRecorder { Task<string?> RecordTurnAsync(string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role, DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result, CodexUsageStatus? preStatus, CancellationToken cancellationToken); }`, `SessionTelemetryRecorder(...)`, `NullSessionTelemetryRecorder`.
 
 - [ ] **Step 1: Add test doubles** — append to `TestDoubles.cs`:
@@ -882,11 +882,11 @@ internal sealed class FakeCodexRolloutLocator : ICodexRolloutLocator
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using CommandCenter.Agents.Models;
-using CommandCenter.Cli;
+using LoopRelay.Agents.Models;
+using LoopRelay.Cli;
 using Xunit;
 
-namespace CommandCenter.Cli.Tests;
+namespace LoopRelay.Cli.Tests;
 
 public class SessionTelemetryRecorderTests
 {
@@ -1000,19 +1000,19 @@ public class SessionTelemetryRecorderTests
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter SessionTelemetryRecorderTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter SessionTelemetryRecorderTests`
 Expected: FAIL — recorder types do not exist.
 
-- [ ] **Step 4: Write minimal implementation** — `src/CommandCenter.CLI/SessionTelemetryRecorder.cs`:
+- [ ] **Step 4: Write minimal implementation** — `src/LoopRelay.CLI/SessionTelemetryRecorder.cs`:
 
 ```csharp
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using CommandCenter.Agents.Models;
-using CommandCenter.Orchestration.Abstractions;
+using LoopRelay.Agents.Models;
+using LoopRelay.Orchestration.Abstractions;
 
-namespace CommandCenter.Cli;
+namespace LoopRelay.Cli;
 
 /// <summary>Records one telemetry row per codex turn. Returns the resolved codex rollout path (cached across a
 /// session's turns), or null. MUST NOT throw — telemetry never breaks a turn.</summary>
@@ -1114,13 +1114,13 @@ internal sealed class NullSessionTelemetryRecorder : ISessionTelemetryRecorder
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter SessionTelemetryRecorderTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter SessionTelemetryRecorderTests`
 Expected: PASS (5 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/SessionTelemetryRecorder.cs tests/CommandCenter.CLI.Tests/SessionTelemetryRecorderTests.cs tests/CommandCenter.CLI.Tests/TestDoubles.cs
+git add src/LoopRelay.CLI/SessionTelemetryRecorder.cs tests/LoopRelay.CLI.Tests/SessionTelemetryRecorderTests.cs tests/LoopRelay.CLI.Tests/TestDoubles.cs
 git commit -m "feat(cli): SessionTelemetryRecorder builds+appends per-turn rows (fail-open)"
 ```
 
@@ -1129,8 +1129,8 @@ git commit -m "feat(cli): SessionTelemetryRecorder builds+appends per-turn rows 
 ### Task 7: Wire the recorder into `GatedAgentRuntime` / `GatedAgentSession`
 
 **Files:**
-- Modify: `src/CommandCenter.CLI/GatedAgentRuntime.cs`
-- Modify: `tests/CommandCenter.CLI.Tests/GatedAgentRuntimeTests.cs`
+- Modify: `src/LoopRelay.CLI/GatedAgentRuntime.cs`
+- Modify: `tests/LoopRelay.CLI.Tests/GatedAgentRuntimeTests.cs`
 
 **Interfaces:**
 - Changes: `GatedAgentRuntime(IAgentRuntime inner, IUsageGate usageGate, ISessionTelemetryRecorder recorder, IClock clock, string repoName)`. Each turn/one-shot: capture the gate's pre-status, run the turn, then `recorder.RecordTurnAsync(...)`; cache the rollout path per session.
@@ -1160,7 +1160,7 @@ Add a local recording recorder at the bottom of the class (near the other fakes)
 ```csharp
     private sealed class RecordingSessionTelemetryRecorder : ISessionTelemetryRecorder
     {
-        public List<(SessionRole Role, int TurnIndex, string? CachedLogPath, CommandCenter.Cli.CodexUsageStatus? Pre)> Calls { get; } = new();
+        public List<(SessionRole Role, int TurnIndex, string? CachedLogPath, LoopRelay.Cli.CodexUsageStatus? Pre)> Calls { get; } = new();
         public string? PathToReturn { get; set; } = "/log";
 
         public Task<string?> RecordTurnAsync(
@@ -1232,20 +1232,20 @@ Add new `[Fact]`s:
     }
 ```
 
-(Existing tests keep working; `AgentTurnState`/`AgentTokenUsage` are already imported via `CommandCenter.Agents.Models`.)
+(Existing tests keep working; `AgentTurnState`/`AgentTokenUsage` are already imported via `LoopRelay.Agents.Models`.)
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter GatedAgentRuntimeTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter GatedAgentRuntimeTests`
 Expected: FAIL to compile — `GatedAgentRuntime` ctor takes 2 args, not 5.
 
 - [ ] **Step 3: Rewrite `GatedAgentRuntime.cs`**:
 
 ```csharp
-using CommandCenter.Agents.Abstractions;
-using CommandCenter.Agents.Models;
+using LoopRelay.Agents.Abstractions;
+using LoopRelay.Agents.Models;
 
-namespace CommandCenter.Cli;
+namespace LoopRelay.Cli;
 
 /// <summary>
 /// Wraps an <see cref="IAgentRuntime"/> so the Codex usage gate runs before EVERY codex turn/one-shot, and one
@@ -1333,13 +1333,13 @@ internal sealed class GatedAgentSession(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter GatedAgentRuntimeTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter GatedAgentRuntimeTests`
 Expected: PASS — existing tests + 4 new emission tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/GatedAgentRuntime.cs tests/CommandCenter.CLI.Tests/GatedAgentRuntimeTests.cs
+git add src/LoopRelay.CLI/GatedAgentRuntime.cs tests/LoopRelay.CLI.Tests/GatedAgentRuntimeTests.cs
 git commit -m "feat(cli): emit a telemetry row per codex turn at the gate seam"
 ```
 
@@ -1348,13 +1348,13 @@ git commit -m "feat(cli): emit a telemetry row per codex turn at the gate seam"
 ### Task 8: Compose in `Program.cs` + `.gitignore`
 
 **Files:**
-- Create: `src/CommandCenter.CLI/SessionTelemetryComposition.cs`
-- Modify: `src/CommandCenter.CLI/Program.cs`
+- Create: `src/LoopRelay.CLI/SessionTelemetryComposition.cs`
+- Modify: `src/LoopRelay.CLI/Program.cs`
 - Modify: `.gitignore` (repo root)
-- Test: `tests/CommandCenter.CLI.Tests/SessionTelemetryCompositionTests.cs`
+- Test: `tests/LoopRelay.CLI.Tests/SessionTelemetryCompositionTests.cs`
 
 **Interfaces:**
-- Consumes: everything above; `Repository` (`CommandCenter.Core.Repositories`), `ICodexUsageProbe`, `IDecisionCostModel`.
+- Consumes: everything above; `Repository` (`LoopRelay.Core.Repositories`), `ICodexUsageProbe`, `IDecisionCostModel`.
 - Produces: `SessionTelemetryComposition.CreateRecorder(Repository repository, bool enabled, ICodexUsageProbe probe, IDecisionCostModel costModel, IClock clock, ILoopConsole console) : ISessionTelemetryRecorder` and `SessionTelemetryComposition.RepoName(Repository)` and `SessionTelemetryComposition.IsEnabled()`.
 
 - [ ] **Step 1: Write the failing test** — `SessionTelemetryCompositionTests.cs`:
@@ -1365,13 +1365,13 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using CommandCenter.Agents.Models;
-using CommandCenter.Cli;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration.Services;
+using LoopRelay.Agents.Models;
+using LoopRelay.Cli;
+using LoopRelay.Core.Repositories;
+using LoopRelay.Orchestration.Services;
 using Xunit;
 
-namespace CommandCenter.Cli.Tests;
+namespace LoopRelay.Cli.Tests;
 
 public class SessionTelemetryCompositionTests : IDisposable
 {
@@ -1386,7 +1386,7 @@ public class SessionTelemetryCompositionTests : IDisposable
         new(1, AgentTurnState.Completed, "o", new AgentTokenUsage(10, 2, 0));
 
     [Fact]
-    public async Task CreateRecorder_WhenEnabled_WritesUnderRepoCommandCenterTelemetry()
+    public async Task CreateRecorder_WhenEnabled_WritesUnderRepoLoopRelayTelemetry()
     {
         ISessionTelemetryRecorder recorder = SessionTelemetryComposition.CreateRecorder(
             Repo(), enabled: true, new FakeCodexUsageProbe(), new EffectiveTokenCostModel(),
@@ -1395,7 +1395,7 @@ public class SessionTelemetryCompositionTests : IDisposable
         await recorder.RecordTurnAsync("AxiomRepo", repoPath, new SessionIdentity(Guid.NewGuid()),
             SessionRole.Decision, DateTimeOffset.UnixEpoch, null, Turn(), null, CancellationToken.None);
 
-        string dir = Path.Combine(repoPath, ".commandcenter", "telemetry");
+        string dir = Path.Combine(repoPath, ".LoopRelay", "telemetry");
         Assert.True(Directory.Exists(dir));
         Assert.NotEmpty(Directory.EnumerateFiles(dir, "sessions.*.jsonl"));
     }
@@ -1410,7 +1410,7 @@ public class SessionTelemetryCompositionTests : IDisposable
         await recorder.RecordTurnAsync("AxiomRepo", repoPath, new SessionIdentity(Guid.NewGuid()),
             SessionRole.Decision, DateTimeOffset.UnixEpoch, null, Turn(), null, CancellationToken.None);
 
-        Assert.False(Directory.Exists(Path.Combine(repoPath, ".commandcenter")));
+        Assert.False(Directory.Exists(Path.Combine(repoPath, ".LoopRelay")));
         Assert.IsType<NullSessionTelemetryRecorder>(recorder);
     }
 
@@ -1426,29 +1426,29 @@ public class SessionTelemetryCompositionTests : IDisposable
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter SessionTelemetryCompositionTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter SessionTelemetryCompositionTests`
 Expected: FAIL — `SessionTelemetryComposition` does not exist.
 
-- [ ] **Step 3: Write the factory** — `src/CommandCenter.CLI/SessionTelemetryComposition.cs`:
+- [ ] **Step 3: Write the factory** — `src/LoopRelay.CLI/SessionTelemetryComposition.cs`:
 
 ```csharp
 using System;
 using System.IO;
-using CommandCenter.Core.Repositories;
-using CommandCenter.Orchestration.Abstractions;
+using LoopRelay.Core.Repositories;
+using LoopRelay.Orchestration.Abstractions;
 
-namespace CommandCenter.Cli;
+namespace LoopRelay.Cli;
 
 /// <summary>
 /// Builds the per-turn telemetry recorder for the CLI loop. Enabled by default; set
-/// <c>COMMANDCENTER_SESSION_LOG=0</c> (or <c>false</c>) to disable (swaps in the no-op recorder, which also
-/// skips the extra post-turn probe). The log lives under <c>&lt;repo&gt;/.commandcenter/telemetry/</c>.
+/// <c>LoopRelay_SESSION_LOG=0</c> (or <c>false</c>) to disable (swaps in the no-op recorder, which also
+/// skips the extra post-turn probe). The log lives under <c>&lt;repo&gt;/.LoopRelay/telemetry/</c>.
 /// </summary>
 internal static class SessionTelemetryComposition
 {
     public static bool IsEnabled()
     {
-        string? flag = Environment.GetEnvironmentVariable("COMMANDCENTER_SESSION_LOG");
+        string? flag = Environment.GetEnvironmentVariable("LoopRelay_SESSION_LOG");
         return !(string.Equals(flag, "0", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(flag, "false", StringComparison.OrdinalIgnoreCase));
     }
@@ -1471,7 +1471,7 @@ internal static class SessionTelemetryComposition
             return new NullSessionTelemetryRecorder();
         }
 
-        string directory = Path.Combine(repository.Path, ".commandcenter", "telemetry");
+        string directory = Path.Combine(repository.Path, ".LoopRelay", "telemetry");
         var sink = new RotatingJsonlTelemetrySink(directory, clock);
         var locator = new FileSystemCodexRolloutLocator(FileSystemCodexRolloutLocator.ResolveDefaultSessionsRoot());
         return new SessionTelemetryRecorder(probe, locator, sink, costModel, clock, console);
@@ -1481,7 +1481,7 @@ internal static class SessionTelemetryComposition
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug --filter SessionTelemetryCompositionTests`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter SessionTelemetryCompositionTests`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Wire `Program.cs`.** After the `usageGate` line (currently `var usageGate = new UsageGate(...)`) and before `var gatedRuntime = ...`, insert:
@@ -1500,28 +1500,28 @@ var gatedRuntime = new GatedAgentRuntime(
     runtime, usageGate, telemetryRecorder, telemetryClock, SessionTelemetryComposition.RepoName(repository));
 ```
 
-`EffectiveTokenCostModel` is in `CommandCenter.Orchestration.Services`, already imported at the top of `Program.cs` (line 9). No new using needed.
+`EffectiveTokenCostModel` is in `LoopRelay.Orchestration.Services`, already imported at the top of `Program.cs` (line 9). No new using needed.
 
 - [ ] **Step 6: Add to `.gitignore`.** Append to the repo-root `.gitignore`:
 
 ```gitignore
 
 # CLI per-turn session telemetry log (local only; a visualizer manages pruning)
-.commandcenter/
+.LoopRelay/
 ```
 
 - [ ] **Step 7: Build the whole solution + run the full CLI test suite**
 
-Run: `dotnet build CommandCenter.sln -c Debug`
+Run: `dotnet build LoopRelay.sln -c Debug`
 Expected: Build succeeded, 0 errors.
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj -c Debug`
+Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug`
 Expected: PASS — all CLI tests (existing + new) green.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/SessionTelemetryComposition.cs src/CommandCenter.CLI/Program.cs tests/CommandCenter.CLI.Tests/SessionTelemetryCompositionTests.cs .gitignore
+git add src/LoopRelay.CLI/SessionTelemetryComposition.cs src/LoopRelay.CLI/Program.cs tests/LoopRelay.CLI.Tests/SessionTelemetryCompositionTests.cs .gitignore
 git commit -m "feat(cli): compose session telemetry recorder in Program + gitignore log"
 ```
 
@@ -1536,10 +1536,10 @@ git commit -m "feat(cli): compose session telemetry recorder in Program + gitign
 - Post capacity via one added probe → Task 6 (`ProbePostAsync`). ✓
 - Effective tokens via `EffectiveTokenCostModel.Measure` → Task 6 + Task 8 (`new EffectiveTokenCostModel()`). ✓
 - Codex rollout path (cwd + open-time, lazy + cached per session) → Task 4 + Task 7 caching. ✓
-- Location repo-local `.commandcenter/telemetry/`, git-ignored → Task 8. ✓
+- Location repo-local `.LoopRelay/telemetry/`, git-ignored → Task 8. ✓
 - Per-day/size-hybrid rotation, keep all → Task 3. ✓
 - Fail-open everywhere → Tasks 4/6 try-catch; Task 7 relies on recorder never throwing. ✓
-- Enable/disable default-on → Task 8 (`COMMANDCENTER_SESSION_LOG`). ✓
+- Enable/disable default-on → Task 8 (`LoopRelay_SESSION_LOG`). ✓
 
 **Placeholder scan:** none — every step carries full code.
 

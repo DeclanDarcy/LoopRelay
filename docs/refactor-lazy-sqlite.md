@@ -7,7 +7,7 @@
 
 ## Executive summary
 
-CommandCenter pays a ~30s cold start because four `IHostedService.StartAsync` methods run **eager per-repo derivation** before Kestrel binds: decision-session snapshot rebuilds, workflow timeline projection, workflow continuation, and execution-session recovery. The user's mandate is precise:
+LoopRelay pays a ~30s cold start because four `IHostedService.StartAsync` methods run **eager per-repo derivation** before Kestrel binds: decision-session snapshot rebuilds, workflow timeline projection, workflow continuation, and execution-session recovery. The user's mandate is precise:
 
 > "I don't want ANY of these to happen on startup. They should be stored in a DB and calculated when relevant. Recovery should be on-demand. I need an elegant and robust refactor. Use SQLite."
 
@@ -38,7 +38,7 @@ The deciding test is a single question: **who is the consumer?**
 
 ### Stays on disk (genuine external contract — untouched)
 
-The orchestrator `.md` plane enumerated in `OrchestrationArtifactPaths` (`src/CommandCenter.Orchestration/OrchestrationArtifactPaths.cs`):
+The orchestrator `.md` plane enumerated in `OrchestrationArtifactPaths` (`src/LoopRelay.Orchestration/OrchestrationArtifactPaths.cs`):
 
 - `plan.md`, `specs/epic.md` + `s{n}.md`, `operational_context.md`, `operational_delta.md`, `decisions/decisions.md` (+ rotated `decisions.NNNN.md`), `milestones/m*.md`, `handoffs/handoff.md` (+ rotated).
 
@@ -50,13 +50,13 @@ Decisions/candidates/proposals (`decision.json` + `history.json` per id), reason
 
 **Why keep these on files:** the mandate is "don't do this on startup; store *derived* data in a DB; recovery on-demand" — not "rewrite the persistence layer." These already round-trip correctly. Moving them to SQLite would mean reproducing byte-identical `.json` *and* the `.md` projections that reasoning/decisions emit (which the orchestration loop reads as a contract), rewriting the `ParseSequence`-over-`ListDirectoriesAsync` id allocator, and redirecting the many tests that read raw `.agents` JSON directly. That is strictly more scope, more contract surface, and more migration risk than the ask requires. It remains a clean, clearly-separable follow-on (see **Open Decisions**).
 
-*Confirmed safe to defer:* the Rust/Tauri shell (`src/CommandCenter.Shell/src/main.rs`) has zero filesystem/`.agents` access — it is a pure HTTP proxy. So these JSON files are not a Rust/UI contract; they could move later without breaking the shell. They simply don't need to move *now*.
+*Confirmed safe to defer:* the Rust/Tauri shell (`src/LoopRelay.Shell/src/main.rs`) has zero filesystem/`.agents` access — it is a pure HTTP proxy. So these JSON files are not a Rust/UI contract; they could move later without breaking the shell. They simply don't need to move *now*.
 
 ### Moves to SQLite (internal-derived caches + recovery coordination)
 
 Single in-process consumer: the backend's own observability projection. `DecisionSessionRouter.Evaluate` is pure no-I/O and never reads these.
 
-- The **five decision-session derived snapshots**: metrics, economics, coherence, lifecycle-policy, transfer-eligibility (`src/CommandCenter.DecisionSessions/Persistence/DecisionSessionArtifactPaths.cs:12-20`). Consumed only by `DecisionSessionObservabilityService.GetProjectionAsync`.
+- The **five decision-session derived snapshots**: metrics, economics, coherence, lifecycle-policy, transfer-eligibility (`src/LoopRelay.DecisionSessions/Persistence/DecisionSessionArtifactPaths.cs:12-20`). Consumed only by `DecisionSessionObservabilityService.GetProjectionAsync`.
 - **Workflow timelines** (`FileSystemWorkflowRepository.SaveTimelineAsync` — the `.json`).
 - **Decision-session recovery-result audit rows** + recovery **history** + the **metrics staleness stamp** (`DecisionSessionMetricsSnapshotStamp`).
 - **Recovery coordination state** (a new per-repo ledger).
@@ -69,7 +69,7 @@ Single in-process consumer: the backend's own observability projection. `Decisio
 
 ## Concrete SQLite schema
 
-**Layout.** One DB **per repo** at `<repo>/.agents/derived-cache.db` (co-located with the `.md` contract plane; DELETE-repo teardown drops the file with the `.agents` tree — satisfies m10). Plus **one global DB** at `%AppData%/CommandCenter/command-center.db` for the recovery ledger, which must survive even while a repo dir is being torn down. The DB path is resolved from the same env-var mechanism as `COMMAND_CENTER_CONFIGURATION_PATH` (e.g. `COMMAND_CENTER_DB_PATH`) so dev/test/prod DBs are separable — essential for the build-Release-while-Debug-runs constraint.
+**Layout.** One DB **per repo** at `<repo>/.agents/derived-cache.db` (co-located with the `.md` contract plane; DELETE-repo teardown drops the file with the `.agents` tree — satisfies m10). Plus **one global DB** at `%AppData%/LoopRelay/command-center.db` for the recovery ledger, which must survive even while a repo dir is being torn down. The DB path is resolved from the same env-var mechanism as `COMMAND_CENTER_CONFIGURATION_PATH` (e.g. `COMMAND_CENTER_DB_PATH`) so dev/test/prod DBs are separable — essential for the build-Release-while-Debug-runs constraint.
 
 All connections, on open:
 
@@ -126,7 +126,7 @@ CREATE INDEX ix_recovery_result_latest ON recovery_result(repository_id, occurre
 - `source_fingerprint` is **per family**, so invalidation is scoped: `metrics-base` ← `{decisions, reasoning, operational-context}`; `coherence-base` ← `{reasoning}` only; `workflow-timeline` ← `{execution, handoff, decision, git, decision-session}`. A single global repo version would over-invalidate and defeat the cache.
 - The envelope ownership/schema-version checks that today throw on read become `WHERE repository_id = @repo` (cross-repo reads return zero rows) plus a `formula_version`/`schema_version` guard.
 
-### Global DB (`%AppData%/CommandCenter/command-center.db`)
+### Global DB (`%AppData%/LoopRelay/command-center.db`)
 
 ```sql
 -- Recovery coordination ledger: one row per repo, survives per-repo dir churn.
@@ -143,7 +143,7 @@ Schema is versioned with `PRAGMA user_version` and applied idempotently (`CREATE
 
 ## The lazy-compute + invalidation + time-field-recompute mechanism
 
-Two small abstractions in a new `CommandCenter.Persistence.Sqlite` project. The seam is the **service layer** (endpoints already call services) — *not* `IArtifactStore`, which is path+glob-shaped and stays filesystem-backed.
+Two small abstractions in a new `LoopRelay.Persistence.Sqlite` project. The seam is the **service layer** (endpoints already call services) — *not* `IArtifactStore`, which is path+glob-shaped and stays filesystem-backed.
 
 ```csharp
 // The cache primitive. Generic over the PURE base type.
@@ -194,7 +194,7 @@ async Task<TLive> ReadDerivedAsync<TBase, TLive>(
 
 ### Where it slots in
 
-`DecisionSessionMetricsService.GetMetricsAsync` today does: *read snapshot (result discarded) → full evidence read → `BuildSnapshot` → write* (`src/CommandCenter.DecisionSessions/Services/DecisionSessionMetricsService.cs:18-42`). It becomes:
+`DecisionSessionMetricsService.GetMetricsAsync` today does: *read snapshot (result discarded) → full evidence read → `BuildSnapshot` → write* (`src/LoopRelay.DecisionSessions/Services/DecisionSessionMetricsService.cs:18-42`). It becomes:
 
 - `computeBase` = aggregate-query the counts/bytes/tokens + base timestamps. The base record is exactly `DecisionSessionMetrics` (pure counts, lines 63-74) plus `{sessionStartedAt, lastActivityAt, createdAt}`.
 - `project(base, now)` = populate `Statistics` / `Activity` / `Growth` / `Cache` (lines 54-61, 75-78 — all `measuredAt`-relative) on every call.
@@ -276,7 +276,7 @@ Result: Kestrel binds with **zero per-repo derivation work**. Cold start collaps
 
 ## DI, migrations, and per-test SQLite isolation
 
-**DI.** New `CommandCenter.Persistence.Sqlite` project exposing `ISqliteConnectionFactory` (per-repo `Data Source=<repo>/.agents/derived-cache.db`, path from env; plus the global DB), `IDerivedSnapshotCache`, `ISourceFingerprintProvider`, and the per-repo recovery gate — all `AddSingleton`. In each module's `ServiceCollectionExtensions`, the derivation services gain the cache dependency, and the three derivation `AddHostedService` lines go away. **`IArtifactStore` registration in `Program.cs` is untouched** (keeps the `.md` contract plane filesystem-backed). The connection factory must close/dispose the per-repo connection on m10 DELETE-repo teardown *before* the `.agents` tree is removed — otherwise Windows file locks block deletion.
+**DI.** New `LoopRelay.Persistence.Sqlite` project exposing `ISqliteConnectionFactory` (per-repo `Data Source=<repo>/.agents/derived-cache.db`, path from env; plus the global DB), `IDerivedSnapshotCache`, `ISourceFingerprintProvider`, and the per-repo recovery gate — all `AddSingleton`. In each module's `ServiceCollectionExtensions`, the derivation services gain the cache dependency, and the three derivation `AddHostedService` lines go away. **`IArtifactStore` registration in `Program.cs` is untouched** (keeps the `.md` contract plane filesystem-backed). The connection factory must close/dispose the per-repo connection on m10 DELETE-repo teardown *before* the `.agents` tree is removed — otherwise Windows file locks block deletion.
 
 **Migrations.** No EF migrations. A tiny idempotent `EnsureSchemaAsync` runs `CREATE TABLE IF NOT EXISTS` and bumps `PRAGMA user_version` on first connection per DB, lazily on first repo access. No migration runner, no startup cost.
 
@@ -308,7 +308,7 @@ Each phase builds in Release, keeps the ~1137-test suite reproducibly green (res
 
 ### Phase 0 — Scaffold (no behavior change)
 
-- **Change:** Add `CommandCenter.Persistence.Sqlite` (Dapper + `Microsoft.Data.Sqlite`), `ISqliteConnectionFactory`, `IDerivedSnapshotCache`, `ISourceFingerprintProvider`, `MemorySqliteSnapshotCache`, `EnsureSchemaAsync`. Register the factory; wire nothing into services.
+- **Change:** Add `LoopRelay.Persistence.Sqlite` (Dapper + `Microsoft.Data.Sqlite`), `ISqliteConnectionFactory`, `IDerivedSnapshotCache`, `ISourceFingerprintProvider`, `MemorySqliteSnapshotCache`, `EnsureSchemaAsync`. Register the factory; wire nothing into services.
 - **Why safe:** Nothing consumes it.
 - **Tests:** All green unchanged. Add unit tests for the cache double and schema-ensure.
 

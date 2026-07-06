@@ -76,10 +76,10 @@ project.fragment.lock.json
 artifacts/
 !schemas/artifacts/
 !schemas/artifacts/**
-!src/CommandCenter.Backend/Artifacts/
-!src/CommandCenter.Backend/Artifacts/**
-!src/CommandCenter.UI/src/features/artifacts/
-!src/CommandCenter.UI/src/features/artifacts/**
+!src/LoopRelay.Backend/Artifacts/
+!src/LoopRelay.Backend/Artifacts/**
+!src/LoopRelay.UI/src/features/artifacts/
+!src/LoopRelay.UI/src/features/artifacts/**
 **/debugging/
 **/performance-results/
 **/reports/
@@ -301,8 +301,8 @@ node_modules/
 dist/
 
 # Rust/Tauri generated output
-src/CommandCenter.Shell/target/
-src/CommandCenter.Shell/gen/
+src/LoopRelay.Shell/target/
+src/LoopRelay.Shell/gen/
 
 # Compass TypeScript monorepo packages are source, not NuGet restore packages.
 !/packages/
@@ -388,4 +388,4 @@ healthchecksdb
 .orchestrix/
 
 # CLI per-turn session telemetry log (local only; a visualizer manages pruning)
-.commandcenter/
+.LoopRelay/

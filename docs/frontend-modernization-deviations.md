@@ -104,7 +104,7 @@ This ledger records intentional differences between the target Command Center fr
 
 ## App Authority Boundary
 
-- Location or surface: `src/CommandCenter.UI/src/App.tsx`.
+- Location or surface: `src/LoopRelay.UI/src/App.tsx`.
 - Description: `App.tsx` is not reduced to a physically thin composition root even though DTOs, transport, projection hooks, shell state, design primitives, and major feature presentation surfaces have been extracted.
 - Reason: The remaining code owns workflow coordination, local drafts, readiness derivation, backend command dispatch, stream reconciliation, and post-mutation projection refreshes. Moving those responsibilities into feature presentation components or generic hooks would make authority harder to locate without adding backend capability.
 - Category: Product decision.

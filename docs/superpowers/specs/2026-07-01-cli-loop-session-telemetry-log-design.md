@@ -26,7 +26,7 @@ one JSONL row per codex turn.
   usage gate's existing philosophy (`UsageGate.cs:49`).
 
 > **Superseded (2026-07-04):** the watermark usage gate (`UsageGate`/`UsageGateComposition` and the
-> `COMMANDCENTER_USAGE_GATE` flag) was replaced by an always-on usage-limit error detector
+> `LoopRelay_USAGE_GATE` flag) was replaced by an always-on usage-limit error detector
 > (`UsageLimitDetector.cs`): failed turns whose diagnostics say "You've hit your usage limit … try again
 > at <time>" are waited out and retried at the `GatedAgentRuntime` seam. With the gate gone the pre-turn
 > capacity snapshot has no source, so `preFiveHourPercent`/`preWeeklyPercent` were dropped from the row;
@@ -52,7 +52,7 @@ One compact JSON object per line (`sessions.<date>.<NNNN>.jsonl`):
 | `timestamp` | string (ISO-8601 UTC) | When the row was emitted (turn completion). *Additive — needed for the time-series ratio.* |
 | `repoName` | string | Human repo name = `Path.GetFileName(repository.Path)` (`Program.cs:26`). |
 | `codexLogPath` | string \| null | Absolute path to the codex rollout JSONL for this session's process (see resolution). `null` if unresolved. |
-| `sessionId` | string (GUID) | CommandCenter's `SessionIdentity` (`SessionIdentity.cs:5`). Internal correlation key, **not** codex's id. |
+| `sessionId` | string (GUID) | LoopRelay's `SessionIdentity` (`SessionIdentity.cs:5`). Internal correlation key, **not** codex's id. |
 | `sessionType` | string | `SessionRole` name: `Decision` / `OperationalExecution` / `Transfer` / `ContextUpdate` (`SessionRole.cs`). |
 | `turnIndex` | int | `AgentTurnResult.TurnIndex` (1-based within the session). *Additive — the natural per-turn key.* |
 | `promptTokens` | int | `AgentTokenUsage.PromptTokens`. *Raw tokens = `promptTokens + outputTokens`; split so the ratio is fully reconstructable.* |
@@ -109,7 +109,7 @@ minutes, so this is negligible.
 
 Codex writes one rollout per process at `~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl`,
 whose first line is `session_meta` carrying `session_id`, `timestamp`, and `cwd` (= the
-repo path). CommandCenter never receives codex's id, so we locate the file heuristically:
+repo path). LoopRelay never receives codex's id, so we locate the file heuristically:
 
 - **`FileSystemCodexRolloutLocator.Resolve(workingDirectory, openedAtUtc)`**: scan
   `~/.codex/sessions` for `rollout-*.jsonl` files whose first-line `session_meta.cwd`
@@ -128,12 +128,12 @@ could mis-attribute; acceptable given the serial loop, and `null` is always a sa
 
 ## Log storage & rotation
 
-- **Location:** repo-local, git-ignored: `<repo>/.commandcenter/telemetry/sessions.<date>.<NNNN>.jsonl`.
+- **Location:** repo-local, git-ignored: `<repo>/.LoopRelay/telemetry/sessions.<date>.<NNNN>.jsonl`.
   Not under `.agents/` — that submodule is committed & pushed every iteration
   (`AgentsSubmodulePublisher`), which would mean noisy telemetry commits and steady bloat.
-  Add `.commandcenter/` to the repo's `.gitignore` (create if absent).
-  > **Superseded (2026-07-04):** `.commandcenter/` is now self-ignoring — `FileDecisionSessionResumeStore`
-  > writes a `.commandcenter/.gitignore` containing `*` when it first creates the directory, so the manual
+  Add `.LoopRelay/` to the repo's `.gitignore` (create if absent).
+  > **Superseded (2026-07-04):** `.LoopRelay/` is now self-ignoring — `FileDecisionSessionResumeStore`
+  > writes a `.LoopRelay/.gitignore` containing `*` when it first creates the directory, so the manual
   > root-.gitignore step is no longer load-bearing once the loop has run a decision step in the repo.
 - **Rotation: per-day / size hybrid.**
   - A new file begins each **calendar day** (UTC): `sessions.2026-07-01.0000.jsonl`.
@@ -163,9 +163,9 @@ Each unit has one purpose, a defined interface, and is independently testable:
   `ICodexRolloutLocator`, `ISessionTelemetrySink`, `IDecisionCostModel`, `repoName`, and a
   clock; orchestrate the per-turn sequence; cache the resolved path per session; record
   the session-open time.
-- **`Program.cs`** — construct the concrete sink (path = `<repo>/.commandcenter/telemetry`),
+- **`Program.cs`** — construct the concrete sink (path = `<repo>/.LoopRelay/telemetry`),
   locator, and clock; derive `repoName` from `repository.Path`; pass through. A CLI
-  flag / env (`--no-session-log` or `COMMANDCENTER_SESSION_LOG=0`) swaps in the null sink;
+  flag / env (`--no-session-log` or `LoopRelay_SESSION_LOG=0`) swaps in the null sink;
   **default on**.
 
 A minimal clock abstraction (`TimeProvider`, or the codebase's existing convention as used
@@ -182,7 +182,7 @@ Telemetry must never wedge or crash a turn:
 - Sink I/O failure (locked file, disk) → warn, drop that row, keep looping.
 - Locator failure or no match → `codexLogPath = null`.
 
-## Testing plan (xUnit, `CommandCenter.CLI.Tests`)
+## Testing plan (xUnit, `LoopRelay.CLI.Tests`)
 
 - **Rotation** (`RotatingJsonlTelemetrySink`): appends to today's `0000`; rolls to `0001`
   when size cap crossed; starts a fresh `0000` on a new day (driven by a fake clock);
@@ -204,7 +204,7 @@ Telemetry must never wedge or crash a turn:
 ## Settled decisions
 
 - Grain = **per codex turn** (user-confirmed).
-- Location = **repo-local git-ignored `.commandcenter/telemetry/`** (user-confirmed).
+- Location = **repo-local git-ignored `.LoopRelay/telemetry/`** (user-confirmed).
 - Rotation = **per-day + ~5 MB size hybrid, keep all** (user-confirmed).
 - Capacity = **remaining percent**; user is aware and wants the token→percent ratio.
 - Effective tokens = the router's canonical `EffectiveTokenCostModel.Measure`.

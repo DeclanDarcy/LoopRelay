@@ -1,0 +1,190 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+
+namespace LoopRelay.Roadmap.Cli;
+
+internal sealed partial class DecisionLedgerStore(RoadmapArtifacts artifacts)
+{
+    private readonly StructuredDocumentStore<DecisionLedgerPersistenceDocument> structuredStore = new(
+        artifacts,
+        RoadmapArtifactPaths.DecisionLedgerJson,
+        DecisionLedgerPersistenceDocument.CurrentSchemaVersion,
+        document => document.SchemaVersion,
+        DecisionLedgerPersistenceDocument.Validate);
+
+    public async Task<string> AppendAsync(DecisionLedgerEntry entry)
+    {
+        DecisionLedgerPersistenceDocument ledger = await LoadDocumentAsync();
+        var entries = ledger.ToDomain().Append(entry).OrderBy(item => item.DecisionId, StringComparer.Ordinal).ToArray();
+        await SaveDocumentAsync(DecisionLedgerPersistenceDocument.FromDomain(entries));
+        return entry.DecisionId;
+    }
+
+    public async Task<string> NextDecisionIdAsync()
+    {
+        DecisionLedgerPersistenceDocument ledger = await LoadDocumentAsync();
+        int max = ledger.Entries
+            .Select(entry => DecisionIdRegex().Match(entry.DecisionId))
+            .Where(match => match.Success)
+            .Select(match => int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture))
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return $"D{max + 1:0000}";
+    }
+
+    public async Task<string> LastDecisionIdAsync()
+    {
+        DecisionLedgerPersistenceDocument ledger = await LoadDocumentAsync();
+        int max = ledger.Entries
+            .Select(entry => DecisionIdRegex().Match(entry.DecisionId))
+            .Where(match => match.Success)
+            .Select(match => int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture))
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return max == 0 ? "None" : $"D{max:0000}";
+    }
+
+    private async Task<DecisionLedgerPersistenceDocument> LoadDocumentAsync()
+    {
+        DecisionLedgerPersistenceDocument? structured = await structuredStore.LoadAsync();
+        if (structured is not null)
+        {
+            return structured;
+        }
+
+        string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.DecisionLedger);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return DecisionLedgerPersistenceDocument.Empty;
+        }
+
+        DecisionLedgerPersistenceDocument migrated;
+        try
+        {
+            migrated = ParseLegacyMarkdown(content);
+        }
+        catch (MarkdownParseException exception)
+        {
+            throw new RoadmapStepException($"Legacy decision ledger cannot be migrated: {exception.Message}");
+        }
+
+        await SaveDocumentAsync(migrated);
+        return migrated;
+    }
+
+    private async Task SaveDocumentAsync(DecisionLedgerPersistenceDocument document)
+    {
+        await structuredStore.SaveAsync(document);
+        await artifacts.WriteAsync(RoadmapArtifactPaths.DecisionLedger, Render(document.ToDomain()));
+    }
+
+    public static string Render(IReadOnlyList<DecisionLedgerEntry> entries)
+    {
+        var lines = new List<string> { "# Decision Ledger" };
+        foreach (DecisionLedgerEntry entry in entries.OrderBy(entry => entry.DecisionId, StringComparer.Ordinal))
+        {
+            lines.Add(string.Empty);
+            lines.Add($"## {entry.DecisionId}");
+            lines.Add(string.Empty);
+            lines.Add("| Field | Value |");
+            lines.Add("|---|---|");
+            lines.Add($"| Timestamp | {entry.Timestamp:O} |");
+            lines.Add($"| State | {entry.State} |");
+            lines.Add($"| Transition | {EscapeCell(entry.Transition)} |");
+            lines.Add($"| Prompt | {EscapeCell(entry.Prompt)} |");
+            lines.Add($"| Projection Path | {EscapeCell(entry.ProjectionPath)} |");
+            lines.Add($"| Input Artifact Paths | {Join(entry.InputArtifactPaths)} |");
+            lines.Add($"| Output Artifact Paths | {Join(entry.OutputArtifactPaths)} |");
+            lines.Add($"| Decision / Disposition | {EscapeCell(entry.Decision)} |");
+            lines.Add($"| Confidence | {EscapeCell(entry.Confidence)} |");
+            lines.Add($"| Rationale Excerpt | {EscapeCell(entry.RationaleExcerpt)} |");
+        }
+
+        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
+    }
+
+    private static DecisionLedgerPersistenceDocument ParseLegacyMarkdown(string content)
+    {
+        MarkdownTableParser.ValidateTables(content);
+        var entries = new List<DecisionLedgerEntry>();
+        MatchCollection matches = DecisionHeadingRegex().Matches(content);
+        for (int index = 0; index < matches.Count; index++)
+        {
+            Match match = matches[index];
+            int end = index + 1 < matches.Count ? matches[index + 1].Index : content.Length;
+            string section = content[match.Index..end];
+            string decisionId = $"D{match.Groups["number"].Value}";
+            IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTableStrict(section, $"## {decisionId}");
+            entries.Add(new DecisionLedgerEntry(
+                decisionId,
+                ParseTimestamp(Field(fields, "Timestamp", string.Empty)) ?? DateTimeOffset.MinValue,
+                ParseState(Field(fields, "State", RoadmapState.CoreReady.ToString())),
+                Field(fields, "Transition", "None"),
+                Field(fields, "Prompt", "None"),
+                Field(fields, "Projection Path", "None"),
+                ParseList(Field(fields, "Input Artifact Paths", "None")),
+                ParseList(Field(fields, "Output Artifact Paths", "None")),
+                Field(fields, "Decision / Disposition", "None"),
+                Field(fields, "Confidence", "Unknown"),
+                Field(fields, "Rationale Excerpt", string.Empty)));
+        }
+
+        DecisionLedgerPersistenceDocument migrated = DecisionLedgerPersistenceDocument.FromDomain(entries);
+        IReadOnlyList<string> errors = DecisionLedgerPersistenceDocument.Validate(migrated);
+        if (errors.Count > 0)
+        {
+            throw new RoadmapStepException($"Legacy decision ledger cannot be migrated because validation failed: {string.Join("; ", errors)}");
+        }
+
+        return migrated;
+    }
+
+    private static string Field(IReadOnlyDictionary<string, string> row, string field, string fallback) =>
+        row.TryGetValue(field, out string? value) && !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : fallback;
+
+    private static IReadOnlyList<string> ParseList(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || string.Equals(value.Trim(), "None", StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        return value
+            .Split("<br>", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(path => !string.Equals(path, "None", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+    }
+
+    private static RoadmapState ParseState(string value) =>
+        Enum.TryParse(value, out RoadmapState state) ? state : RoadmapState.CoreReady;
+
+    private static DateTimeOffset? ParseTimestamp(string value) =>
+        DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out DateTimeOffset parsed)
+            ? parsed
+            : null;
+
+    private static string Join(IReadOnlyList<string> paths) =>
+        paths.Count == 0 ? "None" : string.Join("<br>", paths.Select(EscapeCell));
+
+    private static string EscapeCell(string? value) =>
+        (value ?? string.Empty)
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("|", "\\|", StringComparison.Ordinal)
+            .Replace("\r\n", "<br>", StringComparison.Ordinal)
+            .Replace("\n", "<br>", StringComparison.Ordinal)
+            .Replace("\r", "<br>", StringComparison.Ordinal);
+
+    [GeneratedRegex(@"^D(?<number>\d{4})$", RegexOptions.CultureInvariant)]
+    private static partial Regex DecisionIdRegex();
+
+    [GeneratedRegex(@"^## D(?<number>\d{4})\s*$", RegexOptions.Multiline | RegexOptions.CultureInvariant)]
+    private static partial Regex DecisionHeadingRegex();
+}

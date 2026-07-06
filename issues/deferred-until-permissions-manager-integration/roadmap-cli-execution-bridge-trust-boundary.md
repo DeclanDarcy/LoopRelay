@@ -6,13 +6,13 @@ High
 
 ## Finding
 
-`CommandCenter.Roadmap.CLI` sends generated and repository-controlled Markdown directly to an execution agent that runs with `danger-full-access`, workspace writes, network access, and approvals disabled.
+`LoopRelay.Roadmap.CLI` sends generated and repository-controlled Markdown directly to an execution agent that runs with `danger-full-access`, workspace writes, network access, and approvals disabled.
 
 Affected code:
 
-- `src/CommandCenter.Roadmap.CLI/ExecutionPromptGenerator.cs`
-- `src/CommandCenter.Roadmap.CLI/RoadmapExecutionBridge.cs`
-- `src/CommandCenter.Roadmap.CLI/AgentSpecs.cs`
+- `src/LoopRelay.Roadmap.CLI/ExecutionPromptGenerator.cs`
+- `src/LoopRelay.Roadmap.CLI/RoadmapExecutionBridge.cs`
+- `src/LoopRelay.Roadmap.CLI/AgentSpecs.cs`
 
 The execution prompt embeds the active epic, milestone specs, and operational context verbatim. Those artifacts can originate from roadmap files, generated LLM output, or previously promoted Markdown. If any embedded content contains prompt injection, the injected instructions are delivered to an agent with broad local and network authority.
 

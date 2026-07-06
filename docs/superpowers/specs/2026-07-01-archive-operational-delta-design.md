@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-01
 **Status:** Approved (design)
-**Scope:** `CommandCenter.Orchestration` **and** `CommandCenter.CLI` — the two independent
+**Scope:** `LoopRelay.Orchestration` **and** `LoopRelay.CLI` — the two independent
 Transfer implementations. Discovery found the CLI loop (`DecisionSession.TransferAsync`) is a
 genuine parallel transfer site with identical behavior (writes the live delta, evolves and
 writes the context back, records health), not merely a consumer. The user asked for consistent

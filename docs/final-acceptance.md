@@ -1,6 +1,6 @@
 # Final Acceptance — Phase 12 (Deferred Non-Goals and Final Definition of Done)
 
-This is the capstone certification for the CommandCenter refactor (`.agents/plan.md`, milestones m0–m12). The
+This is the capstone certification for the LoopRelay refactor (`.agents/plan.md`, milestones m0–m12). The
 milestone file is named `m12-adaptive-engineering-intelligence.md`, but its title and body are **"Phase 12 —
 Deferred Non-Goals and Final Definition of Done"** (a stale filename, as with m8 and m11; the body is
 authoritative). m12 builds no features. Its bar is faithfulness: prove every Definition-of-Done acceptance
@@ -36,8 +36,8 @@ landing points. Line numbers are indicative of the audited revision and may drif
 | FA-9 | Each continuation produces and rotates the next handoff | met | `RunContinuationAsync` verifies the live handoff, computes the next sequence from disk (`NextHandoffSequenceAsync`), rotates to `handoff.000N.md` under the `continued` guard |
 | FA-10 | Router `Continue` reuses the warm Decision process | met | `RouteNextDecisionRunAsync` → `Evaluate` = Continue → `BeginDecisionRunAsync` reuses the held-open session (no close) |
 | FA-11 | Router `Transfer`: write delta, rewrite operational context, fresh process, resume streaming | met | Transfer mechanics: `ProduceOperationalDelta.Text` → write `operational_delta.md` → `CloseDecisionSessionAsync` → `UpdateOperationalContext.Text` → fresh session → `StartDecisionSessionFromTransfer.Render(newContext)` → propose |
-| FA-12 | All prompt text comes from generated `CommandCenter.Core.Prompts` classes | met | `PromptAuthorityTests.Production_source_does_not_duplicate_canonical_prompt_text` (in `ArchitectureLayeringTests.cs`); 11 `.prompt` templates |
-| FA-13 | Execution and DecisionSessions reach Codex only through `CommandCenter.Agents` | met | `ArchitectureLayeringTests` (11 layering methods + `DecisionRuntime_cannot_depend_on_…_m5`); both roles inject `IAgentRuntime`; Orchestration is the sole composition root |
+| FA-12 | All prompt text comes from generated `LoopRelay.Core.Prompts` classes | met | `PromptAuthorityTests.Production_source_does_not_duplicate_canonical_prompt_text` (in `ArchitectureLayeringTests.cs`); 11 `.prompt` templates |
+| FA-13 | Execution and DecisionSessions reach Codex only through `LoopRelay.Agents` | met | `ArchitectureLayeringTests` (11 layering methods + `DecisionRuntime_cannot_depend_on_…_m5`); both roles inject `IAgentRuntime`; Orchestration is the sole composition root |
 | FA-14 | Full certification commands and contract/governance suites pass | met | Cert commands `.agents/plan.md`:178–199; suites present: `ArchitectureLayeringTests`, `OrchestrationGovernanceTests`, `FinalAcceptanceTests`, `BackendEndpointDispositionTests`, `ContractVerification/*`, `ProcessLeakDetectionTests`, `OrchestrationDeterministicFallbackTests`, `OrchestrationSnapshot/StreamContractTests` |
 
 ### Faithful nuances (not defects)
@@ -70,19 +70,19 @@ The non-goals prohibit adding **platform-wide / cross-repository** intelligence 
 pre-existing, **repository-scoped** subsystems use adjacent vocabulary but are neither platform-wide nor wired
 into the orchestration loop:
 
-- `CommandCenter.Decisions` — `DecisionDiscoveryService.DiscoverAsync(Guid repositoryId)` and
+- `LoopRelay.Decisions` — `DecisionDiscoveryService.DiscoverAsync(Guid repositoryId)` and
   `RecommendationService` provide per-repository decision *support* (the documented deterministic/offline
   fallback subsystem, not the live loop authority). Both are scoped by `repositoryId`; neither performs
   cross-repository learning or opportunity discovery.
-- `CommandCenter.Reasoning` — `ReasoningGraphService` (`GetGraphAsync`/`TraceBackward`/`TraceForward`, all by
+- `LoopRelay.Reasoning` — `ReasoningGraphService` (`GetGraphAsync`/`TraceBackward`/`TraceForward`, all by
   `repositoryId`) is a per-repository reasoning lineage view, a separate concern (the `reasoning-*` docs), not
   a cross-repository knowledge graph or global query surface.
-- `CommandCenter.Continuity` — `CompressionTrend` records metrics for a single operational-context proposal,
+- `LoopRelay.Continuity` — `CompressionTrend` records metrics for a single operational-context proposal,
   not trend analysis across repositories.
 
 **The orchestration loop adds none of these and consumes none of them.** This is verified structurally:
-`CommandCenter.Orchestration`'s compiled manifest references `Agents`, `Core`, `Continuity`, `Decisions`,
-`DecisionSessions`, and `Execution` — and **does not reference `CommandCenter.Reasoning`** — and its source
+`LoopRelay.Orchestration`'s compiled manifest references `Agents`, `Core`, `Continuity`, `Decisions`,
+`DecisionSessions`, and `Execution` — and **does not reference `LoopRelay.Reasoning`** — and its source
 contains zero references to `ReasoningGraphService`, `DecisionDiscoveryService`, or `RecommendationService`. The
 `FinalAcceptanceTests.Orchestration_loop_does_not_absorb_the_reasoning_or_knowledge_subsystem` guard pins this
 boundary so a future change that folds the reasoning/knowledge subsystem into the loop fails the build graph.
@@ -102,7 +102,7 @@ turn); and router-driven reuse or transfer (FA-10, FA-11; the registry-free `Dec
 
 ## Governance pin
 
-`tests/CommandCenter.Backend.Tests/Orchestration/FinalAcceptanceTests.cs` pins the four m12-specific boundaries
+`tests/LoopRelay.Backend.Tests/Orchestration/FinalAcceptanceTests.cs` pins the four m12-specific boundaries
 no earlier milestone test guarded: the five-method Completion-Statement command surface, the non-goal isolation
 from the reasoning/knowledge subsystem, the compositional delegation (NG-6), and the completeness of the
 generated eleven-prompt catalog (FA-12 / NG-5). It is a pure unit class (no host boot), so it stays outside the
@@ -110,7 +110,7 @@ generated eleven-prompt catalog (FA-12 / NG-5). It is a pure unit class (no host
 
 ## Verification
 
-`dotnet test tests/CommandCenter.Backend.Tests` — full backend suite green; see `docs/refactor-plan-status`
+`dotnet test tests/LoopRelay.Backend.Tests` — full backend suite green; see `docs/refactor-plan-status`
 memory for the run count. m12 is additive-test + documentation only (no prompt, Rust, UI, wire, or
 orchestration production-code change), so the m8 contract goldens, the three m8-frozen UI type files, and the UI
 suite are untouched and remain green by construction.

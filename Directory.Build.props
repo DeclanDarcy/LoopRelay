@@ -1,8 +1,0 @@
-<Project>
-    <!-- Alias is only valid in projects that reference CommandCenter.Execution.
-         Core is the base layer and can't reference Execution (would be a cycle),
-         so opt it (and any future base-only project) out via the property below. -->
-    <ItemGroup Condition="'$(UseExecutionContextAlias)' != 'false'">
-        <Using Include="CommandCenter.Execution.Models.ExecutionContext" Alias="ExecutionContext" />
-    </ItemGroup>
-</Project>

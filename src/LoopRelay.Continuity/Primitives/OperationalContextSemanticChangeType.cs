@@ -1,0 +1,35 @@
+namespace LoopRelay.Continuity.Primitives;
+
+public enum OperationalContextSemanticChangeType
+{
+    SectionAdded,
+    SectionRemoved,
+    SectionChanged,
+    ItemAdded,
+    ItemRemoved,
+    ItemChanged,
+    ModifiedArchitecture,
+    ModifiedConstraint,
+    ModifiedWorkflow,
+    ModifiedDecision,
+    ModifiedUnderstanding,
+    LostUnderstanding,
+    ResolvedUnderstanding,
+    DuplicateRemoved,
+    TransientRemoved,
+    ConstraintAdded,
+    ConstraintRemoved,
+    QuestionAdded,
+    QuestionRemoved,
+    RiskAdded,
+    RiskRemoved,
+    DecisionAdded,
+    DecisionRemoved,
+    ImportantDecisionIntroduced,
+    DecisionRetired,
+    RationaleChanged,
+    RationaleLostWarning,
+    OpenDecisionPreserved,
+    OpenDecisionResolved,
+    PreservationWarning
+}

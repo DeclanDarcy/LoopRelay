@@ -18,14 +18,14 @@ Accepted verifier entry points:
 
 | Surface | Command | Notes |
 | --- | --- | --- |
-| .NET build | `dotnet build CommandCenter.slnx` | Run serially with backend tests. |
-| Backend tests | `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` | Run serially with solution build. |
-| TypeScript build | `npm run build` in `src/CommandCenter.UI` | Runs `tsc -b` before Vite. |
-| Frontend lint | `npm run lint` in `src/CommandCenter.UI` | Static frontend verification. |
-| Frontend tests | `npm run test` in `src/CommandCenter.UI` | Vitest characterization suite. |
-| Browser E2E | `npm run test:e2e` in `src/CommandCenter.UI` | Playwright workspace coverage. |
-| Rust build | `cargo build` in `src/CommandCenter.Shell` | Shell compiler health. |
-| Rust tests | `cargo test` in `src/CommandCenter.Shell` | Test harness executes and includes shell behavior regressions for successful opaque JSON relay and boundary-violation error-envelope relay. |
+| .NET build | `dotnet build LoopRelay.slnx` | Run serially with backend tests. |
+| Backend tests | `dotnet test tests/LoopRelay.Backend.Tests/LoopRelay.Backend.Tests.csproj` | Run serially with solution build. |
+| TypeScript build | `npm run build` in `src/LoopRelay.UI` | Runs `tsc -b` before Vite. |
+| Frontend lint | `npm run lint` in `src/LoopRelay.UI` | Static frontend verification. |
+| Frontend tests | `npm run test` in `src/LoopRelay.UI` | Vitest characterization suite. |
+| Browser E2E | `npm run test:e2e` in `src/LoopRelay.UI` | Playwright workspace coverage. |
+| Rust build | `cargo build` in `src/LoopRelay.Shell` | Shell compiler health. |
+| Rust tests | `cargo test` in `src/LoopRelay.Shell` | Test harness executes and includes shell behavior regressions for successful opaque JSON relay and boundary-violation error-envelope relay. |
 
 ## Current Quarantines
 
@@ -45,8 +45,8 @@ Status: seeded with executable Rust regressions for successful opaque JSON relay
 
 Primary evidence:
 
-- `src/CommandCenter.Shell/src/main.rs` test `backend_get_value_relays_opaque_json_without_interpretation`
-- `src/CommandCenter.Shell/src/main.rs` test `backend_get_value_preserves_boundary_violation_error_envelope`
+- `src/LoopRelay.Shell/src/main.rs` test `backend_get_value_relays_opaque_json_without_interpretation`
+- `src/LoopRelay.Shell/src/main.rs` test `backend_get_value_preserves_boundary_violation_error_envelope`
 - `docs/shell-transport-classification.md`
 - `.agents/milestones/m0.3-shell-regression-classification-slice-0046.md`
 
@@ -142,7 +142,7 @@ Mechanism intent:
 | Workflow instance fixture comparison | `.agents/milestones/m0.2-workflow-instance-fixture-slice-0028.md` adds `workflow-instance.golden.json` and `ContractOracleFixtureTests.WorkflowInstanceGoldenFixtureMatchesBackendSerialization` for the primary workflow endpoint response shape. | Dev mock workflow handler verification and populated `decisionSession` fixture coverage remain pending; local workflow Oracle certification is recorded in Slice 0032. |
 | Workflow TypeScript consumer verification | `.agents/milestones/m0.2-workflow-typescript-consumer-verification-slice-0029.md` adds `workflowContractFixture.test.ts`, which reads `workflow-instance.golden.json` and checks the manual TypeScript `WorkflowInstance` shape plus represented nested workflow shapes. | This is a UI characterization verifier, not generated contract infrastructure. Rust workflow commands are pass-through `serde_json::Value`; dev mock workflow handler coverage remains absent. |
 | Workflow request-boundary verification | `.agents/milestones/m0.2-workflow-request-boundary-slice-0030.md` extends `ContractRequestBoundaryTests` for the primary workflow projection backend route, Rust command, and TypeScript API wrapper. | This protects request shape only; it does not verify dev mock response coverage, populated `decisionSession` fixtures, sibling workflow endpoints, or local workflow Oracle certification. |
-| Workflow artifact freshness | `.agents/milestones/m0.2-workflow-artifact-freshness-slice-0031.md` adds `workflow-instance.artifact-freshness.json` and `ContractGeneratedArtifactFreshnessTests.WorkflowInstanceTypeScriptContractArtifactMatchesFreshnessManifest`, tying the workflow golden fixture to `src/CommandCenter.UI/src/types/workflow.ts`. | This is still a Phase 0 verified manual artifact freshness check, not generated contract infrastructure. Dev mock workflow coverage, populated `decisionSession` coverage, and sibling workflow endpoint fixtures remain pending. |
+| Workflow artifact freshness | `.agents/milestones/m0.2-workflow-artifact-freshness-slice-0031.md` adds `workflow-instance.artifact-freshness.json` and `ContractGeneratedArtifactFreshnessTests.WorkflowInstanceTypeScriptContractArtifactMatchesFreshnessManifest`, tying the workflow golden fixture to `src/LoopRelay.UI/src/types/workflow.ts`. | This is still a Phase 0 verified manual artifact freshness check, not generated contract infrastructure. Dev mock workflow coverage, populated `decisionSession` coverage, and sibling workflow endpoint fixtures remain pending. |
 | Workflow pilot certification | `.agents/milestones/m0.2-workflow-oracle-certification-slice-0032.md` records local certification for the primary workflow projection fixture comparison, TypeScript consumer verification, request-boundary verification, artifact freshness verification, and full backend test suite. | Certification is limited to the primary workflow projection. Dev mock workflow coverage and populated `decisionSession` coverage are accepted initial-pilot gaps; sibling workflow endpoint fixtures remain pending. |
 
 ## Architectural Regression Framework
@@ -153,7 +153,7 @@ Status: certified as a framework-complete Phase 0 architectural regression found
 
 Primary evidence:
 
-- `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs`
+- `tests/LoopRelay.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs`
 - `.agents/milestones/m0.3-regression-framework-inventory-skeleton-slice-0036.md`
 - `.agents/milestones/m0.3-invariant-catalog-slice-0037.md`
 - `.agents/milestones/m0.3-regression-taxonomy-slice-0038.md`
@@ -172,7 +172,7 @@ Framework intent:
 | Regression area | Initial mechanism | Owner | Severity | Drift model |
 | --- | --- | --- | --- | --- |
 | Contract Oracle mechanisms | Backend architecture meta-regression discovers fixture drift, consumer verification, artifact freshness, request-boundary, and framework-wiring tests. | Backend architecture tests | Local build failure | Mechanism disappearance, fixture-copy drift, or unreviewed Oracle wiring drift. |
-| Frontend architecture-test area | Vitest metadata skeleton under `src/CommandCenter.UI/src/test/architecture` verifies that the frontend architecture regression framework is discoverable and tied to frontend invariant ownership before broad UI rules are enforced. | Frontend architecture tests | CI failure | Missing frontend regression location, unowned UI guard, or frontend invariant metadata drift. |
+| Frontend architecture-test area | Vitest metadata skeleton under `src/LoopRelay.UI/src/test/architecture` verifies that the frontend architecture regression framework is discoverable and tied to frontend invariant ownership before broad UI rules are enforced. | Frontend architecture tests | CI failure | Missing frontend regression location, unowned UI guard, or frontend invariant metadata drift. |
 | Authority, projection, transport, state, controller, workspace, presentation, runtime, governance, and evidence invariants | Planned executable regressions cataloged for later M0.3 slices before broad migration work depends on them. | Area-specific test surface selected by invariant | Severity to be assigned per invariant before implementation | Duplicate authority, projection impurity, transport responsibility growth, state duplication, composition creep, semantic leakage, unscoped failures, or governance bypass. |
 
 ### Regression Taxonomy
@@ -377,7 +377,7 @@ Primary evidence:
 - `.agents/milestones/m0.4-compatibility-structure-governance-slice-0056.md`
 - `.agents/milestones/m0.4-decision-governance-certification-slice-0057.md`
 - `.agents/milestones/m0.4-decision-governance-acceptance-baseline-slice-0058.md`
-- `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalDecisionGovernanceTests.cs`
+- `tests/LoopRelay.Backend.Tests/Architecture/ArchitecturalDecisionGovernanceTests.cs`
 
 Mechanism intent:
 
@@ -386,7 +386,7 @@ Mechanism intent:
 | Decision class catalog | `docs/architecture-decision-governance.md` defines decision classes, minimum evidence, required regression or guard, and durable documentation obligations. `ArchitecturalDecisionGovernanceTests.DecisionGovernanceDocumentDefinesRequiredDecisionClasses` verifies the catalog remains present and populated. | Source-change detection for ungoverned architecture-affecting edits remains later M0.4 work. |
 | Mechanism lifecycle approval | `docs/architecture-decision-governance.md` defines approval and evidence requirements for adding, strengthening, weakening, quarantining, replacing, and retiring mechanisms. `ArchitecturalDecisionGovernanceTests.DecisionGovernanceDocumentDefinesMechanismLifecycleApproval` verifies the lifecycle table remains present and populated. | The guard verifies metadata, not every future mechanism change. Later slices must add checks for disabled or weakened regressions. |
 | Architecture-regression bypass guard | `ArchitecturalDecisionGovernanceTests.ArchitectureRegressionTestsAreNotDisabledOrFocused` scans backend and frontend architecture regression test homes for xUnit `Skip` and Vitest `.skip` or `.only` bypasses. | This is initial regression-weakening enforcement only; broader source-change detection for removed guards, narrowed assertions, shell mirrors, compatibility fields, and active decision/evidence validation remains later M0.4 work. |
-| Shell Rust struct classification guard | `ArchitecturalDecisionGovernanceTests.ShellRustStructsRemainClassifiedInTransportInventory` compares Rust structs in `src/CommandCenter.Shell/src/main.rs` with the Rust Mirror Inventory in `docs/shell-transport-classification.md`. New unclassified structs and stale inventory entries fail governance. | This detects inventory bypass and stale classifications. It does not yet prove each classified struct has the correct current or target state, nor does it retire existing mirrors. |
+| Shell Rust struct classification guard | `ArchitecturalDecisionGovernanceTests.ShellRustStructsRemainClassifiedInTransportInventory` compares Rust structs in `src/LoopRelay.Shell/src/main.rs` with the Rust Mirror Inventory in `docs/shell-transport-classification.md`. New unclassified structs and stale inventory entries fail governance. | This detects inventory bypass and stale classifications. It does not yet prove each classified struct has the correct current or target state, nor does it retire existing mirrors. |
 | Active governance artifact guard | `ArchitecturalDecisionGovernanceTests.ActiveGovernanceArtifactsKeepRequiredStructureAndEvidenceLinks` verifies the active decision checkpoint has authorized-decision and next-sequence sections, M0.4 governance slice evidence files have required evidence sections, and decision-governance evidence links in this document resolve to files. | This protects active M0.4 governance artifacts from losing their structural floor or mechanism evidence links. It does not yet validate every historical decision file, enforce the full decision-record template for checkpoint files, or prove bidirectional reachability across all decisions, evidence, capabilities, and mechanisms. |
 | Referential governance claim guard | `ArchitecturalDecisionGovernanceTests.ReferentialGovernanceClaimsRemainReachable` verifies active decisions cite reachable M0.4 governance evidence, M0.4 governance evidence references a governed decision/capability/mechanism artifact, and capability/mechanism M0.4 evidence links resolve to files. | This protects graph reachability for current M0.4 governance claims. It does not judge whether an authorized decision is substantively correct and does not validate the full historical decision corpus. |
 | Authority/projection file-name watchlist guard | `ArchitecturalDecisionGovernanceTests.AuthorityAndProjectionLikeFileNamesRemainGoverned` scans source file names under `src/` and backend tests for `Authority` or `Projection` and requires each watched file to remain listed in `docs/authority-projection-governance-watchlist.md`. | This detects new named authority/projection-like artifacts and stale inventory entries only. It does not scan type names, prove authority correctness, prove projection purity, or detect semantic inference in files without watched names. |
@@ -416,24 +416,24 @@ Introduced: Milestones m0–m10 (`next` branch).
 
 Status: certified for the Plan Authoring → Execution → Decision loop; reproducibly green at the m10 hardening baseline.
 
-These mechanisms protect the orchestration loop subsystem (`CommandCenter.Agents`, `CommandCenter.Core.Prompts`, `CommandCenter.Orchestration`) that runs alongside the legacy execution-session subsystem. The loop's implementation overview is in `docs/architecture.md` (Orchestration Loop Architecture) and its durable evidence register — including every per-boundary guard, intentional divergence, and rollback path — is in `docs/orchestration-loop-governance.md`. The entries below add the executable-protection detail in this document's mechanism register; they refine and do not replace the Architectural Invariant Catalog row "Backend domain services compute semantic meaning" or the Layering boundaries recorded in the governance register's Test Coverage Map.
+These mechanisms protect the orchestration loop subsystem (`LoopRelay.Agents`, `LoopRelay.Core.Prompts`, `LoopRelay.Orchestration`) that runs alongside the legacy execution-session subsystem. The loop's implementation overview is in `docs/architecture.md` (Orchestration Loop Architecture) and its durable evidence register — including every per-boundary guard, intentional divergence, and rollback path — is in `docs/orchestration-loop-governance.md`. The entries below add the executable-protection detail in this document's mechanism register; they refine and do not replace the Architectural Invariant Catalog row "Backend domain services compute semantic meaning" or the Layering boundaries recorded in the governance register's Test Coverage Map.
 
 Primary evidence:
 
-- `tests/CommandCenter.Backend.Tests/ArchitectureLayeringTests.cs` (hosts both `ArchitectureLayeringTests` and `PromptAuthorityTests`)
-- `src/CommandCenter.Core/Prompts/PromptProvenance.cs`
-- `src/CommandCenter.Orchestration/Services/RepositoryOrchestrator.cs`
-- `src/CommandCenter.Orchestration/OrchestrationArtifactPaths.cs`
-- `src/CommandCenter.Backend/Endpoints/PlanAuthoringEndpoints.cs`
+- `tests/LoopRelay.Backend.Tests/ArchitectureLayeringTests.cs` (hosts both `ArchitectureLayeringTests` and `PromptAuthorityTests`)
+- `src/LoopRelay.Core/Prompts/PromptProvenance.cs`
+- `src/LoopRelay.Orchestration/Services/RepositoryOrchestrator.cs`
+- `src/LoopRelay.Orchestration/OrchestrationArtifactPaths.cs`
+- `src/LoopRelay.Backend/Endpoints/PlanAuthoringEndpoints.cs`
 - `docs/orchestration-loop-governance.md` (evidence register and Governance Test Coverage Map)
 
 ### No-Literal-Prompt Enforcement
 
 | Field | Value |
 | --- | --- |
-| Protected invariant | No production source re-types a canonical prompt body. Every agent turn is issued from a compile-time class generated from a `.prompt` template under `src/CommandCenter.Core/Prompts/`; production code never hand-composes prompt text. |
-| Guard command/source | `PromptAuthorityTests.Production_source_does_not_duplicate_canonical_prompt_text` (declared in `tests/CommandCenter.Backend.Tests/ArchitectureLayeringTests.cs`). It enumerates `*.cs` under `src/`, skips the catalog directory `src/CommandCenter.Core/Prompts`, any path under an `obj/` segment, and any `*.g.cs` generated file, then fails if any of eleven distinctive `CanonicalPromptMarkers` (verbatim fragments of canonical prompt bodies) appears in the remaining production source. |
-| Owner | Backend architecture tests; `CommandCenter.Core.Prompts` catalog is the authoring surface. |
+| Protected invariant | No production source re-types a canonical prompt body. Every agent turn is issued from a compile-time class generated from a `.prompt` template under `src/LoopRelay.Core/Prompts/`; production code never hand-composes prompt text. |
+| Guard command/source | `PromptAuthorityTests.Production_source_does_not_duplicate_canonical_prompt_text` (declared in `tests/LoopRelay.Backend.Tests/ArchitectureLayeringTests.cs`). It enumerates `*.cs` under `src/`, skips the catalog directory `src/LoopRelay.Core/Prompts`, any path under an `obj/` segment, and any `*.g.cs` generated file, then fails if any of eleven distinctive `CanonicalPromptMarkers` (verbatim fragments of canonical prompt bodies) appears in the remaining production source. |
+| Owner | Backend architecture tests; `LoopRelay.Core.Prompts` catalog is the authoring surface. |
 | Severity | Local build failure. |
 | Detection confidence | High — verbatim substring comparison of distinctive canonical fragments against compiled production source. |
 | Lifecycle state | Guarded. |
@@ -445,13 +445,13 @@ Primary evidence:
 | Field | Value |
 | --- | --- |
 | Protected invariant | Every agent turn records a `PromptProvenance` so any turn is auditable back to the canonical catalog: the prompt name, generated type, build-time `SourceHash`, session role, workflow phase, and the repository-relative identities of the artifacts it consumed and was directed to produce are all captured at issuance. |
-| Guard command/source | `PromptProvenance` (`src/CommandCenter.Core/Prompts/PromptProvenance.cs`) — a sealed record with seven fields (`PromptName`, `PromptType`, `SourceHash`, `SessionRole`, `WorkflowPhase`, `InputArtifactIdentities`, `OutputArtifactIdentities`) and the `PromptSessionRole` enum (`Planning`, `OperationalExecution`, `Decision`, `Transfer`, `ContextUpdate`). `RepositoryOrchestrator` records provenance per turn into `planningProvenance` / `executionProvenance` / `decisionProvenance`, with one builder per canonical prompt (e.g. `BuildContinueExecutionProvenance`, `BuildStartExecutionProvenance`, `BuildGetNextDecisionsProvenance`). |
-| Owner | `CommandCenter.Core.Prompts` (the provenance type and the catalog `SourceHash`); `RepositoryOrchestrator` (per-turn capture). |
+| Guard command/source | `PromptProvenance` (`src/LoopRelay.Core/Prompts/PromptProvenance.cs`) — a sealed record with seven fields (`PromptName`, `PromptType`, `SourceHash`, `SessionRole`, `WorkflowPhase`, `InputArtifactIdentities`, `OutputArtifactIdentities`) and the `PromptSessionRole` enum (`Planning`, `OperationalExecution`, `Decision`, `Transfer`, `ContextUpdate`). `RepositoryOrchestrator` records provenance per turn into `planningProvenance` / `executionProvenance` / `decisionProvenance`, with one builder per canonical prompt (e.g. `BuildContinueExecutionProvenance`, `BuildStartExecutionProvenance`, `BuildGetNextDecisionsProvenance`). |
+| Owner | `LoopRelay.Core.Prompts` (the provenance type and the catalog `SourceHash`); `RepositoryOrchestrator` (per-turn capture). |
 | Severity | Local build failure. |
 | Detection confidence | High for the recorded fields (each is a required member; `SourceHash` is the catalog type's build-time content hash pinning the exact template text). |
 | Lifecycle state | Guarded. |
 | Drift model | A turn is issued without recorded provenance, or provenance loses the prompt identity / `SourceHash` / role / phase / artifact-identity linkage that makes a turn auditable to the catalog. |
-| Known limits | Artifacts are identified by repository-relative path — the only stable identity on `LoadedArtifact`/`Artifact` (neither carries an id or content hash today), so identity is path-based, not content-addressed. `PromptSessionRole` mirrors `CommandCenter.Agents.Models.SessionRole` by redeclaration (Core is the base layer and must not reference the Agents runtime); the two enums are kept aligned by convention, mapped only by a higher layer. The additive nullable `ExecutionPromptManifest.Provenance` wire field carries provenance downstream but no consumer is required to read it. |
+| Known limits | Artifacts are identified by repository-relative path — the only stable identity on `LoadedArtifact`/`Artifact` (neither carries an id or content hash today), so identity is path-based, not content-addressed. `PromptSessionRole` mirrors `LoopRelay.Agents.Models.SessionRole` by redeclaration (Core is the base layer and must not reference the Agents runtime); the two enums are kept aligned by convention, mapped only by a higher layer. The additive nullable `ExecutionPromptManifest.Provenance` wire field carries provenance downstream but no consumer is required to read it. |
 
 ### Handoff and Decision Rotation Sequencing
 
@@ -470,11 +470,11 @@ Primary evidence:
 
 | Field | Value |
 | --- | --- |
-| Protected invariant | `CommandCenter.Agents` and `CommandCenter.Core` are leaf projects (reference no other `CommandCenter.*`); `CommandCenter.DecisionSessions` is isolated from `CommandCenter.Execution`, `CommandCenter.Orchestration`, and every higher layer; and the live Decision loop takes no dependency on the deterministic `CommandCenter.Decisions` services. |
-| Guard command/source | `ArchitectureLayeringTests` (`tests/CommandCenter.Backend.Tests/ArchitectureLayeringTests.cs`) asserts isolation at two levels — reflection over the compiled assembly manifest (catches consumed forbidden references) and a `.csproj` build-graph scan via `HasActiveProjectReference` (catches declared-but-unconsumed references the compiler would prune). `Agents_is_role_agnostic_and_references_no_other_CommandCenter_project` and `Core_is_the_shared_center…` assert the leaves; `DecisionSessions_does_not_reference_operational_or_higher_layers`, `Forbidden_project_references_are_absent_from_the_build_graph`, and the m5 cert `DecisionRuntime_cannot_depend_on_execution_operational_orchestration_m5` assert Decision-role isolation from Execution/Orchestration. The live-loop ⊥ `CommandCenter.Decisions` posture is recorded as the Decision-router governance boundary in `docs/orchestration-loop-governance.md` (Known Fallback Behavior). |
+| Protected invariant | `LoopRelay.Agents` and `LoopRelay.Core` are leaf projects (reference no other `LoopRelay.*`); `LoopRelay.DecisionSessions` is isolated from `LoopRelay.Execution`, `LoopRelay.Orchestration`, and every higher layer; and the live Decision loop takes no dependency on the deterministic `LoopRelay.Decisions` services. |
+| Guard command/source | `ArchitectureLayeringTests` (`tests/LoopRelay.Backend.Tests/ArchitectureLayeringTests.cs`) asserts isolation at two levels — reflection over the compiled assembly manifest (catches consumed forbidden references) and a `.csproj` build-graph scan via `HasActiveProjectReference` (catches declared-but-unconsumed references the compiler would prune). `Agents_is_role_agnostic_and_references_no_other_LoopRelay_project` and `Core_is_the_shared_center…` assert the leaves; `DecisionSessions_does_not_reference_operational_or_higher_layers`, `Forbidden_project_references_are_absent_from_the_build_graph`, and the m5 cert `DecisionRuntime_cannot_depend_on_execution_operational_orchestration_m5` assert Decision-role isolation from Execution/Orchestration. The live-loop ⊥ `LoopRelay.Decisions` posture is recorded as the Decision-router governance boundary in `docs/orchestration-loop-governance.md` (Known Fallback Behavior). |
 | Owner | Backend architecture tests; cross-layer architecture tests for the Decision-router boundary. |
 | Severity | Release blocker — a forbidden edge would let a downstream role or composition root influence upstream authority, or bind the live loop to the deterministic fallback it is meant to supersede. |
 | Detection confidence | High — reflection plus authoritative build-graph parsing; `XDocument.Load` discards XML comments so a commented-out `ProjectReference` is correctly not treated as an active edge. |
 | Lifecycle state | Certified — the m5 `DecisionRuntime ⊥ Execution` certification maps to milestone exit criteria. |
-| Drift model | `CommandCenter.Agents` or `CommandCenter.Core` gains a product-project reference (losing leaf/role-agnostic status); `CommandCenter.DecisionSessions` reaches Execution's operational orchestration or the composition root; or the live Decision loop takes a dependency on the deterministic `CommandCenter.Decisions` generation/scoring services. |
-| Known limits | Reflection only catches a forbidden reference whose types are actually consumed; the `.csproj` build-graph scan is the authoritative backstop for declared-but-unconsumed edges and must remain wired. The Decision-loop ⊥ `CommandCenter.Decisions` boundary is asserted as a governance/layering posture; `CommandCenter.Decisions` remains a tested deterministic fallback, not the live authority. |
+| Drift model | `LoopRelay.Agents` or `LoopRelay.Core` gains a product-project reference (losing leaf/role-agnostic status); `LoopRelay.DecisionSessions` reaches Execution's operational orchestration or the composition root; or the live Decision loop takes a dependency on the deterministic `LoopRelay.Decisions` generation/scoring services. |
+| Known limits | Reflection only catches a forbidden reference whose types are actually consumed; the `.csproj` build-graph scan is the authoritative backstop for declared-but-unconsumed edges and must remain wired. The Decision-loop ⊥ `LoopRelay.Decisions` boundary is asserted as a governance/layering posture; `LoopRelay.Decisions` remains a tested deterministic fallback, not the live authority. |

@@ -30,10 +30,10 @@ already persist their own evidence into state. This issue should stay focused on
 
 Affected code:
 
-- `src/CommandCenter.Roadmap.CLI/InvariantValidator.cs`
-- `src/CommandCenter.Roadmap.CLI/RoadmapStateMachine.cs`
-- `src/CommandCenter.Roadmap.CLI/RoadmapStepException.cs`
-- `src/CommandCenter.Roadmap.CLI/RoadmapStateStore.cs`
+- `src/LoopRelay.Roadmap.CLI/InvariantValidator.cs`
+- `src/LoopRelay.Roadmap.CLI/RoadmapStateMachine.cs`
+- `src/LoopRelay.Roadmap.CLI/RoadmapStepException.cs`
+- `src/LoopRelay.Roadmap.CLI/RoadmapStateStore.cs`
 
 `InvariantValidator.FailAsync` renders a `RoadmapBlockedArtifact`, writes it to
 `RoadmapArtifactPaths.OrchestrationEvidenceDirectory` with the

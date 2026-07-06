@@ -1,0 +1,1292 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using LoopRelay.Core.Repositories;
+using LoopRelay.Decisions.Abstractions;
+using LoopRelay.Decisions.Models;
+using LoopRelay.Decisions.Persistence;
+using LoopRelay.Decisions.Primitives;
+
+namespace LoopRelay.Decisions.Services;
+
+public sealed class DecisionGovernanceService(
+    IRepositoryService repositoryService,
+    IDecisionRepository decisionRepository) : IDecisionGovernanceService
+{
+    private static readonly DecisionProposalState[] ActiveProposalStates =
+    [
+        DecisionProposalState.Draft,
+        DecisionProposalState.Generated,
+        DecisionProposalState.Viewed,
+        DecisionProposalState.NeedsRefinement,
+        DecisionProposalState.ReadyForResolution,
+        DecisionProposalState.Refined
+    ];
+
+    public async Task<DecisionGovernanceReport> GetCurrentReportAsync(Guid repositoryId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        return await BuildReportAsync(repository);
+    }
+
+    public async Task<DecisionGovernanceReport> GenerateReportAsync(Guid repositoryId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionGovernanceReport report = await BuildReportAsync(repository);
+        return await decisionRepository.SaveGovernanceReportAsync(repository, report);
+    }
+
+    public async Task<IReadOnlyList<DecisionGovernanceReport>> ListReportsAsync(Guid repositoryId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        return await decisionRepository.ListGovernanceReportsAsync(repository);
+    }
+
+    private async Task<DecisionGovernanceReport> BuildReportAsync(Repository repository)
+    {
+        IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
+        IReadOnlyList<DecisionCandidate> candidates = await decisionRepository.ListCandidatesAsync(repository);
+        IReadOnlyList<DecisionProposal> proposals = await decisionRepository.ListProposalsAsync(repository);
+        IReadOnlyList<DecisionAssimilationRecommendation> assimilationRecommendations =
+            await ListAssimilationRecommendationsAsync(repository, decisions);
+        IReadOnlyList<DecisionGovernanceReport> priorGovernanceReports =
+            await decisionRepository.ListGovernanceReportsAsync(repository);
+        var findings = new List<DecisionGovernanceFinding>();
+        var diagnostics = new List<string>();
+
+        AnalyzeDecisionConsistency(decisions, findings);
+        AnalyzeRelationships(decisions, findings);
+        AnalyzeResolvedDecisionAuthority(decisions, findings);
+        AnalyzeActiveAuthority(decisions, findings);
+        AnalyzeCandidateHygiene(decisions, candidates, proposals, findings);
+        AnalyzeProposalQuality(decisions, candidates, proposals, findings);
+        AnalyzeExecutionReadiness(decisions, findings);
+        AnalyzeConflictingExecutionDirectives(decisions, findings);
+        AnalyzeAuthorityBoundaries(decisions, proposals, assimilationRecommendations, findings);
+        AnalyzeProjectionIntegrity(repository, decisions, candidates, proposals, findings);
+        AnalyzeCoverage(candidates, proposals, findings, diagnostics);
+        AnalyzeRepeatedGovernanceFindings(priorGovernanceReports, findings);
+
+        IReadOnlyList<DecisionGovernanceFinding> orderedFindings = findings
+            .OrderByDescending(finding => finding.Severity)
+            .ThenBy(finding => finding.Category)
+            .ThenBy(finding => finding.Id, StringComparer.Ordinal)
+            .ToArray();
+        int blockingCount = orderedFindings.Count(finding => finding.BlocksExecutionProjection);
+        DecisionHealthAssessment health = blockingCount > 0
+            ? DecisionHealthAssessment.Blocked
+            : orderedFindings.Count == 0
+                ? DecisionHealthAssessment.Healthy
+                : DecisionHealthAssessment.AdvisoryFindings;
+        var summary = new DecisionGovernanceSummary(
+            decisions.Count,
+            decisions.Count(decision => decision.State == DecisionState.Resolved),
+            candidates.Count(candidate => candidate.State is DecisionCandidateState.Discovered or DecisionCandidateState.Promoted),
+            proposals.Count(proposal => ActiveProposalStates.Contains(proposal.State)),
+            assimilationRecommendations.Count,
+            orderedFindings.Count,
+            blockingCount);
+
+        return new DecisionGovernanceReport(
+            $"governance.{DateTimeOffset.UtcNow:yyyyMMddHHmmssfffffff}",
+            repository.Id,
+            DateTimeOffset.UtcNow,
+            FingerprintInputs(decisions, candidates, proposals, assimilationRecommendations),
+            health,
+            summary,
+            orderedFindings,
+            diagnostics.Order(StringComparer.Ordinal).ToArray());
+    }
+
+    private static void AnalyzeDecisionConsistency(
+        IReadOnlyList<Decision> decisions,
+        List<DecisionGovernanceFinding> findings)
+    {
+        foreach (IGrouping<string, Decision> duplicate in decisions.GroupBy(decision => decision.Id.Value)
+                     .Where(group => group.Count() > 1))
+        {
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.Consistency,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                "Duplicate decision id",
+                $"Decision id {duplicate.Key} appears more than once in structured decision records.",
+                duplicate.Select(DecisionSource).ToArray(),
+                [duplicate.Key],
+                [],
+                []);
+        }
+
+        foreach (Decision decision in decisions.Where(decision => decision.Metadata.RepositoryId == Guid.Empty))
+        {
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.Consistency,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                "Decision repository metadata is missing",
+                $"Decision {decision.Id.Value} does not have repository ownership metadata.",
+                [DecisionSource(decision)],
+                [decision.Id.Value],
+                [],
+                []);
+        }
+    }
+
+    private static void AnalyzeRelationships(
+        IReadOnlyList<Decision> decisions,
+        List<DecisionGovernanceFinding> findings)
+    {
+        Dictionary<string, Decision> byId = decisions.ToDictionary(decision => decision.Id.Value, StringComparer.Ordinal);
+        foreach (Decision decision in decisions)
+        {
+            foreach (DecisionRelationship relationship in decision.Relationships)
+            {
+                if (relationship.SourceDecisionId != decision.Id)
+                {
+                    AddFinding(
+                        findings,
+                        DecisionGovernanceCategory.SupersessionLineage,
+                        DecisionGovernanceSeverity.Blocking,
+                        true,
+                        "Relationship source does not match owning decision",
+                        $"Decision {decision.Id.Value} contains a {relationship.Type} relationship sourced from {relationship.SourceDecisionId.Value}.",
+                        [DecisionSource(decision)],
+                        [decision.Id.Value, relationship.SourceDecisionId.Value],
+                        [],
+                        []);
+                }
+
+                if (!byId.ContainsKey(relationship.TargetDecisionId.Value))
+                {
+                    AddFinding(
+                        findings,
+                        DecisionGovernanceCategory.DependencyIntegrity,
+                        DecisionGovernanceSeverity.Blocking,
+                        true,
+                        "Relationship target is missing",
+                        $"Decision {decision.Id.Value} has a {relationship.Type} relationship to missing decision {relationship.TargetDecisionId.Value}.",
+                        [DecisionSource(decision)],
+                        [decision.Id.Value, relationship.TargetDecisionId.Value],
+                        [],
+                        []);
+                }
+
+                if (byId.TryGetValue(relationship.TargetDecisionId.Value, out Decision? relationshipTarget) &&
+                    relationship.Type is DecisionRelationshipType.DependsOn or DecisionRelationshipType.Supports or DecisionRelationshipType.Constrains &&
+                    relationshipTarget.State is DecisionState.Archived or DecisionState.Superseded)
+                {
+                    AddFinding(
+                        findings,
+                        DecisionGovernanceCategory.AuthorityBoundary,
+                        DecisionGovernanceSeverity.Blocking,
+                        true,
+                        "Relationship references inactive authority",
+                        $"Decision {decision.Id.Value} has a {relationship.Type} relationship to {relationshipTarget.State} decision {relationshipTarget.Id.Value}.",
+                        [DecisionSource(decision), DecisionSource(relationshipTarget)],
+                        [decision.Id.Value, relationshipTarget.Id.Value],
+                        [],
+                        []);
+                }
+
+                if (relationship.Type == DecisionRelationshipType.ConflictsWith &&
+                    byId.TryGetValue(relationship.TargetDecisionId.Value, out Decision? target) &&
+                    decision.State == DecisionState.Resolved &&
+                    target.State == DecisionState.Resolved)
+                {
+                    AddFinding(
+                        findings,
+                        DecisionGovernanceCategory.Consistency,
+                        DecisionGovernanceSeverity.Blocking,
+                        true,
+                        "Conflicting resolved decisions",
+                        $"Resolved decision {decision.Id.Value} conflicts with resolved decision {target.Id.Value}.",
+                        [DecisionSource(decision), DecisionSource(target)],
+                        [decision.Id.Value, target.Id.Value],
+                        [],
+                        []);
+                }
+            }
+        }
+
+        ILookup<string, DecisionRelationship> incomingSupersedes = decisions
+            .SelectMany(decision => decision.Relationships)
+            .Where(relationship => relationship.Type == DecisionRelationshipType.Supersedes)
+            .ToLookup(relationship => relationship.TargetDecisionId.Value, StringComparer.Ordinal);
+        foreach (Decision superseded in decisions.Where(decision => decision.State == DecisionState.Superseded))
+        {
+            DecisionRelationship[] parents = incomingSupersedes[superseded.Id.Value].ToArray();
+            if (parents.Length == 0)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.SupersessionLineage,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Superseded decision has no replacement ancestry",
+                    $"Decision {superseded.Id.Value} is Superseded but no active decision records a Supersedes relationship to it.",
+                    [DecisionSource(superseded)],
+                    [superseded.Id.Value],
+                    [],
+                    []);
+            }
+            else if (parents.Length > 1)
+            {
+                Decision[] parentDecisions = parents
+                    .Select(parent => byId.TryGetValue(parent.SourceDecisionId.Value, out Decision? source) ? source : null)
+                    .OfType<Decision>()
+                    .ToArray();
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.SupersessionLineage,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Superseded decision has multiple replacement parents",
+                    $"Decision {superseded.Id.Value} is superseded by multiple decisions: {string.Join(", ", parents.Select(parent => parent.SourceDecisionId.Value).Order(StringComparer.Ordinal))}.",
+                    parentDecisions.Select(DecisionSource).Prepend(DecisionSource(superseded)).ToArray(),
+                    parents.Select(parent => parent.SourceDecisionId.Value).Append(superseded.Id.Value).ToArray(),
+                    [],
+                    []);
+            }
+        }
+
+        foreach (Decision decision in decisions)
+        {
+            if (HasCircularSupersession(decision.Id.Value, byId, []))
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.SupersessionLineage,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Circular supersession lineage",
+                    $"Decision {decision.Id.Value} participates in a circular Supersedes relationship.",
+                    [DecisionSource(decision)],
+                    [decision.Id.Value],
+                    [],
+                    []);
+            }
+        }
+    }
+
+    private static void AnalyzeResolvedDecisionAuthority(
+        IReadOnlyList<Decision> decisions,
+        List<DecisionGovernanceFinding> findings)
+    {
+        foreach (Decision decision in decisions.Where(decision => decision.State == DecisionState.Resolved))
+        {
+            if (decision.Resolution is null)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.AuthorityMetadata,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Resolved decision has no resolution",
+                    $"Decision {decision.Id.Value} is Resolved but has no resolution metadata.",
+                    [DecisionSource(decision)],
+                    [decision.Id.Value],
+                    [],
+                    []);
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(decision.Resolution.ResolvedBy) ||
+                string.IsNullOrWhiteSpace(decision.Resolution.Rationale) ||
+                string.IsNullOrWhiteSpace(decision.Resolution.SelectedOptionId))
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.AuthorityMetadata,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Resolved decision metadata is incomplete",
+                    $"Decision {decision.Id.Value} is missing resolver, rationale, or selected option metadata.",
+                    [DecisionSource(decision)],
+                    [decision.Id.Value],
+                    [],
+                    []);
+            }
+
+            if (decision.Resolution.SourceProposalSnapshot is null)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.FingerprintIntegrity,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Resolved decision lacks source proposal snapshot",
+                    $"Decision {decision.Id.Value} cannot prove the proposal fingerprint used for resolution.",
+                    [DecisionSource(decision)],
+                    [decision.Id.Value],
+                    [],
+                    []);
+            }
+            else
+            {
+                AnalyzeResolvedDecisionSnapshot(decision, findings);
+            }
+        }
+    }
+
+    private static void AnalyzeResolvedDecisionSnapshot(
+        Decision decision,
+        List<DecisionGovernanceFinding> findings)
+    {
+        DecisionResolvedProposalSnapshot snapshot = decision.Resolution!.SourceProposalSnapshot!;
+        bool incomplete = string.IsNullOrWhiteSpace(snapshot.ProposalId) ||
+            string.IsNullOrWhiteSpace(snapshot.CandidateId) ||
+            string.IsNullOrWhiteSpace(snapshot.ProposalFingerprint) ||
+            string.IsNullOrWhiteSpace(snapshot.Title) ||
+            string.IsNullOrWhiteSpace(snapshot.Context) ||
+            snapshot.Options.Count == 0 ||
+            snapshot.Evidence.Count == 0 ||
+            !snapshot.Options.Any(option => string.Equals(option.Id, decision.Resolution.SelectedOptionId, StringComparison.Ordinal));
+        if (incomplete)
+        {
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.FingerprintIntegrity,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                "Resolved decision source proposal snapshot is incomplete",
+                $"Decision {decision.Id.Value} has a source proposal snapshot missing required content or the selected option {decision.Resolution.SelectedOptionId}.",
+                [DecisionSource(decision)],
+                [decision.Id.Value],
+                [snapshot.CandidateId],
+                [snapshot.ProposalId]);
+            return;
+        }
+
+        string actualFingerprint = Fingerprint(new DecisionProposal(
+            snapshot.ProposalId,
+            decision.Metadata.RepositoryId,
+            snapshot.CandidateId,
+            snapshot.ProposalState,
+            snapshot.Title,
+            snapshot.Context,
+            snapshot.Options,
+            snapshot.Tradeoffs,
+            snapshot.Recommendation,
+            snapshot.Assumptions,
+            snapshot.Evidence,
+            snapshot.History)
+        {
+            OptionRelationships = snapshot.OptionRelationships,
+            AnalyzedOptions = snapshot.AnalyzedOptions,
+            TradeoffComparisons = snapshot.TradeoffComparisons,
+            TradeoffAnalysisDiagnostics = snapshot.TradeoffAnalysisDiagnostics,
+            GenerationDiagnostics = snapshot.GenerationDiagnostics
+        });
+        if (!string.Equals(snapshot.ProposalFingerprint, actualFingerprint, StringComparison.Ordinal))
+        {
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.FingerprintIntegrity,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                "Resolved decision source proposal fingerprint is invalid",
+                $"Decision {decision.Id.Value} records source proposal fingerprint {snapshot.ProposalFingerprint}, but the resolved snapshot hashes to {actualFingerprint}.",
+                [DecisionSource(decision)],
+                [decision.Id.Value],
+                [snapshot.CandidateId],
+                [snapshot.ProposalId]);
+        }
+    }
+
+    private static void AnalyzeActiveAuthority(
+        IReadOnlyList<Decision> decisions,
+        List<DecisionGovernanceFinding> findings)
+    {
+        Decision[] activeAuthorities = decisions
+            .Where(decision => decision.State == DecisionState.Resolved && decision.Resolution?.Outcome == DecisionOutcome.Accepted)
+            .ToArray();
+        foreach (IGrouping<string, Decision> duplicateCandidate in activeAuthorities
+                     .Where(decision => !string.IsNullOrWhiteSpace(decision.Resolution?.SourceProposalSnapshot?.CandidateId))
+                     .GroupBy(decision => decision.Resolution!.SourceProposalSnapshot!.CandidateId, StringComparer.Ordinal)
+                     .Where(group => group.Count() > 1))
+        {
+            Decision[] authorities = duplicateCandidate.ToArray();
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.AuthorityBoundary,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                "Multiple active authorities for one candidate",
+                $"Candidate {duplicateCandidate.Key} has multiple accepted resolved decisions: {string.Join(", ", authorities.Select(decision => decision.Id.Value).Order(StringComparer.Ordinal))}.",
+                authorities.Select(DecisionSource).ToArray(),
+                authorities.Select(decision => decision.Id.Value).ToArray(),
+                [duplicateCandidate.Key],
+                authorities
+                    .Select(decision => decision.Resolution?.SourceProposalSnapshot?.ProposalId)
+                    .OfType<string>()
+                    .ToArray());
+        }
+    }
+
+    private static void AnalyzeCandidateHygiene(
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<DecisionCandidate> candidates,
+        IReadOnlyList<DecisionProposal> proposals,
+        List<DecisionGovernanceFinding> findings)
+    {
+        DecisionCandidate[] activeCandidates = candidates
+            .Where(IsActiveCandidate)
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.SourceFingerprint))
+            .ToArray();
+        Dictionary<string, DecisionCandidate[]> terminalCandidatesByFingerprint = candidates
+            .Where(candidate => !IsActiveCandidate(candidate))
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.SourceFingerprint))
+            .GroupBy(candidate => candidate.SourceFingerprint, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        Dictionary<string, string[]> resolvedProposalIdsByCandidate = proposals
+            .Where(proposal => proposal.State == DecisionProposalState.Resolved)
+            .GroupBy(proposal => proposal.CandidateId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(proposal => proposal.Id).Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+        Dictionary<string, string[]> resolvedDecisionIdsByCandidate = decisions
+            .Where(decision => decision.State == DecisionState.Resolved)
+            .Where(decision => !string.IsNullOrWhiteSpace(decision.Resolution?.SourceProposalSnapshot?.CandidateId))
+            .GroupBy(decision => decision.Resolution!.SourceProposalSnapshot!.CandidateId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(decision => decision.Id.Value).Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+
+        foreach (IGrouping<string, DecisionCandidate> duplicateSource in activeCandidates
+                     .GroupBy(candidate => candidate.SourceFingerprint, StringComparer.Ordinal)
+                     .Where(group => group.Count() > 1))
+        {
+            DecisionCandidate[] duplicates = duplicateSource.ToArray();
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.DecisionCoverage,
+                DecisionGovernanceSeverity.Warning,
+                false,
+                "Multiple active candidates share a source fingerprint",
+                $"Active candidates {string.Join(", ", duplicates.Select(candidate => candidate.Id).Order(StringComparer.Ordinal))} share source fingerprint {duplicateSource.Key}. One candidate should remain active and the duplicate should be marked explicitly.",
+                duplicates.Select(CandidateSource).ToArray(),
+                [],
+                duplicates.Select(candidate => candidate.Id).ToArray(),
+                []);
+        }
+
+        foreach (DecisionCandidate candidate in activeCandidates)
+        {
+            if (terminalCandidatesByFingerprint.TryGetValue(candidate.SourceFingerprint, out DecisionCandidate[]? terminalMatches))
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.DecisionCoverage,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Active candidate reuses terminal source fingerprint",
+                    $"Candidate {candidate.Id} is {candidate.State}, but terminal candidate(s) {string.Join(", ", terminalMatches.Select(match => $"{match.Id}:{match.State}").Order(StringComparer.Ordinal))} already record the same source fingerprint.",
+                    terminalMatches.Select(CandidateSource).Prepend(CandidateSource(candidate)).ToArray(),
+                    [],
+                    terminalMatches.Select(match => match.Id).Append(candidate.Id).ToArray(),
+                    []);
+            }
+
+            bool hasResolvedProposal = resolvedProposalIdsByCandidate.TryGetValue(candidate.Id, out string[]? resolvedProposalIds);
+            bool hasResolvedDecision = resolvedDecisionIdsByCandidate.TryGetValue(candidate.Id, out string[]? resolvedDecisionIds);
+            if (hasResolvedProposal || hasResolvedDecision)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.DecisionCoverage,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Active candidate already has resolved authority",
+                    $"Candidate {candidate.Id} is still {candidate.State}, but resolved authority already exists through proposal(s) {string.Join(", ", resolvedProposalIds ?? [])} and decision(s) {string.Join(", ", resolvedDecisionIds ?? [])}. The candidate should be reviewed for lifecycle cleanup.",
+                    [CandidateSource(candidate)],
+                    resolvedDecisionIds ?? [],
+                    [candidate.Id],
+                    resolvedProposalIds ?? []);
+            }
+        }
+    }
+
+    private static void AnalyzeProposalQuality(
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<DecisionCandidate> candidates,
+        IReadOnlyList<DecisionProposal> proposals,
+        List<DecisionGovernanceFinding> findings)
+    {
+        HashSet<string> candidateIds = candidates.Select(candidate => candidate.Id).ToHashSet(StringComparer.Ordinal);
+        Dictionary<string, DecisionCandidate> candidatesById = candidates.ToDictionary(candidate => candidate.Id, StringComparer.Ordinal);
+        HashSet<string> resolvedCandidateIds = proposals
+            .Where(proposal => proposal.State == DecisionProposalState.Resolved)
+            .Select(proposal => proposal.CandidateId)
+            .Concat(decisions
+                .Where(decision => decision.State == DecisionState.Resolved)
+                .Select(decision => decision.Resolution?.SourceProposalSnapshot?.CandidateId)
+                .OfType<string>())
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (DecisionProposal proposal in proposals)
+        {
+            if (!candidateIds.Contains(proposal.CandidateId))
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.DependencyIntegrity,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Proposal source candidate is missing",
+                    $"Proposal {proposal.Id} references missing candidate {proposal.CandidateId}.",
+                    [ProposalSource(proposal)],
+                    [],
+                    [proposal.CandidateId],
+                    [proposal.Id]);
+            }
+
+            if (ActiveProposalStates.Contains(proposal.State) &&
+                candidatesById.TryGetValue(proposal.CandidateId, out DecisionCandidate? candidate) &&
+                candidate.State is not DecisionCandidateState.Discovered and not DecisionCandidateState.Promoted)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.ProposalQuality,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Unresolved proposal source candidate is no longer active",
+                    $"Proposal {proposal.Id} is {proposal.State}, but candidate {candidate.Id} is {candidate.State}. The proposal should be reviewed, expired, or discarded.",
+                    [ProposalSource(proposal), CandidateSource(candidate)],
+                    [],
+                    [proposal.CandidateId],
+                    [proposal.Id]);
+            }
+
+            if (ActiveProposalStates.Contains(proposal.State) &&
+                resolvedCandidateIds.Contains(proposal.CandidateId))
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.ProposalQuality,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Unresolved proposal is stale after candidate resolution",
+                    $"Proposal {proposal.Id} is still {proposal.State}, but candidate {proposal.CandidateId} already has resolved authority. The proposal should be reviewed, expired, or discarded.",
+                    [ProposalSource(proposal)],
+                    [],
+                    [proposal.CandidateId],
+                    [proposal.Id]);
+            }
+
+            if (ActiveProposalStates.Contains(proposal.State) &&
+                (proposal.Options.Count == 0 || proposal.Recommendation is null || proposal.Evidence.Count == 0))
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.ProposalQuality,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Active proposal is incomplete",
+                    $"Proposal {proposal.Id} is active but lacks options, a recommendation, or evidence.",
+                    [ProposalSource(proposal)],
+                    [],
+                    [proposal.CandidateId],
+                    [proposal.Id]);
+            }
+        }
+    }
+
+    private static void AnalyzeExecutionReadiness(
+        IReadOnlyList<Decision> decisions,
+        List<DecisionGovernanceFinding> findings)
+    {
+        foreach (Decision decision in decisions.Where(decision => decision.State == DecisionState.Resolved && decision.Resolution is not null))
+        {
+            if (decision.Resolution!.Outcome != DecisionOutcome.Accepted)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.ExecutionProjectionReadiness,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Resolved decision is not accepted",
+                    $"Decision {decision.Id.Value} is resolved with outcome {decision.Resolution?.Outcome}; it should not be projected as an execution constraint.",
+                    [DecisionSource(decision)],
+                    [decision.Id.Value],
+                    [],
+                    []);
+            }
+        }
+    }
+
+    private static void AnalyzeConflictingExecutionDirectives(
+        IReadOnlyList<Decision> decisions,
+        List<DecisionGovernanceFinding> findings)
+    {
+        ProjectedDecisionDirective[] directives = decisions
+            .Where(decision => decision.State == DecisionState.Resolved &&
+                decision.Resolution?.Outcome == DecisionOutcome.Accepted &&
+                decision.Resolution.SourceProposalSnapshot is not null)
+            .Select(TryProjectExecutionDirective)
+            .OfType<ProjectedDecisionDirective>()
+            .ToArray();
+
+        foreach (IGrouping<string, ProjectedDecisionDirective> directiveGroup in directives
+                     .GroupBy(directive => directive.Subject, StringComparer.Ordinal)
+                     .Where(group => group.Any(directive => directive.IsPositive) &&
+                         group.Any(directive => !directive.IsPositive)))
+        {
+            ProjectedDecisionDirective[] conflicting = directiveGroup.ToArray();
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.ExecutionProjectionReadiness,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                "Conflicting execution directives",
+                $"Accepted resolved decisions project contradictory execution directives for '{directiveGroup.Key}': {string.Join("; ", conflicting.Select(directive => $"{directive.Decision.Id.Value}: {directive.Statement}").Order(StringComparer.Ordinal))}.",
+                conflicting.Select(directive => DecisionSource(directive.Decision)).ToArray(),
+                conflicting.Select(directive => directive.Decision.Id.Value).ToArray(),
+                conflicting.Select(directive => directive.Decision.Resolution?.SourceProposalSnapshot?.CandidateId).OfType<string>().ToArray(),
+                conflicting.Select(directive => directive.Decision.Resolution?.SourceProposalSnapshot?.ProposalId).OfType<string>().ToArray());
+        }
+    }
+
+    private static ProjectedDecisionDirective? TryProjectExecutionDirective(Decision decision)
+    {
+        DecisionResolution resolution = decision.Resolution!;
+        DecisionResolvedProposalSnapshot snapshot = resolution.SourceProposalSnapshot!;
+        DecisionOption? selectedOption = snapshot.Options
+            .FirstOrDefault(option => string.Equals(option.Id, resolution.SelectedOptionId, StringComparison.Ordinal));
+        if (selectedOption is null)
+        {
+            return null;
+        }
+
+        return TryParseDirective(selectedOption.Title, decision) ??
+            TryParseDirective(selectedOption.Description, decision) ??
+            TryParseDirective(decision.Title, decision);
+    }
+
+    private static ProjectedDecisionDirective? TryParseDirective(string statement, Decision decision)
+    {
+        string normalized = NormalizeDirectiveText(statement);
+        if (normalized.Length == 0)
+        {
+            return null;
+        }
+
+        foreach ((string Prefix, bool IsPositive) directive in DirectivePrefixes)
+        {
+            if (!normalized.StartsWith(directive.Prefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string subject = normalized[directive.Prefix.Length..].Trim();
+            if (subject.Length == 0)
+            {
+                return null;
+            }
+
+            return new ProjectedDecisionDirective(
+                subject,
+                directive.IsPositive,
+                statement.Trim(),
+                decision);
+        }
+
+        return null;
+    }
+
+    private static string NormalizeDirectiveText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        bool previousWasSpace = true;
+        foreach (char character in value.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(character);
+                previousWasSpace = false;
+            }
+            else if (!previousWasSpace)
+            {
+                builder.Append(' ');
+                previousWasSpace = true;
+            }
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static void AnalyzeAuthorityBoundaries(
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<DecisionProposal> proposals,
+        IReadOnlyList<DecisionAssimilationRecommendation> assimilationRecommendations,
+        List<DecisionGovernanceFinding> findings)
+    {
+        Dictionary<string, Decision> decisionsById = decisions.ToDictionary(decision => decision.Id.Value, StringComparer.Ordinal);
+        Dictionary<string, DecisionProposal> proposalsById = proposals.ToDictionary(proposal => proposal.Id, StringComparer.Ordinal);
+
+        foreach (DecisionAssimilationRecommendation recommendation in assimilationRecommendations)
+        {
+            if (!decisionsById.TryGetValue(recommendation.DecisionId, out Decision? decision))
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.AuthorityBoundary,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Assimilation recommendation references missing decision",
+                    $"Assimilation recommendation for {recommendation.DecisionId} has no source decision record.",
+                    [AssimilationSource(recommendation)],
+                    [recommendation.DecisionId],
+                    [],
+                    []);
+                continue;
+            }
+
+            if (decision.State != DecisionState.Resolved || decision.Resolution?.Outcome != DecisionOutcome.Accepted)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.AuthorityBoundary,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Assimilation recommendation is not backed by accepted authority",
+                    $"Assimilation recommendation for {decision.Id.Value} is backed by state {decision.State} and outcome {decision.Resolution?.Outcome}.",
+                    [DecisionSource(decision), AssimilationSource(recommendation)],
+                    [decision.Id.Value],
+                    [],
+                    []);
+            }
+        }
+
+        foreach (DecisionProposal proposal in proposals.Where(proposal => proposal.State == DecisionProposalState.Resolved))
+        {
+            bool hasDecision = decisions.Any(decision =>
+                string.Equals(decision.Resolution?.SourceProposalSnapshot?.ProposalId, proposal.Id, StringComparison.Ordinal));
+            if (!hasDecision)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.AuthorityBoundary,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Resolved proposal has no authoritative decision",
+                    $"Proposal {proposal.Id} is Resolved but no decision records it as the source proposal.",
+                    [ProposalSource(proposal)],
+                    [],
+                    [proposal.CandidateId],
+                    [proposal.Id]);
+            }
+        }
+
+        foreach (Decision decision in decisions.Where(decision => decision.Resolution?.SourceProposalSnapshot is not null))
+        {
+            string proposalId = decision.Resolution!.SourceProposalSnapshot!.ProposalId;
+            if (proposalsById.TryGetValue(proposalId, out DecisionProposal? currentProposal) &&
+                currentProposal.State != DecisionProposalState.Resolved)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.AuthorityBoundary,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Decision source proposal is not marked resolved",
+                    $"Decision {decision.Id.Value} was resolved from proposal {proposalId}, but the current proposal state is {currentProposal.State}.",
+                    [DecisionSource(decision), ProposalSource(currentProposal)],
+                    [decision.Id.Value],
+                    [currentProposal.CandidateId],
+                    [proposalId]);
+            }
+        }
+    }
+
+    private static void AnalyzeCoverage(
+        IReadOnlyList<DecisionCandidate> candidates,
+        IReadOnlyList<DecisionProposal> proposals,
+        List<DecisionGovernanceFinding> findings,
+        List<string> diagnostics)
+    {
+        AnalyzeRepeatedSignalCoverage(
+            candidates,
+            findings,
+            "Repeated ambiguity signal",
+            "ambiguity",
+            ["Ambiguity"]);
+        AnalyzeRepeatedSignalCoverage(
+            candidates,
+            findings,
+            "Repeated blocker signal",
+            "blocker",
+            ["BlockedExecution"]);
+        AnalyzeRepeatedSignalCoverage(
+            candidates,
+            findings,
+            "Repeated architectural fork signal",
+            "architectural-fork",
+            ["ArchitecturalFork"]);
+        AnalyzeRepeatedSignalCoverage(
+            candidates,
+            findings,
+            "Repeated unresolved question signal",
+            "unresolved-question",
+            ["MissingDirection", "RepeatedContinuityUncertainty", "StaleOpenDecision"]);
+
+        foreach (DecisionCandidate candidate in candidates.Where(candidate => candidate.State == DecisionCandidateState.Promoted))
+        {
+            bool hasActiveProposal = proposals.Any(proposal =>
+                proposal.CandidateId == candidate.Id && ActiveProposalStates.Contains(proposal.State));
+            bool hasResolvedProposal = proposals.Any(proposal =>
+                proposal.CandidateId == candidate.Id && proposal.State == DecisionProposalState.Resolved);
+            if (!hasActiveProposal && !hasResolvedProposal)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.DecisionCoverage,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Promoted candidate has no proposal",
+                    $"Candidate {candidate.Id} is promoted but has no active or resolved proposal.",
+                    [CandidateSource(candidate)],
+                    [],
+                    [candidate.Id],
+                    []);
+            }
+        }
+
+        diagnostics.Add("Repeated decision coverage analysis is limited to structured active-candidate signal kinds and exact source references.");
+    }
+
+    private static void AnalyzeRepeatedGovernanceFindings(
+        IReadOnlyList<DecisionGovernanceReport> priorReports,
+        List<DecisionGovernanceFinding> findings)
+    {
+        GovernanceFindingOccurrence[] occurrences = priorReports
+            .SelectMany(report => report.Findings
+                .Where(finding => finding.Title != "Repeated governance finding")
+                .Select(finding => new GovernanceFindingOccurrence(report.Id, finding)))
+            .Concat(findings
+                .Where(finding => finding.Title != "Repeated governance finding")
+                .Select(finding => new GovernanceFindingOccurrence("current", finding)))
+            .ToArray();
+
+        foreach (IGrouping<string, GovernanceFindingOccurrence> repeatedFinding in occurrences
+                     .GroupBy(occurrence => GovernanceFindingKey(occurrence.Finding), StringComparer.Ordinal)
+                     .Where(group => group.Select(occurrence => occurrence.ReportId).Distinct(StringComparer.Ordinal).Count() > 1))
+        {
+            GovernanceFindingOccurrence[] repeatedOccurrences = repeatedFinding.ToArray();
+            DecisionGovernanceFinding representative = repeatedOccurrences[0].Finding;
+            string[] reportIds = repeatedOccurrences
+                .Select(occurrence => occurrence.ReportId)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.DecisionCoverage,
+                DecisionGovernanceSeverity.Warning,
+                false,
+                "Repeated governance finding",
+                $"Governance finding '{representative.Title}' appears in multiple reports: {string.Join(", ", reportIds)}.",
+                repeatedOccurrences
+                    .Where(occurrence => occurrence.ReportId != "current")
+                    .Select(occurrence => new DecisionSourceReference(
+                        "DecisionGovernanceReport",
+                        $".agents/decisions/governance/{occurrence.ReportId}.json"))
+                    .Concat(repeatedOccurrences.SelectMany(occurrence => occurrence.Finding.Sources))
+                    .ToArray(),
+                repeatedOccurrences.SelectMany(occurrence => occurrence.Finding.RelatedDecisionIds).ToArray(),
+                repeatedOccurrences.SelectMany(occurrence => occurrence.Finding.RelatedCandidateIds).ToArray(),
+                repeatedOccurrences.SelectMany(occurrence => occurrence.Finding.RelatedProposalIds).ToArray());
+        }
+    }
+
+    private static void AnalyzeRepeatedSignalCoverage(
+        IReadOnlyList<DecisionCandidate> candidates,
+        List<DecisionGovernanceFinding> findings,
+        string title,
+        string signalLabel,
+        IReadOnlyCollection<string> signalKinds)
+    {
+        foreach (IGrouping<string, CandidateSignalReference> repeatedSignal in candidates
+                     .Where(IsActiveCandidate)
+                     .SelectMany(CandidateSignalReferences)
+                     .Where(reference => signalKinds.Contains(reference.SignalKind))
+                     .GroupBy(reference => $"{reference.SignalKind}|{SourceKey(reference.Source)}", StringComparer.Ordinal)
+                     .Where(group => group.Select(reference => reference.Candidate.Id).Distinct(StringComparer.Ordinal).Count() > 1))
+        {
+            CandidateSignalReference[] references = repeatedSignal.ToArray();
+            DecisionCandidate[] relatedCandidates = references
+                .Select(reference => reference.Candidate)
+                .DistinctBy(candidate => candidate.Id)
+                .OrderBy(candidate => candidate.Id, StringComparer.Ordinal)
+                .ToArray();
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.DecisionCoverage,
+                DecisionGovernanceSeverity.Warning,
+                false,
+                title,
+                $"Active candidates {string.Join(", ", relatedCandidates.Select(candidate => candidate.Id))} repeat {signalLabel} signal {references[0].SignalKind} from the same structured source reference.",
+                references.Select(reference => reference.Source).Concat(relatedCandidates.Select(CandidateSource)).ToArray(),
+                [],
+                relatedCandidates.Select(candidate => candidate.Id).ToArray(),
+                []);
+        }
+    }
+
+    private static IEnumerable<CandidateSignalReference> CandidateSignalReferences(DecisionCandidate candidate)
+    {
+        foreach (DecisionSignal signal in candidate.Signals)
+        {
+            DecisionSourceReference[] sources = signal.Evidence
+                .SelectMany(evidence => evidence.Sources)
+                .Concat(candidate.Sources)
+                .ToArray();
+            foreach (DecisionSourceReference source in sources.Length == 0 ? [CandidateSource(candidate)] : sources)
+            {
+                yield return new CandidateSignalReference(candidate, signal.Kind, source);
+            }
+        }
+    }
+
+    private static string SourceKey(DecisionSourceReference source)
+    {
+        return string.Join(
+            "|",
+            source.SourceKind,
+            source.RelativePath ?? string.Empty,
+            source.Section ?? string.Empty,
+            source.ItemId ?? string.Empty);
+    }
+
+    private static string GovernanceFindingKey(DecisionGovernanceFinding finding)
+    {
+        return string.Join(
+            "|",
+            finding.Category,
+            finding.Title,
+            string.Join(",", finding.RelatedDecisionIds.Order(StringComparer.Ordinal)),
+            string.Join(",", finding.RelatedCandidateIds.Order(StringComparer.Ordinal)),
+            string.Join(",", finding.RelatedProposalIds.Order(StringComparer.Ordinal)));
+    }
+
+    private static bool IsActiveCandidate(DecisionCandidate candidate)
+    {
+        return candidate.State is DecisionCandidateState.Discovered or DecisionCandidateState.Promoted;
+    }
+
+    private static void AnalyzeProjectionIntegrity(
+        Repository repository,
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<DecisionCandidate> candidates,
+        IReadOnlyList<DecisionProposal> proposals,
+        List<DecisionGovernanceFinding> findings)
+    {
+        if (!Directory.Exists(DecisionArtifactPaths.ResolveRoot(repository, DecisionArtifactKind.Decision)) &&
+            !Directory.Exists(DecisionArtifactPaths.ResolveRoot(repository, DecisionArtifactKind.Candidate)) &&
+            !Directory.Exists(DecisionArtifactPaths.ResolveRoot(repository, DecisionArtifactKind.Proposal)))
+        {
+            return;
+        }
+
+        foreach (Decision decision in decisions)
+        {
+            string relativePath = DecisionArtifactPaths.DecisionMarkdown(decision.Id.Value);
+            CheckProjection(
+                repository,
+                relativePath,
+                "DecisionRecordProjection",
+                $"Decision {decision.Id.Value} markdown projection is missing",
+                $"Decision {decision.Id.Value} has no generated decision.md projection beside its structured record.",
+                $"Decision {decision.Id.Value} markdown projection is stale",
+                $"Decision {decision.Id.Value} decision.md does not match the current structured decision identity or state.",
+                [$"# {decision.Id.Value}:", $"- State: {decision.State}"],
+                findings,
+                [decision.Id.Value],
+                [],
+                []);
+        }
+
+        foreach (DecisionCandidate candidate in candidates)
+        {
+            string relativePath = DecisionArtifactPaths.CandidateMarkdown(candidate.Id);
+            CheckProjection(
+                repository,
+                relativePath,
+                "DecisionCandidateProjection",
+                $"Candidate {candidate.Id} markdown projection is missing",
+                $"Candidate {candidate.Id} has no generated candidate.md projection beside its structured record.",
+                $"Candidate {candidate.Id} markdown projection is stale",
+                $"Candidate {candidate.Id} candidate.md does not match the current structured candidate identity or state.",
+                [$"# {candidate.Id}:", $"- State: {candidate.State}"],
+                findings,
+                [],
+                [candidate.Id],
+                []);
+        }
+
+        foreach (DecisionProposal proposal in proposals)
+        {
+            string relativePath = DecisionArtifactPaths.ProposalMarkdown(proposal.Id);
+            CheckProjection(
+                repository,
+                relativePath,
+                "DecisionProposalProjection",
+                $"Proposal {proposal.Id} markdown projection is missing",
+                $"Proposal {proposal.Id} has no generated proposal.md projection beside its structured record.",
+                $"Proposal {proposal.Id} markdown projection is stale",
+                $"Proposal {proposal.Id} proposal.md does not match the current structured proposal identity or state.",
+                [$"# {proposal.Id}:", $"- State: {proposal.State}", $"- Candidate: {proposal.CandidateId}"],
+                findings,
+                [],
+                [proposal.CandidateId],
+                [proposal.Id]);
+        }
+
+        string indexPath = DecisionArtifactPaths.DecisionsIndex();
+        var expectedIndexFragments = decisions.Select(decision => decision.Id.Value)
+            .Concat(candidates.Select(candidate => candidate.Id))
+            .Concat(proposals.Select(proposal => proposal.Id))
+            .ToArray();
+        CheckProjection(
+            repository,
+            indexPath,
+            "DecisionIndexProjection",
+            "Decision index projection is missing",
+            "The current decisions.md projection is missing from .agents/decisions.",
+            "Decision index projection is stale",
+            "The current decisions.md projection does not list every structured decision lifecycle artifact.",
+            ["# Decisions", .. expectedIndexFragments],
+            findings,
+            decisions.Select(decision => decision.Id.Value).ToArray(),
+            candidates.Select(candidate => candidate.Id).ToArray(),
+            proposals.Select(proposal => proposal.Id).ToArray());
+    }
+
+    private static void CheckProjection(
+        Repository repository,
+        string relativePath,
+        string sourceKind,
+        string missingTitle,
+        string missingDetail,
+        string staleTitle,
+        string staleDetail,
+        IReadOnlyList<string> expectedFragments,
+        List<DecisionGovernanceFinding> findings,
+        IReadOnlyList<string> relatedDecisionIds,
+        IReadOnlyList<string> relatedCandidateIds,
+        IReadOnlyList<string> relatedProposalIds)
+    {
+        string path = DecisionArtifactPaths.Resolve(repository, relativePath);
+        var source = new DecisionSourceReference(sourceKind, relativePath);
+        if (!File.Exists(path))
+        {
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.ProjectionIntegrity,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                missingTitle,
+                missingDetail,
+                [source],
+                relatedDecisionIds,
+                relatedCandidateIds,
+                relatedProposalIds);
+            return;
+        }
+
+        string content = File.ReadAllText(path);
+        if (string.IsNullOrWhiteSpace(content) ||
+            expectedFragments.Any(fragment => !content.Contains(fragment, StringComparison.Ordinal)))
+        {
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.ProjectionIntegrity,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                staleTitle,
+                staleDetail,
+                [source],
+                relatedDecisionIds,
+                relatedCandidateIds,
+                relatedProposalIds);
+        }
+    }
+
+    private async Task<IReadOnlyList<DecisionAssimilationRecommendation>> ListAssimilationRecommendationsAsync(
+        Repository repository,
+        IReadOnlyList<Decision> decisions)
+    {
+        var recommendations = new List<DecisionAssimilationRecommendation>();
+        foreach (Decision decision in decisions)
+        {
+            DecisionAssimilationRecommendation? recommendation =
+                await decisionRepository.GetAssimilationRecommendationAsync(repository, decision.Id);
+            if (recommendation is not null)
+            {
+                recommendations.Add(recommendation);
+            }
+        }
+
+        return recommendations.OrderBy(recommendation => recommendation.DecisionId, StringComparer.Ordinal).ToArray();
+    }
+
+    private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
+    {
+        Repository? repository = (await repositoryService.GetAllAsync())
+            .FirstOrDefault(repository => repository.Id == repositoryId);
+        return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
+    }
+
+    private static bool HasCircularSupersession(
+        string decisionId,
+        IReadOnlyDictionary<string, Decision> decisions,
+        HashSet<string> visited)
+    {
+        if (!visited.Add(decisionId))
+        {
+            return true;
+        }
+
+        if (!decisions.TryGetValue(decisionId, out Decision? decision))
+        {
+            return false;
+        }
+
+        foreach (DecisionRelationship relationship in decision.Relationships
+                     .Where(relationship => relationship.Type == DecisionRelationshipType.Supersedes))
+        {
+            if (HasCircularSupersession(relationship.TargetDecisionId.Value, decisions, [.. visited]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void AddFinding(
+        List<DecisionGovernanceFinding> findings,
+        DecisionGovernanceCategory category,
+        DecisionGovernanceSeverity severity,
+        bool blocksExecutionProjection,
+        string title,
+        string detail,
+        IReadOnlyList<DecisionSourceReference> sources,
+        IReadOnlyList<string> relatedDecisionIds,
+        IReadOnlyList<string> relatedCandidateIds,
+        IReadOnlyList<string> relatedProposalIds)
+    {
+        string id = $"GOV-{findings.Count + 1:0000}";
+        findings.Add(new DecisionGovernanceFinding(
+            id,
+            category,
+            severity,
+            blocksExecutionProjection,
+            title,
+            detail,
+            sources,
+            relatedDecisionIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            relatedCandidateIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            relatedProposalIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
+    }
+
+    private static string FingerprintInputs(
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<DecisionCandidate> candidates,
+        IReadOnlyList<DecisionProposal> proposals,
+        IReadOnlyList<DecisionAssimilationRecommendation> assimilationRecommendations)
+    {
+        object input = new
+        {
+            Decisions = decisions.OrderBy(decision => decision.Id.Value, StringComparer.Ordinal),
+            Candidates = candidates.OrderBy(candidate => candidate.Id, StringComparer.Ordinal),
+            Proposals = proposals.OrderBy(proposal => proposal.Id, StringComparer.Ordinal),
+            AssimilationRecommendations = assimilationRecommendations.OrderBy(recommendation => recommendation.DecisionId, StringComparer.Ordinal)
+        };
+        byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(input, DecisionJson.Options));
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    private static string Fingerprint(DecisionProposal proposal)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(proposal, DecisionJson.Options));
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    private static readonly (string Prefix, bool IsPositive)[] DirectivePrefixes =
+    [
+        ("do not use ", false),
+        ("do not enable ", false),
+        ("do not allow ", false),
+        ("disable ", false),
+        ("avoid ", false),
+        ("exclude ", false),
+        ("forbid ", false),
+        ("reject ", false),
+        ("remove ", false),
+        ("prevent ", false),
+        ("use ", true),
+        ("enable ", true),
+        ("adopt ", true),
+        ("include ", true),
+        ("allow ", true),
+        ("require ", true),
+        ("keep ", true),
+        ("preserve ", true)
+    ];
+
+    private sealed record ProjectedDecisionDirective(
+        string Subject,
+        bool IsPositive,
+        string Statement,
+        Decision Decision);
+
+    private sealed record CandidateSignalReference(
+        DecisionCandidate Candidate,
+        string SignalKind,
+        DecisionSourceReference Source);
+
+    private sealed record GovernanceFindingOccurrence(
+        string ReportId,
+        DecisionGovernanceFinding Finding);
+
+    private static DecisionSourceReference DecisionSource(Decision decision)
+    {
+        return new DecisionSourceReference(
+            "DecisionRecord",
+            $".agents/decisions/records/{decision.Id.Value}/decision.json",
+            DecisionId: decision.Id);
+    }
+
+    private static DecisionSourceReference CandidateSource(DecisionCandidate candidate)
+    {
+        return new DecisionSourceReference(
+            "DecisionCandidate",
+            $".agents/decisions/candidates/{candidate.Id}/candidate.json",
+            CandidateId: candidate.Id);
+    }
+
+    private static DecisionSourceReference ProposalSource(DecisionProposal proposal)
+    {
+        return new DecisionSourceReference(
+            "DecisionProposal",
+            $".agents/decisions/proposals/{proposal.Id}/proposal.json",
+            ProposalId: proposal.Id,
+            CandidateId: proposal.CandidateId);
+    }
+
+    private static DecisionSourceReference AssimilationSource(DecisionAssimilationRecommendation recommendation)
+    {
+        return new DecisionSourceReference(
+            "DecisionAssimilationRecommendation",
+            $".agents/decisions/assimilation/{recommendation.DecisionId}/recommendation.json",
+            DecisionId: new DecisionId(recommendation.DecisionId));
+    }
+}

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-04
 **Status:** Approved
-**Scope:** CommandCenter.CLI (loop), CommandCenter.Agents (session/protocol seam), CommandCenter.Plan.CLI (epic rollover clearing), CommandCenter.Core (shared store)
+**Scope:** LoopRelay.CLI (loop), LoopRelay.Agents (session/protocol seam), LoopRelay.Plan.CLI (epic rollover clearing), LoopRelay.Core (shared store)
 
 ## Motivation
 
@@ -15,7 +15,7 @@ transfer.
 
 This feature resumes the previous decision session when the loop enters the decision step for the
 first time in a run, IF a previous session exists. The data needed to resume is persisted under
-`{REPO_DIR}/.commandcenter/`. Upon epic completion the persisted session is cleared.
+`{REPO_DIR}/.LoopRelay/`. Upon epic completion the persisted session is cleared.
 
 ## Verified codex capability (feasibility)
 
@@ -36,7 +36,7 @@ generate-json-schema --experimental`):
 ## Goals
 
 1. First decision-step entry of a CLI run resumes the persisted decision session when one exists.
-2. Resume state lives at `{REPO_DIR}/.commandcenter/decision-session.json`.
+2. Resume state lives at `{REPO_DIR}/.LoopRelay/decision-session.json`.
 3. Epic completion clears the persisted session — at BOTH seams (loop gate + Plan.CLI rollover).
 4. Fail-soft: any resume failure degrades loudly to today's fresh-process behavior.
 
@@ -53,7 +53,7 @@ generate-json-schema --experimental`):
 
 ## Design
 
-### 1. Persisted state — `{REPO_DIR}/.commandcenter/decision-session.json`
+### 1. Persisted state — `{REPO_DIR}/.LoopRelay/decision-session.json`
 
 One compact camelCase JSON object (same serialization conventions as the telemetry ledger):
 
@@ -83,19 +83,19 @@ One compact camelCase JSON object (same serialization conventions as the telemet
   restores `seeded = true`.
 
 **Store type:** `IDecisionSessionResumeStore` + `FileDecisionSessionResumeStore` in
-**CommandCenter.Core** (shared so both CommandCenter.CLI and CommandCenter.Plan.CLI reference it):
+**LoopRelay.Core** (shared so both LoopRelay.CLI and LoopRelay.Plan.CLI reference it):
 `ReadAsync()` (null on missing/corrupt; corrupt file is deleted), `WriteAsync(state)`,
 `ClearAsync()` (idempotent delete). All operations are fail-open in the telemetry sense — an IO
 error never breaks a turn or the loop; failures surface as console warnings only.
 
-**Self-ignoring directory (load-bearing):** when creating `.commandcenter/`, the store writes
-`.commandcenter/.gitignore` containing `*` (if absent). `WorkingTreeChangeDetector` and `CommitGate`
+**Self-ignoring directory (load-bearing):** when creating `.LoopRelay/`, the store writes
+`.LoopRelay/.gitignore` containing `*` (if absent). `WorkingTreeChangeDetector` and `CommitGate`
 exclude only `.agents`, so an un-ignored state file would make a clean tree look dirty (corrupting
 the no-changes/stall gates) and would be committed into target repos. The self-ignore removes the
-dependency on the manual "add `.commandcenter/` to the target repo's .gitignore" convention (and
+dependency on the manual "add `.LoopRelay/` to the target repo's .gitignore" convention (and
 incidentally closes the same pre-existing footgun for telemetry once the store first writes).
 
-### 2. Protocol / session layer (CommandCenter.Agents)
+### 2. Protocol / session layer (LoopRelay.Agents)
 
 - `AgentSessionSpec` gains optional `ResumeThreadId` (nullable string, default null).
 - `AgentSpecs.Decision(repository)` gains an optional `resumeThreadId` parameter.
@@ -113,7 +113,7 @@ incidentally closes the same pre-existing footgun for telemetry once the store f
 - `IAgentSession` exposes `string? ThreadId` (null until the handshake completes; null forever for
   one-shot/legacy sessions). `GatedAgentSession` passes it through. Test fakes updated.
 
-### 3. DecisionSession (CommandCenter.CLI)
+### 3. DecisionSession (LoopRelay.CLI)
 
 - New constructor dependency: the resume store.
 - **First open only** (a `resumeAttempted` flag on the object — one attempt per CLI process,
@@ -155,8 +155,8 @@ incidentally closes the same pre-existing footgun for telemetry once the store f
 
 ### 5. Kill switch
 
-`COMMANDCENTER_DECISION_RESUME=0` (or `false`) disables the resume attempt (state is still written
-and cleared normally; only the resume-on-open is skipped). Mirrors the `COMMANDCENTER_SESSION_LOG`
+`LoopRelay_DECISION_RESUME=0` (or `false`) disables the resume attempt (state is still written
+and cleared normally; only the resume-on-open is skipped). Mirrors the `LoopRelay_SESSION_LOG`
 convention. Default: enabled. Insurance against `thread/resume` behavioral surprises — the protocol
 subcommand is still marked experimental upstream.
 

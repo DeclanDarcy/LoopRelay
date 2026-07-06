@@ -1,0 +1,30 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LoopRelay.Agents/LoopRelay.Agents.csproj" />
+    <Project Path="src/LoopRelay.Cli/LoopRelay.Cli.csproj" />
+    <Project Path="src/LoopRelay.Continuity/LoopRelay.Continuity.csproj" />
+    <Project Path="src/LoopRelay.Core/LoopRelay.Core.csproj" />
+    <Project Path="src/LoopRelay.Decisions/LoopRelay.Decisions.csproj" />
+    <Project Path="src/LoopRelay.DecisionSessions/LoopRelay.DecisionSessions.csproj" />
+    <Project Path="src/LoopRelay.Execution/LoopRelay.Execution.csproj" />
+    <Project Path="src/LoopRelay.Orchestration/LoopRelay.Orchestration.csproj" />
+    <Project Path="src/LoopRelay.Persistence.Sqlite/LoopRelay.Persistence.Sqlite.csproj" />
+    <Project Path="src/LoopRelay.Plan.Cli/LoopRelay.Plan.Cli.csproj" />
+    <Project Path="src/LoopRelay.Reasoning/LoopRelay.Reasoning.csproj" />
+    <Project Path="src/LoopRelay.Roadmap.Cli/LoopRelay.Roadmap.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LoopRelay.Agents.Tests/LoopRelay.Agents.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Cli.Tests/LoopRelay.Cli.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Continuity.Tests/LoopRelay.Continuity.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Core.Tests/LoopRelay.Core.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Decisions.Tests/LoopRelay.Decisions.Tests.csproj" />
+    <Project Path="tests/LoopRelay.DecisionSessions.Tests/LoopRelay.DecisionSessions.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Execution.Tests/LoopRelay.Execution.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Orchestration.Tests/LoopRelay.Orchestration.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Persistence.Sqlite.Tests/LoopRelay.Persistence.Sqlite.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Plan.Cli.Tests/LoopRelay.Plan.Cli.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Reasoning.Tests/LoopRelay.Reasoning.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Roadmap.Cli.Tests/LoopRelay.Roadmap.Cli.Tests.csproj" />
+  </Folder>
+</Solution>

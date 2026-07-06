@@ -1,10 +1,10 @@
-# CommandCenter.Roadmap.CLI Implementation Plan
+# LoopRelay.Roadmap.CLI Implementation Plan
 
 > For agentic workers: implement this plan task-by-task. Use checkbox (`- [ ]`) tracking and keep changes scoped to the files named in each task.
 
 ## Goal
 
-Create a standalone .NET console app, `CommandCenter.Roadmap.CLI`, that executes the projection-based engineering roadmap state machine as a file-backed workflow.
+Create a standalone .NET console app, `LoopRelay.Roadmap.CLI`, that executes the projection-based engineering roadmap state machine as a file-backed workflow.
 
 ## Progress
 
@@ -26,7 +26,7 @@ Updated 2026-07-05:
 - [x] Task 14: Execution compatibility materialization and roadmap execution bridge abstraction.
 - [x] Task 15: Completion certification and roadmap-completion-context update routing.
 - [x] Task 16: CLI entrypoint, DI composition, cancellation, and exit-code mapping.
-- [x] Task 17: Verification completed with `dotnet build CommandCenter.slnx` and `dotnet test tests\CommandCenter.Roadmap.CLI.Tests\CommandCenter.Roadmap.CLI.Tests.csproj`.
+- [x] Task 17: Verification completed with `dotnet build LoopRelay.slnx` and `dotnet test tests\LoopRelay.Roadmap.CLI.Tests\LoopRelay.Roadmap.CLI.Tests.csproj`.
 
 The CLI must:
 
@@ -41,14 +41,14 @@ The CLI must:
 
 ## Architectural Position
 
-`CommandCenter.Roadmap.CLI` is a new console app, not a replacement for `CommandCenter.Plan.CLI` or `CommandCenter.CLI`.
+`LoopRelay.Roadmap.CLI` is a new console app, not a replacement for `LoopRelay.Plan.CLI` or `LoopRelay.CLI`.
 
 It reuses existing low-level building blocks:
 
-- `CommandCenter.Agents`: `IAgentRuntime`, `AgentSessionSpec`, streaming turn rendering.
-- `CommandCenter.Core`: source-generated prompt classes from `.prompt` files.
-- `CommandCenter.Core.Artifacts`: `IArtifactStore`, `FileSystemArtifactStore`, `ArtifactPath`.
-- `CommandCenter.Orchestration`: existing artifact constants where they match current paths.
+- `LoopRelay.Agents`: `IAgentRuntime`, `AgentSessionSpec`, streaming turn rendering.
+- `LoopRelay.Core`: source-generated prompt classes from `.prompt` files.
+- `LoopRelay.Core.Artifacts`: `IArtifactStore`, `FileSystemArtifactStore`, `ArtifactPath`.
+- `LoopRelay.Orchestration`: existing artifact constants where they match current paths.
 
 It owns roadmap-state-machine concerns:
 
@@ -69,7 +69,7 @@ It owns roadmap-state-machine concerns:
 
 - Target framework: `net10.0`.
 - Enable nullable and implicit usings in every new project.
-- Set `<UseExecutionContextAlias>false</UseExecutionContextAlias>` in the CLI and test csproj because the CLI does not reference `CommandCenter.Execution`.
+- Set `<UseExecutionContextAlias>false</UseExecutionContextAlias>` in the CLI and test csproj because the CLI does not reference `LoopRelay.Execution`.
 - Do not use `Microsoft.Extensions.Hosting`; use an explicit `Program.cs` composition like the existing CLIs.
 - Use `Microsoft.Extensions.DependencyInjection` for composition.
 - Run Codex turns through `IAgentRuntime`.
@@ -820,8 +820,8 @@ After a successful update, clear active epic/spec execution state as appropriate
 ## File Structure
 
 ```text
-src/CommandCenter.Roadmap.CLI/
-  CommandCenter.Roadmap.CLI.csproj
+src/LoopRelay.Roadmap.CLI/
+  LoopRelay.Roadmap.CLI.csproj
   Program.cs
   CliArguments.cs
   LoopConsole.cs
@@ -863,8 +863,8 @@ src/CommandCenter.Roadmap.CLI/
   ExecutionCompatibilityMaterializer.cs
   RoadmapExecutionBridge.cs
 
-tests/CommandCenter.Roadmap.CLI.Tests/
-  CommandCenter.Roadmap.CLI.Tests.csproj
+tests/LoopRelay.Roadmap.CLI.Tests/
+  LoopRelay.Roadmap.CLI.Tests.csproj
   TestDoubles.cs
   CliArgumentsTests.cs
   NorthStarContextLoaderTests.cs
@@ -892,21 +892,21 @@ tests/CommandCenter.Roadmap.CLI.Tests/
 
 Files:
 
-- Create `src/CommandCenter.Roadmap.CLI/CommandCenter.Roadmap.CLI.csproj`
-- Create `src/CommandCenter.Roadmap.CLI/Program.cs`
-- Create `tests/CommandCenter.Roadmap.CLI.Tests/CommandCenter.Roadmap.CLI.Tests.csproj`
-- Modify `CommandCenter.slnx`
+- Create `src/LoopRelay.Roadmap.CLI/LoopRelay.Roadmap.CLI.csproj`
+- Create `src/LoopRelay.Roadmap.CLI/Program.cs`
+- Create `tests/LoopRelay.Roadmap.CLI.Tests/LoopRelay.Roadmap.CLI.Tests.csproj`
+- Modify `LoopRelay.slnx`
 
 Requirements:
 
-- CLI references `CommandCenter.Agents`, `CommandCenter.Core`, `CommandCenter.Orchestration`.
-- Test project references the CLI and `CommandCenter.Core`.
+- CLI references `LoopRelay.Agents`, `LoopRelay.Core`, `LoopRelay.Orchestration`.
+- Test project references the CLI and `LoopRelay.Core`.
 - Add `InternalsVisibleTo` for the test project.
 - Program parses one required `REPO_DIR`.
 
 Acceptance:
 
-- `dotnet build CommandCenter.slnx` discovers both projects.
+- `dotnet build LoopRelay.slnx` discovers both projects.
 
 ## Task 2: Artifact Path and Repository IO Layer
 
@@ -1282,7 +1282,7 @@ Files:
 
 Requirements:
 
-- `CommandCenter.Roadmap.CLI <REPO_DIR>`
+- `LoopRelay.Roadmap.CLI <REPO_DIR>`
 - Print phase markers for each state.
 - Surface Codex executable path like existing CLIs.
 - Ctrl+C cancels the current turn and writes final cancelled state.
@@ -1303,15 +1303,15 @@ Tests:
 Run:
 
 ```powershell
-dotnet build CommandCenter.slnx
-dotnet test tests\CommandCenter.Roadmap.CLI.Tests\CommandCenter.Roadmap.CLI.Tests.csproj
+dotnet build LoopRelay.slnx
+dotnet test tests\LoopRelay.Roadmap.CLI.Tests\LoopRelay.Roadmap.CLI.Tests.csproj
 ```
 
 If generated prompt signatures differ from the assumed render calls, update only the prompt invocation adapter and tests. Do not hardcode prompt template text in the CLI.
 
 ## Implementation Notes
 
-- Existing prompt files under `src/CommandCenter.Core/Prompts/Planning` and `src/CommandCenter.Core/Prompts/Projections` are already the correct source of agent instructions. The CLI should render generated prompt classes rather than duplicating prompt bodies.
+- Existing prompt files under `src/LoopRelay.Core/Prompts/Planning` and `src/LoopRelay.Core/Prompts/Projections` are already the correct source of agent instructions. The CLI should render generated prompt classes rather than duplicating prompt bodies.
 - The planning prompt classes may have signatures such as `Render(projectContext)`, `Render(projectContext, completedEpics)`, `Render(projectContext, epic)`, `Render(projectContext, newEpicProposal)`, or `Render(projectContext, codebaseAudit)`. Confirm exact generated signatures during build and isolate them behind `RoadmapPromptCatalog`.
 - Multi-file prompt outputs are not trusted until parsed and validated.
 - The state machine should stop on explicit uncertainty rather than inventing missing evidence.

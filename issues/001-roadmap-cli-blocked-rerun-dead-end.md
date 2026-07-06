@@ -110,9 +110,9 @@ that the roadmap state machine otherwise enforces.
 
 Add a command shape to `CliArguments`, for example:
 
-- `CommandCenter.Roadmap.CLI <repo> run`
-- `CommandCenter.Roadmap.CLI <repo> status`
-- `CommandCenter.Roadmap.CLI <repo> unblock`
+- `LoopRelay.Roadmap.CLI <repo> run`
+- `LoopRelay.Roadmap.CLI <repo> status`
+- `LoopRelay.Roadmap.CLI <repo> unblock`
 
 Recommended semantics:
 
@@ -140,7 +140,7 @@ This is the most robust long-term design.
 
 ### Option 2: Keep the single command, but add automatic unblock review
 
-Keep the current `CommandCenter.Roadmap.CLI <repo>` shape. In
+Keep the current `LoopRelay.Roadmap.CLI <repo>` shape. In
 `RoadmapStateMachine.RunAsync`, before the early `PreflightRequirement.None` return,
 detect repairable states with non-empty `TransitionIntent` and run a dedicated
 unblock planner.

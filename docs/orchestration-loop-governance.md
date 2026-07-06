@@ -2,7 +2,7 @@
 
 Governance evidence for the Plan Authoring → Execution → Decision orchestration loop (milestones m0–m10, `next` branch). This document is the durable evidence register required by `docs/architecture-decision-governance.md` and follows the Evidence Package Schema in `docs/architectural-evidence.md`. Each architecture-affecting change below records its invariant, owner, evidence, consumers affected, compatibility impact, and rollback path. The implementation overview is in `docs/architecture.md` (Orchestration Loop Architecture); the contract surface is in `docs/contracts.md` and `docs/contract-endpoint-catalog.md`; the protective mechanisms are in `docs/architectural-mechanisms.md`.
 
-Scope note: the orchestration loop is a new subsystem that runs alongside — not in place of — the legacy execution-session subsystem (`CommandCenter.Execution`, `HandoffService`, `AwaitingAcceptance`). Both coexist in the running backend. The legacy subsystem is unmodified and is the documented rollback target (rollback path 5).
+Scope note: the orchestration loop is a new subsystem that runs alongside — not in place of — the legacy execution-session subsystem (`LoopRelay.Execution`, `HandoffService`, `AwaitingAcceptance`). Both coexist in the running backend. The legacy subsystem is unmodified and is the documented rollback target (rollback path 5).
 
 ## Architecture-Affecting Change Register
 
@@ -11,11 +11,11 @@ Each row is an evidence package keyed by an evidence id. "Evidence" cites the au
 ### LOOP-1 — Shared role-agnostic process runtime
 
 - **Capability**: Codex process lifetime / state ownership.
-- **Invariant**: A Codex process is owned by `CommandCenter.Agents` independent of session role and is reaped on every fail/cancel/dispose via `Process.Kill(entireProcessTree: true)`; `CommandCenter.Agents` references no other `CommandCenter.*` project.
-- **Owner**: `CommandCenter.Agents` (`AgentRuntime`, `AgentProcess`, `AgentSessionRegistry`).
+- **Invariant**: A Codex process is owned by `LoopRelay.Agents` independent of session role and is reaped on every fail/cancel/dispose via `Process.Kill(entireProcessTree: true)`; `LoopRelay.Agents` references no other `LoopRelay.*` project.
+- **Owner**: `LoopRelay.Agents` (`AgentRuntime`, `AgentProcess`, `AgentSessionRegistry`).
 - **Slice/milestone**: m1.
-- **Evidence**: `AgentProcess.DisposeAsync` (`Process.Kill(entireProcessTree: true)`); `CommandCenter.Agents.csproj` references only `Microsoft.Extensions.DependencyInjection.Abstractions`; two session shapes in `AgentRuntime.RunOneShotAsync` / `OpenSessionAsync`.
-- **Consumers affected**: `CommandCenter.Execution`, `CommandCenter.DecisionSessions`, `CommandCenter.Orchestration` (the four importers of `CommandCenter.Agents`).
+- **Evidence**: `AgentProcess.DisposeAsync` (`Process.Kill(entireProcessTree: true)`); `LoopRelay.Agents.csproj` references only `Microsoft.Extensions.DependencyInjection.Abstractions`; two session shapes in `AgentRuntime.RunOneShotAsync` / `OpenSessionAsync`.
+- **Consumers affected**: `LoopRelay.Execution`, `LoopRelay.DecisionSessions`, `LoopRelay.Orchestration` (the four importers of `LoopRelay.Agents`).
 - **Compatibility impact**: Additive; legacy execution provider path unchanged.
 - **Guard**: `ArchitectureLayeringTests` (leaf isolation), `ProcessLeakDetectionTests` (counting-process leak harness, m10).
 - **Rollback path**: None required — the runtime is dormant unless an orchestrator opens a session; disabling the loop (rollback paths 1–4) leaves no live Agents sessions.
@@ -48,9 +48,9 @@ Each row is an evidence package keyed by an evidence id. "Evidence" cites the au
 
 - **Capability**: Prompt authority.
 - **Invariant**: Every agent turn is issued from a generated prompt class (11 canonical `.prompt` templates); no production code re-types a prompt body; each turn records a `PromptProvenance`.
-- **Owner**: `CommandCenter.Core.Prompts` catalog + the Lib.Prompts source generator; `ExecutionPromptBuilder` and `RepositoryOrchestrator` (provenance capture).
+- **Owner**: `LoopRelay.Core.Prompts` catalog + the Lib.Prompts source generator; `ExecutionPromptBuilder` and `RepositoryOrchestrator` (provenance capture).
 - **Slice/milestone**: m0 (authority + provenance), m3–m7 (loop turns).
-- **Evidence**: 11 `.prompt` files under `src/CommandCenter.Core/Prompts/`; `PromptProvenance` (7 fields) and `PromptSessionRole`; `PromptAuthorityTests` scans `src/**` for canonical prompt-body markers and asserts none.
+- **Evidence**: 11 `.prompt` files under `src/LoopRelay.Core/Prompts/`; `PromptProvenance` (7 fields) and `PromptSessionRole`; `PromptAuthorityTests` scans `src/**` for canonical prompt-body markers and asserts none.
 - **Consumers affected**: All agent turns; the additive nullable `ExecutionPromptManifest.Provenance` wire field.
 - **Compatibility impact**: Additive and nullable; no consumer is required to read provenance.
 - **Guard**: `PromptAuthorityTests` (no-literal-prompt), `ArchitectureLayeringTests` (Core ⊥ Agents).
@@ -68,7 +68,7 @@ See the dedicated divergence record below. Owner: `RepositoryOrchestrator` (rota
 - **Slice/milestone**: m7 (after a course-correction away from a registry-based router that was structurally unreachable in the registry-free loop — recorded in the m7 milestone evidence).
 - **Evidence**: `DecisionSessionRouter.Evaluate(RouterInputs)` transfers once the live process's context **occupancy** (`DecisionSessionTokens` — the latest proposal's prompt+output, not a cumulative sum) reaches `TransferOccupancyThresholdTokens` (default `ModelContextWindowTokens` `256_000` × `TransferOccupancyFraction` `0.80` = `204_800`); the loop-owned eligibility downgrade (`route == Transfer && !decisionSeeded ⇒ Continue`) lives in the orchestrator, not the router.
 - **Consumers affected**: The continuation → next-decision routing only; UI shows the effective route + a `transferred` event.
-- **Compatibility impact**: Supersedes the unreachable registry-policy design; `CommandCenter.DecisionSessions` registry services remain for the legacy/deterministic path.
+- **Compatibility impact**: Supersedes the unreachable registry-policy design; `LoopRelay.DecisionSessions` registry services remain for the legacy/deterministic path.
 - **Guard**: deterministic-fallback router tests (estimate-when-observed-zero, token-reset-on-recycle, deferred-transfer fall-through), `DecisionRuntime ⊥ Execution` layering cert.
 - **Rollback path**: Force transfer-only (rollback path 3) or disable decision reuse (path 2). Raising `ModelContextWindowTokens` or `TransferOccupancyFraction` makes the router Continue (reuse) longer.
 
@@ -90,7 +90,7 @@ See the dedicated divergence record below. Owner: `RepositoryOrchestrator` (rota
 - **Owner**: `OrchestrationFeatureFlags`, `OrchestratorShutdownHostedService`, `IAgentRuntime.CloseSessionAsync`, `RepositoriesEndpoints` (DELETE teardown).
 - **Slice/milestone**: m10.
 - **Evidence**: `OrchestrationFeatureFlags` (5 bools, defaults `true/true/false/true/true`; the fifth is the Stage-2 `SandboxOperationalContextEvolutionEnabled` — see LOOP-9); the branch points in `RepositoryOrchestrator`; `DELETE /api/repositories/{repositoryId}` calls `registry.RemoveAsync` before config rewrite.
-- **Consumers affected**: Operators (config `CommandCenter:Orchestration`); the `completed` frame keeps shape with `commitSha = null` when auto-commit is off.
+- **Consumers affected**: Operators (config `LoopRelay:Orchestration`); the `completed` frame keeps shape with `commitSha = null` when auto-commit is off.
 - **Compatibility impact**: Additive; `NoContent`/`202` contracts unchanged.
 - **Guard**: `RepositoryOrchestratorFeatureFlagsTests` (per-flag OFF-branch), `ProcessLeakDetectionTests`, `OrchestratorShutdownAndRemovalTests`.
 - **Rollback path**: The flags *are* the rollback surface — see Rollback Paths.
@@ -99,7 +99,7 @@ See the dedicated divergence record below. Owner: `RepositoryOrchestrator` (rota
 
 - **Capability**: Transfer cost reduction and renewal-reward stability (Stage 2 of the transfer-cost economics work).
 - **Invariant**: A decision-session Transfer's `UpdateOperationalContext` evolution one-shot runs in an ISOLATED sandbox workspace seeded with ONLY `.agents/operational_context.md` (read/write) and `.agents/operational_delta.md` (read), scoped by codex `--cd` (`AgentSessionSpec.WorkingDirectory` + `workspace-write`); it can no longer re-explore the repository. The evolved context is copied back into the repo. Separately, the operational context's size is tracked across transfers and a SUSTAINED upward ratchet (growth streak ≥ 2) is flagged.
-- **Owner**: `RepositoryOrchestrator.EvolveOperationalContextAsync` / `RecordOperationalContextHealth`; `ISandboxWorkspaceFactory` / `TempSandboxWorkspaceFactory`; `OperationalContextHealthMonitor`; mirrored by `CommandCenter.CLI` `DecisionSession`.
+- **Owner**: `RepositoryOrchestrator.EvolveOperationalContextAsync` / `RecordOperationalContextHealth`; `ISandboxWorkspaceFactory` / `TempSandboxWorkspaceFactory`; `OperationalContextHealthMonitor`; mirrored by `LoopRelay.CLI` `DecisionSession`.
 - **Slice/milestone**: Stage 2 (post-refactor; transfer-cost economics).
 - **Evidence**: the evolution one-shot's `WorkingDirectory` is the sandbox root, not the repository; the transfer copies the evolved `operational_context.md` back into the repo; `LastOperationalContextHealth.Warning` becomes true on a sustained ratchet (the CLI emits a `console.Warn`). Motivated by the measured ~425k-token repo re-exploration that dominated transfer cost.
 - **Consumers affected**: None external — the evolved context and the `transferred` frame are unchanged; the size-health verdict is a read-only property (`LastOperationalContextHealth`), deliberately kept OFF the SSE decision-stream contract to avoid a contract/freshness/UI ripple.
@@ -114,7 +114,7 @@ See the dedicated divergence record below. Owner: `RepositoryOrchestrator` (rota
 - **Decision class**: Reference architecture change (durable architecture definition changes).
 - **Invariant changed**: How a completed agent turn becomes accepted repository work.
 
-**Legacy behavior (retained, unmodified).** In `CommandCenter.Execution`, `HandoffService.ProcessProviderCompletionAsync` validates the produced handoff and transitions `RepositoryExecutionState` to `AwaitingAcceptance`. The human then accepts or rejects the execution output through `ExecutionSessionService.AcceptAsync` / `RejectAsync`, after which commit and push are explicit `AwaitingCommit` / `AwaitingPush` workflow steps. Handoff history is preserved by `HandoffService.ArchivePreviousHandoffAsync`.
+**Legacy behavior (retained, unmodified).** In `LoopRelay.Execution`, `HandoffService.ProcessProviderCompletionAsync` validates the produced handoff and transitions `RepositoryExecutionState` to `AwaitingAcceptance`. The human then accepts or rejects the execution output through `ExecutionSessionService.AcceptAsync` / `RejectAsync`, after which commit and push are explicit `AwaitingCommit` / `AwaitingPush` workflow steps. Handoff history is preserved by `HandoffService.ArchivePreviousHandoffAsync`.
 
 **Orchestration-loop behavior (new).** The orchestrator does not use `AwaitingAcceptance`. A completed execution turn rotates the handoff synchronously inside the orchestrator (`.agents/handoffs/handoff.md` → `handoff.NNNN.md`) and proceeds; commit/push happens automatically during Execute Plan (flag-gated). The human gate is **moved downstream** to the Decision Submit gate (`BeginSubmitDecisionsAsync`, reached via `decision/submit`): the operator reviews and edits the proposed governance decisions, and Submit is the single persistence point that advances the loop. Execution output itself is not separately accepted/rejected.
 
@@ -129,13 +129,13 @@ See the dedicated divergence record below. Owner: `RepositoryOrchestrator` (rota
 
 ## Rollback Paths
 
-The loop exposes five rollback paths. Paths 2–4 are the m10 `OrchestrationFeatureFlags` (set under configuration `CommandCenter:Orchestration`); each default reproduces today's behavior, so a rollback is an explicit opt-out. A further Stage-2 flag, `SandboxOperationalContextEvolutionEnabled` (default **ON**, unlike the m10 flags), is an additional rollback lever (LOOP-9) for the **backend** `RepositoryOrchestrator` only: set it OFF to revert the sandboxed operational-context evolution to running against the repository working directory. The CLI `DecisionSession` mirror has no flag surface and always sandboxes, so reverting it is a code change rather than configuration.
+The loop exposes five rollback paths. Paths 2–4 are the m10 `OrchestrationFeatureFlags` (set under configuration `LoopRelay:Orchestration`); each default reproduces today's behavior, so a rollback is an explicit opt-out. A further Stage-2 flag, `SandboxOperationalContextEvolutionEnabled` (default **ON**, unlike the m10 flags), is an additional rollback lever (LOOP-9) for the **backend** `RepositoryOrchestrator` only: set it OFF to revert the sandboxed operational-context evolution to running against the repository working directory. The CLI `DecisionSession` mirror has no flag surface and always sandboxes, so reverting it is a code change rather than configuration.
 
 1. **Disable the Plan Authoring screen.** This is a UI mount gate, not a backend flag: the React `App` keeps the Plan Authoring screen mounted only while an authoring session is active (`isAuthoringSessionActive` latch) or no plan exists. Removing the screen's entry point (or holding the gate closed) prevents the loop from being initiated from the UI; the backend endpoints remain but are undriven. *Restored behavior*: users interact only with the legacy workspace.
 2. **Disable persistent planning** — `PersistentPlanningProcessEnabled = false`. Each planning turn runs as a fresh one-shot via `RunOneShotAsync`; Revise re-runs `RevisePlan` as its own one-shot against the persisted plan. *Restored behavior*: no held-open planning process.
 3. **Disable Decision reuse / force transfer-only** — `PersistentDecisionProcessReuseEnabled = false` makes every decision run open→seed→propose→close (no warm Decision process). `TransferOnlyDecisionFallbackEnabled = true` forces the router verdict to Transfer *after* evaluation, while the unseeded⇒Continue and execution-gate-deferral safety downgrades still apply. *Restored behavior*: no warm decision reuse, or always-recycle routing.
 4. **Disable automatic commit/push** — `AutomaticCommitPushAfterExecuteEnabled = false`. Execute Plan skips the commit/push and its `committed` frame; the `completed` frame keeps shape with `commitSha = null`, and the operator commits/pushes manually. A synchronous confirmation gate was intentionally not added (it would break the `202` Execute Plan contract); the flag is the off-switch.
-5. **Return to existing execution/session endpoints.** The legacy `CommandCenter.Execution` execution-session subsystem (`ExecutionEndpoints`, `ExecutionSessionsEndpoints`, `HandoffService`, `AwaitingAcceptance`, `execution-sessions.json`) is unmodified and remains registered. Operators can drive execution entirely through it, bypassing the orchestration loop. *Restored behavior*: the full pre-refactor `AwaitingAcceptance` flow.
+5. **Return to existing execution/session endpoints.** The legacy `LoopRelay.Execution` execution-session subsystem (`ExecutionEndpoints`, `ExecutionSessionsEndpoints`, `HandoffService`, `AwaitingAcceptance`, `execution-sessions.json`) is unmodified and remains registered. Operators can drive execution entirely through it, bypassing the orchestration loop. *Restored behavior*: the full pre-refactor `AwaitingAcceptance` flow.
 
 Each rollback restores a prior verified behavior without redefining an invariant, satisfying the preferred rollback order in `docs/architecture-decision-governance.md`.
 
@@ -143,7 +143,7 @@ Each rollback restores a prior verified behavior without redefining an invariant
 
 These paths are deliberately retained as fallbacks. They are documented here so they do not masquerade as the live design.
 
-- **Deterministic `CommandCenter.Decisions` services.** Decision generation/scoring in `CommandCenter.Decisions` is the offline/deterministic path. The live loop authors decisions through the Codex Decision session, not these services; a layering certification asserts the live loop takes no dependency on them. They remain a tested fallback, not the authority.
+- **Deterministic `LoopRelay.Decisions` services.** Decision generation/scoring in `LoopRelay.Decisions` is the offline/deterministic path. The live loop authors decisions through the Codex Decision session, not these services; a layering certification asserts the live loop takes no dependency on them. They remain a tested fallback, not the authority.
 - **Token estimator fallback.** When observed decision-session token usage is `0`, the router falls back to a deterministic `(len + 3) / 4` estimate over the handoff plus decisions. Observed usage always wins when present. This is a routing heuristic of last resort, asserted by a determinism test, not a token-accounting source of truth.
 - **Registry-free router degradation.** If router evaluation faults, routing degrades to `Continue` (warm reuse). Transfer is additionally downgraded to Continue for an unseeded or gate-contended process. These are safe-by-default degradations, not the intended steady-state route.
 - **One-shot fallback when persistent processes are disabled.** With persistent planning/decision reuse off (rollback paths 2–3), the loop still functions via one-shot `codex exec --json` turns; warm-process efficiency is lost but correctness is preserved.

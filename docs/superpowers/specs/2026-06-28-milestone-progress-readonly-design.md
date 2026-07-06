@@ -48,10 +48,10 @@ generated-dashboard pipeline (IR builder, generated `.ts`, metadata table). Ther
 
 ## 4. Data contract
 
-### New C# DTOs — `src/CommandCenter.Core/Projections/MilestoneProgress.cs` (new file)
+### New C# DTOs — `src/LoopRelay.Core/Projections/MilestoneProgress.cs` (new file)
 
 ```csharp
-namespace CommandCenter.Core.Projections;
+namespace LoopRelay.Core.Projections;
 
 public sealed class MilestoneProgress
 {
@@ -79,7 +79,7 @@ public MilestoneProgressRollup MilestoneProgress { get; init; } = new();   // NE
 
 `MilestoneCount` is retained (other consumers, e.g. `SelectedRepositorySummary`, still use it).
 
-### TS mirror — `src/CommandCenter.UI/src/types/repositories.ts`
+### TS mirror — `src/LoopRelay.UI/src/types/repositories.ts`
 
 ```ts
 export type MilestoneProgress = {
@@ -98,7 +98,7 @@ export type MilestoneProgressRollup = {
 milestoneProgress: MilestoneProgressRollup
 ```
 
-### Rust mirror — `src/CommandCenter.Shell/src/main.rs` (`RepositoryWorkspaceProjection`)
+### Rust mirror — `src/LoopRelay.Shell/src/main.rs` (`RepositoryWorkspaceProjection`)
 
 Add a `RepositoryMilestoneProgress` struct (snake_case fields) + a
 `milestone_progress` field carrying `{ completed_milestone_count, total_milestone_count,
@@ -107,7 +107,7 @@ exact (they `Assert.Single`/enumerate known omissions).
 
 ## 5. Checkbox parsing rule (fence-aware)
 
-Verified against all 30 milestone files in `CommandCenter` and `Axiom`: the only form is
+Verified against all 30 milestone files in `LoopRelay` and `Axiom`: the only form is
 GFM task items with a hyphen bullet — `- [ ] ` / `- [x] ` (lowercase `x`, 2-space nested
 indent, no `*`/`+` bullets, no `[X]`, no tabs). Nested items are counted individually.
 
@@ -133,7 +133,7 @@ Add a private `BuildMilestoneProgressAsync(repository, inventory)` + a fence-awa
 ## 6. Change inventory
 
 ### Part A — Backend (projection)
-- **NEW** `src/CommandCenter.Core/Projections/MilestoneProgress.cs` (the two DTOs).
+- **NEW** `src/LoopRelay.Core/Projections/MilestoneProgress.cs` (the two DTOs).
 - `RepositoryWorkspaceProjection.cs` — add `MilestoneProgress` property.
 - `RepositoryProjectionService.cs` — `BuildMilestoneProgressAsync` + fence-aware
   `CountCheckboxes`; call from `BuildWorkspaceProjectionAsync` (~:94-120); assign after the
@@ -145,9 +145,9 @@ Add a private `BuildMilestoneProgressAsync(repository, inventory)` + a fence-awa
 - `tests/.../ContractFixtures/repository-workspace.golden.json` — regenerate (see §7).
 - `tests/.../ContractFixtures/repository-workspace.artifact-freshness.json` — recompute
   `sourceSha256` (golden) + `artifactSha256` (`repositories.ts`).
-- `src/CommandCenter.UI/src/types/repositories.ts` — add the new types + `milestoneProgress`.
-- `src/CommandCenter.Shell/src/main.rs` — workspace Rust mirror struct + new struct.
-- `src/CommandCenter.UI/src/devTauriMock.ts` — workspace mock builder emits `milestoneProgress`.
+- `src/LoopRelay.UI/src/types/repositories.ts` — add the new types + `milestoneProgress`.
+- `src/LoopRelay.Shell/src/main.rs` — workspace Rust mirror struct + new struct.
+- `src/LoopRelay.UI/src/devTauriMock.ts` — workspace mock builder emits `milestoneProgress`.
 - `tests/.../RepositoryProjectionServiceTests.cs` — assert the new fields (needs a written
   fixture milestone file with known checkboxes).
 

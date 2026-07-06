@@ -13,7 +13,7 @@ not a dashboard: a single editorial column whose top-to-bottom order mirrors the
 
 - Frontend NEVER composes prompt text or selects a prompt class. It sends only `{ epic, specs[], newCodebase }`
   on write and `{ feedback }` on revise. The backend renders prompts.
-- Changes confined to `src/CommandCenter.UI/**` and `src/CommandCenter.Shell/src/main.rs`.
+- Changes confined to `src/LoopRelay.UI/**` and `src/LoopRelay.Shell/src/main.rs`.
 - Mirror existing conventions: `invokeCommand` boundary, EventSource SSE pattern (`useExecutionEvents`),
   hand-written types, `devTauriMock` invoke switch, vitest characterization style, `cc-*`/global CSS, design tokens.
 

@@ -1,0 +1,1732 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Configuration;
+using LoopRelay.Execution;
+using LoopRelay.Core.Planning;
+using LoopRelay.Core.Projections;
+using LoopRelay.Core.Repositories;
+using LoopRelay.Decisions.Abstractions;
+using LoopRelay.Decisions.Models;
+using LoopRelay.Decisions.Primitives;
+using LoopRelay.Decisions.Services;
+using LoopRelay.Execution.Abstractions;
+using LoopRelay.Execution.Models;
+using LoopRelay.Execution.Modules;
+using LoopRelay.Execution.Primitives;
+using LoopRelay.Execution.Services;
+
+namespace LoopRelay.Execution.Tests;
+
+[Collection("ProcessEnvironment")]
+public sealed class ExecutionSessionServiceTests
+{
+    [Fact]
+    public async Task ReadyRepositoryLaunchesWithFakeProvider()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+
+        Assert.Equal(ExecutionSessionState.Executing, summary.State);
+        Assert.Equal(RepositoryExecutionState.Executing, summary.RepositoryState);
+        Assert.Equal("fake", summary.ProviderName);
+        Assert.Equal(RepositoryExecutionState.Executing, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+    }
+
+    [Fact]
+    public async Task CancelMovesActiveExecutionToCancelledAndAllowsRestart()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        await harness.SessionService.StartAsync(harness.Repository.Id, new ExecutionStartRequest());
+        Assert.Equal(
+            RepositoryExecutionState.Executing,
+            await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+
+        ExecutionSessionSummary cancelled = await harness.SessionService.CancelAsync(
+            harness.Repository.Id,
+            new ExecutionCancellationRequest());
+
+        Assert.Equal(ExecutionSessionState.Cancelled, cancelled.State);
+        Assert.Equal(RepositoryExecutionState.Cancelled, cancelled.RepositoryState);
+        Assert.Equal(
+            RepositoryExecutionState.Cancelled,
+            await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+
+        // A cancelled repository is no longer active, so a fresh run can start.
+        ExecutionSessionSummary restarted = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+        Assert.Equal(RepositoryExecutionState.Executing, restarted.RepositoryState);
+    }
+
+    [Fact]
+    public async Task CancelWithoutActiveExecutionThrows()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        // Nothing was started, so there is no active session to cancel.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CancelAsync(harness.Repository.Id, new ExecutionCancellationRequest()));
+    }
+
+    [Fact]
+    public async Task MissingPlanBlocksLaunch()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/milestones/m2.md", "milestone");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.StartAsync(
+                harness.Repository.Id,
+                new ExecutionStartRequest()));
+
+        Assert.Contains("launch is blocked", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await harness.Store.LoadAsync());
+    }
+
+    [Fact]
+    public async Task ContextHardLimitBlocksLaunch()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/plan.md", new string('a', 260 * 1024));
+        await WriteAsync(harness.Repository, ".agents/milestones/m2.md", "milestone");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.StartAsync(
+                harness.Repository.Id,
+                new ExecutionStartRequest()));
+
+        Assert.Contains("hard limit", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await harness.Store.LoadAsync());
+    }
+
+    [Fact]
+    public async Task DirtyRepositoryLaunchSucceedsAndStoresSnapshot()
+    {
+        var dirtyState = new RepositoryDirtyState
+        {
+            ModifiedPaths = ["src/changed.cs"],
+            IsClean = false
+        };
+        Harness harness = await CreateHarnessAsync(dirtyState);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
+
+        Assert.False(session.RepositorySnapshot!.DirtyState.IsClean);
+        Assert.Contains("src/changed.cs", session.RepositorySnapshot.DirtyState.ModifiedPaths);
+    }
+
+    [Fact]
+    public async Task DuplicateLaunchBlocks()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.StartAsync(
+                harness.Repository.Id,
+                new ExecutionStartRequest()));
+
+        Assert.Contains("active execution", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Single(await harness.Store.LoadAsync());
+    }
+
+    [Fact]
+    public async Task FakeProviderFailureLeavesRepositoryReadyAndRecordsFailure()
+    {
+        var provider = new FakeExecutionProvider { FailOnStart = true };
+        Harness harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single();
+
+        Assert.Equal(ExecutionSessionState.Failed, summary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.Equal(RepositoryExecutionState.Ready, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Contains("failed to start", session.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task StructuredProviderStartFailureLeavesRepositoryReadyAndRecordsFailure()
+    {
+        var provider = new FailingExecutionProvider(new ExecutionProviderException(
+            "ProviderLaunchFailed",
+            "Codex process failed to start."));
+        Harness harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single();
+
+        Assert.Equal(ExecutionSessionState.Failed, summary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.Equal(RepositoryExecutionState.Ready, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Contains("ProviderLaunchFailed", session.FailureReason);
+    }
+
+    [Fact]
+    public async Task StartupRecoveryFailsPersistedExecutingSessionAfterStoreReload()
+    {
+        var provider = new MetadataExecutionProvider();
+        Harness harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+
+        var reloadedService = new ExecutionSessionService(
+            harness.ContextService,
+            new FileSystemExecutionSessionStore(harness.StorePath),
+            new FakeExecutionProvider(),
+            new ExecutionPromptBuilder(),
+            new ExecutionMonitoringService(new FileSystemExecutionSessionStore(harness.StorePath)),
+            new FakeGitService(null, null));
+
+        await reloadedService.RecoverAsync();
+        ExecutionSessionSummary? active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
+        ExecutionSessionSummary? repositorySummary = await reloadedService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+        ExecutionSession? recoveredSession = await reloadedService.GetSessionAsync(summary.SessionId);
+
+        Assert.Null(active);
+        Assert.NotNull(repositorySummary);
+        Assert.Equal(ExecutionSessionState.Failed, repositorySummary.State);
+        Assert.Equal(RepositoryExecutionState.Failed, repositorySummary.RepositoryState);
+        Assert.Equal(ExecutionSessionService.OrphanedProviderFailureReason, repositorySummary.FailureReason);
+        Assert.Equal("C:\\tools\\codex.exe", repositorySummary.ProviderExecutablePath);
+        Assert.Equal(7890, repositorySummary.ProviderProcessId);
+        Assert.NotNull(recoveredSession);
+        Assert.Equal(ExecutionSessionState.Failed, recoveredSession.State);
+        Assert.Equal(RepositoryExecutionState.Failed, recoveredSession.RepositoryState);
+        Assert.Equal(RepositoryExecutionState.Failed, await reloadedService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Equal(ExecutionSessionService.OrphanedProviderFailureReason, recoveredSession.FailureReason);
+        Assert.Equal("C:\\tools\\codex.exe", recoveredSession.ProviderExecutablePath);
+        Assert.Equal(7890, recoveredSession.ProviderProcessId);
+        Assert.NotNull(recoveredSession.ProviderStartedAt);
+        Assert.NotNull(recoveredSession.PromptMetadata);
+    }
+
+    [Fact]
+    public async Task StartupRecoveryKeepsExecutingSessionActiveWhenProviderReattachSucceeds()
+    {
+        var provider = new MetadataExecutionProvider();
+        Harness harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+        var reattachProvider = new FakeExecutionProvider
+        {
+            SupportsReattach = true,
+            ReattachSucceeds = true
+        };
+        var reloadedStore = new FileSystemExecutionSessionStore(harness.StorePath);
+        var reloadedMonitoringService = new ExecutionMonitoringService(reloadedStore);
+        var reloadedService = new ExecutionSessionService(
+            harness.ContextService,
+            reloadedStore,
+            reattachProvider,
+            new ExecutionPromptBuilder(),
+            reloadedMonitoringService,
+            new FakeGitService(null, null));
+
+        await reloadedService.RecoverAsync();
+        ExecutionSessionSummary? active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
+        ExecutionSessionSummary? repositorySummary = await reloadedService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+        ExecutionSession? recoveredSession = await reloadedService.GetSessionAsync(summary.SessionId);
+        IReadOnlyList<ExecutionEvent> events = await reloadedMonitoringService.GetEventsAsync(summary.SessionId);
+
+        Assert.NotNull(active);
+        Assert.Equal(ExecutionSessionState.Executing, active.State);
+        Assert.Equal(RepositoryExecutionState.Executing, active.RepositoryState);
+        Assert.NotNull(repositorySummary);
+        Assert.Equal(ExecutionSessionState.Executing, repositorySummary.State);
+        Assert.NotNull(recoveredSession);
+        Assert.Equal(ExecutionSessionState.Executing, recoveredSession.State);
+        Assert.Equal(RepositoryExecutionState.Executing, await reloadedService.GetRepositoryStateAsync(harness.Repository.Id));
+        ExecutionEvent recoveryEvent = Assert.Single(events, executionEvent => executionEvent.Type == ExecutionEventType.Recovery);
+        Assert.Equal(ExecutionEventType.Recovery, recoveryEvent.Type);
+        Assert.Equal(ExecutionSessionService.ReattachedProviderRecoveryMessage, recoveryEvent.Message);
+    }
+
+    [Fact]
+    public async Task ProviderStartFailureRemainsVisibleWhenRepositoryReturnsReady()
+    {
+        var provider = new FailingExecutionProvider(new ExecutionProviderException(
+            "ProviderLaunchFailed",
+            "Codex process failed to start."));
+        Harness harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+        ExecutionSessionSummary? active = await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id);
+        ExecutionSessionSummary? repositorySummary = await harness.SessionService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+
+        Assert.Equal(ExecutionSessionState.Failed, summary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.Null(active);
+        Assert.NotNull(repositorySummary);
+        Assert.Equal(ExecutionSessionState.Failed, repositorySummary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, repositorySummary.RepositoryState);
+        Assert.Contains("ProviderLaunchFailed", repositorySummary.FailureReason);
+    }
+
+    [Fact]
+    public async Task StartupRecoveryDoesNotMutateNonExecutingSessions()
+    {
+        Harness harness = await CreateHarnessAsync();
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var failedSession = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddMinutes(1),
+            LastActivityAt = startedAt.AddMinutes(1),
+            State = ExecutionSessionState.Failed,
+            RepositoryState = RepositoryExecutionState.Failed,
+            ProviderName = "codex",
+            ProviderExecutablePath = "C:\\tools\\codex.exe",
+            ProviderProcessId = 7890,
+            ProviderStartedAt = startedAt,
+            PromptMetadata = new ExecutionPromptMetadata
+            {
+                RepositoryPath = harness.Repository.Path,
+                IncludedArtifactPaths = [".agents/plan.md"]
+            },
+            FailureReason = "Existing failure."
+        };
+        await harness.Store.SaveAsync([failedSession]);
+
+        await harness.SessionService.RecoverAsync();
+        ExecutionSession recoveredSession = (await harness.Store.LoadAsync()).Single();
+
+        Assert.Equal(ExecutionSessionState.Failed, recoveredSession.State);
+        Assert.Equal(RepositoryExecutionState.Failed, recoveredSession.RepositoryState);
+        Assert.Equal("Existing failure.", recoveredSession.FailureReason);
+        Assert.Equal(failedSession.CompletedAt, recoveredSession.CompletedAt);
+        Assert.Equal("C:\\tools\\codex.exe", recoveredSession.ProviderExecutablePath);
+        Assert.Equal(7890, recoveredSession.ProviderProcessId);
+        Assert.NotNull(recoveredSession.PromptMetadata);
+    }
+
+    [Fact]
+    public async Task PreviousCurrentHandoffSnapshotIsCapturedBeforeProviderStart()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", "previous handoff");
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
+
+        Assert.Equal("previous handoff", session.PreviousHandoffContent);
+        Assert.NotNull(session.PreviousHandoffCapturedAt);
+    }
+
+    [Fact]
+    public async Task ProviderReceivesExecutionPrompt()
+    {
+        var provider = new FakeExecutionProvider();
+        Harness harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+
+        Assert.NotNull(provider.LastPrompt);
+        Assert.Contains("start executing the first milestone", provider.LastPrompt.Text);
+    }
+
+    [Fact]
+    public async Task StartPersistsDecisionInfluenceTraceForProjectedDecisions()
+    {
+        var projection = new ExecutionDecisionProjection(
+            Guid.Empty,
+            DateTimeOffset.UtcNow,
+            [
+                new ExecutionConstraint(
+                    "ECON-0001",
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    "Use repository artifacts as authority.",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    [])
+            ],
+            [
+                new ExecutionDirective(
+                    "EDIR-0001",
+                    "DEC-0002",
+                    "Apply handoff rotation",
+                    "Apply handoff rotation before completing.",
+                    DecisionClassification.Tactical,
+                    ExecutionProjectionKind.ImplementationDirective,
+                    [])
+            ],
+            [
+                new ExecutionDecisionPriority(
+                    "EPRI-0001",
+                    "DEC-0002",
+                    "Apply handoff rotation",
+                    "Apply handoff rotation before completing.",
+                    DecisionClassification.Tactical,
+                    ExecutionProjectionKind.ImplementationDirective,
+                    1,
+                    [])
+            ],
+            [
+                new ExecutionArchitectureRule(
+                    "EARC-0001",
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    "Use repository artifacts as authority.",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    [])
+            ],
+            [],
+            [],
+            [
+                new DecisionProjectionDecisionDiagnostic(
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    DecisionState.Resolved,
+                    DecisionOutcome.Accepted,
+                    DecisionClassification.Architectural,
+                    "Accepted resolved decision projected into execution context.",
+                    ["ECON-0001", "EARC-0001"])
+            ],
+            [
+                new DecisionProjectionDecisionDiagnostic(
+                    "DEC-0003",
+                    "Rejected decision",
+                    DecisionState.Resolved,
+                    DecisionOutcome.Rejected,
+                    DecisionClassification.Tactical,
+                    "Resolution outcome is Rejected.",
+                    [])
+            ],
+            [],
+            [],
+            [
+                new DecisionProjectionDecisionDiagnostic(
+                    "DEC-0003",
+                    "Rejected decision",
+                    DecisionState.Resolved,
+                    DecisionOutcome.Rejected,
+                    DecisionClassification.Tactical,
+                    "Resolution outcome is Rejected.",
+                    [])
+            ],
+            [],
+            [
+                new DecisionProjectedStatement(
+                    "ECON-0001",
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    "Use repository artifacts as authority.",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    "Constraint",
+                    []),
+                new DecisionProjectedStatement(
+                    "EARC-0001",
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    "Use repository artifacts as authority.",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    "ArchitectureRule",
+                    [])
+            ],
+            new ExecutionDecisionContext([], [], [], [], [], []),
+            "projection-fingerprint");
+        Harness harness = await CreateHarnessAsync(decisionProjection: projection);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+
+        string influencePath = Path.Combine(
+            harness.Repository.Path,
+            ".agents",
+            "decisions",
+            "influence",
+            $"execution-{summary.SessionId:N}.json");
+        Assert.True(File.Exists(influencePath));
+        using JsonDocument document = JsonDocument.Parse(await File.ReadAllTextAsync(influencePath));
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        jsonOptions.Converters.Add(new JsonStringEnumConverter());
+        DecisionInfluenceTrace trace = JsonSerializer.Deserialize<DecisionInfluenceTrace>(
+            document.RootElement.GetProperty("payload").GetRawText(),
+            jsonOptions)!;
+
+        Assert.Equal(summary.SessionId, trace.ExecutionSessionId);
+        Assert.Equal("projection-fingerprint", trace.ProjectionFingerprint);
+        Assert.Equal("DEC-0001", Assert.Single(trace.IncludedDecisions).DecisionId);
+        Assert.Equal("DEC-0003", Assert.Single(trace.ExcludedDecisions).DecisionId);
+        Assert.Empty(trace.SupersededDecisions);
+        Assert.Empty(trace.ConflictingDecisions);
+        Assert.Equal("DEC-0003", Assert.Single(trace.IgnoredDecisions).DecisionId);
+        Assert.Empty(trace.BlockedDecisions);
+        Assert.Contains(trace.Statements, statement =>
+            statement.StatementId == "ECON-0001" &&
+            statement.DecisionId == "DEC-0001" &&
+            statement.PromptSection == "Governed Decision Projection / Constraints");
+        Assert.Contains(trace.Statements, statement =>
+            statement.StatementId == "EDIR-0001" &&
+            statement.DecisionId == "DEC-0002" &&
+            statement.PromptSection == "Governed Decision Projection / Directives");
+        Assert.Contains(trace.Statements, statement =>
+            statement.StatementId == "EPRI-0001" &&
+            statement.PriorityRank == 1 &&
+            statement.PromptSection == "Governed Decision Projection / Priorities");
+        Assert.Contains(trace.Statements, statement =>
+            statement.StatementId == "EARC-0001" &&
+            statement.PromptSection == "Governed Decision Projection / Architecture Rules");
+
+        var influenceService = new DecisionInfluenceService(harness.RepositoryService, new FileSystemArtifactStore());
+        DecisionInfluenceTrace? reloadedTrace =
+            await influenceService.GetExecutionInfluenceAsync(harness.Repository.Id, summary.SessionId);
+        IReadOnlyList<DecisionInfluenceTrace> decisionInfluence =
+            await influenceService.ListDecisionInfluenceAsync(harness.Repository.Id, "DEC-0002");
+
+        Assert.NotNull(reloadedTrace);
+        Assert.Equal(trace.Id, reloadedTrace.Id);
+        DecisionInfluenceTrace filteredTrace = Assert.Single(decisionInfluence);
+        Assert.Equal(trace.Id, filteredTrace.Id);
+        Assert.All(filteredTrace.Statements.Where(statement => statement.DecisionId == "DEC-0002"), statement =>
+            Assert.Contains(statement.StatementType, new[] { "Directive", "Priority" }));
+    }
+
+    [Fact]
+    public async Task ProviderLaunchMetadataPersistsAfterStoreReload()
+    {
+        var provider = new MetadataExecutionProvider();
+        Harness harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+
+        IReadOnlyList<ExecutionSession> sessions = await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync();
+        ExecutionSession session = sessions.Single(session => session.Id == summary.SessionId);
+
+        Assert.Equal("codex", session.ProviderName);
+        Assert.Equal("C:\\tools\\codex.exe", session.ProviderExecutablePath);
+        Assert.Equal(7890, session.ProviderProcessId);
+        Assert.NotNull(session.ProviderStartedAt);
+        Assert.NotNull(session.PromptMetadata);
+        Assert.Equal([".agents/plan.md"], session.PromptMetadata.IncludedArtifactPaths);
+    }
+
+    [Fact]
+    public async Task PromptManifestPersistsRequestedAndDeliveredLaunchContext()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", "operational context");
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+
+        IReadOnlyList<ExecutionSession> sessions = await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync();
+        ExecutionSession session = sessions.Single(session => session.Id == summary.SessionId);
+        ExecutionPromptManifest manifest = session.PromptManifest!;
+
+        Assert.NotNull(manifest);
+        Assert.Equal(summary.SessionId, manifest.SessionId);
+        Assert.Contains("start executing the first milestone", manifest.PromptText);
+        // Operational context is delivered onto the context and recorded in the manifest (below), but it is
+        // no longer injected into the prompt text — it belongs to the decision/codex session.
+        Assert.DoesNotContain("operational context", manifest.PromptText);
+        Assert.Equal("DeliveredAsRequested", manifest.ProviderDeliveryStatus);
+        Assert.Empty(manifest.ProviderAdjustments);
+        Assert.Null(manifest.DivergenceReason);
+        Assert.Contains(ExecutionPromptManifest.NoProviderDivergenceSignalDiagnostic, manifest.Diagnostics);
+        Assert.Equal(manifest.RequestedContextBytes, manifest.DeliveredContextBytes);
+        Assert.Equal(manifest.RequestedContextCharacters, manifest.DeliveredContextCharacters);
+        Assert.Equal(".agents/operational_context.md", manifest.OperationalContextSourceDelivered);
+        Assert.Null(manifest.HandoffSourceDelivered);
+
+        Assert.Contains(manifest.RequestedArtifacts, artifact =>
+            artifact.Role == "CurrentHandoff" &&
+            artifact.RelativePath == ".agents/handoffs/handoff.md" &&
+            !artifact.Delivered);
+        Assert.DoesNotContain(manifest.DeliveredArtifacts, artifact => artifact.Role == "CurrentHandoff");
+        Assert.Contains(manifest.DeliveredArtifacts, artifact =>
+            artifact.Role == "OperationalContext" &&
+            artifact.RelativePath == ".agents/operational_context.md" &&
+            artifact.Delivered &&
+            artifact.ByteCount > 0 &&
+            artifact.CharacterCount > 0);
+    }
+
+    [Fact]
+    public async Task AcceptFromAwaitingAcceptanceWithChangedFilesTransitionsToAwaitingCommit()
+    {
+        var dirtyState = new RepositoryDirtyState
+        {
+            ModifiedPaths = ["src/changed.cs"],
+            IsClean = false
+        };
+        Harness harness = await CreateHarnessAsync(dirtyState);
+        ExecutionSession session = await StoreAwaitingAcceptanceSessionAsync(harness);
+
+        ExecutionSessionSummary summary = await harness.SessionService.AcceptAsync(
+            session.Id,
+            new ExecutionAcceptanceRequest { DecisionNote = " Reviewed and accepted. " });
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Equal(ExecutionSessionState.Completed, summary.State);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, summary.RepositoryState);
+        Assert.NotNull(summary.AcceptedAt);
+        Assert.Equal("Reviewed and accepted.", summary.DecisionNote);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Equal(summary.AcceptedAt, storedSession.AcceptedAt);
+        Assert.Equal("Reviewed and accepted.", storedSession.DecisionNote);
+        Assert.False(storedSession.RepositorySnapshot!.DirtyState.IsClean);
+    }
+
+    [Fact]
+    public async Task AcceptFromAwaitingAcceptanceWithCleanWorkingTreeTransitionsToReady()
+    {
+        Harness harness = await CreateHarnessAsync();
+        ExecutionSession session = await StoreAwaitingAcceptanceSessionAsync(harness);
+
+        ExecutionSessionSummary summary = await harness.SessionService.AcceptAsync(session.Id, new ExecutionAcceptanceRequest());
+
+        Assert.Equal(ExecutionSessionState.Completed, summary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.NotNull(summary.AcceptedAt);
+        Assert.Null(summary.DecisionNote);
+        Assert.Equal(RepositoryExecutionState.Ready, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+    }
+
+    [Fact]
+    public async Task RejectFromAwaitingAcceptanceTransitionsToReadyAndPreservesHandoff()
+    {
+        Harness harness = await CreateHarnessAsync();
+        ExecutionSession session = await StoreAwaitingAcceptanceSessionAsync(harness);
+
+        ExecutionSessionSummary summary = await harness.SessionService.RejectAsync(
+            session.Id,
+            new ExecutionAcceptanceRequest { DecisionNote = "Not sufficient" });
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Equal(ExecutionSessionState.Completed, summary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.NotNull(summary.RejectedAt);
+        Assert.Equal("Not sufficient", summary.DecisionNote);
+        Assert.Equal(".agents/handoffs/handoff.md", summary.HandoffPath);
+        Assert.Equal(".agents/handoffs/handoff.md", storedSession.HandoffPath);
+        Assert.Equal(RepositoryExecutionState.Ready, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+    }
+
+    [Fact]
+    public async Task AcceptOutsideAwaitingAcceptanceFails()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.AcceptAsync(summary.SessionId, new ExecutionAcceptanceRequest()));
+
+        Assert.Contains("awaiting acceptance", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RejectOutsideAwaitingAcceptanceFails()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.RejectAsync(summary.SessionId, new ExecutionAcceptanceRequest()));
+
+        Assert.Contains("awaiting acceptance", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AcceptedStatePersistsAfterStoreReload()
+    {
+        var dirtyState = new RepositoryDirtyState
+        {
+            ModifiedPaths = ["src/changed.cs"],
+            IsClean = false
+        };
+        Harness harness = await CreateHarnessAsync(dirtyState);
+        ExecutionSession session = await StoreAwaitingAcceptanceSessionAsync(harness);
+
+        await harness.SessionService.AcceptAsync(session.Id, new ExecutionAcceptanceRequest { DecisionNote = "accepted" });
+        ExecutionSession reloadedSession = (await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync()).Single();
+
+        Assert.Equal(ExecutionSessionState.Completed, reloadedSession.State);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, reloadedSession.RepositoryState);
+        Assert.NotNull(reloadedSession.AcceptedAt);
+        Assert.Null(reloadedSession.RejectedAt);
+        Assert.Equal("accepted", reloadedSession.DecisionNote);
+        Assert.Equal(".agents/handoffs/handoff.md", reloadedSession.HandoffPath);
+    }
+
+    [Fact]
+    public async Task CommitFromAwaitingCommitPersistsMetadataAndTransitionsToAwaitingPush()
+    {
+        var gitService = new FakeGitService(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            },
+            null);
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        ExecutionSessionSummary summary = await harness.SessionService.CommitAsync(
+            session.Id,
+            new CommitRequest
+            {
+                Message = "Reviewed commit",
+                SelectedPaths = ["src/changed.cs"],
+                StatusSnapshotId = "snapshot"
+            });
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Equal(RepositoryExecutionState.AwaitingPush, summary.RepositoryState);
+        Assert.Equal("commit-sha", summary.CommitSha);
+        Assert.Equal("Reviewed commit", summary.CommitMessage);
+        Assert.Equal("snapshot", summary.PreparationSnapshotId);
+        Assert.Equal(["src/changed.cs"], gitService.LastCommittedPaths);
+        Assert.Equal("commit-sha", storedSession.CommitSha);
+        Assert.Equal(RepositoryExecutionState.AwaitingPush, storedSession.RepositoryState);
+    }
+
+    [Fact]
+    public async Task CommitRejectsEmptySelectedPaths()
+    {
+        Harness harness = await CreateHarnessAsync(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            });
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = [],
+                    StatusSnapshotId = "snapshot"
+                }));
+
+        Assert.Contains("At least one path", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CommitRejectsStaleReviewedSnapshot()
+    {
+        Harness harness = await CreateHarnessAsync(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            });
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["src/changed.cs"],
+                    StatusSnapshotId = "old-snapshot"
+                }));
+
+        Assert.Contains("stale status snapshot", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CommitRejectsRepositoryStatusChangedAfterPreparation()
+    {
+        var gitService = new FakeGitService(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs", "src/other.cs"],
+                IsClean = false
+            },
+            null)
+        {
+            CurrentSnapshotId = "changed-snapshot"
+        };
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["src/changed.cs"],
+                    StatusSnapshotId = "snapshot"
+                }));
+
+        Assert.Contains("Refresh commit review", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CommitRejectsUnknownOrUnsafePaths()
+    {
+        Harness harness = await CreateHarnessAsync(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            });
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var unknown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["src/unknown.cs"],
+                    StatusSnapshotId = "snapshot"
+                }));
+        var escaping = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["../outside.cs"],
+                    StatusSnapshotId = "snapshot"
+                }));
+
+        Assert.Contains("prepared commit scope", unknown.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("repository-relative", escaping.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CommitFailureLeavesSessionAwaitingCommitForRetry()
+    {
+        var gitService = new FakeGitService(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            },
+            null)
+        {
+            CommitFailure = "git commit failed"
+        };
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["src/changed.cs"],
+                    StatusSnapshotId = "snapshot"
+                }));
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Contains("git commit failed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, storedSession.RepositoryState);
+        Assert.Null(storedSession.CommitSha);
+    }
+
+    [Fact]
+    public async Task PushFromAwaitingPushPersistsMetadataAndTransitionsToReady()
+    {
+        var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = true }, null);
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingPushSessionAsync(harness);
+
+        ExecutionSessionSummary summary = await harness.SessionService.PushAsync(session.Id, new PushRequest());
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.Equal("commit-sha", summary.PushedCommitSha);
+        Assert.NotNull(summary.PushAttemptedAt);
+        Assert.NotNull(summary.PushedAt);
+        Assert.Equal("main", summary.PushBranchName);
+        Assert.Equal(RepositoryExecutionState.Ready, storedSession.RepositoryState);
+        Assert.Equal("commit-sha", storedSession.PushedCommitSha);
+        Assert.NotNull(storedSession.RepositorySnapshot);
+        Assert.Equal("commit-sha", gitService.LastPushedCommitSha);
+        Assert.Null(await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id));
+        ExecutionSessionSummary? latestSummary = await harness.SessionService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+        Assert.NotNull(latestSummary);
+        Assert.Equal(session.Id, latestSummary.SessionId);
+        IReadOnlyList<ExecutionSessionSummary> history = await harness.SessionService.GetRepositorySessionHistoryAsync(harness.Repository.Id);
+        ExecutionSessionSummary historySummary = Assert.Single(history);
+        Assert.Equal(session.Id, historySummary.SessionId);
+        Assert.Equal(RepositoryExecutionState.Ready, historySummary.RepositoryState);
+    }
+
+    [Fact]
+    public async Task RepositorySessionHistoryReturnsNewestSessionsFirst()
+    {
+        Harness harness = await CreateHarnessAsync();
+        DateTimeOffset firstStartedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+        DateTimeOffset secondStartedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var firstSession = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            StartedAt = firstStartedAt,
+            CompletedAt = firstStartedAt.AddMinutes(1),
+            LastActivityAt = firstStartedAt.AddMinutes(1),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.Ready,
+            ProviderName = "fake",
+            PushedAt = firstStartedAt.AddMinutes(2),
+            PushedCommitSha = "first-sha"
+        };
+        var secondSession = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            StartedAt = secondStartedAt,
+            CompletedAt = secondStartedAt.AddMinutes(1),
+            LastActivityAt = secondStartedAt.AddMinutes(1),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.Ready,
+            ProviderName = "fake",
+            PushedAt = secondStartedAt.AddMinutes(2),
+            PushedCommitSha = "second-sha"
+        };
+        await harness.Store.SaveAsync([firstSession, secondSession]);
+
+        IReadOnlyList<ExecutionSessionSummary> history = await harness.SessionService.GetRepositorySessionHistoryAsync(harness.Repository.Id, limit: 1);
+
+        ExecutionSessionSummary summary = Assert.Single(history);
+        Assert.Equal(secondSession.Id, summary.SessionId);
+        Assert.Equal("second-sha", summary.PushedCommitSha);
+    }
+
+    [Fact]
+    public async Task RepeatableExecutionLoopRebuildsContextArchivesHandoffsAndSurvivesRestart()
+    {
+        var providerA = new FakeExecutionProvider();
+        var gitService = new StatefulFakeGitService();
+        Harness harness = await CreateHarnessAsync(provider: providerA, gitService: gitService);
+        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
+        await WriteAsync(harness.Repository, ".agents/milestones/m8-a.md", "milestone A");
+        await WriteAsync(harness.Repository, ".agents/milestones/m8-b.md", "milestone B");
+        await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", "initial handoff");
+
+        ExecutionSessionSummary first = await ExecuteLoopAsync(
+            harness.SessionService,
+            harness.MonitoringService,
+            harness.Repository,
+            "handoff A",
+            "provider output A");
+
+        Assert.Equal(RepositoryExecutionState.Ready, first.RepositoryState);
+        Assert.Null(await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id));
+        Assert.NotNull(providerA.LastPrompt);
+        Assert.Equal("initial handoff", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.0001.md"));
+        Assert.Equal("handoff A", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.md"));
+
+        var providerB = new FakeExecutionProvider();
+        var reloadedStore = new FileSystemExecutionSessionStore(harness.StorePath);
+        ExecutionMonitoringService reloadedMonitoringService = CreateMonitoringService(reloadedStore);
+        var reloadedService = new ExecutionSessionService(
+            harness.ContextService,
+            reloadedStore,
+            providerB,
+            new ExecutionPromptBuilder(),
+            reloadedMonitoringService,
+            gitService);
+
+        Assert.Equal(RepositoryExecutionState.Ready, await reloadedService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Null(await reloadedService.GetActiveSessionAsync(harness.Repository.Id));
+        Assert.Single(await reloadedService.GetRepositorySessionHistoryAsync(harness.Repository.Id));
+
+        ExecutionSessionSummary second = await ExecuteLoopAsync(
+            reloadedService,
+            reloadedMonitoringService,
+            harness.Repository,
+            "handoff B",
+            "provider output B");
+        IReadOnlyList<ExecutionSessionSummary> history = await reloadedService.GetRepositorySessionHistoryAsync(harness.Repository.Id);
+        IReadOnlyList<ExecutionEvent> secondEvents = await reloadedMonitoringService.GetEventsAsync(second.SessionId);
+
+        Assert.Equal(RepositoryExecutionState.Ready, second.RepositoryState);
+        Assert.Null(await reloadedService.GetActiveSessionAsync(harness.Repository.Id));
+        Assert.Equal(2, history.Count);
+        Assert.Equal([second.SessionId, first.SessionId], history.Select(session => session.SessionId).ToArray());
+        Assert.Contains(secondEvents, executionEvent =>
+            executionEvent.Type == ExecutionEventType.StdOut &&
+            executionEvent.Message == "provider output B");
+        Assert.Contains(secondEvents, executionEvent => executionEvent.Type == ExecutionEventType.HandoffValidated);
+        Assert.NotNull(providerB.LastPrompt);
+        Assert.Equal("initial handoff", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.0001.md"));
+        Assert.Equal("handoff A", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.0002.md"));
+        Assert.Equal("handoff B", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.md"));
+    }
+
+    [Fact]
+    public async Task PushFailureLeavesSessionAwaitingPushForRetry()
+    {
+        var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = true }, null)
+        {
+            PushFailure = "git push failed"
+        };
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingPushSessionAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.PushAsync(session.Id, new PushRequest()));
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Contains("git push failed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RepositoryExecutionState.AwaitingPush, storedSession.RepositoryState);
+        Assert.NotNull(storedSession.PushAttemptedAt);
+        Assert.Contains("git push failed", storedSession.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(storedSession.PushedAt);
+        Assert.Null(storedSession.PushedCommitSha);
+    }
+
+    [Fact]
+    public async Task GitEligibilityProjectsCommitPreconditionsAndStalePreparation()
+    {
+        var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = false }, null)
+        {
+            CurrentSnapshotId = "new-snapshot"
+        };
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+        var eligibilityService = new ExecutionGitEligibilityService(harness.Store, gitService);
+
+        ExecutionGitActionEligibility eligibility = await eligibilityService.GetEligibilityAsync(
+            session.Id,
+            new ExecutionGitActionEligibilityRequest
+            {
+                CommitMessage = "",
+                SelectedPaths = ["src/changed.cs", "unknown.cs"]
+            });
+
+        Assert.True(eligibility.SessionExists);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, eligibility.RepositoryState);
+        Assert.True(eligibility.CommitPreparationLoaded);
+        Assert.False(eligibility.CommitPreparationCurrent);
+        Assert.Equal("snapshot", eligibility.PreparedStatusSnapshotId);
+        Assert.Equal("new-snapshot", eligibility.CurrentStatusSnapshotId);
+        Assert.Equal(2, eligibility.SelectedPathCount);
+        Assert.Contains("unknown.cs", eligibility.UnknownSelectedPaths);
+        Assert.False(eligibility.CommitMessagePresent);
+        Assert.False(eligibility.CanCommit);
+        Assert.Contains("Commit preparation is stale.", eligibility.CommitDisabledReasons);
+        Assert.Contains("Commit message is required.", eligibility.CommitDisabledReasons);
+        Assert.Contains("Selected paths include entries outside the prepared commit scope.", eligibility.CommitDisabledReasons);
+    }
+
+    [Fact]
+    public async Task GitEligibilityProjectsPushPreconditionsAndRemoteState()
+    {
+        var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = true }, null)
+        {
+            StatusAheadCount = 1,
+            StatusBehindCount = 1
+        };
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingPushSessionAsync(harness);
+        DateTimeOffset attemptedAt = DateTimeOffset.UtcNow;
+        await harness.Store.SaveAsync([CreatePushFailedSession(session, attemptedAt, "git push failed")]);
+        var eligibilityService = new ExecutionGitEligibilityService(harness.Store, gitService);
+
+        ExecutionGitActionEligibility eligibility = await eligibilityService.GetEligibilityAsync(
+            session.Id,
+            new ExecutionGitActionEligibilityRequest());
+
+        Assert.True(eligibility.AwaitingPush);
+        Assert.True(eligibility.CommitShaExists);
+        Assert.Equal("commit-sha", eligibility.CommitSha);
+        Assert.Equal("git push failed", eligibility.PreviousPushFailure);
+        Assert.Equal(attemptedAt, eligibility.PreviousPushAttemptedAt);
+        Assert.NotNull(eligibility.RemoteBranchState);
+        Assert.Equal(1, eligibility.RemoteBranchState.AheadCount);
+        Assert.Equal(1, eligibility.RemoteBranchState.BehindCount);
+        Assert.True(eligibility.RemoteBranchState.HasUnpushedChanges);
+        Assert.True(eligibility.RemoteBranchState.HasRemoteDivergence);
+        Assert.False(eligibility.CanPush);
+        Assert.Contains("Remote branch has new commits; review branch state before pushing.", eligibility.PushDisabledReasons);
+    }
+
+    [Fact]
+    public async Task LaunchPersistsPromptManifestDistinctFromPreviewContext()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", "preview operational context");
+
+        ImplementationExecutionContext preview = await harness.ContextService.BuildContextAsync(harness.Repository.Id);
+        LoopRelay.Core.Artifacts.LoadedArtifact previewOperationalContext = Assert.Single(
+            preview.Artifacts,
+            artifact => artifact.Role == "OperationalContext");
+        Assert.Equal("preview operational context", previewOperationalContext.Content);
+
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", "launched operational context with updated evidence");
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
+        ExecutionPromptManifest manifest = session.PromptManifest!;
+        ExecutionPromptManifestArtifact deliveredOperationalContext = Assert.Single(
+            manifest.DeliveredArtifacts,
+            artifact => artifact.Role == "OperationalContext");
+        ExecutionPromptManifestArtifact requestedOperationalContext = Assert.Single(
+            manifest.RequestedArtifacts,
+            artifact => artifact.Role == "OperationalContext");
+
+        Assert.Equal(summary.SessionId, manifest.SessionId);
+        Assert.Equal("DeliveredAsRequested", manifest.ProviderDeliveryStatus);
+        Assert.Empty(manifest.ProviderAdjustments);
+        Assert.Contains(ExecutionPromptManifest.NoProviderDivergenceSignalDiagnostic, manifest.Diagnostics);
+        // The manifest snapshots the launch-time operational_context — distinct from preview, verified via the
+        // delivered-artifact character counts below — but operational_context is no longer in the prompt text.
+        Assert.DoesNotContain("launched operational context with updated evidence", manifest.PromptText);
+        Assert.DoesNotContain("preview operational context", manifest.PromptText);
+        Assert.Equal("launched operational context with updated evidence".Length, deliveredOperationalContext.CharacterCount);
+        Assert.Equal(deliveredOperationalContext.CharacterCount, requestedOperationalContext.CharacterCount);
+        Assert.NotEqual(previewOperationalContext.CharacterCount, deliveredOperationalContext.CharacterCount);
+    }
+
+    private static async Task<Harness> CreateHarnessAsync(
+        RepositoryDirtyState? dirtyState = null,
+        string? gitFailure = null,
+        IExecutionProvider? provider = null,
+        IGitService? gitService = null,
+        ExecutionDecisionProjection? decisionProjection = null)
+    {
+        var repositoryService = new RepositoryService(
+            new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
+        Repository repository = await repositoryService.RegisterAsync(CreateGitRepositoryDirectory());
+        var artifactStore = new FileSystemArtifactStore();
+        var contextService = new ImplementationExecutionContextService(
+            repositoryService,
+            new ArtifactService(artifactStore),
+            new PlanningService(artifactStore),
+            gitService ?? new FakeGitService(dirtyState, gitFailure),
+            decisionProjection is null ? null : new FakeDecisionProjectionService(decisionProjection));
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = new FileSystemExecutionSessionStore(storePath);
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
+        var sessionService = new ExecutionSessionService(
+            contextService,
+            store,
+            provider ?? new FakeExecutionProvider(),
+            new ExecutionPromptBuilder(),
+            monitoringService,
+            gitService ?? new FakeGitService(dirtyState, gitFailure),
+            new DecisionInfluenceService(repositoryService, artifactStore));
+
+        return new Harness(repositoryService, repository, contextService, store, storePath, monitoringService, sessionService);
+    }
+
+    private static ExecutionMonitoringService CreateMonitoringService(FileSystemExecutionSessionStore store)
+    {
+        return new ExecutionMonitoringService(
+            store,
+            new HandoffService(store, new FileSystemArtifactStore()));
+    }
+
+    private static async Task<ExecutionSessionSummary> ExecuteLoopAsync(
+        ExecutionSessionService sessionService,
+        ExecutionMonitoringService monitoringService,
+        Repository repository,
+        string generatedHandoff,
+        string providerOutput)
+    {
+        ExecutionSessionSummary started = await sessionService.StartAsync(
+            repository.Id,
+            new ExecutionStartRequest());
+        var duplicate = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sessionService.StartAsync(
+                repository.Id,
+                new ExecutionStartRequest()));
+        Assert.Contains("active execution", duplicate.Message, StringComparison.OrdinalIgnoreCase);
+
+        IExecutionProviderObserver observer = monitoringService.CreateProviderObserver(started.SessionId);
+        await observer.OnStdOutAsync(providerOutput);
+        await WriteAsync(repository, ".agents/handoffs/handoff.md", generatedHandoff);
+        await observer.OnProviderExitedAsync(0);
+
+        ExecutionSession? completed = await sessionService.GetSessionAsync(started.SessionId);
+        Assert.NotNull(completed);
+        Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, completed.RepositoryState);
+        Assert.Equal(".agents/handoffs/handoff.md", completed.HandoffPath);
+
+        ExecutionSessionSummary accepted = await sessionService.AcceptAsync(started.SessionId, new ExecutionAcceptanceRequest());
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, accepted.RepositoryState);
+        CommitPreparation preparation = await sessionService.PrepareCommitAsync(started.SessionId);
+        ExecutionSessionSummary committed = await sessionService.CommitAsync(
+            started.SessionId,
+            new CommitRequest
+            {
+                Message = preparation.ProposedMessage,
+                SelectedPaths = preparation.ScopeItems
+                    .Where(item => item.IsSelected)
+                    .Select(item => item.Path)
+                    .ToArray(),
+                StatusSnapshotId = preparation.StatusSnapshot.Id
+            });
+        Assert.Equal(RepositoryExecutionState.AwaitingPush, committed.RepositoryState);
+
+        return await sessionService.PushAsync(started.SessionId, new PushRequest());
+    }
+
+    private static async Task WriteReadyArtifactsAsync(Repository repository)
+    {
+        await WriteAsync(repository, ".agents/plan.md", "plan");
+        await WriteAsync(repository, ".agents/milestones/m2.md", "milestone");
+    }
+
+    private static async Task<ExecutionSession> StoreAwaitingAcceptanceSessionAsync(Harness harness)
+    {
+        ExecutionSession session = CreateAwaitingAcceptanceSession(harness.Repository);
+        await harness.Store.SaveAsync([session]);
+        return session;
+    }
+
+    private static async Task<ExecutionSession> StoreAwaitingCommitSessionWithPreparationAsync(Harness harness)
+    {
+        var session = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
+            AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            LastActivityAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingCommit,
+            ProviderName = "fake",
+            CommitPreparation = new CommitPreparation
+            {
+                Id = Guid.NewGuid(),
+                SessionId = Guid.NewGuid(),
+                RepositoryId = harness.Repository.Id,
+                RepositoryPath = harness.Repository.Path,
+                ProposedMessage = "m6-git-lifecycle\n\n- 1 file changed",
+                ScopeItems =
+                [
+                    new CommitScopeItem
+                    {
+                        Path = "src/changed.cs",
+                        ChangeType = CommitChangeType.Modified,
+                        Origin = CommitChangeOrigin.ExecutionGenerated,
+                        IsSelected = true
+                    }
+                ],
+                StatusSnapshot = new CommitStatusSnapshot
+                {
+                    Id = "snapshot",
+                    Branch = "main",
+                    DirtyState = new RepositoryDirtyState
+                    {
+                        ModifiedPaths = ["src/changed.cs"],
+                        IsClean = false
+                    },
+                    CapturedAt = DateTimeOffset.UtcNow.AddMinutes(-3)
+                },
+                GeneratedAt = DateTimeOffset.UtcNow.AddMinutes(-3)
+            }
+        };
+        await harness.Store.SaveAsync([session]);
+        return session;
+    }
+
+    private static async Task<ExecutionSession> StoreAwaitingPushSessionAsync(Harness harness)
+    {
+        var session = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
+            AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            LastActivityAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingPush,
+            ProviderName = "fake",
+            CommitSha = "commit-sha",
+            CommittedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            CommitMessage = "Reviewed commit",
+            PreparationSnapshotId = "snapshot"
+        };
+        await harness.Store.SaveAsync([session]);
+        return session;
+    }
+
+    private static ExecutionSession CreatePushFailedSession(
+        ExecutionSession session,
+        DateTimeOffset attemptedAt,
+        string failureReason)
+    {
+        return new ExecutionSession
+        {
+            Id = session.Id,
+            RepositoryId = session.RepositoryId,
+            RepositoryPath = session.RepositoryPath,
+            StartedAt = session.StartedAt,
+            CompletedAt = session.CompletedAt,
+            AcceptedAt = session.AcceptedAt,
+            RejectedAt = session.RejectedAt,
+            DecisionNote = session.DecisionNote,
+            LastActivityAt = attemptedAt,
+            State = session.State,
+            RepositoryState = RepositoryExecutionState.AwaitingPush,
+            ProviderName = session.ProviderName,
+            ProviderExecutablePath = session.ProviderExecutablePath,
+            ProviderProcessId = session.ProviderProcessId,
+            ProviderStartedAt = session.ProviderStartedAt,
+            PromptMetadata = session.PromptMetadata,
+            PromptManifest = session.PromptManifest,
+            RepositorySnapshot = session.RepositorySnapshot,
+            CommitPreparation = session.CommitPreparation,
+            CommitSha = session.CommitSha,
+            CommittedAt = session.CommittedAt,
+            CommitMessage = session.CommitMessage,
+            PreparationSnapshotId = session.PreparationSnapshotId,
+            PushAttemptedAt = attemptedAt,
+            PushedAt = session.PushedAt,
+            PushedCommitSha = session.PushedCommitSha,
+            PushRemoteName = session.PushRemoteName,
+            PushBranchName = session.PushBranchName,
+            PreviousHandoffContent = session.PreviousHandoffContent,
+            PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
+            HandoffPath = session.HandoffPath,
+            FailureReason = failureReason,
+            Events = session.Events
+        };
+    }
+
+    private static ExecutionSession CreateAwaitingAcceptanceSession(Repository repository)
+    {
+        var sessionId = Guid.NewGuid();
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        DateTimeOffset completedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        return new ExecutionSession
+        {
+            Id = sessionId,
+            RepositoryId = repository.Id,
+            RepositoryPath = repository.Path,
+            StartedAt = startedAt,
+            CompletedAt = completedAt,
+            LastActivityAt = completedAt,
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingAcceptance,
+            ProviderName = "fake",
+            HandoffPath = ".agents/handoffs/handoff.md",
+            Events =
+            [
+                new ExecutionEvent
+                {
+                    Sequence = 1,
+                    Type = ExecutionEventType.StdOut,
+                    Timestamp = completedAt,
+                    Message = "done"
+                }
+            ]
+        };
+    }
+
+    private static async Task WriteAsync(Repository repository, string relativePath, string content)
+    {
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        await File.WriteAllTextAsync(path, content);
+    }
+
+    private static Task<string> ReadAsync(Repository repository, string relativePath)
+    {
+        return File.ReadAllTextAsync(Path.Combine(
+            repository.Path,
+            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+    }
+
+    private static string CreateGitRepositoryDirectory()
+    {
+        string directory = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(directory, ".git"));
+        return directory;
+    }
+
+    private static string CreateTemporaryDirectory()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "LoopRelay.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    private sealed record Harness(
+        RepositoryService RepositoryService,
+        Repository Repository,
+        ImplementationExecutionContextService ContextService,
+        FileSystemExecutionSessionStore Store,
+        string StorePath,
+        ExecutionMonitoringService MonitoringService,
+        ExecutionSessionService SessionService);
+
+    private sealed class FakeDecisionProjectionService(ExecutionDecisionProjection projection) : IDecisionProjectionService
+    {
+        public Task<ExecutionDecisionProjection> BuildExecutionProjectionAsync(
+            Guid repositoryId,
+            string? executionRequest = null,
+            string? milestoneContent = null)
+        {
+            return Task.FromResult(projection with { RepositoryId = repositoryId });
+        }
+    }
+
+    private sealed class FakeGitService(RepositoryDirtyState? dirtyState, string? failure) : IGitService
+    {
+        public string CurrentSnapshotId { get; init; } = "snapshot";
+
+        public string? CommitFailure { get; init; }
+
+        public string? PushFailure { get; init; }
+
+        public int StatusAheadCount { get; init; }
+
+        public int StatusBehindCount { get; init; }
+
+        public IReadOnlyList<string> LastCommittedPaths { get; private set; } = [];
+
+        public string? LastPushedCommitSha { get; private set; }
+
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
+        {
+            if (failure is not null)
+            {
+                throw new InvalidOperationException(failure);
+            }
+
+            return Task.FromResult(new RepositorySnapshot
+            {
+                Branch = "main",
+                DirtyState = dirtyState ?? new RepositoryDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<RepositoryGitStatus> GetStatusAsync(Repository repository)
+        {
+            if (failure is not null)
+            {
+                throw new InvalidOperationException(failure);
+            }
+
+            return Task.FromResult(new RepositoryGitStatus
+            {
+                Branch = "main",
+                AheadCount = StatusAheadCount,
+                BehindCount = StatusBehindCount,
+                DirtyState = dirtyState ?? new RepositoryDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session)
+        {
+            if (failure is not null)
+            {
+                throw new InvalidOperationException(failure);
+            }
+
+            return Task.FromResult(new CommitPreparation
+            {
+                Id = Guid.NewGuid(),
+                SessionId = session.Id,
+                RepositoryId = session.RepositoryId,
+                RepositoryPath = session.RepositoryPath,
+                ProposedMessage = "Execution changes\n\n- 1 file changed",
+                ScopeItems =
+                [
+                    new CommitScopeItem
+                    {
+                        Path = "src/changed.cs",
+                        ChangeType = CommitChangeType.Modified,
+                        Origin = CommitChangeOrigin.ExecutionGenerated,
+                        IsSelected = true
+                    }
+                ],
+                StatusSnapshot = new CommitStatusSnapshot
+                {
+                    Id = "snapshot",
+                    Branch = "main",
+                    DirtyState = dirtyState ?? new RepositoryDirtyState(),
+                    CapturedAt = DateTimeOffset.UtcNow
+                },
+                GeneratedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository)
+        {
+            if (failure is not null)
+            {
+                throw new InvalidOperationException(failure);
+            }
+
+            return Task.FromResult(new CommitStatusSnapshot
+            {
+                Id = CurrentSnapshotId,
+                Branch = "main",
+                DirtyState = dirtyState ?? new RepositoryDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitResult> CommitAsync(
+            Repository repository,
+            string message,
+            IReadOnlyList<string> selectedPaths,
+            string preparationSnapshotId)
+        {
+            if (CommitFailure is not null)
+            {
+                throw new InvalidOperationException(CommitFailure);
+            }
+
+            LastCommittedPaths = selectedPaths;
+            return Task.FromResult(new CommitResult
+            {
+                CommitSha = "commit-sha",
+                CommittedAt = DateTimeOffset.UtcNow,
+                CommitMessage = message,
+                PreparationSnapshotId = preparationSnapshotId,
+                SelectedPaths = selectedPaths
+            });
+        }
+
+        public Task<PushResult> PushAsync(Repository repository, string? commitSha)
+        {
+            if (PushFailure is not null)
+            {
+                throw new InvalidOperationException(PushFailure);
+            }
+
+            LastPushedCommitSha = commitSha;
+            return Task.FromResult(new PushResult
+            {
+                PushAttemptedAt = DateTimeOffset.UtcNow,
+                PushedAt = DateTimeOffset.UtcNow,
+                PushedCommitSha = commitSha,
+                BranchName = "main"
+            });
+        }
+    }
+
+    private sealed class StatefulFakeGitService : IGitService
+    {
+        private int commitCount;
+        private string currentSnapshotId = "snapshot-initial";
+
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
+        {
+            return Task.FromResult(new RepositorySnapshot
+            {
+                Branch = "main",
+                DirtyState = BuildDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<RepositoryGitStatus> GetStatusAsync(Repository repository)
+        {
+            return Task.FromResult(new RepositoryGitStatus
+            {
+                Branch = "main",
+                DirtyState = BuildDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session)
+        {
+            currentSnapshotId = $"snapshot-{session.Id:N}";
+            return Task.FromResult(new CommitPreparation
+            {
+                Id = Guid.NewGuid(),
+                SessionId = session.Id,
+                RepositoryId = session.RepositoryId,
+                RepositoryPath = session.RepositoryPath,
+                ProposedMessage = "Execution changes\n\n- 1 file changed",
+                ScopeItems =
+                [
+                    new CommitScopeItem
+                    {
+                        Path = "src/change.cs",
+                        ChangeType = CommitChangeType.Modified,
+                        Origin = CommitChangeOrigin.ExecutionGenerated,
+                        IsSelected = true
+                    }
+                ],
+                StatusSnapshot = new CommitStatusSnapshot
+                {
+                    Id = currentSnapshotId,
+                    Branch = "main",
+                    DirtyState = BuildDirtyState(),
+                    CapturedAt = DateTimeOffset.UtcNow
+                },
+                GeneratedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository)
+        {
+            return Task.FromResult(new CommitStatusSnapshot
+            {
+                Id = currentSnapshotId,
+                Branch = "main",
+                DirtyState = BuildDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitResult> CommitAsync(
+            Repository repository,
+            string message,
+            IReadOnlyList<string> selectedPaths,
+            string preparationSnapshotId)
+        {
+            commitCount++;
+            return Task.FromResult(new CommitResult
+            {
+                CommitSha = $"commit-sha-{commitCount}",
+                CommittedAt = DateTimeOffset.UtcNow,
+                CommitMessage = message,
+                PreparationSnapshotId = preparationSnapshotId,
+                SelectedPaths = selectedPaths
+            });
+        }
+
+        public Task<PushResult> PushAsync(Repository repository, string? commitSha)
+        {
+            return Task.FromResult(new PushResult
+            {
+                PushAttemptedAt = DateTimeOffset.UtcNow,
+                PushedAt = DateTimeOffset.UtcNow,
+                PushedCommitSha = commitSha,
+                BranchName = "main"
+            });
+        }
+
+        private static RepositoryDirtyState BuildDirtyState()
+        {
+            return new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            };
+        }
+    }
+
+    private sealed class MetadataExecutionProvider : IExecutionProvider
+    {
+        public string Name => "codex";
+
+        public bool SupportsReattach => false;
+
+        public Task<ExecutionProviderStartResult> StartAsync(
+            ExecutionPrompt prompt,
+            ExecutionSession session,
+            IExecutionProviderObserver observer)
+        {
+            return Task.FromResult(new ExecutionProviderStartResult
+            {
+                ProviderName = Name,
+                ExecutablePath = "C:\\tools\\codex.exe",
+                ProcessId = 7890,
+                StartedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<bool> TryReattachAsync(
+            ExecutionSession session,
+            IExecutionProviderObserver observer)
+        {
+            return Task.FromResult(false);
+        }
+    }
+
+    private sealed class FailingExecutionProvider(Exception exception) : IExecutionProvider
+    {
+        public string Name => "codex";
+
+        public bool SupportsReattach => false;
+
+        public Task<ExecutionProviderStartResult> StartAsync(
+            ExecutionPrompt prompt,
+            ExecutionSession session,
+            IExecutionProviderObserver observer)
+        {
+            throw exception;
+        }
+
+        public Task<bool> TryReattachAsync(
+            ExecutionSession session,
+            IExecutionProviderObserver observer)
+        {
+            return Task.FromResult(false);
+        }
+    }
+}

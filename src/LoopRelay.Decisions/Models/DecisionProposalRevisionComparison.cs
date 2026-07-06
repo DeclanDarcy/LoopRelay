@@ -1,0 +1,31 @@
+using LoopRelay.Decisions.Primitives;
+
+namespace LoopRelay.Decisions.Models;
+
+public sealed record DecisionProposalRevisionComparison(
+    string ProposalId,
+    string RevisionId,
+    Guid RepositoryId,
+    string SourceProposalFingerprint,
+    string CurrentProposalFingerprint,
+    bool SourceMatchesCurrentProposal,
+    IReadOnlyList<string> ChangedFields,
+    IReadOnlyList<DecisionRevisionFieldComparison> FieldComparisons,
+    IReadOnlyList<string> AcceptedChanges,
+    IReadOnlyList<string> RejectedChanges,
+    IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<DecisionConstraint> Constraints,
+    IReadOnlyList<DecisionOption> PreviousOptions,
+    IReadOnlyList<DecisionOption> RevisedOptions,
+    IReadOnlyList<DecisionOption> RetiredOptions,
+    IReadOnlyList<DecisionAssumption> PreviousAssumptions,
+    IReadOnlyList<DecisionAssumption> RevisedAssumptions,
+    IReadOnlyList<DecisionAssumption> RetiredAssumptions,
+    IReadOnlyList<DecisionTradeoff> PreviousTradeoffs,
+    IReadOnlyList<DecisionTradeoff> RevisedTradeoffs,
+    IReadOnlyList<DecisionAssumptionRevision> AssumptionRevisions,
+    IReadOnlyList<DecisionOptionRevision> OptionRevisions,
+    IReadOnlyList<DecisionTradeoffRevision> TradeoffRevisions,
+    IReadOnlyList<DecisionPriorityAdjustment> PriorityAdjustments,
+    HumanAuthoringBurden HumanAuthoringBurden,
+    IReadOnlyList<DecisionSourceReference> Sources);

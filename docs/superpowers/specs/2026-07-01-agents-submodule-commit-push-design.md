@@ -2,8 +2,8 @@
 
 **Date:** 2026-07-01
 **Status:** Approved (design)
-**Scope:** `CommandCenter.CLI` only for behavior. `.agents/` is now a git submodule
-(`.gitmodules` → `CommandCenter.Agents.git`, checked out on `main`). The backend
+**Scope:** `LoopRelay.CLI` only for behavior. `.agents/` is now a git submodule
+(`.gitmodules` → `LoopRelay.Agents.git`, checked out on `main`). The backend
 `RepositoryOrchestrator` is deliberately untouched (it is `internal`-isolated from the CLI loop
 and has zero references to `CommitGate`/`LoopRunner`); its parallel gap is recorded as **TD-8**
 rather than fixed here.
@@ -155,7 +155,7 @@ assert every git call runs inside the `.agents` working directory.
 
 ## Verification during implementation
 
-- `dotnet test` for `CommandCenter.CLI.Tests` green; full backend suite unaffected (CLI-isolated).
+- `dotnet test` for `LoopRelay.CLI.Tests` green; full backend suite unaffected (CLI-isolated).
 - Real git: `:(exclude).agents` is accepted by the installed git (verified via `git add -n`), so the
   parent commit never stages the submodule gitlink.
 - Manual: in a repo whose `.agents/` is a submodule on a branch, run one loop iteration and confirm the

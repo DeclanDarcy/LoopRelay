@@ -4,11 +4,11 @@ Every agent turn in the Plan Authoring → Execution → Decision orchestration 
 
 ## Generated Prompt Authority
 
-Prompts are the single source of agent instructions. The canonical prompt bodies live as `.prompt` templates under `src/CommandCenter.Core/Prompts/`; the Lib.Prompts source generator turns each template into a strongly-typed `static partial class` in the `CommandCenter.Core.Prompts` namespace at build time. Production code calls the generated class (`.Text` or `.Render(...)`) and never composes a prompt body by hand.
+Prompts are the single source of agent instructions. The canonical prompt bodies live as `.prompt` templates under `src/LoopRelay.Core/Prompts/`; the Lib.Prompts source generator turns each template into a strongly-typed `static partial class` in the `LoopRelay.Core.Prompts` namespace at build time. Production code calls the generated class (`.Text` or `.Render(...)`) and never composes a prompt body by hand.
 
 This is a structural invariant, not a convention:
 
-- `CommandCenter.Core` is the base layer and the prompt authority. It takes no dependency on the `CommandCenter.Agents` runtime that sits above it (enforced by `ArchitectureLayeringTests`).
+- `LoopRelay.Core` is the base layer and the prompt authority. It takes no dependency on the `LoopRelay.Agents` runtime that sits above it (enforced by `ArchitectureLayeringTests`).
 - The catalog is the *only* place a canonical prompt body appears in source. `ExecutionPromptBuilder` — the live execution path's prompt builder — previously hand-composed literals; that was deleted in favor of `ContinueExecution.Render(...)` / `StartExecution.Render(...)`, and the regression is locked out by `PromptAuthorityTests` (see *No-Literal-Prompt Enforcement*).
 - Every rendered turn records a `PromptProvenance` (see *Prompt Provenance*) so a turn is auditable back to the exact template that produced it.
 
@@ -36,12 +36,12 @@ Notes:
 
 ## Source Generation
 
-The generator is `Lib.Prompts.PromptSourceGenerator` (an `IIncrementalGenerator` at `dotnet-libraries/Lib.Prompts/src/Lib.Prompts/PromptSourceGenerator.cs`), wired into `CommandCenter.Core` as an analyzer-only reference (`OutputItemType="Analyzer"`, `ReferenceOutputAssembly="false"`) with the package's `Lib.Prompts.props`/`Lib.Prompts.targets` supplying every `.prompt` as an `AdditionalFiles` input.
+The generator is `Lib.Prompts.PromptSourceGenerator` (an `IIncrementalGenerator` at `dotnet-libraries/Lib.Prompts/src/Lib.Prompts/PromptSourceGenerator.cs`), wired into `LoopRelay.Core` as an analyzer-only reference (`OutputItemType="Analyzer"`, `ReferenceOutputAssembly="false"`) with the package's `Lib.Prompts.props`/`Lib.Prompts.targets` supplying every `.prompt` as an `AdditionalFiles` input.
 
 For each `*.prompt` additional file the generator:
 
 - Parses `{name}` holes in a single pass (`{{` / `}}` escape to literal braces; a name must be a valid C# identifier; reused names map to one parameter). Malformed templates become **build errors** (`PROMPT001`–`PROMPT004`), so a broken placeholder fails the build rather than shipping.
-- Emits a `public static partial class` named after the file, in the folder-derived namespace (`CommandCenter.Core.Prompts`).
+- Emits a `public static partial class` named after the file, in the folder-derived namespace (`LoopRelay.Core.Prompts`).
 - Always emits `public const string SourceHash` — the SHA-256 (lowercase hex) of the raw template text at build time — and `public const string Template` (the raw text).
 - When the template has **no** parameters, emits `public const string Text` (the fully rendered text) and a parameterless `Render()` returning it.
 - When the template **has** parameters, emits `Render(string? a, string? b, …)`. A null argument renders as the empty string; rendering is a single `string.Concat` of the literal and hole parts (or the lone hole, for a single-placeholder template). There is no runtime parse and no file I/O.
@@ -50,7 +50,7 @@ For each `*.prompt` additional file the generator:
 
 ## Prompt Provenance
 
-`PromptProvenance` (`src/CommandCenter.Core/Prompts/PromptProvenance.cs`) is the per-turn record captured at every render site. It is a `sealed record` with seven fields:
+`PromptProvenance` (`src/LoopRelay.Core/Prompts/PromptProvenance.cs`) is the per-turn record captured at every render site. It is a `sealed record` with seven fields:
 
 1. `PromptName` — the canonical prompt's name, captured as `nameof(<Prompt>)`.
 2. `PromptType` — the generated catalog type's full name (`typeof(<Prompt>).FullName`).
@@ -62,7 +62,7 @@ For each `*.prompt` additional file the generator:
 
 Artifacts are identified by repository-relative path — the only stable identity on `LoadedArtifact`/`Artifact` today (neither carries an id or content hash). Canonical paths are centralized in `OrchestrationArtifactPaths`.
 
-`PromptSessionRole` is an enum with members `Planning`, `OperationalExecution`, `Decision`, `Transfer`, `ContextUpdate`. It **mirrors** `CommandCenter.Agents.Models.SessionRole` (same members, same order) but is **redeclared in Core** on purpose: Core is the base layer and prompt authority and must not reference the Agents runtime above it. A higher layer that already references both can map between the two enums; Core never does.
+`PromptSessionRole` is an enum with members `Planning`, `OperationalExecution`, `Decision`, `Transfer`, `ContextUpdate`. It **mirrors** `LoopRelay.Agents.Models.SessionRole` (same members, same order) but is **redeclared in Core** on purpose: Core is the base layer and prompt authority and must not reference the Agents runtime above it. A higher layer that already references both can map between the two enums; Core never does.
 
 Provenance is recorded at the two render sites:
 
@@ -71,17 +71,17 @@ Provenance is recorded at the two render sites:
 
 ## No-Literal-Prompt Enforcement
 
-`PromptAuthorityTests` (defined in `tests/CommandCenter.Backend.Tests/ArchitectureLayeringTests.cs`) is the regression that protects prompt authority. Its single fact, `Production_source_does_not_duplicate_canonical_prompt_text`:
+`PromptAuthorityTests` (defined in `tests/LoopRelay.Backend.Tests/ArchitectureLayeringTests.cs`) is the regression that protects prompt authority. Its single fact, `Production_source_does_not_duplicate_canonical_prompt_text`:
 
 - Enumerates every `*.cs` under `src/` recursively.
-- Excludes the catalog directory `src/CommandCenter.Core/Prompts` (which legitimately authors the text), any path under an `obj/` directory, and any generated `*.g.cs` file (the generator's output legitimately contains the text).
+- Excludes the catalog directory `src/LoopRelay.Core/Prompts` (which legitimately authors the text), any path under an `obj/` directory, and any generated `*.g.cs` file (the generator's output legitimately contains the text).
 - Fails if any remaining production source file contains one of the `CanonicalPromptMarkers` — distinctive verbatim fragments of the canonical prompt bodies. A match means canonical prompt text was duplicated outside the generated catalog.
 
 This guard is scoped to production `src/`; test-tree assertion literals are out of scope. It is the live enforcement of evidence package `LOOP-4` in `docs/orchestration-loop-governance.md`; the protective-mechanism entry is catalogued in `docs/architectural-mechanisms.md`.
 
 ## The `.prompt` Templates Are Authoritative
 
-The `.prompt` files under `src/CommandCenter.Core/Prompts/` are the source of truth for agent instructions, and editing one changes its `SourceHash` and every turn's recorded provenance. They **must not be hand-edited as part of documentation work**. This document describes the catalog; it does not author it. Prompt-body changes are application changes that travel through the normal change and certification path, not through doc updates.
+The `.prompt` files under `src/LoopRelay.Core/Prompts/` are the source of truth for agent instructions, and editing one changes its `SourceHash` and every turn's recorded provenance. They **must not be hand-edited as part of documentation work**. This document describes the catalog; it does not author it. Prompt-body changes are application changes that travel through the normal change and certification path, not through doc updates.
 
 ## See Also
 

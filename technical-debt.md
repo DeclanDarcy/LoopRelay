@@ -12,13 +12,13 @@ impact of leaving it, and the path to resolve it. Newest section first.
 ## 2026-07-04 — CLI decision session resume across restarts
 
 Background: the CLI loop now persists its decision session's codex thread id and
-router accounting to `{repo}/.commandcenter/decision-session.json` and resumes it
+router accounting to `{repo}/.LoopRelay/decision-session.json` and resumes it
 via app-server `thread/resume` (spec: docs/superpowers/specs/2026-07-04-cli-decision-session-resume-design.md).
 
 ### TD-13 — Backend decision session does not resume across restarts
 
 **Deferred.** The legacy backend's `RepositoryOrchestrator` decision session (`IAgentSession? decisionSession`)
-does not persist and resume its thread id from `{repo}/.commandcenter/decision-session.json`
+does not persist and resume its thread id from `{repo}/.LoopRelay/decision-session.json`
 (design spec: docs/superpowers/specs/2026-07-04-cli-decision-session-resume-design.md).
 Won't-fix-in-place per the backend-rewrite policy; carry the design into the rewrite instead.
 
@@ -50,7 +50,7 @@ current codebase", so they were merged into a single `WritePlan.prompt`/`WritePl
 
 ### TD-12 — `PlanWriteRequest.NewCodebase` and the UI "New Codebase" checkbox are now dead input
 
-**Deferred.** `PlanWriteRequest.NewCodebase` (`src/CommandCenter.Orchestration/Models/
+**Deferred.** `PlanWriteRequest.NewCodebase` (`src/LoopRelay.Orchestration/Models/
 PlanWriteRequest.cs`) is still a public field on the Write Plan request, and
 `PlanAuthoringScreen.tsx` still has a "New Codebase" checkbox (`newCodebase`/`setNewCodebase`)
 that sends it, but the backend no longer reads the value for anything — `BuildWritePlan` renders
@@ -80,14 +80,14 @@ discarded, stream end was mapped to Completed without consulting the exit code, 
 existence post-check was self-satisfied (the CLI seeded the file), so the delta was archived
 unapplied. Fixed by (1) adding `--skip-git-repo-check` to the shared one-shot argument builder,
 (2) retaining a bounded stderr tail + failing one-shot turns on nonzero exit (surfaced as
-`AgentTurnResult.Diagnostics`) in the shared `CommandCenter.Agents` components, and (4, CLI
+`AgentTurnResult.Diagnostics`) in the shared `LoopRelay.Agents` components, and (4, CLI
 only) a `DecisionSession` guard that fails the transfer — before the delta archive — when the
 evolved sandbox `operational_context.md` comes back byte-identical to the seeded content.
 
 ### TD-11 — Backend `RepositoryOrchestrator` sandboxed evolution lacks the unchanged-context guard
 
 **Deferred.** The backend `RepositoryOrchestrator`'s sandboxed context evolution gains fixes
-(1)–(2) automatically through the shared `CommandCenter.Agents` components (the one-shot arg
+(1)–(2) automatically through the shared `LoopRelay.Agents` components (the one-shot arg
 builder, the exit-code-aware one-shot completion, and the stderr-tail diagnostics), but it has
 no equivalent of the CLI `DecisionSession.EvolveOperationalContextAsync` unchanged-context
 guard: an evolution one-shot that completes without modifying the seeded
@@ -163,7 +163,7 @@ session only runs when a handoff is present, so it always renders
 `SourceHash` wiring) — a small but real change the maintainer may prefer to keep as a defensive
 path rather than delete now.
 
-**Impact:** one prompt template in `CommandCenter.Core/Prompts` that the active loop never
+**Impact:** one prompt template in `LoopRelay.Core/Prompts` that the active loop never
 renders (the CLI has no first-pass decision anymore). Unlike TD-6's `GetNextDecisions`, no
 backend path consumes it either — it was CLI-only from the start — so it is dead everywhere.
 
@@ -214,7 +214,7 @@ sites, sharing the CLI's publisher logic or a submodule-aware `IGitService` over
 
 ## 2026-06-30 — decisions.md is the execution agent's system prompt (CLI decision-first)
 
-Background: `CommandCenter.CLI` was re-sequenced so the **decision session runs before
+Background: `LoopRelay.CLI` was re-sequenced so the **decision session runs before
 execution** and `decisions.md` is now *the execution agent's system prompt*, not a set of
 directions. The decision proposal turn no longer renders `GetNextDecisions`; it renders
 `GenerateSystemPromptForFirstExecutionAgent` on the first pass (no handoff yet) and
@@ -230,7 +230,7 @@ prompt. Scope was CLI-only; the backend/legacy paths were adapted just enough to
 **Deferred (obsolete, not deleted).** After the decision-first change the CLI no longer renders
 `GetNextDecisions.prompt` — it proposes via `GenerateSystemPromptFor{First,Next}ExecutionAgent`
 instead. It is **kept** solely because the legacy backend decision path still consumes it:
-`CommandCenter.Orchestration` → `RepositoryOrchestrator` renders `GetNextDecisions.Render(handoff)`.
+`LoopRelay.Orchestration` → `RepositoryOrchestrator` renders `GetNextDecisions.Render(handoff)`.
 
 (`StartExecution` was also CLI-dead under decision-first, but the 2026-07-01 execution-first
 change **revived it in the CLI** — `ExecutionStep` renders `StartExecution.Render(plan)` on the
@@ -241,7 +241,7 @@ first pass — so it is no longer dead anywhere and has been dropped from this i
 leave the backend flow unchanged (see TD-1). Marking it obsolete here rather than deleting keeps
 the record without forcing the larger backend migration.
 
-**Impact:** one prompt template in `CommandCenter.Core/Prompts` that the *active* (CLI) loop
+**Impact:** one prompt template in `LoopRelay.Core/Prompts` that the *active* (CLI) loop
 never renders. Provenance/tests still reference its `SourceHash`, so it cannot be removed
 piecemeal.
 
@@ -274,24 +274,24 @@ decisions)` signature, or correct the docs sooner as a standalone doc fix.
 
 ## 2026-06-30 — Two-turn execution session
 
-Background: `CommandCenter.CLI`'s `ExecutionStep` was changed so an execution
+Background: `LoopRelay.CLI`'s `ExecutionStep` was changed so an execution
 slice runs as **two user-input turns over one held-open operational app-server
 session** — turn 1 (`StartExecution`/`ContinueExecution`) does the work and is no
 longer asked for a handoff; turn 2 (`GenerateHandoff`) writes
 `.agents/handoffs/handoff.md` from the in-session context of turn 1. The handoff
 instruction was removed from `StartExecution.prompt`/`ContinueExecution.prompt`
 and now lives standalone in `GenerateHandoff.prompt`. These three prompts are
-shared from `CommandCenter.Core`, so the change ripples beyond the CLI.
+shared from `LoopRelay.Core`, so the change ripples beyond the CLI.
 
 ### TD-1 — Legacy backend execution paths still assume single-turn handoff
 
 **Deferred.** Two backend execution paths render the same shared prompts but were
 intentionally left on the old single-turn model:
 
-- `CommandCenter.Orchestration` → `RepositoryOrchestrator` renders
+- `LoopRelay.Orchestration` → `RepositoryOrchestrator` renders
   `StartExecution.Render(plan)` / `ContinueExecution.Render(plan, handoff, decisions)`
   as a **single one-shot codex turn** and never calls `GenerateHandoff`.
-- `CommandCenter.Execution` → `ExecutionPromptBuilder` → `ExecutionSessionService`
+- `LoopRelay.Execution` → `ExecutionPromptBuilder` → `ExecutionSessionService`
   builds the same prompts for the legacy HTTP execution-session path.
 
 **Why deferred:** the CLI serial loop is the active orchestration path; these are

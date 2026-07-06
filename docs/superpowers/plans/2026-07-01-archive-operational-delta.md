@@ -6,7 +6,7 @@
 
 **Architecture:** Two independent Transfer implementations fold a delta into the operational context and today leave the live delta lingering. Add shared numbered-archive path helpers, then a rotate-then-delete step at the point each site has persisted the evolved context — strict (a failed archive fails the transfer). Backend uses the existing `IArtifactStore` + `HighestSequence` rotation idiom; CLI reuses the existing `LoopArtifacts.RotateAsync` move-semantics helper.
 
-**Tech Stack:** C# / .NET, xUnit. Backend: `CommandCenter.Orchestration`, `CommandCenter.Backend.Tests`. CLI: `CommandCenter.CLI`, `CommandCenter.CLI.Tests`.
+**Tech Stack:** C# / .NET, xUnit. Backend: `LoopRelay.Orchestration`, `LoopRelay.Backend.Tests`. CLI: `LoopRelay.CLI`, `LoopRelay.CLI.Tests`.
 
 ## Global Constraints
 
@@ -24,8 +24,8 @@
 ### Task 1: Shared archive path helpers
 
 **Files:**
-- Modify: `src/CommandCenter.Orchestration/OrchestrationArtifactPaths.cs`
-- Test: `tests/CommandCenter.Backend.Tests/OrchestrationArtifactProtocolTests.cs` (extend the canonical-paths test at ~line 173)
+- Modify: `src/LoopRelay.Orchestration/OrchestrationArtifactPaths.cs`
+- Test: `tests/LoopRelay.Backend.Tests/OrchestrationArtifactProtocolTests.cs` (extend the canonical-paths test at ~line 173)
 
 **Interfaces:**
 - Produces: `OrchestrationArtifactPaths.DeltasDirectory` (`".agents/deltas"`), `OrchestrationArtifactPaths.HistoricalDeltaSearchPattern` (`"operational_delta.*.md"`), `OrchestrationArtifactPaths.HistoricalDelta(int sequence) => ".agents/deltas/operational_delta.NNNN.md"`.
@@ -40,7 +40,7 @@
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/CommandCenter.Backend.Tests -c Release --filter "FullyQualifiedName~OrchestrationArtifactProtocolTests.All_seven_canonical_artifacts"`
+Run: `dotnet test tests/LoopRelay.Backend.Tests -c Release --filter "FullyQualifiedName~OrchestrationArtifactProtocolTests.All_seven_canonical_artifacts"`
 Expected: FAIL — compile error, `DeltasDirectory` / `HistoricalDelta` are not defined.
 
 - [ ] **Step 3: Write minimal implementation** — in `OrchestrationArtifactPaths.cs`, immediately after the `OperationalDelta` constant (line 26), add:
@@ -61,13 +61,13 @@ Expected: FAIL — compile error, `DeltasDirectory` / `HistoricalDelta` are not 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `dotnet test tests/CommandCenter.Backend.Tests -c Release --filter "FullyQualifiedName~OrchestrationArtifactProtocolTests.All_seven_canonical_artifacts"`
+Run: `dotnet test tests/LoopRelay.Backend.Tests -c Release --filter "FullyQualifiedName~OrchestrationArtifactProtocolTests.All_seven_canonical_artifacts"`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CommandCenter.Orchestration/OrchestrationArtifactPaths.cs tests/CommandCenter.Backend.Tests/OrchestrationArtifactProtocolTests.cs
+git add src/LoopRelay.Orchestration/OrchestrationArtifactPaths.cs tests/LoopRelay.Backend.Tests/OrchestrationArtifactProtocolTests.cs
 git commit -m "feat: add .agents/deltas archive path helpers"
 ```
 
@@ -76,8 +76,8 @@ git commit -m "feat: add .agents/deltas archive path helpers"
 ### Task 2: Backend orchestrator archives the delta
 
 **Files:**
-- Modify: `src/CommandCenter.Orchestration/Services/RepositoryOrchestrator.cs` (add helpers near `NextHandoffSequenceAsync` ~line 1359; insert the archive step in `PrepareTransferAsync` after `string newContext = evolvedContext;` ~line 1664)
-- Test: `tests/CommandCenter.Backend.Tests/Orchestration/RepositoryOrchestratorTransferTests.cs`
+- Modify: `src/LoopRelay.Orchestration/Services/RepositoryOrchestrator.cs` (add helpers near `NextHandoffSequenceAsync` ~line 1359; insert the archive step in `PrepareTransferAsync` after `string newContext = evolvedContext;` ~line 1664)
+- Test: `tests/LoopRelay.Backend.Tests/Orchestration/RepositoryOrchestratorTransferTests.cs`
 
 **Interfaces:**
 - Consumes: `OrchestrationArtifactPaths.HistoricalDelta`, `.DeltasDirectory`, `.HistoricalDeltaSearchPattern` (Task 1); existing `HighestSequence(IReadOnlyList<string>)`, `artifactStore`, `ArtifactPath.ResolveRepositoryPath`, `DecisionStream.Publish`, `Serialize`.
@@ -169,7 +169,7 @@ git commit -m "feat: add .agents/deltas archive path helpers"
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/CommandCenter.Backend.Tests -c Release --filter "FullyQualifiedName~RepositoryOrchestratorTransferTests.Transfer_archives_the_operational_delta_after_the_context_update|FullyQualifiedName~RepositoryOrchestratorTransferTests.Successive_transfers_archive|FullyQualifiedName~RepositoryOrchestratorTransferTests.Transfer_failed_delta_archive"`
+Run: `dotnet test tests/LoopRelay.Backend.Tests -c Release --filter "FullyQualifiedName~RepositoryOrchestratorTransferTests.Transfer_archives_the_operational_delta_after_the_context_update|FullyQualifiedName~RepositoryOrchestratorTransferTests.Successive_transfers_archive|FullyQualifiedName~RepositoryOrchestratorTransferTests.Transfer_failed_delta_archive"`
 Expected: FAIL — archive never happens, so `HistoricalDelta(1)` reads null and the live delta still exists; no `ArchiveOperationalDelta` failed frame.
 
 - [ ] **Step 3: Write the implementation**
@@ -250,23 +250,23 @@ In `RepositoryOrchestratorTransferTests.cs`:
             new[] { "ProduceOperationalDelta", "UpdateOperationalContext", "ArchiveOperationalDelta", "StartDecisionSessionFromTransfer", "GetNextDecisions" },
 ```
 
-In `tests/CommandCenter.Backend.Tests/OrchestrationArtifactProtocolTests.cs`:
+In `tests/LoopRelay.Backend.Tests/OrchestrationArtifactProtocolTests.cs`:
 - Line ~168 (`Transfer_writes_operational_delta_and_rewrites_operational_context`): change the `ReadAsync(...OperationalDelta)` assertion to `HistoricalDelta(1)` (expected `"OPERATIONAL DELTA"`). Leave line ~167 (`Assert.Contains(...OperationalDelta, store.WriteQueries)`) as-is — the live delta is still written first.
 
-In `tests/CommandCenter.Backend.Tests/Orchestration/RepositoryOrchestratorFeatureFlagsTests.cs`:
+In `tests/LoopRelay.Backend.Tests/Orchestration/RepositoryOrchestratorFeatureFlagsTests.cs`:
 - Line ~209 (`Transfer_only_fallback_forces_transfer...`): change the `ReadAsync(...OperationalDelta)` assertion to `HistoricalDelta(1)` (expected `"DELTA"`).
 
 > Leave UNCHANGED (verified correct): `RepositoryOrchestratorTransferTests` lines ~455 (rewrite fails → archive never runs → live delta retained) and all `Assert.False(...ExistsAsync(...OperationalDelta))` cases (368/396/422/609 — never transferred); `OrchestrationRecoveryCertificationTests` line ~331 (context update fails → archive never runs); all provenance/identity/sandbox-delta assertions; `OrchestrationStreamContractTests` line ~98 (the `transferred` event identity payload, deliberately unchanged).
 
 - [ ] **Step 5: Run the full backend orchestration suite to verify green**
 
-Run: `dotnet test tests/CommandCenter.Backend.Tests -c Release --filter "FullyQualifiedName~Orchestration"`
+Run: `dotnet test tests/LoopRelay.Backend.Tests -c Release --filter "FullyQualifiedName~Orchestration"`
 Expected: PASS (new tests green; updated tests green; nothing else regressed).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/CommandCenter.Orchestration/Services/RepositoryOrchestrator.cs tests/CommandCenter.Backend.Tests
+git add src/LoopRelay.Orchestration/Services/RepositoryOrchestrator.cs tests/LoopRelay.Backend.Tests
 git commit -m "feat: archive operational delta after backend transfer context update"
 ```
 
@@ -275,8 +275,8 @@ git commit -m "feat: archive operational delta after backend transfer context up
 ### Task 3: CLI `LoopArtifacts.RotateOperationalDeltaAsync`
 
 **Files:**
-- Modify: `src/CommandCenter.CLI/LoopArtifacts.cs` (add after `RotateLiveDecisionsAsync`, ~line 45)
-- Test: `tests/CommandCenter.CLI.Tests/LoopArtifactsTests.cs`
+- Modify: `src/LoopRelay.CLI/LoopArtifacts.cs` (add after `RotateLiveDecisionsAsync`, ~line 45)
+- Test: `tests/LoopRelay.CLI.Tests/LoopArtifactsTests.cs`
 
 **Interfaces:**
 - Consumes: Task 1 path helpers; existing private `LoopArtifacts.RotateAsync(liveRelative, directoryRelative, searchPattern, baseName, historical)`.
@@ -321,7 +321,7 @@ git commit -m "feat: archive operational delta after backend transfer context up
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests -c Release --filter "FullyQualifiedName~LoopArtifactsTests.RotateOperationalDelta"`
+Run: `dotnet test tests/LoopRelay.CLI.Tests -c Release --filter "FullyQualifiedName~LoopArtifactsTests.RotateOperationalDelta"`
 Expected: FAIL — compile error, `RotateOperationalDeltaAsync` is not defined.
 
 - [ ] **Step 3: Write minimal implementation** — in `LoopArtifacts.cs`, after `RotateLiveDecisionsAsync` (~line 45), add:
@@ -337,13 +337,13 @@ Expected: FAIL — compile error, `RotateOperationalDeltaAsync` is not defined.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests -c Release --filter "FullyQualifiedName~LoopArtifactsTests.RotateOperationalDelta"`
+Run: `dotnet test tests/LoopRelay.CLI.Tests -c Release --filter "FullyQualifiedName~LoopArtifactsTests.RotateOperationalDelta"`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/LoopArtifacts.cs tests/CommandCenter.CLI.Tests/LoopArtifactsTests.cs
+git add src/LoopRelay.CLI/LoopArtifacts.cs tests/LoopRelay.CLI.Tests/LoopArtifactsTests.cs
 git commit -m "feat: add LoopArtifacts.RotateOperationalDeltaAsync move-rotation"
 ```
 
@@ -352,8 +352,8 @@ git commit -m "feat: add LoopArtifacts.RotateOperationalDeltaAsync move-rotation
 ### Task 4: CLI `DecisionSession.TransferAsync` archives the delta
 
 **Files:**
-- Modify: `src/CommandCenter.CLI/DecisionSession.cs` (insert in `TransferAsync` after the `EvolveOperationalContextAsync` call, ~line 148, before opening the fresh session ~line 151)
-- Test: `tests/CommandCenter.CLI.Tests/DecisionSessionTests.cs`
+- Modify: `src/LoopRelay.CLI/DecisionSession.cs` (insert in `TransferAsync` after the `EvolveOperationalContextAsync` call, ~line 148, before opening the fresh session ~line 151)
+- Test: `tests/LoopRelay.CLI.Tests/DecisionSessionTests.cs`
 
 **Interfaces:**
 - Consumes: Task 3 `artifacts.RotateOperationalDeltaAsync()`; existing `console.Phase`, `LoopStepException`.
@@ -459,7 +459,7 @@ internal sealed class ThrowOnDeltaArchiveStore(IArtifactStore inner) : IArtifact
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests -c Release --filter "FullyQualifiedName~DecisionSessionTests.Run_Transfer_ArchivesTheDelta|FullyQualifiedName~DecisionSessionTests.Run_Transfer_FailedDeltaArchive"`
+Run: `dotnet test tests/LoopRelay.CLI.Tests -c Release --filter "FullyQualifiedName~DecisionSessionTests.Run_Transfer_ArchivesTheDelta|FullyQualifiedName~DecisionSessionTests.Run_Transfer_FailedDeltaArchive"`
 Expected: FAIL — archive not wired yet: `HistoricalDelta(1)` is null / live delta still present; the failure test does not throw.
 
 - [ ] **Step 3: Write the implementation** — in `DecisionSession.cs` `TransferAsync`, immediately after the `EvolveOperationalContextAsync` call (`(AgentTurnResult update, string newContext) = await EvolveOperationalContextAsync(...)`, ~line 148) and before `session = await runtime.OpenSessionAsync(...)` (~line 151), insert:
@@ -487,13 +487,13 @@ In `DecisionSessionTests.cs`, these read the live delta after a *successful* tra
 
 - [ ] **Step 5: Run the full CLI test suite to verify green**
 
-Run: `dotnet test tests/CommandCenter.CLI.Tests -c Release`
+Run: `dotnet test tests/LoopRelay.CLI.Tests -c Release`
 Expected: PASS (new tests green; the three updated tests green; nothing else regressed). Note: any Rust failures are pre-existing and unrelated (project memory).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/CommandCenter.CLI/DecisionSession.cs tests/CommandCenter.CLI.Tests/DecisionSessionTests.cs
+git add src/LoopRelay.CLI/DecisionSession.cs tests/LoopRelay.CLI.Tests/DecisionSessionTests.cs
 git commit -m "feat: archive operational delta after CLI transfer context update"
 ```
 
@@ -502,7 +502,7 @@ git commit -m "feat: archive operational delta after CLI transfer context update
 ### Task 5: Cross-consumer verification + docs
 
 **Files:**
-- (Verify only) `src/CommandCenter.UI/src/api/operationalContext.ts`, `src/CommandCenter.Middle/Continuity/OperationalContextGenerationService.cs`, `src/CommandCenter.Continuity/Services/FileSystemOperationalContextProposalStore.cs`
+- (Verify only) `src/LoopRelay.UI/src/api/operationalContext.ts`, `src/LoopRelay.Middle/Continuity/OperationalContextGenerationService.cs`, `src/LoopRelay.Continuity/Services/FileSystemOperationalContextProposalStore.cs`
 - Modify (docs): `docs/orchestration-loop-governance.md`, `docs/architecture.md` — add a one-line note that the live `operational_delta.md` is archived to `.agents/deltas/` after a successful context update (only if these docs already describe the delta lifecycle; otherwise skip).
 
 - [ ] **Step 1: Confirm no consumer depends on the live delta persisting** — search for readers of the live delta path and confirm none treat its post-transfer absence as an error:
@@ -514,7 +514,7 @@ Expected: the only writers/readers of the *live* `.agents/operational_delta.md` 
 
 - [ ] **Step 3: Full suite sanity + commit**
 
-Run: `dotnet test tests/CommandCenter.Backend.Tests -c Release` then `dotnet test tests/CommandCenter.CLI.Tests -c Release`
+Run: `dotnet test tests/LoopRelay.Backend.Tests -c Release` then `dotnet test tests/LoopRelay.CLI.Tests -c Release`
 Expected: PASS (backend and CLI green; pre-existing Rust failures unrelated).
 
 ```bash

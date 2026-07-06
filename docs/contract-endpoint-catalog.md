@@ -2,7 +2,7 @@
 
 This catalog expands the Milestone 0.2 contract inventory from family-level entries into endpoint-level route surfaces. It is an inventory and fixture-selection aid, not a generated schema and not a substitute for serialized golden fixtures.
 
-Current scan baseline: 177 backend endpoint mappings under `src/CommandCenter.Backend/Endpoints`, Tauri command wrappers in `src/CommandCenter.Shell/src/main.rs`, TypeScript API wrappers in `src/CommandCenter.UI/src/api`, manual TypeScript types in `src/CommandCenter.UI/src/types`, and development mock payloads in `src/CommandCenter.UI/src/devTauriMock.ts`.
+Current scan baseline: 177 backend endpoint mappings under `src/LoopRelay.Backend/Endpoints`, Tauri command wrappers in `src/LoopRelay.Shell/src/main.rs`, TypeScript API wrappers in `src/LoopRelay.UI/src/api`, manual TypeScript types in `src/LoopRelay.UI/src/types`, and development mock payloads in `src/LoopRelay.UI/src/devTauriMock.ts`.
 
 ## Inventory Fields
 
@@ -24,13 +24,13 @@ Each endpoint-level inventory entry must eventually include:
 
 | Consumer class | Current examples | Oracle obligation |
 | --- | --- | --- |
-| Backend endpoint tests | `tests/CommandCenter.Backend.Tests` | Pin status, shape, null/empty behavior, and error envelope behavior for fixture candidates. |
-| Rust shell commands | `src/CommandCenter.Shell/src/main.rs` | Preserve serialized backend payloads and errors; any typed Rust mirror is a compatibility consumer until generated, verified, or retired. |
-| TypeScript API wrappers | `src/CommandCenter.UI/src/api/*.ts` | Use contract identity and command argument shape consistently; eventually consume generated or verified types. |
-| Manual TypeScript types | `src/CommandCenter.UI/src/types/*.ts` | Compatibility consumers only; not contract authority. |
-| Dev Tauri mock | `src/CommandCenter.UI/src/devTauriMock.ts` | Must be generated from, or checked against, Oracle-observed contracts before it can be trusted as development data. |
-| React hooks and components | `src/CommandCenter.UI/src/hooks`, `src/CommandCenter.UI/src/App.tsx`, feature surfaces | Consume authoritative facts; must not infer backend-owned semantics from weak strings. |
-| Characterization and E2E tests | `src/CommandCenter.UI/src/test`, Playwright tests | Useful downstream compatibility evidence, but not shape authority. |
+| Backend endpoint tests | `tests/LoopRelay.Backend.Tests` | Pin status, shape, null/empty behavior, and error envelope behavior for fixture candidates. |
+| Rust shell commands | `src/LoopRelay.Shell/src/main.rs` | Preserve serialized backend payloads and errors; any typed Rust mirror is a compatibility consumer until generated, verified, or retired. |
+| TypeScript API wrappers | `src/LoopRelay.UI/src/api/*.ts` | Use contract identity and command argument shape consistently; eventually consume generated or verified types. |
+| Manual TypeScript types | `src/LoopRelay.UI/src/types/*.ts` | Compatibility consumers only; not contract authority. |
+| Dev Tauri mock | `src/LoopRelay.UI/src/devTauriMock.ts` | Must be generated from, or checked against, Oracle-observed contracts before it can be trusted as development data. |
+| React hooks and components | `src/LoopRelay.UI/src/hooks`, `src/LoopRelay.UI/src/App.tsx`, feature surfaces | Consume authoritative facts; must not infer backend-owned semantics from weak strings. |
+| Characterization and E2E tests | `src/LoopRelay.UI/src/test`, Playwright tests | Useful downstream compatibility evidence, but not shape authority. |
 | Durable docs | `docs/` | May describe accepted contracts and lifecycle, but must not define shape independently of backend serialization and fixtures. |
 
 ## Narrow Serialization Rules
@@ -54,7 +54,7 @@ These rules are now required before selecting any first golden fixture. Unknowns
 
 ## Backend JSON Serialization Observation
 
-The backend HTTP JSON configuration is currently `JsonSerializerDefaults.Web` plus `JsonStringEnumConverter` in `src/CommandCenter.Backend/Program.cs`.
+The backend HTTP JSON configuration is currently `JsonSerializerDefaults.Web` plus `JsonStringEnumConverter` in `src/LoopRelay.Backend/Program.cs`.
 
 Observed implications for Oracle fixtures:
 
@@ -259,13 +259,13 @@ Known compatibility finding:
 
 Current fixture coverage:
 
-- `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json`.
+- `tests/LoopRelay.Backend.Tests/ContractFixtures/repository-workspace.golden.json`.
 - `ContractOracleFixtureTests.RepositoryWorkspaceGoldenFixtureMatchesBackendSerialization`.
 - `ContractConsumerVerificationTests.RepositoryWorkspaceRustMirrorReportsKnownDecisionSessionSummaryOmission`.
 - `ContractConsumerVerificationTests.RepositoryWorkspaceRustMirrorRecursivelyVerifiesMirroredNestedShape`.
 - `ContractConsumerVerificationTests.RepositoryWorkspaceTypeScriptTypeMatchesGoldenFixture`.
 - `ContractConsumerVerificationTests.RepositoryWorkspaceDevTauriMockPayloadMatchesGoldenFixture`.
-- `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.artifact-freshness.json`.
+- `tests/LoopRelay.Backend.Tests/ContractFixtures/repository-workspace.artifact-freshness.json`.
 - `ContractGeneratedArtifactFreshnessTests.RepositoryWorkspaceTypeScriptContractArtifactMatchesFreshnessManifest`.
 - `ContractRequestBoundaryTests.RepositoryWorkspaceBackendEndpointHasRepositoryIdRouteArgumentAndNoBody`.
 - `ContractRequestBoundaryTests.RepositoryWorkspaceRustCommandHasRepositoryIdArgumentAndForwardsGetWithoutBody`.
@@ -356,7 +356,7 @@ Known consumers:
 
 - Rust Tauri command `get_workflow_projection`, which currently returns `serde_json::Value` and does not define a typed Rust `WorkflowInstance` response mirror.
 - TypeScript API wrapper `getWorkflowProjection(repositoryId)`.
-- Manual TypeScript type `WorkflowInstance` and nested workflow types in `src/CommandCenter.UI/src/types/workflow.ts`.
+- Manual TypeScript type `WorkflowInstance` and nested workflow types in `src/LoopRelay.UI/src/types/workflow.ts`.
 - React `useWorkflowProjection`, workflow operations panels, workspace workflow rail, execution workflow rail, governance workspace, selected repository summary, and shell header.
 - Backend workflow projection tests and frontend characterization tests.
 
@@ -403,7 +403,7 @@ Top-level field catalog:
 
 The Plan Authoring -> Execution -> Decision orchestration loop (milestones m0-m10) adds ten endpoints plus a repository-teardown side effect on the existing repository DELETE. The implementation overview is in `docs/architecture.md` (Orchestration Loop Architecture); the contract-identity, stream-event, and structured-error inventory is in `docs/contracts.md` (Orchestration Loop Contract Inventory); governance evidence is in `docs/orchestration-loop-governance.md`.
 
-These ten endpoints are not part of the 177-mapping baseline count above; they are the `next`-branch loop surface owned by `RepositoryOrchestrator` through `RepositoryOrchestratorRegistry`, and each is mapped under `/api/repositories/{repositoryId:guid}/`. The `EndpointFamily` column uses the classification asserted by `tests/CommandCenter.Backend.Tests/BackendEndpointDispositionTests.cs`: the new `Plan`, `DecisionRuntime`, and `Conversation` families are distinct from the legacy `Decisions` (`/decisions/`) and `DecisionSessions` (`/decision-sessions/`) families. The two SSE streams routed under `/execution` and the legacy `/execution-sessions` / `/git` routes all classify as the `Execution` family; the repository DELETE classifies as the `Repositories` family.
+These ten endpoints are not part of the 177-mapping baseline count above; they are the `next`-branch loop surface owned by `RepositoryOrchestrator` through `RepositoryOrchestratorRegistry`, and each is mapped under `/api/repositories/{repositoryId:guid}/`. The `EndpointFamily` column uses the classification asserted by `tests/LoopRelay.Backend.Tests/BackendEndpointDispositionTests.cs`: the new `Plan`, `DecisionRuntime`, and `Conversation` families are distinct from the legacy `Decisions` (`/decisions/`) and `DecisionSessions` (`/decision-sessions/`) families. The two SSE streams routed under `/execution` and the legacy `/execution-sessions` / `/git` routes all classify as the `Execution` family; the repository DELETE classifies as the `Repositories` family.
 
 | Method | Route (under `/api/repositories/{repositoryId:guid}`) | EndpointFamily | Success body / status | Error codes | Consumers |
 | --- | --- | --- | --- | --- | --- |

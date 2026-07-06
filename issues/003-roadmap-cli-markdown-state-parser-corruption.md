@@ -33,10 +33,10 @@ Roadmap CLI persists machine-readable state as Markdown tables, escapes pipe cha
 
 Affected code:
 
-- `src/CommandCenter.Roadmap.CLI/RoadmapStateStore.cs`
-- `src/CommandCenter.Roadmap.CLI/MarkdownTableParser.cs`
-- `src/CommandCenter.Roadmap.CLI/ProjectionManifestStore.cs`
-- `src/CommandCenter.Roadmap.CLI/ArtifactLifecycleStore.cs`
+- `src/LoopRelay.Roadmap.CLI/RoadmapStateStore.cs`
+- `src/LoopRelay.Roadmap.CLI/MarkdownTableParser.cs`
+- `src/LoopRelay.Roadmap.CLI/ProjectionManifestStore.cs`
+- `src/LoopRelay.Roadmap.CLI/ArtifactLifecycleStore.cs`
 
 `RoadmapStateStore.Escape` writes `\|`, but `MarkdownTableParser.SplitRow` uses
 `Split('|')` first. Any escaped pipe inside a table cell is still treated as a

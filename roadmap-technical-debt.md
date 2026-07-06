@@ -21,15 +21,15 @@ Newest section first.
 
 The prompt template has an explicit `<COMPLETED_EPICS>` input slot:
 
-- `src/CommandCenter.Core/Prompts/Planning/CreateRoadmapCompletionContext.prompt`
+- `src/LoopRelay.Core/Prompts/Planning/CreateRoadmapCompletionContext.prompt`
 
 However, the roadmap CLI bootstrap path does not populate that slot. In
 `RoadmapStateMachine.BootstrapRoadmapCompletionContextAsync`, the runtime prompt
 context contains only projection content and the prompt is invoked with an empty
 secondary input:
 
-- `src/CommandCenter.Roadmap.CLI/RoadmapStateMachine.cs`
-- `src/CommandCenter.Roadmap.CLI/RoadmapPromptCatalog.cs`
+- `src/LoopRelay.Roadmap.CLI/RoadmapStateMachine.cs`
+- `src/LoopRelay.Roadmap.CLI/RoadmapPromptCatalog.cs`
 
 The prompt contract and input resolver also model `CreateRoadmapCompletionContext`
 as having no completed-epic inputs:
