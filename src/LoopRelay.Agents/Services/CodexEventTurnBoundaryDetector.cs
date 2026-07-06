@@ -6,8 +6,8 @@ namespace LoopRelay.Agents.Services;
 
 /// <summary>
 /// Parses Codex <c>exec --json</c> JSONL events (codex-cli 0.139) into per-line turn inspections,
-/// replacing the synthetic <see cref="SentinelTurnBoundaryDetector"/> now that <c>codex proto</c>
-/// no longer exists. A <c>turn.completed</c> event ends the turn and carries Codex-reported token
+/// replacing the earlier synthetic sentinel transport now that <c>codex proto</c> no longer exists.
+/// A <c>turn.completed</c> event ends the turn and carries Codex-reported token
 /// usage (retiring the character-count estimate); agent-message events surface their text as the
 /// turn's output; every other event (reasoning, command execution, thread lifecycle) is ignored so
 /// it never pollutes the turn output.

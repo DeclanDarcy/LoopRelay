@@ -109,7 +109,7 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
 /// invocation order, and returns whatever <see cref="Handler"/> produces (or a zero-exit success when Handler
 /// is null). <see cref="OnRunAsync"/> is an async hook invoked (before Handler) for every call, so a test can
 /// match a command (e.g. the new-epic invocation — the only non-git call) and simulate its filesystem side
-/// effects against the in-memory artifact store. StartAsync/StartInteractiveAsync throw — the publisher and
+/// effects against the in-memory artifact store. StartInteractiveAsync throws — the publisher and
 /// rollover step only ever run RunAsync.
 /// </summary>
 internal sealed class FakeProcessRunner : IProcessRunner
@@ -133,16 +133,6 @@ internal sealed class FakeProcessRunner : IProcessRunner
 
         return Handler?.Invoke(workingDirectory, arguments) ?? Ok();
     }
-
-    public Task<ProcessStartResult> StartAsync(
-        string fileName,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        string? standardInput = null,
-        Func<string, Task>? onStandardOutput = null,
-        Func<string, Task>? onStandardError = null,
-        Func<int?, Task>? onExit = null) =>
-        throw new NotSupportedException();
 
     public Task<IAgentProcess> StartInteractiveAsync(
         string fileName,

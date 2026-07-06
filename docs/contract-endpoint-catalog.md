@@ -180,7 +180,7 @@ Top-level field catalog:
 | JSON field | Backend field/type | Semantic owner | Serialization owner | Consumers | Compatibility field | Required | Derived | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `repository` | `Repository` | Core repository service/configuration | Backend JSON | shell, TS, UI, mock, tests | No | Yes | No | Repository identity object. |
-| `availability` | `RepositoryAvailability` | Middle repository projection availability check | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from repository path, directory access, and `.git` presence. |
+| `availability` | Retired backend-era availability enum | Retired repository projection availability check | Backend JSON string enum | retired shell, TS, UI, mock, tests | No | Historical | Historical | Backend-era dashboard/workspace field; no current CLI owner. |
 | `readiness` | `ExecutionReadiness` | Planning service | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from plan and milestone artifact state. |
 | `executionState` | `RepositoryExecutionState` | Execution session service | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Repository-level execution lifecycle state. |
 | `activeExecutionSession` | `ExecutionSessionSummary` or `null` | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Explicit `null` when no active execution session exists. |
@@ -293,7 +293,7 @@ Top-level field catalog:
 | JSON field | Backend field/type | Semantic owner | Serialization owner | Consumers | Compatibility field | Required | Derived | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `repository` | `Repository` | Core repository service/configuration | Backend JSON | shell, TS, UI, mock, tests | No | Yes | No | Repository identity object. |
-| `availability` | `RepositoryAvailability` | Middle repository projection availability check | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from repository path, directory access, and `.git` presence. |
+| `availability` | Retired backend-era availability enum | Retired repository projection availability check | Backend JSON string enum | retired shell, TS, UI, mock, tests | No | Historical | Historical | Backend-era dashboard/workspace field; no current CLI owner. |
 | `readiness` | `ExecutionReadiness` | Planning service | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from plan and milestone artifact state. |
 | `executionState` | `RepositoryExecutionState` | Execution session service | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Repository-level execution lifecycle state. |
 | `executionSummary` | `ExecutionSessionSummary` or `null` | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Latest/current summary; explicit `null` allowed. |

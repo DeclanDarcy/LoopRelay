@@ -25,7 +25,7 @@
 **Create (production, `src/LoopRelay.CLI/`):**
 - `SessionTelemetryRecord.cs` — the 14-field record + `SessionTelemetryJson.Options`.
 - `Clock.cs` — `IClock` + `SystemClock`.
-- `SessionTelemetrySink.cs` — `ISessionTelemetrySink`, `RotatingJsonlTelemetrySink`, `NullSessionTelemetrySink`.
+- `SessionTelemetrySink.cs` — `ISessionTelemetrySink`, `RotatingJsonlTelemetrySink`.
 - `CodexRolloutLocator.cs` — `ICodexRolloutLocator`, `FileSystemCodexRolloutLocator`.
 - `SessionTelemetryRecorder.cs` — `ISessionTelemetryRecorder`, `SessionTelemetryRecorder`, `NullSessionTelemetryRecorder`.
 - `SessionTelemetryComposition.cs` — factory building the recorder for `Program.cs`.
@@ -251,7 +251,7 @@ git commit -m "feat(cli): IClock/SystemClock + FakeClock test double"
 
 **Interfaces:**
 - Consumes: `SessionTelemetryRecord`, `SessionTelemetryJson.Options` (Task 1), `IClock` (Task 2).
-- Produces: `ISessionTelemetrySink { void Append(SessionTelemetryRecord record); }`, `RotatingJsonlTelemetrySink(string directory, IClock clock, long maxBytes = 5_242_880)`, `NullSessionTelemetrySink`.
+- Produces: `ISessionTelemetrySink { void Append(SessionTelemetryRecord record); }`, `RotatingJsonlTelemetrySink(string directory, IClock clock, long maxBytes = 5_242_880)`. Disabled telemetry is handled by `NullSessionTelemetryRecorder`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -322,12 +322,6 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
         Assert.True(File.Exists(Path.Combine(dir, "sessions.2026-07-02.0000.jsonl")));
     }
 
-    [Fact]
-    public void NullSink_Append_DoesNothing()
-    {
-        new NullSessionTelemetrySink().Append(Rec("x"));
-        Assert.False(Directory.Exists(dir));
-    }
 }
 ```
 
@@ -398,17 +392,13 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
     }
 }
 
-/// <summary>No-op sink used when session telemetry is disabled.</summary>
-internal sealed class NullSessionTelemetrySink : ISessionTelemetrySink
-{
-    public void Append(SessionTelemetryRecord record) { }
-}
+// Disabled telemetry is handled at the recorder layer by NullSessionTelemetryRecorder.
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test tests/LoopRelay.CLI.Tests/LoopRelay.CLI.Tests.csproj -c Debug --filter RotatingJsonlTelemetrySinkTests`
-Expected: PASS (4 tests).
+Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 

@@ -10,13 +10,13 @@ This is a structural invariant, not a convention:
 
 - `LoopRelay.Core` is the base layer and the prompt authority. It takes no dependency on the `LoopRelay.Agents` runtime that sits above it (enforced by `ArchitectureLayeringTests`).
 - The catalog is the *only* place a canonical prompt body appears in source. `ExecutionPromptBuilder` — the live execution path's prompt builder — previously hand-composed literals; that was deleted in favor of `ContinueExecution.Render(...)` / `StartExecution.Render(...)`, and the regression is locked out by `PromptAuthorityTests` (see *No-Literal-Prompt Enforcement*).
-- Every rendered turn records a `PromptProvenance` (see *Prompt Provenance*) so a turn is auditable back to the exact template that produced it.
+- Current CLI provenance is recorded at the artifact boundary rather than through a Core prompt-provenance DTO: roadmap projection/derived-artifact provenance, roadmap transition input snapshots and journals, and main CLI session telemetry carry the live audit trail.
 
 ## The 10 Canonical Prompts
 
-There are 10 canonical `.prompt` templates. A template with no `{placeholder}` emits a `const string Text` (plus a parameterless `Render()`); a template with placeholders emits `Render(string? …)` with one `string?` parameter per distinct placeholder, in first-appearance order. The "Generated signature" column below is derived from each template's placeholders and verified against the `.prompt` file; the "Session role" column is the `PromptSessionRole` recorded by the call site's provenance. Loop steps reference the lifecycle in `docs/architecture.md`.
+There are 10 canonical `.prompt` templates in the backend-era loop catalog described here. A template with no `{placeholder}` emits a `const string Text` (plus a parameterless `Render()`); a template with placeholders emits `Render(string? …)` with one `string?` parameter per distinct placeholder, in first-appearance order. The "Generated signature" column below is derived from each template's placeholders and verified against the `.prompt` file. Loop steps reference the lifecycle in `docs/architecture.md`.
 
-| Prompt | Generated signature | Session role | Where used in the loop |
+| Prompt | Generated signature | Runtime role | Where used in the loop |
 | --- | --- | --- | --- |
 | `WritePlan` | `.Text` | `Planning` | Write plan (`BeginWritePlanAsync`, held-open Operational planning session). |
 | `RevisePlan` | `.Render(feedback)` | `Planning` | Revise plan (`BeginRevisePlanAsync`) — re-runs against the persisted `.agents/plan.md`. |
@@ -46,28 +46,17 @@ For each `*.prompt` additional file the generator:
 - When the template has **no** parameters, emits `public const string Text` (the fully rendered text) and a parameterless `Render()` returning it.
 - When the template **has** parameters, emits `Render(string? a, string? b, …)`. A null argument renders as the empty string; rendering is a single `string.Concat` of the literal and hole parts (or the lone hole, for a single-placeholder template). There is no runtime parse and no file I/O.
 
-`SourceHash` is the build-time content pin: the orchestrator and `ExecutionPromptBuilder` copy it into each turn's `PromptProvenance`, so the exact template text behind any turn is recoverable.
+`SourceHash` is the build-time content pin. Current CLIs use generated prompt identities and hashes when writing derived artifact provenance, transition input evidence, and session telemetry; Core no longer exposes a separate prompt-provenance contract.
 
-## Prompt Provenance
+## Current CLI Provenance
 
-`PromptProvenance` (`src/LoopRelay.Core/Prompts/PromptProvenance.cs`) is the per-turn record captured at every render site. It is a `sealed record` with seven fields:
+The retired backend loop used a Core `PromptProvenance` record to describe every rendered turn. The current CLI-shaped solution does not ship that record. Auditability is carried by the runtime surfaces that still have production owners:
 
-1. `PromptName` — the canonical prompt's name, captured as `nameof(<Prompt>)`.
-2. `PromptType` — the generated catalog type's full name (`typeof(<Prompt>).FullName`).
-3. `SourceHash` — the generated `<Prompt>.SourceHash`, pinning the exact template text.
-4. `SessionRole` — the `PromptSessionRole` the turn ran under.
-5. `WorkflowPhase` — the phase within the role's lifecycle (e.g. operational `Start` vs `Continue`).
-6. `InputArtifactIdentities` — repository-relative paths of the artifacts rendered into the prompt.
-7. `OutputArtifactIdentities` — repository-relative paths of the artifacts the turn is directed to produce.
+- Roadmap projection and derived-artifact provenance for generated roadmap artifacts.
+- Roadmap transition input snapshots and journals for state-machine transitions.
+- Main CLI session telemetry for loop/session execution events.
 
-Artifacts are identified by repository-relative path — the only stable identity on `LoadedArtifact`/`Artifact` today (neither carries an id or content hash). Canonical paths are centralized in `OrchestrationArtifactPaths`.
-
-`PromptSessionRole` is an enum with members `Planning`, `OperationalExecution`, `Decision`, `Transfer`, `ContextUpdate`. It **mirrors** `LoopRelay.Agents.Models.SessionRole` (same members, same order) but is **redeclared in Core** on purpose: Core is the base layer and prompt authority and must not reference the Agents runtime above it. A higher layer that already references both can map between the two enums; Core never does.
-
-Provenance is recorded at the two render sites:
-
-- `ExecutionPromptBuilder.Build` captures it for the operational `StartExecution` / `ContinueExecution` turns (`WorkflowPhase` = `Start` / `Continue`) and surfaces it on the additive nullable `ExecutionPromptManifest.Provenance` wire field.
-- `RepositoryOrchestrator` captures it for every other loop turn (plan write/revise, milestone extraction, decision seed/propose, and the transfer-route delta/context-update turns).
+The generated prompt classes remain the prompt authority. Their `SourceHash` values are evidence inputs for those CLI-owned records, not a standalone Core contract.
 
 ## No-Literal-Prompt Enforcement
 

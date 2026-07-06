@@ -56,8 +56,3 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
     }
 }
 
-/// <summary>No-op sink used when session telemetry is disabled.</summary>
-internal sealed class NullSessionTelemetrySink : ISessionTelemetrySink
-{
-    public void Append(SessionTelemetryRecord record) { }
-}

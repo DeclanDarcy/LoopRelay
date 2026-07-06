@@ -44,15 +44,15 @@ Each row is an evidence package keyed by an evidence id. "Evidence" cites the au
 - **Guard**: orchestration concurrency/lifecycle tests (teardown-vs-create serialization, dispose-drains-in-flight), `RepositoryOrchestratorStressTests`.
 - **Rollback path**: Disable the loop (paths 1–4); the registry holds no orchestrators once no repository drives a turn, and `OrchestratorShutdownHostedService` reaps it on shutdown.
 
-### LOOP-4 — Generated prompt authority, provenance, and no-literal-prompt enforcement
+### LOOP-4 — Generated prompt authority, CLI provenance, and no-literal-prompt enforcement
 
 - **Capability**: Prompt authority.
-- **Invariant**: Every agent turn is issued from a generated prompt class (11 canonical `.prompt` templates); no production code re-types a prompt body; each turn records a `PromptProvenance`.
-- **Owner**: `LoopRelay.Core.Prompts` catalog + the Lib.Prompts source generator; `ExecutionPromptBuilder` and `RepositoryOrchestrator` (provenance capture).
+- **Invariant**: Every agent turn is issued from a generated prompt class (11 canonical `.prompt` templates); no production code re-types a prompt body; CLI audit records are written by the artifact/telemetry surfaces that still have runtime ownership.
+- **Owner**: `LoopRelay.Core.Prompts` catalog + the Lib.Prompts source generator; CLI roadmap projection/transition journaling and session telemetry surfaces own current provenance capture.
 - **Slice/milestone**: m0 (authority + provenance), m3–m7 (loop turns).
-- **Evidence**: 11 `.prompt` files under `src/LoopRelay.Core/Prompts/`; `PromptProvenance` (7 fields) and `PromptSessionRole`; `PromptAuthorityTests` scans `src/**` for canonical prompt-body markers and asserts none.
-- **Consumers affected**: All agent turns; the additive nullable `ExecutionPromptManifest.Provenance` wire field.
-- **Compatibility impact**: Additive and nullable; no consumer is required to read provenance.
+- **Evidence**: 11 `.prompt` files under `src/LoopRelay.Core/Prompts/`; roadmap derived-artifact provenance, roadmap transition input snapshots/journals, and main CLI session telemetry; `PromptAuthorityTests` scans `src/**` for canonical prompt-body markers and asserts none.
+- **Consumers affected**: All CLI agent turns and generated roadmap/session audit records.
+- **Compatibility impact**: The retired backend prompt-provenance DTO is no longer part of the CLI-shaped solution.
 - **Guard**: `PromptAuthorityTests` (no-literal-prompt), `ArchitectureLayeringTests` (Core ⊥ Agents).
 - **Rollback path**: Not applicable — prompt authority is a structural invariant with no behavioral toggle. The `.prompt` templates must not be edited as part of documentation work.
 

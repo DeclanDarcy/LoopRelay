@@ -151,7 +151,7 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
 /// <summary>
 /// Scripts <see cref="IProcessRunner.RunAsync"/> for the CommitGate (no real git). Records every call,
 /// and returns whatever <see cref="Handler"/> produces (or a zero-exit success when Handler is null).
-/// StartAsync/StartInteractiveAsync throw — the gate only ever runs RunAsync.
+/// StartInteractiveAsync throws — the gate only ever runs RunAsync.
 /// </summary>
 internal sealed class FakeProcessRunner : IProcessRunner
 {
@@ -166,16 +166,6 @@ internal sealed class FakeProcessRunner : IProcessRunner
         Calls.Add((fileName, arguments, workingDirectory));
         return Task.FromResult(Handler?.Invoke(workingDirectory, arguments) ?? Ok());
     }
-
-    public Task<ProcessStartResult> StartAsync(
-        string fileName,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        string? standardInput = null,
-        Func<string, Task>? onStandardOutput = null,
-        Func<string, Task>? onStandardError = null,
-        Func<int?, Task>? onExit = null) =>
-        throw new NotSupportedException();
 
     public Task<IAgentProcess> StartInteractiveAsync(
         string fileName,
@@ -241,12 +231,6 @@ internal sealed class FakeInteractiveProcessRunner(FakeAgentProcess process) : I
     }
 
     public Task<ProcessRunResult> RunAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory) =>
-        throw new NotSupportedException();
-
-    public Task<ProcessStartResult> StartAsync(
-        string fileName, IReadOnlyList<string> arguments, string workingDirectory,
-        string? standardInput = null, Func<string, Task>? onStandardOutput = null,
-        Func<string, Task>? onStandardError = null, Func<int?, Task>? onExit = null) =>
         throw new NotSupportedException();
 }
 

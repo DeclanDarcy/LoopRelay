@@ -421,7 +421,7 @@ These mechanisms protect the orchestration loop subsystem (`LoopRelay.Agents`, `
 Primary evidence:
 
 - `tests/LoopRelay.Backend.Tests/ArchitectureLayeringTests.cs` (hosts both `ArchitectureLayeringTests` and `PromptAuthorityTests`)
-- `src/LoopRelay.Core/Prompts/PromptProvenance.cs`
+- roadmap derived-artifact provenance, transition input snapshots/journals, and main CLI session telemetry
 - `src/LoopRelay.Orchestration/Services/RepositoryOrchestrator.cs`
 - `src/LoopRelay.Orchestration/OrchestrationArtifactPaths.cs`
 - `src/LoopRelay.Backend/Endpoints/PlanAuthoringEndpoints.cs`
@@ -440,18 +440,18 @@ Primary evidence:
 | Drift model | A production source file re-introduces a canonical prompt body literal instead of rendering the generated catalog class (the regression that `ExecutionPromptBuilder` previously exhibited). |
 | Known limits | Scope is production `src/` only. Generated `*.g.cs` (in `obj/`) legitimately contains the text and is excluded; the catalog directory authors it and is excluded. Test-tree assertion literals are explicitly out of scope and tracked as a separate follow-up — this guard does not protect prompt text re-typed inside `tests/`. Detection is keyed to the eleven enumerated markers, not an exhaustive byte-diff of every template. |
 
-### Prompt Provenance Capture
+### Prompt SourceHash And CLI Provenance
 
 | Field | Value |
 | --- | --- |
-| Protected invariant | Every agent turn records a `PromptProvenance` so any turn is auditable back to the canonical catalog: the prompt name, generated type, build-time `SourceHash`, session role, workflow phase, and the repository-relative identities of the artifacts it consumed and was directed to produce are all captured at issuance. |
-| Guard command/source | `PromptProvenance` (`src/LoopRelay.Core/Prompts/PromptProvenance.cs`) — a sealed record with seven fields (`PromptName`, `PromptType`, `SourceHash`, `SessionRole`, `WorkflowPhase`, `InputArtifactIdentities`, `OutputArtifactIdentities`) and the `PromptSessionRole` enum (`Planning`, `OperationalExecution`, `Decision`, `Transfer`, `ContextUpdate`). `RepositoryOrchestrator` records provenance per turn into `planningProvenance` / `executionProvenance` / `decisionProvenance`, with one builder per canonical prompt (e.g. `BuildContinueExecutionProvenance`, `BuildStartExecutionProvenance`, `BuildGetNextDecisionsProvenance`). |
-| Owner | `LoopRelay.Core.Prompts` (the provenance type and the catalog `SourceHash`); `RepositoryOrchestrator` (per-turn capture). |
+| Protected invariant | Generated prompt identities and build-time `SourceHash` values remain available for CLI audit records, while runtime provenance is owned by the artifact or telemetry surface that emits it. |
+| Guard command/source | Generated prompt classes under `src/LoopRelay.Core/Prompts/` expose `SourceHash`; current CLI provenance is written by roadmap derived-artifact provenance, roadmap transition input snapshots/journals, and main CLI session telemetry. |
+| Owner | `LoopRelay.Core.Prompts` (catalog and `SourceHash`); `LoopRelay.Roadmap.Cli` and `LoopRelay.Cli` (runtime provenance records). |
 | Severity | Local build failure. |
-| Detection confidence | High for the recorded fields (each is a required member; `SourceHash` is the catalog type's build-time content hash pinning the exact template text). |
+| Detection confidence | High for generated prompt source hashes and file-backed CLI provenance records; no standalone Core prompt-provenance DTO is shipped. |
 | Lifecycle state | Guarded. |
-| Drift model | A turn is issued without recorded provenance, or provenance loses the prompt identity / `SourceHash` / role / phase / artifact-identity linkage that makes a turn auditable to the catalog. |
-| Known limits | Artifacts are identified by repository-relative path — the only stable identity on `LoadedArtifact`/`Artifact` (neither carries an id or content hash today), so identity is path-based, not content-addressed. `PromptSessionRole` mirrors `LoopRelay.Agents.Models.SessionRole` by redeclaration (Core is the base layer and must not reference the Agents runtime); the two enums are kept aligned by convention, mapped only by a higher layer. The additive nullable `ExecutionPromptManifest.Provenance` wire field carries provenance downstream but no consumer is required to read it. |
+| Drift model | A generated prompt loses its stable `SourceHash`, a CLI artifact is emitted without its owned provenance record, or session telemetry is silently bypassed. |
+| Known limits | The retired backend-era prompt-provenance record is not part of the current CLI-shaped solution. The remaining provenance records are scoped to their owning artifacts and telemetry streams. |
 
 ### Handoff and Decision Rotation Sequencing
 

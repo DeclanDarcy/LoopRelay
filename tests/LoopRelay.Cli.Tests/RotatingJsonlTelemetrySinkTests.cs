@@ -60,11 +60,4 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
         Assert.True(File.Exists(Path.Combine(dir, "sessions.2026-07-01.0000.jsonl")));
         Assert.True(File.Exists(Path.Combine(dir, "sessions.2026-07-02.0000.jsonl")));
     }
-
-    [Fact]
-    public void NullSink_Append_DoesNothing()
-    {
-        new Cli.NullSessionTelemetrySink().Append(Rec("x"));
-        Assert.False(Directory.Exists(dir));
-    }
 }

@@ -57,7 +57,7 @@ The loop drives two role-specialized sessions distinguished only by their declar
 
 ### Generated prompt authority
 
-Every agent turn is issued from a compile-time class generated from a `.prompt` template under `src/LoopRelay.Core/Prompts/` (11 canonical prompts). No production code composes prompt text by hand: `PromptAuthorityTests` scans `src/**` for distinctive canonical prompt-body markers and fails if any literal prompt body reappears outside the generated catalog. Each turn records a `PromptProvenance` (prompt name, generated type, `SourceHash`, session role, workflow phase, and input/output artifact identities). The prompt catalog, generated signatures, and these mechanisms are documented in `docs/prompt-architecture.md` and `docs/architectural-mechanisms.md`.
+Every agent turn is issued from a compile-time class generated from a `.prompt` template under `src/LoopRelay.Core/Prompts/` (11 canonical prompts). No production code composes prompt text by hand: `PromptAuthorityTests` scans `src/**` for distinctive canonical prompt-body markers and fails if any literal prompt body reappears outside the generated catalog. The current CLI audit trail is carried by roadmap derived-artifact provenance, roadmap transition input snapshots/journals, and main CLI session telemetry rather than by a Core prompt-provenance DTO. The prompt catalog, generated signatures, and these mechanisms are documented in `docs/prompt-architecture.md` and `docs/architectural-mechanisms.md`.
 
 ### Repository-scoped orchestrator ownership
 

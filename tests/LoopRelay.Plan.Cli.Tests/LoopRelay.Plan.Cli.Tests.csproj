@@ -24,4 +24,8 @@
     <ProjectReference Include="..\..\src\LoopRelay.Agents\LoopRelay.Agents.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\TestSupport\MemoryArtifactStore.cs" Link="TestSupport\MemoryArtifactStore.cs" />
+  </ItemGroup>
+
 </Project>

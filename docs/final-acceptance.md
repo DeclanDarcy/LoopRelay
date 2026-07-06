@@ -97,8 +97,8 @@ boundary so a future change that folds the reasoning/knowledge subsystem into th
 Each clause maps to verified behavior: the single-screen flow (FA-1, the `isAuthoringSessionActive` mount latch,
 m9's in-place lifecycle); persistent planning + decision processes (FA-4, FA-6, FA-10; held-open
 `CodexAppServerSession`); faithful `.agents` artifact writes (FA-2, FA-5, FA-8, FA-9, `OrchestrationArtifactPaths`);
-generated prompt provenance per turn (`PromptProvenance` recorded for every planning/operational/decision/transfer
-turn); and router-driven reuse or transfer (FA-10, FA-11; the registry-free `DecisionSessionRouter`).
+CLI-owned provenance through roadmap derived artifacts, transition input snapshots/journals, and session telemetry;
+and router-driven reuse or transfer (FA-10, FA-11; the registry-free `DecisionSessionRouter`).
 
 ## Governance pin
 

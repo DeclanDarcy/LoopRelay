@@ -155,7 +155,7 @@ Each unit has one purpose, a defined interface, and is independently testable:
 - **`ISessionTelemetrySink`** — `void Append(SessionTelemetryRecord record)`.
   - `RotatingJsonlTelemetrySink` — per-day/size hybrid file selection + serialization +
     locked append. Depends on: base directory, size cap, a clock.
-  - `NullSessionTelemetrySink` — no-op; used when telemetry is disabled or construction fails.
+  - Disabled telemetry uses `NullSessionTelemetryRecorder`; there is no no-op sink in the current implementation.
 - **`ICodexRolloutLocator`** — `string? Resolve(string workingDirectory, DateTimeOffset openedAtUtc)`.
   - `FileSystemCodexRolloutLocator` — the `~/.codex/sessions` scan above.
 - **`IUsageGate.WaitForCapacityAsync`** — return type widened to `Task<CodexUsageStatus?>`.
@@ -165,7 +165,7 @@ Each unit has one purpose, a defined interface, and is independently testable:
   the session-open time.
 - **`Program.cs`** — construct the concrete sink (path = `<repo>/.LoopRelay/telemetry`),
   locator, and clock; derive `repoName` from `repository.Path`; pass through. A CLI
-  flag / env (`--no-session-log` or `LoopRelay_SESSION_LOG=0`) swaps in the null sink;
+  flag / env (`--no-session-log` or `LoopRelay_SESSION_LOG=0`) swaps in the no-op recorder;
   **default on**.
 
 A minimal clock abstraction (`TimeProvider`, or the codebase's existing convention as used
