@@ -1,18 +1,6 @@
 using System.Text;
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Extensions;
-using LoopRelay.Agents.Services;
-using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Roadmap.Cli;
-using Microsoft.Extensions.DependencyInjection;
-using BundleFileExtractor = LoopRelay.Roadmap.Cli.BundleFileExtractor;
-using DecisionLedgerStore = LoopRelay.Roadmap.Cli.DecisionLedgerStore;
-using ExecutionCompatibilityMaterializer = LoopRelay.Roadmap.Cli.ExecutionCompatibilityMaterializer;
-using ProjectContextLoader = LoopRelay.Roadmap.Cli.ProjectContextLoader;
-using RoadmapArtifacts = LoopRelay.Roadmap.Cli.RoadmapArtifacts;
-using RoadmapStateStore = LoopRelay.Roadmap.Cli.RoadmapStateStore;
-using SplitEpicBundleInterpreter = LoopRelay.Roadmap.Cli.SplitEpicBundleInterpreter;
 
 try
 {
@@ -31,83 +19,9 @@ if (!CliArguments.TryParse(args, out RoadmapCliInvocation invocation, out string
 
 Repository repository = invocation.Repository;
 
-var services = new ServiceCollection();
-services.AddAgents();
-services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();
-await using ServiceProvider provider = services.BuildServiceProvider();
-
-var console = new ConsoleLoopConsole();
-var store = provider.GetRequiredService<IArtifactStore>();
-var runtime = provider.GetRequiredService<IAgentRuntime>();
-var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
-
-var artifacts = new RoadmapArtifacts(store, repository);
-var projectionRegistry = new ProjectionRegistry();
-var provenanceFactory = new ProjectionProvenanceFactory(projectionRegistry);
-var contractRegistry = new PromptContractRegistry(projectionRegistry);
-var manifestStore = new ProjectionManifestStore(artifacts);
-var executionPreparationManifest = new ExecutionPreparationManifestStore(artifacts);
-var executionPreparation = new ExecutionPreparationProvenanceService(artifacts, executionPreparationManifest);
-var validator = new ProjectionValidator();
-var promptRunner = new RoadmapPromptRunner(runtime, repository, console);
-var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
-var contextBuilder = new RoadmapPromptContextBuilder(artifacts, executionPreparation);
-var inputResolver = new TransitionInputResolver(artifacts, executionPreparation);
-var selectionProvenanceManifest = new SelectionProvenanceManifestStore(artifacts);
-var selectionProvenance = new SelectionProvenanceService(artifacts, selectionProvenanceManifest, contextBuilder, inputResolver);
-var completionPolicy = new CompletionCertificationPolicy();
-var completionRouter = new CompletionCertificationRouter();
-var stateStore = new RoadmapStateStore(artifacts);
-var decisionLedger = new DecisionLedgerStore(artifacts);
-var journal = new TransitionJournalStore(artifacts);
-var lifecycle = new ArtifactLifecycleStore(artifacts);
-var startupPlanner = new RoadmapStartupPlanner();
-var projectContextLoader = new ProjectContextLoader(artifacts);
-var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle, provenanceFactory, selectionProvenance, executionPreparation);
-var unblockPlanner = new RoadmapUnblockPlanner(artifacts, projectContextLoader, contractRegistry, resumePlanner, completionPolicy, completionRouter, executionPreparation);
-var promotion = new ArtifactPromotionService(artifacts, lifecycle);
-var bundleExtractor = new BundleFileExtractor();
-var splitBundleInterpreter = new SplitEpicBundleInterpreter();
-var bundleManifest = new BundleManifestWriter(artifacts);
-var splitFamilies = new SplitFamilyStore(artifacts);
-var operationalContext = new OperationalContextGenerator(artifacts, lifecycle, executionPreparation);
-var executionPrompt = new ExecutionPromptGenerator(artifacts, lifecycle, executionPreparation);
-var materializer = new ExecutionCompatibilityMaterializer(artifacts, executionPreparation);
-IRoadmapExecutionBridge executionBridge = new RoadmapExecutionBridge(runtime, artifacts, repository, console);
-var executionInterpreter = new RoadmapExecutionOutcomeInterpreter();
-var invariants = new InvariantValidator(artifacts, projectContextLoader, projectionRegistry, contractRegistry, manifestStore, lifecycle, splitFamilies, executionPreparation);
-var machine = new RoadmapStateMachine(
-    artifacts,
-    projectContextLoader,
-    contractRegistry,
-    manifestStore,
-    projectionCache,
-    contextBuilder,
-    inputResolver,
-    completionPolicy,
-    completionRouter,
-    promptRunner,
-    stateStore,
-    startupPlanner,
-    resumePlanner,
-    unblockPlanner,
-    selectionProvenance,
-    decisionLedger,
-    journal,
-    lifecycle,
-    promotion,
-    bundleExtractor,
-    splitBundleInterpreter,
-    bundleManifest,
-    splitFamilies,
-    executionPreparation,
-    operationalContext,
-    executionPrompt,
-    materializer,
-    executionBridge,
-    executionInterpreter,
-    invariants,
-    console);
+await using var composition = RoadmapCliComposition.Create(invocation);
+var console = composition.Console;
+var machine = composition.Machine;
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
@@ -118,20 +32,10 @@ Console.CancelKeyPress += (_, e) =>
 };
 
 console.Info($"LoopRelay.Roadmap.Cli {invocation.Command.ToString().ToLowerInvariant()} starting for {repository.Path}");
-console.Info($"Codex executable: {executableResolver.Resolve()}");
+console.Info($"Codex executable: {composition.ExecutableResolver.Resolve()}");
 
 RoadmapOutcome outcome;
-try
-{
-    outcome = await machine.ExecuteAsync(invocation.Command, cts.Token);
-}
-finally
-{
-    if (provider.GetService<AgentSessionRegistry>() is { } registry)
-    {
-        await registry.DisposeAsync();
-    }
-}
+outcome = await machine.ExecuteAsync(invocation.Command, cts.Token);
 
 switch (outcome)
 {

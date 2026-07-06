@@ -2,10 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
-    <UseImplementationExecutionContextAlias>false</UseImplementationExecutionContextAlias>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,11 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\LoopRelay.Agents\LoopRelay.Agents.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\..\src\LoopRelay.Orchestration.Primitives\LoopRelay.Orchestration.csproj" />
   </ItemGroup>
 
 </Project>

@@ -5,23 +5,26 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
-    <UseImplementationExecutionContextAlias>false</UseImplementationExecutionContextAlias>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\LoopRelay.Roadmap.Cli\LoopRelay.Roadmap.Cli.csproj" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LoopRelay.Infrastructure\LoopRelay.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\LoopRelay.Core\LoopRelay.Core.csproj" />
-    <ProjectReference Include="..\..\src\LoopRelay.Agents\LoopRelay.Agents.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\TestSupport\MemoryArtifactStore.cs" Link="TestSupport\MemoryArtifactStore.cs" />
   </ItemGroup>
 
 </Project>

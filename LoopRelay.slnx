@@ -3,15 +3,18 @@
     <Project Path="src/LoopRelay.Agents/LoopRelay.Agents.csproj" />
     <Project Path="src/LoopRelay.Cli/LoopRelay.Cli.csproj" />
     <Project Path="src/LoopRelay.Core/LoopRelay.Core.csproj" />
-    <Project Path="src/LoopRelay.Orchestration.Primitives/LoopRelay.Orchestration.Primitives.csproj" />
+    <Project Path="src/LoopRelay.Infrastructure/LoopRelay.Infrastructure.csproj" />
+    <Project Path="src/LoopRelay.Orchestration.Primitives/LoopRelay.Orchestration.csproj" />
     <Project Path="src/LoopRelay.Plan.Cli/LoopRelay.Plan.Cli.csproj" />
+    <Project Path="src/LoopRelay.Prompts.Generator/LoopRelay.Prompts.Generator.csproj" />
     <Project Path="src/LoopRelay.Roadmap.Cli/LoopRelay.Roadmap.Cli.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LoopRelay.Agents.Tests/LoopRelay.Agents.Tests.csproj" />
     <Project Path="tests/LoopRelay.Cli.Tests/LoopRelay.Cli.Tests.csproj" />
     <Project Path="tests/LoopRelay.Core.Tests/LoopRelay.Core.Tests.csproj" />
-    <Project Path="tests/LoopRelay.Orchestration.Primitives.Tests/LoopRelay.Orchestration.Primitives.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Infrastructure.Tests/LoopRelay.Infrastructure.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Orchestration.Primitives.Tests/LoopRelay.Orchestration.Tests.csproj" />
     <Project Path="tests/LoopRelay.Plan.Cli.Tests/LoopRelay.Plan.Cli.Tests.csproj" />
     <Project Path="tests/LoopRelay.Roadmap.Cli.Tests/LoopRelay.Roadmap.Cli.Tests.csproj" />
   </Folder>

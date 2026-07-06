@@ -36,7 +36,7 @@ Notes:
 
 ## Source Generation
 
-The generator is `Lib.Prompts.PromptSourceGenerator` (an `IIncrementalGenerator` at `dotnet-libraries/Lib.Prompts/src/Lib.Prompts/PromptSourceGenerator.cs`), wired into `LoopRelay.Core` as an analyzer-only reference (`OutputItemType="Analyzer"`, `ReferenceOutputAssembly="false"`) with the package's `Lib.Prompts.props`/`Lib.Prompts.targets` supplying every `.prompt` as an `AdditionalFiles` input.
+The generator is `Lib.Prompts.PromptSourceGenerator` (an `IIncrementalGenerator` vendored at `src/LoopRelay.Prompts.Generator/PromptSourceGenerator.cs`), wired into `LoopRelay.Core` as an analyzer-only project reference (`OutputItemType="Analyzer"`, `ReferenceOutputAssembly="false"`) with `LoopRelay.Core.csproj` supplying every `.prompt` as an `AdditionalFiles` input.
 
 For each `*.prompt` additional file the generator:
 
