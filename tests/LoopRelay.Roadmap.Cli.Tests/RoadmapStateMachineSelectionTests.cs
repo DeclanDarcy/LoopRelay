@@ -28,6 +28,41 @@ public sealed class RoadmapStateMachineSelectionTests
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
         Assert.Contains("# Roadmap Completion Context", repo.Read(Cli.RoadmapArtifactPaths.RoadmapCompletionContext), StringComparison.Ordinal);
         Assert.Equal(4, runtime.OneShotCalls);
+        Assert.Contains(runtime.Prompts, prompt => prompt.Contains("No completed epic markdown files were found under `.agents/archive/epics/*.md`.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Missing_completion_context_bootstrap_passes_archived_epic_evidence()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/archive/epics/001-done.md", """
+            # Epic: Archived Capability
+
+            ## Epic Metadata
+
+            | Field | Value |
+            |---|---|
+            | Epic ID | EPIC-DONE |
+
+            ## Completion Evidence
+
+            Implemented and verified.
+            """);
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("CreateRoadmapCompletionContext")),
+            ScriptedAgentRuntime.Completed("# Roadmap Completion Context"),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        string bootstrapPrompt = runtime.Prompts.Single(prompt => prompt.Contains(".agents/archive/epics/001-done.md", StringComparison.Ordinal));
+        Assert.Contains("Archived Capability", bootstrapPrompt, StringComparison.Ordinal);
+        Assert.Contains("| Epic ID | EPIC-DONE |", bootstrapPrompt, StringComparison.Ordinal);
+        Assert.Contains("| Evidence Quality | Strong |", bootstrapPrompt, StringComparison.Ordinal);
     }
 
     [Fact]

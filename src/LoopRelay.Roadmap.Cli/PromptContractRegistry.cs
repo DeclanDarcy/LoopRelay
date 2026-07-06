@@ -8,7 +8,7 @@ internal sealed class PromptContractRegistry
     {
         contracts = new[]
         {
-            Contract("CreateRoadmapCompletionContext", [], [RoadmapArtifactPaths.RoadmapCompletionContext], [], "RoadmapCompletionContextWriter", StaleProjectionPolicy.Block, "None"),
+            Contract("CreateRoadmapCompletionContext", [], [RoadmapArtifactPaths.RoadmapCompletionContext], [], "RoadmapCompletionContextWriter", StaleProjectionPolicy.Block, "None", optionalInputs: [RoadmapArtifactPaths.CompletedEpicsPattern]),
             Contract("UpdateRoadmapCompletionContext", [RoadmapArtifactPaths.RoadmapCompletionContext, RoadmapArtifactPaths.ActiveEpic], [RoadmapArtifactPaths.RoadmapCompletionContext], ["Close Epic", "Close With Follow-Up"], "RoadmapCompletionContextWriter", StaleProjectionPolicy.Block, "None"),
             Contract("SelectNextEpic", [RoadmapArtifactPaths.RoadmapCompletionContext, RoadmapArtifactPaths.RoadmapFile], [RoadmapArtifactPaths.Selection], ["Select Existing Epic", "Select New Intermediary Epic", "Select Split Epic", "Strategic Investigation Required", "Roadmap Revision Required", "No Suitable Initiative"], "SelectionWriter", StaleProjectionPolicy.Block, "SelectionParser"),
             Contract("EpicPreparationAudit", [RoadmapArtifactPaths.Selection], [RoadmapArtifactPaths.AuditEvidenceDirectory], ["Realign", "Reimagine", "Retire", "Insufficient Evidence"], "AuditEvidenceWriter", StaleProjectionPolicy.Block, "EpicPreparationAuditParser"),
@@ -45,14 +45,14 @@ internal sealed class PromptContractRegistry
         {
             "# Prompt Contracts",
             string.Empty,
-            "| Runtime Prompt | Projection | Required Inputs | Required Outputs | Allowed Decisions | Blocking Outputs | Artifact Writer | Stale Projection Policy | Parser |",
-            "|---|---|---|---|---|---|---|---|---|",
+            "| Runtime Prompt | Projection | Required Inputs | Optional Inputs | Required Outputs | Allowed Decisions | Blocking Outputs | Artifact Writer | Stale Projection Policy | Parser |",
+            "|---|---|---|---|---|---|---|---|---|---|",
         };
 
         foreach (PromptContract contract in All.OrderBy(contract => contract.RuntimePromptName, StringComparer.Ordinal))
         {
             lines.Add(
-                $"| {contract.RuntimePromptName} | {contract.RequiredProjectionRuntimePrompt} | {Join(contract.RequiredInputs)} | {Join(contract.RequiredOutputs)} | {Join(contract.AllowedDecisions)} | {Join(contract.BlockingOutputs)} | {contract.ArtifactWriter} | {contract.StaleProjectionPolicy} | {contract.ParserName} |");
+                $"| {contract.RuntimePromptName} | {contract.RequiredProjectionRuntimePrompt} | {Join(contract.RequiredInputs)} | {Join(contract.OptionalInputs)} | {Join(contract.RequiredOutputs)} | {Join(contract.AllowedDecisions)} | {Join(contract.BlockingOutputs)} | {contract.ArtifactWriter} | {contract.StaleProjectionPolicy} | {contract.ParserName} |");
         }
 
         await artifacts.WriteAsync(RoadmapArtifactPaths.PromptContracts, string.Join(Environment.NewLine, lines) + Environment.NewLine);
@@ -66,12 +66,13 @@ internal sealed class PromptContractRegistry
         string writer,
         StaleProjectionPolicy stalePolicy,
         string parserName,
-        IReadOnlyList<string>? blockingOutputs = null) =>
+        IReadOnlyList<string>? blockingOutputs = null,
+        IReadOnlyList<string>? optionalInputs = null) =>
         new(
             runtimePromptName,
             runtimePromptName,
             requiredInputs,
-            [],
+            optionalInputs ?? [],
             requiredOutputs,
             allowedDecisions,
             blockingOutputs ?? [],

@@ -48,6 +48,7 @@ internal sealed class TransitionInputResolver(
         switch (request.RuntimePromptName)
         {
             case "CreateRoadmapCompletionContext":
+                await AddCompletedEpicInputsAsync(inputs);
                 break;
             case "SelectNextEpic":
                 inputs.AddRequired(RoadmapArtifactPaths.RoadmapCompletionContext, TransitionInputRole.RoadmapCompletionContext);
@@ -91,6 +92,15 @@ internal sealed class TransitionInputResolver(
         foreach (string path in roadmapFiles.Order(StringComparer.Ordinal))
         {
             inputs.AddRequired(path, TransitionInputRole.RoadmapSource);
+        }
+    }
+
+    private async Task AddCompletedEpicInputsAsync(TransitionInputAccumulator inputs)
+    {
+        IReadOnlyList<string> completedEpics = await artifacts.ListAsync(RoadmapArtifactPaths.CompletedEpicsDirectory, "*.md");
+        foreach (string path in completedEpics.Order(StringComparer.Ordinal))
+        {
+            inputs.AddOptional(path, TransitionInputRole.CompletedEpic);
         }
     }
 
@@ -238,6 +248,7 @@ internal static class TransitionInputRole
     public const string MilestoneSpec = "MilestoneSpec";
     public const string ExecutionEvidence = "ExecutionEvidence";
     public const string CompletionEvaluation = "CompletionEvaluation";
+    public const string CompletedEpic = "CompletedEpic";
 }
 
 internal sealed class TransitionInputAccumulator

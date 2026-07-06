@@ -25,6 +25,19 @@ public sealed class PromptContractRegistryTests
         await registry.EmitSnapshotAsync(repo.Artifacts);
 
         Assert.Contains("SelectNextEpic", repo.Read(Cli.RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
+        Assert.Contains("Optional Inputs", repo.Read(Cli.RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
+        Assert.Contains(".agents/archive/epics/*.md", repo.Read(Cli.RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Create_completion_context_declares_completed_epic_archive_glob()
+    {
+        var registry = new Cli.PromptContractRegistry(new Cli.ProjectionRegistry());
+
+        Cli.PromptContract contract = registry.Get("CreateRoadmapCompletionContext");
+
+        Assert.Empty(contract.RequiredInputs);
+        Assert.Contains(Cli.RoadmapArtifactPaths.CompletedEpicsPattern, contract.OptionalInputs);
     }
 
     [Fact]

@@ -571,13 +571,14 @@ internal sealed class RoadmapStateMachine(
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = "# Roadmap Completion Bootstrap\n\n## Projection Content\n\n" + projection.Content;
+        string completedEpicEvidence = await new CompletedEpicEvidenceLoader(artifacts).RenderAsync();
         string output = await RunPromptTransitionAsync(
             RoadmapState.CoreReady,
             RoadmapState.RoadmapCompletionContextReady,
             runtimePrompt,
             projection.Definition.ProjectionPath,
             context,
-            string.Empty,
+            completedEpicEvidence,
             [RoadmapArtifactPaths.RoadmapCompletionContext],
             cancellationToken);
         await artifacts.WriteAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);

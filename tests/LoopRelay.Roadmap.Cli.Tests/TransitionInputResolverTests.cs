@@ -21,6 +21,31 @@ public sealed class TransitionInputResolverTests
     }
 
     [Fact]
+    public async Task Create_completion_context_resolves_archived_epics_as_completed_epic_inputs()
+    {
+        using var repo = new TempRepo();
+        string projectionPath = SeedProjection(repo, "CreateRoadmapCompletionContext");
+        repo.Write(".agents/archive/epics/002-beta.md", "beta");
+        repo.Write(".agents/archive/epics/001-alpha.md", "alpha");
+
+        Cli.TransitionInputSnapshot snapshot = await ResolveAsync(repo, "CreateRoadmapCompletionContext", projectionPath);
+
+        Assert.Equal(
+            [".agents/archive/epics/001-alpha.md", ".agents/archive/epics/002-beta.md", projectionPath],
+            snapshot.ArtifactInputs.Select(input => input.Path).ToArray());
+        Assert.Contains(snapshot.ArtifactInputs, input =>
+            input.Path == ".agents/archive/epics/001-alpha.md" &&
+            input.Roles == Cli.TransitionInputRole.CompletedEpic &&
+            input.Hash == Cli.RoadmapHash.Sha256("alpha"));
+        Assert.Contains(snapshot.ArtifactInputs, input =>
+            input.Path == ".agents/archive/epics/002-beta.md" &&
+            input.Roles == Cli.TransitionInputRole.CompletedEpic &&
+            input.Hash == Cli.RoadmapHash.Sha256("beta"));
+        Assert.Equal(Cli.RoadmapHash.Sha256("alpha"), snapshot.ToInputArtifactHashes()[".agents/archive/epics/001-alpha.md"]);
+        Assert.Equal(Cli.RoadmapHash.Sha256("beta"), snapshot.ToInputArtifactHashes()[".agents/archive/epics/002-beta.md"]);
+    }
+
+    [Fact]
     public async Task Selection_resolves_ordered_roadmap_file_set()
     {
         using var repo = new TempRepo();

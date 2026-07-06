@@ -114,6 +114,40 @@ public sealed class TransitionJournalTests
         Assert.Equal(started.InputArtifactHashes, failed.InputArtifactHashes);
     }
 
+    [Fact]
+    public async Task Bootstrap_journal_records_archived_epic_input_hashes()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        const string archivedEpicPath = ".agents/archive/epics/001-done.md";
+        const string archivedEpic = """
+            # Epic: Done
+
+            ## Completion Evidence
+
+            Verified.
+            """;
+        repo.Write(archivedEpicPath, archivedEpic);
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("CreateRoadmapCompletionContext")),
+            ScriptedAgentRuntime.Completed("# Roadmap Completion Context"),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Cli.TransitionJournalRecord started = ReadJournal(repo).Single(record =>
+            record.Event == "TransitionStarted" &&
+            record.Prompt == "CreateRoadmapCompletionContext");
+        Assert.Equal(Cli.RoadmapHash.Sha256(archivedEpic), started.InputArtifactHashes[archivedEpicPath]);
+        Assert.NotNull(started.InputSnapshot);
+        Assert.Contains(started.InputSnapshot.ArtifactInputs, input =>
+            input.Path == archivedEpicPath &&
+            input.Roles == Cli.TransitionInputRole.CompletedEpic);
+    }
+
     private static Cli.TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
         repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
