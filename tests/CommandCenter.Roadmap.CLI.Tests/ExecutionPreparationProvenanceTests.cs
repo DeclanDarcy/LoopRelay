@@ -186,6 +186,7 @@ public sealed class ExecutionPreparationProvenanceTests
 
         Assert.False(result.IsValid);
         Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal("ExecutionPreparationStale", result.FailureCategory);
         Assert.Contains("provenance is not fresh", result.Error, StringComparison.Ordinal);
     }
 

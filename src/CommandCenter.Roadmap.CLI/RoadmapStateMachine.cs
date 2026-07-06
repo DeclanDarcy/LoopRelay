@@ -901,7 +901,12 @@ internal sealed class RoadmapStateMachine(
         InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.MilestoneSpecsReady, projectContext.Hash, cancellationToken);
         if (!invariant.IsValid)
         {
-            throw new RoadmapStepException(invariant.Error ?? "Invariant validation failed after milestone generation.");
+            await PersistInvariantFailureAndThrowAsync(
+                invariant,
+                RoadmapState.ActiveEpicReady,
+                RoadmapState.MilestoneSpecsReady,
+                "PostMilestoneInvariantValidation",
+                projection.Definition.ProjectionPath);
         }
     }
 
@@ -1031,7 +1036,12 @@ internal sealed class RoadmapStateMachine(
         InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.ExecutionPromptReady, projectContext.Hash, cancellationToken);
         if (!invariant.IsValid)
         {
-            throw new RoadmapStepException(invariant.Error ?? "Invariant validation failed before execution.");
+            await PersistInvariantFailureAndThrowAsync(
+                invariant,
+                RoadmapState.ExecutionPromptReady,
+                RoadmapState.ExecutionLoop,
+                "PreExecutionInvariantValidation",
+                "None");
         }
 
         DateTimeOffset executionStarted = DateTimeOffset.UtcNow;
@@ -1718,6 +1728,113 @@ internal sealed class RoadmapStateMachine(
             ["Resolve invalid completion certification and rerun"]);
 
         return RoadmapOutcome.Paused;
+    }
+
+    internal async Task PersistInvariantFailureAndThrowAsync(
+        InvariantValidationResult invariant,
+        RoadmapState originatingState,
+        RoadmapState attemptedState,
+        string transition,
+        string projection)
+    {
+        string reason = invariant.Error ?? "Invariant validation failed.";
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+        IReadOnlyList<string> evidencePaths = await EnsureInvariantEvidencePathsAsync(
+            invariant,
+            transition,
+            attemptedState,
+            reason,
+            failedAt);
+        RoadmapWorkflowFailure failure = RoadmapWorkflowFailure.InvariantFailure(
+            originatingState,
+            attemptedState,
+            invariant.FailureState,
+            transition,
+            projection,
+            invariant.FailureCategory,
+            evidencePaths,
+            reason,
+            invariant.RecoveryGuidance,
+            failedAt);
+
+        await PersistWorkflowFailureAsync(failure);
+        throw RoadmapStepException.AlreadyPersisted(new RoadmapStepException(reason));
+    }
+
+    private async Task<IReadOnlyList<string>> EnsureInvariantEvidencePathsAsync(
+        InvariantValidationResult invariant,
+        string transition,
+        RoadmapState attemptedState,
+        string reason,
+        DateTimeOffset failedAt)
+    {
+        if (!string.IsNullOrWhiteSpace(invariant.EvidencePath))
+        {
+            return [invariant.EvidencePath];
+        }
+
+        string details = $"""
+            Invariant validation reported a failure without returning an evidence path.
+
+            | Field | Value |
+            |---|---|
+            | Attempted State | {attemptedState} |
+            | Failure State | {invariant.FailureState} |
+            | Invariant Category | {invariant.FailureCategory} |
+            | Original Reason | {reason} |
+
+            This fallback artifact exists only to keep workflow state recoverable when validator evidence is unavailable.
+            """;
+        string fallbackPath = await artifacts.WriteNumberedEvidenceAsync(
+            RoadmapArtifactPaths.BlockerEvidenceDirectory,
+            "invariant-failure-missing-evidence",
+            RoadmapBlockedArtifact.Render(
+                invariant.FailureState,
+                transition,
+                "Invariant validation failed without validator evidence.",
+                "Restore validator evidence or repair the invariant violation, then rerun the roadmap CLI.",
+                "None",
+                details,
+                failedAt));
+        return [fallbackPath];
+    }
+
+    private async Task PersistWorkflowFailureAsync(RoadmapWorkflowFailure failure)
+    {
+        IReadOnlyDictionary<string, string> inputHashes = failure.InputSnapshot?.ToInputArtifactHashes()
+            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        await journalStore.AppendAsync(new TransitionJournalRecord(
+            failure.JournalEvent,
+            Guid.NewGuid().ToString("N"),
+            failure.FailedAt,
+            failure.OriginatingState,
+            failure.AttemptedState,
+            failure.Transition,
+            failure.Projection,
+            failure.PromptContractKey,
+            inputHashes,
+            failure.EvidencePaths,
+            0,
+            failure.FailureState.ToString(),
+            failure.FailureCategory,
+            failure.Reason,
+            failure.InputSnapshot));
+
+        await SaveStateAsync(
+            failure.FailureState,
+            failure.StateTransitionStatus,
+            failure.OriginatingState,
+            failure.AttemptedState,
+            failure.Transition,
+            failure.Projection,
+            FormatList(failure.EvidencePaths),
+            failure.Decision,
+            failure.FailedAt,
+            failure.FailedAt,
+            null,
+            [new BlockerRow(failure.Reason, failure.RequiredNextStep)],
+            new RoadmapTransitionIntent(failure.RecoveryIntent, failure.FailureState, failure.EvidencePaths),
+            ["Review invariant failure evidence and rerun"]);
     }
 
     private async Task AppendDecisionAsync(RoadmapState state, string transition, string projectionPath, string outputPath, string decision, string confidence, string rationale)

@@ -18,6 +18,23 @@ public sealed class InvariantValidatorTests
 
         Assert.False(result.IsValid);
         Assert.Equal(RoadmapState.Failed, result.FailureState);
+        Assert.Equal("DuplicateActiveEpic", result.FailureCategory);
+        Assert.StartsWith(RoadmapArtifactPaths.OrchestrationEvidenceDirectory, result.EvidencePath, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rejects_project_context_drift()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        ProjectContext original = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        repo.Write(RoadmapArtifactPaths.ProjectContextSourceFiles[0], "changed project context");
+
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.CoreReady, original.Hash);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(RoadmapState.Failed, result.FailureState);
+        Assert.Equal("ProjectContextDrift", result.FailureCategory);
     }
 
     [Fact]
@@ -34,6 +51,7 @@ public sealed class InvariantValidatorTests
 
         Assert.False(result.IsValid);
         Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal("SpecEpicMismatch", result.FailureCategory);
     }
 
     [Fact]
@@ -54,19 +72,23 @@ public sealed class InvariantValidatorTests
 
         Assert.False(result.IsValid);
         Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal("ActiveEpicInvalid", result.FailureCategory);
         Assert.Contains("blocked", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task Rejects_execution_without_required_artifacts()
+    public async Task Rejects_missing_execution_preparation_prerequisites()
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
         ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.ExecutionLoop, projectContext.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.ExecutionPromptReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal("ExecutionPreparationStale", result.FailureCategory);
     }
 
     [Fact]
@@ -81,7 +103,43 @@ public sealed class InvariantValidatorTests
 
         Assert.False(result.IsValid);
         Assert.Equal(RoadmapState.Failed, result.FailureState);
+        Assert.Equal("ProjectionManifestMissing", result.FailureCategory);
         Assert.Contains("manifest entry", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Rejects_projection_manifest_invalid_entry()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        const string runtimePrompt = "SelectNextEpic";
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths[runtimePrompt], ProjectionSamples.Valid(runtimePrompt));
+        await SeedProjectionManifestAsync(repo, runtimePrompt, ProjectionValidationStatus.Invalid);
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.CoreReady, projectContext.Hash);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal("ProjectionInvalid", result.FailureCategory);
+    }
+
+    [Fact]
+    public async Task Rejects_stale_projection_provenance()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        const string runtimePrompt = "SelectNextEpic";
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths[runtimePrompt], ProjectionSamples.Valid(runtimePrompt));
+        await SeedProjectionManifestAsync(repo, runtimePrompt, ProjectionValidationStatus.Valid);
+        repo.Write(RoadmapArtifactPaths.ProjectContextSourceFiles[0], "changed project context");
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.CoreReady, projectContext.Hash);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal("ProjectionProvenanceStale", result.FailureCategory);
     }
 
     [Fact]
@@ -117,5 +175,22 @@ public sealed class InvariantValidatorTests
             lifecycle ?? new ArtifactLifecycleStore(repo.Artifacts),
             new SplitFamilyStore(repo.Artifacts),
             ExecutionPreparationTestSupport.CreateProvenance(repo));
+    }
+
+    private static async Task SeedProjectionManifestAsync(
+        TempRepo repo,
+        string runtimePrompt,
+        ProjectionValidationStatus validationStatus)
+    {
+        ProjectContext context = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectionProvenance provenance = new ProjectionProvenanceFactory(new ProjectionRegistry())
+            .Create(runtimePrompt, context);
+        await new ProjectionManifestStore(repo.Artifacts).UpsertAsync(ProjectionManifestEntry.FromTrustedProvenance(
+            provenance,
+            RoadmapHash.Sha256(repo.Read(RoadmapArtifactPaths.ProjectionPaths[runtimePrompt])),
+            DateTimeOffset.UtcNow,
+            validationStatus,
+            ProjectionFreshness.Fresh,
+            validationStatus == ProjectionValidationStatus.Invalid ? "Invalid projection fixture." : null));
     }
 }

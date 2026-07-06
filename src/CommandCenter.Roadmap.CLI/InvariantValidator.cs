@@ -23,7 +23,12 @@ internal sealed class InvariantValidator(
             ProjectContext projectContext = await projectContextLoader.LoadAsync(cancellationToken);
             if (!string.Equals(projectContext.Hash, expectedProjectContextHash, StringComparison.Ordinal))
             {
-                return await FailAsync(state, RoadmapState.Failed, "Project Context hash changed during the run.");
+                return await FailAsync(
+                    state,
+                    RoadmapState.Failed,
+                    "ProjectContextDrift",
+                    "Project Context hash changed during the run.",
+                    "Restore the Project Context evidence to the preflight hash or restart the workflow with the current Project Context.");
             }
 
             foreach (ProjectionDefinition projection in projectionRegistry.All)
@@ -42,12 +47,22 @@ internal sealed class InvariantValidator(
                 ProjectionManifestEntry? entry = manifest.Find(projection.RuntimePromptName);
                 if (entry is null)
                 {
-                    return await FailAsync(state, RoadmapState.Failed, $"Projection {projection.ProjectionPath} exists without a manifest entry.");
+                    return await FailAsync(
+                        state,
+                        RoadmapState.Failed,
+                        "ProjectionManifestMissing",
+                        $"Projection {projection.ProjectionPath} exists without a manifest entry.",
+                        "Restore projection manifest provenance before continuing.");
                 }
 
                 if (entry.ValidationStatus == ProjectionValidationStatus.Invalid)
                 {
-                    return await FailAsync(state, RoadmapState.EvidenceBlocked, $"Projection {projection.ProjectionPath} is marked invalid.");
+                    return await FailAsync(
+                        state,
+                        RoadmapState.EvidenceBlocked,
+                        "ProjectionInvalid",
+                        $"Projection {projection.ProjectionPath} is marked invalid.",
+                        "Regenerate or repair the invalid projection evidence before continuing.");
                 }
 
                 ProjectionFreshness freshness = ProjectionFreshnessEvaluator.Evaluate(
@@ -58,6 +73,7 @@ internal sealed class InvariantValidator(
                     return await FailAsync(
                         state,
                         RoadmapState.EvidenceBlocked,
+                        "ProjectionProvenanceStale",
                         $"Projection {projection.ProjectionPath} provenance is not fresh: {FormatReasons(freshness.Reasons)}.");
                 }
             }
@@ -69,7 +85,12 @@ internal sealed class InvariantValidator(
                  entry.Path.StartsWith(".agents/epic-", StringComparison.OrdinalIgnoreCase)));
             if (activeEpics > 1)
             {
-                return await FailAsync(state, RoadmapState.Failed, "More than one epic is marked Ready or Executing.");
+                return await FailAsync(
+                    state,
+                    RoadmapState.Failed,
+                    "DuplicateActiveEpic",
+                    "More than one epic is marked Ready or Executing.",
+                    "Repair artifact lifecycle metadata so exactly one active epic is Ready or Executing.");
             }
 
             InvariantValidationResult activeEpicResult = await ValidateActiveEpicAsync(state);
@@ -96,7 +117,12 @@ internal sealed class InvariantValidator(
                     !await artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext) ||
                     !await artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt))
                 {
-                    return await FailAsync(state, RoadmapState.EvidenceBlocked, "Execution bridge prerequisites are incomplete.");
+                    return await FailAsync(
+                        state,
+                        RoadmapState.EvidenceBlocked,
+                        "ExecutionPrerequisitesMissing",
+                        "Execution bridge prerequisites are incomplete.",
+                        "Restore active epic, operational context, and execution prompt artifacts before continuing.");
                 }
             }
 
@@ -104,7 +130,7 @@ internal sealed class InvariantValidator(
         }
         catch (RoadmapStepException exception)
         {
-            return await FailAsync(state, RoadmapState.EvidenceBlocked, exception.Message);
+            return await FailAsync(state, RoadmapState.EvidenceBlocked, "InvariantEvaluationException", exception.Message);
         }
     }
 
@@ -117,24 +143,37 @@ internal sealed class InvariantValidator(
                 return await FailAsync(
                     RoadmapState.SplitChildSelection,
                     RoadmapState.EvidenceBlocked,
+                    "SplitChildPromotionTargetInvalid",
                     $"Split child promotion target is not a valid split child epic path: {childEpicPath}.");
             }
 
             bool exists = await splitFamilyStore.ExistsForChildAsync(childEpicPath);
             if (!exists)
             {
-                return await FailAsync(RoadmapState.SplitChildSelection, RoadmapState.EvidenceBlocked, $"Split child {childEpicPath} has no split-family artifact.");
+                return await FailAsync(
+                    RoadmapState.SplitChildSelection,
+                    RoadmapState.EvidenceBlocked,
+                    "SplitFamilyMissing",
+                    $"Split child {childEpicPath} has no split-family artifact.");
             }
 
             string content = await artifacts.ReadRequiredAsync(childEpicPath);
             ArtifactValidationResult validation = epicValidator.Validate(content);
             return validation.IsValid
                 ? InvariantValidationResult.Valid()
-                : await FailAsync(RoadmapState.SplitChildSelection, RoadmapState.EvidenceBlocked, validation.Error ?? $"Split child {childEpicPath} failed epic validation.");
+                : await FailAsync(
+                    RoadmapState.SplitChildSelection,
+                    RoadmapState.EvidenceBlocked,
+                    "SplitChildInvalid",
+                    validation.Error ?? $"Split child {childEpicPath} failed epic validation.");
         }
         catch (RoadmapStepException exception)
         {
-            return await FailAsync(RoadmapState.SplitChildSelection, RoadmapState.EvidenceBlocked, exception.Message);
+            return await FailAsync(
+                RoadmapState.SplitChildSelection,
+                RoadmapState.EvidenceBlocked,
+                "SplitChildPromotionException",
+                exception.Message);
         }
     }
 
@@ -147,14 +186,24 @@ internal sealed class InvariantValidator(
 
         if (!await artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic))
         {
-            return await FailAsync(state, RoadmapState.EvidenceBlocked, "Active epic is missing.");
+            return await FailAsync(
+                state,
+                RoadmapState.EvidenceBlocked,
+                "ActiveEpicMissing",
+                "Active epic is missing.",
+                "Restore or promote an active epic before continuing.");
         }
 
         string content = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
         ArtifactValidationResult validation = epicValidator.Validate(content);
         return validation.IsValid
             ? InvariantValidationResult.Valid()
-            : await FailAsync(state, RoadmapState.EvidenceBlocked, validation.Error ?? "Active epic failed validation.");
+            : await FailAsync(
+                state,
+                RoadmapState.EvidenceBlocked,
+                "ActiveEpicInvalid",
+                validation.Error ?? "Active epic failed validation.",
+                "Repair the active epic artifact before continuing.");
     }
 
     private static bool RequiresActiveEpic(RoadmapState state) =>
@@ -200,7 +249,12 @@ internal sealed class InvariantValidator(
             cancellationToken);
         return readiness.IsFresh
             ? InvariantValidationResult.Valid()
-            : await FailAsync(state, RoadmapState.EvidenceBlocked, readiness.Reason);
+            : await FailAsync(
+                state,
+                RoadmapState.EvidenceBlocked,
+                "ExecutionPreparationStale",
+                readiness.Reason,
+                "Regenerate stale execution preparation artifacts before continuing.");
     }
 
     private static bool RequiresMilestoneSpecs(RoadmapState state) =>
@@ -225,7 +279,12 @@ internal sealed class InvariantValidator(
             if (declaredEpicPath is not null &&
                 !string.Equals(declaredEpicPath, RoadmapArtifactPaths.ActiveEpic, StringComparison.OrdinalIgnoreCase))
             {
-                return await FailAsync(state, RoadmapState.EvidenceBlocked, $"{spec} belongs to {declaredEpicPath}, not the active epic.");
+                return await FailAsync(
+                    state,
+                    RoadmapState.EvidenceBlocked,
+                    "SpecEpicMismatch",
+                    $"{spec} belongs to {declaredEpicPath}, not the active epic.",
+                    "Repair milestone spec provenance so all active specs belong to the active epic.");
             }
         }
 
@@ -252,21 +311,41 @@ internal sealed class InvariantValidator(
         return null;
     }
 
-    private async Task<InvariantValidationResult> FailAsync(RoadmapState currentState, RoadmapState failureState, string message)
+    private async Task<InvariantValidationResult> FailAsync(
+        RoadmapState currentState,
+        RoadmapState failureState,
+        string category,
+        string message,
+        string recoveryGuidance = "Repair the invariant violation before continuing the roadmap state machine.")
     {
+        DateTimeOffset createdAt = DateTimeOffset.UtcNow;
+        string details = $"""
+            Invariant validation failed before the workflow state machine could safely continue.
+
+            | Field | Value |
+            |---|---|
+            | Validated State | {currentState} |
+            | Failure State | {failureState} |
+            | Invariant Category | {category} |
+            | Recovery Guidance | {recoveryGuidance} |
+
+            ## Diagnostic
+
+            {message}
+            """;
         string content = RoadmapBlockedArtifact.Render(
             failureState,
-            "InvariantValidator",
+            $"InvariantValidator:{category}",
             message,
-            "Repair the invariant violation before continuing the roadmap state machine.",
+            recoveryGuidance,
             "None",
-            message,
-            DateTimeOffset.UtcNow);
+            details,
+            createdAt);
         string path = await artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.OrchestrationEvidenceDirectory,
             "invariant-failure",
             content);
-        return InvariantValidationResult.Invalid(failureState, message, path);
+        return InvariantValidationResult.Invalid(failureState, message, path, category, recoveryGuidance);
     }
 
     private static string FormatReasons(IReadOnlyList<ProjectionStaleReason> reasons) =>
@@ -277,10 +356,17 @@ internal sealed record InvariantValidationResult(
     bool IsValid,
     RoadmapState FailureState,
     string? Error,
-    string? EvidencePath)
+    string? EvidencePath,
+    string FailureCategory,
+    string RecoveryGuidance)
 {
-    public static InvariantValidationResult Valid() => new(true, RoadmapState.CoreReady, null, null);
+    public static InvariantValidationResult Valid() => new(true, RoadmapState.CoreReady, null, null, "None", "None");
 
-    public static InvariantValidationResult Invalid(RoadmapState failureState, string error, string evidencePath) =>
-        new(false, failureState, error, evidencePath);
+    public static InvariantValidationResult Invalid(
+        RoadmapState failureState,
+        string error,
+        string evidencePath,
+        string failureCategory,
+        string recoveryGuidance) =>
+        new(false, failureState, error, evidencePath, failureCategory, recoveryGuidance);
 }

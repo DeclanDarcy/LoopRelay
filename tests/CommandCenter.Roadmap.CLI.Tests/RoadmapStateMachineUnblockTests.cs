@@ -312,6 +312,7 @@ public sealed class RoadmapStateMachineUnblockTests
     [InlineData("ResolveArtifactPromotionBlocker")]
     [InlineData("ResolveSplitEpicBlocker")]
     [InlineData("ResolveTransitionFailure")]
+    [InlineData("ResolveInvariantViolation")]
     public async Task Unsupported_blocker_intents_remain_report_only(string intent)
     {
         using var repo = SeedProject();

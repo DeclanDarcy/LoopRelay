@@ -53,6 +53,9 @@ internal sealed class RoadmapUnblockPlanner(
             "ResolveTransitionFailure" => await UnsupportedIntentAsync(
                 persistedState,
                 "Prompt transition failures are not automatically retried because retry safety and prompt idempotency are not yet modeled."),
+            "ResolveInvariantViolation" => await UnsupportedIntentAsync(
+                persistedState,
+                "Invariant violation recovery requires validator-specific repair and revalidation before automatic unblock can be safe."),
             "ResolveExecutionBlocker" => await UnsupportedIntentAsync(
                 persistedState,
                 "Execution blocker recovery needs an execution-blocker-specific contract; the current unblock planner does not yet define one."),

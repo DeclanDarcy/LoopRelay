@@ -96,6 +96,111 @@ public sealed class RoadmapFailurePersistenceTests
     }
 
     [Fact]
+    public async Task Invariant_failure_preserves_validator_evidence_state_and_journal()
+    {
+        using var repo = SeedRepo(includeCompletionContext: true);
+        var runtime = new ScriptedAgentRuntime(BuildMilestoneInvariantTurns(MismatchedMilestoneBundle()).ToArray());
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(TransitionStatus.Paused, state.LastTransition.Status);
+        Assert.Equal(RoadmapState.ActiveEpicReady, state.LastTransition.From);
+        Assert.Equal(RoadmapState.MilestoneSpecsReady, state.LastTransition.To);
+        Assert.Equal("PostMilestoneInvariantValidation", state.LastTransition.Prompt);
+        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], state.LastTransition.Projection);
+        Assert.Equal(evidencePath, state.LastTransition.Output);
+        Assert.Equal("Invariant Failed: SpecEpicMismatch", state.LastTransition.Decision);
+        Assert.Equal("ResolveInvariantViolation", state.TransitionIntent.Intent);
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.TransitionIntent.DispatchState);
+        Assert.StartsWith(RoadmapArtifactPaths.OrchestrationEvidenceDirectory, evidencePath, StringComparison.Ordinal);
+        Assert.Contains("SpecEpicMismatch", repo.Read(evidencePath), StringComparison.Ordinal);
+        Assert.Contains(evidencePath, Assert.Single(state.Blockers).RequiredNextStep, StringComparison.Ordinal);
+
+        string stateMarkdown = repo.Read(RoadmapArtifactPaths.State);
+        Assert.Contains(evidencePath, stateMarkdown, StringComparison.Ordinal);
+        Assert.Contains("ResolveInvariantViolation", stateMarkdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResolveBlocker", stateMarkdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("RoadmapStateMachine", stateMarkdown, StringComparison.Ordinal);
+        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+
+        TransitionJournalRecord invariantFailed = ReadJournal(repo).Single(record => record.Event == "InvariantFailed");
+        Assert.Equal(state.LastTransition.From, invariantFailed.PreviousState);
+        Assert.Equal(state.LastTransition.To, invariantFailed.AttemptedState);
+        Assert.Equal(state.LastTransition.Prompt, invariantFailed.Prompt);
+        Assert.Equal(state.LastTransition.Projection, invariantFailed.Projection);
+        Assert.Equal([evidencePath], invariantFailed.OutputPaths);
+        Assert.Equal(RoadmapState.EvidenceBlocked.ToString(), invariantFailed.Result);
+        Assert.Equal("SpecEpicMismatch", invariantFailed.ParserDecision);
+        Assert.Contains(".agents/other-epic.md", invariantFailed.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Failed_invariant_persistence_does_not_downgrade_to_evidence_blocked()
+    {
+        using var repo = SeedRepo(includeCompletionContext: true);
+        await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(".agents/epic-1.md", ArtifactLifecycleState.Ready);
+        var runtime = new ScriptedAgentRuntime(BuildMilestoneInvariantTurns(MilestoneBundle()).ToArray());
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
+        Assert.Equal(RoadmapState.Failed, state.CurrentState);
+        Assert.Equal(TransitionStatus.Failed, state.LastTransition.Status);
+        Assert.Equal("Invariant Failed: DuplicateActiveEpic", state.LastTransition.Decision);
+        Assert.Equal("ResolveInvariantViolation", state.TransitionIntent.Intent);
+        Assert.Equal(RoadmapState.Failed, state.TransitionIntent.DispatchState);
+        Assert.StartsWith(RoadmapArtifactPaths.OrchestrationEvidenceDirectory, evidencePath, StringComparison.Ordinal);
+        Assert.Contains("DuplicateActiveEpic", repo.Read(evidencePath), StringComparison.Ordinal);
+        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+
+        TransitionJournalRecord invariantFailed = ReadJournal(repo).Single(record => record.Event == "InvariantFailed");
+        Assert.Equal(RoadmapState.Failed.ToString(), invariantFailed.Result);
+        Assert.Equal("DuplicateActiveEpic", invariantFailed.ParserDecision);
+        Assert.Equal([evidencePath], invariantFailed.OutputPaths);
+    }
+
+    [Fact]
+    public async Task Invariant_failure_without_validator_evidence_uses_specific_fallback_not_generic_blocker()
+    {
+        using var repo = SeedRepo(includeCompletionContext: true);
+        RoadmapStateMachine machine = StateMachineFactory.Create(repo, new ScriptedAgentRuntime());
+        InvariantValidationResult invariant = InvariantValidationResult.Invalid(
+            RoadmapState.EvidenceBlocked,
+            "Validator failed without evidence.",
+            string.Empty,
+            "MissingValidatorEvidence",
+            "Restore validator diagnostics before continuing.");
+
+        RoadmapStepException exception = await Assert.ThrowsAsync<RoadmapStepException>(() =>
+            machine.PersistInvariantFailureAndThrowAsync(
+                invariant,
+                RoadmapState.ExecutionPromptReady,
+                RoadmapState.ExecutionLoop,
+                "PreExecutionInvariantValidation",
+                "None"));
+
+        Assert.Equal(RoadmapFailurePersistence.AlreadyPersisted, exception.Persistence);
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        string fallbackPath = Assert.Single(state.TransitionIntent.EvidencePaths);
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal("ResolveInvariantViolation", state.TransitionIntent.Intent);
+        Assert.Equal(fallbackPath, state.LastTransition.Output);
+        Assert.StartsWith(RoadmapArtifactPaths.BlockerEvidenceDirectory, fallbackPath, StringComparison.Ordinal);
+        Assert.Contains("without returning an evidence path", repo.Read(fallbackPath), StringComparison.Ordinal);
+        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+
+        TransitionJournalRecord invariantFailed = ReadJournal(repo).Single(record => record.Event == "InvariantFailed");
+        Assert.Equal([fallbackPath], invariantFailed.OutputPaths);
+        Assert.Equal("MissingValidatorEvidence", invariantFailed.ParserDecision);
+    }
+
+    [Fact]
     public async Task Preflight_failure_uses_generic_safety_net()
     {
         using var repo = new TempRepo();
@@ -262,6 +367,16 @@ public sealed class RoadmapFailurePersistenceTests
         };
     }
 
+    private static IEnumerable<AgentTurnResult> BuildMilestoneInvariantTurns(string milestoneBundle)
+    {
+        yield return ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic"));
+        yield return ScriptedAgentRuntime.Completed(NewEpicSelection());
+        yield return ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("CreateNewEpic"));
+        yield return ScriptedAgentRuntime.Completed(RoadmapSamples.ValidEpic("Invariant Persistence Epic", "EPIC-INVARIANT"));
+        yield return ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("GenerateMilestoneDeepDivesForEpic"));
+        yield return ScriptedAgentRuntime.Completed(milestoneBundle);
+    }
+
     private static TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
         repo.Read(RoadmapArtifactPaths.TransitionJournal)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -381,6 +496,19 @@ public sealed class RoadmapFailurePersistenceTests
         ## Acceptance Criteria
 
         - [ ] Failure ownership remains explicit.
+        """;
+
+    private static string MismatchedMilestoneBundle() => """
+        # FILE: .agents/specs/invariant-mismatch-test.md
+        # Invariant Mismatch Test Milestone
+
+        | Field | Value |
+        |---|---|
+        | Epic Path | .agents/other-epic.md |
+
+        ## Acceptance Criteria
+
+        - [ ] Validator evidence remains authoritative.
         """;
 
     private static string CompletionEvaluation(string recommendation) => $$"""
