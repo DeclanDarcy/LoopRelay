@@ -42,6 +42,7 @@ internal sealed class DecisionSession(
     private bool resumeAttempted;
 
     // Operational-context size-health state (Stage 2, mirrors RepositoryOrchestrator). Single-threaded, no lock.
+    private const int OperationalContextGrowthStreakWarningThreshold = 2;
     private int? previousOperationalContextSize;
     private int operationalContextGrowthStreak;
 
@@ -395,17 +396,24 @@ internal sealed class DecisionSession(
         return optimize;
     }
 
-    // Size-health guard (Stage 2, mirrors RepositoryOrchestrator.RecordOperationalContextHealth): warn on a
-    // sustained upward ratchet of the operational-context size across consecutive transfers.
+    // Size-health guard: warn on a sustained upward ratchet of the operational-context size across consecutive
+    // transfers. Kept local so the CLI does not depend on the legacy orchestration host's monitor service.
     private void RecordOperationalContextHealth(int newSize)
     {
-        OperationalContextHealth verdict = OperationalContextHealthMonitor.Classify(
-            previousOperationalContextSize, newSize, operationalContextGrowthStreak);
-        previousOperationalContextSize = verdict.Size;
-        operationalContextGrowthStreak = verdict.GrowthStreak;
-        if (verdict.Warning)
+        if (previousOperationalContextSize is null)
         {
-            console.Warn($"Operational context has grown for {verdict.GrowthStreak} consecutive transfers (now {verdict.Size} chars) — check for bloat.");
+            previousOperationalContextSize = newSize;
+            operationalContextGrowthStreak = 0;
+            return;
+        }
+
+        operationalContextGrowthStreak = newSize > previousOperationalContextSize.Value
+            ? operationalContextGrowthStreak + 1
+            : 0;
+        previousOperationalContextSize = newSize;
+        if (operationalContextGrowthStreak >= OperationalContextGrowthStreakWarningThreshold)
+        {
+            console.Warn($"Operational context has grown for {operationalContextGrowthStreak} consecutive transfers (now {newSize} chars) — check for bloat.");
         }
     }
 

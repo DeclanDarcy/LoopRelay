@@ -24,7 +24,7 @@ internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
             }
         }
 
-        IReadOnlyList<string> numberedFiles = await artifacts.ListAsync(".agents/core", "*.md");
+        IReadOnlyList<string> numberedFiles = await artifacts.ListAsync(RoadmapArtifactPaths.ProjectContextDirectory, "*.md");
         string[] extras = numberedFiles
             .Where(path => NumberedProjectContextFileRegex().IsMatch(Path.GetFileName(path)))
             .Where(path => !RoadmapArtifactPaths.ProjectContextSourceFiles.Contains(path, StringComparer.Ordinal))

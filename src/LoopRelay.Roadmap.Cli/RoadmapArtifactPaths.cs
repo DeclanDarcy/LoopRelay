@@ -32,17 +32,18 @@ internal static class RoadmapArtifactPaths
     public const string EvaluationEvidenceDirectory = ".agents/evidence/evaluations";
     public const string BlockerEvidenceDirectory = ".agents/evidence/blockers";
     public const string OrchestrationEvidenceDirectory = ".agents/evidence/orchestration";
+    public const string ProjectContextDirectory = ".agents/ctx";
 
     public static readonly IReadOnlyList<string> ProjectContextSourceFiles =
     [
-        ".agents/ctx/01-purpose.md",
-        ".agents/ctx/02-capability-model.md",
-        ".agents/ctx/03-invariants.md",
-        ".agents/ctx/04-strategic-structure.md",
-        ".agents/ctx/05-authority-model.md",
-        ".agents/ctx/06-evaluation-model.md",
-        ".agents/ctx/07-drift-and-false-success.md",
-        ".agents/ctx/08-vocabulary.md",
+        $"{ProjectContextDirectory}/01-purpose.md",
+        $"{ProjectContextDirectory}/02-capability-model.md",
+        $"{ProjectContextDirectory}/03-invariants.md",
+        $"{ProjectContextDirectory}/04-strategic-structure.md",
+        $"{ProjectContextDirectory}/05-authority-model.md",
+        $"{ProjectContextDirectory}/06-evaluation-model.md",
+        $"{ProjectContextDirectory}/07-drift-and-false-success.md",
+        $"{ProjectContextDirectory}/08-vocabulary.md",
     ];
 
     public static readonly IReadOnlyDictionary<string, string> ProjectionPaths =

@@ -24,8 +24,7 @@ public enum PromptSessionRole
 /// it consumed and was directed to produce, so any turn is auditable back to the catalog.
 /// </summary>
 /// <remarks>
-/// Artifacts are identified by repository-relative path — the only stable identity on
-/// <c>LoadedArtifact</c>/<c>Artifact</c> (neither carries an id or content hash today).
+/// Artifacts are identified by repository-relative path, the stable identity shared by the CLI artifact files.
 /// </remarks>
 public sealed record PromptProvenance
 {

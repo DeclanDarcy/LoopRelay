@@ -17,7 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\LoopRelay.Agents\LoopRelay.Agents.csproj" />
     <ProjectReference Include="..\LoopRelay.Core\LoopRelay.Core.csproj" />
-    <ProjectReference Include="..\LoopRelay.Orchestration\LoopRelay.Orchestration.csproj" />
+    <ProjectReference Include="..\LoopRelay.Orchestration.Primitives\LoopRelay.Orchestration.Primitives.csproj" />
   </ItemGroup>
 
   <!-- The loop's components are `internal`; the test project drives them directly. -->
