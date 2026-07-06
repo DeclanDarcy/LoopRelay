@@ -4,76 +4,45 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
 {
+    private readonly StructuredDocumentStore<ProjectionManifestPersistenceDocument> structuredStore = new(
+        artifacts,
+        RoadmapArtifactPaths.ProjectionsManifestJson,
+        ProjectionManifestPersistenceDocument.CurrentSchemaVersion,
+        document => document.SchemaVersion,
+        ProjectionManifestPersistenceDocument.Validate);
+
     public async Task<ProjectionManifest> LoadAsync()
     {
+        ProjectionManifestPersistenceDocument? structured = await structuredStore.LoadAsync();
+        if (structured is not null)
+        {
+            return structured.ToDomain();
+        }
+
         string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.ProjectionsManifest);
         if (string.IsNullOrWhiteSpace(content))
         {
             return ProjectionManifest.Empty;
         }
 
-        var entries = new List<ProjectionManifestEntry>();
-        foreach (string line in content.Split('\n'))
+        ProjectionManifest migrated;
+        try
         {
-            string trimmed = line.Trim();
-            if (!trimmed.StartsWith('|') || trimmed.StartsWith("|---", StringComparison.Ordinal) ||
-                trimmed.Contains("Runtime Prompt", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            string[] cells = trimmed.Trim('|').Split('|').Select(UnescapeCell).ToArray();
-            if (cells.Length >= 16)
-            {
-                entries.Add(new ProjectionManifestEntry(
-                    cells[0],
-                    cells[2],
-                    cells[4],
-                    cells[7],
-                    ParseList(cells[8]),
-                    cells[9],
-                    cells[10],
-                    ParseGeneratedAt(cells[11]),
-                    ParseValidationStatus(cells[12]),
-                    ParseStaleStatus(cells[13]),
-                    string.Equals(cells[15], "None", StringComparison.Ordinal) ? null : cells[15],
-                    ParseProvenanceStatus(cells[5]),
-                    cells[1],
-                    cells[3],
-                    ParseCausalInputs(cells[6]),
-                    ParseStaleReasons(cells[14])));
-                continue;
-            }
-
-            if (cells.Length < 11)
-            {
-                continue;
-            }
-
-            entries.Add(new ProjectionManifestEntry(
-                cells[0],
-                cells[1],
-                cells[2],
-                cells[3],
-                ParseList(cells[4]),
-                cells[5],
-                cells[6],
-                ParseGeneratedAt(cells[7]),
-                ParseValidationStatus(cells[8]),
-                ProjectionStaleStatus.UnknownProvenance,
-                string.Equals(cells[10], "None", StringComparison.Ordinal) ? null : cells[10],
-                ProjectionProvenanceStatus.Unknown,
-                cells[0],
-                string.Empty,
-                [],
-                [ProjectionStaleReason.UnknownProvenance]));
+            migrated = ParseLegacyMarkdown(content);
+        }
+        catch (MarkdownParseException exception)
+        {
+            throw new RoadmapStepException($"Legacy projection manifest cannot be migrated: {exception.Message}");
         }
 
-        return new ProjectionManifest(entries);
+        await SaveAsync(migrated);
+        return migrated;
     }
 
     public async Task SaveAsync(ProjectionManifest manifest)
     {
+        ProjectionManifestPersistenceDocument persisted = ProjectionManifestPersistenceDocument.FromDomain(manifest);
+        await structuredStore.SaveAsync(persisted);
         await artifacts.WriteAsync(RoadmapArtifactPaths.ProjectionsManifest, Render(manifest));
     }
 
@@ -119,11 +88,77 @@ internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
         return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 
+    private static ProjectionManifest ParseLegacyMarkdown(string content)
+    {
+        MarkdownTableParser.ValidateTables(content);
+        var entries = new List<ProjectionManifestEntry>();
+        foreach (IReadOnlyDictionary<string, string> row in MarkdownTableParser.ParseTablesStrict(content))
+        {
+            if (row.ContainsKey("Projection Identity"))
+            {
+                entries.Add(new ProjectionManifestEntry(
+                    Field(row, "Runtime Prompt"),
+                    Field(row, "Projection Prompt"),
+                    Field(row, "Path"),
+                    Field(row, "Projection Prompt Source Hash"),
+                    ParseList(Field(row, "Project Context Files")),
+                    Field(row, "Project Context Hash"),
+                    Field(row, "Projection Hash"),
+                    ParseGeneratedAt(Field(row, "Generated At")),
+                    ParseValidationStatus(Field(row, "Validation Status")),
+                    ParseStaleStatus(Field(row, "Stale Status")),
+                    NullIfNone(Field(row, "Last Validation Error")),
+                    ParseProvenanceStatus(Field(row, "Provenance Status")),
+                    Field(row, "Projection Identity"),
+                    Field(row, "Projection Prompt Type"),
+                    ParseCausalInputs(Field(row, "Causal Inputs")),
+                    ParseStaleReasons(Field(row, "Stale Reasons"))));
+                continue;
+            }
+
+            if (!row.ContainsKey("Runtime Prompt") || !row.ContainsKey("Projection Prompt") || !row.ContainsKey("Path"))
+            {
+                continue;
+            }
+
+            entries.Add(new ProjectionManifestEntry(
+                Field(row, "Runtime Prompt"),
+                Field(row, "Projection Prompt"),
+                Field(row, "Path"),
+                Field(row, "Projection Prompt Source Hash"),
+                ParseList(Field(row, "Project Context Files")),
+                Field(row, "Project Context Hash"),
+                Field(row, "Projection Hash"),
+                ParseGeneratedAt(Field(row, "Generated At")),
+                ParseValidationStatus(Field(row, "Validation Status")),
+                ProjectionStaleStatus.UnknownProvenance,
+                NullIfNone(Field(row, "Last Validation Error")),
+                ProjectionProvenanceStatus.Unknown,
+                Field(row, "Runtime Prompt"),
+                string.Empty,
+                [],
+                [ProjectionStaleReason.UnknownProvenance]));
+        }
+
+        ProjectionManifest manifest = new(entries.OrderBy(entry => entry.RuntimePromptName, StringComparer.Ordinal).ToArray());
+        ProjectionManifestPersistenceDocument persisted = ProjectionManifestPersistenceDocument.FromDomain(manifest);
+        IReadOnlyList<string> errors = ProjectionManifestPersistenceDocument.Validate(persisted);
+        if (errors.Count > 0)
+        {
+            throw new RoadmapStepException($"Legacy projection manifest cannot be migrated because validation failed: {string.Join("; ", errors)}");
+        }
+
+        return manifest;
+    }
+
     private static string EscapeCell(string? value) =>
         (value ?? string.Empty).Replace("\\", "\\\\", StringComparison.Ordinal).Replace("|", "\\|", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
 
-    private static string UnescapeCell(string value) =>
-        value.Trim().Replace("\\|", "|", StringComparison.Ordinal).Replace("\\\\", "\\", StringComparison.Ordinal);
+    private static string Field(IReadOnlyDictionary<string, string> row, string field) =>
+        row.TryGetValue(field, out string? value) ? value : string.Empty;
+
+    private static string? NullIfNone(string value) =>
+        string.Equals(value, "None", StringComparison.Ordinal) ? null : value;
 
     private static IReadOnlyList<string> ParseList(string cell) =>
         cell.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -151,9 +186,9 @@ internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
         {
             return JsonSerializer.Deserialize<IReadOnlyList<ProjectionCausalInput>>(cell) ?? [];
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            return [];
+            throw new MarkdownParseException($"Projection manifest causal inputs are not valid JSON: {exception.Message}");
         }
     }
 
@@ -170,7 +205,10 @@ internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
             if (Enum.TryParse(value, out ProjectionStaleReason reason))
             {
                 reasons.Add(reason);
+                continue;
             }
+
+            throw new MarkdownParseException($"Projection manifest contains unknown stale reason `{value}`.");
         }
 
         return reasons;

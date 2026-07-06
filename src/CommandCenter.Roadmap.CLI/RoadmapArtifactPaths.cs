@@ -4,8 +4,11 @@ internal static class RoadmapArtifactPaths
 {
     public const string AgentsDirectory = ".agents";
     public const string State = ".agents/state.md";
+    public const string StateJson = ".agents/state.json";
     public const string DecisionLedger = ".agents/decision-ledger.md";
+    public const string DecisionLedgerJson = ".agents/decision-ledger.json";
     public const string Lifecycle = ".agents/artifacts/lifecycle.md";
+    public const string LifecycleJson = ".agents/artifacts/lifecycle.json";
     public const string RoadmapFile = ".agents/roadmap.md";
     public const string RoadmapDirectory = ".agents/roadmap";
     public const string Selection = ".agents/selection.md";
@@ -19,6 +22,7 @@ internal static class RoadmapArtifactPaths
     public const string ExecutionMilestonesDirectory = ".agents/milestones";
     public const string RoadmapCompletionContext = ".agents/core/roadmap-completion-context.md";
     public const string ProjectionsManifest = ".agents/projections/manifest.md";
+    public const string ProjectionsManifestJson = ".agents/projections/manifest.json";
     public const string PromptContracts = ".agents/contracts/prompt-contracts.md";
     public const string TransitionJournal = ".agents/journal/transitions.jsonl";
     public const string SplitFamiliesDirectory = ".agents/splits";
@@ -62,4 +66,6 @@ internal static class RoadmapArtifactPaths
         !string.Equals(Path.GetFileName(path), "bundle-manifest.md", StringComparison.OrdinalIgnoreCase);
 
     public static string SplitFamily(string familyId) => $".agents/splits/split-family-{familyId}.md";
+
+    public static string SplitFamilyJson(string familyId) => $".agents/splits/split-family-{familyId}.json";
 }

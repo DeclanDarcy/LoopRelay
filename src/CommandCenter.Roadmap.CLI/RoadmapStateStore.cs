@@ -5,7 +5,21 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
 {
+    private readonly StructuredDocumentStore<RoadmapStatePersistenceDocument> structuredStore = new(
+        artifacts,
+        RoadmapArtifactPaths.StateJson,
+        RoadmapStatePersistenceDocument.CurrentSchemaVersion,
+        document => document.SchemaVersion,
+        RoadmapStatePersistenceDocument.Validate);
+
     public async Task SaveAsync(RoadmapStateDocument document)
+    {
+        RoadmapStatePersistenceDocument persisted = RoadmapStatePersistenceDocument.FromDomain(document);
+        await structuredStore.SaveAsync(persisted);
+        await artifacts.WriteAsync(RoadmapArtifactPaths.State, Render(document));
+    }
+
+    public static string Render(RoadmapStateDocument document)
     {
         var lines = new List<string>
         {
@@ -23,7 +37,7 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
 
         foreach (ArtifactStateRow row in document.ActiveArtifacts)
         {
-            lines.Add($"| {row.Artifact} | {row.Path} | {row.Status} |");
+            lines.Add($"| {Escape(row.Artifact)} | {Escape(row.Path)} | {Escape(row.Status)} |");
         }
 
         lines.AddRange(
@@ -35,10 +49,10 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             "|---|---|",
             $"| From | {document.LastTransition.From} |",
             $"| To | {document.LastTransition.To} |",
-            $"| Prompt | {document.LastTransition.Prompt} |",
-            $"| Projection | {document.LastTransition.Projection} |",
-            $"| Output | {document.LastTransition.Output} |",
-            $"| Decision | {document.LastTransition.Decision} |",
+            $"| Prompt | {Escape(document.LastTransition.Prompt)} |",
+            $"| Projection | {Escape(document.LastTransition.Projection)} |",
+            $"| Output | {Escape(document.LastTransition.Output)} |",
+            $"| Decision | {Escape(document.LastTransition.Decision)} |",
             $"| Status | {document.LastTransition.Status} |",
             $"| Started At | {document.LastTransition.StartedAt:O} |",
             $"| Completed At | {(document.LastTransition.CompletedAt is { } completed ? completed.ToString("O") : string.Empty)} |",
@@ -59,7 +73,7 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
 
         foreach (BlockerRow blocker in document.Blockers)
         {
-            lines.Add($"| {blocker.Blocker} | {blocker.RequiredNextStep} |");
+            lines.Add($"| {Escape(blocker.Blocker)} | {Escape(blocker.RequiredNextStep)} |");
         }
 
         lines.AddRange(
@@ -70,7 +84,7 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             "| Field | Value |",
             "|---|---|",
             $"| Ledger Path | {RoadmapArtifactPaths.DecisionLedger} |",
-            $"| Last Decision ID | {document.LastDecisionId} |",
+            $"| Last Decision ID | {Escape(document.LastDecisionId)} |",
             $"| Retired Epics | {document.RetiredEpicsCount} |",
             $"| Split Families | {document.SplitFamiliesCount} |",
             string.Empty,
@@ -116,22 +130,55 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             }
         }
 
-        await artifacts.WriteAsync(RoadmapArtifactPaths.State, string.Join(Environment.NewLine, lines) + Environment.NewLine);
+        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 
     public async Task<RoadmapStateDocument?> LoadAsync()
     {
+        RoadmapStatePersistenceDocument? structured = await structuredStore.LoadAsync();
+        if (structured is not null)
+        {
+            return structured.ToDomain();
+        }
+
         string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.State);
         if (string.IsNullOrWhiteSpace(content))
         {
             return null;
         }
 
+        RoadmapStateDocument migrated;
+        try
+        {
+            migrated = ParseLegacyMarkdown(content);
+        }
+        catch (MarkdownParseException exception)
+        {
+            throw new RoadmapStepException($"Legacy roadmap state cannot be migrated: {exception.Message}");
+        }
+
+        await SaveAsync(migrated);
+        return migrated;
+    }
+
+    private static RoadmapStateDocument ParseLegacyMarkdown(string content)
+    {
+        MarkdownTableParser.ValidateTables(content);
+
         RoadmapState state = RoadmapState.CoreReady;
         Match stateMatch = CurrentStateRegex().Match(content);
-        if (stateMatch.Success && Enum.TryParse(stateMatch.Groups["state"].Value.Trim(), out RoadmapState parsed))
+        if (!stateMatch.Success)
+        {
+            throw new RoadmapStepException("Legacy roadmap state cannot be migrated because `## Current State` is missing or malformed.");
+        }
+
+        if (Enum.TryParse(stateMatch.Groups["state"].Value.Trim(), out RoadmapState parsed))
         {
             state = parsed;
+        }
+        else
+        {
+            throw new RoadmapStepException($"Legacy roadmap state cannot be migrated because current state `{stateMatch.Groups["state"].Value.Trim()}` is unknown.");
         }
 
         IReadOnlyList<ArtifactStateRow> activeArtifacts = ParseActiveArtifacts(content);
@@ -143,7 +190,7 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
         DecisionLedgerSummary ledgerSummary = ParseDecisionLedgerSummary(content, retired.Count);
         ProjectionManifestCounts projectionCounts = ParseProjectionManifestCounts(content);
 
-        return new RoadmapStateDocument(
+        var document = new RoadmapStateDocument(
             state,
             activeArtifacts,
             transition,
@@ -155,43 +202,35 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             transitionIntent,
             nextTransitions,
             retired);
+
+        RoadmapStatePersistenceDocument migrated = RoadmapStatePersistenceDocument.FromDomain(document);
+        IReadOnlyList<string> errors = RoadmapStatePersistenceDocument.Validate(migrated);
+        if (errors.Count > 0)
+        {
+            throw new RoadmapStepException($"Legacy roadmap state cannot be migrated because validation failed: {string.Join("; ", errors)}");
+        }
+
+        return document;
     }
 
     private static IReadOnlyList<ArtifactStateRow> ParseActiveArtifacts(string content)
     {
-        try
-        {
-            return MarkdownTableParser.ParseTables(MarkdownTableParser.ExtractSection(content, "## Active Artifacts"))
-                .Where(row => row.ContainsKey("Artifact") && row.ContainsKey("Path") && row.ContainsKey("Status"))
-                .Select(row => new ArtifactStateRow(row["Artifact"], row["Path"], row["Status"]))
-                .Where(row => !string.IsNullOrWhiteSpace(row.Path))
-                .ToArray();
-        }
-        catch (MarkdownParseException)
+        string? section = MarkdownTableParser.TryExtractSection(content, "## Active Artifacts");
+        if (section is null)
         {
             return [];
         }
+
+        return MarkdownTableParser.ParseTablesStrict(section)
+            .Where(row => row.ContainsKey("Artifact") && row.ContainsKey("Path") && row.ContainsKey("Status"))
+            .Select(row => new ArtifactStateRow(row["Artifact"], row["Path"], row["Status"]))
+            .Where(row => !string.IsNullOrWhiteSpace(row.Path))
+            .ToArray();
     }
 
     private static RoadmapTransitionSummary ParseLastTransition(string content, RoadmapState fallbackState)
     {
-        try
-        {
-            IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(content, "## Last Transition");
-            return new RoadmapTransitionSummary(
-                ParseState(Field(fields, "From", fallbackState.ToString()), fallbackState),
-                ParseState(Field(fields, "To", fallbackState.ToString()), fallbackState),
-                Field(fields, "Prompt", "None"),
-                Field(fields, "Projection", "None"),
-                Field(fields, "Output", "None"),
-                Field(fields, "Decision", "None"),
-                Enum.TryParse(Field(fields, "Status", TransitionStatus.Completed.ToString()), out TransitionStatus status)
-                    ? status
-                    : TransitionStatus.Completed,
-                ParseTimestamp(Field(fields, "Started At", string.Empty)) ?? DateTimeOffset.MinValue,
-                ParseTimestamp(Field(fields, "Completed At", string.Empty)));
-        }
-        catch (MarkdownParseException)
+        if (MarkdownTableParser.TryExtractSection(content, "## Last Transition") is null)
         {
             return new RoadmapTransitionSummary(
                 fallbackState,
@@ -204,43 +243,54 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
                 DateTimeOffset.MinValue,
                 null);
         }
+
+        IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTableStrict(content, "## Last Transition");
+        return new RoadmapTransitionSummary(
+            ParseState(Field(fields, "From", fallbackState.ToString()), fallbackState),
+            ParseState(Field(fields, "To", fallbackState.ToString()), fallbackState),
+            Field(fields, "Prompt", "None"),
+            Field(fields, "Projection", "None"),
+            Field(fields, "Output", "None"),
+            Field(fields, "Decision", "None"),
+            Enum.TryParse(Field(fields, "Status", TransitionStatus.Completed.ToString()), out TransitionStatus status)
+                ? status
+                : TransitionStatus.Completed,
+            ParseTimestamp(Field(fields, "Started At", string.Empty)) ?? DateTimeOffset.MinValue,
+            ParseTimestamp(Field(fields, "Completed At", string.Empty)));
     }
 
     private static RoadmapTransitionIntent ParseTransitionIntent(string content, RoadmapState fallbackState)
     {
-        try
-        {
-            IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(content, "## Transition Intent");
-            string evidenceValue = Field(fields, "Evidence Paths", "None");
-            IReadOnlyList<string> evidencePaths = evidenceValue
-                .Split("<br>", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(path => !string.Equals(path, "None", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            return new RoadmapTransitionIntent(
-                Field(fields, "Intent", "None"),
-                ParseState(Field(fields, "Dispatch State", fallbackState.ToString()), fallbackState),
-                evidencePaths);
-        }
-        catch (MarkdownParseException)
+        if (MarkdownTableParser.TryExtractSection(content, "## Transition Intent") is null)
         {
             return RoadmapTransitionIntent.Empty(fallbackState);
         }
+
+        IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTableStrict(content, "## Transition Intent");
+        string evidenceValue = Field(fields, "Evidence Paths", "None");
+        IReadOnlyList<string> evidencePaths = evidenceValue
+            .Split("<br>", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(path => !string.Equals(path, "None", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        return new RoadmapTransitionIntent(
+            Field(fields, "Intent", "None"),
+            ParseState(Field(fields, "Dispatch State", fallbackState.ToString()), fallbackState),
+            evidencePaths);
     }
 
     private static IReadOnlyList<BlockerRow> ParseBlockers(string content)
     {
-        try
-        {
-            return MarkdownTableParser.ParseTables(MarkdownTableParser.ExtractSection(content, "## Blockers"))
-                .Where(row => row.ContainsKey("Blocker") && row.ContainsKey("Required Next Step"))
-                .Select(row => new BlockerRow(row["Blocker"], row["Required Next Step"]))
-                .Where(row => !string.IsNullOrWhiteSpace(row.Blocker))
-                .ToArray();
-        }
-        catch (MarkdownParseException)
+        string? section = MarkdownTableParser.TryExtractSection(content, "## Blockers");
+        if (section is null)
         {
             return [];
         }
+
+        return MarkdownTableParser.ParseTablesStrict(section)
+            .Where(row => row.ContainsKey("Blocker") && row.ContainsKey("Required Next Step"))
+            .Select(row => new BlockerRow(row["Blocker"], row["Required Next Step"]))
+            .Where(row => !string.IsNullOrWhiteSpace(row.Blocker))
+            .ToArray();
     }
 
     private static IReadOnlyList<string> ParseNextValidTransitions(string content)
@@ -262,34 +312,30 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
 
     private static DecisionLedgerSummary ParseDecisionLedgerSummary(string content, int retiredCount)
     {
-        try
-        {
-            IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(content, "## Decision Ledger Summary");
-            return new DecisionLedgerSummary(
-                Field(fields, "Last Decision ID", "None"),
-                ParseInt(Field(fields, "Retired Epics", retiredCount.ToString(CultureInfo.InvariantCulture)), retiredCount),
-                ParseInt(Field(fields, "Split Families", "0"), 0));
-        }
-        catch (MarkdownParseException)
+        if (MarkdownTableParser.TryExtractSection(content, "## Decision Ledger Summary") is null)
         {
             return new DecisionLedgerSummary("None", retiredCount, 0);
         }
+
+        IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTableStrict(content, "## Decision Ledger Summary");
+        return new DecisionLedgerSummary(
+            Field(fields, "Last Decision ID", "None"),
+            ParseInt(Field(fields, "Retired Epics", retiredCount.ToString(CultureInfo.InvariantCulture)), retiredCount),
+            ParseInt(Field(fields, "Split Families", "0"), 0));
     }
 
     private static ProjectionManifestCounts ParseProjectionManifestCounts(string content)
     {
-        try
-        {
-            IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTable(content, "## Projection Manifest Summary");
-            return new ProjectionManifestCounts(
-                ParseInt(Field(fields, "Valid Projections", "0"), 0),
-                ParseInt(Field(fields, "Stale Projections", "0"), 0),
-                ParseInt(Field(fields, "Invalid Projections", "0"), 0));
-        }
-        catch (MarkdownParseException)
+        if (MarkdownTableParser.TryExtractSection(content, "## Projection Manifest Summary") is null)
         {
             return new ProjectionManifestCounts(0, 0, 0);
         }
+
+        IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTableStrict(content, "## Projection Manifest Summary");
+        return new ProjectionManifestCounts(
+            ParseInt(Field(fields, "Valid Projections", "0"), 0),
+            ParseInt(Field(fields, "Stale Projections", "0"), 0),
+            ParseInt(Field(fields, "Invalid Projections", "0"), 0));
     }
 
     private static IReadOnlyList<RetiredEpic> ParseRetiredEpics(string content)
@@ -298,7 +344,7 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
         if (start >= 0)
         {
             string section = ExtractSubsection(content, start, "### Retired Epics".Length);
-            return MarkdownTableParser.ParseTables(section)
+            return MarkdownTableParser.ParseTablesStrict(section)
                 .Select(ParseRetiredEpicRow)
                 .Where(retired => retired.HasStableIdentity)
                 .ToList();
@@ -380,7 +426,13 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
 
     private static string Join(IReadOnlyList<string> values) => values.Count == 0 ? "None" : string.Join("<br>", values.Select(Escape));
 
-    private static string Escape(string value) => value.Replace("|", "\\|", StringComparison.Ordinal);
+    private static string Escape(string value) =>
+        value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("|", "\\|", StringComparison.Ordinal)
+            .Replace("\r\n", "<br>", StringComparison.Ordinal)
+            .Replace("\n", "<br>", StringComparison.Ordinal)
+            .Replace("\r", "<br>", StringComparison.Ordinal);
 
     [GeneratedRegex(@"## Current State\s+(?<state>[A-Za-z0-9]+)", RegexOptions.CultureInvariant)]
     private static partial Regex CurrentStateRegex();

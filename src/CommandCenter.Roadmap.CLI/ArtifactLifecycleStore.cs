@@ -2,37 +2,39 @@ namespace CommandCenter.Roadmap.Cli;
 
 internal sealed class ArtifactLifecycleStore(RoadmapArtifacts artifacts)
 {
+    private readonly StructuredDocumentStore<ArtifactLifecyclePersistenceDocument> structuredStore = new(
+        artifacts,
+        RoadmapArtifactPaths.LifecycleJson,
+        ArtifactLifecyclePersistenceDocument.CurrentSchemaVersion,
+        document => document.SchemaVersion,
+        ArtifactLifecyclePersistenceDocument.Validate);
+
     public async Task<IReadOnlyList<ArtifactLifecycleEntry>> LoadAsync()
     {
+        ArtifactLifecyclePersistenceDocument? structured = await structuredStore.LoadAsync();
+        if (structured is not null)
+        {
+            return structured.ToDomain();
+        }
+
         string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.Lifecycle);
         if (string.IsNullOrWhiteSpace(content))
         {
             return [];
         }
 
-        var entries = new List<ArtifactLifecycleEntry>();
-        foreach (string line in content.Split('\n'))
+        IReadOnlyList<ArtifactLifecycleEntry> migrated;
+        try
         {
-            string trimmed = line.Trim();
-            if (!trimmed.StartsWith('|') || trimmed.StartsWith("|---", StringComparison.Ordinal) || trimmed.Contains("Path", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            string[] cells = trimmed.Trim('|').Split('|').Select(cell => cell.Trim()).ToArray();
-            if (cells.Length < 4)
-            {
-                continue;
-            }
-
-            entries.Add(new ArtifactLifecycleEntry(
-                cells[0],
-                Enum.TryParse(cells[1], out ArtifactLifecycleState state) ? state : ArtifactLifecycleState.Missing,
-                DateTimeOffset.TryParse(cells[2], out DateTimeOffset updatedAt) ? updatedAt : DateTimeOffset.MinValue,
-                cells[3]));
+            migrated = ParseLegacyMarkdown(content);
+        }
+        catch (MarkdownParseException exception)
+        {
+            throw new RoadmapStepException($"Legacy artifact lifecycle cannot be migrated: {exception.Message}");
         }
 
-        return entries;
+        await SaveAsync(migrated);
+        return migrated;
     }
 
     public async Task UpsertAsync(string path, ArtifactLifecycleState state, string notes = "")
@@ -48,6 +50,13 @@ internal sealed class ArtifactLifecycleStore(RoadmapArtifacts artifacts)
 
     public async Task SaveAsync(IReadOnlyList<ArtifactLifecycleEntry> entries)
     {
+        ArtifactLifecyclePersistenceDocument persisted = ArtifactLifecyclePersistenceDocument.FromDomain(entries);
+        await structuredStore.SaveAsync(persisted);
+        await artifacts.WriteAsync(RoadmapArtifactPaths.Lifecycle, Render(entries));
+    }
+
+    public static string Render(IReadOnlyList<ArtifactLifecycleEntry> entries)
+    {
         var lines = new List<string>
         {
             "# Artifact Lifecycle",
@@ -58,9 +67,45 @@ internal sealed class ArtifactLifecycleStore(RoadmapArtifacts artifacts)
 
         foreach (ArtifactLifecycleEntry entry in entries.OrderBy(entry => entry.Path, StringComparer.Ordinal))
         {
-            lines.Add($"| {entry.Path} | {entry.State} | {entry.UpdatedAt:O} | {entry.Notes.Replace('\n', ' ')} |");
+            lines.Add($"| {EscapeCell(entry.Path)} | {entry.State} | {entry.UpdatedAt:O} | {EscapeCell(entry.Notes)} |");
         }
 
-        await artifacts.WriteAsync(RoadmapArtifactPaths.Lifecycle, string.Join(Environment.NewLine, lines) + Environment.NewLine);
+        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
+
+    private static IReadOnlyList<ArtifactLifecycleEntry> ParseLegacyMarkdown(string content)
+    {
+        MarkdownTableParser.ValidateTables(content);
+        var entries = new List<ArtifactLifecycleEntry>();
+        foreach (IReadOnlyDictionary<string, string> row in MarkdownTableParser.ParseTablesStrict(content))
+        {
+            if (!row.ContainsKey("Path") || !row.ContainsKey("State") || !row.ContainsKey("Updated At") || !row.ContainsKey("Notes"))
+            {
+                continue;
+            }
+
+            entries.Add(new ArtifactLifecycleEntry(
+                row["Path"],
+                Enum.TryParse(row["State"], out ArtifactLifecycleState state) ? state : ArtifactLifecycleState.Missing,
+                DateTimeOffset.TryParse(row["Updated At"], out DateTimeOffset updatedAt) ? updatedAt : DateTimeOffset.MinValue,
+                row["Notes"]));
+        }
+
+        ArtifactLifecyclePersistenceDocument persisted = ArtifactLifecyclePersistenceDocument.FromDomain(entries);
+        IReadOnlyList<string> errors = ArtifactLifecyclePersistenceDocument.Validate(persisted);
+        if (errors.Count > 0)
+        {
+            throw new RoadmapStepException($"Legacy artifact lifecycle cannot be migrated because validation failed: {string.Join("; ", errors)}");
+        }
+
+        return entries.OrderBy(entry => entry.Path, StringComparer.Ordinal).ToArray();
+    }
+
+    private static string EscapeCell(string? value) =>
+        (value ?? string.Empty)
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("|", "\\|", StringComparison.Ordinal)
+            .Replace("\r\n", "<br>", StringComparison.Ordinal)
+            .Replace("\n", "<br>", StringComparison.Ordinal)
+            .Replace("\r", "<br>", StringComparison.Ordinal);
 }
