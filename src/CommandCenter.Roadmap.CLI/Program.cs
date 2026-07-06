@@ -16,11 +16,13 @@ catch (IOException)
     // Output is redirected.
 }
 
-if (!CliArguments.TryParse(args, out Repository repository, out string error))
+if (!CliArguments.TryParse(args, out RoadmapCliInvocation invocation, out string error))
 {
     Console.Error.WriteLine(error);
     return 2;
 }
+
+Repository repository = invocation.Repository;
 
 var services = new ServiceCollection();
 services.AddAgents();
@@ -53,13 +55,14 @@ var decisionLedger = new DecisionLedgerStore(artifacts);
 var journal = new TransitionJournalStore(artifacts);
 var lifecycle = new ArtifactLifecycleStore(artifacts);
 var startupPlanner = new RoadmapStartupPlanner();
+var projectContextLoader = new ProjectContextLoader(artifacts);
 var resumePlanner = new RoadmapResumePlanner(artifacts, contractRegistry, manifestStore, lifecycle, provenanceFactory, selectionProvenance, executionPreparation);
+var unblockPlanner = new RoadmapUnblockPlanner(artifacts, projectContextLoader, contractRegistry, resumePlanner, completionPolicy, completionRouter, executionPreparation);
 var promotion = new ArtifactPromotionService(artifacts, lifecycle);
 var bundleExtractor = new BundleFileExtractor();
 var splitBundleInterpreter = new SplitEpicBundleInterpreter();
 var bundleManifest = new BundleManifestWriter(artifacts);
 var splitFamilies = new SplitFamilyStore(artifacts);
-var projectContextLoader = new ProjectContextLoader(artifacts);
 var operationalContext = new OperationalContextGenerator(artifacts, lifecycle, executionPreparation);
 var executionPrompt = new ExecutionPromptGenerator(artifacts, lifecycle, executionPreparation);
 var materializer = new ExecutionCompatibilityMaterializer(artifacts, executionPreparation);
@@ -80,6 +83,7 @@ var machine = new RoadmapStateMachine(
     stateStore,
     startupPlanner,
     resumePlanner,
+    unblockPlanner,
     selectionProvenance,
     decisionLedger,
     journal,
@@ -106,13 +110,13 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
-console.Info($"CommandCenter.Roadmap.CLI starting for {repository.Path}");
+console.Info($"CommandCenter.Roadmap.CLI {invocation.Command.ToString().ToLowerInvariant()} starting for {repository.Path}");
 console.Info($"Codex executable: {executableResolver.Resolve()}");
 
 RoadmapOutcome outcome;
 try
 {
-    outcome = await machine.RunAsync(cts.Token);
+    outcome = await machine.ExecuteAsync(invocation.Command, cts.Token);
 }
 finally
 {

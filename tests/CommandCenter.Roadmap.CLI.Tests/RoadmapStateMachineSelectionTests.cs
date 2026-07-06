@@ -83,6 +83,8 @@ internal static class StateMachineFactory
             inputResolver);
         IRoadmapExecutionBridge executionBridge = bridge ?? new FakeRoadmapExecutionBridge();
         var invariants = new InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
+        var resumePlanner = new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
+        var unblockPlanner = new RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, resumePlanner, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
         return new RoadmapStateMachine(
             repo.Artifacts,
             loader,
@@ -96,7 +98,8 @@ internal static class StateMachineFactory
             runner,
             stateStore,
             new RoadmapStartupPlanner(),
-            new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation),
+            resumePlanner,
+            unblockPlanner,
             selectionProvenance,
             new DecisionLedgerStore(repo.Artifacts),
             new TransitionJournalStore(repo.Artifacts),

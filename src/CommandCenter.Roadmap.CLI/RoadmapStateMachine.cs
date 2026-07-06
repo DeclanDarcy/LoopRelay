@@ -16,6 +16,7 @@ internal sealed class RoadmapStateMachine(
     RoadmapStateStore stateStore,
     RoadmapStartupPlanner startupPlanner,
     RoadmapResumePlanner resumePlanner,
+    RoadmapUnblockPlanner unblockPlanner,
     SelectionProvenanceService selectionProvenance,
     DecisionLedgerStore decisionLedger,
     TransitionJournalStore journalStore,
@@ -34,6 +35,70 @@ internal sealed class RoadmapStateMachine(
     InvariantValidator invariantValidator,
     ILoopConsole console)
 {
+    public Task<RoadmapOutcome> ExecuteAsync(
+        RoadmapCliCommand command,
+        CancellationToken cancellationToken) =>
+        command switch
+        {
+            RoadmapCliCommand.Status => StatusAsync(cancellationToken),
+            RoadmapCliCommand.Run => RunAsync(cancellationToken),
+            RoadmapCliCommand.Unblock => UnblockAsync(cancellationToken),
+            _ => throw new RoadmapStepException($"Unsupported roadmap command: {command}."),
+        };
+
+    public async Task<RoadmapOutcome> StatusAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        RoadmapStateDocument? persistedState = await stateStore.LoadAsync();
+        if (persistedState is null)
+        {
+            console.Info("No persisted roadmap state exists.");
+            return RoadmapOutcome.Paused;
+        }
+
+        RoadmapStartupPlan startupPlan = startupPlanner.Plan(persistedState);
+        console.Info($"Status: {persistedState.CurrentState}. {startupPlan.Reason}");
+        console.Info($"Transition intent: {persistedState.TransitionIntent.Intent} -> {persistedState.TransitionIntent.DispatchState}");
+        foreach (BlockerRow blocker in persistedState.Blockers)
+        {
+            console.Warn($"{blocker.Blocker} Required next step: {blocker.RequiredNextStep}");
+        }
+
+        return startupPlan.ReportOutcome ?? RoadmapOutcome.Paused;
+    }
+
+    public async Task<RoadmapOutcome> UnblockAsync(CancellationToken cancellationToken)
+    {
+        RoadmapStateDocument? persistedState = await stateStore.LoadAsync();
+        RoadmapUnblockPlan unblockPlan = await unblockPlanner.PlanAsync(persistedState, cancellationToken);
+        console.Info($"Unblock plan: {unblockPlan.Status} for {unblockPlan.TransitionIntent.Intent}. {unblockPlan.Reason}");
+
+        if (persistedState is null)
+        {
+            return RoadmapOutcome.Paused;
+        }
+
+        if (unblockPlan.Status != RoadmapUnblockPlanStatus.Success)
+        {
+            if (IsBlockedRecoveryState(persistedState.CurrentState))
+            {
+                await PersistUnblockReviewFailureAsync(persistedState, unblockPlan);
+            }
+
+            return RoadmapWorkflowStateClassifier.ReportOutcome(persistedState.CurrentState);
+        }
+
+        return unblockPlan.Action switch
+        {
+            RoadmapUnblockAction.RecoverToCoreReady => await RecoverPreflightBlockerAsync(persistedState, unblockPlan),
+            RoadmapUnblockAction.RecoverExecutionDisposition => await RecoverExecutionDispositionAsync(persistedState, unblockPlan),
+            RoadmapUnblockAction.RecoverCompletionCertification => await RecoverCompletionCertificationAsync(persistedState, unblockPlan, cancellationToken),
+            RoadmapUnblockAction.RecoverExecutionRuntimeFailure => await RecoverExecutionRuntimeFailureAsync(persistedState, unblockPlan),
+            _ => throw new RoadmapStepException($"Unsupported unblock recovery action: {unblockPlan.Action}."),
+        };
+    }
+
     public async Task<RoadmapOutcome> RunAsync(CancellationToken cancellationToken)
     {
         RoadmapStateDocument? persistedState = await stateStore.LoadAsync();
@@ -171,6 +236,257 @@ internal sealed class RoadmapStateMachine(
             default:
                 throw new RoadmapStepException($"Unsupported resume action: {resumePlan.Action}.");
         }
+    }
+
+    private async Task<RoadmapOutcome> RecoverPreflightBlockerAsync(
+        RoadmapStateDocument persistedState,
+        RoadmapUnblockPlan unblockPlan)
+    {
+        string reviewPath = await WriteUnblockReviewEvidenceAsync(persistedState, unblockPlan, success: true);
+        await RecordUnblockJournalAsync(persistedState, unblockPlan, reviewPath, "Recovered", null);
+
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        await SaveStateAsync(
+            RoadmapState.CoreReady,
+            TransitionStatus.Completed,
+            persistedState.CurrentState,
+            RoadmapState.CoreReady,
+            "UnblockReview",
+            "None",
+            FormatList([..unblockPlan.TransitionIntent.EvidencePaths, reviewPath]),
+            unblockPlan.Decision,
+            completed,
+            completed,
+            null,
+            [],
+            RoadmapTransitionIntent.Empty(RoadmapState.CoreReady));
+        return RoadmapOutcome.Paused;
+    }
+
+    private async Task<RoadmapOutcome> RecoverExecutionDispositionAsync(
+        RoadmapStateDocument persistedState,
+        RoadmapUnblockPlan unblockPlan)
+    {
+        ExecutionDispositionValidationResult validation = unblockPlan.ExecutionValidation
+            ?? throw new RoadmapStepException("Execution disposition unblock did not include validation evidence.");
+        ExecutionDispositionRoute route = validation.Route
+            ?? throw new RoadmapStepException("Execution disposition unblock did not include a validated route.");
+        string executionEvidencePath = unblockPlan.PrimaryEvidencePath
+            ?? throw new RoadmapStepException("Execution disposition unblock did not include an execution evidence path.");
+        string reviewPath = await WriteUnblockReviewEvidenceAsync(persistedState, unblockPlan, success: true);
+        await RecordUnblockJournalAsync(persistedState, unblockPlan, reviewPath, "Recovered", null);
+
+        if (route.OutcomeKind is RoadmapExecutionOutcomeKind.ContinueRequired or RoadmapExecutionOutcomeKind.ExecutionBlocked)
+        {
+            await lifecycleStore.UpsertAsync(
+                RoadmapArtifactPaths.ActiveEpic,
+                ArtifactLifecycleState.Executing,
+                $"Unblock review routed execution disposition: {validation.Disposition.StatusText}.");
+        }
+
+        IReadOnlyList<string> outputs = [executionEvidencePath, reviewPath];
+        IReadOnlyList<BlockerRow> blockers = route.OutcomeKind == RoadmapExecutionOutcomeKind.ExecutionBlocked
+            ? [new BlockerRow(validation.Disposition.EvidenceSummary, $"Review {executionEvidencePath}, resolve the execution blocker, and run explicit unblock when a handler exists.")]
+            : [];
+        TransitionStatus status = route.OutcomeKind == RoadmapExecutionOutcomeKind.EpicComplete
+            ? TransitionStatus.Completed
+            : TransitionStatus.Paused;
+        IReadOnlyList<string> nextTransitions = route.OutcomeKind switch
+        {
+            RoadmapExecutionOutcomeKind.EpicComplete => [route.WorkflowTransition],
+            RoadmapExecutionOutcomeKind.ContinueRequired => ["ExecutionLoop", route.WorkflowTransition],
+            RoadmapExecutionOutcomeKind.ExecutionBlocked => [route.WorkflowTransition],
+            _ => [route.WorkflowTransition],
+        };
+
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        await SaveStateAsync(
+            route.TargetState,
+            status,
+            persistedState.CurrentState,
+            route.TargetState,
+            "UnblockReview",
+            "None",
+            FormatList(outputs),
+            validation.Disposition.StatusText,
+            completed,
+            completed,
+            null,
+            blockers,
+            new RoadmapTransitionIntent(route.WorkflowTransition, route.TargetState, outputs),
+            nextTransitions);
+        return RoadmapOutcome.Paused;
+    }
+
+    private async Task<RoadmapOutcome> RecoverCompletionCertificationAsync(
+        RoadmapStateDocument persistedState,
+        RoadmapUnblockPlan unblockPlan,
+        CancellationToken cancellationToken)
+    {
+        CompletionCertificationPolicyResult certification = unblockPlan.CompletionCertification
+            ?? throw new RoadmapStepException("Completion certification unblock did not include certification evidence.");
+        CompletionCertificationRoute route = unblockPlan.CompletionRoute
+            ?? throw new RoadmapStepException("Completion certification unblock did not include a route.");
+        string evaluationPath = unblockPlan.PrimaryEvidencePath
+            ?? throw new RoadmapStepException("Completion certification unblock did not include an evaluation evidence path.");
+        string reviewPath = await WriteUnblockReviewEvidenceAsync(persistedState, unblockPlan, success: true);
+        await RecordUnblockJournalAsync(persistedState, unblockPlan, reviewPath, "Recovered", null);
+        await AppendDecisionAsync(
+            RoadmapState.CompletionEvaluationAndContextUpdate,
+            "UnblockReview",
+            persistedState.LastTransition.Projection,
+            evaluationPath,
+            certification.Decision.ClosureRecommendation,
+            "Unclear",
+            unblockPlan.Reason);
+
+        if (route.RequiresRoadmapCompletionContextUpdate)
+        {
+            ProjectContext projectContext = await projectContextLoader.LoadAsync(cancellationToken);
+            await UpdateRoadmapCompletionContextAsync(projectContext, evaluationPath, cancellationToken);
+        }
+
+        if (route.ActiveEpicLifecycleState is { } activeEpicLifecycleState)
+        {
+            await lifecycleStore.UpsertAsync(
+                RoadmapArtifactPaths.ActiveEpic,
+                activeEpicLifecycleState,
+                $"Completion certification unblock route: {route.ClosureRecommendation}");
+        }
+
+        await PersistCompletionRouteAsync(
+            route,
+            certification.Decision,
+            persistedState.LastTransition.Projection,
+            evaluationPath,
+            [reviewPath],
+            []);
+        return route.CliOutcome;
+    }
+
+    private async Task<RoadmapOutcome> RecoverExecutionRuntimeFailureAsync(
+        RoadmapStateDocument persistedState,
+        RoadmapUnblockPlan unblockPlan)
+    {
+        string reviewPath = await WriteUnblockReviewEvidenceAsync(persistedState, unblockPlan, success: true);
+        await RecordUnblockJournalAsync(persistedState, unblockPlan, reviewPath, "Recovered", null);
+        await lifecycleStore.UpsertAsync(
+            RoadmapArtifactPaths.ActiveEpic,
+            ArtifactLifecycleState.Executing,
+            "Execution runtime failure was unblocked for a safe retry.");
+
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        IReadOnlyList<string> outputs = [..unblockPlan.TransitionIntent.EvidencePaths, reviewPath];
+        await SaveStateAsync(
+            RoadmapState.ExecutionPromptReady,
+            TransitionStatus.Completed,
+            persistedState.CurrentState,
+            RoadmapState.ExecutionPromptReady,
+            "UnblockReview",
+            "None",
+            FormatList(outputs),
+            unblockPlan.Decision,
+            completed,
+            completed,
+            null,
+            [],
+            new RoadmapTransitionIntent(
+                ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution),
+                RoadmapState.ExecutionPromptReady,
+                [RoadmapArtifactPaths.ExecutionPrompt, reviewPath]),
+            ["ExecutionLoop", ExecutionCommandText(ExecutionDispositionCommand.ContinueExecution)]);
+        return RoadmapOutcome.Paused;
+    }
+
+    private async Task PersistUnblockReviewFailureAsync(
+        RoadmapStateDocument persistedState,
+        RoadmapUnblockPlan unblockPlan)
+    {
+        string reviewPath = await WriteUnblockReviewEvidenceAsync(persistedState, unblockPlan, success: false);
+        await RecordUnblockJournalAsync(
+            persistedState,
+            unblockPlan,
+            reviewPath,
+            unblockPlan.Status.ToString(),
+            unblockPlan.Reason);
+
+        ProjectionManifest manifest = await manifestStore.LoadAsync();
+        int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md")).Count;
+        await stateStore.SaveAsync(persistedState with
+        {
+            ActiveArtifacts = await ActiveArtifactRowsAsync(),
+            Blockers = AppendUnblockReviewBlocker(
+                persistedState.Blockers,
+                unblockPlan,
+                reviewPath),
+            LastDecisionId = await decisionLedger.LastDecisionIdAsync(),
+            RetiredEpicsCount = persistedState.RetiredEpics.Count,
+            SplitFamiliesCount = splitFamilyCount,
+            ProjectionManifestCounts = new ProjectionManifestCounts(
+                manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Valid),
+                manifest.Entries.Count(entry => entry.StaleStatus != ProjectionStaleStatus.Fresh),
+                manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Invalid)),
+            NextValidTransitions = AppendNextTransition(persistedState.NextValidTransitions, "unblock"),
+        });
+    }
+
+    private async Task<string> WriteUnblockReviewEvidenceAsync(
+        RoadmapStateDocument persistedState,
+        RoadmapUnblockPlan unblockPlan,
+        bool success)
+    {
+        string content = RenderUnblockReviewEvidence(persistedState, unblockPlan, success, DateTimeOffset.UtcNow);
+        string path = await artifacts.WriteNumberedEvidenceAsync(
+            RoadmapArtifactPaths.BlockerEvidenceDirectory,
+            "unblock-review",
+            content);
+        await lifecycleStore.UpsertAsync(
+            path,
+            success ? ArtifactLifecycleState.Ready : ArtifactLifecycleState.Blocked,
+            unblockPlan.Reason);
+        return path;
+    }
+
+    private async Task RecordUnblockJournalAsync(
+        RoadmapStateDocument persistedState,
+        RoadmapUnblockPlan unblockPlan,
+        string reviewPath,
+        string result,
+        string? errorMessage)
+    {
+        IReadOnlyDictionary<string, string> hashes = new SortedDictionary<string, string>(
+            unblockPlan.Evidence
+                .Where(evidence => !string.IsNullOrWhiteSpace(evidence.Hash))
+                .GroupBy(evidence => evidence.Path, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Last().Hash,
+                    StringComparer.Ordinal),
+            StringComparer.Ordinal);
+        IReadOnlyList<string> outputs =
+        [
+            ..unblockPlan.Evidence
+                .Where(evidence => evidence.Path.StartsWith(".agents/", StringComparison.Ordinal))
+                .Select(evidence => evidence.Path)
+                .Distinct(StringComparer.Ordinal),
+            reviewPath,
+        ];
+        await journalStore.AppendAsync(new TransitionJournalRecord(
+            unblockPlan.Status == RoadmapUnblockPlanStatus.Success ? "UnblockReviewCompleted" : "UnblockReviewBlocked",
+            Guid.NewGuid().ToString("N"),
+            DateTimeOffset.UtcNow,
+            persistedState.CurrentState,
+            unblockPlan.TargetState ?? persistedState.CurrentState,
+            "UnblockReview",
+            "None",
+            unblockPlan.TransitionIntent.Intent,
+            hashes,
+            outputs,
+            0,
+            result,
+            unblockPlan.Decision,
+            errorMessage,
+            null));
     }
 
     private async Task<RoadmapOutcome> RunFromCoreReadyAsync(
@@ -1242,12 +1558,15 @@ internal sealed class RoadmapStateMachine(
         CompletionCertificationRoute route,
         CompletionEvaluationDecision decision,
         string projectionPath,
-        string evaluationPath)
+        string evaluationPath,
+        IReadOnlyList<string>? additionalEvidencePaths = null,
+        IReadOnlyList<BlockerRow>? blockers = null)
     {
         DateTimeOffset completed = DateTimeOffset.UtcNow;
+        IReadOnlyList<string> extraOutputs = additionalEvidencePaths ?? [];
         IReadOnlyList<string> outputs = route.RequiresRoadmapCompletionContextUpdate
-            ? [evaluationPath, RoadmapArtifactPaths.RoadmapCompletionContext]
-            : [evaluationPath];
+            ? [evaluationPath, RoadmapArtifactPaths.RoadmapCompletionContext, ..extraOutputs]
+            : [evaluationPath, ..extraOutputs];
         string routingContext = string.Join(
             Environment.NewLine,
             [
@@ -1291,8 +1610,10 @@ internal sealed class RoadmapStateMachine(
             completed,
             completed,
             null,
-            null,
-            route.ToRoadmapTransitionIntent(evaluationPath),
+            blockers,
+            extraOutputs.Count > 0
+                ? new RoadmapTransitionIntent(route.Intent.ToString(), route.TargetState, outputs)
+                : route.ToRoadmapTransitionIntent(evaluationPath),
             route.NextTransitions);
     }
 
@@ -1696,6 +2017,79 @@ internal sealed class RoadmapStateMachine(
         return [..existing, transition];
     }
 
+    private static IReadOnlyList<BlockerRow> AppendUnblockReviewBlocker(
+        IReadOnlyList<BlockerRow> existing,
+        RoadmapUnblockPlan unblockPlan,
+        string reviewPath)
+    {
+        string blocker = $"{unblockPlan.Decision}: {OneLine(unblockPlan.Reason)}";
+        if (existing.Any(row => string.Equals(row.Blocker, blocker, StringComparison.Ordinal)))
+        {
+            return existing;
+        }
+
+        return
+        [
+            ..existing,
+            new BlockerRow(
+                blocker,
+                $"{unblockPlan.RequiredNextStep} Review evidence: {reviewPath}."),
+        ];
+    }
+
+    private static string RenderUnblockReviewEvidence(
+        RoadmapStateDocument state,
+        RoadmapUnblockPlan unblockPlan,
+        bool success,
+        DateTimeOffset createdAt)
+    {
+        var lines = new List<string>
+        {
+            "# Roadmap Unblock Review",
+            string.Empty,
+            "| Field | Value |",
+            "|---|---|",
+            $"| Result | {(success ? "Recovered" : unblockPlan.Status)} |",
+            $"| Reviewed State | {state.CurrentState} |",
+            $"| Reviewed Intent | {Escape(unblockPlan.TransitionIntent.Intent)} |",
+            $"| Dispatch State | {unblockPlan.TransitionIntent.DispatchState} |",
+            $"| Recovery Action | {unblockPlan.Action} |",
+            $"| Recovery Decision | {Escape(unblockPlan.Decision)} |",
+            $"| Target State | {(unblockPlan.TargetState?.ToString() ?? "None")} |",
+            $"| Reason | {Escape(unblockPlan.Reason)} |",
+            $"| Required Next Step | {Escape(unblockPlan.RequiredNextStep)} |",
+            $"| Created At | {createdAt:O} |",
+            string.Empty,
+            "## Prior Transition",
+            string.Empty,
+            "| Field | Value |",
+            "|---|---|",
+            $"| From | {state.LastTransition.From} |",
+            $"| To | {state.LastTransition.To} |",
+            $"| Prompt | {Escape(state.LastTransition.Prompt)} |",
+            $"| Projection | {Escape(state.LastTransition.Projection)} |",
+            $"| Output | {Escape(state.LastTransition.Output)} |",
+            $"| Decision | {Escape(state.LastTransition.Decision)} |",
+            $"| Status | {state.LastTransition.Status} |",
+            string.Empty,
+            "## Original Blockers",
+            string.Empty,
+            FormatBlockers(state.Blockers),
+            string.Empty,
+            "## Evidence Hashes",
+            string.Empty,
+            "| Kind | Path | Status | SHA-256 |",
+            "|---|---|---|---|",
+        };
+
+        foreach (RoadmapUnblockEvidence evidence in unblockPlan.Evidence)
+        {
+            lines.Add($"| {Escape(evidence.Kind)} | {Escape(evidence.Path)} | {Escape(evidence.Status)} | {Escape(evidence.Hash)} |");
+        }
+
+        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
+    }
+
     private static string FormatBlockers(IReadOnlyList<BlockerRow> blockers)
     {
         if (blockers.Count == 0)
@@ -1710,6 +2104,18 @@ internal sealed class RoadmapStateMachine(
 
     private static string FormatList(IReadOnlyList<string> values) =>
         values.Count == 0 ? "None" : string.Join(", ", values);
+
+    private static bool IsBlockedRecoveryState(RoadmapState state) =>
+        state is RoadmapState.EvidenceBlocked
+            or RoadmapState.Failed
+            or RoadmapState.ExecutionBlocked;
+
+    private static string Escape(string value) =>
+        value
+            .Replace("|", "\\|", StringComparison.Ordinal)
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Trim();
 
     private static string OneLine(string value) =>
         string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
