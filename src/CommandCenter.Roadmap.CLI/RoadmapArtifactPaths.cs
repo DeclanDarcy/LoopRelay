@@ -35,14 +35,14 @@ internal static class RoadmapArtifactPaths
 
     public static readonly IReadOnlyList<string> ProjectContextSourceFiles =
     [
-        ".agents/core/01-purpose.md",
-        ".agents/core/02-capability-model.md",
-        ".agents/core/03-invariants.md",
-        ".agents/core/04-strategic-structure.md",
-        ".agents/core/05-authority-model.md",
-        ".agents/core/06-evaluation-model.md",
-        ".agents/core/07-drift-and-false-success.md",
-        ".agents/core/08-vocabulary.md",
+        ".agents/ctx/01-purpose.md",
+        ".agents/ctx/02-capability-model.md",
+        ".agents/ctx/03-invariants.md",
+        ".agents/ctx/04-strategic-structure.md",
+        ".agents/ctx/05-authority-model.md",
+        ".agents/ctx/06-evaluation-model.md",
+        ".agents/ctx/07-drift-and-false-success.md",
+        ".agents/ctx/08-vocabulary.md",
     ];
 
     public static readonly IReadOnlyDictionary<string, string> ProjectionPaths =

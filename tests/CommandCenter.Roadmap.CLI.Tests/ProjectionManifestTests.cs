@@ -126,7 +126,7 @@ public sealed class ProjectionManifestTests
 
             | Runtime Prompt | Projection Identity | Projection Prompt | Projection Prompt Type | Path | Provenance Status | Causal Inputs | Projection Prompt Source Hash | Project Context Files | Project Context Hash | Projection Hash | Generated At | Validation Status | Stale Status | Stale Reasons | Last Validation Error |
             |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-            | SelectNextEpic | SelectNextEpic | ProjectionForSelectNextEpic | Planning | .agents/projections/select-next-epic.md | Trusted | {not-json} | source-hash | .agents/core/01-purpose.md | context-hash | projection-hash | 2026-01-01T00:00:00.0000000+00:00 | Valid | Fresh | None | None |
+            | SelectNextEpic | SelectNextEpic | ProjectionForSelectNextEpic | Planning | .agents/projections/select-next-epic.md | Trusted | {not-json} | source-hash | .agents/ctx/01-purpose.md | context-hash | projection-hash | 2026-01-01T00:00:00.0000000+00:00 | Valid | Fresh | None | None |
             """);
 
         RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new ProjectionManifestStore(repo.Artifacts).LoadAsync());
@@ -141,7 +141,7 @@ public sealed class ProjectionManifestTests
             "ProjectionForSelectNextEpic",
             ".agents/projections/select|next.md",
             "source-hash",
-            [".agents/core/01-purpose.md", ".agents/core/02-capability|model.md"],
+            [".agents/ctx/01-purpose.md", ".agents/ctx/02-capability|model.md"],
             "context-hash",
             "projection-hash|with\\slash",
             DateTimeOffset.Parse("2026-01-01T00:00:00Z"),

@@ -26,8 +26,8 @@ public sealed class ProjectContextLoaderTests
 
         RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => loader.LoadAsync());
 
-        Assert.Contains(".agents/core/01-purpose.md", ex.Message, StringComparison.Ordinal);
-        Assert.Contains(".agents/core/08-vocabulary.md", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(".agents/ctx/01-purpose.md", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(".agents/ctx/08-vocabulary.md", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class ProjectContextLoaderTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(".agents/core/09-extra.md", "extra");
+        repo.Write(".agents/ctx/09-extra.md", "extra");
 
         RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new ProjectContextLoader(repo.Artifacts).LoadAsync());
 
