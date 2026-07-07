@@ -15,7 +15,7 @@ internal sealed class OperationalContextGenerator(
             throw new RoadmapStepException("Cannot generate operational context without milestone specs.");
         }
 
-        string ledger = await artifacts.ReadAsync(RoadmapArtifactPaths.DecisionLedger) ?? "No roadmap decisions recorded.";
+        string ledger = await artifacts.ReadAsync(RoadmapArtifactPaths.DecisionLedgerJson) ?? "No roadmap decisions recorded.";
         IReadOnlyList<ArtifactLifecycleEntry> lifecycle = await lifecycleStore.LoadAsync();
 
         var lines = new List<string>

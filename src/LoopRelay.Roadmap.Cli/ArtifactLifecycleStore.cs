@@ -52,25 +52,6 @@ internal sealed class ArtifactLifecycleStore(RoadmapArtifacts artifacts)
     {
         ArtifactLifecyclePersistenceDocument persisted = ArtifactLifecyclePersistenceDocument.FromDomain(entries);
         await structuredStore.SaveAsync(persisted);
-        await artifacts.WriteAsync(RoadmapArtifactPaths.Lifecycle, Render(entries));
-    }
-
-    public static string Render(IReadOnlyList<ArtifactLifecycleEntry> entries)
-    {
-        var lines = new List<string>
-        {
-            "# Artifact Lifecycle",
-            string.Empty,
-            "| Path | State | Updated At | Notes |",
-            "|---|---|---|---|",
-        };
-
-        foreach (ArtifactLifecycleEntry entry in entries.OrderBy(entry => entry.Path, StringComparer.Ordinal))
-        {
-            lines.Add($"| {EscapeCell(entry.Path)} | {entry.State} | {entry.UpdatedAt:O} | {EscapeCell(entry.Notes)} |");
-        }
-
-        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 
     private static IReadOnlyList<ArtifactLifecycleEntry> ParseLegacyMarkdown(string content)
@@ -101,11 +82,4 @@ internal sealed class ArtifactLifecycleStore(RoadmapArtifacts artifacts)
         return entries.OrderBy(entry => entry.Path, StringComparer.Ordinal).ToArray();
     }
 
-    private static string EscapeCell(string? value) =>
-        (value ?? string.Empty)
-            .Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("|", "\\|", StringComparison.Ordinal)
-            .Replace("\r\n", "<br>", StringComparison.Ordinal)
-            .Replace("\n", "<br>", StringComparison.Ordinal)
-            .Replace("\r", "<br>", StringComparison.Ordinal);
 }

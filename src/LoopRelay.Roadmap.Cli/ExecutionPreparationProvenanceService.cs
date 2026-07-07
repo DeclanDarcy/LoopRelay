@@ -459,10 +459,10 @@ internal sealed class ExecutionPreparationProvenanceService(
 
     private async Task<ExecutionPreparationManifestInput> CaptureDecisionLedgerInputAsync()
     {
-        string version = await HashIfPresentAsync(RoadmapArtifactPaths.DecisionLedger) ?? MissingInputVersion;
+        string version = await HashIfPresentAsync(RoadmapArtifactPaths.DecisionLedgerJson) ?? MissingInputVersion;
         return new ExecutionPreparationManifestInput(
             DecisionLedgerInputKind,
-            RoadmapArtifactPaths.DecisionLedger,
+            RoadmapArtifactPaths.DecisionLedgerJson,
             version);
     }
 

@@ -77,32 +77,6 @@ internal sealed partial class DecisionLedgerStore(RoadmapArtifacts artifacts)
     private async Task SaveDocumentAsync(DecisionLedgerPersistenceDocument document)
     {
         await structuredStore.SaveAsync(document);
-        await artifacts.WriteAsync(RoadmapArtifactPaths.DecisionLedger, Render(document.ToDomain()));
-    }
-
-    public static string Render(IReadOnlyList<DecisionLedgerEntry> entries)
-    {
-        var lines = new List<string> { "# Decision Ledger" };
-        foreach (DecisionLedgerEntry entry in entries.OrderBy(entry => entry.DecisionId, StringComparer.Ordinal))
-        {
-            lines.Add(string.Empty);
-            lines.Add($"## {entry.DecisionId}");
-            lines.Add(string.Empty);
-            lines.Add("| Field | Value |");
-            lines.Add("|---|---|");
-            lines.Add($"| Timestamp | {entry.Timestamp:O} |");
-            lines.Add($"| State | {entry.State} |");
-            lines.Add($"| Transition | {EscapeCell(entry.Transition)} |");
-            lines.Add($"| Prompt | {EscapeCell(entry.Prompt)} |");
-            lines.Add($"| Projection Path | {EscapeCell(entry.ProjectionPath)} |");
-            lines.Add($"| Input Artifact Paths | {Join(entry.InputArtifactPaths)} |");
-            lines.Add($"| Output Artifact Paths | {Join(entry.OutputArtifactPaths)} |");
-            lines.Add($"| Decision / Disposition | {EscapeCell(entry.Decision)} |");
-            lines.Add($"| Confidence | {EscapeCell(entry.Confidence)} |");
-            lines.Add($"| Rationale Excerpt | {EscapeCell(entry.RationaleExcerpt)} |");
-        }
-
-        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 
     private static DecisionLedgerPersistenceDocument ParseLegacyMarkdown(string content)
@@ -170,17 +144,6 @@ internal sealed partial class DecisionLedgerStore(RoadmapArtifacts artifacts)
             out DateTimeOffset parsed)
             ? parsed
             : null;
-
-    private static string Join(IReadOnlyList<string> paths) =>
-        paths.Count == 0 ? "None" : string.Join("<br>", paths.Select(EscapeCell));
-
-    private static string EscapeCell(string? value) =>
-        (value ?? string.Empty)
-            .Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("|", "\\|", StringComparison.Ordinal)
-            .Replace("\r\n", "<br>", StringComparison.Ordinal)
-            .Replace("\n", "<br>", StringComparison.Ordinal)
-            .Replace("\r", "<br>", StringComparison.Ordinal);
 
     [GeneratedRegex(@"^D(?<number>\d{4})$", RegexOptions.CultureInvariant)]
     private static partial Regex DecisionIdRegex();

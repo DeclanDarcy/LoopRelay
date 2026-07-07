@@ -25,7 +25,7 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         Cli.RetiredEpic retired = Assert.Single(state.RetiredEpics);
         Assert.Equal("EPIC-001", retired.EpicId);
         Assert.Equal("Epic A", retired.EpicName);
-        Assert.DoesNotContain("- Retire Epic", repo.Read(Cli.RoadmapArtifactPaths.State), StringComparison.Ordinal);
+        Assert.DoesNotContain("Retire Epic", state.NextValidTransitions);
     }
 
     [Fact]
@@ -91,9 +91,9 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
-        string state = repo.Read(Cli.RoadmapArtifactPaths.State);
-        Assert.Contains("EvidenceBlocked", state, StringComparison.Ordinal);
-        Assert.Contains("| Status | Failed |", state, StringComparison.Ordinal);
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Failed, state.LastTransition.Status);
     }
 
     private static TempRepo SeedRepo()

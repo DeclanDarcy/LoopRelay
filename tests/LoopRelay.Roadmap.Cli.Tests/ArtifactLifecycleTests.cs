@@ -17,6 +17,7 @@ public sealed class ArtifactLifecycleTests
         Assert.Single(entries);
         Assert.Equal(Cli.ArtifactLifecycleState.Executing, entries[0].State);
         Assert.Contains("\"SchemaVersion\": \"artifact-lifecycle.v1\"", repo.Read(Cli.RoadmapArtifactPaths.LifecycleJson), StringComparison.Ordinal);
+        Assert.False(Exists(repo, Cli.RoadmapArtifactPaths.Lifecycle));
     }
 
     [Fact]
@@ -55,7 +56,7 @@ public sealed class ArtifactLifecycleTests
     }
 
     [Fact]
-    public async Task Lifecycle_store_rendering_is_deterministic_for_same_entries()
+    public async Task Lifecycle_store_json_persistence_is_deterministic_for_same_entries()
     {
         using var repo = new TempRepo();
         var store = new Cli.ArtifactLifecycleStore(repo.Artifacts);
@@ -67,12 +68,11 @@ public sealed class ArtifactLifecycleTests
 
         await store.SaveAsync(entries);
         string firstJson = repo.Read(Cli.RoadmapArtifactPaths.LifecycleJson);
-        string firstMarkdown = repo.Read(Cli.RoadmapArtifactPaths.Lifecycle);
 
         await store.SaveAsync(entries);
 
         Assert.Equal(firstJson, repo.Read(Cli.RoadmapArtifactPaths.LifecycleJson));
-        Assert.Equal(firstMarkdown, repo.Read(Cli.RoadmapArtifactPaths.Lifecycle));
+        Assert.False(Exists(repo, Cli.RoadmapArtifactPaths.Lifecycle));
     }
 
     [Fact]

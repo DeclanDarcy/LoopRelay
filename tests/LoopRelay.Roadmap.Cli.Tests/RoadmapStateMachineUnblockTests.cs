@@ -12,14 +12,14 @@ public sealed class RoadmapStateMachineUnblockTests
     {
         using var repo = new TempRepo();
         await SaveStateAsync(repo, BlockedState("ResolveBlocker", Cli.RoadmapState.EvidenceBlocked, ".agents/evidence/blockers/preflight.0001.md"));
-        string before = repo.Read(Cli.RoadmapArtifactPaths.State);
+        string before = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).ExecuteAsync(
             Cli.RoadmapCliCommand.Status,
             CancellationToken.None);
 
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Assert.Equal(before, repo.Read(Cli.RoadmapArtifactPaths.State));
+        Assert.Equal(before, repo.Read(Cli.RoadmapArtifactPaths.StateJson));
         Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md"));
     }
 
@@ -28,14 +28,14 @@ public sealed class RoadmapStateMachineUnblockTests
     {
         using var repo = new TempRepo();
         await SaveStateAsync(repo, BlockedState("ResolveBlocker", Cli.RoadmapState.EvidenceBlocked, ".agents/evidence/blockers/preflight.0001.md"));
-        string before = repo.Read(Cli.RoadmapArtifactPaths.State);
+        string before = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).ExecuteAsync(
             Cli.RoadmapCliCommand.Run,
             CancellationToken.None);
 
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Assert.Equal(before, repo.Read(Cli.RoadmapArtifactPaths.State));
+        Assert.Equal(before, repo.Read(Cli.RoadmapArtifactPaths.StateJson));
     }
 
     [Fact]

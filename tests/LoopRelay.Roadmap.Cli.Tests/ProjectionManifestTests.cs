@@ -33,6 +33,7 @@ public sealed class ProjectionManifestTests
             input.Kind == Cli.ProjectionProvenance.ProjectionPromptTemplateInputKind &&
             input.Version == provenance.Prompt.SourceHash);
         Assert.Contains("\"SchemaVersion\": \"projection-manifest.v1\"", repo.Read(Cli.RoadmapArtifactPaths.ProjectionsManifestJson), StringComparison.Ordinal);
+        Assert.False(Exists(repo, Cli.RoadmapArtifactPaths.ProjectionsManifest));
     }
 
     [Fact]
@@ -72,7 +73,7 @@ public sealed class ProjectionManifestTests
     }
 
     [Fact]
-    public async Task Store_rendering_is_deterministic_for_same_manifest()
+    public async Task Store_json_persistence_is_deterministic_for_same_manifest()
     {
         using var repo = new TempRepo();
         var store = new Cli.ProjectionManifestStore(repo.Artifacts);
@@ -80,12 +81,11 @@ public sealed class ProjectionManifestTests
 
         await store.SaveAsync(manifest);
         string firstJson = repo.Read(Cli.RoadmapArtifactPaths.ProjectionsManifestJson);
-        string firstMarkdown = repo.Read(Cli.RoadmapArtifactPaths.ProjectionsManifest);
 
         await store.SaveAsync(manifest);
 
         Assert.Equal(firstJson, repo.Read(Cli.RoadmapArtifactPaths.ProjectionsManifestJson));
-        Assert.Equal(firstMarkdown, repo.Read(Cli.RoadmapArtifactPaths.ProjectionsManifest));
+        Assert.False(Exists(repo, Cli.RoadmapArtifactPaths.ProjectionsManifest));
     }
 
     [Fact]

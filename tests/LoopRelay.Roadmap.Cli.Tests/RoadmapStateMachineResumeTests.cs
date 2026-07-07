@@ -19,10 +19,10 @@ public sealed class RoadmapStateMachineResumeTests
 
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
         Assert.Equal(0, runtime.OneShotCalls);
-        string state = repo.Read(Cli.RoadmapArtifactPaths.State);
+        string state = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
         Assert.Contains("EvidenceBlocked", state, StringComparison.Ordinal);
         Assert.Contains("Missing evidence", state, StringComparison.Ordinal);
-        Assert.DoesNotContain("| Prompt | Preflight |", state, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Prompt\": \"Preflight\"", state, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -38,11 +38,11 @@ public sealed class RoadmapStateMachineResumeTests
 
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
         Assert.Equal(0, runtime.OneShotCalls);
-        string state = repo.Read(Cli.RoadmapArtifactPaths.State);
+        string state = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
         Assert.Contains("EvidenceBlocked", state, StringComparison.Ordinal);
         Assert.Contains("Missing evidence", state, StringComparison.Ordinal);
         Assert.DoesNotContain("Project Context source contract violation", state, StringComparison.Ordinal);
-        Assert.DoesNotContain("| Prompt | Preflight |", state, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Prompt\": \"Preflight\"", state, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -67,10 +67,10 @@ public sealed class RoadmapStateMachineResumeTests
 
         Assert.Equal(expectedOutcome, outcome);
         Assert.Equal(0, runtime.OneShotCalls);
-        string state = repo.Read(Cli.RoadmapArtifactPaths.State);
+        string state = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
         Assert.Contains(persistedState.ToString(), state, StringComparison.Ordinal);
         Assert.DoesNotContain("Project Context source contract violation", state, StringComparison.Ordinal);
-        Assert.DoesNotContain("| Prompt | Preflight |", state, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Prompt\": \"Preflight\"", state, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed class RoadmapStateMachineResumeTests
             blockers: [new Cli.BlockerRow("Original blocker", "Resolve original blocker")],
             intent: intent,
             nextTransitions: ["GenerateMilestoneDeepDives"]));
-        string stateBefore = repo.Read(Cli.RoadmapArtifactPaths.State);
+        string stateBefore = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
         var runtime = new ScriptedAgentRuntime();
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
@@ -125,8 +125,8 @@ public sealed class RoadmapStateMachineResumeTests
         Assert.DoesNotContain(state.Blockers, blocker => blocker.Blocker.Contains("Project Context source contract violation", StringComparison.Ordinal));
         Assert.Contains("GenerateMilestoneDeepDives", state.NextValidTransitions);
         Assert.DoesNotContain("Repair Project Context and rerun", state.NextValidTransitions);
-        Assert.Equal(stateBefore, repo.Read(Cli.RoadmapArtifactPaths.State));
-        Assert.DoesNotContain("| Prompt | Preflight |", repo.Read(Cli.RoadmapArtifactPaths.State), StringComparison.Ordinal);
+        Assert.Equal(stateBefore, repo.Read(Cli.RoadmapArtifactPaths.StateJson));
+        Assert.DoesNotContain("\"Prompt\": \"Preflight\"", repo.Read(Cli.RoadmapArtifactPaths.StateJson), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public sealed class RoadmapStateMachineResumeTests
             prompt: "CreateNewEpic",
             output: Cli.RoadmapArtifactPaths.ActiveEpic,
             nextTransitions: ["GenerateMilestoneDeepDives"]));
-        string stateBefore = repo.Read(Cli.RoadmapArtifactPaths.State);
+        string stateBefore = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
         var runtime = new ScriptedAgentRuntime();
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
@@ -150,7 +150,7 @@ public sealed class RoadmapStateMachineResumeTests
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(Cli.RoadmapState.ActiveEpicReady, state.CurrentState);
         Assert.Empty(state.Blockers);
-        Assert.Equal(stateBefore, repo.Read(Cli.RoadmapArtifactPaths.State));
+        Assert.Equal(stateBefore, repo.Read(Cli.RoadmapArtifactPaths.StateJson));
         Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
     }
 
@@ -166,7 +166,7 @@ public sealed class RoadmapStateMachineResumeTests
 
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
         Assert.Equal(0, runtime.OneShotCalls);
-        Assert.Contains("StrategicInvestigationRequired", repo.Read(Cli.RoadmapArtifactPaths.State), StringComparison.Ordinal);
+        Assert.Contains("StrategicInvestigationRequired", repo.Read(Cli.RoadmapArtifactPaths.StateJson), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public sealed class RoadmapStateMachineResumeTests
         Assert.Equal(4, runtime.OneShotCalls);
         Assert.All(runtime.Prompts, prompt => Assert.DoesNotContain("SelectNextEpic", prompt, StringComparison.Ordinal));
         Assert.True(File.Exists(Path.Combine(repo.Root, Cli.RoadmapArtifactPaths.Selection.Replace('/', Path.DirectorySeparatorChar))) == false);
-        Assert.Contains("ExecutionLoop", repo.Read(Cli.RoadmapArtifactPaths.State), StringComparison.Ordinal);
+        Assert.Contains("ExecutionLoop", repo.Read(Cli.RoadmapArtifactPaths.StateJson), StringComparison.Ordinal);
     }
 
     private static Cli.RoadmapStateDocument State(

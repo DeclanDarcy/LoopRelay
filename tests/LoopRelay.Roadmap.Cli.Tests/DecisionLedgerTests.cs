@@ -16,8 +16,10 @@ public sealed class DecisionLedgerTests
         await store.AppendAsync(new Cli.DecisionLedgerEntry(id, DateTimeOffset.UtcNow, Cli.RoadmapState.SelectNextStrategicInitiative, "SelectNextEpic", "SelectNextEpic", "projection", ["input"], ["output"], "Select Existing Epic", "High", "reason"));
 
         Assert.Equal("D0001", await store.LastDecisionIdAsync());
-        Assert.Contains("Select Existing Epic", repo.Read(Cli.RoadmapArtifactPaths.DecisionLedger), StringComparison.Ordinal);
-        Assert.Contains("\"SchemaVersion\": \"decision-ledger.v1\"", repo.Read(Cli.RoadmapArtifactPaths.DecisionLedgerJson), StringComparison.Ordinal);
+        string ledgerJson = repo.Read(Cli.RoadmapArtifactPaths.DecisionLedgerJson);
+        Assert.Contains("Select Existing Epic", ledgerJson, StringComparison.Ordinal);
+        Assert.Contains("\"SchemaVersion\": \"decision-ledger.v1\"", ledgerJson, StringComparison.Ordinal);
+        Assert.False(Exists(repo, Cli.RoadmapArtifactPaths.DecisionLedger));
     }
 
     [Fact]

@@ -25,7 +25,7 @@ The canonical stores are versioned JSON documents:
 - `.agents/decision-ledger.json`
 - `.agents/splits/split-family-*.json`
 
-Each store owns explicit DTOs, schema-version validation, deterministic serialization, and conversion to and from the domain objects used by the roadmap runtime. Markdown is rendered from the domain objects after structured persistence succeeds.
+Each store owns explicit DTOs, schema-version validation, deterministic serialization, and conversion to and from the domain objects used by the roadmap runtime. The Roadmap CLI no longer writes Markdown shadows for these stores; engineers inspect the canonical JSON directly.
 
 ## Migration
 
@@ -35,10 +35,10 @@ Load order is:
 2. If JSON is absent, parse legacy Markdown as migration input.
 3. Validate the reconstructed DTO.
 4. Persist canonical JSON.
-5. Regenerate Markdown from the canonical domain object.
+5. Continue using the canonical JSON document for runtime behavior.
 
 Malformed legacy Markdown fails the load instead of being silently migrated. Once JSON exists, Markdown is not parsed for normal runtime behavior.
 
-## Rendering
+## Inspection
 
-Markdown remains deterministic, stable, and diff-friendly, but it is a projection only. Runtime correctness depends on the structured JSON documents, not table delimiters, escaping, or presentation syntax.
+Runtime correctness and operator inspection both depend on the structured JSON documents, not table delimiters, escaping, or presentation syntax. Legacy Markdown files may remain on disk after migration, but they are not rewritten as shadows.

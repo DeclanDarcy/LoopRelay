@@ -97,7 +97,7 @@ public sealed class ExecutionPreparationProvenanceTests
     {
         using var repo = new TempRepo();
         Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
-        repo.Write(Cli.RoadmapArtifactPaths.DecisionLedger, "# Decision Ledger");
+        repo.Write(Cli.RoadmapArtifactPaths.DecisionLedgerJson, "{}");
 
         Cli.DerivedArtifactFreshness operationalContext = await provenance.EvaluateOperationalContextFreshnessAsync();
         Assert.False(operationalContext.IsFresh);

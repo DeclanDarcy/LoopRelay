@@ -6,11 +6,10 @@ internal sealed class SplitFamilyStore(RoadmapArtifacts artifacts)
 {
     public async Task<string> WriteAsync(SplitFamily family)
     {
-        string markdownPath = RoadmapArtifactPaths.SplitFamily(family.FamilyId);
-        await StructuredStore(RoadmapArtifactPaths.SplitFamilyJson(family.FamilyId))
+        string jsonPath = RoadmapArtifactPaths.SplitFamilyJson(family.FamilyId);
+        await StructuredStore(jsonPath)
             .SaveAsync(SplitFamilyPersistenceDocument.FromDomain(family));
-        await artifacts.WriteAsync(markdownPath, Render(family));
-        return markdownPath;
+        return jsonPath;
     }
 
     public async Task<bool> ExistsForChildAsync(string childEpicPath)
@@ -58,47 +57,6 @@ internal sealed class SplitFamilyStore(RoadmapArtifacts artifacts)
         }
 
         return false;
-    }
-
-    public static string Render(SplitFamily family)
-    {
-        var lines = new List<string>
-        {
-            "# Split Family",
-            string.Empty,
-            "| Field | Value |",
-            "|---|---|",
-            $"| Family ID | {EscapeCell(family.FamilyId)} |",
-            $"| Created At | {family.CreatedAt:O} |",
-            $"| Selected Child | {EscapeCell(family.SelectedChildPath)} |",
-            $"| Selected Child Rationale | {EscapeCell(family.SelectedChildRationale)} |",
-            string.Empty,
-            "## Proposal",
-            string.Empty,
-            family.Proposal,
-            string.Empty,
-            "## Child Epics",
-            string.Empty,
-        };
-
-        foreach (string child in family.ChildEpicPaths)
-        {
-            lines.Add($"- {child}");
-        }
-
-        lines.AddRange(
-        [
-            string.Empty,
-            "## Dependency Order",
-            string.Empty,
-        ]);
-
-        foreach (string child in family.DependencyOrder)
-        {
-            lines.Add($"- {child}");
-        }
-
-        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 
     private SplitFamily ParseLegacyMarkdown(string path, string content)
@@ -182,11 +140,4 @@ internal sealed class SplitFamilyStore(RoadmapArtifacts artifacts)
             : fileName;
     }
 
-    private static string EscapeCell(string? value) =>
-        (value ?? string.Empty)
-            .Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("|", "\\|", StringComparison.Ordinal)
-            .Replace("\r\n", "<br>", StringComparison.Ordinal)
-            .Replace("\n", "<br>", StringComparison.Ordinal)
-            .Replace("\r", "<br>", StringComparison.Ordinal);
 }

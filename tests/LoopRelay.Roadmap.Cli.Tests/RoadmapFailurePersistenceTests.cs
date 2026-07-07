@@ -45,9 +45,9 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.TransitionIntent.DispatchState);
         Assert.Equal([expectedOutput], state.TransitionIntent.EvidencePaths);
 
-        string stateMarkdown = repo.Read(Cli.RoadmapArtifactPaths.State);
-        Assert.DoesNotContain("RoadmapStateMachine", stateMarkdown, StringComparison.Ordinal);
-        Assert.DoesNotContain("ResolveBlocker", stateMarkdown, StringComparison.Ordinal);
+        string stateJson = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
+        Assert.DoesNotContain("RoadmapStateMachine", stateJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResolveBlocker", stateJson, StringComparison.Ordinal);
         Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
         Cli.TransitionJournalRecord failed = ReadJournal(repo).Single(record =>
@@ -121,11 +121,11 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Contains("SpecEpicMismatch", repo.Read(evidencePath), StringComparison.Ordinal);
         Assert.Contains(evidencePath, Assert.Single(state.Blockers).RequiredNextStep, StringComparison.Ordinal);
 
-        string stateMarkdown = repo.Read(Cli.RoadmapArtifactPaths.State);
-        Assert.Contains(evidencePath, stateMarkdown, StringComparison.Ordinal);
-        Assert.Contains("ResolveInvariantViolation", stateMarkdown, StringComparison.Ordinal);
-        Assert.DoesNotContain("ResolveBlocker", stateMarkdown, StringComparison.Ordinal);
-        Assert.DoesNotContain("RoadmapStateMachine", stateMarkdown, StringComparison.Ordinal);
+        string stateJson = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
+        Assert.Contains(evidencePath, stateJson, StringComparison.Ordinal);
+        Assert.Contains("ResolveInvariantViolation", stateJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResolveBlocker", stateJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("RoadmapStateMachine", stateJson, StringComparison.Ordinal);
         Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
         Cli.TransitionJournalRecord invariantFailed = ReadJournal(repo).Single(record => record.Event == "InvariantFailed");

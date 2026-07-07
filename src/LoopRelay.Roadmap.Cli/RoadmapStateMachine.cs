@@ -403,7 +403,7 @@ internal sealed class RoadmapStateMachine(
             unblockPlan.Reason);
 
         ProjectionManifest manifest = await manifestStore.LoadAsync();
-        int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md")).Count;
+        int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json")).Count;
         await stateStore.SaveAsync(persistedState with
         {
             ActiveArtifacts = await ActiveArtifactRowsAsync(),
@@ -1909,7 +1909,7 @@ internal sealed class RoadmapStateMachine(
         string lastDecision = await decisionLedger.LastDecisionIdAsync();
         IReadOnlyList<RetiredEpic> effectiveRetiredEpics = retiredEpics ?? existing?.RetiredEpics ?? [];
         IReadOnlyList<BlockerRow> effectiveBlockers = blockers ?? existing?.Blockers ?? [];
-        int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md")).Count;
+        int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json")).Count;
         await stateStore.SaveAsync(new RoadmapStateDocument(
             current,
             activeArtifacts,

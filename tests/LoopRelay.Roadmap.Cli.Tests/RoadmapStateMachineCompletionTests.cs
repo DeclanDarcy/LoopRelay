@@ -86,8 +86,8 @@ public sealed class RoadmapStateMachineCompletionTests
         Assert.Equal(expectedIntent, result.State.TransitionIntent.Intent);
         Assert.Equal(state, result.State.TransitionIntent.DispatchState);
         Assert.Equal(activeEpicLifecycle, result.ActiveEpicLifecycle);
-        Assert.DoesNotContain("| Status | Failed |", result.StateMarkdown, StringComparison.Ordinal);
-        Assert.DoesNotContain("RoadmapStateMachine", result.StateMarkdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Status\": \"Failed\"", result.StateJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("RoadmapStateMachine", result.StateJson, StringComparison.Ordinal);
 
         string evidencePath = Assert.Single(result.EvidencePaths);
         Assert.StartsWith(Cli.RoadmapArtifactPaths.EvaluationEvidenceDirectory, evidencePath, StringComparison.Ordinal);
@@ -204,7 +204,7 @@ public sealed class RoadmapStateMachineCompletionTests
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        string stateMarkdown = repo.Read(Cli.RoadmapArtifactPaths.State);
+        string stateJson = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
         IReadOnlyList<string> evidencePaths = state.TransitionIntent.EvidencePaths;
         string evaluationPath = evidencePaths.Single(path => path.StartsWith(Cli.RoadmapArtifactPaths.EvaluationEvidenceDirectory, StringComparison.Ordinal));
         string evaluationEvidence = repo.Read(evaluationPath);
@@ -224,7 +224,7 @@ public sealed class RoadmapStateMachineCompletionTests
         return new CompletionRunResult(
             outcome,
             state,
-            stateMarkdown,
+            stateJson,
             repo.Read(Cli.RoadmapArtifactPaths.RoadmapCompletionContext),
             evaluationEvidence,
             blockerEvidence,
@@ -342,7 +342,7 @@ public sealed class RoadmapStateMachineCompletionTests
     private sealed record CompletionRunResult(
         Cli.RoadmapOutcome Outcome,
         Cli.RoadmapStateDocument State,
-        string StateMarkdown,
+        string StateJson,
         string CompletionContext,
         string EvaluationEvidence,
         string? BlockerEvidence,

@@ -24,7 +24,7 @@ public sealed class RoadmapStateMachineSplitTests
         Assert.Equal(existing, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
         Assert.False(await repo.Artifacts.ExistsAsync(".agents/specs/not-a-child.md"));
         Assert.False(await repo.Artifacts.ExistsAsync(".agents/specs/split-test.md"));
-        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md"));
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
 
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
@@ -52,7 +52,7 @@ public sealed class RoadmapStateMachineSplitTests
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Contains(".agents/epic.md", repo.Read(evidencePath), StringComparison.Ordinal);
-        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md"));
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
     }
 
     [Fact]
@@ -145,12 +145,12 @@ public sealed class RoadmapStateMachineSplitTests
         Assert.Contains("ArtifactPromotionService", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
         Assert.Contains("ArtifactPromoted", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
 
-        string familyPath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md"));
+        string familyPath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
         string family = repo.Read(familyPath);
-        Assert.Contains("- .agents/epic-1.md", family, StringComparison.Ordinal);
-        Assert.Contains("- .agents/epic-2.md", family, StringComparison.Ordinal);
+        Assert.Contains(".agents/epic-1.md", family, StringComparison.Ordinal);
+        Assert.Contains(".agents/epic-2.md", family, StringComparison.Ordinal);
         Assert.DoesNotContain(".agents/specs", family, StringComparison.Ordinal);
-        Assert.Contains("| Selected Child | .agents/epic-1.md |", family, StringComparison.Ordinal);
+        Assert.Contains("\"SelectedChildPath\": \".agents/epic-1.md\"", family, StringComparison.Ordinal);
     }
 
     private static TempRepo SeedRepo()

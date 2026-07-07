@@ -16,121 +16,6 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
     {
         RoadmapStatePersistenceDocument persisted = RoadmapStatePersistenceDocument.FromDomain(document);
         await structuredStore.SaveAsync(persisted);
-        await artifacts.WriteAsync(RoadmapArtifactPaths.State, Render(document));
-    }
-
-    public static string Render(RoadmapStateDocument document)
-    {
-        var lines = new List<string>
-        {
-            "# Engineering Loop State",
-            string.Empty,
-            "## Current State",
-            string.Empty,
-            document.CurrentState.ToString(),
-            string.Empty,
-            "## Active Artifacts",
-            string.Empty,
-            "| Artifact | Path | Status |",
-            "|---|---|---|",
-        };
-
-        foreach (ArtifactStateRow row in document.ActiveArtifacts)
-        {
-            lines.Add($"| {Escape(row.Artifact)} | {Escape(row.Path)} | {Escape(row.Status)} |");
-        }
-
-        lines.AddRange(
-        [
-            string.Empty,
-            "## Last Transition",
-            string.Empty,
-            "| Field | Value |",
-            "|---|---|",
-            $"| From | {document.LastTransition.From} |",
-            $"| To | {document.LastTransition.To} |",
-            $"| Prompt | {Escape(document.LastTransition.Prompt)} |",
-            $"| Projection | {Escape(document.LastTransition.Projection)} |",
-            $"| Output | {Escape(document.LastTransition.Output)} |",
-            $"| Decision | {Escape(document.LastTransition.Decision)} |",
-            $"| Status | {document.LastTransition.Status} |",
-            $"| Started At | {document.LastTransition.StartedAt:O} |",
-            $"| Completed At | {(document.LastTransition.CompletedAt is { } completed ? completed.ToString("O") : string.Empty)} |",
-            string.Empty,
-            "## Transition Intent",
-            string.Empty,
-            "| Field | Value |",
-            "|---|---|",
-            $"| Intent | {Escape(document.TransitionIntent.Intent)} |",
-            $"| Dispatch State | {document.TransitionIntent.DispatchState} |",
-            $"| Evidence Paths | {Join(document.TransitionIntent.EvidencePaths)} |",
-            string.Empty,
-            "## Blockers",
-            string.Empty,
-            "| Blocker | Required Next Step |",
-            "|---|---|",
-        ]);
-
-        foreach (BlockerRow blocker in document.Blockers)
-        {
-            lines.Add($"| {Escape(blocker.Blocker)} | {Escape(blocker.RequiredNextStep)} |");
-        }
-
-        lines.AddRange(
-        [
-            string.Empty,
-            "## Decision Ledger Summary",
-            string.Empty,
-            "| Field | Value |",
-            "|---|---|",
-            $"| Ledger Path | {RoadmapArtifactPaths.DecisionLedger} |",
-            $"| Last Decision ID | {Escape(document.LastDecisionId)} |",
-            $"| Retired Epics | {document.RetiredEpicsCount} |",
-            $"| Split Families | {document.SplitFamiliesCount} |",
-            string.Empty,
-            "## Projection Manifest Summary",
-            string.Empty,
-            "| Field | Value |",
-            "|---|---|",
-            $"| Manifest Path | {RoadmapArtifactPaths.ProjectionsManifest} |",
-            $"| Valid Projections | {document.ProjectionManifestCounts.Valid} |",
-            $"| Stale Projections | {document.ProjectionManifestCounts.Stale} |",
-            $"| Invalid Projections | {document.ProjectionManifestCounts.Invalid} |",
-            string.Empty,
-            "## Next Valid Transitions",
-            string.Empty,
-        ]);
-
-        foreach (string transition in document.NextValidTransitions)
-        {
-            lines.Add($"- {transition}");
-        }
-
-        lines.AddRange(
-        [
-            string.Empty,
-            "## Runtime State",
-            string.Empty,
-            "### Retired Epics",
-            string.Empty,
-        ]);
-
-        if (document.RetiredEpics.Count == 0)
-        {
-            lines.Add("None");
-        }
-        else
-        {
-            lines.Add("| Epic ID | Epic Name | Retired At | Audit Evidence | Primary Reason |");
-            lines.Add("|---|---|---|---|---|");
-            foreach (RetiredEpic retired in document.RetiredEpics)
-            {
-                lines.Add(
-                    $"| {Escape(retired.EpicId)} | {Escape(retired.EpicName)} | {retired.RetiredAt:O} | {Escape(retired.AuditEvidencePath)} | {Escape(retired.PrimaryReason)} |");
-            }
-        }
-
-        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 
     public async Task<RoadmapStateDocument?> LoadAsync()
@@ -423,16 +308,6 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
             out DateTimeOffset parsed)
             ? parsed
             : null;
-
-    private static string Join(IReadOnlyList<string> values) => values.Count == 0 ? "None" : string.Join("<br>", values.Select(Escape));
-
-    private static string Escape(string value) =>
-        value
-            .Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("|", "\\|", StringComparison.Ordinal)
-            .Replace("\r\n", "<br>", StringComparison.Ordinal)
-            .Replace("\n", "<br>", StringComparison.Ordinal)
-            .Replace("\r", "<br>", StringComparison.Ordinal);
 
     [GeneratedRegex(@"## Current State\s+(?<state>[A-Za-z0-9]+)", RegexOptions.CultureInvariant)]
     private static partial Regex CurrentStateRegex();

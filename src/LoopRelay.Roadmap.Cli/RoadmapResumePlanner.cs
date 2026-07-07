@@ -613,13 +613,13 @@ internal sealed class RoadmapArtifactSnapshot
     {
         string[] knownPaths =
         [
-            RoadmapArtifactPaths.State,
+            RoadmapArtifactPaths.StateJson,
             RoadmapArtifactPaths.RoadmapCompletionContext,
             RoadmapArtifactPaths.Selection,
             RoadmapArtifactPaths.ActiveEpic,
             RoadmapArtifactPaths.OperationalContext,
             RoadmapArtifactPaths.ExecutionPrompt,
-            RoadmapArtifactPaths.DecisionLedger,
+            RoadmapArtifactPaths.DecisionLedgerJson,
         ];
 
         var statuses = new Dictionary<string, ArtifactStatus>(StringComparer.OrdinalIgnoreCase);
@@ -652,7 +652,7 @@ internal sealed class RoadmapArtifactSnapshot
             [RoadmapArtifactPaths.ExecutionEvidenceDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.ExecutionEvidenceDirectory, "*.md")).Count,
             [RoadmapArtifactPaths.EvaluationEvidenceDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "*.md")).Count,
             [RoadmapArtifactPaths.BlockerEvidenceDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md")).Count,
-            [RoadmapArtifactPaths.SplitFamiliesDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "*.md")).Count,
+            [RoadmapArtifactPaths.SplitFamiliesDirectory] = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "*.json")).Count,
         };
 
         return new RoadmapArtifactSnapshot(

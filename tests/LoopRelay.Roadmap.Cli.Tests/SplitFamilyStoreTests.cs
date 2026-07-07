@@ -11,9 +11,10 @@ public sealed class SplitFamilyStoreTests
         var store = new Cli.SplitFamilyStore(repo.Artifacts);
         Cli.SplitFamily family = Family("family-1", [".agents/epic-1.md", ".agents/epic-2.md"]);
 
-        string markdownPath = await store.WriteAsync(family);
-        repo.Write(markdownPath, "# Split Family\n\n## Child Epics\n\n- .agents/other.md\n");
+        string jsonPath = await store.WriteAsync(family);
+        repo.Write(Cli.RoadmapArtifactPaths.SplitFamily("family-1"), "# Split Family\n\n## Child Epics\n\n- .agents/other.md\n");
 
+        Assert.Equal(Cli.RoadmapArtifactPaths.SplitFamilyJson("family-1"), jsonPath);
         Assert.True(await store.ExistsForChildAsync(".agents/epic-2.md"));
         Assert.Contains("\"SchemaVersion\": \"split-family.v1\"", repo.Read(Cli.RoadmapArtifactPaths.SplitFamilyJson("family-1")), StringComparison.Ordinal);
     }

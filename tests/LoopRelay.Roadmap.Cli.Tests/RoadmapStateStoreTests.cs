@@ -6,7 +6,7 @@ namespace LoopRelay.Roadmap.Cli.Tests;
 public sealed class RoadmapStateStoreTests
 {
     [Fact]
-    public async Task Writes_required_sections_and_round_trips_state()
+    public async Task Writes_json_and_round_trips_state()
     {
         using var repo = new TempRepo();
         var store = new RoadmapStateStore(repo.Artifacts);
@@ -24,10 +24,6 @@ public sealed class RoadmapStateStoreTests
             ["GenerateMilestoneDeepDives"],
             [new Cli.RetiredEpic("EPIC-001", "Retired Epic", "Already satisfied.", ".agents/evidence/audits/epic-preparation-audit.0001.md", DateTimeOffset.UtcNow)]));
 
-        string content = repo.Read(Cli.RoadmapArtifactPaths.State);
-        Assert.Contains("## Current State", content, StringComparison.Ordinal);
-        Assert.Contains("## Last Transition", content, StringComparison.Ordinal);
-        Assert.Contains("## Transition Intent", content, StringComparison.Ordinal);
         Cli.RoadmapStateDocument? loaded = await store.LoadAsync();
         Assert.Equal(Cli.RoadmapState.ActiveEpicReady, loaded?.CurrentState);
         Assert.Equal(Cli.RoadmapState.CreateNewEpic, loaded?.LastTransition.From);
@@ -46,6 +42,7 @@ public sealed class RoadmapStateStoreTests
         Assert.Equal("EPIC-001", retired.EpicId);
         Assert.Equal("Retired Epic", retired.EpicName);
         Assert.Contains("\"SchemaVersion\": \"roadmap-state.v1\"", repo.Read(Cli.RoadmapArtifactPaths.StateJson), StringComparison.Ordinal);
+        Assert.False(Exists(repo, Cli.RoadmapArtifactPaths.State));
     }
 
     [Fact]
@@ -122,12 +119,11 @@ public sealed class RoadmapStateStoreTests
 
         await store.SaveAsync(state);
         string firstJson = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
-        string firstMarkdown = repo.Read(Cli.RoadmapArtifactPaths.State);
 
         await store.SaveAsync(state);
 
         Assert.Equal(firstJson, repo.Read(Cli.RoadmapArtifactPaths.StateJson));
-        Assert.Equal(firstMarkdown, repo.Read(Cli.RoadmapArtifactPaths.State));
+        Assert.False(Exists(repo, Cli.RoadmapArtifactPaths.State));
     }
 
     [Fact]
