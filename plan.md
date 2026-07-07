@@ -1,108 +1,340 @@
-# Projection Generation and Injection Plan
+# CLI Permission Settings Plan
 
 ## Goal
 
-Make the existing Project Context projection prompts actually feed the two consumers that currently need them:
+Externalize the hardcoded permission policy from `LoopRelay.Permissions` into a CLI consumer-owned `settings.json`, and make CLI publish produce a default `settings.json` containing today's effective permission values.
 
-- `LoopRelay.Plan.Cli` `AdversarialPlanReview`
-- `LoopRelay.Cli` `DecisionSession`
+The runtime behavior should remain unchanged when the generated default file is used.
 
-The CLIs stay separate. Roadmap does not call Plan or Main, and Roadmap still stops at milestone specs. Projection generation becomes shared infrastructure because Plan and Main cannot reference Roadmap-local projection types.
+## Current State
 
-## Current Gap
+Permission policy is currently embedded in code:
 
-- `ProjectionForAdversarialPlanReview.prompt` exists, but `ReviewStep` calls `AdversarialPlanReview.Render(plan)` with no generated projection.
-- `AdversarialPlanReview.prompt` contains a literal `north_star_projection` input body instead of a render parameter.
-- `ProjectionForDecisionSession.prompt` exists, but `DecisionSession.BuildProposalPromptAsync(...)` injects only operational context plus `GenerateSystemPromptForFirstExecutionAgent` or `GenerateSystemPromptForNextExecutionAgent`.
-- Roadmap owns reusable projection mechanics today (`ProjectContextLoader`, `ProjectionCache`, manifest/provenance/freshness/validator), but those are internal to `LoopRelay.Roadmap.Cli`.
+- `src/LoopRelay.Permissions/Services/PermissionConstants.cs`
+  - `FingerprintVersion = "v1"`
+  - `CommandsWithSubcommands`
+  - `SafeTools`
+  - `SafeBashCommands`
+  - chain-splitting regex
+- `src/LoopRelay.Permissions/Services/PermissionEvaluatorEngine.cs`
+  - hard-deny commands and patterns
+  - review-required commands and subcommands
+  - allow-listed command/subcommand combinations
+  - closed-world deny fallback
+- `src/LoopRelay.Permissions/Services/InvariantGuard.cs`
+  - non-bypassable guardrails duplicating the dangerous hard-deny cases
 
-## Design
+Both `LoopRelay.Cli` and `LoopRelay.Plan.Cli` call `services.AddAgents()`, and `AddAgents()` calls `AddCodexPermissions()`, so permission settings need to be shared infrastructure loaded by each CLI host before the service provider is built.
 
-Introduce shared projection infrastructure outside all three CLI executables, with no dependency on `LoopRelay.Roadmap.Cli`, `LoopRelay.Plan.Cli`, or `LoopRelay.Cli`.
+## Target Configuration
+
+Add a source-controlled default settings file, for example:
+
+- `src/LoopRelay.Cli/settings.default.json`
+- or a shared root template such as `config/settings.default.json` if both CLIs should publish the same file
+
+Publish should materialize this as:
+
+- `C:\tools\command-center\settings.json`
+- `C:\tools\command-center-plan\settings.json`
+
+The runtime should load `settings.json` from `AppContext.BaseDirectory` by default, because that is the deployed CLI consumer directory. An optional environment override such as `LOOPRELAY_SETTINGS_PATH` can be added for tests and local development, but the normal path should not depend on the caller's current working directory or the target repository directory.
+
+## Default `settings.json` Shape
+
+Use a typed options object instead of scattering raw JSON reads through evaluator code.
 
 Recommended shape:
 
-- Add a shared project, for example `LoopRelay.Projections`.
-- Reference shared dependencies only: `LoopRelay.Agents`, `LoopRelay.Core`, and the artifact/repository abstractions already used by the CLIs.
-- Move or adapt Roadmap-local projection types into the shared project:
-  - `ProjectContextLoader` / `ProjectContext`
-  - projection definitions and catalog rendering
-  - projection manifest persistence
-  - provenance and freshness evaluation
-  - projection validation
-  - projection cache/generation service
-- Keep Roadmap-specific runtime prompt contracts in Roadmap. The shared layer should accept registered projection definitions rather than hard-coding Roadmap workflow states.
+```json
+{
+  "permissions": {
+    "fingerprintVersion": "v1",
+    "commandsWithSubcommands": [
+      "git",
+      "npm",
+      "pnpm",
+      "yarn",
+      "docker",
+      "kubectl",
+      "dotnet",
+      "cargo",
+      "go",
+      "pip",
+      "conda",
+      "apt-get",
+      "apt",
+      "brew",
+      "systemctl",
+      "terraform",
+      "az",
+      "gcloud",
+      "gh"
+    ],
+    "safeTools": [
+      "read",
+      "glob",
+      "grep",
+      "ls"
+    ],
+    "safeBashCommands": [
+      "echo",
+      "cat",
+      "head",
+      "tail",
+      "wc",
+      "sort",
+      "uniq",
+      "diff",
+      "less",
+      "more",
+      "file",
+      "stat",
+      "which",
+      "whoami",
+      "date",
+      "uname",
+      "hostname",
+      "basename",
+      "dirname",
+      "realpath",
+      "true",
+      "false",
+      "test",
+      "env",
+      "printenv",
+      "id",
+      "groups",
+      "tee",
+      "tr",
+      "cut",
+      "paste",
+      "fold",
+      "fmt",
+      "nl",
+      "seq",
+      "yes",
+      "printf",
+      "find",
+      "xargs",
+      "type",
+      "command",
+      "rg"
+    ],
+    "hardDeny": {
+      "privilegeEscalationCommands": [
+        "sudo",
+        "su",
+        "doas"
+      ],
+      "recursiveForceDelete": {
+        "command": "rm",
+        "flagSets": [
+          [
+            "-rf"
+          ],
+          [
+            "-fr"
+          ],
+          [
+            "-r",
+            "-f"
+          ],
+          [
+            "-r",
+            "--force"
+          ],
+          [
+            "--recursive",
+            "-f"
+          ],
+          [
+            "--recursive",
+            "--force"
+          ]
+        ]
+      },
+      "systemControlCommands": [
+        "shutdown",
+        "reboot",
+        "halt",
+        "poweroff"
+      ],
+      "networkFetchCommands": [
+        "curl",
+        "wget"
+      ],
+      "gitForcePushFlags": [
+        "--force",
+        "-f"
+      ],
+      "indirectShellExecution": {
+        "commands": [
+          "bash",
+          "sh",
+          "zsh"
+        ],
+        "flag": "-c"
+      }
+    },
+    "reviewRequired": {
+      "gitCommit": true,
+      "gitCommitAmendFlags": [
+        "--amend"
+      ],
+      "gitPush": true,
+      "installCommands": [
+        "npm",
+        "pnpm",
+        "yarn",
+        "pip",
+        "dotnet",
+        "cargo",
+        "apt-get",
+        "apt",
+        "brew",
+        "conda"
+      ],
+      "installSubcommand": "install",
+      "infrastructureCommands": [
+        "docker",
+        "kubectl",
+        "terraform"
+      ]
+    },
+    "allow": {
+      "alwaysAllowedCommands": [
+        "pwd"
+      ],
+      "gitReadOnlySubcommands": [
+        "status",
+        "diff"
+      ],
+      "gitLogAllowedUnlessFlags": [
+        "-p",
+        "--patch"
+      ],
+      "dotnetAllowedSubcommands": [
+        "build",
+        "test",
+        "restore"
+      ],
+      "packageManagerAllowedSubcommands": {
+        "npm": [
+          "test",
+          "run"
+        ],
+        "pnpm": [
+          "test",
+          "run"
+        ],
+        "yarn": [
+          "test",
+          "run"
+        ]
+      },
+      "testCommands": {
+        "pytest": [],
+        "go": [
+          "test"
+        ]
+      }
+    }
+  }
+}
+```
 
-Projection artifacts:
+The chain-splitting regex can stay code-owned because it is parser syntax, not consumer policy. Closed-world deny should also stay code-owned as the final safety behavior.
 
-- `AdversarialPlanReview` projection: `.agents/projections/adversarial-plan-review.md`
-- `DecisionSession` projection: `.agents/projections/decision-session.md`
-- Shared manifest: `.agents/projections/manifest.json`
+## Non-Bypassable Invariants
 
-The manifest must merge entries by projection identity and preserve existing Roadmap projection entries.
+Keep `InvariantGuard` as a separate safety layer, but drive its command lists from the same resolved policy object after validation.
 
-## Prompt Changes
+Do not let an operator turn off these invariant categories through `settings.json`:
 
-1. Update `AdversarialPlanReview.prompt`.
-   - Replace the literal `north_star_projection` block with a render parameter.
-   - Target generated signature: `AdversarialPlanReview.Render(projectContextProjection, planToReview)`.
-   - Keep `planToReview` as the plan body.
+- privilege escalation commands
+- recursive forced delete
+- system control commands
+- network fetch commands
+- Git force push
+- indirect shell execution
 
-2. Update `ProjectionForDecisionSession.prompt`.
-   - Treat the intended consumer as `DecisionSession`, not only `GenerateSystemPromptForNextExecutionAgent`.
-   - Make the downstream use instructions cover both first and next execution-system-prompt generation.
+The settings file may add stricter deny/review/allow entries, but it must not weaken these minimum guardrails. Implement this by merging loaded policy with a code-owned `MinimumPermissionPolicy`, then validating that all required invariant entries are present.
 
-3. Update `GenerateSystemPromptForFirstExecutionAgent.prompt`.
-   - Add an explicit projection input block, for example `<EXECUTION_STRATEGIC_MEMORY_PROJECTION>`.
-   - Target generated signature: `GenerateSystemPromptForFirstExecutionAgent.Render(decisionSessionProjection)`.
+## Implementation Steps
 
-4. Update `GenerateSystemPromptForNextExecutionAgent.prompt`.
-   - Add the same projection input block before the handoff input.
-   - Target generated signature: `GenerateSystemPromptForNextExecutionAgent.Render(decisionSessionProjection, handoff)`.
+1. Add typed permission settings models in `LoopRelay.Permissions`.
+   - Suggested types: `PermissionPolicyOptions`, `PermissionHardDenyOptions`, `PermissionReviewRequiredOptions`, `PermissionAllowOptions`.
+   - Normalize all configured commands, subcommands, and flags with `StringComparer.OrdinalIgnoreCase`.
+   - Validate missing sections, duplicate entries, empty strings, and malformed recursive-delete flag sets.
 
-No consumer prompt should contain placeholder projection text after this change.
+2. Replace `PermissionConstants` list usage with injected policy.
+   - Keep `ChainSplitter` in code.
+   - Move `CommandsWithSubcommands` into `CommandParser` through an injected `PermissionPolicyOptions`.
+   - Move `SafeTools` and `SafeBashCommands` into `PermissionEvaluatorEngine`.
 
-## Plan CLI Wiring
+3. Convert `PermissionEvaluatorEngine` from static policy checks to instance checks.
+   - Keep `EvaluateSingle` behavior equivalent.
+   - Preserve exact decisions for the generated default settings.
+   - Keep `IsRecursiveForceDelete` behavior, but source the flag sets from the policy object.
 
-1. Register the shared projection service in `PlanCliComposition`.
-2. Add a pipeline phase before `Adversarial Review`: `Generate Adversarial Review Projection`.
-3. Generate or reuse the `AdversarialPlanReview` projection from `.agents/ctx/*.md`.
-4. Write/update the projection artifact and manifest through the shared service.
-5. Publish `.agents` after projection generation because this step writes durable artifacts.
-6. Change `ReviewStep` to render `AdversarialPlanReview.Render(projection.Content, plan)`.
-7. Keep the review Codex session read-only and one-turn; the host-side projection service owns artifact writes.
+4. Update `InvariantGuard` to use the validated policy.
+   - Enforce the minimum guardrail merge before DI registration completes or before the first evaluation.
+   - Preserve invariant-denial reasons closely enough that existing tests still assert meaningful fragments.
 
-## Main CLI Wiring
+5. Add a settings loader owned by CLI startup.
+   - Suggested type: `CliSettingsLoader` in a shared CLI-accessible location, or duplicate small host loaders if avoiding a new shared project.
+   - Load `settings.json` from `AppContext.BaseDirectory`.
+   - Support `LOOPRELAY_SETTINGS_PATH` only if useful for tests.
+   - Fail fast with a clear error if a present settings file is invalid.
+   - For source/dev runs, either copy the default settings file to output via project item metadata or allow the loader to read `settings.default.json` from the build output and report that a consumer `settings.json` is missing.
 
-1. Register the shared projection service in `LoopCliComposition`.
-2. Inject it into `DecisionSession`.
-3. Before opening or resuming a decision thread, evaluate freshness for the `DecisionSession` projection.
-4. If the persisted decision thread was seeded from a stale or missing projection, clear resume state and open a fresh decision session.
-5. When `seeded == false`, generate/reuse the fresh `DecisionSession` projection and include it with operational context in the first proposal turn.
-6. When `seeded == true`, do not resend the projection; the warm Codex thread already carries it.
-7. After a transfer, the new process starts with `seeded == false`, so the next proposal injects the projection again alongside the evolved operational context.
+6. Change DI registration.
+   - Add an overload such as `AddCodexPermissions(PermissionPolicyOptions policy)`.
+   - Add an overload such as `AddAgents(PermissionPolicyOptions policy)`.
+   - Update `LoopCliComposition.Create(...)` and `PlanCliComposition.Create(...)` to load settings and pass the policy into `AddAgents(...)`.
+   - Keep a test-only/default overload if existing tests need simple construction, but make production CLI startup use explicit settings.
 
-## Tests
+7. Publish default settings.
+   - Update `publish-cli.bat` to copy the default settings template to `%OUTPUT_DIR%\settings.json` after successful `dotnet publish`.
+   - Update `publish-plan-cli.bat` the same way.
+   - Prefer preserving an existing `%OUTPUT_DIR%\settings.json` so operator edits are not overwritten during republish.
+   - If an overwrite mode is needed later, add it explicitly rather than making publish destructive by default.
 
-Add or update tests for:
-
-- Shared projection generation writes the expected artifact and manifest entry.
-- Fresh projection reuse does not call Codex again.
-- Project Context or projection prompt template drift marks the projection stale.
-- Projection validation accepts the two new consumers and rejects missing required sections.
-- `ReviewStep` sends `AdversarialPlanReview.Render(projection, plan)`.
-- `PlanPipeline` generates and publishes the adversarial-review projection before review.
-- `DecisionSession` fresh first proposal includes the decision projection.
-- `DecisionSession` next proposal on a fresh process includes projection plus handoff.
-- Warm `DecisionSession` proposals do not resend the projection.
-- Resume with a stale/missing decision projection clears resume state and opens fresh.
-- Transfer recycle re-injects the decision projection on the next fresh proposal.
-- Architecture/layering tests prove Plan/Main do not reference Roadmap.
+8. Update tests.
+   - `LoopRelay.Permissions.Tests`: verify the default JSON policy reproduces current allow/deny behavior.
+   - Add validation tests for missing required invariant entries and invalid JSON shape.
+   - Update parser tests to construct `CommandParser` with default policy.
+   - Update gateway/session tests to construct the permission handler with default loaded policy.
+   - Add CLI tests for loading `settings.json` from a controlled path or temporary output directory.
+   - Add publish-script coverage if this repo already has script-level tests; otherwise document manual verification.
 
 ## Acceptance Criteria
 
-- `AdversarialPlanReview` receives a generated Project Context projection, not literal placeholder text.
-- `DecisionSession` receives a generated execution strategic memory projection on every fresh decision process.
-- Projection artifacts are provenance-tracked and freshness-gated through `.agents/projections/manifest.json`.
-- Existing Roadmap projection behavior still works or is migrated without changing Roadmap's stop-at-milestone-specs boundary.
-- No automated `Roadmap -> Plan -> Main` chain is introduced.
+- `settings.json` generated by publish contains the current hardcoded permission values.
+- Main CLI and Plan CLI both consume the deployed `settings.json`.
+- The default generated file produces the same decisions currently covered by `PermissionCoreTests` and `PermissionGatewayTests`.
+- Invalid settings fail startup or permission registration with a clear diagnostic.
+- Missing or edited allow-list entries cannot disable the non-bypassable invariant guardrails.
+- Republish does not silently overwrite an existing consumer-edited `settings.json`.
+
+## Verification
+
+Run:
+
+```powershell
+dotnet test tests\LoopRelay.Permissions.Tests\LoopRelay.Permissions.Tests.csproj
+dotnet test tests\LoopRelay.Agents.Tests\LoopRelay.Agents.Tests.csproj
+dotnet test tests\LoopRelay.Cli.Tests\LoopRelay.Cli.Tests.csproj
+dotnet test tests\LoopRelay.Plan.Cli.Tests\LoopRelay.Plan.Cli.Tests.csproj
+```
+
+Manual publish checks:
+
+```powershell
+.\publish-cli.bat
+Test-Path C:\tools\command-center\settings.json
+Test-Path C:\tools\command-center-plan\settings.json
+```
+
+Then edit one published `settings.json`, rerun publish, and confirm the edit is preserved.
