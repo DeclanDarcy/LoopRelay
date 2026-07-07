@@ -3,6 +3,7 @@ using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
 using LoopRelay.Orchestration;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 
 namespace LoopRelay.Cli;
 
@@ -26,8 +27,11 @@ internal sealed class ExecutionStep(
     ILoopConsole console,
     Repository repository,
     WorkingTreeChangeDetector changeDetector,
-    MilestoneGate milestones)
+    MilestoneGate milestones,
+    string? promptPolicy = null)
 {
+    private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         string? plan = await artifacts.ReadPlanAsync();
@@ -46,12 +50,16 @@ internal sealed class ExecutionStep(
         if (hasDecisions)
         {
             (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
-            executionPrompt = ContinueExecution.Render(plan, details, decisions);
+            executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
+                ContinueExecution.Render(plan, details, decisions),
+                promptPolicy);
             workPhase = "Execution: ContinueExecution";
         }
         else
         {
-            executionPrompt = StartExecution.Render(plan, details);
+            executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
+                StartExecution.Render(plan, details),
+                promptPolicy);
             workPhase = "Execution: StartExecution";
         }
 

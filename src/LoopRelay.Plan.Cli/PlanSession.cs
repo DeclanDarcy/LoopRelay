@@ -3,6 +3,7 @@ using LoopRelay.Core.Repositories;
 using LoopRelay.Orchestration;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 
 namespace LoopRelay.Plan.Cli;
 
@@ -15,8 +16,13 @@ namespace LoopRelay.Plan.Cli;
 /// copied from DecisionSession). The session is closed exactly once regardless of how many turns run or fail.
 /// </summary>
 internal sealed class PlanSession(
-    IAgentRuntime runtime, PlanArtifacts artifacts, ILoopConsole console, Repository repository) : IAsyncDisposable
+    IAgentRuntime runtime,
+    PlanArtifacts artifacts,
+    ILoopConsole console,
+    Repository repository,
+    string? promptPolicy = null) : IAsyncDisposable
 {
+    private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
     private IAgentSession? session;
     private bool closed;
 
@@ -26,7 +32,10 @@ internal sealed class PlanSession(
         closed = false; // guards the session just opened; a prior session (if any) was already closed by then
 
         var renderer = new ConsoleTurnRenderer(console);
-        AgentTurnResult result = await session.RunTurnAsync(WritePlan.Text, renderer.Stream, cancellationToken);
+        AgentTurnResult result = await session.RunTurnAsync(
+            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(WritePlan.Text, promptPolicy),
+            renderer.Stream,
+            cancellationToken);
         if (result.State != AgentTurnState.Completed)
         {
             await CloseAsync();
@@ -50,7 +59,9 @@ internal sealed class PlanSession(
         // sends only the review-feedback delta rather than re-sending the whole transcript.
         var renderer = new ConsoleTurnRenderer(console);
         AgentTurnResult result = await session.RunTurnAsync(
-            RevisePlan.Render(feedback), renderer.Stream, cancellationToken);
+            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(RevisePlan.Render(feedback), promptPolicy),
+            renderer.Stream,
+            cancellationToken);
         if (result.State != AgentTurnState.Completed)
         {
             await CloseAsync();

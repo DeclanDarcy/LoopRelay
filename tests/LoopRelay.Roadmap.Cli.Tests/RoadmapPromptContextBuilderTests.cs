@@ -37,4 +37,18 @@ public sealed class RoadmapPromptContextBuilderTests
 
         Assert.Throws<Cli.RoadmapStepException>(() => builder.BuildAuditContext("<!-- BEGIN PROJECT-CONTEXT FILE: 01-purpose.md -->", "epic"));
     }
+
+    [Fact]
+    public async Task Runtime_prompt_runner_appends_implementation_first_policy()
+    {
+        using var repo = new TempRepo();
+        var runtime = new ScriptedAgentRuntime(ScriptedAgentRuntime.Completed("ok"));
+        var runner = new Cli.RoadmapPromptRunner(runtime, repo.Repository, new TestConsole());
+
+        await runner.RunRuntimePromptAsync("SelectNextEpic", "project context", string.Empty, CancellationToken.None);
+
+        string prompt = Assert.Single(runtime.Prompts);
+        Assert.Contains("Repository growth is implementation-first", prompt, StringComparison.Ordinal);
+        Assert.Contains("The HITL-requested exception is disabled", prompt, StringComparison.Ordinal);
+    }
 }

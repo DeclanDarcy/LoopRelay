@@ -37,6 +37,7 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
     {
         ArgumentNullException.ThrowIfNull(document);
 
+        document = Normalize(document);
         Validate(document);
         string content = JsonSerializer.Serialize(document, JsonOptions);
         await artifacts.WriteAsync(LedgerPath, content + Environment.NewLine);
@@ -53,6 +54,7 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
                 throw new NonImplementationReviewLedgerException("Non-implementation review ledger was empty.");
             }
 
+            document = Normalize(document);
             Validate(document);
             return document;
         }
@@ -77,5 +79,18 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
             throw new NonImplementationReviewLedgerException(
                 "Non-implementation review ledger entries section is required.");
         }
+
+        if (document.HitlRequests is null)
+        {
+            throw new NonImplementationReviewLedgerException(
+                "Non-implementation review ledger HITL requests section is required.");
+        }
     }
+
+    private static NonImplementationReviewLedgerDocument Normalize(NonImplementationReviewLedgerDocument document) =>
+        document with
+        {
+            Entries = document.Entries ?? Array.Empty<NonImplementationReviewLedgerEntry>(),
+            HitlRequests = document.HitlRequests ?? Array.Empty<NonImplementationHitlRequestEntry>(),
+        };
 }

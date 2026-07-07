@@ -36,6 +36,8 @@ public sealed class NonImplementationReviewFoundationTests
         Assert.Contains("Repository growth is implementation-first", policy, StringComparison.Ordinal);
         Assert.Contains("exception is disabled", policy, StringComparison.Ordinal);
         Assert.Contains("Never invent autonomous documentation", policy, StringComparison.Ordinal);
+        Assert.Contains("Architecture Tests", policy, StringComparison.Ordinal);
+        Assert.Contains("Golden Tests", policy, StringComparison.Ordinal);
         Assert.Contains("does not disable post-execution non-implementation review", policy, StringComparison.Ordinal);
     }
 
@@ -46,7 +48,21 @@ public sealed class NonImplementationReviewFoundationTests
             new NonImplementationArtifactPolicyOptions(AllowHitlRequestedNonImplementationFiles: true));
 
         Assert.Contains("explicit HITL request evidence", policy, StringComparison.Ordinal);
+        Assert.Contains("HITL-requested documentation exception", policy, StringComparison.Ordinal);
+        Assert.Contains("never infer the exception", policy, StringComparison.Ordinal);
         Assert.Contains("Never invent autonomous documentation", policy, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Prompt_policy_section_is_rendered_from_central_composer()
+    {
+        string prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
+            "do work",
+            ImplementationFirstPromptPolicyComposer.ComposeDefault());
+
+        Assert.Contains(ImplementationFirstPromptPolicyComposer.SectionHeading, prompt, StringComparison.Ordinal);
+        Assert.Contains("do work", prompt, StringComparison.Ordinal);
+        Assert.Contains("Repository growth is implementation-first", prompt, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -84,10 +100,12 @@ public sealed class NonImplementationReviewFoundationTests
         Assert.NotNull(saved);
         Assert.Contains("\"schemaVersion\": 1", saved, StringComparison.Ordinal);
         Assert.Contains("\"entries\": []", saved, StringComparison.Ordinal);
+        Assert.Contains("\"hitlRequests\": []", saved, StringComparison.Ordinal);
 
         NonImplementationReviewLedgerDocument loaded = await store.LoadOrCreateAsync();
         Assert.Equal(NonImplementationReviewLedgerDocument.CurrentSchemaVersion, loaded.SchemaVersion);
         Assert.Empty(loaded.Entries);
+        Assert.Empty(loaded.HitlRequests);
     }
 
     [Fact]
@@ -103,6 +121,92 @@ public sealed class NonImplementationReviewFoundationTests
             await Assert.ThrowsAsync<NonImplementationReviewLedgerException>(() => store.LoadOrCreateAsync());
 
         Assert.Contains("Unsupported non-implementation review ledger schema version", exception.Message);
+    }
+
+    [Fact]
+    public void Hitl_request_capture_ignores_unstructured_prose()
+    {
+        IReadOnlyList<NonImplementationHitlRequestEntry> requests =
+            ExplicitHitlNonImplementationRequestCaptureService.ParseStructuredRequests(
+                OrchestrationArtifactPaths.Plan,
+                "Please create docs/requested.md for the human.",
+                DateTimeOffset.UnixEpoch);
+
+        Assert.Empty(requests);
+    }
+
+    [Fact]
+    public async Task Hitl_request_capture_persists_only_structured_markers()
+    {
+        var artifacts = new InMemoryArtifactStore();
+        var store = new NonImplementationReviewLedgerStore(artifacts);
+        var capture = new ExplicitHitlNonImplementationRequestCaptureService(store);
+        const string source = """
+            # Plan
+
+            ## HITL-Requested Non-Implementation Deliverables
+
+            | Path Or Pattern | Source | Source Hash | Rationale |
+            | --- | --- | --- | --- |
+            | docs/requested.md | user | abc | Human asked for the design note. |
+            """;
+
+        ExplicitHitlNonImplementationRequestCaptureResult result =
+            await capture.CaptureFromSourceAsync(
+                OrchestrationArtifactPaths.Plan,
+                source,
+                DateTimeOffset.UnixEpoch);
+        ExplicitHitlNonImplementationRequestCaptureResult duplicate =
+            await capture.CaptureFromSourceAsync(
+                OrchestrationArtifactPaths.Plan,
+                source,
+                DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(1, result.CapturedCount);
+        Assert.Equal(0, duplicate.CapturedCount);
+        NonImplementationReviewLedgerDocument loaded = await store.LoadOrCreateAsync();
+        NonImplementationHitlRequestEntry request = Assert.Single(loaded.HitlRequests);
+        Assert.Equal("docs/requested.md", request.DeliverablePathOrPattern);
+        Assert.Equal(OrchestrationArtifactPaths.Plan, request.SourceArtifactPath);
+        Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
+        Assert.Equal("Human asked for the design note.", request.Rationale);
+    }
+
+    [Fact]
+    public async Task Hitl_request_capture_attaches_matching_evidence_to_ledger_entries()
+    {
+        var artifacts = new InMemoryArtifactStore();
+        var store = new NonImplementationReviewLedgerStore(artifacts);
+        await store.SaveAsync(new NonImplementationReviewLedgerDocument(
+            NonImplementationReviewLedgerDocument.CurrentSchemaVersion,
+            [
+                new NonImplementationReviewLedgerEntry(
+                    "entry-1",
+                    "docs/requested.md",
+                    NonImplementationArtifactRoute.SemanticReviewCandidate,
+                    NonImplementationSemanticDisposition.ConfirmedNonImplementation,
+                    NonImplementationResolutionState.Unresolved,
+                    NonImplementationHitlProvenanceKind.None),
+            ],
+            [
+                new NonImplementationHitlRequestEntry(
+                    "docs/*.md",
+                    OrchestrationArtifactPaths.Plan,
+                    "source-hash",
+                    NonImplementationHitlProvenanceKind.HitlRequested,
+                    "Human requested the note.",
+                    DateTimeOffset.UnixEpoch),
+            ]));
+        var capture = new ExplicitHitlNonImplementationRequestCaptureService(store);
+
+        int attached = await capture.AttachRequestEvidenceAsync();
+
+        Assert.Equal(1, attached);
+        NonImplementationReviewLedgerEntry entry = Assert.Single((await store.LoadOrCreateAsync()).Entries);
+        Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, entry.HitlProvenanceKind);
+        Assert.Equal(OrchestrationArtifactPaths.Plan, entry.HitlProvenanceEvidencePath);
+        Assert.Equal("source-hash", entry.HitlProvenanceSourceHash);
+        Assert.Equal("Human requested the note.", entry.HitlProvenanceRationale);
     }
 
     private sealed class InMemoryArtifactStore : IArtifactStore

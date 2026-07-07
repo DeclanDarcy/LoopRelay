@@ -2,6 +2,7 @@ using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Orchestration;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Agents.Models;
 using LoopRelay.Plan.Cli;
 using Xunit;
@@ -22,6 +23,11 @@ public class PlanSessionTests
 
     private static string Resolve(Repository repo, string rel) => ArtifactPath.ResolveRepositoryPath(repo, rel);
 
+    private static string WithPromptPolicy(string prompt) =>
+        ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
+            prompt,
+            ImplementationFirstPromptPolicyComposer.ComposeDefault());
+
     [Fact]
     public async Task HappyPath_WritePlanThenRevise_RunOnTheSameSession_AndCloseFiresOnce()
     {
@@ -29,13 +35,13 @@ public class PlanSessionTests
 
         rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
         {
-            Assert.Equal(WritePlan.Text, prompt);
+            Assert.Equal(WithPromptPolicy(WritePlan.Text), prompt);
             s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN V1").Wait();
             return Turns.Completed("wrote plan");
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
         {
-            Assert.Equal(RevisePlan.Render("FEEDBACK"), prompt);
+            Assert.Equal(WithPromptPolicy(RevisePlan.Render("FEEDBACK")), prompt);
             s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN V2").Wait();
             return Turns.Completed("revised plan");
         }));

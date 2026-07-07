@@ -2,6 +2,7 @@ using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Orchestration;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Projections;
 using LoopRelay.Plan.Cli;
 using Xunit;
@@ -14,6 +15,11 @@ public class PlanPipelineTests
 
     private static string MilestonePath(string fileName) =>
         ArtifactPath.CombineRelative(OrchestrationArtifactPaths.MilestonesDirectory, fileName);
+
+    private static string WithPromptPolicy(string prompt) =>
+        ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
+            prompt,
+            ImplementationFirstPromptPolicyComposer.ComposeDefault());
 
     private sealed record Harness(
         Cli.PlanPipeline Pipeline,
@@ -79,7 +85,7 @@ public class PlanPipelineTests
         // same warm planning session).
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
         {
-            Assert.Equal(WritePlan.Text, prompt);
+            Assert.Equal(WithPromptPolicy(WritePlan.Text), prompt);
             s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN V1").Wait();
             return Turns.Completed("wrote plan");
         }));
@@ -93,7 +99,7 @@ public class PlanPipelineTests
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
         {
             seenFeedbackAtRevise = RevisePlan.Render(reviewOutput);
-            Assert.Equal(seenFeedbackAtRevise, prompt);
+            Assert.Equal(WithPromptPolicy(seenFeedbackAtRevise), prompt);
             s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN V2 REVISED").Wait();
             return Turns.Completed("revised plan");
         }));

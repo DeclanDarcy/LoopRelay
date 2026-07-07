@@ -6,6 +6,7 @@ using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Permissions.Models;
 using LoopRelay.Projections;
 
@@ -34,10 +35,12 @@ internal sealed class DecisionSession(
     IDecisionCostModel? costModel = null,
     IDecisionSessionResumeStore? resumeStore = null,
     IProjectContextProjectionService? projectionService = null,
-    bool resumeEnabled = true) : IAsyncDisposable
+    bool resumeEnabled = true,
+    string? promptPolicy = null) : IAsyncDisposable
 {
     private readonly IDecisionCostModel costModel = costModel ?? new EffectiveTokenCostModel();
     private readonly IDecisionSessionResumeStore resumeStore = resumeStore ?? new NullDecisionSessionResumeStore();
+    private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
     private IAgentSession? session;
     private bool seeded;
     private bool resumeAttempted;
@@ -123,6 +126,7 @@ internal sealed class DecisionSession(
         string baseline = handoff is null
             ? GenerateSystemPromptForFirstExecutionAgent.Render(decisionSessionProjection)
             : GenerateSystemPromptForNextExecutionAgent.Render(decisionSessionProjection, handoff);
+        baseline = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(baseline, promptPolicy);
 
         if (seeded)
         {

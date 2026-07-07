@@ -4,6 +4,7 @@ using LoopRelay.Agents.Services;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Infrastructure.Diagnostics;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Permissions.Configuration;
 using LoopRelay.Projections;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,9 +35,10 @@ internal sealed class PlanCliComposition : IAsyncDisposable
 
     public static PlanCliComposition Create(Repository repository)
     {
-        var permissionPolicy = CliSettingsLoader.LoadPermissionPolicy();
+        var settings = CliSettingsLoader.Load();
+        string promptPolicy = ImplementationFirstPromptPolicyComposer.Compose(settings.ArtifactPolicy);
         var services = new ServiceCollection();
-        services.AddAgents(permissionPolicy);
+        services.AddAgents(settings.Permissions);
         services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();
 
         ServiceProvider provider = services.BuildServiceProvider();
@@ -54,7 +56,7 @@ internal sealed class PlanCliComposition : IAsyncDisposable
             tokenEstimator,
             new ConsoleInputWaitProgressRenderer(console));
         var preflight = new PreflightGate(artifacts);
-        var planSession = new PlanSession(progressRuntime, artifacts, console, repository);
+        var planSession = new PlanSession(progressRuntime, artifacts, console, repository, promptPolicy);
         var review = new ReviewStep(progressRuntime, artifacts, console, repository);
         var projectionArtifacts = new ProjectionArtifacts(store, repository);
         var projectionRegistry = ProjectionDefinitionRegistry.CreateDefault();

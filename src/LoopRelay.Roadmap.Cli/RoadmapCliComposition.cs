@@ -4,6 +4,8 @@ using LoopRelay.Agents.Services;
 using LoopRelay.Completion;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Infrastructure.Diagnostics;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Permissions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LoopRelay.Roadmap.Cli;
@@ -32,8 +34,10 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
 
     public static RoadmapCliComposition Create(RoadmapCliInvocation invocation)
     {
+        var settings = CliSettingsLoader.Load();
+        string promptPolicy = ImplementationFirstPromptPolicyComposer.Compose(settings.ArtifactPolicy);
         var services = new ServiceCollection();
-        services.AddAgents();
+        services.AddAgents(settings.Permissions);
         services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();
 
         ServiceProvider provider = services.BuildServiceProvider();
@@ -57,7 +61,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var executionPreparationManifest = new ExecutionPreparationManifestStore(artifacts);
         var executionPreparation = new ExecutionPreparationProvenanceService(artifacts, executionPreparationManifest);
         var validator = new ProjectionValidator();
-        var promptRunner = new RoadmapPromptRunner(progressRuntime, repository, console);
+        var promptRunner = new RoadmapPromptRunner(progressRuntime, repository, console, promptPolicy);
         var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
         var contextBuilder = new RoadmapPromptContextBuilder(artifacts, executionPreparation);
         var inputResolver = new TransitionInputResolver(artifacts, executionPreparation);

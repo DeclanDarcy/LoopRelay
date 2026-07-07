@@ -101,6 +101,7 @@ public class DecisionSessionTests
             Assert.Contains("OPCTX", prompt);
             Assert.Contains("HANDOFF", prompt);
             Assert.Contains("next execution agent", prompt);
+            Assert.Contains("Repository growth is implementation-first", prompt);
             return Turns.Completed("DECISIONS-TEXT");
         }));
 
