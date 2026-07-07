@@ -10,6 +10,7 @@ make the identification loop actually run after every execution slice.
   - [ ] Detect execution-produced changes.
   - [ ] Classify changed files.
   - [ ] Create or update ledger entries.
+  - [ ] Skip semantic confirmation only for valid exact ledger identities.
   - [ ] Run semantic confirmation for candidates not covered by valid ledger identity.
   - [ ] Render review evidence under `.agents/evidence/non-implementation/`.
   - [ ] Return evidence paths and summary counts.
@@ -28,6 +29,25 @@ make the identification loop actually run after every execution slice.
   - [ ] component tests alone are insufficient: add an end-to-end loop test that a generated root Markdown file reaches the ledger after one execution slice
   - [ ] pre-existing dirty Markdown that execution does not touch is not ledgered as current slice output
   - [ ] post-execution review failure fails the loop and does not report epic completion
+
+## Detail Notes
+
+`NonImplementationPostExecutionReviewService` should run after every successful execution slice and before the post-execution `.agents` publish. It should:
+
+- accept the pre-slice baseline and post-slice snapshot
+- detect execution-produced changes
+- classify changed files
+- create or update ledger entries
+- skip confirmation only for valid exact ledger identities
+- run semantic confirmation for routed candidates
+- render review evidence under `.agents/evidence/non-implementation/`
+- return evidence paths and summary counts
+
+If review infrastructure fails, the loop should return `LoopOutcome.Failed` with evidence rather than silently skipping the review. Component tests are insufficient; at least one CLI-level test must prove a root Markdown file created during an execution slice reaches the ledger.
+
+The service should run before `CommitGate.CommitPushAndEvaluateAsync` so parent repository changes are reviewed before commit/push. The `.agents` publication after review should include ledger and evidence so review state is not stranded.
+
+When wiring the pre/post snapshots, prefer the same timing from Milestone 2: pre-slice after LoopRelay's pre-execution `.agents` context publish and immediately before `execution.RunAsync`; post-slice immediately after `execution.RunAsync` succeeds and before later LoopRelay cleanup when possible.
 
 ## Acceptance
 - [ ] The review loop runs after every successful execution slice.

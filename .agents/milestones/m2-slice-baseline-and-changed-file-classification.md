@@ -38,6 +38,65 @@ deterministically route only files changed by the current execution slice.
   - [ ] untracked files created during execution are discovered
   - [ ] renames use the destination path
 
+## Detail Notes
+
+The epic says `git diff -> changed file list`, but the current plan's baseline store is necessary to satisfy the spec intent without treating the whole dirty tree as current execution output.
+
+Capture the pre-slice baseline after LoopRelay's pre-execution `.agents` context publish and immediately before `execution.RunAsync`. Capture the post-slice snapshot immediately after `execution.RunAsync` succeeds. Prefer capturing before `RetireLiveDecisionsAsync` and before post-execution `.agents` publication so the delta represents execution output, not later LoopRelay cleanup. If integration constraints force cleanup first, record those `.agents` changes as sanctioned operational evidence and never route them to semantic review.
+
+The detector should use `IProcessRunner` and repository-relative paths. It needs both status and content facts:
+
+- parse `git status --porcelain` for tracked and untracked changed paths
+- record tracked `git diff --name-status` metadata when available
+- include modified, added, deleted, renamed, staged, and untracked paths
+- for renames, use the destination path as the candidate path and preserve source path in evidence
+- compute SHA-256 over file bytes for existing files so untracked files have stable reviewed hashes
+- for deleted files, preserve baseline hash when available and record reviewed status as deleted
+- record existence, deletion flag, extension, size, baseline status, post status, baseline hash, post hash, and `PreExisted`
+
+Delta rules:
+
+- A clean file changed by execution is included.
+- A new untracked file created by execution is included.
+- A pre-existing dirty file unchanged by execution is excluded from the slice delta.
+- A pre-existing dirty file further changed by execution is included with `PreExisted = true`.
+- `.agents` files are recorded as sanctioned operational evidence, then excluded from semantic review.
+
+The deterministic classifier is a router. It must not perform semantic confirmation and must not decide keep/delete behavior.
+
+Exclude implementation artifacts using repository context, not extension alone. Examples:
+
+- source files under `src`
+- test files under `tests`
+- UI assets required by product behavior
+- migrations
+- scripts and build scripts
+- prompt resources compiled into or required by the product
+- generated source conventions that are intentionally tracked
+
+Exclude machine-required artifacts. Examples:
+
+- `.slnx`, `.csproj`, `.props`, `.targets`
+- lockfiles and package manifests
+- CI files
+- runtime or test configuration
+- JSON schemas and config files used by runtime or tests
+- source-generator inputs and generated manifests
+
+Exclude sanctioned operational artifacts under `.agents`, including plans, milestones, handoffs, decisions, deltas, evidence, state, projections, archives, review artifacts, and ledgers.
+
+Route likely prose, design, audit, roadmap, planning, issue, report, or root/docs Markdown files as `SemanticReviewCandidate` when they were changed by the execution slice. Route unknown ambiguous files as `AmbiguousForSemanticReview`.
+
+Every classification result should include:
+
+- route
+- rule ID
+- path facts used by the rule
+- concise rationale
+- classifier version
+
+Run per-file classification with `Task.WhenAll`. Determinism means the same baseline, post-slice state, classifier version, and policy setting produce the same routes and evidence.
+
 ## Acceptance
 - [ ] Changed-file discovery includes untracked files without treating the whole dirty tree as current execution output.
 - [ ] Classification is deterministic for the same baseline and post-slice state.

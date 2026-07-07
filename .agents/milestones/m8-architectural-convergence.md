@@ -13,6 +13,37 @@ simplify only where implementation evidence shows friction or duplication.
 - [ ] Remove or revise any code that implies commit gating, publication gating, repository acceptance, structured knowledge extraction, or documentation debt analysis.
 - [ ] Add or adjust tests only for behavior that moved during convergence.
 
+## Detail Notes
+
+Convergence should reduce ambiguity or duplication introduced while landing the feature. It must not add new capability or broaden the review loop into governance.
+
+Review these seams after the implementation exists:
+
+- vocabulary consistency across models, JSON fields, prompt text, tests, evidence files, and review output
+- prompt policy flow from `ImplementationFirstPromptPolicyComposer`
+- canonical artifact path ownership through `OrchestrationArtifactPaths`
+- `CompletionArtifactPaths` delegation to orchestration constants for shared `.agents` paths
+- classification, semantic confirmation, ledger, post-execution review, synthesis, and completion review ownership
+- separation between non-implementation review state, roadmap decision ledgers, and completion certification decisions
+- helper classes whose boundaries proved artificial after implementation
+
+Remove or revise any code, prompt text, test name, or evidence wording that implies:
+
+- structured insight synthesis
+- semantic deduplication
+- repository knowledge projection
+- preservation metrics
+- repository health analysis
+- documentation debt analysis
+- semantic garbage collection
+- repository mutation acceptance
+- commit gating
+- publication gating
+- repository certification
+- broad relay/runtime redesign
+
+Do not remove tests solely because the architecture was simplified. Move or update tests when behavior moves; delete tests only when the covered behavior was intentionally removed from scope.
+
 ## Acceptance
 - [ ] The implemented capability has stable terminology and clear ownership.
 - [ ] Prompt policy flow remains centralized.

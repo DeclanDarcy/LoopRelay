@@ -40,6 +40,48 @@ inject centralized implementation-first guidance into planning, execution, decis
   - [ ] ledger entries can attach captured HITL request evidence
   - [ ] no prompt has a separately hard-coded copy of the policy body outside the composer
 
+## Detail Notes
+
+Implement the current plan's stricter prompt-time rule unless `.agents/plan.md` is revised first: non-implementation file generation requires both `artifactPolicy.allowHitlRequestedNonImplementationFiles = true` and explicit captured HITL request evidence. Enabled mode never authorizes autonomous documentation or theory-protection artifacts.
+
+Prompt policy should come only from `ImplementationFirstPromptPolicyComposer`. Prompt templates may accept a `{promptPolicy}` parameter, or a small helper may append composed text, but the policy body itself must not be copied into multiple templates.
+
+Prompt targets include:
+
+- `WritePlan.prompt`
+- `RevisePlan.prompt`
+- `StartExecution.prompt`
+- `ContinueExecution.prompt`
+- `GenerateSystemPromptForFirstExecutionAgent.prompt`
+- `GenerateSystemPromptForNextExecutionAgent.prompt`
+- decision prompts such as `GetNextDecisions.prompt`, `StartDecisionSession.prompt`, and `StartDecisionSessionFromTransfer.prompt` when they can prescribe deliverables
+- roadmap planning prompts under `src/LoopRelay.Core/Prompts/Planning` through `RoadmapPromptCatalog.RenderRuntime` or an equivalent centralized context section
+- completion evaluation context when review summaries exist
+
+The policy text must discourage freeze, certification, governance, authority documentation milestones, unsupported Architecture Tests, unsupported Golden Tests, and other artifacts whose purpose is protecting theory rather than validating executable behavior.
+
+`ExplicitHitlNonImplementationRequestCaptureService` should capture only explicit HITL request evidence. Do not infer request evidence from plan prose, agent-authored decisions, file names, or the mere existence of a documentation deliverable.
+
+Generated plan and decision artifacts may carry a stable structured section such as:
+
+```markdown
+## HITL-Requested Non-Implementation Deliverables
+
+| Path Or Pattern | Source | Source Hash | Rationale |
+| --- | --- | --- | --- |
+```
+
+The exact section name can differ if the implementation already has a better convention, but it must be stable and parseable. Captured request entries need:
+
+- deliverable path or path pattern
+- source artifact path
+- source content hash
+- HITL provenance kind
+- rationale or short excerpt
+- first captured timestamp using the repository's existing timestamp convention, or UTC ISO-8601 if no convention exists
+
+Request evidence explains legitimacy. It is not a keep/delete decision and must not bypass completion review.
+
 ## Acceptance
 - [ ] Relevant prompts receive implementation-first guidance from one composition point.
 - [ ] Default planning and execution steer away from autonomous non-implementation files.

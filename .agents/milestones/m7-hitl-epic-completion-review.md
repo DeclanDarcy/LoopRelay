@@ -15,7 +15,7 @@ require explicit human decisions for confirmed non-implementation files at epic 
   - [ ] Apply `Delete` decisions only when the current file path, current content hash, current status, and ledger entry ID match the reviewed target.
   - [ ] If any delete target is stale, replaced, moved, missing unexpectedly, or hash-mismatched, block, rescan, and require a fresh decision.
   - [ ] Validate delete paths stay inside the repository and are not under `.agents`.
-  - [ ] Record `Keep`, `Delete`, `KeepSynthesis`, `DiscardSynthesis`, and semantically uncertain entry resolutions durably.
+  - [ ] Record `Keep`, `Delete`, `ResolveFalsePositive`, `Defer`, `KeepSynthesis`, `DiscardSynthesis`, and `DeferSynthesis` decisions durably.
   - [ ] Preserve a `HitlRequested` or `HitlKept` HITL reason where the decision states that the human requested the file or chose to retain it.
 - [ ] Decision template grammar:
   - [ ] one table row per unresolved ledger entry
@@ -44,8 +44,73 @@ require explicit human decisions for confirmed non-implementation files at epic 
   - [ ] delete decision removes only repository files outside `.agents` when entry ID/path/hash/status match
   - [ ] stale delete decision blocks when hash changed after review
   - [ ] delete decision rejects path traversal and `.agents` paths
-  - [ ] synthesis keep/discard is recorded separately from file keep/delete
+  - [ ] synthesis keep/discard/defer is recorded separately from file keep/delete
   - [ ] semantically uncertain entry can be resolved as false positive, keep, delete, or deferred
+
+## Detail Notes
+
+Completion review must begin with a fresh repository review refresh, not ledger state alone. This prevents false readiness when the ledger has no unresolved entries but current changed prose/report files exist.
+
+`NonImplementationCompletionReviewService` should return `Ready` only when the fresh refresh plus ledger state has no unresolved confirmed non-implementation entries and no unresolved semantic uncertainties. False positives should remain auditable but should not block by themselves.
+
+If decisions are missing, write:
+
+- `.agents/review/non-implementation-review.md`
+- `.agents/review/non-implementation-decisions.md`
+
+and return `Blocked`.
+
+Decision template requirements:
+
+```markdown
+| Entry ID | Path | Reviewed SHA-256 | Reviewed Status | Decision | HITL Reason |
+| --- | --- | --- | --- | --- | --- |
+```
+
+Allowed file decisions:
+
+- `Keep`
+- `Delete`
+- `ResolveFalsePositive`
+- `Defer`
+
+Allowed synthesis decisions in a separate single-row table:
+
+- `KeepSynthesis`
+- `DiscardSynthesis`
+- `DeferSynthesis`
+
+The parser must reject duplicate entry IDs, unknown decisions, missing required rows, path mismatch, hash mismatch, status mismatch, and non-empty decisions for entries that are no longer unresolved.
+
+Delete decisions require stale-decision validation:
+
+- ledger entry ID matches
+- path matches
+- reviewed status matches
+- current content hash matches the reviewed hash
+- current file is still at the reviewed path
+- delete path resolves inside the repository
+- delete path is not under `.agents`
+
+If a delete target is stale, replaced, moved, missing unexpectedly, hash-mismatched, outside the repository, or under `.agents`, block, rescan, and require a fresh decision.
+
+`Defer` is a valid explicit human decision. Once recorded as `HitlDeferred`, it should not be treated as a missing decision for that review cycle, but it must remain visible in completion context and audit output.
+
+Keep decisions should record `HitlKept`. If the human states the file was originally requested, preserve or attach `HitlRequested` evidence where possible.
+
+In the main CLI, run completion review after `gate.IsEpicCompleteAsync()` returns true and before `completionCertification.CertifyPlanCompletionAsync`.
+
+If completion review is blocked:
+
+- publish `.agents` state
+- keep decision-session resume state intact
+- return `LoopOutcome.CompletionBlocked`
+
+If completion review applies parent-repository deletions, commit and push those deletions before certification without incrementing the stall counter. A narrow `CommitGate.CommitPushIfChangedAsync` helper is acceptable if needed.
+
+Pass review evidence paths or a summary path into `CompletionCertificationRequest` and include the review summary in `CompletionPromptContextBuilder.BuildEvaluationContextAsync`. Completed epic archiving should include `.agents/review` contents.
+
+For roadmap completion, run the same review service before completion evaluation. If blocked, persist blocked evidence with the review request path and a next step to fill the decisions template and rerun.
 
 ## Acceptance
 - [ ] Epic completion review happens before final certification closes the epic.
