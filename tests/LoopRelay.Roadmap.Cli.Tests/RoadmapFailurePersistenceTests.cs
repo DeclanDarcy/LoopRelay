@@ -97,6 +97,54 @@ public sealed class RoadmapFailurePersistenceTests
     }
 
     [Fact]
+    public async Task Milestone_output_without_specs_persists_blocker_instead_of_ready_state()
+    {
+        using var repo = SeedRepo(includeCompletionContext: true);
+        string invalidOutput = """
+            # Milestone Deep Dive Notes
+
+            This output contains analysis, but it does not contain any FILE markers.
+            """;
+        var runtime = new ScriptedAgentRuntime(BuildMilestoneInvariantTurns(invalidOutput).ToArray());
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.NotEqual(Cli.RoadmapState.MilestoneSpecsReady, state.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Paused, state.LastTransition.Status);
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, state.LastTransition.From);
+        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, state.LastTransition.To);
+        Assert.Equal("GenerateMilestoneDeepDivesForEpic", state.LastTransition.Prompt);
+        Assert.Equal(Cli.RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], state.LastTransition.Projection);
+        Assert.Equal(evidencePath, state.LastTransition.Output);
+        Assert.Equal("Milestone Spec Generation Failed", state.LastTransition.Decision);
+        Assert.Equal("ResolveMilestoneSpecGenerationFailure", state.TransitionIntent.Intent);
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.TransitionIntent.DispatchState);
+        Assert.Contains("No FILE markers", Assert.Single(state.Blockers).Blocker, StringComparison.Ordinal);
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SpecsDirectory, "*.md"));
+        Assert.Equal(Cli.ArtifactStatus.Missing, await repo.Artifacts.GetStatusAsync($"{Cli.RoadmapArtifactPaths.SpecsDirectory}/bundle-manifest.md"));
+        Assert.Equal(Cli.ArtifactStatus.Missing, await repo.Artifacts.GetStatusAsync(Cli.RoadmapArtifactPaths.ExecutionPreparationManifest));
+
+        string evidence = repo.Read(evidencePath);
+        Assert.Contains("Milestone Spec Generation Failed", evidence, StringComparison.Ordinal);
+        Assert.Contains(invalidOutput.Trim(), evidence, StringComparison.Ordinal);
+
+        Cli.TransitionJournalRecord[] journal = ReadJournal(repo);
+        Assert.Contains(journal, record =>
+            record.Event == "PromptCompleted" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+        Assert.Contains(journal, record =>
+            record.Event == "MilestoneSpecGenerationFailed" &&
+            record.OutputPaths.SequenceEqual([evidencePath]));
+        Assert.DoesNotContain(journal, record =>
+            record.Event == "TransitionCompleted" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+    }
+
+    [Fact]
     public async Task Invariant_failure_preserves_validator_evidence_state_and_journal()
     {
         using var repo = SeedRepo(includeCompletionContext: true);
@@ -128,7 +176,15 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.DoesNotContain("RoadmapStateMachine", stateJson, StringComparison.Ordinal);
         Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
-        Cli.TransitionJournalRecord invariantFailed = ReadJournal(repo).Single(record => record.Event == "InvariantFailed");
+        Cli.TransitionJournalRecord[] journal = ReadJournal(repo);
+        Assert.Contains(journal, record =>
+            record.Event == "PromptCompleted" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+        Assert.DoesNotContain(journal, record =>
+            record.Event == "TransitionCompleted" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+
+        Cli.TransitionJournalRecord invariantFailed = journal.Single(record => record.Event == "InvariantFailed");
         Assert.Equal(state.LastTransition.From, invariantFailed.PreviousState);
         Assert.Equal(state.LastTransition.To, invariantFailed.AttemptedState);
         Assert.Equal(state.LastTransition.Prompt, invariantFailed.Prompt);
