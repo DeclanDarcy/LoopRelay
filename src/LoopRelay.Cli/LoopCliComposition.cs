@@ -7,6 +7,7 @@ using LoopRelay.Core.Repositories;
 using LoopRelay.Infrastructure.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Permissions.Configuration;
 using LoopRelay.Projections;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -36,8 +37,9 @@ internal sealed class LoopCliComposition : IAsyncDisposable
 
     public static LoopCliComposition Create(Repository repository)
     {
+        var permissionPolicy = CliSettingsLoader.LoadPermissionPolicy();
         var services = new ServiceCollection();
-        services.AddAgents();
+        services.AddAgents(permissionPolicy);
         services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();
         services.AddSingleton(new DecisionSessionRouterOptions());
         services.AddSingleton<IDecisionSessionRouter, DecisionSessionRouter>();

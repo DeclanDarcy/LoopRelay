@@ -6,6 +6,18 @@ namespace LoopRelay.Permissions.Services;
 
 public sealed class CommandParser : ICommandParser
 {
+    private readonly PermissionPolicyOptions policy;
+
+    public CommandParser()
+        : this(PermissionPolicyOptions.Default)
+    {
+    }
+
+    public CommandParser(PermissionPolicyOptions policy)
+    {
+        this.policy = PermissionPolicyFactory.MergeWithMinimum(policy);
+    }
+
     public ParseResult Parse(string toolName, string? rawCommand)
     {
         if (rawCommand is null)
@@ -146,13 +158,13 @@ public sealed class CommandParser : ICommandParser
         return null;
     }
 
-    private static ParsedCommand BuildParsedCommand(string[] tokens)
+    private ParsedCommand BuildParsedCommand(string[] tokens)
     {
         string command = tokens[0];
         string? subcommand = null;
         int startIndex = 1;
 
-        if (tokens.Length > 1 && PermissionConstants.CommandsWithSubcommands.Contains(command))
+        if (tokens.Length > 1 && policy.CommandsWithSubcommands.Contains(command))
         {
             string candidate = tokens[1];
             if (!candidate.StartsWith("-", StringComparison.Ordinal))

@@ -5,6 +5,18 @@ namespace LoopRelay.Permissions.Services;
 
 public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
 {
+    private readonly PermissionPolicyOptions policy;
+
+    public PermissionEvaluatorEngine()
+        : this(PermissionPolicyOptions.Default)
+    {
+    }
+
+    public PermissionEvaluatorEngine(PermissionPolicyOptions policy)
+    {
+        this.policy = PermissionPolicyFactory.MergeWithMinimum(policy);
+    }
+
     public EvalResult Evaluate(CanonicalCommand[] commands)
     {
         var aggregated = RuleDecision.Allow;
@@ -28,7 +40,10 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
         return new EvalResult(aggregated, aggregatedReason);
     }
 
-    internal static EvalResult EvaluateSingle(in CanonicalCommand command)
+    internal static EvalResult EvaluateSingle(in CanonicalCommand command) =>
+        new PermissionEvaluatorEngine().EvaluateSingleCore(command);
+
+    private EvalResult EvaluateSingleCore(in CanonicalCommand command)
     {
         EvalResult? result;
 
@@ -53,65 +68,78 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
         return new EvalResult(RuleDecision.Deny, $"No rule matched command '{command.Command}' (closed-world deny)");
     }
 
-    private static EvalResult? CheckHardDeny(in CanonicalCommand command)
+    private EvalResult? CheckHardDeny(in CanonicalCommand command)
     {
-        if (command.Command is "sudo" or "su" or "doas")
+        PermissionHardDenyOptions hardDeny = policy.HardDeny;
+
+        if (hardDeny.PrivilegeEscalationCommands.Contains(command.Command))
         {
             return new EvalResult(RuleDecision.Deny, $"Privilege escalation command '{command.Command}' is forbidden");
         }
 
-        if (command.Command == "rm" && IsRecursiveForceDelete(command.Flags))
+        if (string.Equals(
+                command.Command,
+                hardDeny.RecursiveForceDelete.Command,
+                StringComparison.OrdinalIgnoreCase) &&
+            IsRecursiveForceDelete(command.Flags, hardDeny.RecursiveForceDelete.FlagSets))
         {
             return new EvalResult(RuleDecision.Deny, "Destructive operation 'rm -rf' is forbidden");
         }
 
-        if (command.Command is "shutdown" or "reboot" or "halt" or "poweroff")
+        if (hardDeny.SystemControlCommands.Contains(command.Command))
         {
             return new EvalResult(RuleDecision.Deny, $"System control command '{command.Command}' is forbidden");
         }
 
-        if (command.Command is "curl" or "wget")
+        if (hardDeny.NetworkFetchCommands.Contains(command.Command))
         {
             return new EvalResult(RuleDecision.Deny, $"Network fetch command '{command.Command}' is forbidden");
         }
 
         if (command.Command == "git" &&
             command.Subcommand == "push" &&
-            (command.Flags.Contains("--force") || command.Flags.Contains("-f")))
+            command.Flags.Any(hardDeny.GitForcePushFlags.Contains))
         {
             return new EvalResult(RuleDecision.Deny, "Git force push is forbidden");
         }
 
-        if (command.Command is "bash" or "sh" or "zsh" && command.Flags.Contains("-c"))
+        if (hardDeny.IndirectShellExecution.Commands.Contains(command.Command) &&
+            command.Flags.Contains(hardDeny.IndirectShellExecution.Flag, StringComparer.OrdinalIgnoreCase))
         {
-            return new EvalResult(RuleDecision.Deny, $"Indirect shell execution '{command.Command} -c' is forbidden");
+            return new EvalResult(
+                RuleDecision.Deny,
+                $"Indirect shell execution '{command.Command} {hardDeny.IndirectShellExecution.Flag}' is forbidden");
         }
 
         return null;
     }
 
-    private static EvalResult? CheckReviewRequired(in CanonicalCommand command)
+    private EvalResult? CheckReviewRequired(in CanonicalCommand command)
     {
-        if (command.Command == "git" && command.Subcommand == "commit")
+        PermissionReviewRequiredOptions reviewRequired = policy.ReviewRequired;
+
+        if (reviewRequired.GitCommit && command.Command == "git" && command.Subcommand == "commit")
         {
-            return command.Flags.Contains("--amend")
+            return command.Flags.Any(reviewRequired.GitCommitAmendFlags.Contains)
                 ? new EvalResult(RuleDecision.Deny, "git commit --amend is not allowed")
                 : new EvalResult(RuleDecision.Deny, "git commit requires review");
         }
 
-        if (command.Command == "git" && command.Subcommand == "push")
+        if (reviewRequired.GitPush && command.Command == "git" && command.Subcommand == "push")
         {
             return new EvalResult(RuleDecision.Deny, "git push requires review");
         }
 
-        if (command.Subcommand == "install" &&
-            command.Command is "npm" or "pnpm" or "yarn" or "pip" or "dotnet"
-                or "cargo" or "apt-get" or "apt" or "brew" or "conda")
+        if (string.Equals(
+                command.Subcommand,
+                reviewRequired.InstallSubcommand,
+                StringComparison.OrdinalIgnoreCase) &&
+            reviewRequired.InstallCommands.Contains(command.Command))
         {
             return new EvalResult(RuleDecision.Deny, $"{command.Command} install requires review");
         }
 
-        if (command.Command is "docker" or "kubectl" or "terraform")
+        if (reviewRequired.InfrastructureCommands.Contains(command.Command))
         {
             return new EvalResult(RuleDecision.Deny, $"Infrastructure command '{command.Command}' requires review");
         }
@@ -119,51 +147,55 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
         return null;
     }
 
-    private static EvalResult? CheckAllowList(in CanonicalCommand command)
+    private EvalResult? CheckAllowList(in CanonicalCommand command)
     {
-        if (PermissionConstants.SafeTools.Contains(command.Command))
+        PermissionAllowOptions allow = policy.Allow;
+
+        if (policy.SafeTools.Contains(command.Command))
         {
             return new EvalResult(RuleDecision.Allow, $"Tool '{command.Command}' is always safe");
         }
 
-        if (PermissionConstants.SafeBashCommands.Contains(command.Command))
+        if (policy.SafeBashCommands.Contains(command.Command))
         {
             return new EvalResult(RuleDecision.Allow, $"Command '{command.Command}' is read-only and safe");
         }
 
-        if (command.Command == "pwd")
+        if (allow.AlwaysAllowedCommands.Contains(command.Command))
         {
-            return new EvalResult(RuleDecision.Allow, "pwd is always safe");
+            return new EvalResult(RuleDecision.Allow, $"{command.Command} is always safe");
         }
 
-        if (command.Command == "git" && command.Subcommand == "status")
+        if (command.Command == "git" &&
+            command.Subcommand is not null &&
+            allow.GitReadOnlySubcommands.Contains(command.Subcommand))
         {
-            return new EvalResult(RuleDecision.Allow, "git status is read-only");
-        }
-
-        if (command.Command == "git" && command.Subcommand == "diff")
-        {
-            return new EvalResult(RuleDecision.Allow, "git diff is read-only");
+            return new EvalResult(RuleDecision.Allow, $"git {command.Subcommand} is read-only");
         }
 
         if (command.Command == "git" && command.Subcommand == "log" &&
-            !command.Flags.Contains("-p") &&
-            !command.Flags.Contains("--patch"))
+            !command.Flags.Any(allow.GitLogAllowedUnlessFlags.Contains))
         {
             return new EvalResult(RuleDecision.Allow, "git log is read-only");
         }
 
-        if (command.Command == "dotnet" && command.Subcommand is "build" or "test" or "restore")
+        if (command.Command == "dotnet" &&
+            command.Subcommand is not null &&
+            allow.DotnetAllowedSubcommands.Contains(command.Subcommand))
         {
             return new EvalResult(RuleDecision.Allow, $"dotnet {command.Subcommand} is safe");
         }
 
-        if (command.Command is "npm" or "pnpm" or "yarn" && command.Subcommand is "test" or "run")
+        if (command.Subcommand is not null &&
+            allow.PackageManagerAllowedSubcommands.TryGetValue(command.Command, out IReadOnlySet<string>? allowedSubcommands) &&
+            allowedSubcommands.Contains(command.Subcommand))
         {
             return new EvalResult(RuleDecision.Allow, "Test/script execution is safe");
         }
 
-        if (command.Command == "pytest" || command.Command == "go" && command.Subcommand == "test")
+        if (allow.TestCommands.TryGetValue(command.Command, out IReadOnlySet<string>? testSubcommands) &&
+            (testSubcommands.Count == 0 && command.Subcommand is null ||
+             command.Subcommand is not null && testSubcommands.Contains(command.Subcommand)))
         {
             return new EvalResult(RuleDecision.Allow, "Test execution is safe");
         }
@@ -172,10 +204,20 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
     }
 
     internal static bool IsRecursiveForceDelete(IReadOnlyCollection<string> flags) =>
-        flags.Contains("-rf") ||
-        flags.Contains("-fr") ||
-        (flags.Contains("-r") && flags.Contains("-f")) ||
-        (flags.Contains("-r") && flags.Contains("--force")) ||
-        (flags.Contains("--recursive") && flags.Contains("-f")) ||
-        (flags.Contains("--recursive") && flags.Contains("--force"));
+        IsRecursiveForceDelete(flags, PermissionPolicyOptions.Default.HardDeny.RecursiveForceDelete.FlagSets);
+
+    internal static bool IsRecursiveForceDelete(
+        IReadOnlyCollection<string> flags,
+        IReadOnlyList<IReadOnlySet<string>> configuredFlagSets)
+    {
+        foreach (IReadOnlySet<string> configuredFlagSet in configuredFlagSets)
+        {
+            if (configuredFlagSet.All(flag => flags.Contains(flag, StringComparer.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

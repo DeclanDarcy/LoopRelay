@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Services;
 using LoopRelay.Permissions.Extensions;
+using LoopRelay.Permissions.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -17,6 +18,17 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAgents(this IServiceCollection services)
     {
         services.AddCodexPermissions();
+        return services.AddAgentRuntime();
+    }
+
+    public static IServiceCollection AddAgents(this IServiceCollection services, PermissionPolicyOptions policy)
+    {
+        services.AddCodexPermissions(policy);
+        return services.AddAgentRuntime();
+    }
+
+    private static IServiceCollection AddAgentRuntime(this IServiceCollection services)
+    {
         services.TryAddSingleton<IProcessRunner, ProcessRunner>();
         services.TryAddSingleton<IAgentTokenEstimator, DeterministicAgentTokenEstimator>();
         services.TryAddSingleton<IAgentTurnBoundaryDetector, CodexEventTurnBoundaryDetector>();

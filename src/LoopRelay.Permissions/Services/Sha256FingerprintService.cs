@@ -8,6 +8,18 @@ namespace LoopRelay.Permissions.Services;
 
 public sealed class Sha256FingerprintService : IFingerprintService
 {
+    private readonly PermissionPolicyOptions policy;
+
+    public Sha256FingerprintService()
+        : this(PermissionPolicyOptions.Default)
+    {
+    }
+
+    public Sha256FingerprintService(PermissionPolicyOptions policy)
+    {
+        this.policy = PermissionPolicyFactory.MergeWithMinimum(policy);
+    }
+
     public string Compute(
         string toolName,
         string repoIdentity,
@@ -15,7 +27,7 @@ public sealed class Sha256FingerprintService : IFingerprintService
         CanonicalCommand[] commands)
     {
         using var stream = new MemoryStream();
-        WriteField(stream, "fingerprintVersion", PermissionConstants.FingerprintVersion);
+        WriteField(stream, "fingerprintVersion", policy.FingerprintVersion);
         WriteField(stream, "repoIdentity", repoIdentity);
         WriteField(stream, "workingDirectory", workingDirectory);
         WriteField(stream, "toolName", toolName.ToLowerInvariant());

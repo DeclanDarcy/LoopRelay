@@ -6,6 +6,7 @@ using LoopRelay.Core.Repositories;
 using LoopRelay.Infrastructure.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Permissions.Configuration;
 using LoopRelay.Projections;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -35,8 +36,9 @@ internal sealed class PlanCliComposition : IAsyncDisposable
 
     public static PlanCliComposition Create(Repository repository)
     {
+        var permissionPolicy = CliSettingsLoader.LoadPermissionPolicy();
         var services = new ServiceCollection();
-        services.AddAgents();
+        services.AddAgents(permissionPolicy);
         services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();
 
         ServiceProvider provider = services.BuildServiceProvider();

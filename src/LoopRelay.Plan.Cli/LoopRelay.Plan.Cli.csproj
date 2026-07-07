@@ -22,6 +22,13 @@
     <ProjectReference Include="..\LoopRelay.Projections\LoopRelay.Projections.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\config\settings.default.json" Link="settings.default.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
   <!-- The pipeline's components are `internal`; the test project drives them directly. -->
   <ItemGroup>
     <InternalsVisibleTo Include="LoopRelay.Plan.CLI.Tests" />
