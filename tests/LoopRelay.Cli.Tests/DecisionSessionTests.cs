@@ -5,6 +5,7 @@ using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Projections;
 using LoopRelay.Agents.Models;
 using LoopRelay.Cli;
 using Xunit;
@@ -54,6 +55,40 @@ public class DecisionSessionTests
     private static DecisionSessionResumeState ResumeState(string threadId = "thread-old") =>
         new(threadId, 100, 5d, 2, 3d, 2d, 300_000d, 1, 500, 1);
 
+    private static (Cli.DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
+        RecordingLoopConsole Con, FakeDecisionSessionResumeStore Resume, FakeProjectionService Projection)
+        NewWithProjection(
+            DecisionSessionRouterOptions? routerOptions = null,
+            DecisionSessionResumeState? state = null,
+            ProjectionFreshness? freshness = null)
+    {
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = new Cli.LoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
+        var sandbox = new FakeSandboxWorkspaceFactory { Root = repo.Path };
+        var resume = new FakeDecisionSessionResumeStore { State = state };
+        var projection = new FakeProjectionService("DECISION SESSION PROJECTION");
+        if (freshness is not null)
+        {
+            projection.Freshness = freshness;
+        }
+
+        var session = new Cli.DecisionSession(
+            rt,
+            router,
+            art,
+            con,
+            repo,
+            costModel: null,
+            sandboxFactory: sandbox,
+            resumeStore: resume,
+            projectionService: projection);
+        return (session, rt, store, repo, con, resume, projection);
+    }
+
     // One-shot sandboxes seed their inputs FLAT at the workspace root, bare filenames only (see
     // DecisionSession.SandboxSeedName) — scripted one-shot turns read/write these, never .agents/-shaped paths.
     private const string SandboxContext = "operational_context.md";
@@ -84,6 +119,51 @@ public class DecisionSessionTests
         Assert.Equal("DECISIONS-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
         Assert.Contains("DECISIONS-TEXT", con.Messages);
         Assert.Equal(1, rt.OpenSessions);
+    }
+
+    [Fact]
+    public async Task Run_FreshProcess_IncludesDecisionProjection()
+    {
+        var (session, rt, store, repo, _, _, projection) = NewWithProjection();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            Assert.Contains("DECISION SESSION PROJECTION", prompt);
+            Assert.Contains("OPCTX", prompt);
+            Assert.Contains("HANDOFF", prompt);
+            Assert.Contains("next execution agent", prompt);
+            return Turns.Completed("DECISIONS-TEXT");
+        }));
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, projection.EnsureFreshCalls);
+        Assert.Contains(ProjectionRuntimePromptNames.DecisionSession, projection.RuntimePromptNames);
+    }
+
+    [Fact]
+    public async Task Run_WarmProcess_DoesNotResendDecisionProjection()
+    {
+        var (session, rt, store, repo, _, _, projection) = NewWithProjection();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            Assert.Contains("DECISION SESSION PROJECTION", prompt);
+            return Turns.Completed("D1");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            Assert.DoesNotContain("DECISION SESSION PROJECTION", prompt);
+            Assert.DoesNotContain("OPCTX", prompt);
+            return Turns.Completed("D2");
+        }));
+
+        await session.RunAsync(CancellationToken.None);
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, projection.EnsureFreshCalls);
     }
 
     [Fact]
@@ -765,6 +845,30 @@ public class DecisionSessionTests
     }
 
     [Fact]
+    public async Task Run_FirstEntry_WithStaleDecisionProjection_ClearsResumeAndStartsFresh()
+    {
+        var (session, rt, store, repo, con, resume, projection) = NewWithProjection(
+            state: ResumeState(),
+            freshness: ProjectionFreshness.Stale(ProjectionStaleReason.ProjectContextDrift));
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            Assert.Contains("DECISION SESSION PROJECTION", prompt);
+            Assert.Contains("OPCTX", prompt);
+            Assert.Contains("HANDOFF", prompt);
+            return Turns.Completed("D-FRESH");
+        }));
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, projection.EvaluateFreshnessCalls);
+        Assert.Equal(1, resume.ClearCalls);
+        Assert.Null(rt.OpenedSpecs.Single().ResumeThreadId);
+        Assert.Contains(con.Events, e => e.Kind == "warn" && e.Text.Contains("projection is stale or missing"));
+    }
+
+    [Fact]
     public async Task Run_FirstEntry_ResumeFails_WarnsClearsAndFallsBackToAFreshPrimedProcess()
     {
         var (session, rt, store, repo, con, resume) = NewWithResume(state: ResumeState());
@@ -834,6 +938,40 @@ public class DecisionSessionTests
         Assert.Null(rt.OpenedSpecs[1].ResumeThreadId);         // the recycle opened FRESH — resume is first-open-only
         Assert.Equal(2, resume.Written.Count);
         Assert.Equal("thread-2", resume.Written[^1].ThreadId); // the post-transfer thread re-persisted
+    }
+
+    [Fact]
+    public async Task Run_TransferRecycle_ReinjectsDecisionProjectionOnFreshProcess()
+    {
+        var (session, rt, store, repo, _, _, projection) = NewWithProjection(
+            new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            Assert.Contains("DECISION SESSION PROJECTION", prompt);
+            return new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10));
+        }));
+        await session.RunAsync(CancellationToken.None);
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated");
+        }));
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            Assert.Contains("DECISION SESSION PROJECTION", prompt);
+            Assert.Contains("OPCTX-1", prompt);
+            return Turns.Completed("D2");
+        }));
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Equal(2, projection.EnsureFreshCalls);
     }
 
     [Fact]

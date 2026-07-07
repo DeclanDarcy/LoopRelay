@@ -6,6 +6,7 @@ using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Projections;
 
 namespace LoopRelay.Cli;
 
@@ -32,6 +33,7 @@ internal sealed class DecisionSession(
     IDecisionCostModel? costModel = null,
     ISandboxWorkspaceFactory? sandboxFactory = null,
     IDecisionSessionResumeStore? resumeStore = null,
+    IProjectContextProjectionService? projectionService = null,
     bool resumeEnabled = true) : IAsyncDisposable
 {
     private readonly IDecisionCostModel costModel = costModel ?? new EffectiveTokenCostModel();
@@ -75,7 +77,7 @@ internal sealed class DecisionSession(
         session ??= await OpenOrResumeSessionAsync(cancellationToken);
 
         (string? handoff, _) = await artifacts.ReadLatestHandoffAsync();
-        string proposalPrompt = await BuildProposalPromptAsync(handoff);
+        string proposalPrompt = await BuildProposalPromptAsync(handoff, cancellationToken);
 
         // Own phase header so post-transfer proposal output no longer prints under the last
         // "Decision: Transfer/…" header.
@@ -114,15 +116,18 @@ internal sealed class DecisionSession(
     // authors the NEXT agent's, folding in the previous session's handoff. A FRESH process is also primed with
     // the operational context in this same turn (there is no separate seed) — a WARM process already carries it
     // from its first proposal, so its later proposals send only the handoff delta.
-    private async Task<string> BuildProposalPromptAsync(string? handoff)
+    private async Task<string> BuildProposalPromptAsync(string? handoff, CancellationToken cancellationToken)
     {
+        string decisionSessionProjection = seeded
+            ? string.Empty
+            : (await EnsureDecisionProjectionAsync(cancellationToken)).Content;
         string baseline = handoff is null
-            ? GenerateSystemPromptForFirstExecutionAgent.Text
-            : GenerateSystemPromptForNextExecutionAgent.Render(handoff);
+            ? GenerateSystemPromptForFirstExecutionAgent.Render(decisionSessionProjection)
+            : GenerateSystemPromptForNextExecutionAgent.Render(decisionSessionProjection, handoff);
 
         if (seeded)
         {
-            return baseline; // warm process: the operational context is already in this process's history
+            return baseline; // warm process: the projection and operational context are already in this process's history
         }
 
         await artifacts.EnsureOperationalContextAsync();
@@ -151,6 +156,18 @@ internal sealed class DecisionSession(
         DecisionSessionResumeState? state = firstOpen && resumeEnabled
             ? await resumeStore.ReadAsync(cancellationToken)
             : null;
+        if (state is not null && projectionService is not null)
+        {
+            ProjectionFreshness freshness = await EvaluateDecisionProjectionFreshnessAsync(cancellationToken);
+            if (!freshness.IsFresh)
+            {
+                console.Warn(
+                    "Decision session projection is stale or missing; clearing persisted decision session and starting fresh.");
+                await resumeStore.ClearAsync(cancellationToken);
+                state = null;
+            }
+        }
+
         if (state is null)
         {
             return await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
@@ -414,6 +431,49 @@ internal sealed class DecisionSession(
         if (operationalContextGrowthStreak >= OperationalContextGrowthStreakWarningThreshold)
         {
             console.Warn($"Operational context has grown for {operationalContextGrowthStreak} consecutive transfers (now {newSize} chars) — check for bloat.");
+        }
+    }
+
+    private async Task<ProjectContextProjectionResult> EnsureDecisionProjectionAsync(CancellationToken cancellationToken)
+    {
+        if (projectionService is null)
+        {
+            return new ProjectContextProjectionResult(
+                new ProjectionDefinition(
+                    ProjectionRuntimePromptNames.DecisionSession,
+                    "ProjectionForDecisionSession",
+                    ProjectionArtifactPaths.ProjectionPaths[ProjectionRuntimePromptNames.DecisionSession],
+                    "# Execution Agent System Prompt Projection",
+                    ProjectionRuntimePromptNames.DecisionSession),
+                string.Empty,
+                Generated: false,
+                ProjectionStaleStatus.UnknownProvenance,
+                []);
+        }
+
+        try
+        {
+            return await projectionService.EnsureFreshAsync(
+                ProjectionRuntimePromptNames.DecisionSession,
+                cancellationToken);
+        }
+        catch (ProjectionException ex)
+        {
+            throw new LoopStepException(ex.Message, ex);
+        }
+    }
+
+    private async Task<ProjectionFreshness> EvaluateDecisionProjectionFreshnessAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await projectionService!.EvaluateFreshnessAsync(
+                ProjectionRuntimePromptNames.DecisionSession,
+                cancellationToken);
+        }
+        catch (ProjectionException ex)
+        {
+            throw new LoopStepException(ex.Message, ex);
         }
     }
 

@@ -6,6 +6,7 @@ using LoopRelay.Core.Repositories;
 using LoopRelay.Infrastructure.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Projections;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LoopRelay.Plan.Cli;
@@ -56,6 +57,14 @@ internal sealed class PlanCliComposition : IAsyncDisposable
         var preflight = new PreflightGate(artifacts);
         var planSession = new PlanSession(progressRuntime, artifacts, console, repository);
         var review = new ReviewStep(progressRuntime, artifacts, console, repository);
+        var projectionArtifacts = new ProjectionArtifacts(store, repository);
+        var projectionRegistry = ProjectionDefinitionRegistry.CreateDefault();
+        var projectionService = new ProjectContextProjectionService(
+            projectionArtifacts,
+            projectionRegistry,
+            new ProjectionManifestStore(projectionArtifacts),
+            new ProjectionValidator(projectionRegistry),
+            new ProjectionPromptRunner(progressRuntime, repository, console));
         var oneShot = new SandboxedPromptStep(progressRuntime, sandboxFactory, artifacts, console, repository);
         var publisher = new AgentsSubmodulePublisher(processRunner, repository, console);
         var rollover = new EpicRolloverStep(processRunner, artifacts, console, repository);
@@ -65,6 +74,7 @@ internal sealed class PlanCliComposition : IAsyncDisposable
             preflight,
             planSession,
             review,
+            projectionService,
             oneShot,
             publisher,
             artifacts,

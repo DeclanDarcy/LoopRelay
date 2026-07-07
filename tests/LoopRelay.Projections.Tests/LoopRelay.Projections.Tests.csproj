@@ -19,10 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\LoopRelay.Cli\LoopRelay.Cli.csproj" />
-    <ProjectReference Include="..\..\src\LoopRelay.Core\LoopRelay.Core.csproj" />
-    <ProjectReference Include="..\..\src\LoopRelay.Agents\LoopRelay.Agents.csproj" />
     <ProjectReference Include="..\..\src\LoopRelay.Projections\LoopRelay.Projections.csproj" />
+    <ProjectReference Include="..\..\src\LoopRelay.Core\LoopRelay.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

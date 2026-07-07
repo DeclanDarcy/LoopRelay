@@ -1,5 +1,6 @@
 using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Abstractions;
+using LoopRelay.Projections;
 
 namespace LoopRelay.Plan.Cli;
 
@@ -19,6 +20,7 @@ internal sealed class PlanPipeline(
     PreflightGate preflight,
     PlanSession planSession,
     ReviewStep review,
+    IProjectContextProjectionService projectionService,
     SandboxedPromptStep oneShot,
     AgentsSubmodulePublisher publisher,
     PlanArtifacts artifacts,
@@ -65,9 +67,18 @@ internal sealed class PlanPipeline(
             bool agentsCommitted =
                 await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.WritePlanMessage, cancellationToken);
 
+            console.Phase("Generate Adversarial Review Projection");
+            ProjectContextProjectionResult adversarialProjection = await projectionService.EnsureFreshAsync(
+                ProjectionRuntimePromptNames.AdversarialPlanReview,
+                cancellationToken);
+            agentsCommitted |=
+                await publisher.PublishAgentsAsync(
+                    AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage,
+                    cancellationToken);
+
             console.Phase("Adversarial Review");
             // No publish after this step: the review runs read-only and writes nothing, so there is nothing to publish.
-            string output1 = await review.RunAsync(cancellationToken);
+            string output1 = await review.RunAsync(adversarialProjection.Content, cancellationToken);
 
             console.Phase("Revise Plan");
             await planSession.ReviseAsync(output1, cancellationToken);

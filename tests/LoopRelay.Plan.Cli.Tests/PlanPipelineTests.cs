@@ -3,6 +3,7 @@ using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Models;
+using LoopRelay.Projections;
 using LoopRelay.Plan.Cli;
 using Xunit;
 
@@ -23,7 +24,8 @@ public class PlanPipelineTests
         Repository Repo,
         RecordingLoopConsole Console,
         FakeProcessRunner Processes,
-        FakeDecisionSessionResumeStore Resume);
+        FakeDecisionSessionResumeStore Resume,
+        FakeProjectionService Projection);
 
     private static Harness New(FakeProcessRunner? processes = null)
     {
@@ -35,6 +37,7 @@ public class PlanPipelineTests
         var sandboxes = new FakeSandboxWorkspaceFactory();
         var git = processes ?? new FakeProcessRunner();
         var resume = new FakeDecisionSessionResumeStore();
+        var projection = new FakeProjectionService("ADVERSARIAL REVIEW PROJECTION");
 
         var rollover = new Cli.EpicRolloverStep(git, artifacts, console, repo);
         var preflight = new Cli.PreflightGate(artifacts);
@@ -43,9 +46,9 @@ public class PlanPipelineTests
         var oneShot = new Cli.SandboxedPromptStep(runtime, sandboxes, artifacts, console, repo);
         var publisher = new Cli.AgentsSubmodulePublisher(git, repo, console);
         var pipeline = new Cli.PlanPipeline(
-            rollover, preflight, planSession, review, oneShot, publisher, artifacts, resume, console);
+            rollover, preflight, planSession, review, projection, oneShot, publisher, artifacts, resume, console);
 
-        return new Harness(pipeline, runtime, sandboxes, store, repo, console, git, resume);
+        return new Harness(pipeline, runtime, sandboxes, store, repo, console, git, resume, projection);
     }
 
     private static IReadOnlyList<string> PhaseSequence(RecordingLoopConsole console) =>
@@ -87,7 +90,7 @@ public class PlanPipelineTests
         }));
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
         {
-            seenPlanAtReview = AdversarialPlanReview.Render("PLAN V1");
+            seenPlanAtReview = AdversarialPlanReview.Render("ADVERSARIAL REVIEW PROJECTION", "PLAN V1");
             Assert.Equal(seenPlanAtReview, prompt);
             reviewOutput = "- CONDITIONAL PASS\nTighten milestone 2.";
             return Turns.Completed(reviewOutput);
@@ -145,10 +148,13 @@ public class PlanPipelineTests
         Assert.Equal(
             new[]
             {
-                "Epic Rollover", "Preflight", "Write Plan", "Adversarial Review", "Revise Plan",
+                "Epic Rollover", "Preflight", "Write Plan", "Generate Adversarial Review Projection",
+                "Adversarial Review", "Revise Plan",
                 "Collect Details", "Extract Milestones", "Extract Details",
             },
             PhaseSequence(h.Console));
+        Assert.Equal(1, h.Projection.EnsureFreshCalls);
+        Assert.Contains(ProjectionRuntimePromptNames.AdversarialPlanReview, h.Projection.RuntimePromptNames);
 
         // Session accounting: WritePlan/Revise share one session, Review opens its own.
         Assert.Equal(2, h.Runtime.OpenSessions);
@@ -352,6 +358,7 @@ public class PlanPipelineTests
             new[]
             {
                 Cli.AgentsSubmodulePublisher.WritePlanMessage,
+                Cli.AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage,
                 Cli.AgentsSubmodulePublisher.RevisePlanMessage,
                 Cli.AgentsSubmodulePublisher.CollectDetailsMessage,
                 Cli.AgentsSubmodulePublisher.ExtractMilestonesMessage,
@@ -364,7 +371,7 @@ public class PlanPipelineTests
             git.Calls, c => c.FileName == "git" && !IsSubmodule(c.WorkingDirectory) && c.Args[0] == "commit");
         Assert.Equal(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.GitlinkPointerMessage }, parentCommit.Args);
         var allCommits = git.Calls.Where(c => c.FileName == "git" && c.Args[0] == "commit").ToList();
-        Assert.Equal(6, allCommits.Count);
+        Assert.Equal(7, allCommits.Count);
         Assert.Equal(Cli.AgentsSubmodulePublisher.GitlinkPointerMessage, allCommits[^1].Args[2]);
     }
 
@@ -408,7 +415,8 @@ public class PlanPipelineTests
         Assert.Equal(
             new[]
             {
-                "Epic Rollover", "Preflight", "Write Plan", "Adversarial Review", "Revise Plan",
+                "Epic Rollover", "Preflight", "Write Plan", "Generate Adversarial Review Projection",
+                "Adversarial Review", "Revise Plan",
                 "Collect Details", "Extract Milestones", "Extract Details",
             },
             PhaseSequence(h.Console));
@@ -439,6 +447,7 @@ public class PlanPipelineTests
                 (Cli.AgentsSubmodulePublisher.ArchivePreviousEpicMessage, false),
                 (Cli.AgentsSubmodulePublisher.GitlinkPointerMessage, true),
                 (Cli.AgentsSubmodulePublisher.WritePlanMessage, false),
+                (Cli.AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage, false),
                 (Cli.AgentsSubmodulePublisher.RevisePlanMessage, false),
                 (Cli.AgentsSubmodulePublisher.CollectDetailsMessage, false),
                 (Cli.AgentsSubmodulePublisher.ExtractMilestonesMessage, false),
@@ -538,7 +547,12 @@ public class PlanPipelineTests
             .Select(c => c.Args[2])
             .ToList();
         Assert.Equal(
-            new[] { Cli.AgentsSubmodulePublisher.WritePlanMessage, Cli.AgentsSubmodulePublisher.RevisePlanMessage },
+            new[]
+            {
+                Cli.AgentsSubmodulePublisher.WritePlanMessage,
+                Cli.AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage,
+                Cli.AgentsSubmodulePublisher.RevisePlanMessage,
+            },
             submoduleCommits);
 
         // ...but the parent gitlink pointer is recorded only at the END of a successful run: a failed run

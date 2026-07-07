@@ -6,6 +6,7 @@ using LoopRelay.Core.Repositories;
 using LoopRelay.Infrastructure.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Projections;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LoopRelay.Cli;
@@ -78,6 +79,14 @@ internal sealed class LoopCliComposition : IAsyncDisposable
         var changeDetector = new WorkingTreeChangeDetector(processRunner, repository);
         var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);
         resumeStore.EnsureDirectoryProtection();
+        var projectionArtifacts = new ProjectionArtifacts(store, repository);
+        var projectionRegistry = ProjectionDefinitionRegistry.CreateDefault();
+        var projectionService = new ProjectContextProjectionService(
+            projectionArtifacts,
+            projectionRegistry,
+            new ProjectionManifestStore(projectionArtifacts),
+            new ProjectionValidator(projectionRegistry),
+            new ProjectionPromptRunner(gatedRuntime, repository, console));
         var execution = new ExecutionStep(gatedRuntime, artifacts, console, repository, changeDetector, gate);
         var decision = new DecisionSession(
             gatedRuntime,
@@ -86,6 +95,7 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             console,
             repository,
             resumeStore: resumeStore,
+            projectionService: projectionService,
             resumeEnabled: DecisionResumeComposition.IsEnabled());
         var submodulePublisher = new AgentsSubmodulePublisher(processRunner, repository, console);
         var commitGate = new CommitGate(changeDetector, processRunner, repository, console);

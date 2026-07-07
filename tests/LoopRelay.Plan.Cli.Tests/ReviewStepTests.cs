@@ -32,7 +32,7 @@ public class ReviewStepTests
         await SeedPlanAsync(store, repo, "PLAN CONTENT");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("REVIEW OUTPUT")));
 
-        string output = await step.RunAsync(CancellationToken.None);
+        string output = await step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None);
 
         Assert.Equal("REVIEW OUTPUT", output);
     }
@@ -49,11 +49,12 @@ public class ReviewStepTests
             return Turns.Completed("REVIEW OUTPUT");
         }));
 
-        await step.RunAsync(CancellationToken.None);
+        await step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None);
 
         // The .prompt file is CRLF on disk and the generator preserves line endings verbatim — assert equality
         // against Render() itself rather than a literal "\n" fragment.
-        Assert.Equal(AdversarialPlanReview.Render("PLAN CONTENT"), capturedPrompt);
+        Assert.Equal(AdversarialPlanReview.Render("PROJECT CONTEXT PROJECTION", "PLAN CONTENT"), capturedPrompt);
+        Assert.Contains("PROJECT CONTEXT PROJECTION", capturedPrompt);
         Assert.Contains("PLAN CONTENT", capturedPrompt);
     }
 
@@ -75,7 +76,7 @@ public class ReviewStepTests
             return Turns.Completed("REVIEW OUTPUT");
         }));
 
-        await step.RunAsync(CancellationToken.None);
+        await step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None);
 
         Assert.Equal(1, rt.OpenSessions);
     }
@@ -87,7 +88,7 @@ public class ReviewStepTests
         await SeedPlanAsync(store, repo, "PLAN");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("REVIEW OUTPUT")));
 
-        await step.RunAsync(CancellationToken.None);
+        await step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None);
 
         Assert.Equal(1, rt.OpenSessions);
         Assert.Equal(1, rt.ClosedSessions);
@@ -101,7 +102,7 @@ public class ReviewStepTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed("boom", "review stderr tail")));
 
         Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
-            () => step.RunAsync(CancellationToken.None));
+            () => step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None));
 
         Assert.Contains("review stderr tail", ex.Message);
         Assert.Contains("Agent stderr (tail):", ex.Message);
@@ -116,7 +117,7 @@ public class ReviewStepTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed("boom")));
 
         Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
-            () => step.RunAsync(CancellationToken.None));
+            () => step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None));
 
         Assert.DoesNotContain("Agent stderr (tail):", ex.Message);
         Assert.Equal(1, rt.ClosedSessions);
@@ -130,7 +131,7 @@ public class ReviewStepTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("   \n  ")));
 
         Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
-            () => step.RunAsync(CancellationToken.None));
+            () => step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None));
 
         Assert.Contains("adversarial review returned no output", ex.Message);
         Assert.Equal(1, rt.ClosedSessions);
@@ -141,7 +142,7 @@ public class ReviewStepTests
     {
         var (step, rt, _, _, _) = New();
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(() => step.RunAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<Cli.PlanStepException>(() => step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None));
 
         Assert.Equal(0, rt.OpenSessions);
         Assert.Equal(0, rt.ClosedSessions);
@@ -153,7 +154,7 @@ public class ReviewStepTests
         var (step, rt, store, repo, _) = New();
         await SeedPlanAsync(store, repo, "   \n  ");
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(() => step.RunAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<Cli.PlanStepException>(() => step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None));
 
         Assert.Equal(0, rt.OpenSessions);
     }
@@ -166,7 +167,7 @@ public class ReviewStepTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             Turns.Completed("## Verdict\n\n- FAIL: not ready.")));
 
-        await step.RunAsync(CancellationToken.None);
+        await step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None);
 
         Assert.Contains(con.Events, e => e.Kind == "info" && e.Text == "Review verdict: FAIL");
     }
@@ -179,7 +180,7 @@ public class ReviewStepTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             Turns.Completed("## Verdict\n\n- CONDITIONAL PASS: fix the blockers first.")));
 
-        await step.RunAsync(CancellationToken.None);
+        await step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None);
 
         Assert.Contains(con.Events, e => e.Kind == "info" && e.Text == "Review verdict: CONDITIONAL PASS");
     }
@@ -192,7 +193,7 @@ public class ReviewStepTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             Turns.Completed("## Verdict\n\n- PASS: no material execution risks found.")));
 
-        await step.RunAsync(CancellationToken.None);
+        await step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None);
 
         Assert.Contains(con.Events, e => e.Kind == "info" && e.Text == "Review verdict: PASS");
     }
@@ -205,7 +206,7 @@ public class ReviewStepTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             Turns.Completed("the review body has no verdict section")));
 
-        await step.RunAsync(CancellationToken.None);
+        await step.RunAsync("PROJECT CONTEXT PROJECTION", CancellationToken.None);
 
         Assert.Contains(con.Events, e => e.Kind == "warn" && e.Text == "Review verdict not found in output.");
     }

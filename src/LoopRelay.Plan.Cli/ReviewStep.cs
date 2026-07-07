@@ -17,8 +17,13 @@ namespace LoopRelay.Plan.Cli;
 internal sealed class ReviewStep(
     IAgentRuntime runtime, PlanArtifacts artifacts, ILoopConsole console, Repository repository)
 {
-    public async Task<string> RunAsync(CancellationToken cancellationToken)
+    public async Task<string> RunAsync(string projectContextProjection, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(projectContextProjection))
+        {
+            throw new PlanStepException("Project Context projection was not generated before the adversarial review.");
+        }
+
         // Defensive: the pipeline gates plan.md's existence/non-whitespace immediately after WritePlanAsync, so
         // this should be unreachable in the real pipeline sequence. Guards ReviewStep against being called out
         // of order (e.g. directly, or after some future refactor drops the pipeline's own gate).
@@ -34,7 +39,7 @@ internal sealed class ReviewStep(
         {
             var renderer = new ConsoleTurnRenderer(console);
             AgentTurnResult result = await session.RunTurnAsync(
-                AdversarialPlanReview.Render(plan), renderer.Stream, cancellationToken);
+                AdversarialPlanReview.Render(projectContextProjection, plan), renderer.Stream, cancellationToken);
             if (result.State != AgentTurnState.Completed)
             {
                 throw new PlanStepException(WithDiagnostics(

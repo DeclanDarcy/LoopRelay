@@ -217,9 +217,9 @@ The verdict must be justified by the findings, not by general impressions.
 
 ## Inputs
 
-<NORTH_STAR_PROJECTION>
-north_star_projection
-</NORTH_STAR_PROJECTION>
+<PROJECT_CONTEXT_PROJECTION>
+{projectContextProjection}
+</PROJECT_CONTEXT_PROJECTION>
 
 <PLAN_TO_REVIEW>
 {planToReview}

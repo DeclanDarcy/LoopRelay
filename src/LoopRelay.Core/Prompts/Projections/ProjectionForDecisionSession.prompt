@@ -2,24 +2,24 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
-# Create Project Context Projection For Decision Session / Generate System Prompt For Next Execution Agent
+# Create Project Context Projection For Decision Session
 
 ## Role
 
 You are a projection compiler for a projection-based AI engineering loop.
 
-Your job is to create a projection to be consumed by a later prompt:
+Your job is to create a projection to be consumed by a later decision-session consumer:
 
-GenerateSystemPromptForNextExecutionAgent
+DecisionSession
 
-That downstream prompt will receive:
+That downstream consumer will receive this projection on every fresh decision process and will combine it with:
 
 1. This projection.
 2. The current operational_context.
-3. The previous execution agent's handoff.
+3. The previous execution agent's handoff, when one exists.
 4. The current decisions-session context.
 
-The downstream prompt will generate the next execution agent system prompt and the next decisions.md state for continuing implementation.
+The decision session will use GenerateSystemPromptForFirstExecutionAgent when no handoff exists and GenerateSystemPromptForNextExecutionAgent when a handoff exists.
 
 Your job is NOT to generate the next execution agent prompt.
 
@@ -58,7 +58,7 @@ The projection must define:
 
 This projection exists to support:
 
-GenerateSystemPromptForNextExecutionAgent
+DecisionSession generation of first and next execution-agent system prompts.
 
 It must not include operational state.
 
@@ -82,19 +82,19 @@ It must not update decisions.md.
 
 This projection will be consumed by:
 
-GenerateSystemPromptForNextExecutionAgent
+DecisionSession
 
-That downstream prompt will compute:
+That downstream consumer will compute:
 
 Execution Strategic Memory Projection
 +
 Operational Context
 +
-Previous Execution Handoff
+Optional Previous Execution Handoff
 +
 Current Decisions State
 =
-Next Execution Agent System Prompt
+First Or Next Execution Agent System Prompt
 +
 Updated decisions.md
 
@@ -149,7 +149,7 @@ If the Core does not contain assertion IDs, create stable projection-local IDs u
 
 Projection-local IDs must not pretend to be canonical Core IDs.
 
-You may include generic projection-local execution-governance rules if they are necessary for GenerateSystemPromptForNextExecutionAgent to operate and do not alter Core intent. Mark them clearly as projection-local.
+You may include generic projection-local execution-governance rules if they are necessary for DecisionSession to operate and do not alter Core intent. Mark them clearly as projection-local.
 
 ---
 
@@ -663,7 +663,7 @@ It is a projection of the Project Context, not operational context, execution hi
 | Projection Version | {{projection_version_or_default}} |
 | Projection Date | {{projection_date_or_default}} |
 | Source Core Version | {{core_version_or_unknown}} |
-| Intended Consumer | GenerateSystemPromptForNextExecutionAgent |
+| Intended Consumer | DecisionSession |
 | Projection Family | Execution Agent System Prompt / Resident Strategic Memory |
 
 ## Source Coverage
@@ -847,7 +847,7 @@ Examples:
 
 ## Known Projection Limitations
 
-List ambiguities or missing Core information that may limit GenerateSystemPromptForNextExecutionAgent.
+List ambiguities or missing Core information that may limit DecisionSession.
 
 | Limitation | Why It Matters | Recommended Handling |
 |---|---|---|
@@ -866,13 +866,14 @@ Do not invent missing information to fix these limitations.
 
 ## Downstream Use Instructions
 
-When this projection is used by GenerateSystemPromptForNextExecutionAgent:
+When this projection is used by DecisionSession:
 
 - Treat this projection as resident strategic memory.
 - Treat operational_context as current working state.
 - Treat the previous execution handoff as evidence, not authority.
 - Treat decisions.md as execution continuity state, not north-star intent.
-- Generate the next execution prompt so that it preserves this projection.
+- Generate the first execution prompt so that it preserves this projection when no handoff exists.
+- Generate the next execution prompt so that it preserves this projection when a handoff exists.
 - Update decisions.md only with durable, high-value execution state.
 - Preserve active blockers, unresolved questions, validation obligations, and strategic constraints.
 - Downgrade unsupported handoff claims to assumptions or validation needs.
