@@ -80,6 +80,20 @@ public static class OrchestrationArtifactPaths
     /// <summary>Glob the CLIs use to verify Codex produced milestone files under <see cref="MilestonesDirectory"/>.</summary>
     public const string MilestoneSearchPattern = "m*.md";
 
+    /// <summary>Directory holding non-implementation artifact review state and HITL review requests.</summary>
+    public const string NonImplementationReviewDirectory = ".agents/review";
+
+    public const string NonImplementationLedger = ".agents/review/non-implementation-ledger.json";
+
+    public const string NonImplementationReview = ".agents/review/non-implementation-review.md";
+
+    public const string NonImplementationDecisions = ".agents/review/non-implementation-decisions.md";
+
+    public const string NonImplementationSynthesis = ".agents/review/non-implementation-synthesis.md";
+
+    /// <summary>Directory holding per-slice review evidence produced by the non-implementation loop.</summary>
+    public const string NonImplementationEvidenceDirectory = ".agents/evidence/non-implementation";
+
     /// <summary>Directory holding the live handoff and its rotated history.</summary>
     public const string HandoffsDirectory = ".agents/handoffs";
 

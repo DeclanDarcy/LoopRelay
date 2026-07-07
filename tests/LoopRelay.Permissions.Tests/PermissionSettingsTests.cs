@@ -10,11 +10,11 @@ public sealed class PermissionSettingsTests
     [Fact]
     public void Default_settings_json_reproduces_current_permission_behavior()
     {
-        PermissionPolicyOptions policy = CliSettingsLoader
-            .LoadFromFile(DefaultSettingsPath(), isDefaultTemplate: true)
-            .Permissions;
+        CliSettingsLoadResult result = CliSettingsLoader.LoadFromFile(DefaultSettingsPath(), isDefaultTemplate: true);
+        PermissionPolicyOptions policy = result.Permissions;
 
         Assert.Equal("v1", policy.FingerprintVersion);
+        Assert.False(result.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
 
         AssertAllowed(policy, "pwd");
         AssertAllowed(policy, "git status");
@@ -94,6 +94,39 @@ public sealed class PermissionSettingsTests
 
         Assert.Equal(Path.GetFullPath(path), loaded.Path);
         Assert.False(loaded.IsDefaultTemplate);
+    }
+
+    [Fact]
+    public void Missing_artifact_policy_defaults_to_implementation_first_mode()
+    {
+        JsonObject settings = DefaultSettings();
+        settings.Remove("artifactPolicy");
+
+        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
+
+        Assert.False(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
+    }
+
+    [Fact]
+    public void Missing_artifact_policy_flag_defaults_to_implementation_first_mode()
+    {
+        JsonObject settings = DefaultSettings();
+        settings["artifactPolicy"] = new JsonObject();
+
+        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
+
+        Assert.False(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
+    }
+
+    [Fact]
+    public void Loader_reads_enabled_hitl_requested_non_implementation_mode()
+    {
+        JsonObject settings = DefaultSettings();
+        Object(settings, "artifactPolicy")["allowHitlRequestedNonImplementationFiles"] = true;
+
+        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
+
+        Assert.True(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
     }
 
     private static void AssertAllowed(PermissionPolicyOptions policy, string rawCommand)

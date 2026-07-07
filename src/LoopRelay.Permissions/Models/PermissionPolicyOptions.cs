@@ -4,6 +4,12 @@ namespace LoopRelay.Permissions.Models;
 
 public sealed class PermissionPolicyValidationException(string message) : InvalidOperationException(message);
 
+public sealed record NonImplementationArtifactPolicyOptions(bool AllowHitlRequestedNonImplementationFiles)
+{
+    public static NonImplementationArtifactPolicyOptions Default { get; } =
+        new(AllowHitlRequestedNonImplementationFiles: false);
+}
+
 public sealed class PermissionPolicyOptions
 {
     internal PermissionPolicyOptions(

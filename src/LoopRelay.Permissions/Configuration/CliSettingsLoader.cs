@@ -9,6 +9,7 @@ public sealed class CliSettingsException(string message, Exception? innerExcepti
 
 public sealed record CliSettingsLoadResult(
     PermissionPolicyOptions Permissions,
+    NonImplementationArtifactPolicyOptions ArtifactPolicy,
     string Path,
     bool IsDefaultTemplate);
 
@@ -75,7 +76,9 @@ public static class CliSettingsLoader
 
             PermissionPolicyOptions policy = PermissionPolicyDocumentMapper.ToPolicy(document.Permissions);
             PermissionPolicyOptions merged = PermissionPolicyFactory.MergeWithMinimum(policy);
-            return new CliSettingsLoadResult(merged, fullPath, isDefaultTemplate);
+            NonImplementationArtifactPolicyOptions artifactPolicy =
+                ArtifactPolicyDocumentMapper.ToOptions(document.ArtifactPolicy);
+            return new CliSettingsLoadResult(merged, artifactPolicy, fullPath, isDefaultTemplate);
         }
         catch (JsonException ex)
         {
@@ -94,6 +97,13 @@ public static class CliSettingsLoader
     private sealed class SettingsDocument
     {
         public PermissionPolicyDocument? Permissions { get; set; }
+
+        public ArtifactPolicyDocument? ArtifactPolicy { get; set; }
+    }
+
+    private sealed class ArtifactPolicyDocument
+    {
+        public bool? AllowHitlRequestedNonImplementationFiles { get; set; }
     }
 
     private sealed class PermissionPolicyDocument
@@ -364,5 +374,13 @@ public static class CliSettingsLoader
 
         private static bool SetEquals(IReadOnlySet<string> left, IReadOnlySet<string> right) =>
             left.Count == right.Count && left.All(right.Contains);
+    }
+
+    private static class ArtifactPolicyDocumentMapper
+    {
+        public static NonImplementationArtifactPolicyOptions ToOptions(ArtifactPolicyDocument? document) =>
+            new(
+                document?.AllowHitlRequestedNonImplementationFiles
+                    ?? NonImplementationArtifactPolicyOptions.Default.AllowHitlRequestedNonImplementationFiles);
     }
 }

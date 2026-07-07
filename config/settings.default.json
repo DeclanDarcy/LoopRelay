@@ -1,4 +1,7 @@
 {
+  "artifactPolicy": {
+    "allowHitlRequestedNonImplementationFiles": false
+  },
   "permissions": {
     "fingerprintVersion": "v1",
     "commandsWithSubcommands": [
