@@ -75,6 +75,20 @@ public class LoopConsoleTests
         Assert.Equal("[error] boom\n", errw.ToString());  // the error itself goes to stderr
     }
 
+    [Fact]
+    public void Progress_WritesToStderrWithoutTouchingStdout()
+    {
+        var (console, outw, errw) = New();
+
+        console.Progress("[codex] submitted turn: promptTokensEstimated=2");
+        console.ProgressComplete("[codex] first output: elapsed=1s");
+
+        Assert.Equal(string.Empty, outw.ToString());
+        Assert.Equal(
+            "[codex] submitted turn: promptTokensEstimated=2\n[codex] first output: elapsed=1s\n",
+            errw.ToString());
+    }
+
     // Consecutive structured messages already end in newlines, so each lands on its own line.
     [Fact]
     public void StructuredMessages_EachLandOnTheirOwnLine()

@@ -41,5 +41,8 @@ public class SessionTelemetryRecordTests
         JsonElement r = doc.RootElement;
         Assert.Equal(JsonValueKind.Null, r.GetProperty("codexLogPath").ValueKind);
         Assert.Equal(JsonValueKind.Null, r.GetProperty("postFiveHourPercent").ValueKind);
+        Assert.Equal(JsonValueKind.Null, r.GetProperty("requestAcceptedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, r.GetProperty("firstOutputAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, r.GetProperty("promptTokensEstimated").ValueKind);
     }
 }

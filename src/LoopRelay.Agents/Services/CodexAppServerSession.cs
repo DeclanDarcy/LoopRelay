@@ -90,7 +90,8 @@ public sealed class CodexAppServerSession : IAgentSession
             await EnsureHandshakeAsync(linked.Token);
 
             int turnIndex = completedTurns + 1;
-            var turn = new ActiveTurn(turnIndex);
+            IAgentTurnProgressObserver? progress = AgentTurnProgress.Current;
+            var turn = new ActiveTurn(turnIndex, progress);
             activeTurn = turn;
             try
             {
@@ -98,8 +99,11 @@ public sealed class CodexAppServerSession : IAgentSession
                 CodexAppServerMessage ack = await SendRequestAsync(
                     requestId,
                     CodexAppServerProtocol.TurnStart(requestId, threadId!, prompt, MapEffort(spec.Effort)),
-                    linked.Token);
+                    linked.Token,
+                    () => AgentTurnProgress.Notify(progress, observer => observer.RequestWriteStarted()),
+                    () => AgentTurnProgress.Notify(progress, observer => observer.RequestSubmitted()));
                 ThrowIfError(ack, "turn/start");
+                AgentTurnProgress.Notify(progress, observer => observer.RequestAccepted());
 
                 // Deltas are surfaced on this (caller) path, never on the pump, so onChunk cannot
                 // wedge the transport. The pump completes the chunk channel when the turn ends.
@@ -355,6 +359,8 @@ public sealed class CodexAppServerSession : IAgentSession
                     break;
                 }
 
+                AgentTurnProgress.Notify(turn.Progress, observer => observer.FirstProtocolEvent());
+
                 if (turn.Reader.Apply(message) is { } emission && !string.IsNullOrEmpty(emission.Text))
                 {
                     turn.Chunks.Writer.TryWrite(new AgentStreamChunk(
@@ -371,7 +377,12 @@ public sealed class CodexAppServerSession : IAgentSession
         }
     }
 
-    private async Task<CodexAppServerMessage> SendRequestAsync(long id, string frame, CancellationToken cancellationToken)
+    private async Task<CodexAppServerMessage> SendRequestAsync(
+        long id,
+        string frame,
+        CancellationToken cancellationToken,
+        Action? beforeEnqueue = null,
+        Action? afterEnqueue = null)
     {
         var completion = new TaskCompletionSource<CodexAppServerMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         pending[id] = completion;
@@ -387,7 +398,9 @@ public sealed class CodexAppServerSession : IAgentSession
             cancellationToken.Register(() => completion.TrySetCanceled());
         try
         {
+            beforeEnqueue?.Invoke();
             Enqueue(frame);
+            afterEnqueue?.Invoke();
             return await completion.Task;
         }
         finally
@@ -433,11 +446,13 @@ public sealed class CodexAppServerSession : IAgentSession
             ? id.GetString()
             : null;
 
-    private sealed class ActiveTurn(int turnIndex)
+    private sealed class ActiveTurn(int turnIndex, IAgentTurnProgressObserver? progress)
     {
         public CodexAppServerTurnReader Reader { get; } = new();
 
         public int TurnIndex { get; } = turnIndex;
+
+        public IAgentTurnProgressObserver? Progress { get; } = progress;
 
         public TaskCompletionSource<bool> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 

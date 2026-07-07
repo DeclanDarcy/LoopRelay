@@ -2,6 +2,7 @@ using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Services;
 using LoopRelay.Core.Artifacts;
+using LoopRelay.Infrastructure.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LoopRelay.Roadmap.Cli;
@@ -40,7 +41,12 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var repository = invocation.Repository;
         var store = provider.GetRequiredService<IArtifactStore>();
         var runtime = provider.GetRequiredService<IAgentRuntime>();
+        var tokenEstimator = provider.GetRequiredService<IAgentTokenEstimator>();
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
+        var progressRuntime = new InputWaitProgressAgentRuntime(
+            runtime,
+            tokenEstimator,
+            new ConsoleInputWaitProgressRenderer(console));
 
         var artifacts = new RoadmapArtifacts(store, repository);
         var projectionRegistry = new ProjectionRegistry();
@@ -50,7 +56,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var executionPreparationManifest = new ExecutionPreparationManifestStore(artifacts);
         var executionPreparation = new ExecutionPreparationProvenanceService(artifacts, executionPreparationManifest);
         var validator = new ProjectionValidator();
-        var promptRunner = new RoadmapPromptRunner(runtime, repository, console);
+        var promptRunner = new RoadmapPromptRunner(progressRuntime, repository, console);
         var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
         var contextBuilder = new RoadmapPromptContextBuilder(artifacts, executionPreparation);
         var inputResolver = new TransitionInputResolver(artifacts, executionPreparation);
@@ -92,7 +98,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var operationalContext = new OperationalContextGenerator(artifacts, lifecycle, executionPreparation);
         var executionPrompt = new ExecutionPromptGenerator(artifacts, lifecycle, executionPreparation);
         var materializer = new ExecutionCompatibilityMaterializer(artifacts, executionPreparation);
-        IRoadmapExecutionBridge executionBridge = new RoadmapExecutionBridge(runtime, artifacts, repository, console);
+        IRoadmapExecutionBridge executionBridge = new RoadmapExecutionBridge(progressRuntime, artifacts, repository, console);
         var executionInterpreter = new RoadmapExecutionOutcomeInterpreter();
         var invariants = new InvariantValidator(
             artifacts,

@@ -3,6 +3,7 @@ using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Services;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
+using LoopRelay.Infrastructure.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,11 +45,18 @@ internal sealed class LoopCliComposition : IAsyncDisposable
 
         var store = provider.GetRequiredService<IArtifactStore>();
         var runtime = provider.GetRequiredService<IAgentRuntime>();
+        var tokenEstimator = provider.GetRequiredService<IAgentTokenEstimator>();
         var router = provider.GetRequiredService<IDecisionSessionRouter>();
         var processRunner = provider.GetRequiredService<IProcessRunner>();
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
         var artifacts = new LoopArtifacts(store, repository);
+        var inputWaitObservations = new InputWaitObservationStore();
+        var progressRuntime = new InputWaitProgressAgentRuntime(
+            runtime,
+            tokenEstimator,
+            new ConsoleInputWaitProgressRenderer(console),
+            inputWaitObservations);
         var usageProbe = new CodexUsageProbe(processRunner, executableResolver, repository);
         var telemetryClock = new SystemClock();
         var usageLimit = new UsageLimitDetector(telemetryClock, new TaskDelayScheduler(), console);
@@ -60,11 +68,12 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             telemetryClock,
             console);
         var gatedRuntime = new GatedAgentRuntime(
-            runtime,
+            progressRuntime,
             usageLimit,
             telemetryRecorder,
             telemetryClock,
-            SessionTelemetryComposition.RepoName(repository));
+            SessionTelemetryComposition.RepoName(repository),
+            inputWaitObservations);
         var gate = new MilestoneGate(store, repository);
         var changeDetector = new WorkingTreeChangeDetector(processRunner, repository);
         var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);

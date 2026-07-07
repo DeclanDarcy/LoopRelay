@@ -21,7 +21,25 @@ internal sealed record SessionTelemetryRecord(
     int CachedTokens,
     double EffectiveTokens,
     int? PostFiveHourPercent,
-    int? PostWeeklyPercent);
+    int? PostWeeklyPercent,
+    string? Transport = null,
+    string? Model = null,
+    int? PromptChars = null,
+    int? PromptBytes = null,
+    int? PromptTokensEstimated = null,
+    string? TokenEstimateSource = null,
+    DateTimeOffset? PromptPreparedAt = null,
+    DateTimeOffset? RequestWriteStartedAt = null,
+    DateTimeOffset? RequestSubmittedAt = null,
+    DateTimeOffset? RequestAcceptedAt = null,
+    DateTimeOffset? FirstProtocolEventAt = null,
+    DateTimeOffset? FirstOutputAt = null,
+    DateTimeOffset? CompletedAt = null,
+    int? ReportedPromptTokens = null,
+    int? ReportedCachedTokens = null,
+    int? ReportedOutputTokens = null,
+    string? InputWaitStatus = null,
+    string? EstimatorVersion = null);
 
 /// <summary>Canonical serialization for the telemetry log: compact, camelCase, one object per line.</summary>
 internal static class SessionTelemetryJson

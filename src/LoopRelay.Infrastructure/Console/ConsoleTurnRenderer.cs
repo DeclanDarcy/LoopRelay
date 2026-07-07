@@ -1,3 +1,4 @@
+using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
 
 namespace LoopRelay.Infrastructure.Console;
@@ -16,10 +17,13 @@ public class ConsoleTurnRenderer(ILoopConsole console)
 
         if (chunk.Kind == AgentStreamChunkKind.ToolCall)
         {
+            AgentTurnProgress.Notify(observer => observer.FirstProtocolEvent());
             console.Tool(chunk.Content);
         }
         else
         {
+            AgentTurnProgress.Notify(observer => observer.FirstProtocolEvent());
+            AgentTurnProgress.Notify(observer => observer.FirstOutput());
             console.Delta(chunk.Content);
             replyStreamed = true;
         }

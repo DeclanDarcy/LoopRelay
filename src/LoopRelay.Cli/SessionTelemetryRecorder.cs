@@ -1,4 +1,5 @@
 using LoopRelay.Agents.Models;
+using LoopRelay.Infrastructure.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 
 namespace LoopRelay.Cli;
@@ -15,6 +16,7 @@ internal interface ISessionTelemetryRecorder
         DateTimeOffset openedAtUtc,
         string? cachedLogPath,
         AgentTurnResult result,
+        InputWaitObservation? inputWait,
         CancellationToken cancellationToken);
 }
 
@@ -40,6 +42,7 @@ internal sealed class SessionTelemetryRecorder(
         DateTimeOffset openedAtUtc,
         string? cachedLogPath,
         AgentTurnResult result,
+        InputWaitObservation? inputWait,
         CancellationToken cancellationToken)
     {
         string? path = cachedLogPath;
@@ -61,7 +64,25 @@ internal sealed class SessionTelemetryRecorder(
                 usage.CachedInputTokens,
                 costModel.Measure(usage),
                 post?.FiveHourRemainingPercent,
-                post?.WeeklyRemainingPercent);
+                post?.WeeklyRemainingPercent,
+                inputWait?.Transport,
+                inputWait?.Model,
+                inputWait?.PromptChars,
+                inputWait?.PromptBytes,
+                inputWait?.PromptTokensEstimated,
+                inputWait?.TokenEstimateSource,
+                inputWait?.PromptPreparedAt,
+                inputWait?.RequestWriteStartedAt,
+                inputWait?.RequestSubmittedAt,
+                inputWait?.RequestAcceptedAt,
+                inputWait?.FirstProtocolEventAt,
+                inputWait?.FirstOutputAt,
+                inputWait?.CompletedAt,
+                usage.PromptTokens,
+                usage.CachedInputTokens,
+                usage.OutputTokens,
+                inputWait?.Status,
+                inputWait?.EstimatorVersion);
 
             sink.Append(record);
         }
@@ -102,6 +123,7 @@ internal sealed class NullSessionTelemetryRecorder : ISessionTelemetryRecorder
     public Task<string?> RecordTurnAsync(
         string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role,
         DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result,
+        InputWaitObservation? inputWait,
         CancellationToken cancellationToken) =>
         Task.FromResult(cachedLogPath);
 }

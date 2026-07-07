@@ -7,7 +7,12 @@ public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = n
 {
     private readonly TextWriter outWriter = output ?? System.Console.Out;
     private readonly TextWriter errWriter = error ?? System.Console.Error;
+    private readonly bool progressInteractive = output is null && error is null && !System.Console.IsErrorRedirected;
     private bool midLine;
+    private bool progressLineActive;
+    private int progressLineLength;
+
+    public bool IsProgressInteractive => progressInteractive;
 
     public void Phase(string phase)
     {
@@ -57,8 +62,62 @@ public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = n
 
     public void Error(string text)
     {
+        ProgressComplete();
         EnsureLineStart();
         errWriter.WriteLine($"[error] {text}");
+    }
+
+    public void Progress(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        if (!progressInteractive)
+        {
+            errWriter.WriteLine(text);
+            return;
+        }
+
+        errWriter.Write('\r');
+        errWriter.Write(text);
+        if (progressLineLength > text.Length)
+        {
+            errWriter.Write(new string(' ', progressLineLength - text.Length));
+            errWriter.Write('\r');
+            errWriter.Write(text);
+        }
+
+        progressLineLength = text.Length;
+        progressLineActive = true;
+    }
+
+    public void ProgressComplete(string? text = null)
+    {
+        if (!progressInteractive)
+        {
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                errWriter.WriteLine(text);
+            }
+
+            return;
+        }
+
+        if (progressLineActive)
+        {
+            errWriter.Write('\r');
+            errWriter.Write(new string(' ', progressLineLength));
+            errWriter.Write('\r');
+            progressLineActive = false;
+            progressLineLength = 0;
+        }
+
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            errWriter.WriteLine(text);
+        }
     }
 
     private void EnsureLineStart()

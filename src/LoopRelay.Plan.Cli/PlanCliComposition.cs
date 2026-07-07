@@ -3,6 +3,7 @@ using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Services;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
+using LoopRelay.Infrastructure.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,15 +43,20 @@ internal sealed class PlanCliComposition : IAsyncDisposable
 
         var store = provider.GetRequiredService<IArtifactStore>();
         var runtime = provider.GetRequiredService<IAgentRuntime>();
+        var tokenEstimator = provider.GetRequiredService<IAgentTokenEstimator>();
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
         var processRunner = provider.GetRequiredService<IProcessRunner>();
         ISandboxWorkspaceFactory sandboxFactory = new TempSandboxWorkspaceFactory();
 
         var artifacts = new PlanArtifacts(store, repository);
+        var progressRuntime = new InputWaitProgressAgentRuntime(
+            runtime,
+            tokenEstimator,
+            new ConsoleInputWaitProgressRenderer(console));
         var preflight = new PreflightGate(artifacts);
-        var planSession = new PlanSession(runtime, artifacts, console, repository);
-        var review = new ReviewStep(runtime, artifacts, console, repository);
-        var oneShot = new SandboxedPromptStep(runtime, sandboxFactory, artifacts, console, repository);
+        var planSession = new PlanSession(progressRuntime, artifacts, console, repository);
+        var review = new ReviewStep(progressRuntime, artifacts, console, repository);
+        var oneShot = new SandboxedPromptStep(progressRuntime, sandboxFactory, artifacts, console, repository);
         var publisher = new AgentsSubmodulePublisher(processRunner, repository, console);
         var rollover = new EpicRolloverStep(processRunner, artifacts, console, repository);
         var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);

@@ -18,14 +18,16 @@ internal sealed class GatedAgentRuntime(
     IUsageLimitDetector usageLimit,
     ISessionTelemetryRecorder recorder,
     IClock clock,
-    string repoName) : IAgentRuntime
+    string repoName,
+    InputWaitObservationStore? inputWaitObservations = null) : IAgentRuntime
 {
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec, CancellationToken cancellationToken = default)
     {
         IAgentSession session = await inner.OpenSessionAsync(spec, cancellationToken);
         return new GatedAgentSession(
-            session, usageLimit, recorder, repoName, spec.WorkingDirectory ?? string.Empty, clock.UtcNow);
+            session, usageLimit, recorder, repoName, spec.WorkingDirectory ?? string.Empty, clock.UtcNow,
+            inputWaitObservations);
     }
 
     public async Task<AgentTurnResult> RunOneShotAsync(
@@ -43,7 +45,9 @@ internal sealed class GatedAgentRuntime(
         AgentTurnResult result = await inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
         await recorder.RecordTurnAsync(
             repoName, spec.WorkingDirectory ?? string.Empty, spec.SessionId, spec.Role, openedAt,
-            cachedLogPath: null, result, cancellationToken);
+            cachedLogPath: null, result,
+            inputWaitObservations?.Take(spec.SessionId, result.TurnIndex),
+            cancellationToken);
         return result;
     }
 
@@ -63,7 +67,8 @@ internal sealed class GatedAgentSession(
     ISessionTelemetryRecorder recorder,
     string repoName,
     string workingDirectory,
-    DateTimeOffset openedAtUtc) : IAgentSession
+    DateTimeOffset openedAtUtc,
+    InputWaitObservationStore? inputWaitObservations = null) : IAgentSession
 {
     /// <summary>Wait-and-retry attempts per logical turn before the failure propagates. Covers cascading
     /// windows (a 5h reset followed by a weekly limit) without masking a persistently broken codex. Lives
@@ -94,7 +99,9 @@ internal sealed class GatedAgentSession(
             result = await inner.RunTurnAsync(prompt, onChunk, cancellationToken);
             cachedLogPath = await recorder.RecordTurnAsync(
                 repoName, workingDirectory, inner.SessionId, inner.Role, openedAtUtc,
-                cachedLogPath, result, cancellationToken);
+                cachedLogPath, result,
+                inputWaitObservations?.Take(inner.SessionId, result.TurnIndex),
+                cancellationToken);
 
             UsageLimitHit? hit = usageLimit.Detect(result);
             if (hit is null)

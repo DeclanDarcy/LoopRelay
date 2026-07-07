@@ -317,6 +317,7 @@ public class GatedAgentRuntimeTests
         public Task<string?> RecordTurnAsync(
             string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role,
             DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result,
+            LoopRelay.Infrastructure.Diagnostics.InputWaitObservation? inputWait,
             CancellationToken cancellationToken)
         {
             Calls.Add((role, result.TurnIndex, cachedLogPath));

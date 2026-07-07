@@ -74,12 +74,15 @@ public sealed class AgentSession : IAgentSession
         {
             int turnIndex = completedTurns + 1;
 
+            AgentTurnProgress.Notify(observer => observer.RequestWriteStarted());
             await process.WritePromptAsync(EnsureTrailingNewline(prompt), linked.Token);
 
             if (mode == AgentSessionMode.OneShot)
             {
                 await process.CompleteInputAsync(linked.Token);
             }
+
+            AgentTurnProgress.Notify(observer => observer.RequestSubmitted());
 
             (string output, AgentTokenUsage? boundaryUsage, bool completed) =
                 await ReadTurnAsync(turnIndex, onChunk, linked.Token);
@@ -166,6 +169,8 @@ public sealed class AgentSession : IAgentSession
         {
             while (reader.TryRead(out string? line))
             {
+                AgentTurnProgress.Notify(observer => observer.FirstProtocolEvent());
+
                 // The boundary detector classifies every line in both modes: a real Codex turn
                 // emits a turn-completed event before the process stream ends, while a one-shot
                 // process that emits no boundary still terminates the turn on stream end below.
