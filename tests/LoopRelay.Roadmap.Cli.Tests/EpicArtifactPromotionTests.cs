@@ -65,6 +65,58 @@ public sealed class EpicArtifactPromotionTests
     }
 
     [Fact]
+    public void Validator_rejects_missing_milestone_roadmap()
+    {
+        string content = RoadmapSamples.ValidEpic();
+        int milestoneStart = content.IndexOf("## Milestone Roadmap", StringComparison.Ordinal);
+        string withoutMilestones = content[..milestoneStart].TrimEnd() + Environment.NewLine;
+
+        Cli.ArtifactValidationResult result = new Cli.EpicArtifactValidator()
+            .Validate(withoutMilestones);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("Milestone Roadmap", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validator_rejects_empty_milestone_roadmap()
+    {
+        string content = """
+            # Epic: Empty Milestone Roadmap
+
+            ## Epic Metadata
+
+            | Field | Value |
+            |---|---|
+            | Epic ID | EPIC-EMPTY |
+            | Status | Authored |
+
+            ## Strategic Purpose
+
+            Purpose.
+
+            ## Desired Capability
+
+            Capability.
+
+            ## Acceptance Criteria
+
+            - Criterion.
+
+            ## Milestone Roadmap
+
+            | Milestone ID | Milestone Name | Purpose | Outcome | Depends On | Completion Signal |
+            |---|---|---|---|---|---|
+            """;
+
+        Cli.ArtifactValidationResult result = new Cli.EpicArtifactValidator()
+            .Validate(content);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("at least one milestone row", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validator_rejects_missing_metadata()
     {
         Cli.ArtifactValidationResult result = new Cli.EpicArtifactValidator()

@@ -21,7 +21,8 @@ That decision has already been made by EpicPreparationAudit.
 
 You are NOT merely realigning the epic.
 You are NOT retiring the epic.
-You are NOT expanding the epic into milestones.
+You are NOT expanding the epic into milestone deep dives.
+You ARE defining the replacement epic's capability-level milestone roadmap so it can be expanded safely by the later milestone prompt.
 You are NOT creating implementation tasks.
 You are NOT selecting another roadmap epic.
 You are NOT modifying the roadmap.
@@ -269,7 +270,7 @@ The reimagined epic should remain concise.
 Do not turn it into:
 
 - a design document
-- a milestone roadmap
+- milestone deep dives
 - an implementation plan
 - a codebase audit
 - an architecture proposal
@@ -297,11 +298,23 @@ Do not leave stale fragments of the old epic.
 
 ---
 
-### 10. No execution planning
+### 10. Define milestone structure without execution planning
+
+The reimagined epic must include an epic-level milestone roadmap.
+
+The roadmap should express coherent capability stages for the replacement framing.
+
+It may preserve, adapt, replace, merge, or split previous milestone content only where the EpicPreparationAudit justifies that the old framing is stale.
+
+Each milestone should define:
+
+- purpose
+- outcome
+- dependency relationship
+- completion signal
 
 Do not create:
 
-- milestone roadmaps
 - milestone deep dives
 - implementation tasks
 - step-by-step execution instructions
@@ -309,7 +322,7 @@ Do not create:
 - execution prompts
 - code changes
 
-Those belong to later prompts.
+Milestone deep dives, implementation tasks, and execution plans belong to later prompts.
 
 ---
 
@@ -403,6 +416,7 @@ Do not:
 - update roadmap completion context
 - modify the projection
 - perform a new repository audit
+- omit the replacement epic's milestone roadmap
 - generate milestone deep dives
 - generate implementation tasks
 - create an execution prompt
@@ -464,6 +478,7 @@ Ask:
 - What abstraction should anchor the epic?
 - What dependencies must be respected?
 - What constraints must shape the work?
+- What milestone structure best fits the replacement framing?
 - What stale assumptions must be removed?
 - What non-goals prevent repeating the old framing error?
 
@@ -488,6 +503,7 @@ Check:
 - the projection link is clear
 - the new epic does not become unrelated work
 - the new epic resolves the audit’s reason for Reimagine
+- the new milestone roadmap fits the replacement framing
 - the new epic is ready for later milestone expansion
 
 ---
@@ -687,6 +703,50 @@ Focus on:
 - readiness for downstream work
 - avoidance of drift
 
+## Milestone Roadmap
+
+Create a compact milestone roadmap for this reimagined epic.
+
+Milestones should represent coherent capability stages for the replacement framing.
+
+Use this table:
+
+| Milestone ID | Milestone Name | Purpose | Outcome | Depends On | Completion Signal |
+|---|---|---|---|---|---|
+
+Rules:
+
+- Milestones should be ordered.
+- Milestones should be capability-oriented, not task-oriented.
+- Completion Signal should be auditable.
+- Do not include implementation task lists.
+- Do not include file-level instructions.
+- Do not create milestone deep dives.
+
+## Milestone Summaries
+
+For each milestone, provide a short summary.
+
+Use this structure for each milestone:
+
+### Milestone {{id}} — {{name}}
+
+**Purpose:**  
+{{purpose}}
+
+**Strategic Outcome:**  
+{{outcome}}
+
+**Key Boundaries:**  
+{{boundaries}}
+
+**Completion Signal:**  
+{{completion_signal}}
+
+Keep each milestone summary concise.
+
+Do not create deep dives.
+
 ## Risks and Watchpoints
 
 List risks surfaced by the audit and by the new framing.
@@ -739,6 +799,7 @@ Include rows for:
 - assumptions
 - dependencies
 - acceptance criteria
+- milestone structure
 - risks
 
 ## Final Epic Statement
@@ -764,7 +825,8 @@ Before finalizing, verify:
 - No speculative improvements were added.
 - No repository re-audit was performed.
 - No implementation tasks were created.
-- No milestones were generated.
+- A coherent replacement milestone roadmap was included.
+- No milestone deep dives were generated.
 - No roadmap changes were made.
 - No roadmap completion context changes were made.
 - No projection changes were made.

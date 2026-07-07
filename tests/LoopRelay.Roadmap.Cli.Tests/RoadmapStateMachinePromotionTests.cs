@@ -155,6 +155,33 @@ public sealed class RoadmapStateMachinePromotionTests
         Assert.Contains("ArtifactPromoted", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Realign_rewrite_without_milestone_roadmap_is_blocked_and_preserves_existing_active_epic()
+    {
+        using var repo = SeedRepo();
+        string existing = RoadmapSamples.ValidEpic("Existing Epic", "EPIC-OLD", "Ready");
+        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, existing);
+        string replacement = StripMilestoneRoadmap(RoadmapSamples.ValidEpic("Realigned Epic", "EPIC-OLD", "Realigned", "Realign"));
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(ExistingEpicSelection()),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EpicPreparationAudit")),
+            ScriptedAgentRuntime.Completed(AuditDisposition("Realign")),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("RealignEpic")),
+            ScriptedAgentRuntime.Completed(replacement));
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.Equal(existing, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
+        Assert.Equal(6, runtime.OneShotCalls);
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal("Artifact Promotion Invalid", state.LastTransition.Decision);
+        string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
+        Assert.Equal(replacement, repo.Read(evidencePath));
+    }
+
     private static TempRepo SeedRepo()
     {
         var repo = new TempRepo();
@@ -283,4 +310,12 @@ public sealed class RoadmapStateMachinePromotionTests
         | Overall Drift Classification | None |
         | Closure Recommendation | {{recommendation}} |
         """;
+
+    private static string StripMilestoneRoadmap(string epic)
+    {
+        int milestoneStart = epic.IndexOf("## Milestone Roadmap", StringComparison.Ordinal);
+        return milestoneStart < 0
+            ? epic
+            : epic[..milestoneStart].TrimEnd() + Environment.NewLine;
+    }
 }

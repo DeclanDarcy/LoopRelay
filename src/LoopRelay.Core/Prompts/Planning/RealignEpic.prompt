@@ -21,7 +21,8 @@ That decision has already been made by EpicPreparationAudit.
 
 You are NOT reimagining the epic.
 You are NOT retiring the epic.
-You are NOT expanding the epic into milestones.
+You are NOT expanding the epic into milestone deep dives.
+You ARE preserving and adapting the epic-level milestone roadmap when the current epic already contains one.
 You are NOT creating implementation tasks.
 You are NOT selecting another epic.
 You are NOT modifying the roadmap.
@@ -265,11 +266,34 @@ If the current epic is missing sections necessary for realignment, add only the 
 
 ---
 
-### 9. No execution planning
+### 9. Adapt milestone structure without execution planning
+
+If the Current Epic contains an epic-level milestone roadmap, milestone summaries, or equivalent milestone structure, preserve those milestone sections.
+
+Adapt milestone content only where the EpicPreparationAudit requires correction.
+
+Allowed milestone adaptations include audit-supported changes to:
+
+- milestone names
+- milestone purpose
+- milestone outcome
+- milestone dependencies
+- milestone boundaries
+- milestone completion signals
+- milestone ordering, only when the audit explicitly identifies the current ordering as unsafe or stale
+
+Do not drop existing milestone roadmap content because this prompt is not generating deep milestone specs.
+
+Do not replace a milestone roadmap with generic follow-up text.
+
+Do not collapse multiple existing milestones into one unless the audit explicitly says the current milestone split is invalid.
+
+Do not split one existing milestone into multiple milestones unless the audit explicitly says the current milestone is overbroad and must be separated to preserve the same epic.
+
+If the Current Epic lacks milestone structure and the audit identifies missing milestone structure as a realignment issue, create the smallest epic-level milestone roadmap needed for future milestone expansion.
 
 Do not create:
 
-- milestone roadmaps
 - milestone deep dives
 - implementation tasks
 - step-by-step execution instructions
@@ -277,7 +301,7 @@ Do not create:
 - prompts for execution agents
 - code changes
 
-Those belong to later prompts.
+Milestone deep dives, implementation tasks, and execution plans belong to later prompts.
 
 ---
 
@@ -372,7 +396,9 @@ Do not:
 - merge the epic with another epic
 - retire the epic
 - reimagine the epic
-- expand the epic into milestones
+- delete or omit existing milestone roadmap content
+- replace milestone content with generic follow-up text
+- generate milestone deep dives
 - generate implementation tasks
 - create an execution prompt
 - modify roadmap sequencing
@@ -410,6 +436,7 @@ From Current Epic, identify:
 - current dependencies
 - current acceptance criteria
 - current risks
+- current milestone roadmap and milestone summaries
 
 ### Step 3 — Extract required audit corrections
 
@@ -421,6 +448,7 @@ From EpicPreparationAudit, extract:
 - constraint or commitment issues
 - dependency corrections
 - scope corrections
+- milestone corrections
 - terminology corrections
 - drift risks to mitigate
 - required follow-up
@@ -432,6 +460,7 @@ For each required correction, decide:
 - what section should change
 - what exact semantic issue is being corrected
 - what text should be removed, updated, or added
+- how existing milestone roadmap content should be preserved or adapted
 - whether the change preserves epic identity
 
 Reject any change that is not required by the audit.
@@ -621,6 +650,54 @@ Focus on:
 - avoidance of drift
 - readiness for downstream work
 
+## Milestone Roadmap
+
+Preserve the current epic's milestone roadmap if one exists.
+
+Apply only audit-supported adaptations to milestone names, purpose, outcome, dependency relationships, ordering, boundaries, or completion signals.
+
+If the current epic has no milestone roadmap and the audit requires adding one, create the smallest capability-oriented roadmap needed for future expansion.
+
+Use this table:
+
+| Milestone ID | Milestone Name | Purpose | Outcome | Depends On | Completion Signal |
+|---|---|---|---|---|---|
+
+Rules:
+
+- Milestones should remain ordered.
+- Milestones should remain capability-oriented, not task-oriented.
+- Completion Signal should be auditable.
+- Do not include implementation task lists.
+- Do not include file-level instructions.
+- Do not create milestone deep dives.
+
+## Milestone Summaries
+
+Preserve current milestone summaries if they exist.
+
+Adapt summaries only where the audit requires correction.
+
+Use this structure for each milestone when summaries exist or must be added to preserve coherence:
+
+### Milestone {{id}} — {{name}}
+
+**Purpose:**  
+{{purpose}}
+
+**Strategic Outcome:**  
+{{outcome}}
+
+**Key Boundaries:**  
+{{boundaries}}
+
+**Completion Signal:**  
+{{completion_signal}}
+
+Keep each milestone summary concise.
+
+Do not create deep dives.
+
 ## Risks and Watchpoints
 
 List risks surfaced by the audit that future expansion should respect.
@@ -678,7 +755,9 @@ Before finalizing, verify:
 - No speculative improvements were added.
 - No repository re-audit was performed.
 - No implementation tasks were created.
-- No milestones were generated.
+- Existing milestone roadmap content was preserved or audit-adapted.
+- No milestone content was dropped.
+- No milestone deep dives were generated.
 - No roadmap changes were made.
 - No roadmap completion context changes were made.
 - No projection changes were made.
