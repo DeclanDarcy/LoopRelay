@@ -88,10 +88,7 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
         }
 
         FirstProtocolEvent();
-        if (chunk.Kind == AgentStreamChunkKind.AgentMessage)
-        {
-            FirstOutput();
-        }
+        FirstOutput();
     }
 
     public void FirstOutput()
@@ -176,15 +173,10 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
             using var timer = new PeriodicTimer(renderer.RefreshInterval);
             while (await timer.WaitForNextTickAsync(renderCts.Token))
             {
-                lock (gate)
+                if (!RenderWaitingIfStillWaiting())
                 {
-                    if (firstOutputRendered || completed)
-                    {
-                        return;
-                    }
+                    return;
                 }
-
-                SafeRender(() => renderer.Waiting(Snapshot()));
             }
         }
         catch (OperationCanceledException)
@@ -194,6 +186,22 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
         catch
         {
             // Rendering is informational.
+        }
+    }
+
+    private bool RenderWaitingIfStillWaiting()
+    {
+        lock (gate)
+        {
+            if (firstOutputRendered || completed)
+            {
+                return false;
+            }
+
+            // Keep timer renders ordered before first-output renders; otherwise a tick can repaint
+            // "processing input" after visible output has already started.
+            SafeRender(() => renderer.Waiting(SnapshotWithoutLock()));
+            return true;
         }
     }
 
@@ -226,6 +234,9 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
 
     private InputWaitProgressSnapshot Snapshot() =>
         new(promptTokensEstimated, Stopwatch.GetElapsedTime(startedTimestamp), HasFirstOutput());
+
+    private InputWaitProgressSnapshot SnapshotWithoutLock() =>
+        new(promptTokensEstimated, Stopwatch.GetElapsedTime(startedTimestamp), firstOutputAt is not null);
 
     private bool HasFirstOutput()
     {

@@ -18,6 +18,7 @@ public class ConsoleTurnRenderer(ILoopConsole console)
         if (chunk.Kind == AgentStreamChunkKind.ToolCall)
         {
             AgentTurnProgress.Notify(observer => observer.FirstProtocolEvent());
+            AgentTurnProgress.Notify(observer => observer.FirstOutput());
             console.Tool(chunk.Content);
         }
         else
