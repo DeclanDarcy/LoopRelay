@@ -20,12 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\LoopRelay.Agents\LoopRelay.Agents.csproj" />
     <ProjectReference Include="..\..\src\LoopRelay.Permissions\LoopRelay.Permissions.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -1,21 +1,24 @@
 using System.Text.Json;
 using LoopRelay.Agents.Models;
 using LoopRelay.Agents.Services;
+using LoopRelay.Permissions.Abstractions;
+using LoopRelay.Permissions.Codex;
+using LoopRelay.Permissions.Services;
 
 namespace LoopRelay.Agents.Tests;
 
 public sealed class CodexAppServerSessionTests
 {
-    private static AgentSessionSpec Spec() => new(
+    private static AgentSessionSpec Spec(bool requiresApproval = false) => new(
         SessionIdentity.New(),
         "repo-1",
         SessionRole.OperationalExecution,
-        new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
+        new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: requiresApproval),
         new EffortProfile(AgentEffortLevel.Medium),
         workingDirectory: "/repo");
 
     private static CodexAppServerSession NewSession(ScriptedAppServerProcess process) =>
-        new(Spec(), process, new DeterministicAgentTokenEstimator());
+        new(Spec(), process, new DeterministicAgentTokenEstimator(), PermissionGateway());
 
     [Fact]
     public async Task SingleTurnRunsHandshakeAndReturnsReplyWithReportedUsage()
@@ -107,13 +110,47 @@ public sealed class CodexAppServerSessionTests
     }
 
     [Fact]
-    public async Task ApprovalRequestsAreAutoDeclinedAndDoNotBlockTheTurn()
+    public async Task SafeApprovalRequestsAreAcceptedAndDoNotBlockTheTurn()
     {
-        var process = new ScriptedAppServerProcess { EmitApprovalRequest = true };
+        var process = new ScriptedAppServerProcess { EmitApprovalRequest = true, ApprovalCommand = "dotnet build" };
+        await using var session = new CodexAppServerSession(
+            Spec(requiresApproval: true),
+            process,
+            new DeterministicAgentTokenEstimator(),
+            PermissionGateway());
+
+        AgentTurnResult result = await session.RunTurnAsync("hello");
+        await process.ApprovalAccepted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Contains(process.Writes, write => write.Contains("\"accept\""));
+        Assert.False(ParamsOf(process, "thread/start").TryGetProperty("approvalPolicy", out _));
+    }
+
+    [Fact]
+    public async Task DangerousApprovalRequestsAreDeclinedAndDoNotBlockTheTurn()
+    {
+        var process = new ScriptedAppServerProcess { EmitApprovalRequest = true, ApprovalCommand = "git push" };
         await using CodexAppServerSession session = NewSession(process);
 
         AgentTurnResult result = await session.RunTurnAsync("hello");
-        // The decline is written by the background writer task, so await its observable signal.
+        await process.ApprovalDeclined.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Contains(process.Writes, write => write.Contains("\"decline\""));
+    }
+
+    [Fact]
+    public async Task PermissionEvaluationFailureDeclinesTheRequestInsteadOfHanging()
+    {
+        var process = new ScriptedAppServerProcess { EmitApprovalRequest = true, ApprovalCommand = "dotnet build" };
+        await using var session = new CodexAppServerSession(
+            Spec(),
+            process,
+            new DeterministicAgentTokenEstimator(),
+            new ThrowingPermissionGateway());
+
+        AgentTurnResult result = await session.RunTurnAsync("hello");
         await process.ApprovalDeclined.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(AgentTurnState.Completed, result.State);
@@ -341,6 +378,23 @@ public sealed class CodexAppServerSessionTests
         {
             return new AgentTurnResult(0, AgentTurnState.Failed, string.Empty, AgentTokenUsage.Zero);
         }
+    }
+
+    private static IPermissionGateway PermissionGateway() =>
+        new PermissionGateway(
+            new CodexPermissionAdapter(),
+            new PermissionHandler(
+                new CommandParser(),
+                new CommandCanonicalizer(),
+                new Sha256FingerprintService(),
+                new InMemoryPermissionCache(),
+                new PermissionEvaluatorEngine(),
+                new InvariantGuard()));
+
+    private sealed class ThrowingPermissionGateway : IPermissionGateway
+    {
+        public byte[] Evaluate(ReadOnlySpan<byte> payload, string repoIdentity, string workingDirectory) =>
+            throw new InvalidOperationException("permission engine failed");
     }
 
     private static AgentSessionSpec ResumeSpec(string threadId) => new(

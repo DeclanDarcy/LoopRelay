@@ -1,5 +1,6 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Permissions.Abstractions;
 
 namespace LoopRelay.Agents.Services;
 
@@ -7,7 +8,8 @@ public sealed class AgentRuntime(
     IAgentProcessLauncher launcher,
     IAgentTurnBoundaryDetector boundaryDetector,
     IAgentTokenEstimator tokenEstimator,
-    AgentSessionRegistry registry) : IAgentRuntime
+    AgentSessionRegistry registry,
+    IPermissionGateway? permissionGateway = null) : IAgentRuntime
 {
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec,
@@ -15,7 +17,7 @@ public sealed class AgentRuntime(
     {
         IAgentProcess process = await launcher.LaunchAsync(spec, AgentSessionMode.Persistent, cancellationToken);
         // Held-open sessions speak the Codex app-server JSON-RPC protocol over the process's stdio.
-        var session = new CodexAppServerSession(spec, process, tokenEstimator);
+        var session = new CodexAppServerSession(spec, process, tokenEstimator, permissionGateway);
 
         if (!registry.TryAdd(new AgentSessionKey(spec.RepositoryId, spec.SessionId), session))
         {

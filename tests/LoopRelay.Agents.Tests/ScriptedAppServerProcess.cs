@@ -16,6 +16,7 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
     private readonly TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource approvalDeclined = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource approvalAccepted = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int turnCounter;
 
     public List<string> Writes { get; } = [];
@@ -31,6 +32,8 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
     public string? ErrorSnapshot { get; init; }
 
     public bool EmitApprovalRequest { get; init; }
+
+    public string ApprovalCommand { get; init; } = "git push";
 
     /// <summary>m10 (B): how many item/agentMessage/delta notifications each turn emits (long-output stress).</summary>
     public int DeltaCount { get; init; } = 1;
@@ -56,6 +59,8 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
 
     public Task ApprovalDeclined => approvalDeclined.Task;
 
+    public Task ApprovalAccepted => approvalAccepted.Task;
+
     public int ProcessId => 4321;
     public AgentProcessState State { get; private set; } = AgentProcessState.Running;
     public int? ExitCode => null;
@@ -80,6 +85,10 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
             if (line.Contains("\"decline\"", StringComparison.Ordinal))
             {
                 approvalDeclined.TrySetResult();
+            }
+            else if (line.Contains("\"accept\"", StringComparison.Ordinal))
+            {
+                approvalAccepted.TrySetResult();
             }
 
             React(line);
@@ -182,7 +191,7 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
                 EmitResponse(id, new { turn = new { id = $"u{index}", status = "inProgress" } });
                 if (EmitApprovalRequest)
                 {
-                    EmitServerRequest("appr-1", "item/commandExecution/requestApproval", new { itemId = "i1" });
+                    EmitServerRequest("appr-1", "item/commandExecution/requestApproval", new { itemId = "i1", command = ApprovalCommand });
                 }
 
                 EmitNotification("turn/started", new { threadId = "thread-xyz", turn = new { id = $"u{index}", status = "inProgress" } });

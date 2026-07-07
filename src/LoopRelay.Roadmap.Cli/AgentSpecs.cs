@@ -14,12 +14,21 @@ internal static class AgentSpecs
             new EffortProfile(AgentEffortLevel.High, "xhigh"),
             repository.Path);
 
-    public static AgentSessionSpec ExecutionBridge(Repository repository) =>
-        new(
+    public static AgentSessionSpec ExecutionBridge(Repository repository, RoadmapExecutionOptions? options = null)
+    {
+        RoadmapExecutionOptions effectiveOptions = options ?? RoadmapExecutionOptions.Default;
+        effectiveOptions.Validate();
+
+        return new(
             SessionIdentity.New(),
             repository.Id.ToString("N"),
             SessionRole.OperationalExecution,
-            new SandboxProfile("danger-full-access", CanWriteWorkspace: true, CanAccessNetwork: true, RequiresApproval: false),
+            new SandboxProfile(
+                effectiveOptions.SandboxIdentifier,
+                CanWriteWorkspace: !string.Equals(effectiveOptions.SandboxIdentifier, "read-only", StringComparison.Ordinal),
+                CanAccessNetwork: effectiveOptions.AllowNetwork,
+                RequiresApproval: effectiveOptions.RequiresApproval),
             new EffortProfile(AgentEffortLevel.High, "xhigh"),
             repository.Path);
+    }
 }

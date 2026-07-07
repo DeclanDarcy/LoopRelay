@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Permissions.Abstractions;
 
 namespace LoopRelay.Agents.Services;
 
@@ -28,6 +30,7 @@ public sealed class CodexAppServerSession : IAgentSession
     private readonly AgentSessionSpec spec;
     private readonly IAgentProcess process;
     private readonly IAgentTokenEstimator tokenEstimator;
+    private readonly IPermissionGateway? permissionGateway;
 
     private readonly SemaphoreSlim turnGate = new(1, 1);
     private readonly Channel<string> outbound = Channel.CreateUnbounded<string>(
@@ -49,11 +52,13 @@ public sealed class CodexAppServerSession : IAgentSession
     public CodexAppServerSession(
         AgentSessionSpec spec,
         IAgentProcess process,
-        IAgentTokenEstimator tokenEstimator)
+        IAgentTokenEstimator tokenEstimator,
+        IPermissionGateway? permissionGateway = null)
     {
         this.spec = spec;
         this.process = process;
         this.tokenEstimator = tokenEstimator;
+        this.permissionGateway = permissionGateway;
         pumpTask = Task.Run(PumpAsync);
         writerTask = Task.Run(WriteLoopAsync);
     }
@@ -271,7 +276,7 @@ public sealed class CodexAppServerSession : IAgentSession
         {
             await foreach (string line in process.ReadOutputLinesAsync(sessionCts.Token))
             {
-                Dispatch(CodexAppServerMessage.Parse(line));
+                Dispatch(line, CodexAppServerMessage.Parse(line));
             }
         }
         catch (OperationCanceledException)
@@ -329,7 +334,7 @@ public sealed class CodexAppServerSession : IAgentSession
         }
     }
 
-    private void Dispatch(CodexAppServerMessage message)
+    private void Dispatch(string rawLine, CodexAppServerMessage message)
     {
         switch (message.Kind)
         {
@@ -343,11 +348,9 @@ public sealed class CodexAppServerSession : IAgentSession
                 break;
 
             case CodexAppServerMessageKind.ServerRequest:
-                // Approvals shouldn't fire (approvalPolicy "never"), but an unanswered request hangs
-                // the turn — enqueue a decline without blocking the read loop.
                 if (message.Id is not null)
                 {
-                    Enqueue(CodexAppServerProtocol.ApprovalResponse(message.Id, CodexAppServerProtocol.DeclineDecision));
+                    EnqueueApprovalResponse(rawLine, message);
                 }
 
                 break;
@@ -410,6 +413,33 @@ public sealed class CodexAppServerSession : IAgentSession
     }
 
     private void Enqueue(string frame) => outbound.Writer.TryWrite(frame + "\n");
+
+    private void EnqueueCompleteFrame(string frame)
+    {
+        outbound.Writer.TryWrite(frame.EndsWith('\n') ? frame : frame + "\n");
+    }
+
+    private void EnqueueApprovalResponse(string rawLine, CodexAppServerMessage message)
+    {
+        if (permissionGateway is null)
+        {
+            Enqueue(CodexAppServerProtocol.ApprovalResponse(message.Id!, CodexAppServerProtocol.DeclineDecision));
+            return;
+        }
+
+        try
+        {
+            byte[] response = permissionGateway.Evaluate(
+                Encoding.UTF8.GetBytes(rawLine),
+                spec.RepositoryId,
+                spec.WorkingDirectory ?? ".");
+            EnqueueCompleteFrame(Encoding.UTF8.GetString(response));
+        }
+        catch
+        {
+            Enqueue(CodexAppServerProtocol.ApprovalResponse(message.Id!, CodexAppServerProtocol.DeclineDecision));
+        }
+    }
 
     private long NextId() => Interlocked.Increment(ref nextId);
 

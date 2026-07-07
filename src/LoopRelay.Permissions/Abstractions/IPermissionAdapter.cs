@@ -1,0 +1,10 @@
+using LoopRelay.Permissions.Models;
+
+namespace LoopRelay.Permissions.Abstractions;
+
+public interface IPermissionAdapter
+{
+    PermissionRequest Parse(ReadOnlySpan<byte> payload, string repoIdentity, string workingDirectory);
+
+    byte[] BuildResponse(PermissionRequest request, PermissionResult result);
+}

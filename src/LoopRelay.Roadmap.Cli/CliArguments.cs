@@ -6,7 +6,7 @@ internal static class CliArguments
 {
     public static bool TryParse(string[] args, out RoadmapCliInvocation invocation, out string error)
     {
-        invocation = new RoadmapCliInvocation(RoadmapCliCommand.Run, new Repository());
+        invocation = new RoadmapCliInvocation(RoadmapCliCommand.Run, new Repository(), RoadmapExecutionOptions.Default);
 
         if (args.Length < 1)
         {
@@ -16,6 +16,7 @@ internal static class CliArguments
 
         RoadmapCliCommand command = RoadmapCliCommand.Run;
         string? repoPath = null;
+        int optionStart;
 
         if (TryParseCommand(args[0], out RoadmapCliCommand leadingCommand))
         {
@@ -27,16 +28,14 @@ internal static class CliArguments
             }
 
             repoPath = args[1];
-            if (args.Length > 2)
-            {
-                error = $"Unexpected argument: {args[2]}";
-                return false;
-            }
+            optionStart = 2;
         }
         else
         {
             repoPath = args[0];
-            if (args.Length > 1)
+            optionStart = 1;
+
+            if (args.Length > 1 && !args[1].StartsWith("--", StringComparison.Ordinal))
             {
                 if (!TryParseCommand(args[1], out command))
                 {
@@ -44,12 +43,13 @@ internal static class CliArguments
                     return false;
                 }
 
-                if (args.Length > 2)
-                {
-                    error = $"Unexpected argument: {args[2]}";
-                    return false;
-                }
+                optionStart = 2;
             }
+        }
+
+        if (!TryParseExecutionOptions(args[optionStart..], out RoadmapExecutionOptions executionOptions, out error))
+        {
+            return false;
         }
 
         if (string.IsNullOrWhiteSpace(repoPath))
@@ -72,7 +72,8 @@ internal static class CliArguments
                 Id = Guid.NewGuid(),
                 Name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
                 Path = path,
-            });
+            },
+            executionOptions);
         error = string.Empty;
         return true;
     }
@@ -96,11 +97,49 @@ internal static class CliArguments
         return false;
     }
 
+    private static bool TryParseExecutionOptions(
+        string[] args,
+        out RoadmapExecutionOptions options,
+        out string error)
+    {
+        options = RoadmapExecutionOptions.Default;
+        error = string.Empty;
+
+        if (args.Length == 0)
+        {
+            return true;
+        }
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            string arg = args[i];
+            if (arg is "--elevated" or "--execution-elevated")
+            {
+                if (i + 1 >= args.Length || string.IsNullOrWhiteSpace(args[i + 1]))
+                {
+                    error = "Elevated roadmap execution requires a non-empty reason.";
+                    return false;
+                }
+
+                options = RoadmapExecutionOptions.Elevated(args[++i]);
+                continue;
+            }
+
+            error = $"Unexpected argument: {arg}";
+            return false;
+        }
+
+        return true;
+    }
+
     private static string Usage() =>
-        "Usage: LoopRelay.Roadmap.Cli [status|run|unblock] <REPO_DIR>  (REPO_DIR is required)";
+        "Usage: LoopRelay.Roadmap.Cli [status|run|unblock] <REPO_DIR> [--elevated REASON]  (REPO_DIR is required)";
 }
 
-internal sealed record RoadmapCliInvocation(RoadmapCliCommand Command, Repository Repository);
+internal sealed record RoadmapCliInvocation(
+    RoadmapCliCommand Command,
+    Repository Repository,
+    RoadmapExecutionOptions ExecutionOptions);
 
 internal enum RoadmapCliCommand
 {

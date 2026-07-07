@@ -11,8 +11,4 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\LoopRelay.Permissions\LoopRelay.Permissions.csproj" />
-  </ItemGroup>
-
 </Project>

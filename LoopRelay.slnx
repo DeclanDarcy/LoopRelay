@@ -7,6 +7,7 @@
     <Project Path="src/LoopRelay.Orchestration.Primitives/LoopRelay.Orchestration.csproj" />
     <Project Path="src/LoopRelay.Plan.Cli/LoopRelay.Plan.Cli.csproj" />
     <Project Path="src/LoopRelay.Projections/LoopRelay.Projections.csproj" />
+    <Project Path="src/LoopRelay.Permissions/LoopRelay.Permissions.csproj" />
     <Project Path="src/LoopRelay.Prompts.Generator/LoopRelay.Prompts.Generator.csproj" />
     <Project Path="src/LoopRelay.Roadmap.Cli/LoopRelay.Roadmap.Cli.csproj" />
   </Folder>
@@ -17,6 +18,7 @@
     <Project Path="tests/LoopRelay.Infrastructure.Tests/LoopRelay.Infrastructure.Tests.csproj" />
     <Project Path="tests/LoopRelay.Orchestration.Primitives.Tests/LoopRelay.Orchestration.Tests.csproj" />
     <Project Path="tests/LoopRelay.Plan.Cli.Tests/LoopRelay.Plan.Cli.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Permissions.Tests/LoopRelay.Permissions.Tests.csproj" />
     <Project Path="tests/LoopRelay.Projections.Tests/LoopRelay.Projections.Tests.csproj" />
     <Project Path="tests/LoopRelay.Roadmap.Cli.Tests/LoopRelay.Roadmap.Cli.Tests.csproj" />
   </Folder>
