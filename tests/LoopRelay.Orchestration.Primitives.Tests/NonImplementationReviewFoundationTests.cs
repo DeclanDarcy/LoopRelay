@@ -214,13 +214,27 @@ public sealed class NonImplementationReviewFoundationTests
         await store.SaveAsync(new NonImplementationReviewLedgerDocument(
             NonImplementationReviewLedgerDocument.CurrentSchemaVersion,
             [
-                new NonImplementationReviewLedgerEntry(
-                    "entry-1",
-                    "docs/requested.md",
-                    NonImplementationArtifactRoute.SemanticReviewCandidate,
-                    NonImplementationSemanticDisposition.ConfirmedNonImplementation,
-                    NonImplementationResolutionState.Unresolved,
-                    NonImplementationHitlProvenanceKind.None),
+                new NonImplementationReviewLedgerEntry
+                {
+                    EntryId = "entry-1",
+                    ExecutionSliceId = "slice-1",
+                    Path = "docs/requested.md",
+                    ReviewedContentSha256 = "reviewed-hash",
+                    ReviewedFileDeleted = false,
+                    Route = NonImplementationArtifactRoute.SemanticReviewCandidate,
+                    ClassificationRuleId = "rule",
+                    ClassificationRationale = "candidate",
+                    ClassificationPathFacts = ["path=docs/requested.md"],
+                    ClassifierVersion = "classifier",
+                    SemanticDisposition = NonImplementationSemanticDisposition.ConfirmedNonImplementation,
+                    SemanticRationale = "confirmed",
+                    SemanticEvidence = ["evidence"],
+                    ConfirmationPromptSourceHash = "prompt-hash",
+                    FirstSeenAtUtc = DateTimeOffset.UnixEpoch,
+                    LastSeenAtUtc = DateTimeOffset.UnixEpoch,
+                    ResolutionState = NonImplementationResolutionState.Unresolved,
+                    HitlProvenanceKind = NonImplementationHitlProvenanceKind.None,
+                },
             ],
             [
                 new NonImplementationHitlRequestEntry(
@@ -229,7 +243,8 @@ public sealed class NonImplementationReviewFoundationTests
                     "source-hash",
                     NonImplementationHitlProvenanceKind.HitlRequested,
                     "Human requested the note.",
-                    DateTimeOffset.UnixEpoch),
+                    DateTimeOffset.UnixEpoch,
+                    "| docs/*.md | Human requested the note. |"),
             ]));
         var capture = new ExplicitHitlNonImplementationRequestCaptureService(store);
 
@@ -241,6 +256,7 @@ public sealed class NonImplementationReviewFoundationTests
         Assert.Equal(OrchestrationArtifactPaths.Plan, entry.HitlProvenanceEvidencePath);
         Assert.Equal("source-hash", entry.HitlProvenanceSourceHash);
         Assert.Equal("Human requested the note.", entry.HitlProvenanceRationale);
+        Assert.Equal("docs/*.md", entry.HitlProvenanceEvidenceExcerpt?.Split('|')[1].Trim());
     }
 
     private sealed class InMemoryArtifactStore : IArtifactStore

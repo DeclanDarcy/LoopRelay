@@ -98,6 +98,7 @@ public sealed class ExplicitHitlNonImplementationRequestCaptureService(
         {
             HitlProvenanceKind = provenance,
             HitlProvenanceEvidencePath = match.SourceArtifactPath,
+            HitlProvenanceEvidenceExcerpt = match.EvidenceExcerpt,
             HitlProvenanceSourceHash = match.SourceHash,
             HitlProvenanceRationale = match.Rationale,
         };
@@ -166,7 +167,8 @@ public sealed class ExplicitHitlNonImplementationRequestCaptureService(
                 sourceHash,
                 NonImplementationHitlProvenanceKind.HitlRequested,
                 string.IsNullOrWhiteSpace(rationale) ? "Explicit HITL-request marker." : rationale,
-                capturedAtUtc.ToUniversalTime()));
+                capturedAtUtc.ToUniversalTime(),
+                line));
         }
 
         return entries;
