@@ -255,7 +255,7 @@ public sealed class RoadmapStateMachineUnblockTests
     }
 
     [Fact]
-    public async Task RepairExecutionRuntimeFailure_valid_readiness_recovers_to_execution_prompt_ready()
+    public async Task RepairExecutionRuntimeFailure_is_not_recovered_by_roadmap_cli()
     {
         using var repo = SeedProject();
         await SeedExecutionReadyAsync(repo);
@@ -265,13 +265,12 @@ public sealed class RoadmapStateMachineUnblockTests
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.ExecutionPromptReady, state.CurrentState);
-        Assert.Equal("UnblockReview", state.LastTransition.Prompt);
-        Assert.Equal("ContinueExecution", state.TransitionIntent.Intent);
-        Assert.Contains(Cli.RoadmapArtifactPaths.ExecutionPrompt, state.TransitionIntent.EvidencePaths);
-        Assert.Empty(state.Blockers);
+        Assert.Equal(Cli.RoadmapState.Failed, state.CurrentState);
+        Assert.Equal("ExecutionLoop", state.LastTransition.Prompt);
+        Assert.Equal("RepairExecutionRuntimeFailure", state.TransitionIntent.Intent);
+        Assert.Contains(state.Blockers, blocker => blocker.Blocker.StartsWith("Unblock Review Failed:", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -307,7 +306,7 @@ public sealed class RoadmapStateMachineUnblockTests
         Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(Cli.RoadmapState.Failed, state.CurrentState);
-        Assert.Contains(state.Blockers, blocker => blocker.Blocker.Contains("not fresh", StringComparison.Ordinal) || blocker.Blocker.Contains("not safe", StringComparison.Ordinal));
+        Assert.Contains(state.Blockers, blocker => blocker.Blocker.Contains("no longer advanced by Roadmap CLI", StringComparison.Ordinal));
     }
 
     [Theory]

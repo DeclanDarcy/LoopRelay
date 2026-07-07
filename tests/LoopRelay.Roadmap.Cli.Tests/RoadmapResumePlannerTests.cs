@@ -137,11 +137,11 @@ public sealed class RoadmapResumePlannerTests
 
         Cli.RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(Cli.RoadmapState.ActiveEpicReady, prompt: "CreateNewEpic", output: Cli.RoadmapArtifactPaths.ActiveEpic), context, CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapResumeAction.PrepareExecutionFromActiveEpic, plan.Action);
+        Assert.Equal(Cli.RoadmapResumeAction.GenerateMilestoneSpecs, plan.Action);
     }
 
     [Fact]
-    public async Task Milestone_specs_ready_resumes_at_execution_readiness()
+    public async Task Milestone_specs_ready_pauses_before_execution_context_generation()
     {
         using var repo = new TempRepo();
         Cli.ProjectContext context = await SeedProjectAsync(repo);
@@ -150,11 +150,13 @@ public sealed class RoadmapResumePlannerTests
 
         Cli.RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(Cli.RoadmapState.MilestoneSpecsReady, prompt: "GenerateMilestoneDeepDivesForEpic", output: Cli.RoadmapArtifactPaths.SpecsDirectory), context, CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapResumeAction.PrepareExecutionFromMilestoneSpecs, plan.Action);
+        Assert.Equal(Cli.RoadmapResumeAction.Terminal, plan.Action);
+        Assert.Equal(Cli.RoadmapOutcome.Paused, plan.TerminalOutcome);
+        Assert.Contains("stops before execution context generation", plan.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Execution_prompt_ready_resumes_execution()
+    public async Task Legacy_execution_prompt_ready_is_not_advanced_by_roadmap_cli()
     {
         using var repo = new TempRepo();
         Cli.ProjectContext context = await SeedProjectAsync(repo);
@@ -162,7 +164,9 @@ public sealed class RoadmapResumePlannerTests
 
         Cli.RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(Cli.RoadmapState.ExecutionPromptReady, output: Cli.RoadmapArtifactPaths.ExecutionPrompt), context, CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapResumeAction.RunExecution, plan.Action);
+        Assert.Equal(Cli.RoadmapResumeAction.Terminal, plan.Action);
+        Assert.Equal(Cli.RoadmapOutcome.Paused, plan.TerminalOutcome);
+        Assert.Contains("no longer advanced by Roadmap CLI", plan.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -219,7 +223,8 @@ public sealed class RoadmapResumePlannerTests
 
         Cli.RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(cancelled, context, CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapResumeAction.RunExecution, plan.Action);
+        Assert.Equal(Cli.RoadmapResumeAction.Terminal, plan.Action);
+        Assert.Equal(Cli.RoadmapOutcome.Paused, plan.TerminalOutcome);
     }
 
     [Fact]

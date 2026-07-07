@@ -103,8 +103,9 @@ internal static class StateMachineFactory
     public static Cli.RoadmapStateMachine Create(
         TempRepo repo,
         IAgentRuntime runtime,
-        Cli.IRoadmapExecutionBridge? bridge = null)
+        Cli.ILoopConsole? console = null)
     {
+        Cli.ILoopConsole effectiveConsole = console ?? new TestConsole();
         var projections = new Cli.ProjectionRegistry();
         var contracts = new Cli.PromptContractRegistry(projections);
         var manifest = new Cli.ProjectionManifestStore(repo.Artifacts);
@@ -114,7 +115,7 @@ internal static class StateMachineFactory
         var stateStore = new RoadmapStateStore(repo.Artifacts);
         var split = new Cli.SplitFamilyStore(repo.Artifacts);
         var loader = new ProjectContextLoader(repo.Artifacts);
-        var runner = new Cli.RoadmapPromptRunner(runtime, repo.Repository, new TestConsole());
+        var runner = new Cli.RoadmapPromptRunner(runtime, repo.Repository, effectiveConsole);
         var contextBuilder = new Cli.RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation);
         var inputResolver = new Cli.TransitionInputResolver(repo.Artifacts, executionPreparation);
         var selectionProvenance = new Cli.SelectionProvenanceService(
@@ -122,10 +123,9 @@ internal static class StateMachineFactory
             new Cli.SelectionProvenanceManifestStore(repo.Artifacts),
             contextBuilder,
             inputResolver);
-        Cli.IRoadmapExecutionBridge executionBridge = bridge ?? new FakeRoadmapExecutionBridge();
         var invariants = new Cli.InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
         var resumePlanner = new Cli.RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new Cli.ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
-        var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, resumePlanner, new Cli.CompletionCertificationPolicy(), new Cli.CompletionCertificationRouter(), executionPreparation);
+        var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new Cli.CompletionCertificationPolicy(), new Cli.CompletionCertificationRouter(), executionPreparation);
         return new Cli.RoadmapStateMachine(
             repo.Artifacts,
             loader,
@@ -151,29 +151,7 @@ internal static class StateMachineFactory
             new Cli.BundleManifestWriter(repo.Artifacts),
             split,
             executionPreparation,
-            new Cli.OperationalContextGenerator(repo.Artifacts, lifecycle, executionPreparation),
-            new Cli.ExecutionPromptGenerator(repo.Artifacts, lifecycle, executionPreparation),
-            new ExecutionCompatibilityMaterializer(repo.Artifacts, executionPreparation),
-            executionBridge,
-            new Cli.RoadmapExecutionOutcomeInterpreter(),
             invariants,
-            new TestConsole());
-    }
-
-    private sealed class FakeRoadmapExecutionBridge : Cli.IRoadmapExecutionBridge
-    {
-        public Task<Cli.RoadmapExecutionTransportResult> RunAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(Cli.RoadmapExecutionTransportResult.Completed("""
-                                                                          # Execution Report
-
-                                                                          ## Execution Disposition
-
-                                                                          | Field | Value |
-                                                                          |---|---|
-                                                                          | Status | Epic Complete |
-                                                                          | Confidence | High |
-                                                                          | Evidence Summary | Test bridge explicitly claims epic completion. |
-                                                                          | Next Step | EvaluateEpicCompletionAndDrift |
-                                                                          """));
+            effectiveConsole);
     }
 }

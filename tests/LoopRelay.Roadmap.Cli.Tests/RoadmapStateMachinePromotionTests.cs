@@ -105,7 +105,7 @@ public sealed class RoadmapStateMachinePromotionTests
     }
 
     [Fact]
-    public async Task Successful_authoring_promotes_active_epic_and_continues_to_execution_routing()
+    public async Task Successful_authoring_promotes_active_epic_generates_milestone_specs_and_pauses()
     {
         using var repo = SeedRepo();
         string epic = RoadmapSamples.ValidEpic("Created Epic", "EPIC-NEW");
@@ -115,18 +115,19 @@ public sealed class RoadmapStateMachinePromotionTests
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("CreateNewEpic")),
             ScriptedAgentRuntime.Completed(epic),
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("GenerateMilestoneDeepDivesForEpic")),
-            ScriptedAgentRuntime.Completed(MilestoneBundle()),
-            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EvaluateEpicCompletionAndDrift")),
-            ScriptedAgentRuntime.Completed(CompletionEvaluation("Continue Epic")));
+            ScriptedAgentRuntime.Completed(MilestoneBundle()));
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
         Assert.Equal(epic, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
-        Assert.Equal(8, runtime.OneShotCalls);
+        Assert.Equal(6, runtime.OneShotCalls);
         Assert.Contains("ArtifactPromoted", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.ExecutionLoop, state.CurrentState);
+        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, state.CurrentState);
+        Assert.Equal(Cli.RoadmapArtifactPaths.SpecsDirectory, state.LastTransition.Output);
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.OperationalContext));
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ExecutionPrompt));
     }
 
     [Fact]
@@ -143,15 +144,13 @@ public sealed class RoadmapStateMachinePromotionTests
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("RealignEpic")),
             ScriptedAgentRuntime.Completed(replacement),
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("GenerateMilestoneDeepDivesForEpic")),
-            ScriptedAgentRuntime.Completed(MilestoneBundle()),
-            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EvaluateEpicCompletionAndDrift")),
-            ScriptedAgentRuntime.Completed(CompletionEvaluation("Continue Epic")));
+            ScriptedAgentRuntime.Completed(MilestoneBundle()));
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
         Assert.Equal(replacement, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
-        Assert.Equal(10, runtime.OneShotCalls);
+        Assert.Equal(8, runtime.OneShotCalls);
         Assert.Contains("ArtifactPromoted", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
     }
 

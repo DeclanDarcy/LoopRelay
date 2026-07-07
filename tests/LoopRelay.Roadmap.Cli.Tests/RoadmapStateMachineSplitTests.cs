@@ -131,14 +131,12 @@ public sealed class RoadmapStateMachineSplitTests
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SplitEpic")),
             ScriptedAgentRuntime.Completed(splitOutput),
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("GenerateMilestoneDeepDivesForEpic")),
-            ScriptedAgentRuntime.Completed(MilestoneBundle()),
-            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EvaluateEpicCompletionAndDrift")),
-            ScriptedAgentRuntime.Completed(CompletionEvaluation("Continue Epic")));
+            ScriptedAgentRuntime.Completed(MilestoneBundle()));
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Assert.Equal(8, runtime.OneShotCalls);
+        Assert.Equal(6, runtime.OneShotCalls);
         Assert.Equal(childOne, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
         Assert.Equal(childOne, repo.Read(".agents/epic-1.md"));
         Assert.Equal(childTwo, repo.Read(".agents/epic-2.md"));
@@ -151,6 +149,10 @@ public sealed class RoadmapStateMachineSplitTests
         Assert.Contains(".agents/epic-2.md", family, StringComparison.Ordinal);
         Assert.DoesNotContain(".agents/specs", family, StringComparison.Ordinal);
         Assert.Contains("\"SelectedChildPath\": \".agents/epic-1.md\"", family, StringComparison.Ordinal);
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, state.CurrentState);
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.OperationalContext));
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ExecutionPrompt));
     }
 
     private static TempRepo SeedRepo()

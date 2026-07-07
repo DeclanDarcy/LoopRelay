@@ -183,17 +183,16 @@ public sealed class RoadmapStateMachineResumeTests
             output: Cli.RoadmapArtifactPaths.ActiveEpic));
         var runtime = new ScriptedAgentRuntime(
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("GenerateMilestoneDeepDivesForEpic")),
-            ScriptedAgentRuntime.Completed(MilestoneBundle()),
-            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EvaluateEpicCompletionAndDrift")),
-            ScriptedAgentRuntime.Completed(CompletionEvaluation("Continue Epic")));
+            ScriptedAgentRuntime.Completed(MilestoneBundle()));
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Assert.Equal(4, runtime.OneShotCalls);
+        Assert.Equal(2, runtime.OneShotCalls);
         Assert.All(runtime.Prompts, prompt => Assert.DoesNotContain("SelectNextEpic", prompt, StringComparison.Ordinal));
         Assert.True(File.Exists(Path.Combine(repo.Root, Cli.RoadmapArtifactPaths.Selection.Replace('/', Path.DirectorySeparatorChar))) == false);
-        Assert.Contains("ExecutionLoop", repo.Read(Cli.RoadmapArtifactPaths.StateJson), StringComparison.Ordinal);
+        Assert.Contains("MilestoneSpecsReady", repo.Read(Cli.RoadmapArtifactPaths.StateJson), StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecutionLoop", repo.Read(Cli.RoadmapArtifactPaths.StateJson), StringComparison.Ordinal);
     }
 
     private static Cli.RoadmapStateDocument State(

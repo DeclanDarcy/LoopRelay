@@ -86,7 +86,6 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             artifacts,
             projectContextLoader,
             contractRegistry,
-            resumePlanner,
             completionPolicy,
             completionRouter,
             executionPreparation);
@@ -95,11 +94,6 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var splitBundleInterpreter = new SplitEpicBundleInterpreter();
         var bundleManifest = new BundleManifestWriter(artifacts);
         var splitFamilies = new SplitFamilyStore(artifacts);
-        var operationalContext = new OperationalContextGenerator(artifacts, lifecycle, executionPreparation);
-        var executionPrompt = new ExecutionPromptGenerator(artifacts, lifecycle, executionPreparation);
-        var materializer = new ExecutionCompatibilityMaterializer(artifacts, executionPreparation);
-        IRoadmapExecutionBridge executionBridge = new RoadmapExecutionBridge(progressRuntime, artifacts, repository, console);
-        var executionInterpreter = new RoadmapExecutionOutcomeInterpreter();
         var invariants = new InvariantValidator(
             artifacts,
             projectContextLoader,
@@ -134,11 +128,6 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             bundleManifest,
             splitFamilies,
             executionPreparation,
-            operationalContext,
-            executionPrompt,
-            materializer,
-            executionBridge,
-            executionInterpreter,
             invariants,
             console);
 

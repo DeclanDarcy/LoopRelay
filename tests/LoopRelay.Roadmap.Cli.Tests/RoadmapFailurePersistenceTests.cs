@@ -17,8 +17,6 @@ public sealed class RoadmapFailurePersistenceTests
     [InlineData("ReimagineEpic", "ReimagineEpic", "ActiveEpicReady", Cli.RoadmapArtifactPaths.ActiveEpic)]
     [InlineData("SplitEpic", "SplitEpicProposed", "SplitChildSelection", Cli.RoadmapArtifactPaths.SplitFamiliesDirectory)]
     [InlineData("GenerateMilestoneDeepDivesForEpic", "ActiveEpicReady", "MilestoneSpecsReady", Cli.RoadmapArtifactPaths.SpecsDirectory)]
-    [InlineData("EvaluateEpicCompletionAndDrift", "EpicCompletionDetected", "CompletionEvaluationAndContextUpdate", Cli.RoadmapArtifactPaths.EvaluationEvidenceDirectory)]
-    [InlineData("UpdateRoadmapCompletionContext", "CompletionEvaluationAndContextUpdate", "SelectNextStrategicInitiative", Cli.RoadmapArtifactPaths.RoadmapCompletionContext)]
     public async Task Prompt_transition_failures_are_owned_by_the_transition_layer(
         string prompt,
         string expectedFrom,
@@ -288,41 +286,6 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Equal("None", state.TransitionIntent.Intent);
         Assert.Equal(Cli.RoadmapState.CoreReady, state.TransitionIntent.DispatchState);
         Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
-    }
-
-    [Fact]
-    public async Task Execution_bridge_failure_is_persisted_as_runtime_failure()
-    {
-        using var repo = SeedRepo(includeCompletionContext: true);
-        var runtime = new ScriptedAgentRuntime(
-            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
-            ScriptedAgentRuntime.Completed(NewEpicSelection()),
-            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("CreateNewEpic")),
-            ScriptedAgentRuntime.Completed(RoadmapSamples.ValidEpic("Execution Bridge Epic", "EPIC-BRIDGE")),
-            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("GenerateMilestoneDeepDivesForEpic")),
-            ScriptedAgentRuntime.Completed(MilestoneBundle()));
-
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(
-            repo,
-            runtime,
-            new FailingExecutionBridge("execution bridge unavailable")).RunAsync(CancellationToken.None);
-
-        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.Failed, state.CurrentState);
-        Assert.Equal(Cli.TransitionStatus.Failed, state.LastTransition.Status);
-        Assert.Equal(Cli.RoadmapState.ExecutionLoop, state.LastTransition.From);
-        Assert.Equal(Cli.RoadmapState.Failed, state.LastTransition.To);
-        Assert.Equal("ExecutionLoop", state.LastTransition.Prompt);
-        Assert.Equal("None", state.LastTransition.Projection);
-        Assert.Equal("Runtime Failure", state.LastTransition.Decision);
-        Assert.StartsWith(Cli.RoadmapArtifactPaths.ExecutionEvidenceDirectory, state.LastTransition.Output, StringComparison.Ordinal);
-        Assert.Equal("RepairExecutionRuntimeFailure", state.TransitionIntent.Intent);
-        Assert.Equal(Cli.RoadmapState.Failed, state.TransitionIntent.DispatchState);
-        Assert.Equal([state.LastTransition.Output], state.TransitionIntent.EvidencePaths);
-        Assert.Contains("execution bridge unavailable", Assert.Single(state.Blockers).Blocker, StringComparison.Ordinal);
-        Assert.Contains("Runtime Failure", repo.Read(state.LastTransition.Output), StringComparison.Ordinal);
-        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
     }
 
     private static TempRepo SeedRepo(bool includeCompletionContext)

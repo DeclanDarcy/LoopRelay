@@ -12,6 +12,11 @@ internal static class RoadmapWorkflowStateClassifier
             or RoadmapState.RoadmapRevisionRequired
             or RoadmapState.NoSuitableInitiative
             or RoadmapState.EvidenceGathering
+            or RoadmapState.GenerateOperationalContext
+            or RoadmapState.OperationalContextReady
+            or RoadmapState.GenerateExecutionPrompt
+            or RoadmapState.ExecutionPromptReady
+            or RoadmapState.ExecutionLoop
             or RoadmapState.ExecutionBlocked;
 
     public static RoadmapOutcome ReportOutcome(RoadmapState state) =>
@@ -30,6 +35,11 @@ internal static class RoadmapWorkflowStateClassifier
             RoadmapState.EvidenceBlocked => "Persisted roadmap state is blocked and requires intervention.",
             RoadmapState.Completed => "Persisted roadmap state is already completed.",
             RoadmapState.Failed => "Persisted roadmap state is failed and requires repair.",
+            RoadmapState.GenerateOperationalContext
+                or RoadmapState.OperationalContextReady
+                or RoadmapState.GenerateExecutionPrompt
+                or RoadmapState.ExecutionPromptReady
+                or RoadmapState.ExecutionLoop => $"Persisted roadmap state {state} belongs to legacy execution preparation and is no longer advanced by Roadmap CLI.",
             _ when IsTerminalPauseState(state) => $"Persisted roadmap state is paused at {state}.",
             _ => $"Persisted roadmap state {state} does not require execution preparation.",
         };

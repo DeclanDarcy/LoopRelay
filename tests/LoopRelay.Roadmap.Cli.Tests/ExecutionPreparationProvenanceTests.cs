@@ -144,7 +144,7 @@ public sealed class ExecutionPreparationProvenanceTests
     }
 
     [Fact]
-    public async Task Resume_refuses_stale_execution_preparation()
+    public async Task Resume_does_not_advance_legacy_execution_preparation()
     {
         using var repo = new TempRepo();
         Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
@@ -156,8 +156,9 @@ public sealed class ExecutionPreparationProvenanceTests
             context,
             CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapResumeAction.Block, plan.Action);
-        Assert.Contains("provenance is not fresh", plan.Reason, StringComparison.Ordinal);
+        Assert.Equal(Cli.RoadmapResumeAction.Terminal, plan.Action);
+        Assert.Equal(Cli.RoadmapOutcome.Paused, plan.TerminalOutcome);
+        Assert.Contains("no longer advanced by Roadmap CLI", plan.Reason, StringComparison.Ordinal);
     }
 
     [Theory]

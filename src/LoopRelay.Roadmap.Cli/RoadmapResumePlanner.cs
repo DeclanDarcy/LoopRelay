@@ -182,12 +182,11 @@ internal sealed class RoadmapResumePlanner(
                     projectContext,
                     requireOutputs: false);
                 return promptSafety.IsSafe
-                    ? RoadmapResumePlan.PrepareExecutionFromActiveEpic(state, promptSafety.Reason)
+                    ? RoadmapResumePlan.GenerateMilestoneSpecs(state, promptSafety.Reason)
                     : RoadmapResumePlan.Block(state, promptSafety.Reason);
             }
 
             case RoadmapState.MilestoneSpecsReady:
-            case RoadmapState.GenerateOperationalContext:
             {
                 ResumeSafety safety = await ValidateExecutionPreparationAsync(
                     RoadmapState.MilestoneSpecsReady,
@@ -197,39 +196,22 @@ internal sealed class RoadmapResumePlanner(
                     requireExecutionPrompt: false,
                     cancellationToken);
                 return safety.IsSafe
-                    ? RoadmapResumePlan.PrepareExecutionFromMilestoneSpecs(state, safety.Reason)
+                    ? RoadmapResumePlan.Terminal(
+                        RoadmapOutcome.Paused,
+                        state,
+                        "Milestone specs are ready; Roadmap CLI stops before execution context generation.")
                     : RoadmapResumePlan.Block(state, safety.Reason);
             }
 
+            case RoadmapState.GenerateOperationalContext:
             case RoadmapState.OperationalContextReady:
             case RoadmapState.GenerateExecutionPrompt:
-            {
-                ResumeSafety safety = await ValidateExecutionPreparationAsync(
-                    RoadmapState.OperationalContextReady,
-                    snapshot,
-                    requireSpecs: true,
-                    requireOperationalContext: true,
-                    requireExecutionPrompt: false,
-                    cancellationToken);
-                return safety.IsSafe
-                    ? RoadmapResumePlan.PrepareExecutionFromOperationalContext(state, safety.Reason)
-                    : RoadmapResumePlan.Block(state, safety.Reason);
-            }
-
             case RoadmapState.ExecutionPromptReady:
             case RoadmapState.ExecutionLoop:
-            {
-                ResumeSafety safety = await ValidateExecutionPreparationAsync(
-                    RoadmapState.ExecutionPromptReady,
-                    snapshot,
-                    requireSpecs: true,
-                    requireOperationalContext: true,
-                    requireExecutionPrompt: true,
-                    cancellationToken);
-                return safety.IsSafe
-                    ? RoadmapResumePlan.RunExecution(state, safety.Reason)
-                    : RoadmapResumePlan.Block(state, safety.Reason);
-            }
+                return RoadmapResumePlan.Terminal(
+                    RoadmapOutcome.Paused,
+                    state,
+                    $"Persisted roadmap state {state} belongs to legacy execution preparation and is no longer advanced by Roadmap CLI.");
 
             case RoadmapState.EpicCompletionDetected:
                 return RoadmapResumePlan.EvaluateCompletionClaim(
@@ -537,17 +519,8 @@ internal sealed record RoadmapResumePlan(
     public static RoadmapResumePlan ContinueSelectionDecision(RoadmapState sourceState, string reason) =>
         new(RoadmapResumeAction.ContinueSelectionDecision, sourceState, reason);
 
-    public static RoadmapResumePlan PrepareExecutionFromActiveEpic(RoadmapState sourceState, string reason) =>
-        new(RoadmapResumeAction.PrepareExecutionFromActiveEpic, sourceState, reason);
-
-    public static RoadmapResumePlan PrepareExecutionFromMilestoneSpecs(RoadmapState sourceState, string reason) =>
-        new(RoadmapResumeAction.PrepareExecutionFromMilestoneSpecs, sourceState, reason);
-
-    public static RoadmapResumePlan PrepareExecutionFromOperationalContext(RoadmapState sourceState, string reason) =>
-        new(RoadmapResumeAction.PrepareExecutionFromOperationalContext, sourceState, reason);
-
-    public static RoadmapResumePlan RunExecution(RoadmapState sourceState, string reason) =>
-        new(RoadmapResumeAction.RunExecution, sourceState, reason);
+    public static RoadmapResumePlan GenerateMilestoneSpecs(RoadmapState sourceState, string reason) =>
+        new(RoadmapResumeAction.GenerateMilestoneSpecs, sourceState, reason);
 
     public static RoadmapResumePlan EvaluateCompletionClaim(RoadmapState sourceState, string reason) =>
         new(RoadmapResumeAction.EvaluateCompletionClaim, sourceState, reason);
@@ -564,10 +537,7 @@ internal enum RoadmapResumeAction
     ContinueFromCoreReady,
     SelectNextStrategicInitiative,
     ContinueSelectionDecision,
-    PrepareExecutionFromActiveEpic,
-    PrepareExecutionFromMilestoneSpecs,
-    PrepareExecutionFromOperationalContext,
-    RunExecution,
+    GenerateMilestoneSpecs,
     EvaluateCompletionClaim,
     Terminal,
     Block,

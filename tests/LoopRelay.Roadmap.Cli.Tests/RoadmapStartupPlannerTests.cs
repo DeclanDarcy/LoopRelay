@@ -18,7 +18,7 @@ public sealed class RoadmapStartupPlannerTests
     [Theory]
     [InlineData((int)Cli.RoadmapState.CoreReady)]
     [InlineData((int)Cli.RoadmapState.ActiveEpicReady)]
-    [InlineData((int)Cli.RoadmapState.ExecutionLoop)]
+    [InlineData((int)Cli.RoadmapState.MilestoneSpecsReady)]
     public void Active_workflow_requires_resume_preflight(int stateValue)
     {
         Cli.RoadmapState state = (Cli.RoadmapState)stateValue;
@@ -45,6 +45,11 @@ public sealed class RoadmapStartupPlannerTests
     [InlineData((int)Cli.RoadmapState.RoadmapRevisionRequired)]
     [InlineData((int)Cli.RoadmapState.NoSuitableInitiative)]
     [InlineData((int)Cli.RoadmapState.EvidenceGathering)]
+    [InlineData((int)Cli.RoadmapState.GenerateOperationalContext)]
+    [InlineData((int)Cli.RoadmapState.OperationalContextReady)]
+    [InlineData((int)Cli.RoadmapState.GenerateExecutionPrompt)]
+    [InlineData((int)Cli.RoadmapState.ExecutionPromptReady)]
+    [InlineData((int)Cli.RoadmapState.ExecutionLoop)]
     [InlineData((int)Cli.RoadmapState.ExecutionBlocked)]
     public void Paused_terminal_workflow_is_reported_without_preflight(int stateValue)
     {

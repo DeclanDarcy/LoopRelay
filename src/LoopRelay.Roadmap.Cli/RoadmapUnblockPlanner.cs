@@ -4,7 +4,6 @@ internal sealed class RoadmapUnblockPlanner(
     RoadmapArtifacts artifacts,
     ProjectContextLoader projectContextLoader,
     PromptContractRegistry contractRegistry,
-    RoadmapResumePlanner resumePlanner,
     CompletionCertificationPolicy completionPolicy,
     CompletionCertificationRouter completionRouter,
     ExecutionPreparationProvenanceService executionPreparation)
@@ -367,67 +366,13 @@ internal sealed class RoadmapUnblockPlanner(
                 "Restore the execution runtime failure evidence path and run `unblock` again.");
         }
 
-        RoadmapStateDocument readinessState = state with
-        {
-            CurrentState = RoadmapState.ExecutionPromptReady,
-            LastTransition = new RoadmapTransitionSummary(
-                RoadmapState.GenerateExecutionPrompt,
-                RoadmapState.ExecutionPromptReady,
-                "GenerateExecutionPrompt",
-                "None",
-                RoadmapArtifactPaths.ExecutionPrompt,
-                "Artifact Ready",
-                TransitionStatus.Completed,
-                DateTimeOffset.UtcNow,
-                DateTimeOffset.UtcNow),
-            TransitionIntent = new RoadmapTransitionIntent(
-                ExecutionDispositionProtocol.CommandText(ExecutionDispositionCommand.ContinueExecution),
-                RoadmapState.ExecutionPromptReady,
-                [RoadmapArtifactPaths.ExecutionPrompt]),
-        };
-        RoadmapResumePlan resumePlan = await resumePlanner.PlanAsync(
-            readinessState,
-            projectContext,
-            cancellationToken);
-        if (resumePlan.Action != RoadmapResumeAction.RunExecution)
-        {
-            return RoadmapUnblockPlan.Failed(
-                RoadmapUnblockAction.RecoverExecutionRuntimeFailure,
-                state.CurrentState,
-                state.TransitionIntent,
-                $"Execution readiness is not safe: {resumePlan.Reason}",
-                reviewEvidence,
-                "Repair execution readiness artifacts and run `unblock` again.");
-        }
-
-        ExecutionPreparationReadiness readiness = await executionPreparation.EvaluateReadinessAsync(
-            requireSpecs: true,
-            requireOperationalContext: true,
-            requireExecutionPrompt: true,
-            requireCompatibilityArtifacts: true,
-            cancellationToken);
-        if (!readiness.IsFresh)
-        {
-            return RoadmapUnblockPlan.Failed(
-                RoadmapUnblockAction.RecoverExecutionRuntimeFailure,
-                state.CurrentState,
-                state.TransitionIntent,
-                $"Execution preparation artifacts are not fresh: {readiness.Reason}",
-                reviewEvidence,
-                "Regenerate stale execution preparation artifacts and run `unblock` again.");
-        }
-
-        return RoadmapUnblockPlan.Success(
+        return RoadmapUnblockPlan.Failed(
             RoadmapUnblockAction.RecoverExecutionRuntimeFailure,
             state.CurrentState,
             state.TransitionIntent,
-            "Execution runtime failure repair is ready for a safe execution retry.",
-            [
-                ..reviewEvidence,
-                ..await HashExecutionReadinessArtifactsAsync(),
-            ],
-            RoadmapState.ExecutionPromptReady,
-            "Execution runtime readiness repaired.");
+            "Execution runtime failure recovery belongs to legacy execution preparation and is no longer advanced by Roadmap CLI.",
+            reviewEvidence,
+            "Recover execution outside Roadmap CLI, then rerun roadmap selection when the roadmap state needs to advance.");
     }
 
     private async Task<RoadmapUnblockPlan> UnsupportedIntentAsync(RoadmapStateDocument state, string reason) =>
