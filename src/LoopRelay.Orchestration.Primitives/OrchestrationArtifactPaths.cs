@@ -94,6 +94,15 @@ public static class OrchestrationArtifactPaths
     /// <summary>Directory holding per-slice review evidence produced by the non-implementation loop.</summary>
     public const string NonImplementationEvidenceDirectory = ".agents/evidence/non-implementation";
 
+    public static string NonImplementationSliceEvidenceDirectory(string executionSliceId) =>
+        $"{NonImplementationEvidenceDirectory}/{executionSliceId}";
+
+    public static string NonImplementationSliceBaseline(string executionSliceId) =>
+        $"{NonImplementationSliceEvidenceDirectory(executionSliceId)}/baseline.json";
+
+    public static string NonImplementationSlicePostSnapshot(string executionSliceId) =>
+        $"{NonImplementationSliceEvidenceDirectory(executionSliceId)}/post-snapshot.json";
+
     /// <summary>Directory holding the live handoff and its rotated history.</summary>
     public const string HandoffsDirectory = ".agents/handoffs";
 
