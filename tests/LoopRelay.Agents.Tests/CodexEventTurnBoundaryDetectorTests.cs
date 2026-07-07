@@ -72,6 +72,16 @@ public sealed class CodexEventTurnBoundaryDetectorTests
     }
 
     [Fact]
+    public void ExecGenericAssistantMessageSurfacesItsText()
+    {
+        AgentLineInspection inspection = detector.Inspect(
+            """{"type":"item.completed","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Hi from exec"}]}}""");
+
+        Assert.Equal(AgentLineClassification.Output, inspection.Classification);
+        Assert.Equal("Hi from exec", inspection.Content);
+    }
+
+    [Fact]
     public void AgentMessageContentArrayIsConcatenated()
     {
         AgentLineInspection inspection = detector.Inspect(
@@ -92,6 +102,17 @@ public sealed class CodexEventTurnBoundaryDetectorTests
     }
 
     [Fact]
+    public void ToolItemsSurfaceAsDisplayOnlyToolCalls()
+    {
+        AgentLineInspection inspection = detector.Inspect(
+            """{"type":"item.started","item":{"id":"c1","type":"command_execution","command":["bash","-lc","dotnet test"]}}""");
+
+        Assert.Equal(AgentLineClassification.ToolCall, inspection.Classification);
+        Assert.Equal("$ dotnet test", inspection.Content);
+        Assert.Equal("c1", inspection.StreamId);
+    }
+
+    [Fact]
     public void ReasoningAndLifecycleEventsAreIgnoredSoTheyNeverPolluteOutput()
     {
         Assert.Equal(
@@ -100,9 +121,6 @@ public sealed class CodexEventTurnBoundaryDetectorTests
         Assert.Equal(
             AgentLineClassification.Ignored,
             detector.Inspect("""{"type":"thread.started","thread_id":"abc"}""").Classification);
-        Assert.Equal(
-            AgentLineClassification.Ignored,
-            detector.Inspect("""{"type":"item.started","item":{"type":"command_execution"}}""").Classification);
     }
 
     [Fact]

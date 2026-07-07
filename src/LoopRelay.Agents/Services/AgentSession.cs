@@ -159,6 +159,7 @@ public sealed class AgentSession : IAgentSession
         CancellationToken cancellationToken)
     {
         var output = new StringBuilder();
+        var renderedToolIds = new HashSet<string>(StringComparer.Ordinal);
         ChannelReader<string> reader = lines.Reader;
 
         while (await reader.WaitToReadAsync(cancellationToken))
@@ -173,6 +174,25 @@ public sealed class AgentSession : IAgentSession
                 if (inspection.Classification == AgentLineClassification.TurnCompleted)
                 {
                     return (output.ToString(), inspection.Usage, true);
+                }
+
+                if (inspection.Classification == AgentLineClassification.ToolCall)
+                {
+                    if (inspection.StreamId is { Length: > 0 } streamId && !renderedToolIds.Add(streamId))
+                    {
+                        continue;
+                    }
+
+                    if (onChunk is not null && inspection.Content is { Length: > 0 } toolSummary)
+                    {
+                        await onChunk(new AgentStreamChunk(
+                            turnIndex,
+                            AgentProcessOutputStream.StandardOutput,
+                            toolSummary,
+                            AgentStreamChunkKind.ToolCall));
+                    }
+
+                    continue;
                 }
 
                 if (inspection.Classification == AgentLineClassification.Ignored)

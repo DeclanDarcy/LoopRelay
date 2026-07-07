@@ -134,6 +134,47 @@ public sealed class AgentSessionTests
     }
 
     [Fact]
+    public async Task OneShotExecJsonToolItemsStreamOnceWithoutPollutingOutput()
+    {
+        var process = new FakeInteractiveAgentProcess();
+        await using var session = new AgentSession(
+            Spec(),
+            AgentSessionMode.OneShot,
+            process,
+            new CodexEventTurnBoundaryDetector(),
+            new DeterministicAgentTokenEstimator());
+
+        var chunks = new List<AgentStreamChunk>();
+        Task<AgentTurnResult> turn = session.RunTurnAsync("only prompt", chunk =>
+        {
+            chunks.Add(chunk);
+            return Task.CompletedTask;
+        });
+
+        process.Emit("""{"type":"item.started","item":{"id":"c1","type":"command_execution","command":"git status"}}""");
+        process.Emit("""{"type":"item.completed","item":{"id":"c1","type":"command_execution","command":"git status","exitCode":0}}""");
+        process.Emit("""{"type":"item.completed","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}}""");
+        process.Emit("""{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}""");
+
+        AgentTurnResult result = await turn;
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Equal("done", result.Output);
+        Assert.Collection(
+            chunks,
+            chunk =>
+            {
+                Assert.Equal(AgentStreamChunkKind.ToolCall, chunk.Kind);
+                Assert.Equal("$ git status", chunk.Content);
+            },
+            chunk =>
+            {
+                Assert.Equal(AgentStreamChunkKind.AgentMessage, chunk.Kind);
+                Assert.Equal("done", chunk.Content);
+            });
+    }
+
+    [Fact]
     public async Task DisposeClosesStdinAndDisposesProcessForPersistentSession()
     {
         var process = new FakeInteractiveAgentProcess();

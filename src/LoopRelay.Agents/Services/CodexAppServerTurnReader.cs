@@ -127,8 +127,7 @@ public sealed class CodexAppServerTurnReader
             return null;
         }
 
-        string type = (StringProperty(item, "type") ?? string.Empty).ToLowerInvariant();
-        if (ToolSummary(type, item) is not { Length: > 0 } summary)
+        if (CodexToolCallFormatter.Format(item) is not { Length: > 0 } summary)
         {
             return null;
         }
@@ -141,121 +140,6 @@ public sealed class CodexAppServerTurnReader
         }
 
         return new CodexStreamEmission(summary, AgentStreamChunkKind.ToolCall);
-    }
-
-    // The compact summary for a tool item, or null when the item is not a tool call. Command execution is the
-    // common case; file edits, MCP tool calls, and web searches get a minimal label. Anything else -> null.
-    private static string? ToolSummary(string type, JsonElement item)
-    {
-        if (type.Contains("command"))   // codex item type "commandExecution"
-        {
-            return CommandText(item) is { Length: > 0 } command ? $"$ {Compact(command)}" : null;
-        }
-
-        if (type.Contains("filechange") || type.Contains("file_change") || type.Contains("patch"))
-        {
-            return FileChangeText(item) is { Length: > 0 } files ? $"edit {Compact(files)}" : "edit (files)";
-        }
-
-        if (type.Contains("mcp"))       // "mcpToolCall"
-        {
-            string? server = StringProperty(item, "server");
-            string? tool = StringProperty(item, "tool") ?? StringProperty(item, "name");
-            string label = server is not null && tool is not null ? $"{server}/{tool}" : tool ?? server ?? "call";
-            return $"tool {Compact(label)}";
-        }
-
-        if (type.Contains("websearch") || type.Contains("web_search"))
-        {
-            return (StringProperty(item, "query") ?? StringProperty(item, "text")) is { Length: > 0 } query
-                ? $"web {Compact(query)}"
-                : "web search";
-        }
-
-        return null; // agentMessage, reasoning, todoList, unknown — not a tool line
-    }
-
-    // codex command items carry either a "command" string or an argv array (often a shell wrapper like
-    // ["bash","-lc","git status"]). Prefer the readable inner script; else join the argv.
-    private static string? CommandText(JsonElement item)
-    {
-        if (StringProperty(item, "command") is { Length: > 0 } text)
-        {
-            return text;
-        }
-
-        if (!item.TryGetProperty("command", out JsonElement argv) || argv.ValueKind != JsonValueKind.Array)
-        {
-            return null;
-        }
-
-        var parts = new List<string>();
-        foreach (JsonElement element in argv.EnumerateArray())
-        {
-            if (element.ValueKind == JsonValueKind.String)
-            {
-                parts.Add(element.GetString()!);
-            }
-        }
-
-        if (parts.Count == 0)
-        {
-            return null;
-        }
-
-        // Unwrap "<shell> -lc/-c <script>" to just the script — the noise the wrapper adds isn't worth showing.
-        if (parts.Count >= 3 && (parts[1] == "-lc" || parts[1] == "-c"))
-        {
-            return parts[^1];
-        }
-
-        return string.Join(' ', parts);
-    }
-
-    // A file-change item lists the touched paths (shape varies: an array of {path,...} or a map keyed by path).
-    private static string? FileChangeText(JsonElement item)
-    {
-        if (!item.TryGetProperty("changes", out JsonElement changes))
-        {
-            return null;
-        }
-
-        var paths = new List<string>();
-        if (changes.ValueKind == JsonValueKind.Array)
-        {
-            foreach (JsonElement change in changes.EnumerateArray())
-            {
-                if (StringProperty(change, "path") is { } path)
-                {
-                    paths.Add(path);
-                }
-            }
-        }
-        else if (changes.ValueKind == JsonValueKind.Object)
-        {
-            foreach (JsonProperty property in changes.EnumerateObject())
-            {
-                paths.Add(property.Name);
-            }
-        }
-
-        if (paths.Count == 0)
-        {
-            return null;
-        }
-
-        return paths.Count <= 3
-            ? string.Join(", ", paths)
-            : $"{string.Join(", ", paths.GetRange(0, 3))} +{paths.Count - 3} more";
-    }
-
-    // Collapse to a single line and cap the length so one tool call is always one short console line.
-    private static string Compact(string value)
-    {
-        int newline = value.AsSpan().IndexOfAny('\n', '\r');
-        string line = (newline >= 0 ? value[..newline] : value).Trim();
-        const int max = 160;
-        return line.Length <= max ? line : line[..(max - 3)] + "...";
     }
 
     private void AppendAgentMessage(JsonElement @params)
