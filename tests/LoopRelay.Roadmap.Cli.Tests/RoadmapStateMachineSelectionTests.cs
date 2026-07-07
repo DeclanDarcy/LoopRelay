@@ -1,5 +1,8 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Completion;
+using LoopRelay.Infrastructure.Artifacts;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Roadmap.Cli;
 using BundleFileExtractor = LoopRelay.Roadmap.Cli.BundleFileExtractor;
 using DecisionLedgerStore = LoopRelay.Roadmap.Cli.DecisionLedgerStore;
@@ -84,6 +87,39 @@ public sealed class RoadmapStateMachineSelectionTests
         Assert.Equal("existing context", repo.Read(Cli.RoadmapArtifactPaths.RoadmapCompletionContext));
     }
 
+    [Fact]
+    public async Task Selection_output_captures_structured_hitl_request_markers()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed($"""
+                {StrategicInvestigationSelection()}
+
+                ## HITL-Requested Non-Implementation Deliverables
+
+                | Path Or Pattern | Source | Source Hash | Rationale |
+                | --- | --- | --- | --- |
+                | docs/roadmap-note.md | user | abc | Human explicitly requested the note. |
+                """));
+        var ledger = new NonImplementationReviewLedgerStore(new RepositoryArtifactStore(repo.Store, repo.Repository));
+        var capture = new ExplicitHitlNonImplementationRequestCaptureService(ledger);
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(
+            repo,
+            runtime,
+            hitlRequestCapture: capture).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        NonImplementationHitlRequestEntry request = Assert.Single((await ledger.LoadOrCreateAsync()).HitlRequests);
+        Assert.Equal("docs/roadmap-note.md", request.DeliverablePathOrPattern);
+        Assert.Equal(Cli.RoadmapArtifactPaths.Selection, request.SourceArtifactPath);
+        Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
+    }
+
     private static string StrategicInvestigationSelection() => """
         # Next Strategic Initiative Selection
 
@@ -104,7 +140,8 @@ internal static class StateMachineFactory
     public static Cli.RoadmapStateMachine Create(
         TempRepo repo,
         IAgentRuntime runtime,
-        Cli.ILoopConsole? console = null)
+        Cli.ILoopConsole? console = null,
+        ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null)
     {
         Cli.ILoopConsole effectiveConsole = console ?? new TestConsole();
         var projections = new Cli.ProjectionRegistry();
@@ -154,6 +191,7 @@ internal static class StateMachineFactory
             split,
             executionPreparation,
             invariants,
-            effectiveConsole);
+            effectiveConsole,
+            hitlRequestCapture);
     }
 }

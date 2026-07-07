@@ -4,6 +4,7 @@ using LoopRelay.Agents.Services;
 using LoopRelay.Completion;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Infrastructure.Diagnostics;
+using LoopRelay.Infrastructure.Artifacts;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Permissions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,6 +55,8 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             new ConsoleInputWaitProgressRenderer(console));
 
         var artifacts = new RoadmapArtifacts(store, repository);
+        var hitlRequestCapture = new ExplicitHitlNonImplementationRequestCaptureService(
+            new NonImplementationReviewLedgerStore(new RepositoryArtifactStore(store, repository)));
         var projectionRegistry = new ProjectionRegistry();
         var provenanceFactory = new ProjectionProvenanceFactory(projectionRegistry);
         var contractRegistry = new PromptContractRegistry(projectionRegistry);
@@ -75,7 +78,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var completionRouter = new CompletionCertificationRouter();
         var completionArchive = new CompletedEpicArchiveService(
             store,
-            new AgentCompletionPromptRunner(progressRuntime, repository),
+            new AgentCompletionPromptRunner(progressRuntime, repository, promptPolicy),
             new RoadmapCompletionObserver(console));
         var stateStore = new RoadmapStateStore(artifacts);
         var decisionLedger = new DecisionLedgerStore(artifacts);
@@ -139,7 +142,8 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             splitFamilies,
             executionPreparation,
             invariants,
-            console);
+            console,
+            hitlRequestCapture);
 
         return new RoadmapCliComposition(provider, console, executableResolver, machine);
     }

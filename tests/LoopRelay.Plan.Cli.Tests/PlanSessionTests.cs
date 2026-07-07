@@ -2,6 +2,7 @@ using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Orchestration;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Agents.Models;
 using LoopRelay.Plan.Cli;
@@ -27,6 +28,23 @@ public class PlanSessionTests
         ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
             prompt,
             ImplementationFirstPromptPolicyComposer.ComposeDefault());
+
+    [Fact]
+    public void Plan_prompts_define_the_structured_hitl_request_marker_rules()
+    {
+        Assert.Contains(
+            "## HITL-Requested Non-Implementation Deliverables",
+            WritePlan.Text,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "documentation-centric milestones",
+            WritePlan.Text,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "only when each entry remains grounded in explicit HITL request evidence",
+            RevisePlan.Render("feedback"),
+            StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task HappyPath_WritePlanThenRevise_RunOnTheSameSession_AndCloseFiresOnce()
@@ -96,6 +114,44 @@ public class PlanSessionTests
         await session.WritePlanAsync(CancellationToken.None);
 
         Assert.Contains("wrote plan output", con.Messages);
+    }
+
+    [Fact]
+    public async Task WritePlanAsync_CapturesStructuredHitlRequestMarkersFromTheWrittenPlan()
+    {
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var artifacts = new Cli.PlanArtifacts(store, repo);
+        var rt = new FakeAgentRuntime(store);
+        var ledger = new NonImplementationReviewLedgerStore(store);
+        var capture = new ExplicitHitlNonImplementationRequestCaptureService(ledger);
+        var session = new Cli.PlanSession(
+            rt,
+            artifacts,
+            new RecordingLoopConsole(),
+            repo,
+            hitlRequestCapture: capture);
+        const string plan = """
+            # Plan
+
+            ## HITL-Requested Non-Implementation Deliverables
+
+            | Path Or Pattern | Source | Source Hash | Rationale |
+            | --- | --- | --- | --- |
+            | docs/requested.md | user | abc | Human explicitly asked for the design note. |
+            """;
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), plan).Wait();
+            return Turns.Completed("wrote plan");
+        }));
+
+        await session.WritePlanAsync(CancellationToken.None);
+
+        NonImplementationHitlRequestEntry request = Assert.Single((await ledger.LoadOrCreateAsync()).HitlRequests);
+        Assert.Equal("docs/requested.md", request.DeliverablePathOrPattern);
+        Assert.Equal(OrchestrationArtifactPaths.Plan, request.SourceArtifactPath);
+        Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
     }
 
     [Fact]

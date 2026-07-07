@@ -1,2 +1,6 @@
 revise .agents/plan.md:
 {feedback}
+
+Apply the implementation-first prompt policy included below while revising. Preserve, remove, or update `## HITL-Requested Non-Implementation Deliverables` entries only when each entry remains grounded in explicit HITL request evidence.
+
+Do not add autonomous non-implementation deliverables, documentation-centric milestones, or unsupported theory-protection artifacts while resolving the review feedback.

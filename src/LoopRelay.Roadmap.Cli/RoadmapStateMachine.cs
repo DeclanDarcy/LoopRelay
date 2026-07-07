@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using LoopRelay.Completion;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 
 namespace LoopRelay.Roadmap.Cli;
 
@@ -30,7 +31,8 @@ internal sealed class RoadmapStateMachine(
     SplitFamilyStore splitFamilyStore,
     ExecutionPreparationProvenanceService executionPreparation,
     InvariantValidator invariantValidator,
-    ILoopConsole console)
+    ILoopConsole console,
+    ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null)
 {
     public Task<RoadmapOutcome> ExecuteAsync(
         RoadmapCliCommand command,
@@ -567,6 +569,7 @@ internal sealed class RoadmapStateMachine(
             [RoadmapArtifactPaths.RoadmapCompletionContext],
             cancellationToken);
         await artifacts.WriteAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
+        await CaptureHitlRequestsAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.RoadmapCompletionContext, ArtifactLifecycleState.Ready);
     }
 
@@ -588,6 +591,7 @@ internal sealed class RoadmapStateMachine(
             [RoadmapArtifactPaths.Selection],
             cancellationToken);
         await artifacts.WriteAsync(RoadmapArtifactPaths.Selection, completion.Output);
+        await CaptureHitlRequestsAsync(RoadmapArtifactPaths.Selection, completion.Output);
         string evidencePath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.SelectionEvidenceDirectory, "selection", completion.Output);
         await selectionProvenance.RecordActiveSelectionAsync(
             completion.Output,
@@ -619,6 +623,7 @@ internal sealed class RoadmapStateMachine(
             [RoadmapArtifactPaths.AuditEvidenceDirectory],
             cancellationToken);
         string auditPath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.AuditEvidenceDirectory, "epic-preparation-audit", output);
+        await CaptureHitlRequestsAsync(auditPath, output);
         EpicPreparationAuditDecision decision = new EpicPreparationAuditParser().Parse(output);
         await AppendDecisionAsync(RoadmapState.EpicPreparationAudit, runtimePrompt, projection.Definition.ProjectionPath, auditPath, decision.Disposition, decision.Confidence, decision.RecommendedNextStep);
 
@@ -727,6 +732,7 @@ internal sealed class RoadmapStateMachine(
         foreach (ExtractedBundleFile child in interpretation.ValidatedChildEpics)
         {
             await lifecycleStore.UpsertAsync(child.Path, ArtifactLifecycleState.Draft, "Validated split child epic.");
+            await CaptureHitlRequestsAsync(child.Path, child.Content);
         }
 
         ExtractedBundleFile selectedChild = interpretation.SelectedChild
@@ -890,6 +896,7 @@ internal sealed class RoadmapStateMachine(
             foreach (ExtractedBundleFile file in bundle.Files)
             {
                 await lifecycleStore.UpsertAsync(file.Path, ArtifactLifecycleState.Ready);
+                await CaptureHitlRequestsAsync(file.Path, file.Content);
             }
 
             await executionPreparation.RecordMilestoneSpecsAsync(
@@ -1065,6 +1072,7 @@ internal sealed class RoadmapStateMachine(
             cancellationToken,
             TransitionInputContext.ExecutionEvidence(executionEvidencePath));
         string evaluationPath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "epic-completion-and-drift", output);
+        await CaptureHitlRequestsAsync(evaluationPath, output);
         CompletionEvaluationDecision decision = new CompletionEvaluationParser().Parse(output);
         CompletionCertificationPolicyResult certification = completionPolicy.Validate(decision);
         await AppendDecisionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, evaluationPath, decision.ClosureRecommendation, "Unclear", decision.OverallCompletionStatus);
@@ -1157,6 +1165,7 @@ internal sealed class RoadmapStateMachine(
             cancellationToken,
             TransitionInputContext.CompletionEvaluation(evaluationPath));
         await artifacts.WriteAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
+        await CaptureHitlRequestsAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
         await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "roadmap-completion-update", output);
         await SupersedeActiveSelectionAsync(
             [DerivedArtifactStaleReason.RoadmapCompletionContextDrift],
@@ -1242,6 +1251,7 @@ internal sealed class RoadmapStateMachine(
         DateTimeOffset completed = DateTimeOffset.UtcNow;
         if (result.Promoted)
         {
+            await CaptureHitlRequestsAsync(RoadmapArtifactPaths.ActiveEpic, completion.Output);
             await journalStore.AppendAsync(new TransitionJournalRecord(
                 "ArtifactPromoted",
                 completion.CorrelationId,
@@ -1383,6 +1393,16 @@ internal sealed class RoadmapStateMachine(
                 ["Resolve blocker and rerun"]);
             throw RoadmapStepException.AlreadyPersisted(exception);
         }
+    }
+
+    private async Task CaptureHitlRequestsAsync(string sourceArtifactPath, string sourceContent)
+    {
+        if (hitlRequestCapture is null || string.IsNullOrWhiteSpace(sourceContent))
+        {
+            return;
+        }
+
+        await hitlRequestCapture.CaptureFromSourceAsync(sourceArtifactPath, sourceContent);
     }
 
     private async Task PersistCompletionRouteAsync(

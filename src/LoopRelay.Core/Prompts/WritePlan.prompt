@@ -1,2 +1,13 @@
 write .agents/plan.md to implement the epic and specs in .agents/specs/ against the current codebase
 Note: the epic and specs will be deleted after certifying the plan, the plan must be self-contained and shall not make statements about these source materials
+
+Apply the implementation-first prompt policy included below. The plan must avoid autonomous non-implementation deliverables and documentation-centric milestones.
+
+If the policy permits an explicitly HITL-requested non-implementation deliverable and the source request is explicit, include this stable section in .agents/plan.md:
+
+## HITL-Requested Non-Implementation Deliverables
+
+| Path Or Pattern | Source | Source Hash | Rationale |
+| --- | --- | --- | --- |
+
+Omit that section when there are no explicitly grounded HITL-requested non-implementation deliverables.

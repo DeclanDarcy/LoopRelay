@@ -1,6 +1,9 @@
+using LoopRelay.Agents.Abstractions;
+using LoopRelay.Agents.Models;
 using LoopRelay.Completion;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
+using LoopRelay.Orchestration;
 using LoopRelay.Projections;
 using Xunit;
 
@@ -114,6 +117,74 @@ public sealed class CompletionCertificationServiceTests
         Assert.Equal("PLAN", await h.ReadAsync(".agents/archive/epics/2/plan.md"));
     }
 
+    [Fact]
+    public async Task CompletionEvaluationAndUpdateContextsIncludeReviewSummariesWhenPresent()
+    {
+        Harness h = Harness.Create();
+        await h.SeedExecutionWorkspaceAsync();
+        await h.WriteAsync(OrchestrationArtifactPaths.NonImplementationReview, "# Review\n\nUnresolved docs/report.md.");
+        await h.WriteAsync(OrchestrationArtifactPaths.NonImplementationSynthesis, "# Synthesis\n\nUseful extracted context.");
+        var promptsWithSummaries = new List<string>();
+
+        h.Prompts.Handler = async invocation =>
+        {
+            if (invocation.RuntimePromptName is CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift
+                or CompletionRuntimePromptNames.UpdateRoadmapCompletionContext)
+            {
+                Assert.Contains("Non-Implementation Review Summary", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("Unresolved docs/report.md", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("Non-Implementation Review Synthesis", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("Useful extracted context", invocation.ProjectContext, StringComparison.Ordinal);
+                promptsWithSummaries.Add(invocation.RuntimePromptName);
+            }
+
+            if (invocation.RuntimePromptName == CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift)
+            {
+                return Evaluation("Fully Complete", "None", "Close Epic");
+            }
+
+            if (invocation.RuntimePromptName == CompletionRuntimePromptNames.SynthesizeCompletedEpic)
+            {
+                await h.WriteAsync($".agents/archive/epics/{invocation.Label}.md", "# Completed Epic\n\nSynthesized.");
+                return "synthesized";
+            }
+
+            if (invocation.RuntimePromptName == CompletionRuntimePromptNames.UpdateRoadmapCompletionContext)
+            {
+                return "# Roadmap Completion Context\n\nUpdated.";
+            }
+
+            throw new InvalidOperationException(invocation.RuntimePromptName);
+        };
+
+        CompletionCertificationResult result = await h.Service.CertifyPlanCompletionAsync(new CompletionCertificationRequest(h.Repository));
+
+        Assert.Equal(CompletionCertificationServiceOutcome.Completed, result.Outcome);
+        Assert.Contains(CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift, promptsWithSummaries);
+        Assert.Contains(CompletionRuntimePromptNames.UpdateRoadmapCompletionContext, promptsWithSummaries);
+    }
+
+    [Fact]
+    public async Task AgentCompletionPromptRunner_AppendsImplementationFirstPolicy()
+    {
+        var runtime = new RecordingAgentRuntime(new AgentTurnResult(
+            0,
+            AgentTurnState.Completed,
+            "ok",
+            AgentTokenUsage.Zero));
+        var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" };
+        var runner = new AgentCompletionPromptRunner(runtime, repository);
+
+        string output = await runner.RunAsync(new CompletionRuntimePromptInvocation(
+            CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift,
+            ProjectContext: "context"));
+
+        Assert.Equal("ok", output);
+        string prompt = Assert.Single(runtime.Prompts);
+        Assert.Contains("Repository growth is implementation-first", prompt, StringComparison.Ordinal);
+        Assert.Contains("The HITL-requested exception is disabled", prompt, StringComparison.Ordinal);
+    }
+
     private static string Evaluation(string completionStatus, string drift, string recommendation) => $$"""
         # Epic Completion and Drift Evaluation
 
@@ -199,6 +270,28 @@ public sealed class CompletionCertificationServiceTests
             Invocations.Add(invocation);
             return await Handler(invocation);
         }
+    }
+
+    private sealed class RecordingAgentRuntime(AgentTurnResult result) : IAgentRuntime
+    {
+        public List<string> Prompts { get; } = [];
+
+        public Task<IAgentSession> OpenSessionAsync(
+            AgentSessionSpec spec,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<AgentTurnResult> RunOneShotAsync(
+            AgentSessionSpec spec,
+            string prompt,
+            Func<AgentStreamChunk, Task>? onChunk = null,
+            CancellationToken cancellationToken = default)
+        {
+            Prompts.Add(prompt);
+            return Task.FromResult(result);
+        }
+
+        public ValueTask CloseSessionAsync(IAgentSession session) => ValueTask.CompletedTask;
     }
 
     private sealed class FakeProjectionService : IProjectContextProjectionService

@@ -20,7 +20,8 @@ internal sealed class PlanSession(
     PlanArtifacts artifacts,
     ILoopConsole console,
     Repository repository,
-    string? promptPolicy = null) : IAsyncDisposable
+    string? promptPolicy = null,
+    ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null) : IAsyncDisposable
 {
     private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
     private IAgentSession? session;
@@ -46,6 +47,7 @@ internal sealed class PlanSession(
         renderer.EchoIfSilent(result.Output);
 
         await VerifyPlanGateAsync(result.Diagnostics);
+        await CapturePlanHitlRequestsAsync();
     }
 
     public async Task ReviseAsync(string feedback, CancellationToken cancellationToken)
@@ -72,6 +74,7 @@ internal sealed class PlanSession(
         renderer.EchoIfSilent(result.Output);
 
         await VerifyPlanGateAsync(result.Diagnostics);
+        await CapturePlanHitlRequestsAsync();
     }
 
     // A revise turn that truncates or blanks the plan must not pass — every downstream step seeds from it.
@@ -93,6 +96,20 @@ internal sealed class PlanSession(
         string.IsNullOrWhiteSpace(diagnostics)
             ? message
             : $"{message} Agent stderr (tail):\n{diagnostics}";
+
+    private async Task CapturePlanHitlRequestsAsync()
+    {
+        if (hitlRequestCapture is null)
+        {
+            return;
+        }
+
+        string? plan = await artifacts.ReadAsync(OrchestrationArtifactPaths.Plan);
+        if (!string.IsNullOrWhiteSpace(plan))
+        {
+            await hitlRequestCapture.CaptureFromSourceAsync(OrchestrationArtifactPaths.Plan, plan);
+        }
+    }
 
     // Closed-flag guarded: runtime.CloseSessionAsync fires AT MOST ONCE per opened session. Later calls
     // (whether from a failure path that already closed it, an explicit pipeline close, or DisposeAsync) no-op.

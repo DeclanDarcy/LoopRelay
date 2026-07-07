@@ -3,6 +3,7 @@ using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Services;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
+using LoopRelay.Infrastructure.Artifacts;
 using LoopRelay.Infrastructure.Diagnostics;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Permissions.Configuration;
@@ -51,12 +52,14 @@ internal sealed class PlanCliComposition : IAsyncDisposable
         var processRunner = provider.GetRequiredService<IProcessRunner>();
 
         var artifacts = new PlanArtifacts(store, repository);
+        var hitlRequestCapture = new ExplicitHitlNonImplementationRequestCaptureService(
+            new NonImplementationReviewLedgerStore(new RepositoryArtifactStore(store, repository)));
         var progressRuntime = new InputWaitProgressAgentRuntime(
             runtime,
             tokenEstimator,
             new ConsoleInputWaitProgressRenderer(console));
         var preflight = new PreflightGate(artifacts);
-        var planSession = new PlanSession(progressRuntime, artifacts, console, repository, promptPolicy);
+        var planSession = new PlanSession(progressRuntime, artifacts, console, repository, promptPolicy, hitlRequestCapture);
         var review = new ReviewStep(progressRuntime, artifacts, console, repository);
         var projectionArtifacts = new ProjectionArtifacts(store, repository);
         var projectionRegistry = ProjectionDefinitionRegistry.CreateDefault();

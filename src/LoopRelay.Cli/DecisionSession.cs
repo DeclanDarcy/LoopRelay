@@ -36,7 +36,8 @@ internal sealed class DecisionSession(
     IDecisionSessionResumeStore? resumeStore = null,
     IProjectContextProjectionService? projectionService = null,
     bool resumeEnabled = true,
-    string? promptPolicy = null) : IAsyncDisposable
+    string? promptPolicy = null,
+    ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null) : IAsyncDisposable
 {
     private readonly IDecisionCostModel costModel = costModel ?? new EffectiveTokenCostModel();
     private readonly IDecisionSessionResumeStore resumeStore = resumeStore ?? new NullDecisionSessionResumeStore();
@@ -104,6 +105,10 @@ internal sealed class DecisionSession(
 
         // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
         await artifacts.PersistDecisionsAsync(proposed.Output);
+        if (hitlRequestCapture is not null)
+        {
+            await hitlRequestCapture.CaptureFromSourceAsync(OrchestrationArtifactPaths.Decisions, proposed.Output);
+        }
 
         if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions))
         {

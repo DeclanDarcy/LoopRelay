@@ -4,7 +4,9 @@ using LoopRelay.Core.Repositories;
 using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Projections;
 using LoopRelay.Agents.Models;
 using LoopRelay.Cli;
@@ -111,6 +113,43 @@ public class DecisionSessionTests
         Assert.Equal("DECISIONS-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
         Assert.Contains("DECISIONS-TEXT", con.Messages);
         Assert.Equal(1, rt.OpenSessions);
+    }
+
+    [Fact]
+    public async Task Run_CapturesStructuredHitlRequestMarkersFromPersistedDecisions()
+    {
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var artifacts = new Cli.LoopArtifacts(store, repo);
+        var rt = new FakeAgentRuntime(store);
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions());
+        var ledger = new NonImplementationReviewLedgerStore(store);
+        var capture = new ExplicitHitlNonImplementationRequestCaptureService(ledger);
+        var session = new Cli.DecisionSession(
+            rt,
+            router,
+            artifacts,
+            new RecordingLoopConsole(),
+            repo,
+            hitlRequestCapture: capture);
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        const string decisions = """
+            Execute the next slice.
+
+            ## HITL-Requested Non-Implementation Deliverables
+
+            | Path Or Pattern | Source | Source Hash | Rationale |
+            | --- | --- | --- | --- |
+            | docs/requested.md | user | abc | Human explicitly requested the note. |
+            """;
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed(decisions)));
+
+        await session.RunAsync(CancellationToken.None);
+
+        NonImplementationHitlRequestEntry request = Assert.Single((await ledger.LoadOrCreateAsync()).HitlRequests);
+        Assert.Equal("docs/requested.md", request.DeliverablePathOrPattern);
+        Assert.Equal(OrchestrationArtifactPaths.Decisions, request.SourceArtifactPath);
+        Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
     }
 
     [Fact]

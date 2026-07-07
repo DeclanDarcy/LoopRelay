@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
 using LoopRelay.Core.Repositories;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 
 namespace LoopRelay.Completion;
 
@@ -49,13 +50,20 @@ public static class CompletionPromptCatalog
         };
 }
 
-public sealed class AgentCompletionPromptRunner(IAgentRuntime runtime, Repository repository) : ICompletionPromptRunner
+public sealed class AgentCompletionPromptRunner(
+    IAgentRuntime runtime,
+    Repository repository,
+    string? promptPolicy = null) : ICompletionPromptRunner
 {
+    private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
+
     public async Task<string> RunAsync(
         CompletionRuntimePromptInvocation invocation,
         CancellationToken cancellationToken = default)
     {
-        string prompt = CompletionPromptCatalog.RenderRuntime(invocation);
+        string prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
+            CompletionPromptCatalog.RenderRuntime(invocation),
+            promptPolicy);
         AgentSessionSpec spec = string.Equals(
             invocation.RuntimePromptName,
             CompletionRuntimePromptNames.SynthesizeCompletedEpic,

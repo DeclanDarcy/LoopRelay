@@ -4,6 +4,7 @@ using LoopRelay.Agents.Services;
 using LoopRelay.Completion;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
+using LoopRelay.Infrastructure.Artifacts;
 using LoopRelay.Infrastructure.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Services;
@@ -57,6 +58,8 @@ internal sealed class LoopCliComposition : IAsyncDisposable
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
         var artifacts = new LoopArtifacts(store, repository);
+        var hitlRequestCapture = new ExplicitHitlNonImplementationRequestCaptureService(
+            new NonImplementationReviewLedgerStore(new RepositoryArtifactStore(store, repository)));
         var inputWaitObservations = new InputWaitObservationStore();
         var progressRuntime = new InputWaitProgressAgentRuntime(
             runtime,
@@ -92,7 +95,7 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             new ProjectionManifestStore(projectionArtifacts),
             new ProjectionValidator(projectionRegistry),
             new ProjectionPromptRunner(gatedRuntime, repository, console));
-        var completionPromptRunner = new AgentCompletionPromptRunner(gatedRuntime, repository);
+        var completionPromptRunner = new AgentCompletionPromptRunner(gatedRuntime, repository, promptPolicy);
         var completionObserver = new ConsoleCompletionObserver(console);
         var completionArchive = new CompletedEpicArchiveService(
             store,
@@ -121,7 +124,8 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             resumeStore: resumeStore,
             projectionService: projectionService,
             resumeEnabled: DecisionResumeComposition.IsEnabled(),
-            promptPolicy: promptPolicy);
+            promptPolicy: promptPolicy,
+            hitlRequestCapture: hitlRequestCapture);
         var submodulePublisher = new AgentsSubmodulePublisher(processRunner, repository, console);
         var commitGate = new CommitGate(changeDetector, processRunner, repository, console);
         var loop = new LoopRunner(

@@ -1,4 +1,5 @@
 using System.Text;
+using LoopRelay.Orchestration;
 
 namespace LoopRelay.Completion;
 
@@ -37,6 +38,8 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
             sections.Add(handoff);
         }
 
+        await AddNonImplementationReviewSummarySectionsAsync(sections);
+
         sections.Add(Section(
             "Repository Inspection Instructions",
             "Inspect the repository in read-only mode and verify implementation reality before certifying completion. Treat checked milestone boxes as a completion claim, not as proof of closure."));
@@ -51,14 +54,21 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
         string completedEpic,
         string evaluationEvidencePath)
     {
-        return Build(
-        [
+        var sections = new List<ContextSection>
+        {
             Section("Projection Content", projectionContent),
             Section("Current Roadmap Completion Context", await artifacts.ReadRequiredAsync(roadmapCompletionContextPath)),
             Section($"Completed Epic Synthesis: {completedEpicSynthesisPath}", completedEpic),
             Section($"Latest Completion Evaluation: {evaluationEvidencePath}", await artifacts.ReadRequiredAsync(evaluationEvidencePath)),
-            Section("Repository Inspection Instructions", "Inspect repository reality in read-only mode before updating strategic state."),
-        ]);
+        };
+
+        await AddNonImplementationReviewSummarySectionsAsync(sections);
+
+        sections.Add(Section(
+            "Repository Inspection Instructions",
+            "Inspect repository reality in read-only mode before updating strategic state."));
+
+        return Build(sections);
     }
 
     public string BuildRoadmapCompletionBootstrapContext(string projectionContent) =>
@@ -83,6 +93,27 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
         }
 
         return sections;
+    }
+
+    private async Task AddNonImplementationReviewSummarySectionsAsync(List<ContextSection> sections)
+    {
+        await AddOptionalSectionAsync(
+            sections,
+            $"Non-Implementation Review Summary: {OrchestrationArtifactPaths.NonImplementationReview}",
+            OrchestrationArtifactPaths.NonImplementationReview);
+        await AddOptionalSectionAsync(
+            sections,
+            $"Non-Implementation Review Synthesis: {OrchestrationArtifactPaths.NonImplementationSynthesis}",
+            OrchestrationArtifactPaths.NonImplementationSynthesis);
+    }
+
+    private async Task AddOptionalSectionAsync(List<ContextSection> sections, string title, string relativePath)
+    {
+        string? content = await artifacts.ReadAsync(relativePath);
+        if (!string.IsNullOrWhiteSpace(content))
+        {
+            sections.Add(Section(title, content));
+        }
     }
 
     private static string Build(IReadOnlyList<ContextSection> sections)

@@ -66,6 +66,40 @@ public sealed class NonImplementationReviewFoundationTests
     }
 
     [Fact]
+    public void Prompt_policy_body_is_not_hard_coded_outside_the_composer()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string sourceRoot = Path.Combine(repositoryRoot, "src");
+        string composerPath = Path.GetFullPath(Path.Combine(
+            sourceRoot,
+            "LoopRelay.Orchestration.Primitives",
+            "Services",
+            "NonImplementationReview",
+            "ImplementationFirstPromptPolicyComposer.cs"));
+        string[] policyLines = ImplementationFirstPromptPolicyComposer.ComposeDefault()
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (string file in Directory.EnumerateFiles(sourceRoot, "*.*", SearchOption.AllDirectories)
+            .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+                path.EndsWith(".prompt", StringComparison.OrdinalIgnoreCase)))
+        {
+            string fullPath = Path.GetFullPath(file);
+            if (string.Equals(fullPath, composerPath, StringComparison.OrdinalIgnoreCase) ||
+                fullPath.Split(Path.DirectorySeparatorChar).Contains("bin") ||
+                fullPath.Split(Path.DirectorySeparatorChar).Contains("obj"))
+            {
+                continue;
+            }
+
+            string content = File.ReadAllText(fullPath);
+            foreach (string policyLine in policyLines)
+            {
+                Assert.DoesNotContain(policyLine, content, StringComparison.Ordinal);
+            }
+        }
+    }
+
+    [Fact]
     public void Review_runner_request_is_bounded_and_read_only()
     {
         var request = new NonImplementationReviewRunnerRequest(
@@ -238,5 +272,22 @@ public sealed class NonImplementationReviewFoundationTests
 
         public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path) =>
             Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, "src")) &&
+                Directory.Exists(Path.Combine(directory.FullName, "tests")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root.");
     }
 }
