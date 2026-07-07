@@ -1,0 +1,180 @@
+# Epic Synthesis Prompt
+
+## Purpose
+
+You are synthesizing a collection of planning documents, operational handoffs, and decision records for a single epic that was just implemented into one historical epic specification.
+
+Your task is to read:
+
+```text
+.agents/archive/epics/{label}/*
+```
+
+And write:
+
+```text
+.agents/archive/epics/{label}.md
+```
+
+The output must preserve the actionable intent of the source materials while removing duplication, stale operational noise, abandoned branches, and transient session detail.
+
+---
+
+## Core Objective
+
+Create a single epic document that can serve as the historical record for the epic that was just implemented.
+
+The synthesized document must answer:
+
+> What is this epic trying to accomplish, why does it matter, what has already been decided, what constraints must be preserved, what work remains, and how should execution proceed?
+
+---
+
+## Inputs
+
+Read every file under:
+
+```text
+.agents/epics/{label}/*
+```
+
+Treat the directory as containing mixed-quality material, including but not limited to:
+
+* planning documents
+* milestone drafts
+* implementation notes
+* operational handoffs
+* session summaries
+* decision records
+* audit outputs
+* unresolved questions
+* stale or superseded plans
+
+Do not assume every file is equally authoritative.
+
+---
+
+## Authority Rules
+
+When sources conflict, resolve authority in this order:
+
+1. Explicit accepted decisions
+2. Latest handoff that references completed work
+3. Current roadmap or epic plan
+4. Audit findings grounded in codebase reality
+5. Earlier planning material
+6. Speculative brainstorms
+
+If a conflict cannot be safely resolved, preserve it as an open question rather than silently choosing.
+
+Do not preserve obsolete detail unless it explains a still-relevant constraint, rejected path, or known hazard.
+
+---
+
+## Synthesis Requirements
+
+The output must:
+
+* Be concise enough to be used during execution
+* Preserve all durable decisions
+* Preserve all active constraints and invariants
+* Capture completed work only insofar as it affects remaining work
+* Distinguish settled decisions from open questions
+* Distinguish current execution direction from historical alternatives
+* Remove duplicated prose
+* Remove session-by-session noise
+* Remove implementation trivia unless it constrains future work
+* Preserve file paths, module names, command names, contracts, and test names when they are execution-relevant
+* Convert scattered notes into an ordered execution model
+
+---
+
+## Required Output Structure
+
+Write `.agents/epics/{label}.md` with the following structure:
+
+```markdown
+# {{Epic Title}}
+
+## 1. Epic Purpose
+
+Describe the epic’s durable goal in 1–3 paragraphs.
+
+## 2. Current State
+
+Summarize what already exists, what has been completed, and what the codebase or project currently assumes.
+
+## 3. Accepted Decisions
+
+List durable decisions that must govern future work.
+
+For each decision, include:
+- decision
+- rationale
+- consequences for implementation
+
+## 4. Constraints and Invariants
+
+List non-negotiable constraints, architectural invariants, authority boundaries, and evaluation requirements.
+
+## 5. Remaining Work
+
+Organize remaining work into milestones or execution phases.
+
+Each milestone must include:
+- objective
+- required changes
+- validation requirements
+- dependencies
+- completion criteria
+
+## 6. Known Hazards
+
+Capture risks, prior failure modes, stale paths, misleading shortcuts, and implementation traps.
+
+## 7. Open Questions
+
+List only questions that materially affect execution.
+
+For each question, include:
+- why it matters
+- what evidence would resolve it
+- whether execution can proceed before resolution
+
+## 8. Execution Guidance
+
+Provide concrete guidance for the next implementation agent.
+
+Include:
+- recommended first step
+- files or areas to inspect first
+- what not to change prematurely
+- validation commands or checks, if known
+
+## 9. Source Disposition
+
+Summarize how the source documents were treated.
+
+Group them as:
+- preserved as authoritative
+- partially incorporated
+- superseded
+- ignored as transient/noise
+
+Do not delete source files.
+```
+
+---
+
+## Quality Bar
+
+The synthesized epic is successful if a future implementation agent can use `.agents/epics/{label}.md` without needing to reread the full source directory except for deep evidence checks.
+
+The document must be:
+
+* actionable
+* grounded
+* non-speculative
+* free of redundant planning prose
+* explicit about uncertainty
+* optimized for execution continuity

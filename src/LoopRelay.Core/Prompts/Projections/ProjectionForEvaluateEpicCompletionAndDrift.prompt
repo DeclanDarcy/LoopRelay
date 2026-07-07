@@ -509,7 +509,7 @@ Exclude:
 - epic validation / preparation logic
 - realignment rules
 - reimagination rules
-- new-epic authoring rules
+- CreateNewEpic authoring rules
 - split-epic decomposition rules
 - milestone deep-dive authoring rules
 - execution prompt generation rules

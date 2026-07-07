@@ -2,6 +2,10 @@
 {projectContext}
 </PROJECT_CONTEXT>
 
+<COMPLETED_EPIC>
+{completedEpic}
+</COMPLETED_EPIC>
+
 # Update Roadmap Completion Context
 
 ## Role

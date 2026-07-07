@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-04
 **Status:** Approved
-**Scope:** LoopRelay.CLI (loop), LoopRelay.Agents (session/protocol seam), LoopRelay.Plan.CLI (epic rollover clearing), LoopRelay.Core (shared store)
+**Scope:** LoopRelay.CLI (loop), LoopRelay.Agents (session/protocol seam), LoopRelay.Core (shared store)
 
 ## Motivation
 
@@ -37,7 +37,7 @@ generate-json-schema --experimental`):
 
 1. First decision-step entry of a CLI run resumes the persisted decision session when one exists.
 2. Resume state lives at `{REPO_DIR}/.LoopRelay/decision-session.json`.
-3. Epic completion clears the persisted session — at BOTH seams (loop gate + Plan.CLI rollover).
+3. Epic completion clears the persisted session at the loop gate.
 4. Fail-soft: any resume failure degrades loudly to today's fresh-process behavior.
 
 ## Non-goals
@@ -83,7 +83,7 @@ One compact camelCase JSON object (same serialization conventions as the telemet
   restores `seeded = true`.
 
 **Store type:** `IDecisionSessionResumeStore` + `FileDecisionSessionResumeStore` in
-**LoopRelay.Core** (shared so both LoopRelay.CLI and LoopRelay.Plan.CLI reference it):
+**LoopRelay.Core** (shared so LoopRelay.CLI can persist and clear the decision-session state):
 `ReadAsync()` (null on missing/corrupt; corrupt file is deleted), `WriteAsync(state)`,
 `ClearAsync()` (idempotent delete). All operations are fail-open in the telemetry sense — an IO
 error never breaks a turn or the loop; failures surface as console warnings only.
@@ -142,16 +142,12 @@ incidentally closes the same pre-existing footgun for telemetry once the store f
   `transferCost` (next run re-seeds at the 250k default). Accepted — the file models "resumable
   thread", not a standalone metrics ledger.
 
-### 4. Clearing on epic completion — both seams, both idempotent
+### 4. Clearing on epic completion
 
-1. **LoopRunner:** when `MilestoneGate.IsEpicCompleteAsync()` fires at the top of an iteration,
-   `ClearAsync()` before returning `LoopOutcome.EpicCompleted`. This fires on every re-run against a
-   completed epic; deletion is a no-op then. LoopRunner gains the store as a dependency (testable
-   through the existing harness).
-2. **Plan.CLI:** in `PlanPipeline.RunAsync`, after `EpicRolloverStep.TryArchiveAsync` returns true
-   (the post-gate has proven the archive), `ClearAsync()` — covering the epic-rolled-over-without-
-   the-loop-observing gap (the rollover criterion is artifact presence, not checkbox state, so the
-   two seams genuinely do not subsume each other).
+**LoopRunner:** when `MilestoneGate.IsEpicCompleteAsync()` fires at the top of an iteration,
+`ClearAsync()` before returning `LoopOutcome.EpicCompleted`. This fires on every re-run against a
+completed epic; deletion is a no-op then. LoopRunner gains the store as a dependency (testable
+through the existing harness).
 
 ### 5. Kill switch
 
@@ -186,8 +182,7 @@ Follows existing repo patterns (hand-rolled fakes in `TestDoubles.cs`, real temp
    + process disposed; `ThreadId` exposed post-handshake and passed through `GatedAgentSession`.
 4. **LoopRunner harness test:** epic-complete gate clears the store before returning
    `LoopOutcome.EpicCompleted`.
-5. **Plan.CLI test:** rollover-true path clears the store; rollover-false path does not.
-6. **Manual real-codex smoke:** run loop → let a decision turn complete → kill CLI → rerun → observe
+5. **Manual real-codex smoke:** run loop → let a decision turn complete → kill CLI → rerun → observe
    `Resumed decision session (thread …)` and a proposal turn WITHOUT context re-priming; complete an
    epic → verify the file is gone.
 
@@ -208,5 +203,5 @@ Follows existing repo patterns (hand-rolled fakes in `TestDoubles.cs`, real temp
 - **No `seeded` field in the schema** — write-after-successful-turn invariant makes it always true.
 - **Restore-at-open ordering** — prevents a restored `reuseCycles > 0` from routing `Transfer`
   against a not-yet-opened session.
-- **Clear at both epic seams** — loop gate is the user-facing requirement; rollover clearing covers
-  the loop-never-reran gap (user-approved).
+- **Clear at the loop epic-complete gate** — the loop gate is the user-facing requirement and is
+  idempotent across repeated runs against the same completed epic.

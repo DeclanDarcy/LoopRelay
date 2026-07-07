@@ -5,7 +5,7 @@ namespace LoopRelay.Infrastructure.Tests;
 public sealed class RuntimePrerequisiteDoctorTests
 {
     [Fact]
-    public void MissingCodexExecutableIsAnErrorAndUnsetOptionalVariablesAreInformational()
+    public void MissingCodexExecutableIsAnErrorAndUnsetDecisionResumeIsInformational()
     {
         var doctor = new RuntimePrerequisiteDoctor(_ => null, _ => false);
 
@@ -15,7 +15,6 @@ public sealed class RuntimePrerequisiteDoctorTests
             d.Id == "runtime.codex_executable.missing" &&
             d.Severity == RuntimeDiagnosticSeverity.Error);
         Assert.Contains(diagnostics, d => d.Id == "runtime.decision_resume.default");
-        Assert.Contains(diagnostics, d => d.Id == "runtime.new_epic_executable.default");
     }
 
     [Fact]
@@ -38,12 +37,11 @@ public sealed class RuntimePrerequisiteDoctorTests
     }
 
     [Fact]
-    public void MissingExplicitExecutablesAreErrors()
+    public void MissingExplicitCodexExecutableIsAnError()
     {
         var values = new Dictionary<string, string?>
         {
             [RuntimePrerequisiteDoctor.CodexExecutableVariable] = @"C:\missing\codex.exe",
-            [RuntimePrerequisiteDoctor.NewEpicExecutableVariable] = @"C:\missing\new-epic.exe",
         };
         var doctor = new RuntimePrerequisiteDoctor(
             name => values.TryGetValue(name, out string? value) ? value : null,
@@ -52,6 +50,5 @@ public sealed class RuntimePrerequisiteDoctorTests
         IReadOnlyList<RuntimeDiagnostic> diagnostics = doctor.Inspect();
 
         Assert.Contains(diagnostics, d => d.Id == "runtime.codex_executable.not_found");
-        Assert.Contains(diagnostics, d => d.Id == "runtime.new_epic_executable.not_found");
     }
 }

@@ -324,7 +324,7 @@ CreateNewEpic-style authoring owns:
 - success condition quality
 - risk and follow-up structure
 
-For MVP, SplitEpic may output complete epic files, but those files should be treated as applications of the standard new-epic authoring model to each partition.
+For MVP, SplitEpic may output complete epic files, but those files should be treated as applications of the standard CreateNewEpic authoring model to each partition.
 
 ---
 
@@ -615,7 +615,7 @@ It exists to support:
 - coverage proof
 - overlap prevention
 - split blocking
-- handoff to standard new-epic authoring
+- handoff to standard CreateNewEpic authoring
 
 It is a projection of the Project Context, not a split proposal, roadmap, codebase audit, repository summary, or epic authoring guide.
 
@@ -914,7 +914,7 @@ When this projection is used by SplitEpic:
 - Prove complete coverage.
 - Prevent overlap and duplicate ownership.
 - Block splitting if the partition would create task fragments.
-- Hand each resulting initiative to the standard new-epic authoring model.
+- Hand each resulting initiative to the standard CreateNewEpic authoring model.
 - Do not modify the roadmap.
 - Do not update roadmap completion context.
 - Do not generate implementation tasks.

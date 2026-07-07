@@ -67,10 +67,7 @@ internal sealed class PlanCliComposition : IAsyncDisposable
             new ProjectionPromptRunner(progressRuntime, repository, console));
         var oneShot = new SandboxedPromptStep(progressRuntime, sandboxFactory, artifacts, console, repository);
         var publisher = new AgentsSubmodulePublisher(processRunner, repository, console);
-        var rollover = new EpicRolloverStep(processRunner, artifacts, console, repository);
-        var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);
         var pipeline = new PlanPipeline(
-            rollover,
             preflight,
             planSession,
             review,
@@ -78,7 +75,6 @@ internal sealed class PlanCliComposition : IAsyncDisposable
             oneShot,
             publisher,
             artifacts,
-            resumeStore,
             console);
 
         return new PlanCliComposition(provider, console, executableResolver, pipeline);

@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Orchestration.Models;
 using LoopRelay.Projections;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
@@ -106,12 +105,11 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
 }
 
 /// <summary>
-/// Scripts <see cref="IProcessRunner.RunAsync"/> (no real git, no real new-epic). Records every call in
+/// Scripts <see cref="IProcessRunner.RunAsync"/> (no real git). Records every call in
 /// invocation order, and returns whatever <see cref="Handler"/> produces (or a zero-exit success when Handler
 /// is null). <see cref="OnRunAsync"/> is an async hook invoked (before Handler) for every call, so a test can
-/// match a command (e.g. the new-epic invocation — the only non-git call) and simulate its filesystem side
-/// effects against the in-memory artifact store. StartInteractiveAsync throws — the publisher and
-/// rollover step only ever run RunAsync.
+/// simulate filesystem side effects against the in-memory artifact store. StartInteractiveAsync throws — the
+/// publisher only ever runs RunAsync.
 /// </summary>
 internal sealed class FakeProcessRunner : IProcessRunner
 {
@@ -147,30 +145,6 @@ internal sealed class FakeProcessRunner : IProcessRunner
 
     public static ProcessRunResult Fail(string stderr, int exitCode = 1, string stdout = "") =>
         new() { ExitCode = exitCode, StandardOutput = stdout, StandardError = stderr, Duration = TimeSpan.Zero };
-}
-
-internal sealed class FakeDecisionSessionResumeStore : IDecisionSessionResumeStore
-{
-    public DecisionSessionResumeState? State { get; set; }
-    public List<DecisionSessionResumeState> Written { get; } = new();
-    public int ClearCalls { get; private set; }
-
-    public Task<DecisionSessionResumeState?> ReadAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(State);
-
-    public Task WriteAsync(DecisionSessionResumeState state, CancellationToken cancellationToken = default)
-    {
-        Written.Add(state);
-        State = state;
-        return Task.CompletedTask;
-    }
-
-    public Task ClearAsync(CancellationToken cancellationToken = default)
-    {
-        ClearCalls++;
-        State = null;
-        return Task.CompletedTask;
-    }
 }
 
 internal sealed class FakeProjectionService(string content = "PROJECT CONTEXT PROJECTION") : IProjectContextProjectionService

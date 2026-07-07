@@ -1,22 +1,19 @@
 using LoopRelay.Orchestration;
-using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Projections;
 
 namespace LoopRelay.Plan.Cli;
 
 /// <summary>
-/// The sequencer for the pipeline steps: epic rollover (auto-archive a complete previous workspace via
-/// new-epic, publishing the archive — submodule AND parent gitlink — immediately), preflight, write plan,
-/// adversarial review, revise plan (eager session close, then operational_context.md seeded from the revised
-/// plan), then the three sandboxed one-shots (collect details, extract milestones, extract details) — each
-/// followed by a deterministic filesystem gate. Every artifact-mutating step is followed by a commit+push of
-/// the .agents submodule (the adversarial review writes nothing, so it publishes nothing); the parent repo's
-/// moved gitlink pointer is recorded ONCE at the end of a successful run. Mirrors the reference CLI's
-/// <c>LoopRunner</c> in shape: a thin sequencer that owns no agent-facing logic itself, only orders the steps,
-/// surfaces console phase markers, and translates step failures into a terminal <see cref="PlanOutcome"/>.
+/// The sequencer for the pipeline steps: preflight, write plan, adversarial review, revise plan (eager session
+/// close, then operational_context.md seeded from the revised plan), then the three sandboxed one-shots
+/// (collect details, extract milestones, extract details) — each followed by a deterministic filesystem gate.
+/// Every artifact-mutating step is followed by a commit+push of the .agents submodule (the adversarial review
+/// writes nothing, so it publishes nothing); the parent repo's moved gitlink pointer is recorded ONCE at the
+/// end of a successful run. Mirrors the reference CLI's <c>LoopRunner</c> in shape: a thin sequencer that owns
+/// no agent-facing logic itself, only orders the steps, surfaces console phase markers, and translates step
+/// failures into a terminal <see cref="PlanOutcome"/>.
 /// </summary>
 internal sealed class PlanPipeline(
-    EpicRolloverStep rollover,
     PreflightGate preflight,
     PlanSession planSession,
     ReviewStep review,
@@ -24,32 +21,12 @@ internal sealed class PlanPipeline(
     SandboxedPromptStep oneShot,
     AgentsSubmodulePublisher publisher,
     PlanArtifacts artifacts,
-    IDecisionSessionResumeStore resumeStore,
     ILoopConsole console) : IAsyncDisposable
 {
     public async Task<PlanOutcome> RunAsync(CancellationToken cancellationToken)
     {
         try
         {
-            console.Phase("Epic Rollover");
-            if (await rollover.TryArchiveAsync(cancellationToken))
-            {
-                // The epic boundary invalidates the loop CLI's persisted decision-session resume state — the next
-                // epic must start from a fresh decision process. Cleared here AS WELL AS in the loop's epic-complete
-                // gate: a rollover can happen without the loop ever re-running against the completed epic. Idempotent.
-                await resumeStore.ClearAsync(cancellationToken);
-
-                // The archive's parent gitlink is recorded IMMEDIATELY (not deferred to the end-of-run
-                // reconcile): new-epic leaves specs/ in place, so the run normally continues into planning
-                // the next epic from the surviving specs/epic.md — but it may still stop at the very next
-                // gate (preflight blocks when no epic exists), and the archive must be fully published
-                // either way.
-                if (await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.ArchivePreviousEpicMessage, cancellationToken))
-                {
-                    await publisher.RecordParentGitlinkAsync(cancellationToken);
-                }
-            }
-
             console.Phase("Preflight");
             IReadOnlyList<string> violations = await preflight.CheckAsync();
             if (violations.Count > 0)
@@ -130,8 +107,7 @@ internal sealed class PlanPipeline(
                 await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.ExtractDetailsMessage, cancellationToken);
 
             // Any step commit moved the submodule HEAD, so the parent gitlink pointer necessarily lags — the
-            // control flow already proves it; no status probe. The rollover branch's publishes deliberately do
-            // NOT feed agentsCommitted: its pointer was already recorded immediately, up in step 1.
+            // control flow already proves it; no status probe.
             if (agentsCommitted)
             {
                 await publisher.RecordParentGitlinkAsync(cancellationToken);

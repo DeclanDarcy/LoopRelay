@@ -6,7 +6,6 @@ namespace LoopRelay.Plan.Cli;
 
 internal sealed class AgentsSubmodulePublisher
 {
-    public const string ArchivePreviousEpicMessage = "Plan pipeline: archive previous epic";
     public const string WritePlanMessage = "Plan pipeline: write plan";
     public const string GenerateAdversarialReviewProjectionMessage = "Plan pipeline: generate adversarial review projection";
     public const string RevisePlanMessage = "Plan pipeline: revise plan and seed operational context";

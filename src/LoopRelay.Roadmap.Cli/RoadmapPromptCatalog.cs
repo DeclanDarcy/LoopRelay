@@ -90,7 +90,7 @@ internal static class RoadmapPromptCatalog
             "CreateRoadmapCompletionContext" =>
                 Core.Prompts.Planning.CreateRoadmapCompletionContext.Render(projectContext, secondaryInput),
             "UpdateRoadmapCompletionContext" =>
-                Core.Prompts.Planning.UpdateRoadmapCompletionContext.Render(projectContext),
+                Core.Prompts.Planning.UpdateRoadmapCompletionContext.Render(projectContext, secondaryInput),
             "SelectNextEpic" =>
                 Core.Prompts.Planning.SelectNextEpic.Render(projectContext),
             "EpicPreparationAudit" =>

@@ -33,8 +33,7 @@ internal sealed class LoopRunner(
                 {
                     // A finished epic obsoletes the persisted decision-session resume state — the next epic must start
                     // from a fresh decision process primed with its own operational context. Idempotent by design: this
-                    // fires again on every re-run against a completed epic, and deleting nothing is a no-op. (Plan.CLI's
-                    // epic rollover clears it too, covering the epic-rolled-over-without-this-gate-observing case.)
+                    // fires again on every re-run against a completed epic, and deleting nothing is a no-op.
                     await resumeStore.ClearAsync(cancellationToken);
                     return LoopOutcome.EpicCompleted;
                 }

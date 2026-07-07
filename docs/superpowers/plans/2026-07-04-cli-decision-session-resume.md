@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** When the CLI loop enters the decision step for the first time in a run, resume the previous codex decision session (persisted at `{REPO_DIR}/.LoopRelay/decision-session.json`) via the app-server `thread/resume` method, falling back loudly to a fresh primed process on any failure; clear the persisted state on epic completion (both the loop's milestone gate and Plan.CLI's epic rollover).
+**Goal:** When the CLI loop enters the decision step for the first time in a run, resume the previous codex decision session (persisted at `{REPO_DIR}/.LoopRelay/decision-session.json`) via the app-server `thread/resume` method, falling back loudly to a fresh primed process on any failure; clear the persisted state on epic completion at the loop milestone gate.
 
 **Architecture:** The codex app-server thread id (already extracted from `thread/start` but currently discarded in a private field) is surfaced on `IAgentSession`, persisted by `DecisionSession` after every successful proposal turn, and fed back on the next run via a new optional `AgentSessionSpec.ResumeThreadId`. When that field is set, `AgentRuntime.OpenSessionAsync` runs the handshake **eagerly** and `CodexAppServerSession` sends `thread/resume` instead of `thread/start`; failure throws a typed `AgentSessionResumeException` so the caller can fall back to a fresh open before composing its first prompt. The store lives in `LoopRelay.Orchestration` (shared by both CLIs) and is fail-open like the telemetry ledger.
 
@@ -1567,8 +1567,7 @@ if (await gate.IsEpicCompleteAsync())
 {
     // A finished epic obsoletes the persisted decision-session resume state — the next epic must start
     // from a fresh decision process primed with its own operational context. Idempotent by design: this
-    // fires again on every re-run against a completed epic, and deleting nothing is a no-op. (Plan.CLI's
-    // epic rollover clears it too, covering the epic-rolled-over-without-this-gate-observing case.)
+    // fires again on every re-run against a completed epic, and deleting nothing is a no-op.
     await resumeStore.ClearAsync(cancellationToken);
     return LoopOutcome.EpicCompleted;
 }
@@ -1671,152 +1670,11 @@ git commit -m "feat(cli): clear decision-session resume state on epic completion
 
 ---
 
-### Task 8: Plan.CLI — clear on epic rollover
+### Task 8: Plan.CLI no longer owns epic-boundary resume clearing
 
-**Files:**
-- Modify: `src/LoopRelay.Plan.CLI/PlanPipeline.cs`
-- Modify: `src/LoopRelay.Plan.CLI/Program.cs`
-- Modify: `tests/LoopRelay.Plan.CLI.Tests/TestDoubles.cs` (add `FakeDecisionSessionResumeStore` — same code as the CLI copy)
-- Test: `tests/LoopRelay.Plan.CLI.Tests/PlanPipelineTests.cs`
-
-**Interfaces:**
-- Consumes: `IDecisionSessionResumeStore`/`FileDecisionSessionResumeStore` (Task 1).
-- Produces: `PlanPipeline` ctor gains `IDecisionSessionResumeStore resumeStore` (inserted before the final `ILoopConsole console` param).
-
-- [ ] **Step 1: Add the fake store to Plan.CLI TestDoubles**
-
-Add to `tests/LoopRelay.Plan.CLI.Tests/TestDoubles.cs` (needs `using LoopRelay.Orchestration.Abstractions;` and `using LoopRelay.Orchestration.Models;` if not present):
-
-```csharp
-internal sealed class FakeDecisionSessionResumeStore : IDecisionSessionResumeStore
-{
-    public DecisionSessionResumeState? State { get; set; }
-    public List<DecisionSessionResumeState> Written { get; } = new();
-    public int ClearCalls { get; private set; }
-
-    public Task<DecisionSessionResumeState?> ReadAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(State);
-
-    public Task WriteAsync(DecisionSessionResumeState state, CancellationToken cancellationToken = default)
-    {
-        Written.Add(state);
-        State = state;
-        return Task.CompletedTask;
-    }
-
-    public Task ClearAsync(CancellationToken cancellationToken = default)
-    {
-        ClearCalls++;
-        State = null;
-        return Task.CompletedTask;
-    }
-}
-```
-
-- [ ] **Step 2: Write the failing tests**
-
-In `tests/LoopRelay.Plan.CLI.Tests/PlanPipelineTests.cs`: extend `Harness` with `FakeDecisionSessionResumeStore Resume`, create it in `New()` and pass to the pipeline ctor before `console`. Add `using LoopRelay.Orchestration.Models;`. Then add:
-
-```csharp
-[Fact]
-public async Task RunAsync_WhenTheRolloverArchives_ClearsThePersistedDecisionSessionState()
-{
-    Harness h = New();
-    // A COMPLETE previous workspace (presence-based criterion): plan + details + operational context +
-    // a non-empty milestones directory. The scripted new-epic invocation deletes plan.md so the
-    // rollover's post-gate passes; the run then stops at Preflight (no specs/epic.md) — which is fine,
-    // the clear must already have happened.
-    await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
-    await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Details), "DETAILS");
-    await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-    await h.Store.WriteAsync(Resolve(h.Repo, MilestonePath("m1.md")), "- [ ] t");
-    h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
-    h.Processes.Handler = (_, args) =>
-    {
-        if (args.Count == 0 || args.Contains("new-epic"))
-        {
-            h.Store.DeleteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan)).Wait();
-        }
-
-        return FakeProcessRunner.Ok();
-    };
-
-    PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
-
-    Assert.Equal(PlanOutcome.PreflightBlocked, outcome);
-    Assert.Equal(1, h.Resume.ClearCalls);
-    Assert.Null(h.Resume.State);
-}
-
-[Fact]
-public async Task RunAsync_WhenNoRolloverHappens_LeavesThePersistedDecisionSessionStateAlone()
-{
-    Harness h = New();
-    // An incomplete workspace: the rollover is skipped and preflight blocks. The resume state survives.
-    h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
-
-    PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
-
-    Assert.Equal(PlanOutcome.PreflightBlocked, outcome);
-    Assert.Equal(0, h.Resume.ClearCalls);
-    Assert.NotNull(h.Resume.State);
-}
-```
-
-(If `EpicRolloverStepTests` scripts the new-epic invocation differently — e.g. matching on the file name rather than args — mirror that file's proven matching pattern in the Handler above.)
-
-- [ ] **Step 3: Run tests to verify they fail**
-
-Run: `dotnet test tests/LoopRelay.Plan.CLI.Tests --filter "FullyQualifiedName~PlanPipelineTests"`
-Expected: FAIL to compile — `PlanPipeline` has no `resumeStore` parameter.
-
-- [ ] **Step 4: Implement**
-
-In `src/LoopRelay.Plan.CLI/PlanPipeline.cs`:
-- add `using LoopRelay.Orchestration.Abstractions;`
-- extend the primary ctor (insert before `ILoopConsole console`):
-
-```csharp
-internal sealed class PlanPipeline(
-    EpicRolloverStep rollover,
-    PreflightGate preflight,
-    PlanSession planSession,
-    ReviewStep review,
-    SandboxedPromptStep oneShot,
-    AgentsSubmodulePublisher publisher,
-    PlanArtifacts artifacts,
-    IDecisionSessionResumeStore resumeStore,
-    ILoopConsole console) : IAsyncDisposable
-```
-
-- at the top of the rollover-true branch (immediately inside `if (await rollover.TryArchiveAsync(cancellationToken))`, before the publish), add:
-
-```csharp
-// The epic boundary invalidates the loop CLI's persisted decision-session resume state — the next
-// epic must start from a fresh decision process. Cleared here AS WELL AS in the loop's epic-complete
-// gate: a rollover can happen without the loop ever re-running against the completed epic. Idempotent.
-await resumeStore.ClearAsync(cancellationToken);
-```
-
-In `src/LoopRelay.Plan.CLI/Program.cs` (already imports `LoopRelay.Orchestration.Services`), after the `rollover` construction (line 51), add and rewire:
-
-```csharp
-// Shared with LoopRelay.CLI: the loop's decision-session resume state, cleared at the epic boundary.
-var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);
-var pipeline = new PlanPipeline(rollover, preflight, planSession, review, oneShot, publisher, artifacts, resumeStore, console);
-```
-
-- [ ] **Step 5: Run the Plan.CLI suite**
-
-Run: `dotnet test tests/LoopRelay.Plan.CLI.Tests`
-Expected: PASS (all existing plus the 2 new).
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/LoopRelay.Plan.CLI/PlanPipeline.cs src/LoopRelay.Plan.CLI/Program.cs tests/LoopRelay.Plan.CLI.Tests/TestDoubles.cs tests/LoopRelay.Plan.CLI.Tests/PlanPipelineTests.cs
-git commit -m "feat(plan-cli): clear decision-session resume state at the epic rollover boundary"
-```
+This task is retired. Plan.CLI now starts at preflight and surfaces existing planning artifacts as
+operator cleanup violations. It does not archive previous planning workspaces or clear the loop's
+decision-session resume state. Epic-boundary clearing is owned by the loop's milestone-complete gate.
 
 ---
 
@@ -1878,6 +1736,6 @@ Documented for the operator; requires a codex login and a target repo:
 
 ## Self-review checklist (run after all tasks)
 
-- Spec coverage: storage schema + store (Task 1), protocol frame (Task 2), spec field/exception/ThreadId surface (Task 3), eager resume handshake + fallback contract (Task 4), decision-spec overload (Task 5), first-open resume + persist + clear-on-close semantics + kill-switch behavior (Task 6), loop-gate clearing + kill-switch composition + wiring (Task 7), rollover clearing (Task 8), debt/docs/verification (Task 9).
+- Spec coverage: storage schema + store (Task 1), protocol frame (Task 2), spec field/exception/ThreadId surface (Task 3), eager resume handshake + fallback contract (Task 4), decision-spec overload (Task 5), first-open resume + persist + clear-on-close semantics + kill-switch behavior (Task 6), loop-gate clearing + kill-switch composition + wiring (Task 7), Plan.CLI retirement note (Task 8), debt/docs/verification (Task 9).
 - Every new public/internal name used across tasks matches: `DecisionSessionResumeState`, `IDecisionSessionResumeStore`, `FileDecisionSessionResumeStore`, `NullDecisionSessionResumeStore`, `AgentSessionResumeException`, `ResumeThreadId`, `ThreadId`, `EnsureReadyAsync`, `ThreadResume`, `DecisionResumeComposition`, `FakeDecisionSessionResumeStore`.
 - The telemetry locator degradation for resumed sessions (possibly-null `codexLogPath`) is an accepted spec non-goal — no code change.

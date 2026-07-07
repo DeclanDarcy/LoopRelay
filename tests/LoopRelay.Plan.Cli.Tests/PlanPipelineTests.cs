@@ -2,7 +2,6 @@ using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Orchestration;
-using LoopRelay.Orchestration.Models;
 using LoopRelay.Projections;
 using LoopRelay.Plan.Cli;
 using Xunit;
@@ -24,7 +23,6 @@ public class PlanPipelineTests
         Repository Repo,
         RecordingLoopConsole Console,
         FakeProcessRunner Processes,
-        FakeDecisionSessionResumeStore Resume,
         FakeProjectionService Projection);
 
     private static Harness New(FakeProcessRunner? processes = null)
@@ -36,19 +34,17 @@ public class PlanPipelineTests
         var runtime = new FakeAgentRuntime(store);
         var sandboxes = new FakeSandboxWorkspaceFactory();
         var git = processes ?? new FakeProcessRunner();
-        var resume = new FakeDecisionSessionResumeStore();
         var projection = new FakeProjectionService("ADVERSARIAL REVIEW PROJECTION");
 
-        var rollover = new Cli.EpicRolloverStep(git, artifacts, console, repo);
         var preflight = new Cli.PreflightGate(artifacts);
         var planSession = new Cli.PlanSession(runtime, artifacts, console, repo);
         var review = new Cli.ReviewStep(runtime, artifacts, console, repo);
         var oneShot = new Cli.SandboxedPromptStep(runtime, sandboxes, artifacts, console, repo);
         var publisher = new Cli.AgentsSubmodulePublisher(git, repo, console);
         var pipeline = new Cli.PlanPipeline(
-            rollover, preflight, planSession, review, projection, oneShot, publisher, artifacts, resume, console);
+            preflight, planSession, review, projection, oneShot, publisher, artifacts, console);
 
-        return new Harness(pipeline, runtime, sandboxes, store, repo, console, git, resume, projection);
+        return new Harness(pipeline, runtime, sandboxes, store, repo, console, git, projection);
     }
 
     private static IReadOnlyList<string> PhaseSequence(RecordingLoopConsole console) =>
@@ -57,11 +53,10 @@ public class PlanPipelineTests
     private static bool IsSubmodule(string workingDirectory) =>
         workingDirectory.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);
 
-    /// <summary>Scripts an always-dirty submodule so every publish makes a real commit. Guarded on Args being
-    /// non-empty (the new-epic invocation under a NEW_EPIC_EXECUTABLE override carries no arguments).</summary>
+    /// <summary>Scripts an always-dirty submodule so every publish makes a real commit.</summary>
     private static FakeProcessRunner DirtyGit() => new()
     {
-        Handler = (_, args) => args.Count == 0 ? FakeProcessRunner.Ok() : args[0] switch
+        Handler = (_, args) => args[0] switch
         {
             "status" => FakeProcessRunner.Ok(" M plan.md"),
             "branch" => FakeProcessRunner.Ok("main"),
@@ -148,8 +143,7 @@ public class PlanPipelineTests
         Assert.Equal(
             new[]
             {
-                "Epic Rollover", "Preflight", "Write Plan", "Generate Adversarial Review Projection",
-                "Adversarial Review", "Revise Plan",
+                "Preflight", "Write Plan", "Generate Adversarial Review Projection", "Adversarial Review", "Revise Plan",
                 "Collect Details", "Extract Milestones", "Extract Details",
             },
             PhaseSequence(h.Console));
@@ -186,7 +180,7 @@ public class PlanPipelineTests
         Assert.Equal(0, h.Runtime.OpenSessions);
         Assert.Empty(h.Runtime.OneShotCalls);
         Assert.Contains(h.Console.Events, e => e.Kind == "error");
-        Assert.Equal(new[] { "Epic Rollover", "Preflight" }, PhaseSequence(h.Console));
+        Assert.Equal(new[] { "Preflight" }, PhaseSequence(h.Console));
     }
 
     [Fact]
@@ -375,18 +369,6 @@ public class PlanPipelineTests
         Assert.Equal(Cli.AgentsSubmodulePublisher.GitlinkPointerMessage, allCommits[^1].Args[2]);
     }
 
-    /// <summary>Wires the fake so the only non-git invocation (new-epic) archives the previous workspace:
-    /// plan.md, details.md, operational_context.md and the milestone file are removed. specs/ is NOT touched —
-    /// new-epic leaves it in place (whether or not a epic exists there).</summary>
-    private static void SimulateNewEpicArchive(FakeProcessRunner git, Harness h) =>
-        git.OnRunAsync = (fileName, _, _) => fileName == "git"
-            ? Task.CompletedTask
-            : Task.WhenAll(
-                h.Store.DeleteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan)),
-                h.Store.DeleteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Details)),
-                h.Store.DeleteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.OperationalContext)),
-                h.Store.DeleteAsync(Resolve(h.Repo, MilestonePath("m1.md"))));
-
     private static async Task SeedCompletePreviousWorkspaceAsync(Harness h)
     {
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "OLD PLAN");
@@ -396,118 +378,65 @@ public class PlanPipelineTests
     }
 
     [Fact]
-    public async Task RunAsync_CompletePreviousWorkspace_ArchivesAndPublishesBeforePreflight_ThenPlansTheNextEpicFromTheSurvivingEpic()
+    public async Task RunAsync_CompletePreviousWorkspace_BlocksAtPreflight_AndRunsNoProcess()
     {
-        FakeProcessRunner git = DirtyGit();
-        Harness h = New(git);
-        // A complete previous-epic workspace, plus the epic that new-epic leaves in place under specs/.
+        Harness h = New();
+        // A complete previous-epic workspace is no longer auto-archived by the planning pipeline.
         await SeedCompletePreviousWorkspaceAsync(h);
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "NEXT EPIC");
-        SimulateNewEpicArchive(git, h);
-        ScriptFullHappyRun(h);
 
         Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        // The rollover ran BEFORE preflight, and preflight evaluated the POST-archive state: the old artifacts
-        // are gone (no "already exists") and specs/epic.md SURVIVED the archive — so the SAME run proceeds
-        // to plan the next epic from it.
-        Assert.Equal(Cli.PlanOutcome.Completed, outcome);
-        Assert.Equal(
-            new[]
-            {
-                "Epic Rollover", "Preflight", "Write Plan", "Generate Adversarial Review Projection",
-                "Adversarial Review", "Revise Plan",
-                "Collect Details", "Extract Milestones", "Extract Details",
-            },
-            PhaseSequence(h.Console));
-        Assert.DoesNotContain(h.Console.Events, e => e.Kind == "error");
+        Assert.Equal(Cli.PlanOutcome.PreflightBlocked, outcome);
+        Assert.Equal(new[] { "Preflight" }, PhaseSequence(h.Console));
+        Assert.Empty(h.Processes.Calls);
+        Assert.Equal(0, h.Runtime.OpenSessions);
+        Assert.Empty(h.Runtime.OneShotCalls);
         Assert.Equal(
             "NEXT EPIC",
             await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic)));
-
-        // new-epic ran exactly once, against the provided directory, and BEFORE any publish (its archive is
-        // what the first commit records). (Matched as the only non-git invocation — robust to the
-        // NEW_EPIC_EXECUTABLE resolution tests running in parallel elsewhere in the assembly.)
-        var newEpic = Assert.Single(h.Processes.Calls, c => c.FileName != "git");
-        Assert.Equal(h.Repo.Path, newEpic.WorkingDirectory);
-        int newEpicIndex = h.Processes.Calls.FindIndex(c => c.FileName != "git");
-        int firstCommitIndex = h.Processes.Calls.FindIndex(c => c.FileName == "git" && c.Args[0] == "commit");
-        Assert.True(newEpicIndex < firstCommitIndex, "new-epic must run before the archive publish");
-
-        // The full ordered commit cadence: the archive's submodule commit AND its IMMEDIATE parent gitlink
-        // pointer land first (before preflight could have blocked), then one submodule commit per
-        // artifact-mutating step, then exactly ONE more parent gitlink commit at the very end.
-        var allCommits = git.Calls
-            .Where(c => c.FileName == "git" && c.Args[0] == "commit")
-            .Select(c => (Message: c.Args[2], Parent: !IsSubmodule(c.WorkingDirectory)))
-            .ToList();
-        Assert.Equal(
-            new[]
-            {
-                (Cli.AgentsSubmodulePublisher.ArchivePreviousEpicMessage, false),
-                (Cli.AgentsSubmodulePublisher.GitlinkPointerMessage, true),
-                (Cli.AgentsSubmodulePublisher.WritePlanMessage, false),
-                (Cli.AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage, false),
-                (Cli.AgentsSubmodulePublisher.RevisePlanMessage, false),
-                (Cli.AgentsSubmodulePublisher.CollectDetailsMessage, false),
-                (Cli.AgentsSubmodulePublisher.ExtractMilestonesMessage, false),
-                (Cli.AgentsSubmodulePublisher.ExtractDetailsMessage, false),
-                (Cli.AgentsSubmodulePublisher.GitlinkPointerMessage, true),
-            },
-            allCommits);
+        Assert.Contains(
+            h.Console.Events,
+            e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.Plan) && e.Text.Contains("already exists"));
+        Assert.Contains(
+            h.Console.Events,
+            e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.Details) && e.Text.Contains("already exists"));
+        Assert.Contains(
+            h.Console.Events,
+            e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.OperationalContext) && e.Text.Contains("already exists"));
+        Assert.Contains(
+            h.Console.Events,
+            e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.MilestonesDirectory) && e.Text.Contains("not empty"));
     }
 
     [Fact]
-    public async Task RunAsync_CompletePreviousWorkspace_ButNoEpicEverExisted_ArchivesAndPublishes_ThenPreflightBlocks()
+    public async Task RunAsync_CompletePreviousWorkspace_WithoutEpic_ReportsAllPreflightViolations()
     {
-        FakeProcessRunner git = DirtyGit();
-        Harness h = New(git);
-        // A complete previous-epic workspace but specs/epic.md was NEVER authored: the rollover still
-        // archives (and publishes) the old workspace, then preflight blocks on the missing epic.
+        Harness h = New();
         await SeedCompletePreviousWorkspaceAsync(h);
-        SimulateNewEpicArchive(git, h);
 
         Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        // Preflight evaluated the POST-archive state: its only violation is the missing epic ("author the
-        // next one and rerun"), never "already exists".
         Assert.Equal(Cli.PlanOutcome.PreflightBlocked, outcome);
-        Assert.Equal(new[] { "Epic Rollover", "Preflight" }, PhaseSequence(h.Console));
+        Assert.Equal(new[] { "Preflight" }, PhaseSequence(h.Console));
+        Assert.Empty(h.Processes.Calls);
         Assert.Contains(
             h.Console.Events,
             e => e.Kind == "error" && e.Text.Contains(OrchestrationArtifactPaths.SpecsEpic) && e.Text.Contains("not found"));
-        Assert.DoesNotContain(h.Console.Events, e => e.Kind == "error" && e.Text.Contains("already exists"));
-
-        // new-epic ran exactly once, against the provided directory. (Matched as the only non-git invocation —
-        // robust to the NEW_EPIC_EXECUTABLE resolution tests running in parallel elsewhere in the assembly.)
-        var newEpic = Assert.Single(h.Processes.Calls, c => c.FileName != "git");
-        Assert.Equal(h.Repo.Path, newEpic.WorkingDirectory);
-
-        // The archive's submodule commit AND its parent gitlink pointer both landed even though the run then
-        // blocked at preflight.
-        Assert.Contains(h.Processes.Calls, c =>
-            c.FileName == "git" && IsSubmodule(c.WorkingDirectory) &&
-            c.Args.SequenceEqual(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.ArchivePreviousEpicMessage }));
-        Assert.Contains(h.Processes.Calls, c =>
-            c.FileName == "git" && !IsSubmodule(c.WorkingDirectory) &&
-            c.Args.SequenceEqual(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.GitlinkPointerMessage }));
-
-        // Zero codex calls: the run never got past preflight.
-        Assert.Equal(0, h.Runtime.OpenSessions);
-        Assert.Empty(h.Runtime.OneShotCalls);
+        Assert.Contains(h.Console.Events, e => e.Kind == "error" && e.Text.Contains("already exists"));
     }
 
     [Fact]
-    public async Task RunAsync_IncompletePreviousWorkspace_SkipsNewEpic_AndPreflightReportsTheExistingViolations()
+    public async Task RunAsync_IncompletePreviousWorkspace_PreflightReportsTheExistingViolations()
     {
         Harness h = New();
-        // plan.md only — an incomplete previous workspace is deliberately NOT auto-archived.
+        // plan.md only — existing planning artifacts are operator-owned cleanup.
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "STRAY PLAN");
 
         Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
         Assert.Equal(Cli.PlanOutcome.PreflightBlocked, outcome);
-        // No new-epic invocation, and nothing published before a blocked preflight — no process ran at all.
+        // Nothing is published before a blocked preflight, so no process runs at all.
         Assert.Empty(h.Processes.Calls);
         Assert.Contains(
             h.Console.Events,
@@ -560,47 +489,4 @@ public class PlanPipelineTests
         Assert.DoesNotContain(git.Calls, c => !IsSubmodule(c.WorkingDirectory));
     }
 
-    [Fact]
-    public async Task RunAsync_WhenTheRolloverArchives_ClearsThePersistedDecisionSessionState()
-    {
-        Harness h = New();
-        // A COMPLETE previous workspace (presence-based criterion): plan + details + operational context +
-        // a non-empty milestones directory. The scripted new-epic invocation deletes plan.md so the
-        // rollover's post-gate passes; the run then stops at Preflight (no specs/epic.md) — which is fine,
-        // the clear must already have happened.
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Details), "DETAILS");
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await h.Store.WriteAsync(Resolve(h.Repo, MilestonePath("m1.md")), "- [ ] t");
-        h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
-        h.Processes.Handler = (_, args) =>
-        {
-            if (args.Count == 0 || args.Contains("new-epic"))
-            {
-                h.Store.DeleteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan)).Wait();
-            }
-
-            return FakeProcessRunner.Ok();
-        };
-
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
-
-        Assert.Equal(Cli.PlanOutcome.PreflightBlocked, outcome);
-        Assert.Equal(1, h.Resume.ClearCalls);
-        Assert.Null(h.Resume.State);
-    }
-
-    [Fact]
-    public async Task RunAsync_WhenNoRolloverHappens_LeavesThePersistedDecisionSessionStateAlone()
-    {
-        Harness h = New();
-        // An incomplete workspace: the rollover is skipped and preflight blocks. The resume state survives.
-        h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
-
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
-
-        Assert.Equal(Cli.PlanOutcome.PreflightBlocked, outcome);
-        Assert.Equal(0, h.Resume.ClearCalls);
-        Assert.NotNull(h.Resume.State);
-    }
 }

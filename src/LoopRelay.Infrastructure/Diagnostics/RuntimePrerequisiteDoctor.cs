@@ -18,7 +18,6 @@ public sealed class RuntimePrerequisiteDoctor(
 {
     public const string CodexExecutableVariable = "CODEX_EXECUTABLE";
     public const string DecisionResumeVariable = "LoopRelay_DECISION_RESUME";
-    public const string NewEpicExecutableVariable = "NEW_EPIC_EXECUTABLE";
 
     private readonly Func<string, string?> getEnvironmentVariable =
         getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
@@ -29,7 +28,6 @@ public sealed class RuntimePrerequisiteDoctor(
         var diagnostics = new List<RuntimeDiagnostic>();
         InspectCodexExecutable(diagnostics);
         InspectDecisionResume(diagnostics);
-        InspectNewEpicExecutable(diagnostics);
         return diagnostics;
     }
 
@@ -75,27 +73,6 @@ public sealed class RuntimePrerequisiteDoctor(
             "runtime.decision_resume.invalid",
             RuntimeDiagnosticSeverity.Warning,
             $"{DecisionResumeVariable} should be 0, 1, false, or true."));
-    }
-
-    private void InspectNewEpicExecutable(List<RuntimeDiagnostic> diagnostics)
-    {
-        string? value = getEnvironmentVariable(NewEpicExecutableVariable);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            diagnostics.Add(new RuntimeDiagnostic(
-                "runtime.new_epic_executable.default",
-                RuntimeDiagnosticSeverity.Info,
-                $"{NewEpicExecutableVariable} is not set; the plan pipeline will use cmd.exe /c new-epic."));
-            return;
-        }
-
-        if (!fileExists(value))
-        {
-            diagnostics.Add(new RuntimeDiagnostic(
-                "runtime.new_epic_executable.not_found",
-                RuntimeDiagnosticSeverity.Error,
-                $"{NewEpicExecutableVariable} points to a missing file: {value}."));
-        }
     }
 
     private static bool IsBooleanFlag(string value) =>

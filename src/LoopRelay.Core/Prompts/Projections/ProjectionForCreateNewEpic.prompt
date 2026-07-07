@@ -1046,7 +1046,7 @@ When this projection is used by CreateNewEpic:
 
 Before finalizing, verify:
 
-- The projection contains new-epic authoring semantics only.
+- The projection contains CreateNewEpic authoring semantics only.
 - No new epic proposal is included.
 - No repository state is included.
 - No roadmap completion state is included.

@@ -13,6 +13,6 @@ based on executable evidence.
 | `.agents/decisions/decisions.md` | Loop CLI | Human decision session output | Human-authored direction |
 | `.agents/handoffs/handoff.md` | Execution agent | Agent handoff between turns | Compatibility evidence |
 | `.agents/milestones/*.md` | Plan CLI / execution agent | Milestone checklist rendering | Compatibility projection |
-| `.agents/archive/**` | Plan CLI / new-epic | Historical artifact archive | Historical evidence |
+| `.agents/archive/**` | Manual archive tooling | Historical artifact archive | Historical evidence |
 | `.agents/roadmap/**` | Roadmap CLI | Roadmap projection and transition artifacts | Legacy projection |
 | `.agents/evidence/**` | Roadmap CLI | Numbered execution and transition evidence | Evidence |

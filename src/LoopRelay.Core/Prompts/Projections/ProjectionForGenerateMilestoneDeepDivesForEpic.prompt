@@ -511,7 +511,7 @@ Exclude:
 - epic validation / disposition logic
 - realignment patch rules
 - reimagination replacement rules
-- new-epic authoring rules
+- CreateNewEpic authoring rules
 - split-epic decomposition rules
 - roadmap completion state
 - completed epic history
@@ -916,7 +916,7 @@ Examples:
 - epic validation logic
 - realignment rules
 - reimagination rules
-- new-epic authoring rules
+- CreateNewEpic authoring rules
 - split-epic decomposition rules
 - execution guidance
 - operational context
@@ -990,5 +990,5 @@ Before finalizing, verify:
 - Blocking rules are explicit.
 - Traceability requirements are explicit.
 - Canonical vocabulary is preserved.
-- Excluded operational, implementation, repository, prioritization, validation, realignment, reimagination, new-epic, and split-epic details are not present.
+- Excluded operational, implementation, repository, prioritization, validation, realignment, reimagination, CreateNewEpic, and split-epic details are not present.
 - The projection is compact enough to be passed into GenerateMilestoneDeepDivesForEpic.
