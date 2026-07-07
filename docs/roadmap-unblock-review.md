@@ -8,6 +8,8 @@ The Roadmap CLI separates three operator intents:
 
 Normal `run` does not retry blocked states. A blocked state means the runtime stopped because a safety contract failed or required operator repair. Recovery is only allowed through `unblock`, which revalidates persisted evidence before writing a new transition.
 
+Preflight, resume-planning, and generic runtime blockers discovered by `run` are ephemeral. They are reported to the operator, but `run` does not convert them into `EvidenceBlocked`, append blocker rows, or write generic blocker evidence. The last durable workflow state remains authoritative until the operator fixes the condition and reruns, or manually updates state to record a durable blocker.
+
 ## Review Model
 
 `RoadmapUnblockPlanner` is the recovery boundary. It treats `TransitionIntent` as recovery evidence, not dispatch authority. The planner combines:

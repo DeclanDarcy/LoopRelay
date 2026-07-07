@@ -119,15 +119,7 @@ internal sealed class RoadmapStateMachine(
         }
         catch (RoadmapStepException exception)
         {
-            if (startupPlan.PreflightRequirement == RoadmapPreflightRequirement.RequiredForInitialize || persistedState is null)
-            {
-                await WriteBlockedStateAsync(RoadmapState.EvidenceBlocked, "Preflight", exception.Message);
-            }
-            else
-            {
-                await WritePreflightInterruptedStateAsync(persistedState, exception.Message);
-            }
-
+            await ReportEphemeralBlockerAsync("Project Context preflight", exception.Message, persistedState?.CurrentState);
             console.Error(exception.Message);
             return RoadmapOutcome.PreflightBlocked;
         }
@@ -150,13 +142,13 @@ internal sealed class RoadmapStateMachine(
         }
         catch (RoadmapStepException exception)
         {
-            await WriteBlockedStateAsync(RoadmapState.EvidenceBlocked, "RoadmapStateMachine", exception.Message);
+            await ReportEphemeralBlockerAsync("Roadmap state machine", exception.Message);
             console.Error(exception.Message);
             return RoadmapOutcome.Failed;
         }
         catch (Exception exception)
         {
-            await WriteBlockedStateAsync(RoadmapState.EvidenceBlocked, "RoadmapStateMachine", exception.Message);
+            await ReportEphemeralBlockerAsync("Roadmap state machine", exception.Message);
             console.Error(exception.Message);
             return RoadmapOutcome.Failed;
         }
@@ -230,7 +222,7 @@ internal sealed class RoadmapStateMachine(
 
             case RoadmapResumeAction.Block:
                 console.Warn(resumePlan.Reason);
-                await WriteBlockedStateAsync(RoadmapState.EvidenceBlocked, "ResumePlanning", resumePlan.Reason);
+                await ReportEphemeralBlockerAsync("Resume planning", resumePlan.Reason, resumePlan.SourceState);
                 return RoadmapOutcome.Paused;
 
             default:
@@ -1974,85 +1966,13 @@ internal sealed class RoadmapStateMachine(
     private static string ExecutionCommandText(ExecutionDispositionCommand command) =>
         ExecutionDispositionProtocol.CommandText(command);
 
-    private async Task WriteBlockedStateAsync(RoadmapState state, string transition, string reason)
+    private async Task ReportEphemeralBlockerAsync(string source, string reason, RoadmapState? preservedState = null)
     {
-        string blockerReason = OneLine(reason);
-        string path = await artifacts.WriteNumberedEvidenceAsync(
-            RoadmapArtifactPaths.BlockerEvidenceDirectory,
-            "roadmap-transition-blocked",
-            RoadmapBlockedArtifact.Render(state, transition, blockerReason, "Address the blocker and rerun the roadmap CLI.", "None", reason, DateTimeOffset.UtcNow));
-        await SaveStateAsync(
-            state,
-            TransitionStatus.Failed,
-            RoadmapState.CoreReady,
-            state,
-            transition,
-            "None",
-            path,
-            "Blocked",
-            DateTimeOffset.UtcNow,
-            DateTimeOffset.UtcNow,
-            null,
-            [new BlockerRow(blockerReason, "Address the blocker and rerun the roadmap CLI.")],
-            new RoadmapTransitionIntent("ResolveBlocker", state, [path]),
-            ["Resolve blocker and rerun"]);
-    }
-
-    private async Task WritePreflightInterruptedStateAsync(RoadmapStateDocument interruptedState, string reason)
-    {
-        DateTimeOffset createdAt = DateTimeOffset.UtcNow;
-        string blockerReason = OneLine(reason);
-        string details = $"""
-            Project Context preflight failed before runtime execution could resume.
-
-            ## Interrupted Workflow
-
-            | Field | Value |
-            |---|---|
-            | Previous Current State | {interruptedState.CurrentState} |
-            | Previous Last Transition | {interruptedState.LastTransition.Prompt} |
-            | Previous Transition Status | {interruptedState.LastTransition.Status} |
-            | Previous Transition Intent | {interruptedState.TransitionIntent.Intent} |
-            | Previous Dispatch State | {interruptedState.TransitionIntent.DispatchState} |
-            | Previous Evidence Paths | {FormatList(interruptedState.TransitionIntent.EvidencePaths)} |
-
-            ## Previous Blockers
-
-            {FormatBlockers(interruptedState.Blockers)}
-
-            ## Preflight Failure
-
-            {reason}
-            """;
-        string path = await artifacts.WriteNumberedEvidenceAsync(
-            RoadmapArtifactPaths.BlockerEvidenceDirectory,
-            "roadmap-preflight-blocked",
-            RoadmapBlockedArtifact.Render(
-                interruptedState.CurrentState,
-                "Preflight",
-                blockerReason,
-                "Repair Project Context and rerun the roadmap CLI; the interrupted workflow context remains authoritative.",
-                RoadmapArtifactPaths.State,
-                details,
-                createdAt));
-
-        ProjectionManifest manifest = await manifestStore.LoadAsync();
-        int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md")).Count;
-        await stateStore.SaveAsync(interruptedState with
-        {
-            ActiveArtifacts = await ActiveArtifactRowsAsync(),
-            Blockers = AppendPreflightBlocker(interruptedState.Blockers, blockerReason, path),
-            LastDecisionId = await decisionLedger.LastDecisionIdAsync(),
-            RetiredEpicsCount = interruptedState.RetiredEpics.Count,
-            SplitFamiliesCount = splitFamilyCount,
-            ProjectionManifestCounts = new ProjectionManifestCounts(
-                manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Valid),
-                manifest.Entries.Count(entry => entry.StaleStatus != ProjectionStaleStatus.Fresh),
-                manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Invalid)),
-            NextValidTransitions = AppendNextTransition(
-                interruptedState.NextValidTransitions,
-                "Repair Project Context and rerun"),
-        });
+        preservedState ??= (await stateStore.LoadAsync())?.CurrentState;
+        string stateMessage = preservedState is null
+            ? "No persisted roadmap state was written."
+            : $"Persisted roadmap state remains {preservedState}.";
+        console.Warn($"{source} blocked: {OneLine(reason)} {stateMessage} Fix the condition and rerun, or update state manually if this should be a durable blocker.");
     }
 
     private async Task WriteCancelledStateAsync()
@@ -2102,25 +2022,6 @@ internal sealed class RoadmapStateMachine(
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(path => !string.Equals(path, "None", StringComparison.OrdinalIgnoreCase))
             .ToArray();
-    }
-
-    private static IReadOnlyList<BlockerRow> AppendPreflightBlocker(
-        IReadOnlyList<BlockerRow> existing,
-        string reason,
-        string evidencePath)
-    {
-        if (existing.Any(blocker => string.Equals(blocker.Blocker, reason, StringComparison.Ordinal)))
-        {
-            return existing;
-        }
-
-        return
-        [
-            ..existing,
-            new BlockerRow(
-                reason,
-                $"Repair Project Context and rerun the roadmap CLI. See {evidencePath}."),
-        ];
     }
 
     private static IReadOnlyList<string> AppendNextTransition(

@@ -202,7 +202,7 @@ public sealed class RoadmapFailurePersistenceTests
     }
 
     [Fact]
-    public async Task Preflight_failure_uses_generic_safety_net()
+    public async Task Preflight_failure_does_not_persist_ephemeral_blocker()
     {
         using var repo = new TempRepo();
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
@@ -210,12 +210,12 @@ public sealed class RoadmapFailurePersistenceTests
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).RunAsync(CancellationToken.None);
 
         Assert.Equal(Cli.RoadmapOutcome.PreflightBlocked, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        AssertGenericBlockedState(repo, state, "Preflight");
+        Assert.Null(await new RoadmapStateStore(repo.Artifacts).LoadAsync());
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
     }
 
     [Fact]
-    public async Task Unexpected_runtime_exception_uses_generic_safety_net()
+    public async Task Unexpected_runtime_exception_preserves_last_durable_state()
     {
         using var repo = SeedRepo(includeCompletionContext: true);
         var runtime = new ThrowingAgentRuntime(new InvalidOperationException("agent transport unavailable"));
@@ -224,8 +224,14 @@ public sealed class RoadmapFailurePersistenceTests
 
         Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        AssertGenericBlockedState(repo, state, "RoadmapStateMachine");
-        Assert.Contains("agent transport unavailable", Assert.Single(state.Blockers).Blocker, StringComparison.Ordinal);
+        Assert.Equal(Cli.RoadmapState.CoreReady, state.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Completed, state.LastTransition.Status);
+        Assert.Equal("Preflight", state.LastTransition.Prompt);
+        Assert.Equal("CoreReady", state.LastTransition.Decision);
+        Assert.Empty(state.Blockers);
+        Assert.Equal("None", state.TransitionIntent.Intent);
+        Assert.Equal(Cli.RoadmapState.CoreReady, state.TransitionIntent.DispatchState);
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
     }
 
     [Fact]
@@ -383,21 +389,6 @@ public sealed class RoadmapFailurePersistenceTests
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(line => JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
             .ToArray();
-
-    private static void AssertGenericBlockedState(TempRepo repo, Cli.RoadmapStateDocument state, string prompt)
-    {
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
-        Assert.Equal(Cli.TransitionStatus.Failed, state.LastTransition.Status);
-        Assert.Equal(Cli.RoadmapState.CoreReady, state.LastTransition.From);
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.LastTransition.To);
-        Assert.Equal(prompt, state.LastTransition.Prompt);
-        Assert.Equal("None", state.LastTransition.Projection);
-        Assert.Equal("Blocked", state.LastTransition.Decision);
-        Assert.StartsWith(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, state.LastTransition.Output, StringComparison.Ordinal);
-        Assert.Equal("ResolveBlocker", state.TransitionIntent.Intent);
-        Assert.Equal([state.LastTransition.Output], state.TransitionIntent.EvidencePaths);
-        Assert.Contains("# Roadmap Transition Blocked", repo.Read(state.LastTransition.Output), StringComparison.Ordinal);
-    }
 
     private static string ExistingEpicSelection() => """
         # Next Strategic Initiative Selection

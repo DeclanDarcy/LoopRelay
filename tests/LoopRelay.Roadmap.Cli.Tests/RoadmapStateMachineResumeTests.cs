@@ -74,7 +74,7 @@ public sealed class RoadmapStateMachineResumeTests
     }
 
     [Fact]
-    public async Task Fresh_repository_missing_project_context_writes_preflight_blocker()
+    public async Task Fresh_repository_missing_project_context_does_not_write_preflight_blocker()
     {
         using var repo = new TempRepo();
         var runtime = new ScriptedAgentRuntime();
@@ -84,11 +84,8 @@ public sealed class RoadmapStateMachineResumeTests
         Assert.Equal(Cli.RoadmapOutcome.PreflightBlocked, outcome);
         Assert.Equal(0, runtime.OneShotCalls);
         Cli.RoadmapStateDocument? state = await new RoadmapStateStore(repo.Artifacts).LoadAsync();
-        Assert.NotNull(state);
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
-        Assert.Equal("Preflight", state.LastTransition.Prompt);
-        Assert.Equal("ResolveBlocker", state.TransitionIntent.Intent);
-        Assert.Contains(state.Blockers, blocker => blocker.Blocker.Contains("Project Context source contract violation", StringComparison.Ordinal));
+        Assert.Null(state);
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
     }
 
     [Fact]
@@ -107,6 +104,7 @@ public sealed class RoadmapStateMachineResumeTests
             blockers: [new Cli.BlockerRow("Original blocker", "Resolve original blocker")],
             intent: intent,
             nextTransitions: ["GenerateMilestoneDeepDives"]));
+        string stateBefore = repo.Read(Cli.RoadmapArtifactPaths.State);
         var runtime = new ScriptedAgentRuntime();
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
@@ -124,10 +122,36 @@ public sealed class RoadmapStateMachineResumeTests
         Assert.Equal(Cli.RoadmapState.ActiveEpicReady, state.TransitionIntent.DispatchState);
         Assert.Contains(".agents/evidence/original.md", state.TransitionIntent.EvidencePaths);
         Assert.Contains(state.Blockers, blocker => blocker.Blocker == "Original blocker");
-        Assert.Contains(state.Blockers, blocker => blocker.Blocker.Contains("Project Context source contract violation", StringComparison.Ordinal));
+        Assert.DoesNotContain(state.Blockers, blocker => blocker.Blocker.Contains("Project Context source contract violation", StringComparison.Ordinal));
         Assert.Contains("GenerateMilestoneDeepDives", state.NextValidTransitions);
-        Assert.Contains("Repair Project Context and rerun", state.NextValidTransitions);
+        Assert.DoesNotContain("Repair Project Context and rerun", state.NextValidTransitions);
+        Assert.Equal(stateBefore, repo.Read(Cli.RoadmapArtifactPaths.State));
         Assert.DoesNotContain("| Prompt | Preflight |", repo.Read(Cli.RoadmapArtifactPaths.State), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Resume_planning_block_preserves_persisted_state()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(
+            Cli.RoadmapState.ActiveEpicReady,
+            from: Cli.RoadmapState.CreateNewEpic,
+            prompt: "CreateNewEpic",
+            output: Cli.RoadmapArtifactPaths.ActiveEpic,
+            nextTransitions: ["GenerateMilestoneDeepDives"]));
+        string stateBefore = repo.Read(Cli.RoadmapArtifactPaths.State);
+        var runtime = new ScriptedAgentRuntime();
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.Equal(0, runtime.OneShotCalls);
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, state.CurrentState);
+        Assert.Empty(state.Blockers);
+        Assert.Equal(stateBefore, repo.Read(Cli.RoadmapArtifactPaths.State));
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
     }
 
     [Fact]
