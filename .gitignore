@@ -10,9 +10,6 @@
 *.userosscache
 *.sln.docstates
 
-.agents/specs/
-.agents/**/specs/
-
 # Repo-local Codex profiles keep config tracked but isolate auth, sessions, and
 # history from the normal user profile.
 profiles/*/.codex/*
