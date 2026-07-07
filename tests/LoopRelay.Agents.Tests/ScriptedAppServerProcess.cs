@@ -35,6 +35,10 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
 
     public string ApprovalCommand { get; init; } = "git push";
 
+    public bool EmitFileChangeApproval { get; init; }
+
+    public string ApprovalTargetPath { get; init; } = ".agents/details.md";
+
     /// <summary>m10 (B): how many item/agentMessage/delta notifications each turn emits (long-output stress).</summary>
     public int DeltaCount { get; init; } = 1;
 
@@ -191,7 +195,23 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
                 EmitResponse(id, new { turn = new { id = $"u{index}", status = "inProgress" } });
                 if (EmitApprovalRequest)
                 {
-                    EmitServerRequest("appr-1", "item/commandExecution/requestApproval", new { itemId = "i1", command = ApprovalCommand });
+                    if (EmitFileChangeApproval)
+                    {
+                        EmitServerRequest(
+                            "appr-1",
+                            "item/fileChange/requestApproval",
+                            new
+                            {
+                                itemId = "i1",
+                                operation = "write",
+                                targetPath = ApprovalTargetPath,
+                                grantRoot = ApprovalTargetPath
+                            });
+                    }
+                    else
+                    {
+                        EmitServerRequest("appr-1", "item/commandExecution/requestApproval", new { itemId = "i1", command = ApprovalCommand });
+                    }
                 }
 
                 EmitNotification("turn/started", new { threadId = "thread-xyz", turn = new { id = $"u{index}", status = "inProgress" } });

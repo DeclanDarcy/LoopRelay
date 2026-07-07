@@ -6,6 +6,7 @@ using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Permissions.Models;
 using LoopRelay.Projections;
 
 namespace LoopRelay.Cli;
@@ -31,13 +32,11 @@ internal sealed class DecisionSession(
     ILoopConsole console,
     Repository repository,
     IDecisionCostModel? costModel = null,
-    ISandboxWorkspaceFactory? sandboxFactory = null,
     IDecisionSessionResumeStore? resumeStore = null,
     IProjectContextProjectionService? projectionService = null,
     bool resumeEnabled = true) : IAsyncDisposable
 {
     private readonly IDecisionCostModel costModel = costModel ?? new EffectiveTokenCostModel();
-    private readonly ISandboxWorkspaceFactory sandboxFactory = sandboxFactory ?? new TempSandboxWorkspaceFactory();
     private readonly IDecisionSessionResumeStore resumeStore = resumeStore ?? new NullDecisionSessionResumeStore();
     private IAgentSession? session;
     private bool seeded;
@@ -221,8 +220,8 @@ internal sealed class DecisionSession(
 
     /// <summary>
     /// Transfer recycle, mirroring RepositoryOrchestrator.PrepareTransferAsync: extract an operational delta
-    /// from the warm process, close it, rewrite operational_context.md via a one-shot operational turn, then
-    /// optimize the operational documents (plan/details/context) via a second sandboxed one-shot (CLI-only;
+    /// from the warm process, close it, rewrite operational_context.md via a scoped artifact operation, then
+    /// optimize the operational documents (plan/details/context) via a second scoped artifact operation (CLI-only;
     /// the backend transfer does not run the optimization — see technical-debt.md). The fresh process is NOT
     /// reseeded here — RunAsync reopens it and its next proposal primes it with the just-rewritten context
     /// inline (no legacy StartDecisionSession* turn), so this leaves the process closed.
@@ -284,70 +283,34 @@ internal sealed class DecisionSession(
             costModel.Measure(delta.Usage) + costModel.Measure(update.Usage) + costModel.Measure(optimize.Usage));
     }
 
-    // One-shot sandboxes seed their inputs FLAT at the workspace root (bare filenames, not an .agents/ mirror):
-    // the workspace is purpose-built for the single turn, and a dot-hidden .agents/ directory hides the seeds
-    // from default listings (rg --files, Get-ChildItem without -Force) — observed to cost a live evolution agent
-    // several exploration turns before it found its inputs. The one-shot prompts name the bare filenames.
-    private static string SandboxSeedName(string artifactPath) => Path.GetFileName(artifactPath);
-
-    // Stage 2 (mirrors RepositoryOrchestrator.EvolveOperationalContextAsync): evolve the operational context in an
-    // ISOLATED sandbox workspace seeded with ONLY operational_context.md + operational_delta.md, so codex --cd
-    // confines it there and it no longer re-explores the whole repo. The evolved context is copied back into the
-    // repo (where the next proposal reads it to prime the fresh process). Returns the update turn for cost accounting.
+    // Evolves the operational context through a fresh app-server session scoped to the context and delta artifacts.
+    // Direct repository writes are wrapped in a rollback transaction so a failed turn/gate preserves inputs.
     private async Task<AgentTurnResult> EvolveOperationalContextAsync(
         string deltaOutput, CancellationToken cancellationToken)
     {
-        await using ISandboxWorkspace sandbox =
-            await sandboxFactory.CreateAsync("operational-context-evolution", cancellationToken);
-        string sandboxContextPath = sandbox.Resolve(SandboxSeedName(OrchestrationArtifactPaths.OperationalContext));
-        string sandboxDeltaPath = sandbox.Resolve(SandboxSeedName(OrchestrationArtifactPaths.OperationalDelta));
+        await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, deltaOutput);
 
-        // Seed the workspace with EXACTLY the two evolution inputs.
-        string currentContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
-        await artifacts.WriteAbsoluteAsync(sandboxContextPath, currentContext);
-        await artifacts.WriteAbsoluteAsync(sandboxDeltaPath, deltaOutput);
+        var operation = new DecisionArtifactOperation(
+            Label: "operational-context-evolution",
+            Prompt: UpdateOperationalContext.Text,
+            Profile: new OperationPermissionProfile(
+                "operational-context-evolution",
+                repository.Path,
+                [OrchestrationArtifactPaths.OperationalContext, OrchestrationArtifactPaths.OperationalDelta],
+                [],
+                [OrchestrationArtifactPaths.OperationalContext],
+                []),
+            RequiredOutputs: [OrchestrationArtifactPaths.OperationalContext],
+            ChangedGuard: OrchestrationArtifactPaths.OperationalContext);
 
-        var updateRenderer = new ConsoleTurnRenderer(console);
-        AgentTurnResult update = await runtime.RunOneShotAsync(
-            AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh", workingDirectory: sandbox.RootPath),
-            UpdateOperationalContext.Text,
-            updateRenderer.Stream,
+        return await RunArtifactOperationAsync(
+            operation,
+            "Transfer left no operational_context.md to seed the next decision session from.",
+            "evolution left operational_context.md unchanged — the operational delta was not applied",
             cancellationToken);
-        if (update.State != AgentTurnState.Completed)
-        {
-            throw new LoopStepException(WithDiagnostics(
-                $"Update-operational-context turn ended in state {update.State}.", update.Diagnostics));
-        }
-
-        updateRenderer.EchoIfSilent(update.Output);
-
-        if (!await artifacts.ExistsAbsoluteAsync(sandboxContextPath))
-        {
-            throw new LoopStepException("Transfer left no operational_context.md to seed the next decision session from.");
-        }
-
-        string evolved = await artifacts.ReadAbsoluteAsync(sandboxContextPath) ?? string.Empty;
-
-        // An existence check alone is self-satisfied — the CLI seeded that very file above. A turn that
-        // "completed" without touching the context (e.g. the agent never ran the rewrite) means the
-        // operational delta was NOT applied; failing here, BEFORE the copy-back (and thus before
-        // TransferAsync archives the delta), keeps the live operational_delta.md around for a retry
-        // instead of consuming it unapplied. (No such guard on the optimize step — a no-op
-        // optimization is legitimate.)
-        if (string.Equals(evolved, currentContext, StringComparison.Ordinal))
-        {
-            throw new LoopStepException(
-                "evolution left operational_context.md unchanged — the operational delta was not applied");
-        }
-
-        await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalContext, evolved); // copy the evolved context back into the repo
-        // Size-health is recorded by the optimization pass that follows — one measurement per transfer, on the
-        // final revision the next proposal actually reads.
-        return update;
     }
 
-    // The operational documents the post-evolution optimization one-shot is scoped to — its sandbox is seeded
-    // with EXACTLY these (each existence-guarded) and only these are copied back.
+    // The operational documents the post-evolution optimization operation is scoped to.
     private static readonly string[] OptimizationDocuments =
     [
         OrchestrationArtifactPaths.Plan,
@@ -355,63 +318,142 @@ internal sealed class DecisionSession(
         OrchestrationArtifactPaths.OperationalContext,
     ];
 
-    // Immediately after the context evolution, optimize the operational documents in a SECOND isolated sandbox
-    // with the same posture (codex --cd confined, workspace-write): seeded with plan.md + details.md + the
-    // just-evolved operational_context.md, optimized in place, then copied back into the repo. details.md (and a
-    // missing plan.md) are seeded and copied back only when present — a file the agent deleted in its sandbox is
-    // left untouched in the repo, never deleted. operational_context.md must survive the turn (the next proposal
-    // seeds the fresh process from it), so its absence fails the transfer, mirroring the evolution's hard check.
+    // Immediately after the context evolution, optimize the operational documents in a second scoped app-server
+    // session. Optional documents may be touched only when they existed before this operation.
     private async Task<AgentTurnResult> OptimizeOperationalDocumentsAsync(CancellationToken cancellationToken)
     {
-        await using ISandboxWorkspace sandbox =
-            await sandboxFactory.CreateAsync("operational-documents-optimization", cancellationToken);
-
+        var existingDocuments = new List<string>();
         foreach (string document in OptimizationDocuments)
         {
-            string? content = await artifacts.ReadAsync(document);
-            if (content is not null)
+            if (await artifacts.ExistsAsync(document))
             {
-                await artifacts.WriteAbsoluteAsync(sandbox.Resolve(SandboxSeedName(document)), content);
+                existingDocuments.Add(document);
             }
         }
 
-        var optimizeRenderer = new ConsoleTurnRenderer(console);
-        AgentTurnResult optimize = await runtime.RunOneShotAsync(
-            AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh", workingDirectory: sandbox.RootPath),
-            OptimizeOperationalDocuments.Text,
-            optimizeRenderer.Stream,
+        var operation = new DecisionArtifactOperation(
+            Label: "operational-documents-optimization",
+            Prompt: OptimizeOperationalDocuments.Text,
+            Profile: new OperationPermissionProfile(
+                "operational-documents-optimization",
+                repository.Path,
+                existingDocuments,
+                [],
+                existingDocuments,
+                []),
+            RequiredOutputs: [OrchestrationArtifactPaths.OperationalContext],
+            ChangedGuard: null);
+
+        AgentTurnResult optimize = await RunArtifactOperationAsync(
+            operation,
+            "Optimization left no operational_context.md to seed the next decision session from.",
+            unchangedGuardFailure: null,
             cancellationToken);
-        if (optimize.State != AgentTurnState.Completed)
-        {
-            throw new LoopStepException(WithDiagnostics(
-                $"Optimize-operational-documents turn ended in state {optimize.State}.", optimize.Diagnostics));
-        }
 
-        optimizeRenderer.EchoIfSilent(optimize.Output);
-
-        if (!await artifacts.ExistsAbsoluteAsync(sandbox.Resolve(SandboxSeedName(OrchestrationArtifactPaths.OperationalContext))))
-        {
-            throw new LoopStepException("Optimization left no operational_context.md to seed the next decision session from.");
-        }
-
-        foreach (string document in OptimizationDocuments)
-        {
-            string absolute = sandbox.Resolve(SandboxSeedName(document));
-            if (!await artifacts.ExistsAbsoluteAsync(absolute))
-            {
-                continue;
-            }
-
-            string optimized = await artifacts.ReadAbsoluteAsync(absolute) ?? string.Empty;
-            await artifacts.WriteAsync(document, optimized);
-            if (document == OrchestrationArtifactPaths.OperationalContext)
-            {
-                RecordOperationalContextHealth(optimized.Length);
-            }
-        }
-
+        string optimizedContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
+        RecordOperationalContextHealth(optimizedContext.Length);
         return optimize;
     }
+
+    private async Task<AgentTurnResult> RunArtifactOperationAsync(
+        DecisionArtifactOperation operation,
+        string missingRequiredMessage,
+        string? unchangedGuardFailure,
+        CancellationToken cancellationToken)
+    {
+        string? changedGuardSnapshot = null;
+        foreach (string read in operation.Profile.AllowedReads)
+        {
+            string? content = await artifacts.ReadAsync(read);
+            if (content is null)
+            {
+                throw new LoopStepException($"{operation.Label}: required input {read} was not found.");
+            }
+
+            if (operation.ChangedGuard is not null && string.Equals(read, operation.ChangedGuard, StringComparison.Ordinal))
+            {
+                changedGuardSnapshot = content;
+            }
+        }
+
+        ArtifactMutationTransaction transaction =
+            await ArtifactMutationTransaction.CaptureAsync(artifacts.Store, repository, operation.Profile);
+
+        IAgentSession? scopedSession = null;
+        bool keepChanges = false;
+        try
+        {
+            var renderer = new ConsoleTurnRenderer(console);
+            scopedSession = await runtime.OpenSessionAsync(
+                AgentSpecs.ScopedArtifactOperation(
+                    repository,
+                    AgentEffortLevel.High,
+                    identifier: "xhigh",
+                    operation.Profile),
+                cancellationToken);
+            AgentTurnResult result = await scopedSession.RunTurnAsync(
+                operation.Prompt,
+                renderer.Stream,
+                cancellationToken);
+            if (result.State != AgentTurnState.Completed)
+            {
+                throw new LoopStepException(WithDiagnostics(
+                    $"{operation.Label} turn ended in state {result.State}.", result.Diagnostics));
+            }
+
+            renderer.EchoIfSilent(result.Output);
+
+            IReadOnlyList<string> deleted = await transaction.DeletedSnapshotFilesAsync();
+            if (deleted.Count > 0)
+            {
+                throw new LoopStepException(
+                    $"{operation.Label} deleted declared artifact(s): {string.Join(", ", deleted)}.");
+            }
+
+            foreach (string requiredOutput in operation.RequiredOutputs)
+            {
+                if (!await artifacts.ExistsAsync(requiredOutput))
+                {
+                    throw new LoopStepException(missingRequiredMessage);
+                }
+            }
+
+            if (operation.ChangedGuard is { } changedGuard)
+            {
+                string changedContent = await artifacts.ReadAsync(changedGuard) ?? string.Empty;
+                if (string.Equals(changedContent, changedGuardSnapshot ?? string.Empty, StringComparison.Ordinal))
+                {
+                    throw new LoopStepException(unchangedGuardFailure ?? $"{operation.Label} left {changedGuard} unchanged.");
+                }
+            }
+
+            keepChanges = true;
+            return result;
+        }
+        catch
+        {
+            if (!keepChanges)
+            {
+                await transaction.RestoreAsync();
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (scopedSession is not null)
+            {
+                await runtime.CloseSessionAsync(scopedSession);
+            }
+        }
+    }
+
+    private sealed record DecisionArtifactOperation(
+        string Label,
+        string Prompt,
+        OperationPermissionProfile Profile,
+        IReadOnlyList<string> RequiredOutputs,
+        string? ChangedGuard);
 
     // Size-health guard: warn on a sustained upward ratchet of the operational-context size across consecutive
     // transfers. Kept local so the CLI does not depend on the legacy orchestration host's monitor service.

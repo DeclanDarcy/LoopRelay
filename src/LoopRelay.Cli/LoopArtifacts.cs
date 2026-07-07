@@ -13,6 +13,8 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
 {
     public Repository Repository => repository;
 
+    public IArtifactStore Store => store;
+
     public Task<bool> ExistsAsync(string relativePath) =>
         store.ExistsAsync(Resolve(relativePath));
 
@@ -22,8 +24,7 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
     public Task WriteAsync(string relativePath, string content) =>
         store.WriteAsync(Resolve(relativePath), content);
 
-    // Absolute-path access for the Stage-2 sandbox workspace, which lives OUTSIDE the repository root (so the
-    // repo-relative Resolve, which validates the boundary, cannot be used for it).
+    // Absolute-path access for callers that already resolved and validated their target path.
     public Task<bool> ExistsAbsoluteAsync(string absolutePath) => store.ExistsAsync(absolutePath);
 
     public Task<string?> ReadAbsoluteAsync(string absolutePath) => store.ReadAsync(absolutePath);

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using LoopRelay.Permissions.Codex;
+using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Services;
 
 namespace LoopRelay.Permissions.Tests;
@@ -45,6 +46,30 @@ public sealed class PermissionGatewayTests
         Assert.Equal(CodexPermissionAdapter.DenialDecision, Decision(response));
     }
 
+    [Fact]
+    public void Scoped_file_change_accepts_matching_operation_write()
+    {
+        using TempRepo repo = TempRepo.Create();
+        byte[] response = Gateway().Evaluate(
+            Encoding.UTF8.GetBytes(
+                """{"jsonrpc":"2.0","id":"file-1","method":"item/fileChange/requestApproval","params":{"threadId":"t","turnId":"u","itemId":"i","operation":"write","targetPath":".agents/details.md","grantRoot":".agents/details.md"}}"""),
+            new PermissionGatewayContext("repo", repo.Root, Profile(repo.Root)));
+
+        Assert.Equal(CodexPermissionAdapter.AcceptDecision, Decision(response));
+    }
+
+    [Fact]
+    public void Scoped_safe_command_is_declined_despite_global_allow_list()
+    {
+        using TempRepo repo = TempRepo.Create();
+        byte[] response = Gateway().Evaluate(
+            Encoding.UTF8.GetBytes(
+                """{"jsonrpc":"2.0","id":"cmd-1","method":"item/commandExecution/requestApproval","params":{"threadId":"t","turnId":"u","itemId":"i","command":"dotnet test"}}"""),
+            new PermissionGatewayContext("repo", repo.Root, Profile(repo.Root)));
+
+        Assert.Equal(CodexPermissionAdapter.DenialDecision, Decision(response));
+    }
+
     private static PermissionGateway Gateway() =>
         new(
             new CodexPermissionAdapter(),
@@ -54,11 +79,46 @@ public sealed class PermissionGatewayTests
                 new Sha256FingerprintService(),
                 new InMemoryPermissionCache(),
                 new PermissionEvaluatorEngine(),
-                new InvariantGuard()));
+                new InvariantGuard()),
+            new OperationPermissionHandler());
+
+    private static OperationPermissionProfile Profile(string root) =>
+        new(
+            "collect-details",
+            root,
+            [".agents/plan.md"],
+            [],
+            [".agents/details.md"],
+            []);
 
     private static string Decision(byte[] response)
     {
         using JsonDocument document = JsonDocument.Parse(response);
         return document.RootElement.GetProperty("result").GetProperty("decision").GetString()!;
+    }
+
+    private sealed class TempRepo : IDisposable
+    {
+        private TempRepo(string root)
+        {
+            Root = root;
+        }
+
+        public string Root { get; }
+
+        public static TempRepo Create()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "looprelay-gateway-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            return new TempRepo(root);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Root))
+            {
+                Directory.Delete(Root, recursive: true);
+            }
+        }
     }
 }

@@ -23,11 +23,7 @@ public class DecisionSessionTests
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
-        // These tests are not about sandbox isolation — root the Stage-2 sandbox at the repo so the in-place rewrite
-        // scripts resolve transparently (see FakeSandboxWorkspaceFactory). The dedicated isolation test uses a
-        // distinct root.
-        var sandbox = new FakeSandboxWorkspaceFactory { Root = repo.Path };
-        return (new Cli.DecisionSession(rt, router, art, con, repo, costModel, sandbox), rt, store, repo, con);
+        return (new Cli.DecisionSession(rt, router, art, con, repo, costModel), rt, store, repo, con);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
@@ -45,9 +41,8 @@ public class DecisionSessionTests
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
-        var sandbox = new FakeSandboxWorkspaceFactory { Root = repo.Path };
         var resume = new FakeDecisionSessionResumeStore { State = state };
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox,
+        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null,
             resumeStore: resume, resumeEnabled: resumeEnabled);
         return (session, rt, store, repo, con, resume);
     }
@@ -68,7 +63,6 @@ public class DecisionSessionTests
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
-        var sandbox = new FakeSandboxWorkspaceFactory { Root = repo.Path };
         var resume = new FakeDecisionSessionResumeStore { State = state };
         var projection = new FakeProjectionService("DECISION SESSION PROJECTION");
         if (freshness is not null)
@@ -83,18 +77,15 @@ public class DecisionSessionTests
             con,
             repo,
             costModel: null,
-            sandboxFactory: sandbox,
             resumeStore: resume,
             projectionService: projection);
         return (session, rt, store, repo, con, resume, projection);
     }
 
-    // One-shot sandboxes seed their inputs FLAT at the workspace root, bare filenames only (see
-    // DecisionSession.SandboxSeedName) — scripted one-shot turns read/write these, never .agents/-shaped paths.
-    private const string SandboxContext = "operational_context.md";
-    private const string SandboxDelta = "operational_delta.md";
-    private const string SandboxPlan = "plan.md";
-    private const string SandboxDetails = "details.md";
+    private const string ScopedContext = OrchestrationArtifactPaths.OperationalContext;
+    private const string ScopedDelta = OrchestrationArtifactPaths.OperationalDelta;
+    private const string ScopedPlan = OrchestrationArtifactPaths.Plan;
+    private const string ScopedDetails = OrchestrationArtifactPaths.Details;
 
     [Fact]
     public async Task Run_FreshProcess_DeliversContextInline_Proposes_PersistsAndVerifiesDecisions()
@@ -271,12 +262,12 @@ public class DecisionSessionTests
         // + propose. The post-transfer proposal primes the fresh process with the just-evolved context inline — no
         // reseed turn.
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) => Turns.Completed("DELTA-TEXT")));      // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                            // UpdateOperationalContext
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                            // UpdateOperationalContext
         {
-            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated context");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));            // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));            // OptimizeOperationalDocuments
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                       // propose (context primed inline)
         {
             Assert.Contains("OPCTX-1", prompt);
@@ -287,8 +278,8 @@ public class DecisionSessionTests
 
         Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
-        Assert.Equal(2, rt.OpenSessions);   // original + recycled
-        Assert.Equal(1, rt.ClosedSessions); // original closed during recycle
+        Assert.Equal(4, rt.OpenSessions);   // original + two scoped artifact operations + recycled
+        Assert.Equal(3, rt.ClosedSessions); // original + two scoped artifact operation sessions closed
     }
 
     [Fact]
@@ -309,18 +300,18 @@ public class DecisionSessionTests
 
         // Round 2: eNext 600000 >= (R 300000 + C 250000 default)/1 = 550000 -> economic Transfer (occupancy 20 << guard).
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
         {
-            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose (context inline)
         await session.RunAsync(CancellationToken.None);
 
         Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
-        Assert.Equal(2, rt.OpenSessions);   // original + recycled (economic transfer)
+        Assert.Equal(4, rt.OpenSessions);   // original + two scoped artifact operations + recycled
     }
 
     [Fact]
@@ -349,12 +340,12 @@ public class DecisionSessionTests
         // caught by the asserts, not a throw.
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>                                     // Continue: proposal | Transfer: delta
             new AgentTurnResult(0, AgentTurnState.Completed, "D3", new AgentTokenUsage(10, 10))));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // Transfer-only: UpdateOperationalContext
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // Transfer-only: UpdateOperationalContext
         {
-            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // Transfer-only: OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // Transfer-only: OptimizeOperationalDocuments
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D3T")));           // Transfer-only: proposal
         await session.RunAsync(CancellationToken.None);
 
@@ -374,9 +365,8 @@ public class DecisionSessionTests
         var art = new Cli.LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory(); // distinct root (genuinely separate from the repo)
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -390,15 +380,15 @@ public class DecisionSessionTests
         string? seededContext = null;
         string? seededDelta = null;
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));     // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
         {
             // The sandbox is seeded with ONLY the two evolution inputs; capture them before overwriting the context.
-            seededContext = s.ReadAsync(sandbox.Resolve(SandboxContext)).Result;
-            seededDelta = s.ReadAsync(sandbox.Resolve(SandboxDelta)).Result;
-            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
+            seededContext = s.ReadAsync(Resolve(repo, ScopedContext)).Result;
+            seededDelta = s.ReadAsync(Resolve(repo, ScopedDelta)).Result;
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));      // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));      // OptimizeOperationalDocuments
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                 // propose (context primed inline)
         {
             Assert.Contains("OPCTX-1", prompt);
@@ -406,14 +396,19 @@ public class DecisionSessionTests
         }));
         await session.RunAsync(CancellationToken.None);
 
-        // Both transfer one-shots (evolution, then optimization) ran against the SANDBOX root, not the repository
-        // working directory.
-        Assert.Equal(2, rt.OneShotCalls.Count);
-        Assert.All(rt.OneShotCalls, call =>
+        AgentSessionSpec[] scopedSpecs = rt.OpenedSpecs
+            .Where(spec => spec.OperationPermissionProfile is not null)
+            .ToArray();
+        Assert.Equal(2, scopedSpecs.Length);
+        Assert.All(scopedSpecs, spec =>
         {
-            Assert.Equal(sandbox.Root, call.Spec.WorkingDirectory);
-            Assert.NotEqual(repo.Path, call.Spec.WorkingDirectory);
+            Assert.Equal(repo.Path, spec.WorkingDirectory);
+            Assert.Equal("read-only", spec.Sandbox.Identifier);
+            Assert.True(spec.Sandbox.RequiresApproval);
         });
+        Assert.Contains(scopedSpecs, spec => spec.OperationPermissionProfile!.Label == "operational-context-evolution");
+        Assert.Contains(scopedSpecs, spec => spec.OperationPermissionProfile!.Label == "operational-documents-optimization");
+        Assert.Empty(rt.OneShotCalls);
 
         // The sandbox was seeded with ONLY the two evolution inputs — the CURRENT repo context and the delta — so
         // codex folds the delta into the real base (not blank/wrong), and the delta seeding is not silently dropped.
@@ -424,9 +419,7 @@ public class DecisionSessionTests
         Assert.Equal("OPCTX-1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
         Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
 
-        // One sandbox per one-shot (evolution + optimization), each disposed (cleaned up).
-        Assert.Equal(2, sandbox.CreatedCount);
-        Assert.Equal(2, sandbox.Disposed.Count);
+        // No temp sandbox is created; rollback is handled by the artifact transaction.
     }
 
     [Fact]
@@ -441,7 +434,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -458,12 +451,12 @@ public class DecisionSessionTests
         {
             string evolved = context;
             rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("delta")));       // ProduceOperationalDelta
-            rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                    // UpdateOperationalContext
+            rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                    // UpdateOperationalContext
             {
-                s.WriteAsync(sandbox.Resolve(SandboxContext), evolved).Wait();
+                s.WriteAsync(Resolve(repo, ScopedContext), evolved).Wait();
                 return Turns.Completed("updated");
             }));
-            rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));    // OptimizeOperationalDocuments
+            rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));    // OptimizeOperationalDocuments
             rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>                                    // propose (occupancy 22)
                 new AgentTurnResult(0, AgentTurnState.Completed, "D", new AgentTokenUsage(11, 11))));
             await session.RunAsync(CancellationToken.None);
@@ -483,7 +476,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -495,12 +488,12 @@ public class DecisionSessionTests
 
         // Round 2: Transfer (delta + update + optimize + propose; no reseed turn).
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
         {
-            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose
         await session.RunAsync(CancellationToken.None);
 
@@ -521,7 +514,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -531,12 +524,12 @@ public class DecisionSessionTests
         await session.RunAsync(CancellationToken.None);
 
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
-            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));   // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));   // OptimizeOperationalDocuments
         // The propose turn is never reached because the archive throws first.
 
         await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
@@ -558,7 +551,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory(); // distinct root (genuinely separate from the repo)
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Details), "DETAILS-0");
@@ -575,19 +568,19 @@ public class DecisionSessionTests
         string? seededDetails = null;
         string? seededContext = null;
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));     // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
         {
-            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // OptimizeOperationalDocuments
         {
-            seededPlan = s.ReadAsync(sandbox.Resolve(SandboxPlan)).Result;
-            seededDetails = s.ReadAsync(sandbox.Resolve(SandboxDetails)).Result;
-            seededContext = s.ReadAsync(sandbox.Resolve(SandboxContext)).Result;
-            s.WriteAsync(sandbox.Resolve(SandboxPlan), "PLAN-OPT").Wait();
-            s.WriteAsync(sandbox.Resolve(SandboxDetails), "DETAILS-OPT").Wait();
-            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-OPT").Wait();
+            seededPlan = s.ReadAsync(Resolve(repo, ScopedPlan)).Result;
+            seededDetails = s.ReadAsync(Resolve(repo, ScopedDetails)).Result;
+            seededContext = s.ReadAsync(Resolve(repo, ScopedContext)).Result;
+            s.WriteAsync(Resolve(repo, ScopedPlan), "PLAN-OPT").Wait();
+            s.WriteAsync(Resolve(repo, ScopedDetails), "DETAILS-OPT").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-OPT").Wait();
             return Turns.Completed("optimized");
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                 // propose (context primed inline)
@@ -603,10 +596,12 @@ public class DecisionSessionTests
         Assert.Equal("DETAILS-0", seededDetails);
         Assert.Equal("OPCTX-1", seededContext);
 
-        // The optimization ran as its own one-shot, against the sandbox root, with the optimization prompt.
-        Assert.Equal(2, rt.OneShotCalls.Count);
-        Assert.Equal(sandbox.Root, rt.OneShotCalls[1].Spec.WorkingDirectory);
-        Assert.Equal(OptimizeOperationalDocuments.Text, rt.OneShotCalls[1].Prompt);
+        AgentSessionSpec optimizationSpec = rt.OpenedSpecs
+            .Where(spec => spec.OperationPermissionProfile is not null)
+            .ElementAt(1);
+        Assert.Equal("operational-documents-optimization", optimizationSpec.OperationPermissionProfile!.Label);
+        Assert.Equal(repo.Path, optimizationSpec.WorkingDirectory);
+        Assert.Empty(rt.OneShotCalls);
 
         // All three optimized documents were copied back into the repo.
         Assert.Equal("PLAN-OPT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Plan)));
@@ -626,7 +621,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -638,15 +633,15 @@ public class DecisionSessionTests
         bool? sandboxHadPlan = null;
         bool? sandboxHadDetails = null;
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));     // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
         {
-            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // OptimizeOperationalDocuments
         {
-            sandboxHadPlan = s.ExistsAsync(sandbox.Resolve(SandboxPlan)).Result;
-            sandboxHadDetails = s.ExistsAsync(sandbox.Resolve(SandboxDetails)).Result;
+            sandboxHadPlan = s.ExistsAsync(Resolve(repo, ScopedPlan)).Result;
+            sandboxHadDetails = s.ExistsAsync(Resolve(repo, ScopedDetails)).Result;
             return Turns.Completed("optimized");
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));             // propose
@@ -671,7 +666,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -681,12 +676,12 @@ public class DecisionSessionTests
         await session.RunAsync(CancellationToken.None);
 
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));     // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
         {
-            s.WriteAsync(sandbox.Resolve(SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));                    // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));                    // OptimizeOperationalDocuments
         // Neither the archive nor the propose turn is reached.
 
         await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
@@ -712,12 +707,12 @@ public class DecisionSessionTests
 
         // Round 2: Transfer (delta + update + optimize + archive), then the proposal.
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
         {
-            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose
         await session.RunAsync(CancellationToken.None);
 
@@ -745,7 +740,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -755,7 +750,7 @@ public class DecisionSessionTests
         await session.RunAsync(CancellationToken.None);
 
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("did nothing")));  // UpdateOperationalContext: no write
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("did nothing")));  // UpdateOperationalContext: no write
         // Neither the optimize one-shot, nor the archive, nor the propose turn is reached.
 
         Cli.LoopStepException ex = await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
@@ -766,8 +761,8 @@ public class DecisionSessionTests
         Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
         // The repo context is untouched (the unevolved sandbox copy was never copied back).
         Assert.Equal("OPCTX-0", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
-        // Only the evolution one-shot ran.
-        Assert.Single(rt.OneShotCalls);
+        // Only the evolution scoped operation ran.
+        Assert.Single(rt.OpenedSpecs, spec => spec.OperationPermissionProfile is not null);
     }
 
     [Fact]
@@ -784,7 +779,7 @@ public class DecisionSessionTests
         await session.RunAsync(CancellationToken.None);
 
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) =>                                     // UpdateOperationalContext fails
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>                                     // UpdateOperationalContext fails
             Turns.Failed("", "Not inside a trusted directory and --skip-git-repo-check was not specified.")));
 
         Cli.LoopStepException ex = await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
@@ -811,7 +806,7 @@ public class DecisionSessionTests
         // included, so it can never be consumed as the document. A prompt that asks for the replacement document as
         // OUTPUT makes the agent legitimately skip the write and trip the unchanged-context guard (observed live
         // 2026-07-02: the agent read both seeded files and replied with the merged doc, never touching the file).
-        Assert.Contains("overwriting `operational_context.md`", UpdateOperationalContext.Text);
+        Assert.Contains("overwriting `.agents/operational_context.md`", UpdateOperationalContext.Text);
         Assert.DoesNotContain("The output should be the complete replacement document", UpdateOperationalContext.Text);
     }
 
@@ -925,19 +920,19 @@ public class DecisionSessionTests
 
         // Round 2: Transfer (delta + update + optimize + propose on the recycled process).
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
-            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));
         await session.RunAsync(CancellationToken.None);
 
         Assert.Equal(1, resume.ClearCalls);                    // the transfer close deleted the dead thread's state
         Assert.Null(rt.OpenedSpecs[1].ResumeThreadId);         // the recycle opened FRESH — resume is first-open-only
         Assert.Equal(2, resume.Written.Count);
-        Assert.Equal("thread-2", resume.Written[^1].ThreadId); // the post-transfer thread re-persisted
+        Assert.Equal("thread-4", resume.Written[^1].ThreadId); // the post-transfer thread re-persisted
     }
 
     [Fact]
@@ -956,12 +951,12 @@ public class DecisionSessionTests
         await session.RunAsync(CancellationToken.None);
 
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
-            s.WriteAsync(Resolve(repo, SandboxContext), "OPCTX-1").Wait();
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
         {
             Assert.Contains("DECISION SESSION PROJECTION", prompt);

@@ -39,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IPermissionEvaluatorEngine, PermissionEvaluatorEngine>();
         services.TryAddSingleton<IInvariantGuard, InvariantGuard>();
         services.TryAddSingleton<IPermissionHandler, PermissionHandler>();
+        services.TryAddSingleton<OperationPermissionHandler>();
         return services;
     }
 

@@ -1,5 +1,6 @@
 using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Models;
+using LoopRelay.Permissions.Models;
 using LoopRelay.Cli;
 using Xunit;
 
@@ -74,5 +75,33 @@ public class AgentSpecsTests
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
 
         Assert.Null(Cli.AgentSpecs.Decision(repo).ResumeThreadId);
+    }
+
+    [Fact]
+    public void ScopedArtifactOperation_IsReadOnlyApprovalGatedWithOperationProfile()
+    {
+        var profile = new OperationPermissionProfile(
+            "operational-context-evolution",
+            Repo.Path,
+            [".agents/operational_context.md"],
+            [],
+            [".agents/operational_context.md"],
+            []);
+
+        AgentSessionSpec spec = Cli.AgentSpecs.ScopedArtifactOperation(
+            Repo,
+            AgentEffortLevel.High,
+            "xhigh",
+            profile);
+
+        Assert.Equal(SessionRole.OperationalExecution, spec.Role);
+        Assert.Equal("read-only", spec.Sandbox.Identifier);
+        Assert.False(spec.Sandbox.CanWriteWorkspace);
+        Assert.False(spec.Sandbox.CanAccessNetwork);
+        Assert.True(spec.Sandbox.RequiresApproval);
+        Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
+        Assert.Equal("xhigh", spec.Effort.Identifier);
+        Assert.Equal(Repo.Path, spec.WorkingDirectory);
+        Assert.Same(profile, spec.OperationPermissionProfile);
     }
 }

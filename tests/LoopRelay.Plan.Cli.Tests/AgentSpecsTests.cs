@@ -1,5 +1,6 @@
 using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Models;
+using LoopRelay.Permissions.Models;
 using LoopRelay.Plan.Cli;
 using Xunit;
 
@@ -41,20 +42,27 @@ public class AgentSpecsTests
     }
 
     [Fact]
-    public void SandboxedOneShot_IsWorkspaceWriteAtGivenDirectoryWithXhighEffort()
+    public void ScopedArtifactOperation_IsReadOnlyApprovalGatedAtRepoRootWithProfile()
     {
-        const string sandboxRoot = "/tmp/plan-cli-sandbox";
+        var profile = new OperationPermissionProfile(
+            "collect-details",
+            Repo.Path,
+            [".agents/plan.md"],
+            [],
+            [".agents/details.md"],
+            []);
 
-        AgentSessionSpec spec = Cli.AgentSpecs.SandboxedOneShot(Repo, sandboxRoot);
+        AgentSessionSpec spec = Cli.AgentSpecs.ScopedArtifactOperation(Repo, profile);
 
         Assert.Equal(SessionRole.Planning, spec.Role);
-        Assert.Equal("workspace-write", spec.Sandbox.Identifier);
-        Assert.True(spec.Sandbox.CanWriteWorkspace);
+        Assert.Equal("read-only", spec.Sandbox.Identifier);
+        Assert.False(spec.Sandbox.CanWriteWorkspace);
         Assert.False(spec.Sandbox.CanAccessNetwork);
-        Assert.False(spec.Sandbox.RequiresApproval);
+        Assert.True(spec.Sandbox.RequiresApproval);
         Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
         Assert.Equal("xhigh", spec.Effort.Identifier);
-        Assert.Equal(sandboxRoot, spec.WorkingDirectory);
+        Assert.Equal(Repo.Path, spec.WorkingDirectory);
+        Assert.Same(profile, spec.OperationPermissionProfile);
     }
 
     [Fact]

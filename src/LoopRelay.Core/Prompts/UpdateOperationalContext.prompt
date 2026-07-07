@@ -2,20 +2,20 @@
 
 ## Inputs
 
-You are provided with two documents, seeded at the root of your workspace:
+You are provided with two repository artifacts:
 
-1. **Current `operational_context.md`**
+1. **Current `.agents/operational_context.md`**
 
    * This is the current authoritative operational context.
    * At the beginning of a project it is effectively the complete implementation plan.
    * Over time it evolves into the authoritative description of both the remaining work and everything learned while executing it.
 
-2. **Decision Session Context Extraction `operational_delta.md`**
+2. **Decision Session Context Extraction `.agents/operational_delta.md`**
 
    * Produced by the agent that supervised every execution session handoff and participated in every intra-session decision since the last time `operational_context.md` was updated.
    * Contains every durable fact, architectural decision, project update, and operational delta extracted from the completed decision-making session.
 
-Your task is to evolve `operational_context.md` into its next authoritative revision.
+Your task is to evolve `.agents/operational_context.md` into its next authoritative revision.
 
 ---
 
@@ -210,9 +210,9 @@ without needing to read the previous operational context or the decision session
 
 # Output Requirements
 
-Apply the update by **overwriting `operational_context.md`** — the same file you read the current context from — with the entire updated document, not a patch or diff.
+Apply the update by **overwriting `.agents/operational_context.md`** — the same file you read the current context from — with the entire updated document, not a patch or diff.
 
-Writing the file is the deliverable. Your reply text is discarded: after your run, the caller reads `operational_context.md` back, and an updated document that appears only in your reply — without being written to the file — is a failed run.
+Writing the file is the deliverable. Your reply text is discarded: after your run, the caller reads `.agents/operational_context.md` back, and an updated document that appears only in your reply — without being written to the file — is a failed run.
 
 The written document must not include:
 

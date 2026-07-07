@@ -1,9 +1,9 @@
 # Operational Context Optimization
 
 Review and optimize the project's operational documents:
-* `plan.md`
-* `details.md`
-* `operational_context.md`
+* `.agents/plan.md`
+* `.agents/details.md`
+* `.agents/operational_context.md`
 
 Optimize these documents exclusively for maximizing execution and decision quality across the remaining milestones.
 

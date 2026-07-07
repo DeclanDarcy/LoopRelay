@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using LoopRelay.Permissions.Models;
 
 namespace LoopRelay.Agents.Models;
 
@@ -12,7 +13,8 @@ public sealed record AgentSessionSpec
         EffortProfile effort,
         string? workingDirectory = null,
         IReadOnlyDictionary<string, string>? startupOptions = null,
-        string? resumeThreadId = null)
+        string? resumeThreadId = null,
+        OperationPermissionProfile? operationPermissionProfile = null)
     {
         SessionId = sessionId;
         RepositoryId = repositoryId;
@@ -23,6 +25,7 @@ public sealed record AgentSessionSpec
         StartupOptions = new ReadOnlyDictionary<string, string>(
             new Dictionary<string, string>(startupOptions ?? new Dictionary<string, string>(), StringComparer.Ordinal));
         ResumeThreadId = resumeThreadId;
+        OperationPermissionProfile = operationPermissionProfile;
     }
 
     public SessionIdentity SessionId { get; }
@@ -42,4 +45,6 @@ public sealed record AgentSessionSpec
     /// <summary>Codex app-server thread id to resume instead of starting a fresh thread (persistent sessions
     /// only; ignored by one-shots). When set, the handshake runs eagerly at open — see AgentRuntime.</summary>
     public string? ResumeThreadId { get; }
+
+    public OperationPermissionProfile? OperationPermissionProfile { get; }
 }

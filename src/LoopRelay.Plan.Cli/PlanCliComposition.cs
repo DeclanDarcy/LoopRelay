@@ -4,8 +4,6 @@ using LoopRelay.Agents.Services;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Infrastructure.Diagnostics;
-using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Orchestration.Services;
 using LoopRelay.Permissions.Configuration;
 using LoopRelay.Projections;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,7 +47,6 @@ internal sealed class PlanCliComposition : IAsyncDisposable
         var tokenEstimator = provider.GetRequiredService<IAgentTokenEstimator>();
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
         var processRunner = provider.GetRequiredService<IProcessRunner>();
-        ISandboxWorkspaceFactory sandboxFactory = new TempSandboxWorkspaceFactory();
 
         var artifacts = new PlanArtifacts(store, repository);
         var progressRuntime = new InputWaitProgressAgentRuntime(
@@ -67,14 +64,14 @@ internal sealed class PlanCliComposition : IAsyncDisposable
             new ProjectionManifestStore(projectionArtifacts),
             new ProjectionValidator(projectionRegistry),
             new ProjectionPromptRunner(progressRuntime, repository, console));
-        var oneShot = new SandboxedPromptStep(progressRuntime, sandboxFactory, artifacts, console, repository);
+        var artifactOperation = new PermissionedArtifactOperationStep(progressRuntime, store, artifacts, console, repository);
         var publisher = new AgentsSubmodulePublisher(processRunner, repository, console);
         var pipeline = new PlanPipeline(
             preflight,
             planSession,
             review,
             projectionService,
-            oneShot,
+            artifactOperation,
             publisher,
             artifacts,
             console);

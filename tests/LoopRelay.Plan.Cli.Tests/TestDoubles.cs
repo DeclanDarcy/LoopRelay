@@ -79,6 +79,7 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
     public int OpenSessions { get; private set; }
     public int ClosedSessions { get; private set; }
     public List<(AgentSessionSpec Spec, string Prompt)> OneShotCalls { get; } = new();
+    public List<AgentSessionSpec> OpenedSpecs { get; } = new();
 
     public Task<AgentTurnResult> RunOneShotAsync(
         AgentSessionSpec spec, string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken ct = default)
@@ -90,6 +91,7 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
 
     public Task<IAgentSession> OpenSessionAsync(AgentSessionSpec spec, CancellationToken ct = default)
     {
+        OpenedSpecs.Add(spec);
         OpenSessions++;
         return Task.FromResult<IAgentSession>(new FakeAgentSession(this, spec));
     }

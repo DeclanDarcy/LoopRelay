@@ -3,6 +3,7 @@ using LoopRelay.Agents.Models;
 using LoopRelay.Agents.Services;
 using LoopRelay.Permissions.Abstractions;
 using LoopRelay.Permissions.Codex;
+using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Services;
 
 namespace LoopRelay.Agents.Tests;
@@ -141,6 +142,50 @@ public sealed class CodexAppServerSessionTests
     }
 
     [Fact]
+    public async Task ScopedFileChangeApprovalMatchingOperationProfileIsAccepted()
+    {
+        var process = new ScriptedAppServerProcess
+        {
+            EmitApprovalRequest = true,
+            EmitFileChangeApproval = true,
+            ApprovalTargetPath = ".agents/details.md",
+        };
+        await using var session = new CodexAppServerSession(
+            OperationSpec(".agents/details.md"),
+            process,
+            new DeterministicAgentTokenEstimator(),
+            PermissionGateway());
+
+        AgentTurnResult result = await session.RunTurnAsync("hello");
+        await process.ApprovalAccepted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Contains(process.Writes, write => write.Contains("\"accept\""));
+    }
+
+    [Fact]
+    public async Task ScopedFileChangeApprovalOutsideOperationProfileIsDeclined()
+    {
+        var process = new ScriptedAppServerProcess
+        {
+            EmitApprovalRequest = true,
+            EmitFileChangeApproval = true,
+            ApprovalTargetPath = ".agents/plan.md",
+        };
+        await using var session = new CodexAppServerSession(
+            OperationSpec(".agents/details.md"),
+            process,
+            new DeterministicAgentTokenEstimator(),
+            PermissionGateway());
+
+        AgentTurnResult result = await session.RunTurnAsync("hello");
+        await process.ApprovalDeclined.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Contains(process.Writes, write => write.Contains("\"decline\""));
+    }
+
+    [Fact]
     public async Task PermissionEvaluationFailureDeclinesTheRequestInsteadOfHanging()
     {
         var process = new ScriptedAppServerProcess { EmitApprovalRequest = true, ApprovalCommand = "dotnet build" };
@@ -257,6 +302,36 @@ public sealed class CodexAppServerSessionTests
         // Manual steps: (1) `codex login`; (2) open a held-open Decision app-server thread via the production
         // launcher with BuildDecisionSpec's posture; (3) submit a turn and confirm codex accepts effort=xhigh and
         // the read-only/never sandbox without error. No in-session assertion — see the captured-frame tests above.
+    }
+
+    [Fact(Skip = "requires codex login; manual/live cert — verify read-only app-server sessions request approval before file edits")]
+    public void LiveCertification_ReadOnlyAppServerRequestsApprovalBeforeFileEdits()
+    {
+        // Manual steps: open a scoped artifact operation session with sandbox=read-only and approval on-request,
+        // ask codex to edit an allowed file, and confirm the app-server emits item/fileChange/requestApproval
+        // before any repository mutation is applied.
+    }
+
+    [Fact(Skip = "requires codex login; manual/live cert — verify file-change approvals expose exact target paths")]
+    public void LiveCertification_FileChangeApprovalExposesExactTargetPath()
+    {
+        // Manual steps: capture the raw item/fileChange/requestApproval payload for a scoped artifact edit and
+        // confirm it contains a target path precise enough to compare against the operation profile. If codex only
+        // exposes a broad grantRoot, scoped operations must decline it.
+    }
+
+    [Fact(Skip = "requires codex login; manual/live cert — verify declined scoped approvals do not hang the turn")]
+    public void LiveCertification_DeclinedScopedApprovalDoesNotHang()
+    {
+        // Manual steps: force a scoped operation to request a disallowed edit, verify LoopRelay replies decline,
+        // and confirm codex fails or continues without leaving the turn parked indefinitely.
+    }
+
+    [Fact(Skip = "requires codex login; manual/live cert — verify accepted scoped approvals apply only requested writes")]
+    public void LiveCertification_AcceptedScopedApprovalAllowsOnlyRequestedWrite()
+    {
+        // Manual steps: approve an exact allowed scoped edit, confirm that write succeeds, and confirm a subsequent
+        // non-profile write still triggers and receives a declined approval.
     }
 
     [Fact]
@@ -389,7 +464,23 @@ public sealed class CodexAppServerSessionTests
                 new Sha256FingerprintService(),
                 new InMemoryPermissionCache(),
                 new PermissionEvaluatorEngine(),
-                new InvariantGuard()));
+                new InvariantGuard()),
+            new OperationPermissionHandler());
+
+    private static AgentSessionSpec OperationSpec(string allowedWrite) => new(
+        SessionIdentity.New(),
+        "repo-1",
+        SessionRole.OperationalExecution,
+        new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: true),
+        new EffortProfile(AgentEffortLevel.Medium),
+        workingDirectory: "/repo",
+        operationPermissionProfile: new OperationPermissionProfile(
+            "test-operation",
+            "/repo",
+            [".agents/plan.md"],
+            [],
+            [allowedWrite],
+            []));
 
     private sealed class ThrowingPermissionGateway : IPermissionGateway
     {

@@ -36,11 +36,8 @@ internal sealed class GatedAgentRuntime(
         Func<AgentStreamChunk, Task>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
-        // One-shots are deliberately NOT retried on a usage-limit failure: they run in caller-seeded
-        // sandboxes where the output file often overwrites a seeded input (the operational-context
-        // evolution one-shot rewrites operational_context.md in place), so a failed attempt may have
-        // half-written the very file a rerun would read as authoritative. Only the caller can re-seed;
-        // the failure propagates loudly, exactly as it did before the detector existed.
+        // One-shots are deliberately NOT retried on a usage-limit failure: legacy/projection-adjacent callers may
+        // still mutate their only candidate output, so only the caller can decide whether a rerun is safe.
         DateTimeOffset openedAt = clock.UtcNow;
         AgentTurnResult result = await inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
         await recorder.RecordTurnAsync(

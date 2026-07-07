@@ -6,8 +6,7 @@ namespace LoopRelay.Plan.Cli;
 
 /// <summary>
 /// Repository-relative .agents/* disk access for the planning pipeline, plus dedicated absolute-path
-/// helpers for seeded sandbox workspaces (which live outside the repository root, so the repo-relative
-/// Resolve — which validates the boundary via ArtifactPath.ResolveRepositoryPath — cannot be used for them).
+/// helpers for operation gates that already hold resolved paths.
 /// </summary>
 internal sealed class PlanArtifacts(IArtifactStore store, Repository repository)
 {

@@ -1,5 +1,6 @@
 using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Models;
+using LoopRelay.Permissions.Models;
 
 namespace LoopRelay.Cli;
 
@@ -9,8 +10,8 @@ namespace LoopRelay.Cli;
 /// </summary>
 internal static class AgentSpecs
 {
-    // sandboxIdentifier is the codex sandbox mode. It defaults to "workspace-write" (the context-update
-    // evolution one-shot's posture); the execution session overrides it to "danger-full-access" so codex runs
+    // sandboxIdentifier is the codex sandbox mode. It defaults to "workspace-write" for ordinary operational
+    // sessions; the execution session overrides it to "danger-full-access" so codex runs
     // unsandboxed — matching the legacy CodexExecutionProvider's deliberate policy. danger-full-access also
     // grants network, so CanAccessNetwork tracks it.
     public static AgentSessionSpec Operational(
@@ -29,7 +30,6 @@ internal static class AgentSpecs
                 CanAccessNetwork: sandboxIdentifier == "danger-full-access",
                 RequiresApproval: false),
             new EffortProfile(level, identifier),
-            // Stage 2: a Transfer's evolution one-shot passes a sandbox root so codex --cd scopes it there.
             workingDirectory ?? repository.Path);
 
     public static AgentSessionSpec Decision(Repository repository, string? resumeThreadId = null) =>
@@ -41,4 +41,18 @@ internal static class AgentSpecs
             new EffortProfile(AgentEffortLevel.High, "xhigh"),
             repository.Path,
             resumeThreadId: resumeThreadId);
+
+    public static AgentSessionSpec ScopedArtifactOperation(
+        Repository repository,
+        AgentEffortLevel level,
+        string? identifier,
+        OperationPermissionProfile operationProfile) =>
+        new(
+            SessionIdentity.New(),
+            repository.Id.ToString("N"),
+            SessionRole.OperationalExecution,
+            new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: true),
+            new EffortProfile(level, identifier),
+            repository.Path,
+            operationPermissionProfile: operationProfile);
 }

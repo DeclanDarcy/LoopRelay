@@ -5,7 +5,7 @@ namespace LoopRelay.Plan.Cli;
 
 /// <summary>
 /// The sequencer for the pipeline steps: preflight, write plan, adversarial review, revise plan (eager session
-/// close, then operational_context.md seeded from the revised plan), then the three sandboxed one-shots
+/// close, then operational_context.md seeded from the revised plan), then the three scoped artifact operations
 /// (collect details, extract milestones, extract details) — each followed by a deterministic filesystem gate.
 /// Every artifact-mutating step is followed by a commit+push of the .agents submodule (the adversarial review
 /// writes nothing, so it publishes nothing); the parent repo's moved gitlink pointer is recorded ONCE at the
@@ -18,7 +18,7 @@ internal sealed class PlanPipeline(
     PlanSession planSession,
     ReviewStep review,
     IProjectContextProjectionService projectionService,
-    SandboxedPromptStep oneShot,
+    PermissionedArtifactOperationStep artifactOperation,
     AgentsSubmodulePublisher publisher,
     PlanArtifacts artifacts,
     ILoopConsole console) : IAsyncDisposable
@@ -59,7 +59,7 @@ internal sealed class PlanPipeline(
 
             console.Phase("Revise Plan");
             await planSession.ReviseAsync(output1, cancellationToken);
-            // Eager close: the codex planning process must not outlive its last turn. The one-shot steps below
+            // Eager close: the codex planning process must not outlive its last turn. The artifact operations below
             // do not need the planning session, so it is torn down here rather than held until DisposeAsync.
             await planSession.CloseAsync();
 
@@ -76,8 +76,8 @@ internal sealed class PlanPipeline(
                 await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.RevisePlanMessage, cancellationToken);
 
             console.Phase("Collect Details");
-            SandboxedStepPlan collectDetails = await OneShotSteps.CollectDetailsAsync(artifacts);
-            await oneShot.RunAsync(collectDetails, cancellationToken);
+            ArtifactOperationPlan collectDetails = await OneShotSteps.CollectDetailsAsync(artifacts);
+            await artifactOperation.RunAsync(collectDetails, cancellationToken);
             if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.Details))
             {
                 throw new PlanStepException(
@@ -88,8 +88,8 @@ internal sealed class PlanPipeline(
                 await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.CollectDetailsMessage, cancellationToken);
 
             console.Phase("Extract Milestones");
-            SandboxedStepPlan extractMilestones = await OneShotSteps.ExtractMilestonesAsync(artifacts);
-            await oneShot.RunAsync(extractMilestones, cancellationToken);
+            ArtifactOperationPlan extractMilestones = await OneShotSteps.ExtractMilestonesAsync(artifacts);
+            await artifactOperation.RunAsync(extractMilestones, cancellationToken);
             IReadOnlyList<string> milestones = await artifacts.ListMilestonesRelativeAsync();
             if (milestones.Count == 0)
             {
@@ -101,8 +101,8 @@ internal sealed class PlanPipeline(
                 await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.ExtractMilestonesMessage, cancellationToken);
 
             console.Phase("Extract Details");
-            SandboxedStepPlan extractDetails = await OneShotSteps.ExtractDetailsAsync(artifacts);
-            await oneShot.RunAsync(extractDetails, cancellationToken);
+            ArtifactOperationPlan extractDetails = await OneShotSteps.ExtractDetailsAsync(artifacts);
+            await artifactOperation.RunAsync(extractDetails, cancellationToken);
             agentsCommitted |=
                 await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.ExtractDetailsMessage, cancellationToken);
 

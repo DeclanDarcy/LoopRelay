@@ -39,10 +39,10 @@ public class PlanPipelineTests
         var preflight = new Cli.PreflightGate(artifacts);
         var planSession = new Cli.PlanSession(runtime, artifacts, console, repo);
         var review = new Cli.ReviewStep(runtime, artifacts, console, repo);
-        var oneShot = new Cli.SandboxedPromptStep(runtime, sandboxes, artifacts, console, repo);
+        var artifactOperation = new Cli.PermissionedArtifactOperationStep(runtime, store, artifacts, console, repo);
         var publisher = new Cli.AgentsSubmodulePublisher(git, repo, console);
         var pipeline = new Cli.PlanPipeline(
-            preflight, planSession, review, projection, oneShot, publisher, artifacts, console);
+            preflight, planSession, review, projection, artifactOperation, publisher, artifacts, console);
 
         return new Harness(pipeline, runtime, sandboxes, store, repo, console, git, projection);
     }
@@ -98,24 +98,24 @@ public class PlanPipelineTests
             return Turns.Completed("revised plan");
         }));
 
-        h.Runtime.OneShotTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
         {
             Assert.Equal(CollectDetails.Text, prompt);
-            s.WriteAsync(h.Sandboxes.Resolve("details.md"), "DETAILS V1").Wait();
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Details), "DETAILS V1").Wait();
             return Turns.Completed("collected details");
         }));
-        h.Runtime.OneShotTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
         {
             Assert.Equal(ExtractMilestones.Text, prompt);
-            Assert.Equal("PLAN V2 REVISED", s.ReadAsync(h.Sandboxes.Resolve("plan.md")).Result);
-            s.WriteAsync(h.Sandboxes.Resolve("plan.md"), "PLAN V2 (See ./milestones/m1-thing.md)").Wait();
-            s.WriteAsync(h.Sandboxes.Resolve("milestones/m1-thing.md"), "- [ ] do the thing").Wait();
+            Assert.Equal("PLAN V2 REVISED", s.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan)).Result);
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN V2 (See ./milestones/m1-thing.md)").Wait();
+            s.WriteAsync(Resolve(h.Repo, MilestonePath("m1-thing.md")), "- [ ] do the thing").Wait();
             return Turns.Completed("split into milestones");
         }));
-        h.Runtime.OneShotTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
         {
             Assert.Equal(ExtractDetails.Text, prompt);
-            s.WriteAsync(h.Sandboxes.Resolve("details.md"), "DETAILS FINAL").Wait();
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Details), "DETAILS FINAL").Wait();
             return Turns.Completed("redistributed details");
         }));
 
@@ -150,14 +150,13 @@ public class PlanPipelineTests
         Assert.Equal(1, h.Projection.EnsureFreshCalls);
         Assert.Contains(ProjectionRuntimePromptNames.AdversarialPlanReview, h.Projection.RuntimePromptNames);
 
-        // Session accounting: WritePlan/Revise share one session, Review opens its own.
-        Assert.Equal(2, h.Runtime.OpenSessions);
-        Assert.Equal(2, h.Runtime.ClosedSessions);
+        // Session accounting: WritePlan/Revise share one session, Review opens its own, and each scoped artifact
+        // operation opens a fresh app-server session.
+        Assert.Equal(5, h.Runtime.OpenSessions);
+        Assert.Equal(5, h.Runtime.ClosedSessions);
 
-        // One sandbox per one-shot; the fake's single shared Root means cross-step isolation is not
-        // certified here (the per-step m4/m5 tests carry that).
-        Assert.Equal(3, h.Sandboxes.CreatedCount);
-        Assert.Equal(3, h.Sandboxes.Disposed.Count);
+        Assert.Equal(0, h.Sandboxes.CreatedCount);
+        Assert.Empty(h.Runtime.OneShotCalls);
 
         // Cross-checks that the closures above actually ran and asserted what this test claims.
         Assert.NotNull(seenPlanAtReview);
@@ -165,7 +164,7 @@ public class PlanPipelineTests
 
         // Double-close safety: DisposeAsync after the pipeline's own eager close must not close again.
         await h.Pipeline.DisposeAsync();
-        Assert.Equal(2, h.Runtime.ClosedSessions);
+        Assert.Equal(5, h.Runtime.ClosedSessions);
     }
 
     [Fact]
@@ -201,13 +200,13 @@ public class PlanPipelineTests
             return Turns.Completed("revised plan");
         }));
 
-        h.Runtime.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             Turns.Failed("boom", "collect-details stderr tail")));
 
         Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
         Assert.Equal(Cli.PlanOutcome.Failed, outcome);
-        Assert.Equal(2, h.Runtime.ClosedSessions);
+        Assert.Equal(3, h.Runtime.ClosedSessions);
         Assert.Equal(
             "PLAN V2 REVISED",
             await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan)));
@@ -301,22 +300,22 @@ public class PlanPipelineTests
             return Turns.Completed("revised plan");
         }));
 
-        h.Runtime.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
             onCollectDetailsContext?.Invoke(
                 s.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.OperationalContext)).Result);
-            s.WriteAsync(h.Sandboxes.Resolve("details.md"), "DETAILS").Wait();
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Details), "DETAILS").Wait();
             return Turns.Completed("collected details");
         }));
-        h.Runtime.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
-            s.WriteAsync(h.Sandboxes.Resolve("plan.md"), "PLAN V2 (See ./milestones/m1.md)").Wait();
-            s.WriteAsync(h.Sandboxes.Resolve("milestones/m1.md"), "- [ ] do the thing").Wait();
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN V2 (See ./milestones/m1.md)").Wait();
+            s.WriteAsync(Resolve(h.Repo, MilestonePath("m1.md")), "- [ ] do the thing").Wait();
             return Turns.Completed("split into milestones");
         }));
-        h.Runtime.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
-            s.WriteAsync(h.Sandboxes.Resolve("details.md"), "DETAILS FINAL").Wait();
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Details), "DETAILS FINAL").Wait();
             return Turns.Completed("redistributed details");
         }));
     }
@@ -464,7 +463,7 @@ public class PlanPipelineTests
             s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN V2 REVISED").Wait();
             return Turns.Completed("revised plan");
         }));
-        h.Runtime.OneShotTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed("boom", "stderr tail")));
+        h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed("boom", "stderr tail")));
 
         Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 

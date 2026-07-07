@@ -21,6 +21,8 @@ public sealed class CodexPermissionAdapterTests
         Assert.Equal("42", request.RequestId);
         Assert.Equal("Bash", request.ToolName);
         Assert.Equal("dotnet build", request.RawCommand);
+        Assert.Equal(PermissionRequestKind.CommandExecution, request.Details?.Kind);
+        Assert.Equal("dotnet build", request.Details?.Command);
     }
 
     [Fact]
@@ -35,6 +37,36 @@ public sealed class CodexPermissionAdapterTests
         Assert.Equal("file-1", request.RequestId);
         Assert.Equal("fileChange", request.ToolName);
         Assert.Contains("codex_file_change", request.RawCommand, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parses_file_change_target_path_for_scoped_operation_decisions()
+    {
+        PermissionRequest request = adapter.Parse(
+            Encoding.UTF8.GetBytes(
+                """{"jsonrpc":"2.0","id":"file-1","method":"item/fileChange/requestApproval","params":{"threadId":"t","turnId":"u","itemId":"item-2","operation":"write","targetPath":"C:\\repo\\.agents\\details.md","grantRoot":"C:\\repo\\.agents\\details.md"}}"""),
+            "repo",
+            "C:\\repo");
+
+        Assert.Equal(PermissionRequestKind.FileChange, request.Details?.Kind);
+        Assert.Equal(PermissionPathAccess.Write, request.Details?.PathAccess);
+        Assert.Equal("C:\\repo\\.agents\\details.md", request.Details?.FilePath);
+        Assert.Equal("C:\\repo\\.agents\\details.md", request.Details?.GrantRoot);
+    }
+
+    [Fact]
+    public void Parses_tool_call_path_arguments_for_scoped_operation_decisions()
+    {
+        PermissionRequest request = adapter.Parse(
+            Encoding.UTF8.GetBytes(
+                """{"jsonrpc":"2.0","id":"tool-1","method":"item/tool/call","params":{"name":"write_file","arguments":{"path":".agents/details.md","content":"x"}}}"""),
+            "repo",
+            "/repo");
+
+        Assert.Equal("toolCall", request.ToolName);
+        Assert.Equal(PermissionRequestKind.ToolCall, request.Details?.Kind);
+        Assert.Equal(PermissionPathAccess.Write, request.Details?.PathAccess);
+        Assert.Equal(".agents/details.md", Assert.Single(request.Details?.PathArguments ?? []));
     }
 
     [Theory]

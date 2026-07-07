@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
 using LoopRelay.Permissions.Abstractions;
+using LoopRelay.Permissions.Models;
 
 namespace LoopRelay.Agents.Services;
 
@@ -431,8 +432,10 @@ public sealed class CodexAppServerSession : IAgentSession
         {
             byte[] response = permissionGateway.Evaluate(
                 Encoding.UTF8.GetBytes(rawLine),
-                spec.RepositoryId,
-                spec.WorkingDirectory ?? ".");
+                new PermissionGatewayContext(
+                    spec.RepositoryId,
+                    spec.WorkingDirectory ?? ".",
+                    spec.OperationPermissionProfile));
             EnqueueCompleteFrame(Encoding.UTF8.GetString(response));
         }
         catch
