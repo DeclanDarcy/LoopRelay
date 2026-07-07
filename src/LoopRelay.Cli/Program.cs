@@ -50,6 +50,9 @@ switch (outcome)
         Console.WriteLine("Epic completed. Press any key to exit.");
         Console.ReadKey(intercept: true);
         return 0;
+    case LoopOutcome.CompletionBlocked:
+        console.Warn("Completion certification blocked epic closure. Review the evidence path reported above.");
+        return 4;
     case LoopOutcome.Cancelled:
         console.Warn("Run cancelled. Codex sessions terminated.");
         return 130;

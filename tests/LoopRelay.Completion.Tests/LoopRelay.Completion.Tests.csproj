@@ -19,10 +19,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\LoopRelay.Roadmap.Cli\LoopRelay.Roadmap.Cli.csproj" />
     <ProjectReference Include="..\..\src\LoopRelay.Completion\LoopRelay.Completion.csproj" />
     <ProjectReference Include="..\..\src\LoopRelay.Core\LoopRelay.Core.csproj" />
-    <ProjectReference Include="..\..\src\LoopRelay.Agents\LoopRelay.Agents.csproj" />
+    <ProjectReference Include="..\..\src\LoopRelay.Projections\LoopRelay.Projections.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\TestSupport\MemoryArtifactStore.cs" Link="TestSupport\MemoryArtifactStore.cs" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,5 @@
 using LoopRelay.Roadmap.Cli;
+using LoopRelay.Completion;
 
 namespace LoopRelay.Roadmap.Cli.Tests;
 
@@ -17,9 +18,9 @@ public sealed class CompletionCertificationPolicyTests
         string recommendation,
         string expectedIntent)
     {
-        var policy = new Cli.CompletionCertificationPolicy();
+        var policy = new CompletionCertificationPolicy();
 
-        Cli.CompletionCertificationPolicyResult result = policy.Validate(new Cli.CompletionEvaluationDecision(
+        CompletionCertificationPolicyResult result = policy.Validate(new CompletionEvaluationDecision(
             completionStatus,
             driftClassification,
             recommendation));
@@ -28,7 +29,7 @@ public sealed class CompletionCertificationPolicyTests
         Assert.NotNull(result.Rule);
         Assert.Equal(recommendation, result.Rule!.ClosureRecommendation);
 
-        Cli.CompletionCertificationRoute route = new Cli.CompletionCertificationRouter().Route(result.Decision);
+        CompletionCertificationRoute route = new CompletionCertificationRouter().Route(result.Decision);
         Assert.Equal(expectedIntent, route.Intent.ToString());
         Assert.Equal(recommendation, route.ClosureRecommendation);
     }
@@ -45,9 +46,9 @@ public sealed class CompletionCertificationPolicyTests
         string recommendation,
         string expectedReason)
     {
-        var policy = new Cli.CompletionCertificationPolicy();
+        var policy = new CompletionCertificationPolicy();
 
-        Cli.CompletionCertificationPolicyResult result = policy.Validate(new Cli.CompletionEvaluationDecision(
+        CompletionCertificationPolicyResult result = policy.Validate(new CompletionEvaluationDecision(
             completionStatus,
             driftClassification,
             recommendation));
@@ -61,15 +62,15 @@ public sealed class CompletionCertificationPolicyTests
     [Fact]
     public void Certification_policy_requires_coverage_for_new_completion_status_values()
     {
-        var policy = new Cli.CompletionCertificationPolicy();
-        string[] extendedStatuses = [.. Cli.CompletionEvaluationParser.AllowedCompletionStatuses, "Deferred"];
+        var policy = new CompletionCertificationPolicy();
+        string[] extendedStatuses = [.. CompletionEvaluationParser.AllowedCompletionStatuses, "Deferred"];
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => new Cli.CompletionCertificationPolicy(
+            () => new CompletionCertificationPolicy(
                 policy.Rules,
                 extendedStatuses,
-                Cli.CompletionEvaluationParser.AllowedDriftClassifications,
-                Cli.CompletionCertificationRouter.AllowedRecommendations));
+                CompletionEvaluationParser.AllowedDriftClassifications,
+                CompletionCertificationRouter.AllowedRecommendations));
 
         Assert.Contains("Deferred", exception.Message, StringComparison.Ordinal);
     }
@@ -77,15 +78,15 @@ public sealed class CompletionCertificationPolicyTests
     [Fact]
     public void Certification_policy_requires_coverage_for_new_drift_values()
     {
-        var policy = new Cli.CompletionCertificationPolicy();
-        string[] extendedDrift = [.. Cli.CompletionEvaluationParser.AllowedDriftClassifications, "Ambiguous"];
+        var policy = new CompletionCertificationPolicy();
+        string[] extendedDrift = [.. CompletionEvaluationParser.AllowedDriftClassifications, "Ambiguous"];
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => new Cli.CompletionCertificationPolicy(
+            () => new CompletionCertificationPolicy(
                 policy.Rules,
-                Cli.CompletionEvaluationParser.AllowedCompletionStatuses,
+                CompletionEvaluationParser.AllowedCompletionStatuses,
                 extendedDrift,
-                Cli.CompletionCertificationRouter.AllowedRecommendations));
+                CompletionCertificationRouter.AllowedRecommendations));
 
         Assert.Contains("Ambiguous", exception.Message, StringComparison.Ordinal);
     }
@@ -93,14 +94,14 @@ public sealed class CompletionCertificationPolicyTests
     [Fact]
     public void Certification_policy_requires_coverage_for_new_recommendation_values()
     {
-        var policy = new Cli.CompletionCertificationPolicy();
-        string[] extendedRecommendations = [.. Cli.CompletionCertificationVocabulary.ClosureRecommendations, "Suspend Epic"];
+        var policy = new CompletionCertificationPolicy();
+        string[] extendedRecommendations = [.. CompletionCertificationVocabulary.ClosureRecommendations, "Suspend Epic"];
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => new Cli.CompletionCertificationPolicy(
+            () => new CompletionCertificationPolicy(
                 policy.Rules,
-                Cli.CompletionCertificationVocabulary.CompletionStatuses,
-                Cli.CompletionCertificationVocabulary.DriftClassifications,
+                CompletionCertificationVocabulary.CompletionStatuses,
+                CompletionCertificationVocabulary.DriftClassifications,
                 extendedRecommendations));
 
         Assert.Contains("Suspend Epic", exception.Message, StringComparison.Ordinal);

@@ -1,3 +1,5 @@
+using LoopRelay.Completion;
+
 namespace LoopRelay.Roadmap.Cli;
 
 internal sealed class RoadmapUnblockPlanner(
@@ -304,7 +306,7 @@ internal sealed class RoadmapUnblockPlanner(
                 certification,
                 route);
         }
-        catch (MarkdownParseException exception)
+        catch (CompletionMarkdownParseException exception)
         {
             return RoadmapUnblockPlan.Failed(
                 RoadmapUnblockAction.RecoverCompletionCertification,
@@ -594,7 +596,7 @@ internal sealed record RoadmapUnblockPlan(
             reason,
             evidence,
             "Run the roadmap CLI to continue from the recovered completion route.",
-            route.TargetState,
+            RoadmapCompletionRouteMapper.Map(route).TargetState,
             certification.Decision.ClosureRecommendation,
             primaryEvidencePath,
             CompletionCertification: certification,

@@ -35,7 +35,7 @@ The synthesized document must answer:
 Read every file under:
 
 ```text
-.agents/epics/{label}/*
+.agents/archive/epics/{label}/*
 ```
 
 Treat the directory as containing mixed-quality material, including but not limited to:
@@ -91,7 +91,7 @@ The output must:
 
 ## Required Output Structure
 
-Write `.agents/epics/{label}.md` with the following structure:
+Write `.agents/archive/epics/{label}.md` with the following structure:
 
 ```markdown
 # {{Epic Title}}

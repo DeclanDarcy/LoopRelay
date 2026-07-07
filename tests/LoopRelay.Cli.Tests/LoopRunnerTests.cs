@@ -1,5 +1,6 @@
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
+using LoopRelay.Completion;
 using LoopRelay.Cli;
 using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Models;
@@ -12,7 +13,7 @@ public class LoopRunnerTests
 {
     private sealed record Harness(
         Cli.LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con,
-        FakeProcessRunner Git, FakeDecisionSessionResumeStore Resume);
+        FakeProcessRunner Git, FakeDecisionSessionResumeStore Resume, FakeCompletionCertificationService Completion);
 
     private static Harness New()
     {
@@ -38,9 +39,10 @@ public class LoopRunnerTests
         var submodulePublisher = new Cli.AgentsSubmodulePublisher(git, repo, con);
         var commitGate = new Cli.CommitGate(detector, git, repo, con);
         var resume = new FakeDecisionSessionResumeStore();
+        var completion = new FakeCompletionCertificationService();
         return new Harness(
-            new Cli.LoopRunner(gate, art, exec, dec, submodulePublisher, commitGate, resume, con),
-            rt, store, repo, con, git, resume);
+            new Cli.LoopRunner(gate, art, exec, dec, submodulePublisher, commitGate, resume, completion, con),
+            rt, store, repo, con, git, resume, completion);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
@@ -58,6 +60,7 @@ public class LoopRunnerTests
 
         Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
         Assert.Empty(h.Rt.OneShotCalls);   // no codex run at all
+        Assert.Single(h.Completion.Requests);
     }
 
     [Fact]
@@ -658,5 +661,30 @@ public class LoopRunnerTests
         Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
         Assert.Equal(1, h.Resume.ClearCalls);   // idempotent: re-runs against a completed epic re-delete a no-op
         Assert.Null(h.Resume.State);
+    }
+
+    [Fact]
+    public async Task Run_WhenCompletionCertificationBlocks_DoesNotClearPersistedDecisionSessionState()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");
+        h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
+        h.Completion.Result = CompletionCertificationResult.Blocked(
+            new CompletionEvaluationDecision("Partially Complete", "None", "Continue Epic"),
+            new CompletionCertificationRoute(
+                "Continue Epic",
+                CompletionTransitionIntent.ContinueExecution,
+                RequiresRoadmapCompletionContextUpdate: false,
+                ShouldCloseEpic: false),
+            ".agents/evidence/evaluations/epic-completion-and-drift.0001.md",
+            ".agents/evidence/blockers/completion-certification-blocked.0001.md",
+            [".agents/evidence/evaluations/epic-completion-and-drift.0001.md"],
+            "Continue Epic");
+
+        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.LoopOutcome.CompletionBlocked, outcome);
+        Assert.Equal(0, h.Resume.ClearCalls);
+        Assert.NotNull(h.Resume.State);
     }
 }

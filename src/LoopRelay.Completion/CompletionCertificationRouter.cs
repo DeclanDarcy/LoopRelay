@@ -1,54 +1,34 @@
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Completion;
 
-internal sealed class CompletionCertificationRouter
+public sealed class CompletionCertificationRouter
 {
     private static readonly CompletionCertificationRoute[] DefaultRoutes =
     [
         new(
             "Close Epic",
             CompletionTransitionIntent.UpdateRoadmapCompletionContext,
-            RoadmapState.SelectNextStrategicInitiative,
-            TransitionStatus.Completed,
-            RoadmapOutcome.Completed,
             RequiresRoadmapCompletionContextUpdate: true,
-            ActiveEpicLifecycleState: ArtifactLifecycleState.Completed,
-            NextTransitions: ["SelectNextEpic"]),
+            ShouldCloseEpic: true),
         new(
             "Close With Follow-Up",
             CompletionTransitionIntent.UpdateRoadmapCompletionContext,
-            RoadmapState.SelectNextStrategicInitiative,
-            TransitionStatus.Completed,
-            RoadmapOutcome.Completed,
             RequiresRoadmapCompletionContextUpdate: true,
-            ActiveEpicLifecycleState: ArtifactLifecycleState.Completed,
-            NextTransitions: ["SelectNextEpic"]),
+            ShouldCloseEpic: true),
         new(
             "Continue Epic",
             CompletionTransitionIntent.ContinueExecution,
-            RoadmapState.ExecutionLoop,
-            TransitionStatus.Paused,
-            RoadmapOutcome.Paused,
             RequiresRoadmapCompletionContextUpdate: false,
-            ActiveEpicLifecycleState: ArtifactLifecycleState.Executing,
-            NextTransitions: ["ContinueExecution"]),
+            ShouldCloseEpic: false),
         new(
             "Reopen Epic",
             CompletionTransitionIntent.ReturnToEpicPreparationAudit,
-            RoadmapState.EpicPreparationAudit,
-            TransitionStatus.Paused,
-            RoadmapOutcome.Paused,
             RequiresRoadmapCompletionContextUpdate: false,
-            ActiveEpicLifecycleState: ArtifactLifecycleState.Ready,
-            NextTransitions: ["EpicPreparationAudit"]),
+            ShouldCloseEpic: false),
         new(
             "Gather More Evidence",
             CompletionTransitionIntent.GatherAdditionalEvidence,
-            RoadmapState.EvidenceGathering,
-            TransitionStatus.Paused,
-            RoadmapOutcome.Paused,
             RequiresRoadmapCompletionContextUpdate: false,
-            ActiveEpicLifecycleState: ArtifactLifecycleState.Ready,
-            NextTransitions: ["GatherAdditionalEvidence", "EvaluateEpicCompletionAndDrift"]),
+            ShouldCloseEpic: false),
     ];
 
     private readonly IReadOnlyDictionary<string, CompletionCertificationRoute> routes;
@@ -58,7 +38,7 @@ internal sealed class CompletionCertificationRouter
     {
     }
 
-    internal CompletionCertificationRouter(IEnumerable<CompletionCertificationRoute> routes)
+    public CompletionCertificationRouter(IEnumerable<CompletionCertificationRoute> routes)
     {
         this.routes = routes.ToDictionary(route => route.ClosureRecommendation, StringComparer.Ordinal);
         EnsureComplete(this.routes.Keys);
@@ -98,21 +78,13 @@ internal sealed class CompletionCertificationRouter
     }
 }
 
-internal sealed record CompletionCertificationRoute(
+public sealed record CompletionCertificationRoute(
     string ClosureRecommendation,
     CompletionTransitionIntent Intent,
-    RoadmapState TargetState,
-    TransitionStatus TransitionStatus,
-    RoadmapOutcome CliOutcome,
     bool RequiresRoadmapCompletionContextUpdate,
-    ArtifactLifecycleState? ActiveEpicLifecycleState,
-    IReadOnlyList<string> NextTransitions)
-{
-    public RoadmapTransitionIntent ToRoadmapTransitionIntent(string evidencePath) =>
-        new(Intent.ToString(), TargetState, [evidencePath]);
-}
+    bool ShouldCloseEpic);
 
-internal enum CompletionTransitionIntent
+public enum CompletionTransitionIntent
 {
     UpdateRoadmapCompletionContext,
     ContinueExecution,

@@ -1,6 +1,6 @@
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Completion;
 
-internal sealed class CompletionCertificationPolicy
+public sealed class CompletionCertificationPolicy
 {
     private static readonly string[] CoveredCompletionStatuses =
     [
@@ -63,7 +63,7 @@ internal sealed class CompletionCertificationPolicy
     {
     }
 
-    internal CompletionCertificationPolicy(
+    public CompletionCertificationPolicy(
         IEnumerable<CompletionCertificationPolicyRule> rules,
         IReadOnlyList<string> allowedCompletionStatuses,
         IReadOnlyList<string> allowedDriftClassifications,
@@ -187,7 +187,7 @@ internal sealed class CompletionCertificationPolicy
     }
 }
 
-internal sealed record CompletionCertificationPolicyRule(
+public sealed record CompletionCertificationPolicyRule(
     string ClosureRecommendation,
     IReadOnlyList<string> AllowedCompletionStatuses,
     IReadOnlyList<string> AllowedDriftClassifications,
@@ -200,7 +200,7 @@ internal sealed record CompletionCertificationPolicyRule(
         AllowedDriftClassifications.Contains(driftClassification, StringComparer.Ordinal);
 }
 
-internal sealed record CompletionCertificationPolicyResult(
+public sealed record CompletionCertificationPolicyResult(
     bool IsValid,
     CompletionEvaluationDecision Decision,
     CompletionCertificationPolicyRule? Rule,

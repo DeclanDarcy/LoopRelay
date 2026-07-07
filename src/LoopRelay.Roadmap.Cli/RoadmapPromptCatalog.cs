@@ -107,6 +107,8 @@ internal static class RoadmapPromptCatalog
                 Core.Prompts.Planning.GenerateMilestoneDeepDivesForEpic.Render(projectContext),
             "EvaluateEpicCompletionAndDrift" =>
                 Core.Prompts.Planning.EvaluateEpicCompletionAndDrift.Render(projectContext),
+            "SynthesizeCompletedEpic" =>
+                Core.Prompts.Planning.SynthesizeCompletedEpic.Render(secondaryInput),
             _ => throw new ArgumentOutOfRangeException(nameof(runtimePromptName), runtimePromptName, "Unknown runtime prompt."),
         };
 

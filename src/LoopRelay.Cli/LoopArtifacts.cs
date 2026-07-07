@@ -11,6 +11,8 @@ namespace LoopRelay.Cli;
 /// </summary>
 internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
 {
+    public Repository Repository => repository;
+
     public Task<bool> ExistsAsync(string relativePath) =>
         store.ExistsAsync(Resolve(relativePath));
 

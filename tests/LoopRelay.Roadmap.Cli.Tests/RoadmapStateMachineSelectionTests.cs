@@ -1,4 +1,5 @@
 using LoopRelay.Agents.Abstractions;
+using LoopRelay.Completion;
 using LoopRelay.Roadmap.Cli;
 using BundleFileExtractor = LoopRelay.Roadmap.Cli.BundleFileExtractor;
 using DecisionLedgerStore = LoopRelay.Roadmap.Cli.DecisionLedgerStore;
@@ -125,7 +126,7 @@ internal static class StateMachineFactory
             inputResolver);
         var invariants = new Cli.InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
         var resumePlanner = new Cli.RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new Cli.ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
-        var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new Cli.CompletionCertificationPolicy(), new Cli.CompletionCertificationRouter(), executionPreparation);
+        var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
         return new Cli.RoadmapStateMachine(
             repo.Artifacts,
             loader,
@@ -134,8 +135,9 @@ internal static class StateMachineFactory
             new Cli.ProjectionCache(repo.Artifacts, projections, manifest, new Cli.ProjectionValidator(), runner),
             contextBuilder,
             inputResolver,
-            new Cli.CompletionCertificationPolicy(),
-            new Cli.CompletionCertificationRouter(),
+            new CompletionCertificationPolicy(),
+            new CompletionCertificationRouter(),
+            new FakeCompletedEpicArchiveService(),
             runner,
             stateStore,
             new Cli.RoadmapStartupPlanner(),

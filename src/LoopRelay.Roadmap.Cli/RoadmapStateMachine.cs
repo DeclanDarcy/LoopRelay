@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using LoopRelay.Completion;
 
 namespace LoopRelay.Roadmap.Cli;
 
@@ -12,6 +13,7 @@ internal sealed class RoadmapStateMachine(
     TransitionInputResolver inputResolver,
     CompletionCertificationPolicy completionPolicy,
     CompletionCertificationRouter completionRouter,
+    ICompletedEpicArchiveService completionArchive,
     RoadmapPromptRunner promptRunner,
     RoadmapStateStore stateStore,
     RoadmapStartupPlanner startupPlanner,
@@ -301,6 +303,7 @@ internal sealed class RoadmapStateMachine(
             ?? throw new RoadmapStepException("Completion certification unblock did not include certification evidence.");
         CompletionCertificationRoute route = unblockPlan.CompletionRoute
             ?? throw new RoadmapStepException("Completion certification unblock did not include a route.");
+        RoadmapCompletionRoute roadmapRoute = RoadmapCompletionRouteMapper.Map(route);
         string evaluationPath = unblockPlan.PrimaryEvidencePath
             ?? throw new RoadmapStepException("Completion certification unblock did not include an evaluation evidence path.");
         string reviewPath = await WriteUnblockReviewEvidenceAsync(persistedState, unblockPlan, success: true);
@@ -314,28 +317,37 @@ internal sealed class RoadmapStateMachine(
             "Unclear",
             unblockPlan.Reason);
 
-        if (route.RequiresRoadmapCompletionContextUpdate)
+        CompletedEpicArchiveResult? archive = null;
+        if (roadmapRoute.RequiresRoadmapCompletionContextUpdate)
         {
             ProjectContext projectContext = await projectContextLoader.LoadAsync(cancellationToken);
-            await UpdateRoadmapCompletionContextAsync(projectContext, evaluationPath, cancellationToken);
+            archive = await completionArchive.ArchiveAndSynthesizeAsync(
+                new CompletedEpicArchiveRequest(artifacts.Repository),
+                cancellationToken);
+            await UpdateRoadmapCompletionContextAsync(
+                projectContext,
+                evaluationPath,
+                archive.SynthesisPath,
+                archive.SynthesisContent,
+                cancellationToken);
         }
 
-        if (route.ActiveEpicLifecycleState is { } activeEpicLifecycleState)
+        if (roadmapRoute.ActiveEpicLifecycleState is { } activeEpicLifecycleState)
         {
             await lifecycleStore.UpsertAsync(
                 RoadmapArtifactPaths.ActiveEpic,
                 activeEpicLifecycleState,
-                $"Completion certification unblock route: {route.ClosureRecommendation}");
+                $"Completion certification unblock route: {roadmapRoute.ClosureRecommendation}");
         }
 
         await PersistCompletionRouteAsync(
-            route,
+            roadmapRoute,
             certification.Decision,
             persistedState.LastTransition.Projection,
             evaluationPath,
-            [reviewPath],
+            archive is null ? [reviewPath] : [reviewPath, archive.SynthesisPath],
             []);
-        return route.CliOutcome;
+        return roadmapRoute.CliOutcome;
     }
 
     private async Task<RoadmapOutcome> RecoverExecutionRuntimeFailureAsync(
@@ -1066,21 +1078,36 @@ internal sealed class RoadmapStateMachine(
         }
 
         CompletionCertificationRoute route = completionRouter.Route(certification.Decision);
-        if (route.RequiresRoadmapCompletionContextUpdate)
+        RoadmapCompletionRoute roadmapRoute = RoadmapCompletionRouteMapper.Map(route);
+        CompletedEpicArchiveResult? archive = null;
+        if (roadmapRoute.RequiresRoadmapCompletionContextUpdate)
         {
-            await UpdateRoadmapCompletionContextAsync(projectContext, evaluationPath, cancellationToken);
+            archive = await completionArchive.ArchiveAndSynthesizeAsync(
+                new CompletedEpicArchiveRequest(artifacts.Repository),
+                cancellationToken);
+            await UpdateRoadmapCompletionContextAsync(
+                projectContext,
+                evaluationPath,
+                archive.SynthesisPath,
+                archive.SynthesisContent,
+                cancellationToken);
         }
 
-        if (route.ActiveEpicLifecycleState is { } activeEpicLifecycleState)
+        if (roadmapRoute.ActiveEpicLifecycleState is { } activeEpicLifecycleState)
         {
             await lifecycleStore.UpsertAsync(
                 RoadmapArtifactPaths.ActiveEpic,
                 activeEpicLifecycleState,
-                $"Completion certification route: {route.ClosureRecommendation}");
+                $"Completion certification route: {roadmapRoute.ClosureRecommendation}");
         }
 
-        await PersistCompletionRouteAsync(route, decision, projection.Definition.ProjectionPath, evaluationPath);
-        return route.CliOutcome;
+        await PersistCompletionRouteAsync(
+            roadmapRoute,
+            decision,
+            projection.Definition.ProjectionPath,
+            evaluationPath,
+            archive is null ? null : [archive.SynthesisPath]);
+        return roadmapRoute.CliOutcome;
     }
 
     private async Task<string> ReadPersistedExecutionEvidencePathAsync()
@@ -1103,20 +1130,29 @@ internal sealed class RoadmapStateMachine(
         throw new RoadmapStepException("Cannot resume completion certification because execution evidence is missing.");
     }
 
-    private async Task UpdateRoadmapCompletionContextAsync(ProjectContext projectContext, string evaluationPath, CancellationToken cancellationToken)
+    private async Task UpdateRoadmapCompletionContextAsync(
+        ProjectContext projectContext,
+        string evaluationPath,
+        string completedEpicSynthesisPath,
+        string completedEpicSynthesis,
+        CancellationToken cancellationToken)
     {
         const string runtimePrompt = "UpdateRoadmapCompletionContext";
         console.Phase("Update roadmap completion context");
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = await contextBuilder.BuildCompletionUpdateContextAsync(projection.Content, evaluationPath);
+        string context = await contextBuilder.BuildCompletionUpdateContextAsync(
+            projection.Content,
+            evaluationPath,
+            completedEpicSynthesisPath,
+            completedEpicSynthesis);
         string output = await RunPromptTransitionAsync(
             RoadmapState.CompletionEvaluationAndContextUpdate,
             RoadmapState.SelectNextStrategicInitiative,
             runtimePrompt,
             projection.Definition.ProjectionPath,
             context,
-            string.Empty,
+            completedEpicSynthesis,
             [RoadmapArtifactPaths.RoadmapCompletionContext],
             cancellationToken,
             TransitionInputContext.CompletionEvaluation(evaluationPath));
@@ -1350,7 +1386,7 @@ internal sealed class RoadmapStateMachine(
     }
 
     private async Task PersistCompletionRouteAsync(
-        CompletionCertificationRoute route,
+        RoadmapCompletionRoute route,
         CompletionEvaluationDecision decision,
         string projectionPath,
         string evaluationPath,

@@ -1,6 +1,6 @@
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Completion;
 
-internal static class CompletionCertificationVocabulary
+public static class CompletionCertificationVocabulary
 {
     public static IReadOnlyList<string> CompletionStatuses { get; } =
     [

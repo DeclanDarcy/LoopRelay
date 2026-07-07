@@ -72,15 +72,18 @@ internal sealed class RoadmapPromptContextBuilder(
         return ValidateNoRawProjectContext(Build(sections));
     }
 
-    public async Task<string> BuildCompletionUpdateContextAsync(string projectionContent, string latestEvaluationPath)
+    public async Task<string> BuildCompletionUpdateContextAsync(
+        string projectionContent,
+        string latestEvaluationPath,
+        string completedEpicSynthesisPath,
+        string completedEpicSynthesis)
     {
         string completion = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
-        string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
         string evaluation = await artifacts.ReadRequiredAsync(latestEvaluationPath);
         return ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
             Section("Current Roadmap Completion Context", completion),
-            Section("Completed Epic", activeEpic),
+            Section($"Completed Epic Synthesis: {completedEpicSynthesisPath}", completedEpicSynthesis),
             Section("Latest Completion Evaluation", evaluation),
             Section("Repository Inspection Instructions", "Inspect repository reality in read-only mode before updating strategic state."),
         ]));

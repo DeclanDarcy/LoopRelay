@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/LoopRelay.Agents/LoopRelay.Agents.csproj" />
     <Project Path="src/LoopRelay.Cli/LoopRelay.Cli.csproj" />
+    <Project Path="src/LoopRelay.Completion/LoopRelay.Completion.csproj" />
     <Project Path="src/LoopRelay.Core/LoopRelay.Core.csproj" />
     <Project Path="src/LoopRelay.Infrastructure/LoopRelay.Infrastructure.csproj" />
     <Project Path="src/LoopRelay.Orchestration.Primitives/LoopRelay.Orchestration.csproj" />
@@ -14,6 +15,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/LoopRelay.Agents.Tests/LoopRelay.Agents.Tests.csproj" />
     <Project Path="tests/LoopRelay.Cli.Tests/LoopRelay.Cli.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Completion.Tests/LoopRelay.Completion.Tests.csproj" />
     <Project Path="tests/LoopRelay.Core.Tests/LoopRelay.Core.Tests.csproj" />
     <Project Path="tests/LoopRelay.Infrastructure.Tests/LoopRelay.Infrastructure.Tests.csproj" />
     <Project Path="tests/LoopRelay.Orchestration.Primitives.Tests/LoopRelay.Orchestration.Tests.csproj" />

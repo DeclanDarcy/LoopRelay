@@ -8,6 +8,7 @@ internal sealed class AgentsSubmodulePublisher
 {
     public const string ContextUpdateMessage = "Orchestration loop: context update before execution";
     public const string ExecutionHandoffMessage = "Orchestration loop: execution handoff";
+    public const string CompletionCertificationMessage = "Orchestration loop: completion certification";
     public const string PartialExitMessage = "Orchestration loop: partial state on interrupted exit";
     public const string GitlinkPointerMessage = "Orchestration loop: record .agents submodule pointer";
 

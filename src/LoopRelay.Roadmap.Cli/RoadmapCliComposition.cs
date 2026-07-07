@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Services;
+using LoopRelay.Completion;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Infrastructure.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -68,6 +69,10 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             inputResolver);
         var completionPolicy = new CompletionCertificationPolicy();
         var completionRouter = new CompletionCertificationRouter();
+        var completionArchive = new CompletedEpicArchiveService(
+            store,
+            new AgentCompletionPromptRunner(progressRuntime, repository),
+            new RoadmapCompletionObserver(console));
         var stateStore = new RoadmapStateStore(artifacts);
         var decisionLedger = new DecisionLedgerStore(artifacts);
         var journal = new TransitionJournalStore(artifacts);
@@ -113,6 +118,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             inputResolver,
             completionPolicy,
             completionRouter,
+            completionArchive,
             promptRunner,
             stateStore,
             startupPlanner,
@@ -143,4 +149,13 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
 
         await provider.DisposeAsync();
     }
+}
+
+internal sealed class RoadmapCompletionObserver(ILoopConsole console) : ICompletionObserver
+{
+    public void Phase(string phase) => console.Phase(phase);
+
+    public void Info(string text) => console.Info(text);
+
+    public void Warn(string text) => console.Warn(text);
 }

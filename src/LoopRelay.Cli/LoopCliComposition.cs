@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Services;
+using LoopRelay.Completion;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Infrastructure.Diagnostics;
@@ -87,6 +88,18 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             new ProjectionManifestStore(projectionArtifacts),
             new ProjectionValidator(projectionRegistry),
             new ProjectionPromptRunner(gatedRuntime, repository, console));
+        var completionPromptRunner = new AgentCompletionPromptRunner(gatedRuntime, repository);
+        var completionObserver = new ConsoleCompletionObserver(console);
+        var completionArchive = new CompletedEpicArchiveService(
+            store,
+            completionPromptRunner,
+            completionObserver);
+        var completionCertification = new CompletionCertificationService(
+            store,
+            projectionService,
+            completionPromptRunner,
+            completionArchive,
+            observer: completionObserver);
         var execution = new ExecutionStep(gatedRuntime, artifacts, console, repository, changeDetector, gate);
         var decision = new DecisionSession(
             gatedRuntime,
@@ -107,6 +120,7 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             submodulePublisher,
             commitGate,
             resumeStore,
+            completionCertification,
             console);
 
         return new LoopCliComposition(provider, console, executableResolver, loop);
@@ -122,4 +136,13 @@ internal sealed class LoopCliComposition : IAsyncDisposable
 
         await provider.DisposeAsync();
     }
+}
+
+internal sealed class ConsoleCompletionObserver(ILoopConsole console) : ICompletionObserver
+{
+    public void Phase(string phase) => console.Phase(phase);
+
+    public void Info(string text) => console.Info(text);
+
+    public void Warn(string text) => console.Warn(text);
 }

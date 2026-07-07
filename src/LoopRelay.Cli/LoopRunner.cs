@@ -1,5 +1,6 @@
 using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Abstractions;
+using LoopRelay.Completion;
 
 namespace LoopRelay.Cli;
 
@@ -15,6 +16,7 @@ internal sealed class LoopRunner(
     AgentsSubmodulePublisher submodulePublisher,
     CommitGate commitGate,
     IDecisionSessionResumeStore resumeStore,
+    ICompletionCertificationService completionCertification,
     ILoopConsole console) : IAsyncDisposable
 {
     public async Task<LoopOutcome> RunAsync(CancellationToken cancellationToken)
@@ -31,6 +33,25 @@ internal sealed class LoopRunner(
                 // waits on a (potentially multi-day) quota reset.
                 if (await gate.IsEpicCompleteAsync())
                 {
+                    CompletionCertificationResult completion = await completionCertification.CertifyPlanCompletionAsync(
+                        new CompletionCertificationRequest(artifacts.Repository),
+                        cancellationToken);
+                    await submodulePublisher.PublishAsync(
+                        AgentsSubmodulePublisher.CompletionCertificationMessage,
+                        cancellationToken);
+
+                    if (completion.Outcome == CompletionCertificationServiceOutcome.Blocked)
+                    {
+                        console.Warn($"Completion certification blocked: {completion.Message} Evidence: {FormatEvidence(completion.EvidencePaths)}");
+                        return LoopOutcome.CompletionBlocked;
+                    }
+
+                    if (completion.Outcome == CompletionCertificationServiceOutcome.Failed)
+                    {
+                        console.Error($"Completion certification failed: {completion.Message} Evidence: {FormatEvidence(completion.EvidencePaths)}");
+                        return LoopOutcome.Failed;
+                    }
+
                     // A finished epic obsoletes the persisted decision-session resume state — the next epic must start
                     // from a fresh decision process primed with its own operational context. Idempotent by design: this
                     // fires again on every re-run against a completed epic, and deleting nothing is a no-op.
@@ -149,6 +170,9 @@ internal sealed class LoopRunner(
             console.Warn($"Could not publish partial .agents state on exit: {ex.Message}");
         }
     }
+
+    private static string FormatEvidence(IReadOnlyList<string> evidencePaths) =>
+        evidencePaths.Count == 0 ? "None" : string.Join(", ", evidencePaths);
 
     public ValueTask DisposeAsync() => decision.DisposeAsync();
 }

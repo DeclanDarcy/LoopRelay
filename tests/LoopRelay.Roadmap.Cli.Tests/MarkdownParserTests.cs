@@ -1,4 +1,5 @@
 using LoopRelay.Roadmap.Cli;
+using LoopRelay.Completion;
 
 namespace LoopRelay.Roadmap.Cli.Tests;
 
@@ -92,7 +93,7 @@ public sealed class MarkdownParserTests
         | Closure Recommendation | Close Epic |
         """;
 
-        Cli.CompletionEvaluationDecision decision = new Cli.CompletionEvaluationParser().Parse(markdown);
+        CompletionEvaluationDecision decision = new CompletionEvaluationParser().Parse(markdown);
 
         Assert.Equal("Fully Complete", decision.OverallCompletionStatus);
         Assert.Equal("None", decision.OverallDriftClassification);
@@ -122,7 +123,7 @@ public sealed class MarkdownParserTests
         | Closure Recommendation | {{fields["Closure Recommendation"]}} |
         """;
 
-        Assert.Throws<Cli.MarkdownParseException>(() => new Cli.CompletionEvaluationParser().Parse(markdown));
+        Assert.Throws<CompletionMarkdownParseException>(() => new CompletionEvaluationParser().Parse(markdown));
     }
 
     [Fact]
@@ -134,7 +135,7 @@ public sealed class MarkdownParserTests
         This section does not contain the required field table.
         """;
 
-        Assert.Throws<Cli.MarkdownParseException>(() => new Cli.CompletionEvaluationParser().Parse(markdown));
+        Assert.Throws<CompletionMarkdownParseException>(() => new CompletionEvaluationParser().Parse(markdown));
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Completion;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Roadmap.Cli;
@@ -153,6 +154,25 @@ internal sealed class TestConsole : Cli.ILoopConsole
     public void Info(string text) => Infos.Add(text);
     public void Warn(string text) => Warnings.Add(text);
     public void Error(string text) => Errors.Add(text);
+}
+
+internal sealed class FakeCompletedEpicArchiveService : ICompletedEpicArchiveService
+{
+    public List<CompletedEpicArchiveRequest> Requests { get; } = [];
+
+    public CompletedEpicArchiveResult Result { get; set; } = new(
+        1,
+        ".agents/archive/epics/1",
+        ".agents/archive/epics/1.md",
+        "# Completed Epic");
+
+    public Task<CompletedEpicArchiveResult> ArchiveAndSynthesizeAsync(
+        CompletedEpicArchiveRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        Requests.Add(request);
+        return Task.FromResult(Result);
+    }
 }
 
 internal static class ExecutionPreparationTestSupport
