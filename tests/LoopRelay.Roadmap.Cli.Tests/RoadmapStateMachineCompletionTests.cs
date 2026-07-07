@@ -119,7 +119,7 @@ public sealed class RoadmapStateMachineCompletionTests
         AssertPromptSnapshot(records, "SelectNextEpic", [
             Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"],
             Cli.RoadmapArtifactPaths.RoadmapCompletionContext,
-            Cli.RoadmapArtifactPaths.RoadmapFile,
+            ".agents/roadmap/001-roadmap.md",
         ]);
         AssertPromptSnapshot(records, "GenerateMilestoneDeepDivesForEpic", [
             Cli.RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"],
@@ -244,7 +244,7 @@ public sealed class RoadmapStateMachineCompletionTests
         var repo = new TempRepo();
         repo.SeedProjectContext();
         repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         return repo;
     }
 

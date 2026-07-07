@@ -108,7 +108,7 @@ public sealed class RoadmapResumePlannerTests
         Cli.ProjectContext context = await SeedProjectAsync(repo);
         SeedCompletionContext(repo);
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, SelectionForOutcome(staleOutcome));
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "changed roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "changed roadmap");
 
         Cli.RoadmapResumePlan plan = await CreatePlanner(repo).PlanAsync(State(Cli.RoadmapState.SelectNextStrategicInitiative, prompt: "SelectNextEpic", output: Cli.RoadmapArtifactPaths.Selection), context, CancellationToken.None);
 
@@ -320,7 +320,7 @@ public sealed class RoadmapResumePlannerTests
     private static async Task<Cli.ProjectContext> SeedProjectAsync(TempRepo repo)
     {
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         return await new ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
     }
 

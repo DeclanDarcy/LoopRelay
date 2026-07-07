@@ -74,7 +74,7 @@ public sealed class RoadmapStateMachineUnblockTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap source");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap source");
         const string blockerPath = ".agents/evidence/blockers/preflight.0001.md";
         repo.Write(blockerPath, "original preflight blocker");
         await SaveStateAsync(repo, BlockedState(
@@ -343,7 +343,7 @@ public sealed class RoadmapStateMachineUnblockTests
     {
         var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap source");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap source");
         return repo;
     }
 

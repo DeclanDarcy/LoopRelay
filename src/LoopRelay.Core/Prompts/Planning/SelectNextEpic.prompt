@@ -24,6 +24,10 @@ The selected initiative may be:
 
 The collection of epics at `.agents/roadmap/*.md` is a strategic hypothesis, not the complete search space.
 
+The runtime context provides roadmap source references, not embedded roadmap epic bodies.
+
+Before evaluating existing roadmap epics, inspect `.agents/roadmap/*.md` directly from the repository.
+
 ---
 
 ## Core Objective
@@ -236,7 +240,7 @@ From roadmap completion context, identify:
 
 ### Step 3 — Parse future roadmap options
 
-From the roadmap, identify each future epic and extract:
+From the roadmap files at `.agents/roadmap/*.md`, identify each future epic and extract:
 
 - intended capability
 - dependencies

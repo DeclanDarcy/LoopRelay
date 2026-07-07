@@ -46,12 +46,12 @@ public sealed class TransitionInputResolverTests
     }
 
     [Fact]
-    public async Task Selection_resolves_ordered_roadmap_file_set()
+    public async Task Selection_resolves_ordered_roadmap_directory_file_set()
     {
         using var repo = new TempRepo();
         string projectionPath = SeedProjection(repo, "SelectNextEpic");
         repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "root roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap 001");
         repo.Write(".agents/roadmap/b.md", "b");
         repo.Write(".agents/roadmap/a.md", "a");
 
@@ -62,25 +62,21 @@ public sealed class TransitionInputResolverTests
             .Select(input => input.Path)
             .ToArray();
         Assert.Equal(
-            [Cli.RoadmapArtifactPaths.RoadmapFile, ".agents/roadmap/a.md", ".agents/roadmap/b.md"],
+            [".agents/roadmap/001-roadmap.md", ".agents/roadmap/a.md", ".agents/roadmap/b.md"],
             roadmapInputs);
     }
 
     [Fact]
-    public async Task Selection_records_missing_optional_roadmap_file_when_directory_sources_exist()
+    public async Task Selection_requires_roadmap_directory_sources()
     {
         using var repo = new TempRepo();
         string projectionPath = SeedProjection(repo, "SelectNextEpic");
         repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
-        repo.Write(".agents/roadmap/a.md", "a");
 
-        Cli.TransitionInputSnapshot snapshot = await ResolveAsync(repo, "SelectNextEpic", projectionPath);
+        Cli.RoadmapStepException exception = await Assert.ThrowsAsync<Cli.RoadmapStepException>(
+            () => ResolveAsync(repo, "SelectNextEpic", projectionPath));
 
-        Cli.TransitionArtifactInput roadmapFile = snapshot.ArtifactInputs.Single(input => input.Path == Cli.RoadmapArtifactPaths.RoadmapFile);
-        Assert.False(roadmapFile.Required);
-        Assert.Equal(Cli.TransitionInputPresence.MissingOptional, roadmapFile.Presence);
-        Assert.Null(roadmapFile.Hash);
-        Assert.False(snapshot.ToInputArtifactHashes().ContainsKey(Cli.RoadmapArtifactPaths.RoadmapFile));
+        Assert.Contains(Cli.RoadmapArtifactPaths.RoadmapDirectoryPattern, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

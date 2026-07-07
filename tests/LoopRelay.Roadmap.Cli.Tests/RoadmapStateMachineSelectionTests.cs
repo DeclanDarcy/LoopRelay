@@ -16,7 +16,7 @@ public sealed class RoadmapStateMachineSelectionTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         var runtime = new ScriptedAgentRuntime(
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("CreateRoadmapCompletionContext")),
             ScriptedAgentRuntime.Completed("# Roadmap Completion Context"),
@@ -36,7 +36,7 @@ public sealed class RoadmapStateMachineSelectionTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         repo.Write(".agents/archive/epics/001-done.md", """
             # Epic: Archived Capability
 
@@ -71,7 +71,7 @@ public sealed class RoadmapStateMachineSelectionTests
         using var repo = new TempRepo();
         repo.SeedProjectContext();
         repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         var runtime = new ScriptedAgentRuntime(
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));

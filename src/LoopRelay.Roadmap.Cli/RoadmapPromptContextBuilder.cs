@@ -11,11 +11,11 @@ internal sealed class RoadmapPromptContextBuilder(
     public async Task<string> BuildSelectionContextAsync(string projectionContent, IReadOnlyList<RetiredEpic> retiredEpics)
     {
         string completion = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
-        string roadmap = await artifacts.ReadRoadmapSourceAsync();
+        string roadmapSources = await RenderRoadmapSourceReferencesAsync();
         return ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
             Section("Current Roadmap Completion Context", completion),
-            Section("Roadmap Source", roadmap),
+            Section("Roadmap Source References", roadmapSources),
             Section("Retired Epics", RenderRetiredEpics(retiredEpics)),
         ]));
     }
@@ -123,6 +123,34 @@ internal sealed class RoadmapPromptContextBuilder(
                 .Append(" | ")
                 .Append(Escape(retired.PrimaryReason))
                 .AppendLine(" |");
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private async Task<string> RenderRoadmapSourceReferencesAsync()
+    {
+        IReadOnlyList<string> sourcePaths = await artifacts.RequireRoadmapSourcePathsAsync();
+        var builder = new StringBuilder();
+        builder.AppendLine("Roadmap epic bodies are intentionally not embedded in this prompt context.");
+        builder
+            .Append("Read roadmap epics directly from `")
+            .Append(RoadmapArtifactPaths.RoadmapDirectoryPattern)
+            .AppendLine("` before evaluating existing roadmap candidates.");
+        builder.AppendLine();
+        builder.AppendLine("| Source Path | Source Kind |");
+        builder.AppendLine("|---|---|");
+        builder
+            .Append("| ")
+            .Append(Escape(RoadmapArtifactPaths.RoadmapDirectoryPattern))
+            .AppendLine(" | Primary roadmap epic glob |");
+
+        foreach (string path in sourcePaths)
+        {
+            builder
+                .Append("| ")
+                .Append(Escape(path))
+                .AppendLine(" | Roadmap epic source |");
         }
 
         return builder.ToString().TrimEnd();

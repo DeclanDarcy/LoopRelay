@@ -197,7 +197,7 @@ public sealed class ExecutionPreparationProvenanceTests
         int specCount = 1)
     {
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
         await new Cli.ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(Cli.RoadmapArtifactPaths.ActiveEpic, Cli.ArtifactLifecycleState.Ready);
 
@@ -219,7 +219,7 @@ public sealed class ExecutionPreparationProvenanceTests
     private static async Task<Cli.ProjectContext> SeedProjectAsync(TempRepo repo)
     {
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         return await new ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
     }
 

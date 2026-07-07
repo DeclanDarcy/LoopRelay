@@ -614,7 +614,6 @@ internal sealed class RoadmapArtifactSnapshot
         string[] knownPaths =
         [
             RoadmapArtifactPaths.State,
-            RoadmapArtifactPaths.RoadmapFile,
             RoadmapArtifactPaths.RoadmapCompletionContext,
             RoadmapArtifactPaths.Selection,
             RoadmapArtifactPaths.ActiveEpic,
@@ -636,9 +635,7 @@ internal sealed class RoadmapArtifactSnapshot
         }
 
         IReadOnlyList<string> roadmapFiles = await artifacts.ListAsync(RoadmapArtifactPaths.RoadmapDirectory, "*.md");
-        bool roadmapSourceAvailable =
-            statuses[RoadmapArtifactPaths.RoadmapFile] == ArtifactStatus.Present ||
-            roadmapFiles.Count > 0;
+        bool roadmapSourceAvailable = roadmapFiles.Count > 0;
 
         IReadOnlyDictionary<string, ArtifactLifecycleState> lifecycle = (await lifecycleStore.LoadAsync())
             .GroupBy(entry => entry.Path, StringComparer.OrdinalIgnoreCase)
@@ -682,7 +679,7 @@ internal sealed class RoadmapArtifactSnapshot
 
     public bool HasRequiredInput(string path)
     {
-        if (string.Equals(path, RoadmapArtifactPaths.RoadmapFile, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(path, RoadmapArtifactPaths.RoadmapDirectoryPattern, StringComparison.OrdinalIgnoreCase))
         {
             return RoadmapSourceAvailable;
         }

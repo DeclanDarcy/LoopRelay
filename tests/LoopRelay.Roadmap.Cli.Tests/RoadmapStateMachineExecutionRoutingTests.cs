@@ -176,7 +176,7 @@ public sealed class RoadmapStateMachineExecutionRoutingTests
         var repo = new TempRepo();
         repo.SeedProjectContext();
         repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         return repo;
     }
 

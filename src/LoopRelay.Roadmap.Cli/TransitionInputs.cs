@@ -87,9 +87,8 @@ internal sealed class TransitionInputResolver(
 
     private async Task AddRoadmapSourceInputsAsync(TransitionInputAccumulator inputs)
     {
-        inputs.AddOptional(RoadmapArtifactPaths.RoadmapFile, TransitionInputRole.RoadmapSource);
-        IReadOnlyList<string> roadmapFiles = await artifacts.ListAsync(RoadmapArtifactPaths.RoadmapDirectory, "*.md");
-        foreach (string path in roadmapFiles.Order(StringComparer.Ordinal))
+        IReadOnlyList<string> roadmapFiles = await artifacts.RequireRoadmapSourcePathsAsync();
+        foreach (string path in roadmapFiles)
         {
             inputs.AddRequired(path, TransitionInputRole.RoadmapSource);
         }

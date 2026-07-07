@@ -500,12 +500,6 @@ internal sealed class RoadmapUnblockPlanner(
     private async Task<IReadOnlyList<RoadmapUnblockEvidence>> HashRoadmapSourceAsync()
     {
         var evidence = new List<RoadmapUnblockEvidence>();
-        string? roadmapFile = await artifacts.ReadAsync(RoadmapArtifactPaths.RoadmapFile);
-        if (!string.IsNullOrWhiteSpace(roadmapFile))
-        {
-            evidence.Add(new RoadmapUnblockEvidence(RoadmapArtifactPaths.RoadmapFile, "RoadmapSource", RoadmapHash.Sha256(roadmapFile), "Present"));
-        }
-
         IReadOnlyList<string> roadmapFiles = await artifacts.ListAsync(RoadmapArtifactPaths.RoadmapDirectory, "*.md");
         foreach (string path in roadmapFiles.Order(StringComparer.Ordinal))
         {

@@ -27,6 +27,7 @@ public sealed class PromptContractRegistryTests
         Assert.Contains("SelectNextEpic", repo.Read(Cli.RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
         Assert.Contains("Optional Inputs", repo.Read(Cli.RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
         Assert.Contains(".agents/archive/epics/*.md", repo.Read(Cli.RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
+        Assert.Contains(Cli.RoadmapArtifactPaths.RoadmapDirectoryPattern, repo.Read(Cli.RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
     }
 
     [Fact]

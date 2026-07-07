@@ -24,7 +24,7 @@ public sealed class TransitionJournalTests
     }
 
     [Fact]
-    public void Journal_deserializes_legacy_records_without_input_snapshot()
+    public void Journal_deserializes_records_without_input_snapshot()
     {
         const string legacy = """
             {
@@ -37,7 +37,7 @@ public sealed class TransitionJournalTests
               "projection": "projection",
               "promptContractKey": "contract",
               "inputArtifactHashes": {
-                ".agents/roadmap.md": "hash"
+                ".agents/roadmap/001-roadmap.md": "hash"
               },
               "outputPaths": [
                 ".agents/selection.md"
@@ -55,7 +55,7 @@ public sealed class TransitionJournalTests
 
         Assert.NotNull(record);
         Assert.Null(record.InputSnapshot);
-        Assert.Equal("hash", record.InputArtifactHashes[Cli.RoadmapArtifactPaths.RoadmapFile]);
+        Assert.Equal("hash", record.InputArtifactHashes[".agents/roadmap/001-roadmap.md"]);
     }
 
     [Fact]
@@ -64,9 +64,9 @@ public sealed class TransitionJournalTests
         using var repo = new TempRepo();
         repo.SeedProjectContext();
         repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap v1");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap v1");
         var runtime = new MutatingRuntime(
-            onRuntimePrompt: () => repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap v2"),
+            onRuntimePrompt: () => repo.Write(".agents/roadmap/001-roadmap.md", "roadmap v2"),
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));
 
@@ -83,8 +83,8 @@ public sealed class TransitionJournalTests
         Assert.NotNull(completed.InputSnapshot);
         Assert.Equal(started.InputSnapshot.SnapshotHash, completed.InputSnapshot.SnapshotHash);
         Assert.Equal(started.InputArtifactHashes, completed.InputArtifactHashes);
-        Assert.Equal(Cli.RoadmapHash.Sha256("roadmap v1"), started.InputArtifactHashes[Cli.RoadmapArtifactPaths.RoadmapFile]);
-        Assert.Equal("roadmap v2", repo.Read(Cli.RoadmapArtifactPaths.RoadmapFile));
+        Assert.Equal(Cli.RoadmapHash.Sha256("roadmap v1"), started.InputArtifactHashes[".agents/roadmap/001-roadmap.md"]);
+        Assert.Equal("roadmap v2", repo.Read(".agents/roadmap/001-roadmap.md"));
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public sealed class TransitionJournalTests
         using var repo = new TempRepo();
         repo.SeedProjectContext();
         repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         var runtime = new ScriptedAgentRuntime(
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Failed("selection failed"));
@@ -119,7 +119,7 @@ public sealed class TransitionJournalTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         const string archivedEpicPath = ".agents/archive/epics/001-done.md";
         const string archivedEpic = """
             # Epic: Done

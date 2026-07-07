@@ -33,7 +33,7 @@ public sealed class SelectionProvenanceTests
     {
         using var repo = SeedRepo();
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, Selection());
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "changed roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "changed roadmap");
 
         Cli.DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
 
@@ -123,7 +123,7 @@ public sealed class SelectionProvenanceTests
         var repo = new TempRepo();
         repo.SeedProjectContext();
         repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "# Roadmap Completion Context");
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         repo.Write(Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
         return repo;
     }

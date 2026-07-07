@@ -205,7 +205,7 @@ public sealed class RoadmapFailurePersistenceTests
     public async Task Preflight_failure_uses_generic_safety_net()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
 
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).RunAsync(CancellationToken.None);
 
@@ -267,7 +267,7 @@ public sealed class RoadmapFailurePersistenceTests
     {
         var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapFile, "roadmap");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         if (includeCompletionContext)
         {
             repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");

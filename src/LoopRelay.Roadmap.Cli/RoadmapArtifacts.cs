@@ -35,25 +35,37 @@ internal sealed partial class RoadmapArtifacts(IArtifactStore store, Repository 
 
     public async Task<string> ReadRoadmapSourceAsync()
     {
+        IReadOnlyList<string> sourcePaths = await RequireRoadmapSourcePathsAsync();
         var parts = new List<string>();
-        if (await ExistsAsync(RoadmapArtifactPaths.RoadmapFile))
-        {
-            parts.Add(await ReadRequiredAsync(RoadmapArtifactPaths.RoadmapFile));
-        }
-
-        IReadOnlyList<string> roadmapFiles = await ListAsync(RoadmapArtifactPaths.RoadmapDirectory, "*.md");
-        foreach (string file in roadmapFiles.Order(StringComparer.Ordinal))
+        foreach (string file in sourcePaths)
         {
             parts.Add(await ReadRequiredAsync(file));
         }
 
-        if (parts.Count == 0)
+        return string.Join("\n\n", parts);
+    }
+
+    public async Task<IReadOnlyList<string>> RequireRoadmapSourcePathsAsync()
+    {
+        IReadOnlyList<string> sourcePaths = await ListRoadmapSourcePathsAsync();
+        if (sourcePaths.Count == 0)
         {
             throw new RoadmapStepException(
-                $"No roadmap source found at {RoadmapArtifactPaths.RoadmapFile} or {RoadmapArtifactPaths.RoadmapDirectory}/*.md.");
+                $"No roadmap source found at {RoadmapArtifactPaths.RoadmapDirectoryPattern}.");
         }
 
-        return string.Join("\n\n", parts);
+        foreach (string path in sourcePaths)
+        {
+            _ = await ReadRequiredAsync(path);
+        }
+
+        return sourcePaths;
+    }
+
+    public async Task<IReadOnlyList<string>> ListRoadmapSourcePathsAsync()
+    {
+        IReadOnlyList<string> roadmapFiles = await ListAsync(RoadmapArtifactPaths.RoadmapDirectory, "*.md");
+        return roadmapFiles.Order(StringComparer.Ordinal).ToArray();
     }
 
     public async Task<string> WriteNumberedEvidenceAsync(string evidenceDirectory, string stem, string content)

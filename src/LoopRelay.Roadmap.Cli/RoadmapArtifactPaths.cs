@@ -9,8 +9,8 @@ internal static class RoadmapArtifactPaths
     public const string DecisionLedgerJson = ".agents/decision-ledger.json";
     public const string Lifecycle = ".agents/artifacts/lifecycle.md";
     public const string LifecycleJson = ".agents/artifacts/lifecycle.json";
-    public const string RoadmapFile = ".agents/roadmap.md";
     public const string RoadmapDirectory = ".agents/roadmap";
+    public const string RoadmapDirectoryPattern = ".agents/roadmap/*.md";
     public const string Selection = ".agents/selection.md";
     public const string SelectionProvenanceManifest = ".agents/selection-provenance-manifest.json";
     public const string ActiveEpic = ".agents/epic.md";
