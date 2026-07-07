@@ -2,7 +2,7 @@
 
 ## Objective
 
-require explicit human decisions for confirmed non-implementation files at epic completion.
+require explicit human decisions for confirmed non-implementation files at epic completion before the completion flow proceeds. This is a pending-review decision point, not repository acceptance or certification authority.
 
 ## Work
 - [ ] Implement `NonImplementationCompletionReviewService`.
@@ -26,8 +26,8 @@ require explicit human decisions for confirmed non-implementation files at epic 
 - [ ] Main CLI integration:
   - [ ] At the top of `LoopRunner.RunAsync`, after `gate.IsEpicCompleteAsync()` returns true and before `completionCertification.CertifyPlanCompletionAsync`, run completion review.
   - [ ] If review is blocked, publish `.agents` state, do not clear the decision-session resume state, and return `LoopOutcome.CompletionBlocked`.
-  - [ ] If review applies parent-repo deletions, commit and push those deletions before certification using a commit path that does not increment the stall counter. Add a narrow `CommitGate.CommitPushIfChangedAsync` helper if needed.
-  - [ ] Pass review evidence paths to completion certification context so final certification can see the review state.
+  - [ ] If review applies parent-repo deletions, persist those approved deletions before completion evaluation using a narrow commit/push helper that does not increment the stall counter if the existing flow requires parent-repo changes to be published.
+  - [ ] Pass review evidence paths to completion context so final evaluation can see the pending-review decision state.
 - [ ] Completion integration:
   - [ ] Extend `CompletionCertificationRequest` with non-implementation review evidence paths or a review summary path.
   - [ ] Include the review summary in `CompletionPromptContextBuilder.BuildEvaluationContextAsync`.
@@ -40,7 +40,7 @@ require explicit human decisions for confirmed non-implementation files at epic 
   - [ ] ledger has no unresolved entries but current prose/report files exist, so review does not falsely return ready
   - [ ] epic completion blocks when unresolved confirmed entries exist and no decisions file exists
   - [ ] blocked review does not clear decision-session resume state
-  - [ ] keep decision records HITL keep/request evidence and allows certification to continue
+  - [ ] keep decision records HITL keep/request evidence and allows completion evaluation to continue
   - [ ] delete decision removes only repository files outside `.agents` when entry ID/path/hash/status match
   - [ ] stale delete decision blocks when hash changed after review
   - [ ] delete decision rejects path traversal and `.agents` paths
@@ -98,7 +98,7 @@ If a delete target is stale, replaced, moved, missing unexpectedly, hash-mismatc
 
 Keep decisions should record `HitlKept`. If the human states the file was originally requested, preserve or attach `HitlRequested` evidence where possible.
 
-In the main CLI, run completion review after `gate.IsEpicCompleteAsync()` returns true and before `completionCertification.CertifyPlanCompletionAsync`.
+In the main CLI, run completion review after `gate.IsEpicCompleteAsync()` returns true and before `completionCertification.CertifyPlanCompletionAsync`. The sequencing ensures required HITL review decisions exist before final completion evaluation; it must not be used as autonomous repository acceptance.
 
 If completion review is blocked:
 
@@ -106,14 +106,14 @@ If completion review is blocked:
 - keep decision-session resume state intact
 - return `LoopOutcome.CompletionBlocked`
 
-If completion review applies parent-repository deletions, commit and push those deletions before certification without incrementing the stall counter. A narrow `CommitGate.CommitPushIfChangedAsync` helper is acceptable if needed.
+If completion review applies parent-repository deletions, persist those approved deletions before completion evaluation without incrementing the stall counter when the existing flow requires parent-repository changes to be published. A narrow `CommitGate.CommitPushIfChangedAsync` helper is acceptable if needed.
 
-Pass review evidence paths or a summary path into `CompletionCertificationRequest` and include the review summary in `CompletionPromptContextBuilder.BuildEvaluationContextAsync`. Completed epic archiving should include `.agents/review` contents.
+Pass review evidence paths or a summary path into `CompletionCertificationRequest` and include the review summary in `CompletionPromptContextBuilder.BuildEvaluationContextAsync`. This context is evidence of HITL review state, not a repository certification signal. Completed epic archiving should include `.agents/review` contents.
 
 For roadmap completion, run the same review service before completion evaluation. If blocked, persist blocked evidence with the review request path and a next step to fill the decisions template and rerun.
 
 ## Acceptance
-- [ ] Epic completion review happens before final certification closes the epic.
+- [ ] Epic completion review happens before final completion evaluation closes the epic.
 - [ ] Readiness is based on a fresh review refresh plus ledger state, not stale ledger state alone.
 - [ ] The human can keep/delete files, keep/discard synthesis, and resolve semantically uncertain entries.
 - [ ] Delete decisions cannot remove content that was not reviewed.

@@ -2,41 +2,34 @@
 
 ## Source Basis
 
-This file supplements `.agents/plan.md` using `.agents/specs/epic.md` and `.agents/specs/s0.md` through `.agents/specs/s7.md`.
+This file supplements `.agents/plan.md` using the HITL design discussion excerpts as the controlling intent source.
 
-Use `.agents/plan.md` as the current implementation target. The specs are the recovered intent source. Where the specs and plan differ, this file records only cross-milestone guidance so implementers do not silently follow the older shape.
+Use `.agents/plan.md` as the current implementation target. Do not use older `.agents/specs/*` material as current authority for this work; if historical spec material exists, treat it only as derived planning that must be reconciled against the HITL excerpts and the current plan.
 
 Milestone-specific implementation requirements live in `.agents/milestones/m*.md`.
 
-## Milestone Mapping
-
-The specs use an older milestone order. The current plan intentionally refines that order:
-
-| Spec file | Spec milestone | Current plan milestone |
-| --- | --- | --- |
-| `s0.md` | Architectural foundation | Milestone 0 |
-| `s1.md` | Changed file classification | Milestone 2 |
-| `s2.md` | Semantic candidate confirmation | Milestone 4 |
-| `s3.md` | Non-implementation review ledger | Milestone 3 |
-| `s4.md` | Free-form insight synthesis | Milestone 6 |
-| `s5.md` | HITL epic completion review | Milestone 7 |
-| `s6.md` | Planning integration and implementation-first guidance | Milestone 1 |
-| `s7.md` | Architectural convergence | Milestone 8 |
+## Milestone Order Rationale
 
 The current order is useful because prompt policy and request capture need to exist before agents are asked to plan more work, ledger identity should exist before semantic confirmation persists dispositions, and post-execution integration must be proven before synthesis and completion review depend on the ledger.
 
-## Policy Tension To Resolve
+The milestone sequence should be understood as implementation ordering, not a change to product intent:
 
-There is one meaningful tension between the specs and the current plan.
+- Milestone 0 establishes terminology, settings, prompt-policy composition, minimal ledger ownership, and read-only review-runner boundaries.
+- Milestone 1 injects implementation-first prompt guidance and captures explicit HITL requests before new plans can prescribe non-implementation deliverables.
+- Milestones 2 through 5 implement the post-execution detection, classification, ledger, confirmation, and CLI invocation loop.
+- Milestones 6 and 7 add free-form synthesis and HITL completion review after the ledgered review loop exists.
+- Milestone 8 converges terminology and ownership only after implementation evidence shows duplication or friction.
 
-The specs say default implementation-first mode still allows non-implementation documentation when the HITL specifically requested that documentation or deliverable. The current plan says prompt-time non-implementation file generation requires both an enabled `artifactPolicy.allowHitlRequestedNonImplementationFiles` setting and an explicit HITL request.
+## Policy Semantics To Preserve
 
-Unless the plan is revised, implement the plan's stricter rule for prompt-time generation: enabled setting plus explicit captured HITL request. Still preserve the spec's HITL-authority intent in two ways:
+Prompt-time non-implementation file generation requires both `artifactPolicy.allowHitlRequestedNonImplementationFiles = true` and explicit captured HITL request evidence. Enabled mode never authorizes autonomous documentation, documentation-centric milestones, or theory-protection artifacts.
+
+Preserve HITL authority in two ways:
 
 - Always capture explicit HITL request evidence when it exists.
 - Always allow completion review to record a human keep decision for a non-implementation file, regardless of whether the file was originally generated under the stricter prompt policy.
 
-If product intent is to follow the original spec instead, update `.agents/plan.md` before Milestone 1 so the setting semantics are not ambiguous.
+Request evidence explains why a non-implementation deliverable may be legitimate. It is not a keep/delete decision and does not bypass HITL completion review.
 
 ## Shared Vocabulary Contract
 

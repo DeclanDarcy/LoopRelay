@@ -40,7 +40,7 @@ deterministically route only files changed by the current execution slice.
 
 ## Detail Notes
 
-The epic says `git diff -> changed file list`, but the current plan's baseline store is necessary to satisfy the spec intent without treating the whole dirty tree as current execution output.
+The HITL-described flow says `git diff -> changed file list`, but the current plan's baseline store is necessary to preserve that intent without treating the whole dirty tree as current execution output.
 
 Capture the pre-slice baseline after LoopRelay's pre-execution `.agents` context publish and immediately before `execution.RunAsync`. Capture the post-slice snapshot immediately after `execution.RunAsync` succeeds. Prefer capturing before `RetireLiveDecisionsAsync` and before post-execution `.agents` publication so the delta represents execution output, not later LoopRelay cleanup. If integration constraints force cleanup first, record those `.agents` changes as sanctioned operational evidence and never route them to semantic review.
 

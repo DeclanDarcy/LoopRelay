@@ -2,7 +2,7 @@
 
 ## Objective
 
-simplify only where implementation evidence shows friction or duplication.
+simplify only where implementation evidence shows friction or duplication, without adding capability or changing the review-loop intent.
 
 ## Work
 - [ ] Review terminology across model names, prompt text, ledger fields, evidence artifacts, and tests.
@@ -11,11 +11,12 @@ simplify only where implementation evidence shows friction or duplication.
 - [ ] Keep review state separate from roadmap decision ledgers and completion certification decisions.
 - [ ] Collapse helper classes only when boundaries are artificial after implementation.
 - [ ] Remove or revise any code that implies commit gating, publication gating, repository acceptance, structured knowledge extraction, or documentation debt analysis.
+- [ ] Preserve every behavior required by the HITL-described post-execution review loop; do not use convergence to add features, change policy semantics, or weaken implementation-first prompt guidance.
 - [ ] Add or adjust tests only for behavior that moved during convergence.
 
 ## Detail Notes
 
-Convergence should reduce ambiguity or duplication introduced while landing the feature. It must not add new capability or broaden the review loop into governance.
+Convergence should reduce ambiguity or duplication introduced while landing the feature. It must not add new capability, broaden the review loop into governance, or reinterpret HITL design intent to fit implementation preferences.
 
 Review these seams after the implementation exists:
 

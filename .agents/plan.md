@@ -8,6 +8,8 @@ The default operating mode is implementation-first: autonomous repository growth
 
 This is not a commit gate, publication gate, repository acceptance system, repository knowledge platform, plan-certification system, projection-governance mechanism, or documentation debt analyzer. It is a post-execution identification and review loop plus centralized prompt guidance.
 
+Baseline snapshots, exact content identities, stale-decision validation, and read-only runner boundaries are safeguards for the requested `git diff -> classify -> confirm -> ledger -> HITL review` loop. They do not broaden the feature into a repository governance or acceptance architecture.
+
 ## Target Capability
 
 For every execution slice:
@@ -34,10 +36,10 @@ fresh repository review refresh
 -> human keep/delete/synthesis/uncertain decisions
 -> stale-decision validation
 -> durable decision record
--> completion certification proceeds only after required review decisions exist
+-> completion evaluation proceeds only after required review decisions exist
 ```
 
-Planning, decision, roadmap, and execution prompts should receive centralized implementation-first guidance. The user setting may allow agents to honor explicit HITL-requested non-implementation deliverables, but it must never authorize autonomous non-implementation file generation.
+Planning, decision, roadmap, and execution prompts should receive centralized implementation-first guidance. The user setting may allow agents to honor explicit HITL-requested non-implementation deliverables only when the setting is enabled and the request is captured as explicit HITL evidence. It must never authorize autonomous non-implementation file generation.
 
 ## Vocabulary
 
@@ -58,7 +60,7 @@ Do not use `UncertainCandidate` for deterministic routing. Reserve `Uncertain` o
 
 ## Architecture
 
-Add shared review primitives under `src/LoopRelay.Orchestration.Primitives` because the capability is used by the main CLI loop, completion certification, and roadmap/planning prompt flow. Avoid a new project unless implementation proves the primitives cannot stay cohesive there.
+Add shared review primitives under `src/LoopRelay.Orchestration.Primitives` because the capability is used by the main CLI loop, epic completion flow, and roadmap/planning prompt flow. Avoid a new project unless implementation proves the primitives cannot stay cohesive there.
 
 Recommended folders:
 
@@ -107,6 +109,7 @@ Implementation requirements:
 - Default to `false` when loading the default template.
 - When `false`, prompts hard-steer away from planning or executing non-implementation deliverables.
 - When `true`, prompts may honor explicit HITL-requested non-implementation deliverables, but only when the request is captured as explicit HITL request evidence.
+- Enabled mode plus explicit HITL request evidence is an AND condition for prompt-time generation; neither condition is sufficient alone.
 - The setting never permits agents to invent non-implementation documentation, documentation-centric milestones, or theory-protection artifacts.
 - Keep `permissions` validation unchanged.
 - Return a broader settings result, for example `CliSettingsLoadResult(Permissions, ArtifactPolicy, Path, IsDefaultTemplate)`.

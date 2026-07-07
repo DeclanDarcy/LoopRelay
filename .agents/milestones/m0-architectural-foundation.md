@@ -18,7 +18,7 @@ establish terminology, settings, prompt-policy composition, minimal ledger owner
   - [ ] slice baseline and changed-file detection live in orchestration primitives
   - [ ] semantic confirmation and synthesis run only through the read-only review runner
   - [ ] main CLI invokes the post-execution identification loop after execution writes and before the `.agents` post-execution publish
-  - [ ] epic-completion review runs before completion certification closes the epic
+  - [ ] epic-completion review runs before final completion evaluation closes the epic
   - [ ] roadmap/planning prompts consume the centralized prompt policy text
 - [ ] Add focused tests in `LoopRelay.Orchestration.Primitives.Tests` and `LoopRelay.Permissions.Tests` for settings defaults, ledger skeleton validation, read-only runner contract checks, and policy text selection.
 
