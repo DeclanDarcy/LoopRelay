@@ -27,6 +27,12 @@ public sealed class NonImplementationCompletionReviewService(
     string repositoryRootPath,
     NonImplementationInsightSynthesizer? synthesizer = null) : INonImplementationCompletionReviewService
 {
+    private readonly RepositoryChangeSetDetector _detector = detector;
+    private readonly NonImplementationArtifactClassifier _classifier = classifier;
+    private readonly NonImplementationSemanticConfirmer _semanticConfirmer = semanticConfirmer;
+    private readonly NonImplementationReviewLedgerStore _ledgerStore = ledgerStore;
+    private readonly IArtifactStore _artifacts = artifacts;
+    private readonly NonImplementationInsightSynthesizer? _synthesizer = synthesizer;
     private const string DecisionArtifactPath = OrchestrationArtifactPaths.NonImplementationDecisions;
     private const string ReviewArtifactPath = OrchestrationArtifactPaths.NonImplementationReview;
     private const string SynthesisArtifactPath = OrchestrationArtifactPaths.NonImplementationSynthesis;
@@ -38,23 +44,23 @@ public sealed class NonImplementationCompletionReviewService(
         cancellationToken.ThrowIfCancellationRequested();
 
         CompletionRefresh refresh = await RefreshCurrentRepositoryStateAsync(cancellationToken);
-        if (synthesizer is not null)
+        if (_synthesizer is not null)
         {
-            await synthesizer.SynthesizeAsync(cancellationToken);
+            await _synthesizer.SynthesizeAsync(cancellationToken);
         }
 
-        NonImplementationReviewLedgerDocument document = await ledgerStore.LoadOrCreateAsync();
+        NonImplementationReviewLedgerDocument document = await _ledgerStore.LoadOrCreateAsync();
         IReadOnlyList<NonImplementationReviewLedgerEntry> unresolved = BlockingEntries(document);
         bool synthesisDecisionRequired =
             unresolved.Count > 0 &&
-            !string.IsNullOrWhiteSpace(await artifacts.ReadAsync(SynthesisArtifactPath));
+            !string.IsNullOrWhiteSpace(await _artifacts.ReadAsync(SynthesisArtifactPath));
 
         if (unresolved.Count == 0)
         {
             NonImplementationCompletionReviewSummary readySummary =
                 BuildSummary(refresh, unresolved, resolvedFileDecisionCount: 0, appliedDeleteCount: 0,
                     synthesisDecisionRequired, document.SynthesisDecision?.Decision);
-            await artifacts.WriteAsync(
+            await _artifacts.WriteAsync(
                 ReviewArtifactPath,
                 RenderReviewEvidence(
                     NonImplementationCompletionReviewStatus.Ready,
@@ -73,10 +79,10 @@ public sealed class NonImplementationCompletionReviewService(
                 BlockerMessages: []);
         }
 
-        string? decisionContent = await artifacts.ReadAsync(DecisionArtifactPath);
+        string? decisionContent = await _artifacts.ReadAsync(DecisionArtifactPath);
         if (string.IsNullOrWhiteSpace(decisionContent))
         {
-            await artifacts.WriteAsync(
+            await _artifacts.WriteAsync(
                 DecisionArtifactPath,
                 RenderDecisionTemplate(unresolved, synthesisDecisionRequired));
 
@@ -87,7 +93,7 @@ public sealed class NonImplementationCompletionReviewService(
             [
                 $"Human decisions are required in `{DecisionArtifactPath}` before completion evaluation can proceed.",
             ];
-            await artifacts.WriteAsync(
+            await _artifacts.WriteAsync(
                 ReviewArtifactPath,
                 RenderReviewEvidence(
                     NonImplementationCompletionReviewStatus.Blocked,
@@ -113,7 +119,7 @@ public sealed class NonImplementationCompletionReviewService(
             NonImplementationCompletionReviewSummary blockedSummary =
                 BuildSummary(refresh, unresolved, resolvedFileDecisionCount: 0, appliedDeleteCount: 0,
                     synthesisDecisionRequired, document.SynthesisDecision?.Decision);
-            await artifacts.WriteAsync(
+            await _artifacts.WriteAsync(
                 ReviewArtifactPath,
                 RenderReviewEvidence(
                     NonImplementationCompletionReviewStatus.Blocked,
@@ -139,7 +145,7 @@ public sealed class NonImplementationCompletionReviewService(
             NonImplementationCompletionReviewSummary blockedSummary =
                 BuildSummary(refresh, unresolved, resolvedFileDecisionCount: 0, appliedDeleteCount: 0,
                     synthesisDecisionRequired, document.SynthesisDecision?.Decision);
-            await artifacts.WriteAsync(
+            await _artifacts.WriteAsync(
                 ReviewArtifactPath,
                 RenderReviewEvidence(
                     NonImplementationCompletionReviewStatus.Blocked,
@@ -177,7 +183,7 @@ public sealed class NonImplementationCompletionReviewService(
         NonImplementationCompletionReviewSummary summary =
             BuildSummary(refresh, remainingUnresolved, parsed.FileDecisions.Count, appliedDeletes.Count,
                 synthesisDecisionRequired, parsed.SynthesisDecision?.Decision ?? updatedDocument.SynthesisDecision?.Decision);
-        await artifacts.WriteAsync(
+        await _artifacts.WriteAsync(
             ReviewArtifactPath,
             RenderReviewEvidence(
                 status,
@@ -201,7 +207,7 @@ public sealed class NonImplementationCompletionReviewService(
         CancellationToken cancellationToken)
     {
         string refreshId = $"completion-review-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}";
-        RepositorySliceSnapshot snapshot = await detector.CaptureSnapshotAsync(refreshId);
+        RepositorySliceSnapshot snapshot = await _detector.CaptureSnapshotAsync(refreshId);
         cancellationToken.ThrowIfCancellationRequested();
         RepositorySliceDelta delta = new(
             refreshId,
@@ -225,9 +231,9 @@ public sealed class NonImplementationCompletionReviewService(
                 .ToArray());
 
         NonImplementationArtifactClassificationSet classificationSet =
-            await classifier.ClassifyAsync(delta);
+            await _classifier.ClassifyAsync(delta);
         NonImplementationSemanticConfirmationBatchResult semantic =
-            await semanticConfirmer.ConfirmAsync(
+            await _semanticConfirmer.ConfirmAsync(
                 classificationSet,
                 DateTimeOffset.UtcNow,
                 discoveryContext: $"epic-completion fresh review {refreshId}",
@@ -479,10 +485,10 @@ public sealed class NonImplementationCompletionReviewService(
         foreach (FileDecisionRecord decision in decisions.Where(item => item.Decision == FileReviewDecision.Delete))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            NonImplementationReviewLedgerDocument document = await ledgerStore.LoadOrCreateAsync();
+            NonImplementationReviewLedgerDocument document = await _ledgerStore.LoadOrCreateAsync();
             NonImplementationReviewLedgerEntry entry = document.Entries.First(item =>
                 string.Equals(item.EntryId, decision.EntryId, StringComparison.Ordinal));
-            await artifacts.DeleteAsync(entry.Path);
+            await _artifacts.DeleteAsync(entry.Path);
             deleted.Add(entry.Path);
         }
 
@@ -494,7 +500,7 @@ public sealed class NonImplementationCompletionReviewService(
         string decisionSourceHash,
         CancellationToken cancellationToken)
     {
-        NonImplementationReviewLedgerDocument document = await ledgerStore.LoadOrCreateAsync();
+        NonImplementationReviewLedgerDocument document = await _ledgerStore.LoadOrCreateAsync();
         var entries = document.Entries.ToList();
         DateTimeOffset decidedAtUtc = DateTimeOffset.UtcNow;
 
@@ -564,8 +570,8 @@ public sealed class NonImplementationCompletionReviewService(
                     Rationale: NullIfWhiteSpace(parsed.SynthesisDecision.HitlReason),
                     DecidedBy: "human"),
         };
-        await ledgerStore.SaveAsync(updated);
-        return await ledgerStore.LoadOrCreateAsync();
+        await _ledgerStore.SaveAsync(updated);
+        return await _ledgerStore.LoadOrCreateAsync();
     }
 
     private static NonImplementationHitlProvenanceKind DetermineHitlProvenance(
@@ -633,7 +639,7 @@ public sealed class NonImplementationCompletionReviewService(
             return Convert.ToHexString(hash).ToLowerInvariant();
         }
 
-        string? content = await artifacts.ReadAsync(normalized);
+        string? content = await _artifacts.ReadAsync(normalized);
         return content is null ? null : Sha256Text(content);
     }
 

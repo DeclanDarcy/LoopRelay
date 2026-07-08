@@ -17,21 +17,26 @@ internal sealed class ProjectionCache(
     ProjectionValidator validator,
     RoadmapPromptRunner promptRunner)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly ProjectionRegistry _registry = registry;
+    private readonly ProjectionManifestStore _manifestStore = manifestStore;
+    private readonly ProjectionValidator _validator = validator;
+    private readonly RoadmapPromptRunner _promptRunner = promptRunner;
     public async Task<ProjectionCacheResult> EnsureAsync(
         string runtimePromptName,
         ProjectContext projectContext,
         PromptContract contract,
         CancellationToken cancellationToken)
     {
-        ProjectionDefinition projection = registry.Get(runtimePromptName);
-        var provenanceFactory = new ProjectionProvenanceFactory(registry);
+        ProjectionDefinition projection = _registry.Get(runtimePromptName);
+        var provenanceFactory = new ProjectionProvenanceFactory(_registry);
         ProjectionProvenance currentProvenance = provenanceFactory.Create(projection, projectContext);
-        string? content = await artifacts.ReadAsync(projection.ProjectionPath);
+        string? content = await _artifacts.ReadAsync(projection.ProjectionPath);
         bool generated = false;
 
         if (string.IsNullOrWhiteSpace(content))
         {
-            content = await promptRunner.RunProjectionPromptAsync(projection, projectContext.Content, cancellationToken);
+            content = await _promptRunner.RunProjectionPromptAsync(projection, projectContext.Content, cancellationToken);
             if (string.IsNullOrWhiteSpace(content))
             {
                 throw new RoadmapStepException($"{projection.ProjectionPromptName} returned empty projection content.");
@@ -40,9 +45,9 @@ internal sealed class ProjectionCache(
             generated = true;
         }
 
-        ProjectionValidationResult validation = validator.Validate(runtimePromptName, content);
+        ProjectionValidationResult validation = _validator.Validate(runtimePromptName, content);
         string projectionHash = RoadmapHash.Sha256(content);
-        ProjectionManifest manifest = await manifestStore.LoadAsync();
+        ProjectionManifest manifest = await _manifestStore.LoadAsync();
         ProjectionManifestEntry? previous = manifest.Find(runtimePromptName);
         ProjectionValidationStatus validationStatus = validation.IsValid
             ? ProjectionValidationStatus.Valid
@@ -63,7 +68,7 @@ internal sealed class ProjectionCache(
                 ? CreateUnknownEntry(projection, projectionHash, observedAt, validationStatus, freshness, validation.Error)
                 : previous.WithFreshness(freshness, projectionHash, validationStatus, validation.Error);
 
-        await manifestStore.UpsertAsync(entry);
+        await _manifestStore.UpsertAsync(entry);
 
         if (!validation.IsValid)
         {
@@ -77,7 +82,7 @@ internal sealed class ProjectionCache(
 
         if (generated)
         {
-            await artifacts.WriteAsync(projection.ProjectionPath, content);
+            await _artifacts.WriteAsync(projection.ProjectionPath, content);
         }
 
         if (!freshness.IsFresh && contract.StaleProjectionPolicy == StaleProjectionPolicy.Block)
@@ -131,7 +136,7 @@ internal sealed class ProjectionCache(
             "None",
             details,
             DateTimeOffset.UtcNow);
-        return await artifacts.WriteNumberedEvidenceAsync(
+        return await _artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "projection-blocked",
             content);

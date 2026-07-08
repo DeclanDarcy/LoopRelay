@@ -22,6 +22,10 @@ namespace LoopRelay.Plan.Cli.Services.Execution;
 internal sealed class ReviewStep(
     IAgentRuntime runtime, PlanArtifacts artifacts, ILoopConsole console, Repository repository)
 {
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly PlanArtifacts _artifacts = artifacts;
+    private readonly ILoopConsole _console = console;
+    private readonly Repository _repository = repository;
     public async Task<string> RunAsync(string projectContextProjection, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(projectContextProjection))
@@ -32,17 +36,17 @@ internal sealed class ReviewStep(
         // Defensive: the pipeline gates plan.md's existence/non-whitespace immediately after WritePlanAsync, so
         // this should be unreachable in the real pipeline sequence. Guards ReviewStep against being called out
         // of order (e.g. directly, or after some future refactor drops the pipeline's own gate).
-        string? plan = await artifacts.ReadAsync(OrchestrationArtifactPaths.Plan);
+        string? plan = await _artifacts.ReadAsync(OrchestrationArtifactPaths.Plan);
         if (string.IsNullOrWhiteSpace(plan))
         {
             throw new PlanStepException(
                 $"{OrchestrationArtifactPaths.Plan} was not found before the adversarial review.");
         }
 
-        IAgentSession session = await runtime.OpenSessionAsync(AgentSpecs.Review(repository), cancellationToken);
+        IAgentSession session = await _runtime.OpenSessionAsync(AgentSpecs.Review(_repository), cancellationToken);
         try
         {
-            var renderer = new ConsoleTurnRenderer(console);
+            var renderer = new ConsoleTurnRenderer(_console);
             AgentTurnResult result = await session.RunTurnAsync(
                 AdversarialPlanReview.Render(projectContextProjection, plan), renderer.Stream, cancellationToken);
             if (result.State != AgentTurnState.Completed)
@@ -60,18 +64,18 @@ internal sealed class ReviewStep(
 
             if (TryExtractVerdict(result.Output, out string verdict))
             {
-                console.Info($"Review verdict: {verdict}");
+                _console.Info($"Review verdict: {verdict}");
             }
             else
             {
-                console.Warn("Review verdict not found in output.");
+                _console.Warn("Review verdict not found in output.");
             }
 
             return result.Output;
         }
         finally
         {
-            await runtime.CloseSessionAsync(session);
+            await _runtime.CloseSessionAsync(session);
         }
     }
 

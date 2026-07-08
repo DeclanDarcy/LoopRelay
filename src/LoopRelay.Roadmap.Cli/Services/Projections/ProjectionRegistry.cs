@@ -5,11 +5,11 @@ namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal sealed class ProjectionRegistry
 {
-    private readonly IReadOnlyDictionary<string, ProjectionDefinition> definitions;
+    private readonly IReadOnlyDictionary<string, ProjectionDefinition> _definitions;
 
     public ProjectionRegistry()
     {
-        definitions = new[]
+        _definitions = new[]
         {
             Define("CreateRoadmapCompletionContext", "ProjectionForCreateRoadmapCompletionContext", RoadmapArtifactPaths.ProjectionPaths["CreateRoadmapCompletionContext"]),
             Define("UpdateRoadmapCompletionContext", "ProjectionForUpdateRoadmapCompletionContext", RoadmapArtifactPaths.ProjectionPaths["UpdateRoadmapCompletionContext"]),
@@ -24,10 +24,10 @@ internal sealed class ProjectionRegistry
         }.ToDictionary(definition => definition.RuntimePromptName, StringComparer.Ordinal);
     }
 
-    public IReadOnlyCollection<ProjectionDefinition> All => definitions.Values.ToList();
+    public IReadOnlyCollection<ProjectionDefinition> All => _definitions.Values.ToList();
 
     public ProjectionDefinition Get(string runtimePromptName) =>
-        definitions.TryGetValue(runtimePromptName, out ProjectionDefinition? definition)
+        _definitions.TryGetValue(runtimePromptName, out ProjectionDefinition? definition)
             ? definition
             : throw new ArgumentOutOfRangeException(nameof(runtimePromptName), runtimePromptName, "No projection registered for runtime prompt.");
 

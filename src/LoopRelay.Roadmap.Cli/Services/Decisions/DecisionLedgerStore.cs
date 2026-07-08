@@ -12,7 +12,8 @@ namespace LoopRelay.Roadmap.Cli.Services.Decisions;
 
 internal sealed partial class DecisionLedgerStore(RoadmapArtifacts artifacts)
 {
-    private readonly StructuredDocumentStore<DecisionLedgerPersistenceDocument> structuredStore = new(
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly StructuredDocumentStore<DecisionLedgerPersistenceDocument> _structuredStore = new(
         artifacts,
         RoadmapArtifactPaths.DecisionLedgerJson,
         DecisionLedgerPersistenceDocument.CurrentSchemaVersion,
@@ -55,13 +56,13 @@ internal sealed partial class DecisionLedgerStore(RoadmapArtifacts artifacts)
 
     private async Task<DecisionLedgerPersistenceDocument> LoadDocumentAsync()
     {
-        DecisionLedgerPersistenceDocument? structured = await structuredStore.LoadAsync();
+        DecisionLedgerPersistenceDocument? structured = await _structuredStore.LoadAsync();
         if (structured is not null)
         {
             return structured;
         }
 
-        string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.DecisionLedger);
+        string? content = await _artifacts.ReadAsync(RoadmapArtifactPaths.DecisionLedger);
         if (string.IsNullOrWhiteSpace(content))
         {
             return DecisionLedgerPersistenceDocument.Empty;
@@ -83,7 +84,7 @@ internal sealed partial class DecisionLedgerStore(RoadmapArtifacts artifacts)
 
     private async Task SaveDocumentAsync(DecisionLedgerPersistenceDocument document)
     {
-        await structuredStore.SaveAsync(document);
+        await _structuredStore.SaveAsync(document);
     }
 
     private static DecisionLedgerPersistenceDocument ParseLegacyMarkdown(string content)

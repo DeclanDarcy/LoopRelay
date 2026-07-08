@@ -13,7 +13,9 @@ public sealed class CompletedEpicArchiveService(
     ICompletionPromptRunner promptRunner,
     ICompletionObserver? observer = null) : ICompletedEpicArchiveService
 {
-    private readonly ICompletionObserver observer = observer ?? NullCompletionObserver.Instance;
+    private readonly IArtifactStore _store = store;
+    private readonly ICompletionPromptRunner _promptRunner = promptRunner;
+    private readonly ICompletionObserver _observer = observer ?? NullCompletionObserver.Instance;
 
     public async Task<CompletedEpicArchiveResult> ArchiveAndSynthesizeAsync(
         CompletedEpicArchiveRequest request,
@@ -21,7 +23,7 @@ public sealed class CompletedEpicArchiveService(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var artifacts = new CompletionArtifacts(store, request.Repository);
+        var artifacts = new CompletionArtifacts(_store, request.Repository);
         int index = await ComputeArchiveIndexAsync(artifacts, request.ArchiveRoot);
         string archiveDirectory = $"{request.ArchiveRoot}/{index}";
         string synthesisPath = $"{request.ArchiveRoot}/{index}.md";
@@ -37,7 +39,7 @@ public sealed class CompletedEpicArchiveService(
             throw new CompletionCertificationException($"Completed epic synthesis collision: {synthesisPath}");
         }
 
-        this.observer.Phase("Archive completed execution workspace");
+        _observer.Phase("Archive completed execution workspace");
         await artifacts.CopyFileIfPresentAsync(request.ActiveEpicPath, $"{archiveDirectory}/epic.md");
         await artifacts.MoveDirectoryContentsAsync(CompletionArtifactPaths.DecisionsDirectory, $"{archiveDirectory}/decisions");
         await artifacts.MoveDirectoryContentsAsync(CompletionArtifactPaths.DeltasDirectory, $"{archiveDirectory}/deltas");
@@ -48,9 +50,9 @@ public sealed class CompletedEpicArchiveService(
         await artifacts.MoveFileIfPresentAsync(CompletionArtifactPaths.OperationalContext, $"{archiveDirectory}/operational_context.md");
         await artifacts.MoveFileIfPresentAsync(CompletionArtifactPaths.ExecutionPlan, $"{archiveDirectory}/plan.md");
 
-        this.observer.Phase("Synthesize completed epic");
+        _observer.Phase("Synthesize completed epic");
         string label = index.ToString(CultureInfo.InvariantCulture);
-        _ = await promptRunner.RunAsync(
+        _ = await _promptRunner.RunAsync(
             new CompletionRuntimePromptInvocation(
                 CompletionRuntimePromptNames.SynthesizeCompletedEpic,
                 Label: label),

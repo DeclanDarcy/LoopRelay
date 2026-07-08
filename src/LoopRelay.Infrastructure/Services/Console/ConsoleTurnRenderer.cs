@@ -12,6 +12,7 @@ namespace LoopRelay.Infrastructure.Services.Console;
 /// <summary>Renders a single agent turn stream and suppresses duplicate final echoes.</summary>
 public class ConsoleTurnRenderer(ILoopConsole console)
 {
+    private readonly ILoopConsole _console = console;
     private bool replyStreamed;
 
     public Task Stream(AgentStreamChunk chunk)
@@ -25,13 +26,13 @@ public class ConsoleTurnRenderer(ILoopConsole console)
         {
             AgentTurnProgress.Notify(observer => observer.FirstProtocolEvent());
             AgentTurnProgress.Notify(observer => observer.FirstOutput());
-            console.Tool(chunk.Content);
+            _console.Tool(chunk.Content);
         }
         else
         {
             AgentTurnProgress.Notify(observer => observer.FirstProtocolEvent());
             AgentTurnProgress.Notify(observer => observer.FirstOutput());
-            console.Delta(chunk.Content);
+            _console.Delta(chunk.Content);
             replyStreamed = true;
         }
 
@@ -42,7 +43,7 @@ public class ConsoleTurnRenderer(ILoopConsole console)
     {
         if (!replyStreamed)
         {
-            console.Message(output);
+            _console.Message(output);
         }
     }
 }

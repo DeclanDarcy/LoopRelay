@@ -12,7 +12,8 @@ namespace LoopRelay.Projections.Services.Manifests;
 
 public sealed class ProjectionManifestStore(ProjectionArtifacts.ProjectionArtifacts artifacts)
 {
-    private readonly StructuredJsonDocumentStore<ProjectionManifestPersistenceDocument> structuredStore = new(
+    private readonly ProjectionArtifacts.ProjectionArtifacts _artifacts = artifacts;
+    private readonly StructuredJsonDocumentStore<ProjectionManifestPersistenceDocument> _structuredStore = new(
         artifacts,
         ProjectionArtifactPaths.ProjectionsManifestJson,
         ProjectionManifestPersistenceDocument.CurrentSchemaVersion,
@@ -21,13 +22,13 @@ public sealed class ProjectionManifestStore(ProjectionArtifacts.ProjectionArtifa
 
     public async Task<ProjectionManifest> LoadAsync()
     {
-        ProjectionManifestPersistenceDocument? structured = await structuredStore.LoadAsync();
+        ProjectionManifestPersistenceDocument? structured = await _structuredStore.LoadAsync();
         if (structured is not null)
         {
             return structured.ToDomain();
         }
 
-        string? content = await artifacts.ReadAsync(ProjectionArtifactPaths.ProjectionsManifest);
+        string? content = await _artifacts.ReadAsync(ProjectionArtifactPaths.ProjectionsManifest);
         if (string.IsNullOrWhiteSpace(content))
         {
             return ProjectionManifest.Empty;
@@ -50,7 +51,7 @@ public sealed class ProjectionManifestStore(ProjectionArtifacts.ProjectionArtifa
     public async Task SaveAsync(ProjectionManifest manifest)
     {
         ProjectionManifestPersistenceDocument persisted = ProjectionManifestPersistenceDocument.FromDomain(manifest);
-        await structuredStore.SaveAsync(persisted);
+        await _structuredStore.SaveAsync(persisted);
     }
 
     public async Task UpsertAsync(ProjectionManifestEntry entry)

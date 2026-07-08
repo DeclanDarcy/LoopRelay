@@ -51,9 +51,16 @@ internal sealed class DecisionSession(
     string? promptPolicy = null,
     ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null) : IAsyncDisposable
 {
-    private readonly IDecisionCostModel costModel = costModel ?? new EffectiveTokenCostModel();
-    private readonly IDecisionSessionResumeStore resumeStore = resumeStore ?? new NullDecisionSessionResumeStore();
-    private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly IDecisionSessionRouter _router = router;
+    private readonly LoopArtifacts _artifacts = artifacts;
+    private readonly ILoopConsole _console = console;
+    private readonly Repository _repository = repository;
+    private readonly IProjectContextProjectionService? _projectionService = projectionService;
+    private readonly ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = hitlRequestCapture;
+    private readonly IDecisionCostModel _costModel = costModel ?? new EffectiveTokenCostModel();
+    private readonly IDecisionSessionResumeStore _resumeStore = resumeStore ?? new NullDecisionSessionResumeStore();
+    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
     private IAgentSession? session;
     private bool seeded;
     private bool resumeAttempted;
@@ -75,14 +82,14 @@ internal sealed class DecisionSession(
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        DecisionRoute route = router.Evaluate(BuildRouterInputs());
+        DecisionRoute route = _router.Evaluate(BuildRouterInputs());
         // Eligibility downgrade: a Transfer needs a primed warm process to extract a delta from.
         if (route == DecisionRoute.Transfer && !seeded)
         {
             route = DecisionRoute.Continue;
         }
 
-        console.Phase($"Decision (route={route})");
+        _console.Phase($"Decision (route={route})");
 
         if (route == DecisionRoute.Transfer)
         {
@@ -91,13 +98,13 @@ internal sealed class DecisionSession(
 
         session ??= await OpenOrResumeSessionAsync(cancellationToken);
 
-        (string? handoff, _) = await artifacts.ReadLatestHandoffAsync();
+        (string? handoff, _) = await _artifacts.ReadLatestHandoffAsync();
         string proposalPrompt = await BuildProposalPromptAsync(handoff, cancellationToken);
 
         // Own phase header so post-transfer proposal output no longer prints under the last
         // "Decision: Transfer/…" header.
-        console.Phase("Decision: Propose");
-        var proposalRenderer = new ConsoleTurnRenderer(console);
+        _console.Phase("Decision: Propose");
+        var proposalRenderer = new ConsoleTurnRenderer(_console);
         AgentTurnResult proposed = await session.RunTurnAsync(
             proposalPrompt, proposalRenderer.Stream, cancellationToken);
 
@@ -116,18 +123,18 @@ internal sealed class DecisionSession(
         proposalRenderer.EchoIfSilent(proposed.Output);
 
         // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
-        await artifacts.PersistDecisionsAsync(proposed.Output);
-        if (hitlRequestCapture is not null)
+        await _artifacts.PersistDecisionsAsync(proposed.Output);
+        if (_hitlRequestCapture is not null)
         {
-            await hitlRequestCapture.CaptureFromSourceAsync(OrchestrationArtifactPaths.Decisions, proposed.Output);
+            await _hitlRequestCapture.CaptureFromSourceAsync(OrchestrationArtifactPaths.Decisions, proposed.Output);
         }
 
-        if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions))
+        if (!await _artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions))
         {
             throw new LoopStepException(".agents/decisions/decisions.md was not written.");
         }
 
-        console.Info("New decisions.md verified.");
+        _console.Info("New decisions.md verified.");
     }
 
     // decisions.md IS the execution agent's system prompt. The first pass (no prior handoff) authors the FIRST
@@ -143,19 +150,19 @@ internal sealed class DecisionSession(
         string baseline = handoff is null
             ? GenerateSystemPromptForFirstExecutionAgent.Render(decisionSessionProjection)
             : GenerateSystemPromptForNextExecutionAgent.Render(decisionSessionProjection, handoff);
-        baseline = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(baseline, promptPolicy);
+        baseline = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(baseline, _promptPolicy);
 
         if (seeded)
         {
             return baseline; // warm process: the projection and operational context are already in this process's history
         }
 
-        await artifacts.EnsureOperationalContextAsync();
-        string operationalContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
+        await _artifacts.EnsureOperationalContextAsync();
+        string operationalContext = await _artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(operationalContext))
         {
-            console.Warn("Operational context is empty — the decision agent has no context to work from.");
+            _console.Warn("Operational context is empty — the decision agent has no context to work from.");
         }
 
         return $"{operationalContext}\n\n{baseline}";
@@ -174,29 +181,29 @@ internal sealed class DecisionSession(
         resumeAttempted = true;
 
         DecisionSessionResumeState? state = firstOpen && resumeEnabled
-            ? await resumeStore.ReadAsync(cancellationToken)
+            ? await _resumeStore.ReadAsync(cancellationToken)
             : null;
-        if (state is not null && projectionService is not null)
+        if (state is not null && _projectionService is not null)
         {
             ProjectionFreshness freshness = await EvaluateDecisionProjectionFreshnessAsync(cancellationToken);
             if (!freshness.IsFresh)
             {
-                console.Warn(
+                _console.Warn(
                     "Decision session projection is stale or missing; clearing persisted decision session and starting fresh.");
-                await resumeStore.ClearAsync(cancellationToken);
+                await _resumeStore.ClearAsync(cancellationToken);
                 state = null;
             }
         }
 
         if (state is null)
         {
-            return await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
+            return await _runtime.OpenSessionAsync(AgentSpecs.Decision(_repository), cancellationToken);
         }
 
         try
         {
-            IAgentSession resumed = await runtime.OpenSessionAsync(
-                AgentSpecs.Decision(repository, state.ThreadId), cancellationToken);
+            IAgentSession resumed = await _runtime.OpenSessionAsync(
+                AgentSpecs.Decision(_repository, state.ThreadId), cancellationToken);
 
             // The resumed thread already holds the operational context (its first proposal primed it), and
             // the router accounting it accrued — restore both so priming and transfer economics continue
@@ -211,14 +218,14 @@ internal sealed class DecisionSession(
             transferCount = state.TransferCount;
             previousOperationalContextSize = state.PreviousOperationalContextSize;
             operationalContextGrowthStreak = state.OperationalContextGrowthStreak;
-            console.Info($"Resumed decision session (thread {state.ThreadId}).");
+            _console.Info($"Resumed decision session (thread {state.ThreadId}).");
             return resumed;
         }
         catch (AgentSessionResumeException ex)
         {
-            console.Warn($"Could not resume decision session (thread {state.ThreadId}): {ex.Message} Starting fresh.");
-            await resumeStore.ClearAsync(cancellationToken);
-            return await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
+            _console.Warn($"Could not resume decision session (thread {state.ThreadId}): {ex.Message} Starting fresh.");
+            await _resumeStore.ClearAsync(cancellationToken);
+            return await _runtime.OpenSessionAsync(AgentSpecs.Decision(_repository), cancellationToken);
         }
     }
 
@@ -233,7 +240,7 @@ internal sealed class DecisionSession(
             return; // no codex thread id (legacy/one-shot shapes) — nothing a later run could resume
         }
 
-        await resumeStore.WriteAsync(new DecisionSessionResumeState(
+        await _resumeStore.WriteAsync(new DecisionSessionResumeState(
             threadId, occupancyTokens, reuseCost, reuseCycles, lastCycleCost, prevCycleCost,
             transferCost, transferCount, previousOperationalContextSize, operationalContextGrowthStreak),
             cancellationToken);
@@ -249,8 +256,8 @@ internal sealed class DecisionSession(
     /// </summary>
     private async Task TransferAsync(CancellationToken cancellationToken)
     {
-        console.Phase("Decision: Transfer/ProduceOperationalDelta");
-        var deltaRenderer = new ConsoleTurnRenderer(console);
+        _console.Phase("Decision: Transfer/ProduceOperationalDelta");
+        var deltaRenderer = new ConsoleTurnRenderer(_console);
         AgentTurnResult delta = await session!.RunTurnAsync(
             ProduceOperationalDelta.Text, deltaRenderer.Stream, cancellationToken);
         if (delta.State != AgentTurnState.Completed)
@@ -262,26 +269,26 @@ internal sealed class DecisionSession(
 
         deltaRenderer.EchoIfSilent(delta.Output);
 
-        await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, delta.Output);
+        await _artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, delta.Output);
 
         // Close the old process (resets seeded + token pressure).
         await CloseAsync();
 
-        console.Phase("Decision: Transfer/UpdateOperationalContext");
+        _console.Phase("Decision: Transfer/UpdateOperationalContext");
         AgentTurnResult update = await EvolveOperationalContextAsync(delta.Output, cancellationToken);
 
-        console.Phase("Decision: Transfer/OptimizeOperationalDocuments");
+        _console.Phase("Decision: Transfer/OptimizeOperationalDocuments");
         AgentTurnResult optimize = await OptimizeOperationalDocumentsAsync(cancellationToken);
 
         // Archive the consumed operational delta now that operational_context.md is successfully updated: rotate
         // .agents/operational_delta.md into a numbered .agents/deltas/ copy and remove the live file. Hard step —
         // a missing delta or a failed rotation fails the transfer (the old process is already closed above; no
         // session is open to tear down here).
-        console.Phase("Decision: Transfer/ArchiveOperationalDelta");
+        _console.Phase("Decision: Transfer/ArchiveOperationalDelta");
         string? archived;
         try
         {
-            archived = await artifacts.RotateOperationalDeltaAsync();
+            archived = await _artifacts.RotateOperationalDeltaAsync();
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -301,7 +308,7 @@ internal sealed class DecisionSession(
         // reuse accounting; the fresh process's context-priming cost is captured by the next proposal's
         // RecordProposalCost. transferCost persists across recycles.
         RecordTransferCost(
-            costModel.Measure(delta.Usage) + costModel.Measure(update.Usage) + costModel.Measure(optimize.Usage));
+            _costModel.Measure(delta.Usage) + _costModel.Measure(update.Usage) + _costModel.Measure(optimize.Usage));
     }
 
     // Evolves the operational context through a fresh app-server session scoped to the context and delta artifacts.
@@ -309,14 +316,14 @@ internal sealed class DecisionSession(
     private async Task<AgentTurnResult> EvolveOperationalContextAsync(
         string deltaOutput, CancellationToken cancellationToken)
     {
-        await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, deltaOutput);
+        await _artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, deltaOutput);
 
         var operation = new DecisionArtifactOperation(
             Label: "operational-context-evolution",
             Prompt: UpdateOperationalContext.Text,
             Profile: new OperationPermissionProfile(
                 "operational-context-evolution",
-                repository.Path,
+                _repository.Path,
                 [OrchestrationArtifactPaths.OperationalContext, OrchestrationArtifactPaths.OperationalDelta],
                 [],
                 [OrchestrationArtifactPaths.OperationalContext],
@@ -346,7 +353,7 @@ internal sealed class DecisionSession(
         var existingDocuments = new List<string>();
         foreach (string document in OptimizationDocuments)
         {
-            if (await artifacts.ExistsAsync(document))
+            if (await _artifacts.ExistsAsync(document))
             {
                 existingDocuments.Add(document);
             }
@@ -357,7 +364,7 @@ internal sealed class DecisionSession(
             Prompt: OptimizeOperationalDocuments.Text,
             Profile: new OperationPermissionProfile(
                 "operational-documents-optimization",
-                repository.Path,
+                _repository.Path,
                 existingDocuments,
                 [],
                 existingDocuments,
@@ -371,7 +378,7 @@ internal sealed class DecisionSession(
             unchangedGuardFailure: null,
             cancellationToken);
 
-        string optimizedContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
+        string optimizedContext = await _artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
         RecordOperationalContextHealth(optimizedContext.Length);
         return optimize;
     }
@@ -385,7 +392,7 @@ internal sealed class DecisionSession(
         string? changedGuardSnapshot = null;
         foreach (string read in operation.Profile.AllowedReads)
         {
-            string? content = await artifacts.ReadAsync(read);
+            string? content = await _artifacts.ReadAsync(read);
             if (content is null)
             {
                 throw new LoopStepException($"{operation.Label}: required input {read} was not found.");
@@ -398,16 +405,16 @@ internal sealed class DecisionSession(
         }
 
         ArtifactMutationTransaction transaction =
-            await ArtifactMutationTransaction.CaptureAsync(artifacts.Store, repository, operation.Profile);
+            await ArtifactMutationTransaction.CaptureAsync(_artifacts.Store, _repository, operation.Profile);
 
         IAgentSession? scopedSession = null;
         bool keepChanges = false;
         try
         {
-            var renderer = new ConsoleTurnRenderer(console);
-            scopedSession = await runtime.OpenSessionAsync(
+            var renderer = new ConsoleTurnRenderer(_console);
+            scopedSession = await _runtime.OpenSessionAsync(
                 AgentSpecs.ScopedArtifactOperation(
-                    repository,
+                    _repository,
                     AgentEffortLevel.High,
                     identifier: "xhigh",
                     operation.Profile),
@@ -433,7 +440,7 @@ internal sealed class DecisionSession(
 
             foreach (string requiredOutput in operation.RequiredOutputs)
             {
-                if (!await artifacts.ExistsAsync(requiredOutput))
+                if (!await _artifacts.ExistsAsync(requiredOutput))
                 {
                     throw new LoopStepException(missingRequiredMessage);
                 }
@@ -441,7 +448,7 @@ internal sealed class DecisionSession(
 
             if (operation.ChangedGuard is { } changedGuard)
             {
-                string changedContent = await artifacts.ReadAsync(changedGuard) ?? string.Empty;
+                string changedContent = await _artifacts.ReadAsync(changedGuard) ?? string.Empty;
                 if (string.Equals(changedContent, changedGuardSnapshot ?? string.Empty, StringComparison.Ordinal))
                 {
                     throw new LoopStepException(unchangedGuardFailure ?? $"{operation.Label} left {changedGuard} unchanged.");
@@ -464,7 +471,7 @@ internal sealed class DecisionSession(
         {
             if (scopedSession is not null)
             {
-                await runtime.CloseSessionAsync(scopedSession);
+                await _runtime.CloseSessionAsync(scopedSession);
             }
         }
     }
@@ -493,13 +500,13 @@ internal sealed class DecisionSession(
         previousOperationalContextSize = newSize;
         if (operationalContextGrowthStreak >= OperationalContextGrowthStreakWarningThreshold)
         {
-            console.Warn($"Operational context has grown for {operationalContextGrowthStreak} consecutive transfers (now {newSize} chars) — check for bloat.");
+            _console.Warn($"Operational context has grown for {operationalContextGrowthStreak} consecutive transfers (now {newSize} chars) — check for bloat.");
         }
     }
 
     private async Task<ProjectContextProjectionResult> EnsureDecisionProjectionAsync(CancellationToken cancellationToken)
     {
-        if (projectionService is null)
+        if (_projectionService is null)
         {
             return new ProjectContextProjectionResult(
                 new ProjectionDefinition(
@@ -516,7 +523,7 @@ internal sealed class DecisionSession(
 
         try
         {
-            return await projectionService.EnsureFreshAsync(
+            return await _projectionService.EnsureFreshAsync(
                 ProjectionRuntimePromptNames.DecisionSession,
                 cancellationToken);
         }
@@ -530,7 +537,7 @@ internal sealed class DecisionSession(
     {
         try
         {
-            return await projectionService!.EvaluateFreshnessAsync(
+            return await _projectionService!.EvaluateFreshnessAsync(
                 ProjectionRuntimePromptNames.DecisionSession,
                 cancellationToken);
         }
@@ -549,14 +556,14 @@ internal sealed class DecisionSession(
             return new RouterInputs(0, 0d, 0, 0d, transferCost);
         }
 
-        double predictedNext = costModel.EstimateNextCycle(
+        double predictedNext = _costModel.EstimateNextCycle(
             new DecisionCostForecast(lastCycleCost, prevCycleCost, occupancyTokens, 0));
         return new RouterInputs(occupancyTokens, reuseCost, reuseCycles, predictedNext, transferCost);
     }
 
     private void RecordProposalCost(AgentTokenUsage usage)
     {
-        double cost = costModel.Measure(usage);
+        double cost = _costModel.Measure(usage);
         occupancyTokens = usage.PromptTokens + usage.OutputTokens;
         reuseCost += cost;
         reuseCycles += 1;
@@ -587,7 +594,7 @@ internal sealed class DecisionSession(
     {
         if (session is not null)
         {
-            await runtime.CloseSessionAsync(session);
+            await _runtime.CloseSessionAsync(session);
             session = null;
             seeded = false;
             // Per-process accounting resets for the fresh process; transferCost/transferCount persist.
@@ -599,7 +606,7 @@ internal sealed class DecisionSession(
 
             if (clearResumeState)
             {
-                await resumeStore.ClearAsync(CancellationToken.None);
+                await _resumeStore.ClearAsync(CancellationToken.None);
             }
         }
     }

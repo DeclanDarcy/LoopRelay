@@ -8,11 +8,11 @@ namespace LoopRelay.Orchestration.Services;
 
 public sealed class ArtifactMutationTransaction
 {
-    private readonly IArtifactStore store;
-    private readonly Repository repository;
-    private readonly OperationPermissionProfile profile;
-    private readonly Dictionary<string, string> snapshots;
-    private readonly HashSet<string> absentExactWrites;
+    private readonly IArtifactStore _store;
+    private readonly Repository _repository;
+    private readonly OperationPermissionProfile _profile;
+    private readonly Dictionary<string, string> _snapshots;
+    private readonly HashSet<string> _absentExactWrites;
 
     private ArtifactMutationTransaction(
         IArtifactStore store,
@@ -21,11 +21,11 @@ public sealed class ArtifactMutationTransaction
         Dictionary<string, string> snapshots,
         HashSet<string> absentExactWrites)
     {
-        this.store = store;
-        this.repository = repository;
-        this.profile = profile;
-        this.snapshots = snapshots;
-        this.absentExactWrites = absentExactWrites;
+        _store = store;
+        _repository = repository;
+        _profile = profile;
+        _snapshots = snapshots;
+        _absentExactWrites = absentExactWrites;
     }
 
     public static async Task<ArtifactMutationTransaction> CaptureAsync(
@@ -69,28 +69,28 @@ public sealed class ArtifactMutationTransaction
 
     public async Task RestoreAsync()
     {
-        foreach (KeyValuePair<string, string> snapshot in snapshots)
+        foreach (KeyValuePair<string, string> snapshot in _snapshots)
         {
-            await store.WriteAsync(snapshot.Key, snapshot.Value);
+            await _store.WriteAsync(snapshot.Key, snapshot.Value);
         }
 
-        foreach (string absent in absentExactWrites)
+        foreach (string absent in _absentExactWrites)
         {
-            if (await store.ExistsAsync(absent))
+            if (await _store.ExistsAsync(absent))
             {
-                await store.DeleteAsync(absent);
+                await _store.DeleteAsync(absent);
             }
         }
 
-        foreach (OperationPathGlob glob in profile.AllowedWriteGlobs)
+        foreach (OperationPathGlob glob in _profile.AllowedWriteGlobs)
         {
-            string directory = Resolve(repository, glob.Directory);
-            IReadOnlyList<string> matches = await store.ListAsync(directory, glob.Pattern);
+            string directory = Resolve(_repository, glob.Directory);
+            IReadOnlyList<string> matches = await _store.ListAsync(directory, glob.Pattern);
             foreach (string match in matches)
             {
-                if (!snapshots.ContainsKey(match))
+                if (!_snapshots.ContainsKey(match))
                 {
-                    await store.DeleteAsync(match);
+                    await _store.DeleteAsync(match);
                 }
             }
         }
@@ -99,11 +99,11 @@ public sealed class ArtifactMutationTransaction
     public async Task<IReadOnlyList<string>> DeletedSnapshotFilesAsync()
     {
         var deleted = new List<string>();
-        foreach (string absolute in snapshots.Keys)
+        foreach (string absolute in _snapshots.Keys)
         {
-            if (!await store.ExistsAsync(absolute))
+            if (!await _store.ExistsAsync(absolute))
             {
-                deleted.Add(ArtifactPath.ToRepositoryRelativePath(repository, absolute));
+                deleted.Add(ArtifactPath.ToRepositoryRelativePath(_repository, absolute));
             }
         }
 

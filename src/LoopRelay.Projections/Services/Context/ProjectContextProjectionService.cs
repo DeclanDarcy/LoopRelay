@@ -17,7 +17,12 @@ public sealed class ProjectContextProjectionService(
     ProjectionValidator validator,
     IProjectionPromptRunner promptRunner) : IProjectContextProjectionService
 {
-    private readonly ProjectContextLoader projectContextLoader = new(artifacts);
+    private readonly ProjectionArtifacts.ProjectionArtifacts _artifacts = artifacts;
+    private readonly ProjectionDefinitionRegistry _registry = registry;
+    private readonly ProjectionManifestStore _manifestStore = manifestStore;
+    private readonly ProjectionValidator _validator = validator;
+    private readonly IProjectionPromptRunner _promptRunner = promptRunner;
+    private readonly ProjectContextLoader _projectContextLoader = new(artifacts);
     private readonly ProjectionProvenanceFactory provenanceFactory = new();
 
     public Task<ProjectContextProjectionResult> EnsureFreshAsync(
@@ -30,12 +35,12 @@ public sealed class ProjectContextProjectionService(
         ProjectionRefreshPolicy refreshPolicy,
         CancellationToken cancellationToken = default)
     {
-        ProjectContext projectContext = await projectContextLoader.LoadAsync(cancellationToken);
-        ProjectionDefinition definition = registry.Get(runtimePromptName);
+        ProjectContext projectContext = await _projectContextLoader.LoadAsync(cancellationToken);
+        ProjectionDefinition definition = _registry.Get(runtimePromptName);
         ProjectionProvenance currentProvenance = provenanceFactory.Create(definition, projectContext);
-        ProjectionManifest manifest = await manifestStore.LoadAsync();
+        ProjectionManifest manifest = await _manifestStore.LoadAsync();
         ProjectionManifestEntry? previous = manifest.Find(runtimePromptName);
-        string? content = await artifacts.ReadAsync(definition.ProjectionPath);
+        string? content = await _artifacts.ReadAsync(definition.ProjectionPath);
         bool generated = false;
         ProjectionFreshness freshness;
         ProjectionValidationResult validation;
@@ -45,18 +50,18 @@ public sealed class ProjectContextProjectionService(
             content = await GenerateAsync(definition, projectContext, cancellationToken);
             generated = true;
             freshness = ProjectionFreshness.Fresh;
-            validation = validator.Validate(runtimePromptName, content);
+            validation = _validator.Validate(runtimePromptName, content);
         }
         else
         {
-            validation = validator.Validate(runtimePromptName, content);
+            validation = _validator.Validate(runtimePromptName, content);
             freshness = ProjectionFreshnessEvaluator.Evaluate(currentProvenance, previous);
             if ((!validation.IsValid || !freshness.IsFresh) && refreshPolicy == ProjectionRefreshPolicy.RegenerateWhenStale)
             {
                 content = await GenerateAsync(definition, projectContext, cancellationToken);
                 generated = true;
                 freshness = ProjectionFreshness.Fresh;
-                validation = validator.Validate(runtimePromptName, content);
+                validation = _validator.Validate(runtimePromptName, content);
             }
         }
 
@@ -75,22 +80,22 @@ public sealed class ProjectContextProjectionService(
 
         if (!validation.IsValid)
         {
-            await manifestStore.UpsertAsync(entry);
+            await _manifestStore.UpsertAsync(entry);
             throw new ProjectionException($"Projection validation failed for {runtimePromptName}: {validation.Error}");
         }
 
         if (!freshness.IsFresh && refreshPolicy == ProjectionRefreshPolicy.BlockWhenStale)
         {
-            await manifestStore.UpsertAsync(entry);
+            await _manifestStore.UpsertAsync(entry);
             throw new ProjectionException($"Projection is stale for {runtimePromptName}: {FormatReasons(freshness.Reasons)}.");
         }
 
         if (generated)
         {
-            await artifacts.WriteAsync(definition.ProjectionPath, content);
+            await _artifacts.WriteAsync(definition.ProjectionPath, content);
         }
 
-        await manifestStore.UpsertAsync(entry);
+        await _manifestStore.UpsertAsync(entry);
         return new ProjectContextProjectionResult(definition, content, generated, freshness.Status, freshness.Reasons);
     }
 
@@ -98,15 +103,15 @@ public sealed class ProjectContextProjectionService(
         string runtimePromptName,
         CancellationToken cancellationToken = default)
     {
-        ProjectContext projectContext = await projectContextLoader.LoadAsync(cancellationToken);
-        ProjectionDefinition definition = registry.Get(runtimePromptName);
-        string? content = await artifacts.ReadAsync(definition.ProjectionPath);
+        ProjectContext projectContext = await _projectContextLoader.LoadAsync(cancellationToken);
+        ProjectionDefinition definition = _registry.Get(runtimePromptName);
+        string? content = await _artifacts.ReadAsync(definition.ProjectionPath);
         if (string.IsNullOrWhiteSpace(content))
         {
             return ProjectionFreshness.Unknown(ProjectionStaleReason.MissingProjectionArtifact);
         }
 
-        ProjectionManifest manifest = await manifestStore.LoadAsync();
+        ProjectionManifest manifest = await _manifestStore.LoadAsync();
         ProjectionProvenance currentProvenance = provenanceFactory.Create(definition, projectContext);
         return ProjectionFreshnessEvaluator.Evaluate(currentProvenance, manifest.Find(runtimePromptName));
     }
@@ -117,7 +122,7 @@ public sealed class ProjectContextProjectionService(
         CancellationToken cancellationToken)
     {
         string prompt = definition.RenderPrompt(projectContext.Content);
-        string content = await promptRunner.RunProjectionPromptAsync(definition, prompt, cancellationToken);
+        string content = await _promptRunner.RunProjectionPromptAsync(definition, prompt, cancellationToken);
         if (string.IsNullOrWhiteSpace(content))
         {
             throw new ProjectionException($"{definition.ProjectionPromptName} returned empty projection content.");

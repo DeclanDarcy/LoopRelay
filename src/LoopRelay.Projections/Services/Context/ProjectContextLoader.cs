@@ -9,6 +9,7 @@ namespace LoopRelay.Projections.Services.Context;
 
 public sealed partial class ProjectContextLoader(ProjectionArtifacts.ProjectionArtifacts artifacts)
 {
+    private readonly ProjectionArtifacts.ProjectionArtifacts _artifacts = artifacts;
     public async Task<ProjectContext> LoadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -17,7 +18,7 @@ public sealed partial class ProjectContextLoader(ProjectionArtifacts.ProjectionA
         var contents = new List<(string Path, string FileName, string Content)>();
         foreach (string path in ProjectionArtifactPaths.ProjectContextSourceFiles)
         {
-            string? content = await artifacts.ReadAsync(path);
+            string? content = await _artifacts.ReadAsync(path);
             if (content is null)
             {
                 missing.Add(path);
@@ -28,7 +29,7 @@ public sealed partial class ProjectContextLoader(ProjectionArtifacts.ProjectionA
             }
         }
 
-        IReadOnlyList<string> numberedFiles = await artifacts.ListAsync(ProjectionArtifactPaths.ProjectContextDirectory, "*.md");
+        IReadOnlyList<string> numberedFiles = await _artifacts.ListAsync(ProjectionArtifactPaths.ProjectContextDirectory, "*.md");
         string[] extras = numberedFiles
             .Where(path => NumberedProjectContextFileRegex().IsMatch(Path.GetFileName(path)))
             .Where(path => !ProjectionArtifactPaths.ProjectContextSourceFiles.Contains(path, StringComparer.Ordinal))

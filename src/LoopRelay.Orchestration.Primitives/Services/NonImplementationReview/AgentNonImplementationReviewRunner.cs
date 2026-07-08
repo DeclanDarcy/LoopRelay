@@ -14,6 +14,8 @@ public sealed class AgentNonImplementationReviewRunner(
     IAgentRuntime runtime,
     Repository repository) : INonImplementationReviewRunner
 {
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly Repository _repository = repository;
     public NonImplementationReviewRunnerConstraints Capabilities =>
         NonImplementationReviewRunnerConstraints.ReadOnly;
 
@@ -24,8 +26,8 @@ public sealed class AgentNonImplementationReviewRunner(
         ArgumentNullException.ThrowIfNull(request);
         request.Constraints.EnsureReadOnly();
 
-        AgentTurnResult result = await runtime.RunOneShotAsync(
-            ReadOnlyReviewSpec(repository),
+        AgentTurnResult result = await _runtime.RunOneShotAsync(
+            ReadOnlyReviewSpec(_repository),
             request.PromptPayload,
             onChunk: null,
             cancellationToken);

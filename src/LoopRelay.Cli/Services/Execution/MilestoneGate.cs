@@ -39,9 +39,9 @@ namespace LoopRelay.Cli.Services.Execution;
 /// </summary>
 internal sealed class MilestoneGate
 {
-    private readonly IArtifactStore store;
-    private readonly Repository repository;
-    private readonly Func<string, DateTime?> lastWriteTime;
+    private readonly IArtifactStore _store;
+    private readonly Repository _repository;
+    private readonly Func<string, DateTime?> _lastWriteTime;
 
     /// <summary>What the last parse of a still-incomplete file produced, keyed by the last-write time
     /// captured BEFORE that read (so a racing write forces a re-parse next call, never a stale skip).</summary>
@@ -57,12 +57,12 @@ internal sealed class MilestoneGate
 
     public MilestoneGate(IArtifactStore store, Repository repository, Func<string, DateTime?>? lastWriteTime = null)
     {
-        this.store = store;
-        this.repository = repository;
+        _store = store;
+        _repository = repository;
         // The CLI always runs FileSystemArtifactStore over real paths, so default to the filesystem.
         // File.GetLastWriteTimeUtc returns a 1601 sentinel (not an exception) for a missing file, so the
         // File.Exists guard is REQUIRED: surface null (meaning unknown) for an absent file.
-        this.lastWriteTime = lastWriteTime
+        _lastWriteTime = lastWriteTime
             ?? (path => File.Exists(path) ? File.GetLastWriteTimeUtc(path) : (DateTime?)null);
     }
 
@@ -73,7 +73,7 @@ internal sealed class MilestoneGate
         // — any single unchecked box keeps the aggregate false. We ONLY ever short-circuit to false.
         foreach ((string path, ParsedIncomplete parsed) in incomplete)
         {
-            if (lastWriteTime(path) is { } now && now == parsed.Stamp)
+            if (_lastWriteTime(path) is { } now && now == parsed.Stamp)
             {
                 return false;
             }
@@ -84,14 +84,14 @@ internal sealed class MilestoneGate
         int total = 0;
         int completed = 0;
 
-        string dir = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.MilestonesDirectory);
-        IReadOnlyList<string> files = await store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);
+        string dir = ArtifactPath.ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.MilestonesDirectory);
+        IReadOnlyList<string> files = await _store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);
         foreach (string file in files)
         {
             // Capture the stamp BEFORE the read so a write racing the read records an older stamp and forces a
             // re-parse next call (never a stale skip). ?? string.Empty tolerates a listed-then-deleted file.
-            DateTime? stamp = lastWriteTime(file);
-            string content = await store.ReadAsync(file) ?? string.Empty;
+            DateTime? stamp = _lastWriteTime(file);
+            string content = await _store.ReadAsync(file) ?? string.Empty;
             Accumulate(file, stamp, content, ref total, ref completed);
         }
 
@@ -108,12 +108,12 @@ internal sealed class MilestoneGate
     public async Task<IReadOnlyList<string>> GetUntickedItemsAsync()
     {
         var items = new List<string>();
-        string dir = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.MilestonesDirectory);
-        IReadOnlyList<string> files = await store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);
+        string dir = ArtifactPath.ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.MilestonesDirectory);
+        IReadOnlyList<string> files = await _store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);
         foreach (string file in files)
         {
             // Same stamp discipline as the full parse: capture BEFORE the read, never cache an unknown stamp.
-            DateTime? stamp = lastWriteTime(file);
+            DateTime? stamp = _lastWriteTime(file);
             if (stamp is { } current
                 && incomplete.TryGetValue(file, out ParsedIncomplete cached)
                 && cached.Stamp == current)
@@ -122,7 +122,7 @@ internal sealed class MilestoneGate
                 continue;
             }
 
-            string content = await store.ReadAsync(file) ?? string.Empty;
+            string content = await _store.ReadAsync(file) ?? string.Empty;
             (int t, int c, IReadOnlyList<string> unticked) = CountCheckboxes(content);
             // Re-establish the membership invariant for this file: drop any stale entry first, so a file
             // that became fully checked (or lost its stamp) can never keep short-circuiting the epic gate.

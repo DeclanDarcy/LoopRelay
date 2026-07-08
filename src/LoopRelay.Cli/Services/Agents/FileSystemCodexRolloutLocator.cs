@@ -13,9 +13,9 @@ internal sealed class FileSystemCodexRolloutLocator : ICodexRolloutLocator
 {
     private static readonly TimeSpan StartTolerance = TimeSpan.FromSeconds(1);
 
-    private readonly string sessionsRoot;
+    private readonly string _sessionsRoot;
 
-    public FileSystemCodexRolloutLocator(string sessionsRoot) => this.sessionsRoot = sessionsRoot;
+    public FileSystemCodexRolloutLocator(string sessionsRoot) => _sessionsRoot = sessionsRoot;
 
     /// <summary><c>%CODEX_HOME%/sessions</c>, else <c>%USERPROFILE%/.codex/sessions</c>.</summary>
     public static string ResolveDefaultSessionsRoot()
@@ -33,7 +33,7 @@ internal sealed class FileSystemCodexRolloutLocator : ICodexRolloutLocator
     {
         try
         {
-            if (!Directory.Exists(sessionsRoot))
+            if (!Directory.Exists(_sessionsRoot))
             {
                 return null;
             }
@@ -42,7 +42,7 @@ internal sealed class FileSystemCodexRolloutLocator : ICodexRolloutLocator
             string? best = null;
             DateTimeOffset bestStart = DateTimeOffset.MinValue;
 
-            foreach (string file in Directory.EnumerateFiles(sessionsRoot, "rollout-*.jsonl", SearchOption.AllDirectories))
+            foreach (string file in Directory.EnumerateFiles(_sessionsRoot, "rollout-*.jsonl", SearchOption.AllDirectories))
             {
                 if (!TryReadMeta(file, out string cwd, out DateTimeOffset started))
                 {

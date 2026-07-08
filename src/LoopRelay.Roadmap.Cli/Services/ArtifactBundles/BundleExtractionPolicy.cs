@@ -4,8 +4,8 @@ namespace LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 
 internal sealed class BundleExtractionPolicy
 {
-    private readonly Func<string, bool> isAllowed;
-    private readonly Func<string, string> rejectionMessage;
+    private readonly Func<string, bool> _isAllowed;
+    private readonly Func<string, string> _rejectionMessage;
 
     private BundleExtractionPolicy(
         string name,
@@ -13,8 +13,8 @@ internal sealed class BundleExtractionPolicy
         Func<string, string> rejectionMessage)
     {
         Name = name;
-        this.isAllowed = isAllowed;
-        this.rejectionMessage = rejectionMessage;
+        _isAllowed = isAllowed;
+        _rejectionMessage = rejectionMessage;
     }
 
     public string Name { get; }
@@ -29,9 +29,9 @@ internal sealed class BundleExtractionPolicy
         _ => true,
         path => $"Bundle target path is not allowed for repository-safe extraction: {path}");
 
-    public bool IsAllowed(string path) => isAllowed(path);
+    public bool IsAllowed(string path) => _isAllowed(path);
 
-    public string RejectionMessage(string path) => rejectionMessage(path);
+    public string RejectionMessage(string path) => _rejectionMessage(path);
 
     private static bool IsRoadmapBundleTarget(string path) =>
         path.StartsWith(".agents/specs/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal) ||

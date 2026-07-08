@@ -24,13 +24,18 @@ internal sealed class GatedAgentRuntime(
     string repoName,
     InputWaitObservationStore? inputWaitObservations = null) : IAgentRuntime
 {
+    private readonly IAgentRuntime _inner = inner;
+    private readonly IUsageLimitDetector _usageLimit = usageLimit;
+    private readonly ISessionTelemetryRecorder _recorder = recorder;
+    private readonly IClock _clock = clock;
+    private readonly InputWaitObservationStore? _inputWaitObservations = inputWaitObservations;
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec, CancellationToken cancellationToken = default)
     {
-        IAgentSession session = await inner.OpenSessionAsync(spec, cancellationToken);
+        IAgentSession session = await _inner.OpenSessionAsync(spec, cancellationToken);
         return new GatedAgentSession(
-            session, usageLimit, recorder, repoName, spec.WorkingDirectory ?? string.Empty, clock.UtcNow,
-            inputWaitObservations);
+            session, _usageLimit, _recorder, repoName, spec.WorkingDirectory ?? string.Empty, _clock.UtcNow,
+            _inputWaitObservations);
     }
 
     public async Task<AgentTurnResult> RunOneShotAsync(
@@ -41,16 +46,16 @@ internal sealed class GatedAgentRuntime(
     {
         // One-shots are deliberately NOT retried on a usage-limit failure: legacy/projection-adjacent callers may
         // still mutate their only candidate output, so only the caller can decide whether a rerun is safe.
-        DateTimeOffset openedAt = clock.UtcNow;
-        AgentTurnResult result = await inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
-        await recorder.RecordTurnAsync(
+        DateTimeOffset openedAt = _clock.UtcNow;
+        AgentTurnResult result = await _inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
+        await _recorder.RecordTurnAsync(
             repoName, spec.WorkingDirectory ?? string.Empty, spec.SessionId, spec.Role, openedAt,
             cachedLogPath: null, result,
-            inputWaitObservations?.Take(spec.SessionId, result.TurnIndex),
+            _inputWaitObservations?.Take(spec.SessionId, result.TurnIndex),
             cancellationToken);
         return result;
     }
 
     public ValueTask CloseSessionAsync(IAgentSession session) =>
-        inner.CloseSessionAsync(session is GatedAgentSession gated ? gated.Inner : session);
+        _inner.CloseSessionAsync(session is GatedAgentSession gated ? gated.Inner : session);
 }

@@ -52,6 +52,10 @@ internal sealed class UsageLimitDetector(
 
     private static readonly string[] FullFormats = ["MMM d, yyyy h:mm tt", "MMMM d, yyyy h:mm tt"];
     private static readonly string[] TimeOnlyFormats = ["h:mm tt", "h tt"];
+    private readonly IClock _clock = clock;
+    private readonly IUsageDelay _delay = delay;
+    private readonly ILoopConsole _console = console;
+    private readonly TimeZoneInfo? _timeZone = timeZone;
 
     public UsageLimitHit? Detect(AgentTurnResult result)
     {
@@ -67,7 +71,7 @@ internal sealed class UsageLimitDetector(
             return new UsageLimitHit(FallbackWait, RetryAt: null);
         }
 
-        TimeSpan wait = retryAt - clock.UtcNow;
+        TimeSpan wait = retryAt - _clock.UtcNow;
         if (wait >= MinimumWait)
         {
             return new UsageLimitHit(wait, retryAt);
@@ -80,14 +84,14 @@ internal sealed class UsageLimitDetector(
 
     public async Task WaitOutAsync(UsageLimitHit hit, CancellationToken cancellationToken)
     {
-        console.Warn(hit.RetryAt is { } retryAt
+        _console.Warn(hit.RetryAt is { } retryAt
             ? $"Codex usage limit hit — waiting {Format(hit.Wait)} (until {retryAt:MMM d, yyyy h:mm tt zzz}) before retrying."
             : $"Codex usage limit hit and no usable retry time could be parsed from the error — waiting {Format(hit.Wait)} before retrying.");
-        await delay.DelayAsync(hit.Wait, cancellationToken);
+        await _delay.DelayAsync(hit.Wait, cancellationToken);
     }
 
     public void WarnRetriesExhausted(int retries) =>
-        console.Warn($"Codex usage limit still hit after {retries} waited retries — giving up and surfacing the failure.");
+        _console.Warn($"Codex usage limit still hit after {retries} waited retries — giving up and surfacing the failure.");
 
     private bool TryParseRetryAt(string diagnostics, out DateTimeOffset retryAt)
     {
@@ -160,7 +164,7 @@ internal sealed class UsageLimitDetector(
     private DateTimeOffset AnchorTimeOnly(TimeSpan timeOfDay)
     {
         TimeZoneInfo zone = Zone();
-        DateTime localNow = TimeZoneInfo.ConvertTime(clock.UtcNow, zone).DateTime;
+        DateTime localNow = TimeZoneInfo.ConvertTime(_clock.UtcNow, zone).DateTime;
         DateTime wall = localNow.Date + timeOfDay;
         if (wall <= localNow)
         {
@@ -170,7 +174,7 @@ internal sealed class UsageLimitDetector(
         return new DateTimeOffset(wall, zone.GetUtcOffset(wall));
     }
 
-    private TimeZoneInfo Zone() => timeZone ?? TimeZoneInfo.Local;
+    private TimeZoneInfo Zone() => _timeZone ?? TimeZoneInfo.Local;
 
     private static string Format(TimeSpan duration)
     {

@@ -5,6 +5,7 @@ namespace LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 
 internal sealed class BundleManifestWriter(RoadmapArtifacts artifacts)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
     public async Task<string> WriteAsync(
         string manifestPath,
         string sourcePrompt,
@@ -34,7 +35,7 @@ internal sealed class BundleManifestWriter(RoadmapArtifacts artifacts)
             lines.Add($"| {file.Path} | {file.Hash} |");
         }
 
-        await artifacts.WriteAsync(manifestPath, string.Join(Environment.NewLine, lines) + Environment.NewLine);
+        await _artifacts.WriteAsync(manifestPath, string.Join(Environment.NewLine, lines) + Environment.NewLine);
         return manifestPath;
     }
 

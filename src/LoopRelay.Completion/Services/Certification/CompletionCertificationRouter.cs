@@ -34,7 +34,7 @@ public sealed class CompletionCertificationRouter
             ShouldCloseEpic: false),
     ];
 
-    private readonly IReadOnlyDictionary<string, CompletionCertificationRoute> routes;
+    private readonly IReadOnlyDictionary<string, CompletionCertificationRoute> _routes;
 
     public CompletionCertificationRouter()
         : this(DefaultRoutes)
@@ -43,17 +43,17 @@ public sealed class CompletionCertificationRouter
 
     public CompletionCertificationRouter(IEnumerable<CompletionCertificationRoute> routes)
     {
-        this.routes = routes.ToDictionary(route => route.ClosureRecommendation, StringComparer.Ordinal);
-        EnsureComplete(this.routes.Keys);
+        _routes = routes.ToDictionary(route => route.ClosureRecommendation, StringComparer.Ordinal);
+        EnsureComplete(_routes.Keys);
     }
 
     public static IReadOnlyList<string> AllowedRecommendations =>
         CompletionCertificationVocabulary.ClosureRecommendations;
 
-    public IReadOnlyCollection<CompletionCertificationRoute> All => this.routes.Values.ToList();
+    public IReadOnlyCollection<CompletionCertificationRoute> All => _routes.Values.ToList();
 
     public CompletionCertificationRoute Route(CompletionEvaluationDecision decision) =>
-        this.routes.TryGetValue(decision.ClosureRecommendation, out CompletionCertificationRoute? route)
+        _routes.TryGetValue(decision.ClosureRecommendation, out CompletionCertificationRoute? route)
             ? route
             : throw new InvalidOperationException($"No completion certification route registered for `{decision.ClosureRecommendation}`.");
 

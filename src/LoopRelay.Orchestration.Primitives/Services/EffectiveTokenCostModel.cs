@@ -20,11 +20,11 @@ namespace LoopRelay.Orchestration.Services;
 /// </summary>
 public sealed class EffectiveTokenCostModel : IDecisionCostModel
 {
-    private readonly double cacheCostFactor;
+    private readonly double _cacheCostFactor;
 
     public EffectiveTokenCostModel(double cacheCostFactor = 0.10)
     {
-        this.cacheCostFactor = cacheCostFactor;
+        _cacheCostFactor = cacheCostFactor;
     }
 
     public double Measure(AgentTokenUsage turn)
@@ -35,7 +35,7 @@ public sealed class EffectiveTokenCostModel : IDecisionCostModel
         int output = Math.Max(0, turn.OutputTokens);
         int cached = Math.Clamp(turn.CachedInputTokens, 0, prompt); // cached is a subset of input
         int fresh = prompt - cached;
-        return fresh + (cached * cacheCostFactor) + output;
+        return fresh + (cached * _cacheCostFactor) + output;
     }
 
     public double EstimateNextCycle(DecisionCostForecast forecast)

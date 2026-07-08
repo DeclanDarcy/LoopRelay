@@ -14,16 +14,16 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
 {
     private const long DefaultMaxBytes = 5_242_880; // 5 MiB
 
-    private readonly string directory;
-    private readonly IClock clock;
-    private readonly long maxBytes;
+    private readonly string _directory;
+    private readonly IClock _clock;
+    private readonly long _maxBytes;
     private readonly object gate = new();
 
     public RotatingJsonlTelemetrySink(string directory, IClock clock, long maxBytes = DefaultMaxBytes)
     {
-        this.directory = directory;
-        this.clock = clock;
-        this.maxBytes = maxBytes;
+        _directory = directory;
+        _clock = clock;
+        _maxBytes = maxBytes;
     }
 
     public void Append(SessionTelemetryRecord record)
@@ -31,19 +31,19 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
         string line = JsonSerializer.Serialize(record, SessionTelemetryJson.Options);
         lock (gate)
         {
-            Directory.CreateDirectory(directory);
+            Directory.CreateDirectory(_directory);
             File.AppendAllText(ResolveActiveFile(), line + "\n");
         }
     }
 
     private string ResolveActiveFile()
     {
-        string date = clock.UtcNow.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        string date = _clock.UtcNow.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         for (int sequence = 0; ; sequence++)
         {
-            string candidate = Path.Combine(directory, $"sessions.{date}.{sequence:D4}.jsonl");
+            string candidate = Path.Combine(_directory, $"sessions.{date}.{sequence:D4}.jsonl");
             var info = new FileInfo(candidate);
-            if (!info.Exists || info.Length < maxBytes)
+            if (!info.Exists || info.Length < _maxBytes)
             {
                 return candidate;
             }

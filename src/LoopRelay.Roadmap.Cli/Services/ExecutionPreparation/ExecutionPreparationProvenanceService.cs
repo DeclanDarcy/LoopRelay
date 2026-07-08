@@ -12,6 +12,8 @@ internal sealed class ExecutionPreparationProvenanceService(
     RoadmapArtifacts artifacts,
     ExecutionPreparationManifestStore manifestStore)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly ExecutionPreparationManifestStore _manifestStore = manifestStore;
     public const string ActiveEpicInputKind = "ActiveEpic";
     public const string MilestoneSpecInputKind = "MilestoneSpec";
     public const string DecisionLedgerInputKind = "DecisionLedger";
@@ -36,7 +38,7 @@ internal sealed class ExecutionPreparationProvenanceService(
     {
         cancellationToken.ThrowIfCancellationRequested();
         ExecutionPreparationInputSet inputSet = await CaptureInputSetFromSpecPathsAsync(specPaths, cancellationToken);
-        ExecutionPreparationManifest manifest = (await manifestStore.LoadAsync())
+        ExecutionPreparationManifest manifest = (await _manifestStore.LoadAsync())
             .WithAuthoritativeInputs(
                 inputSet.ActiveEpic.Identity,
                 inputSet.ActiveEpic.Version,
@@ -65,7 +67,7 @@ internal sealed class ExecutionPreparationProvenanceService(
                 DateTimeOffset.UtcNow));
         }
 
-        await manifestStore.SaveAsync(manifest);
+        await _manifestStore.SaveAsync(manifest);
     }
 
     public async Task RecordOperationalContextAsync(
@@ -133,7 +135,7 @@ internal sealed class ExecutionPreparationProvenanceService(
             throw new RoadmapStepException("Cannot record compatibility artifact provenance because milestone output count does not match active spec count.");
         }
 
-        ExecutionPreparationManifest manifest = (await manifestStore.LoadAsync())
+        ExecutionPreparationManifest manifest = (await _manifestStore.LoadAsync())
             .WithAuthoritativeInputs(
                 inputSet.ActiveEpic.Identity,
                 inputSet.ActiveEpic.Version,
@@ -187,7 +189,7 @@ internal sealed class ExecutionPreparationProvenanceService(
                 DateTimeOffset.UtcNow));
         }
 
-        await manifestStore.SaveAsync(manifest);
+        await _manifestStore.SaveAsync(manifest);
     }
 
     public async Task<IReadOnlyList<string>> RequireFreshMilestoneSpecPathsAsync(
@@ -199,7 +201,7 @@ internal sealed class ExecutionPreparationProvenanceService(
             throw new RoadmapStepException($"Milestone spec provenance is not fresh: {FormatReasons(freshness.Reasons)}.");
         }
 
-        ExecutionPreparationManifest manifest = await manifestStore.LoadAsync();
+        ExecutionPreparationManifest manifest = await _manifestStore.LoadAsync();
         return manifest.MilestoneSpecs.Select(input => input.Identity).ToArray();
     }
 
@@ -261,7 +263,7 @@ internal sealed class ExecutionPreparationProvenanceService(
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ExecutionPreparationManifest manifest = await manifestStore.LoadAsync();
+        ExecutionPreparationManifest manifest = await _manifestStore.LoadAsync();
         if (manifest.MilestoneSpecs.Count == 0)
         {
             return DerivedArtifactFreshness.Unknown(DerivedArtifactStaleReason.MissingManifest);
@@ -312,7 +314,7 @@ internal sealed class ExecutionPreparationProvenanceService(
         }
 
         ExecutionPreparationInputSet inputSet = await CaptureFreshInputSetAsync(cancellationToken);
-        ExecutionPreparationManifest manifest = await manifestStore.LoadAsync();
+        ExecutionPreparationManifest manifest = await _manifestStore.LoadAsync();
         return DerivedArtifactFreshnessEvaluator.Evaluate(
             CreateOperationalContextProvenance(inputSet),
             manifest.FindActive(OperationalContextArtifactKind, RoadmapArtifactPaths.OperationalContext),
@@ -330,7 +332,7 @@ internal sealed class ExecutionPreparationProvenanceService(
         }
 
         ExecutionPreparationInputSet inputSet = await CaptureFreshInputSetAsync(cancellationToken);
-        ExecutionPreparationManifest manifest = await manifestStore.LoadAsync();
+        ExecutionPreparationManifest manifest = await _manifestStore.LoadAsync();
         return DerivedArtifactFreshnessEvaluator.Evaluate(
             await CreateExecutionPromptProvenanceAsync(inputSet, cancellationToken),
             manifest.FindActive(ExecutionPromptArtifactKind, RoadmapArtifactPaths.ExecutionPrompt),
@@ -348,7 +350,7 @@ internal sealed class ExecutionPreparationProvenanceService(
         }
 
         ExecutionPreparationInputSet inputSet = await CaptureFreshInputSetAsync(cancellationToken);
-        ExecutionPreparationManifest manifest = await manifestStore.LoadAsync();
+        ExecutionPreparationManifest manifest = await _manifestStore.LoadAsync();
         var results = new List<DerivedArtifactFreshness>
         {
             DerivedArtifactFreshnessEvaluator.Evaluate(
@@ -407,7 +409,7 @@ internal sealed class ExecutionPreparationProvenanceService(
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ExecutionPreparationManifest manifest = (await manifestStore.LoadAsync())
+        ExecutionPreparationManifest manifest = (await _manifestStore.LoadAsync())
             .WithAuthoritativeInputs(
                 inputSet.ActiveEpic.Identity,
                 inputSet.ActiveEpic.Version,
@@ -417,14 +419,14 @@ internal sealed class ExecutionPreparationProvenanceService(
             artifactPath,
             artifactHash,
             DateTimeOffset.UtcNow));
-        await manifestStore.SaveAsync(manifest);
+        await _manifestStore.SaveAsync(manifest);
     }
 
     private async Task<ExecutionPreparationInputSet> CaptureFreshInputSetAsync(
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ExecutionPreparationManifest manifest = await manifestStore.LoadAsync();
+        ExecutionPreparationManifest manifest = await _manifestStore.LoadAsync();
         if (manifest.MilestoneSpecs.Count == 0)
         {
             throw new RoadmapStepException("Cannot evaluate execution preparation without milestone spec provenance.");
@@ -539,7 +541,7 @@ internal sealed class ExecutionPreparationProvenanceService(
 
     private async Task<string?> HashIfPresentAsync(string path)
     {
-        string? content = await artifacts.ReadAsync(path);
+        string? content = await _artifacts.ReadAsync(path);
         return string.IsNullOrWhiteSpace(content) ? null : RoadmapHash.Sha256(content);
     }
 

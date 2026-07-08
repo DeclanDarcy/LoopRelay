@@ -23,6 +23,11 @@ internal sealed class RoadmapTransitionPersistence(
     Decisions.DecisionLedgerStore decisionLedger,
     TransitionJournalStore journalStore)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly ProjectionManifestStore _manifestStore = manifestStore;
+    private readonly State.RoadmapStateStore _stateStore = stateStore;
+    private readonly Decisions.DecisionLedgerStore _decisionLedger = decisionLedger;
+    private readonly TransitionJournalStore _journalStore = journalStore;
     public async Task SaveAsync(
         RoadmapState current,
         TransitionStatus status,
@@ -39,12 +44,12 @@ internal sealed class RoadmapTransitionPersistence(
         RoadmapTransitionIntent? transitionIntent = null,
         IReadOnlyList<string>? nextTransitions = null)
     {
-        RoadmapStateDocument? existing = await stateStore.LoadAsync();
+        RoadmapStateDocument? existing = await _stateStore.LoadAsync();
         RoadmapStateSummarySnapshot summary = await CaptureSummaryAsync();
         IReadOnlyList<RetiredEpic> effectiveRetiredEpics = retiredEpics ?? existing?.RetiredEpics ?? [];
         IReadOnlyList<BlockerRow> effectiveBlockers = blockers ?? existing?.Blockers ?? [];
 
-        await stateStore.SaveAsync(new RoadmapStateDocument(
+        await _stateStore.SaveAsync(new RoadmapStateDocument(
             current,
             summary.ActiveArtifacts,
             new RoadmapTransitionSummary(from, to, prompt, projection, output, decision, status, started, completed),
@@ -61,7 +66,7 @@ internal sealed class RoadmapTransitionPersistence(
     public async Task RefreshAndSaveAsync(RoadmapStateDocument document)
     {
         RoadmapStateSummarySnapshot summary = await CaptureSummaryAsync();
-        await stateStore.SaveAsync(document with
+        await _stateStore.SaveAsync(document with
         {
             ActiveArtifacts = summary.ActiveArtifacts,
             LastDecisionId = summary.LastDecisionId,
@@ -75,7 +80,7 @@ internal sealed class RoadmapTransitionPersistence(
     {
         IReadOnlyDictionary<string, string> inputHashes = failure.InputSnapshot?.ToInputArtifactHashes()
             ?? new Dictionary<string, string>(StringComparer.Ordinal);
-        await journalStore.AppendAsync(new TransitionJournalRecord(
+        await _journalStore.AppendAsync(new TransitionJournalRecord(
             failure.JournalEvent,
             Guid.NewGuid().ToString("N"),
             failure.FailedAt,
@@ -156,10 +161,10 @@ internal sealed class RoadmapTransitionPersistence(
 
     private async Task<RoadmapStateSummarySnapshot> CaptureSummaryAsync()
     {
-        ProjectionManifest manifest = await manifestStore.LoadAsync();
+        ProjectionManifest manifest = await _manifestStore.LoadAsync();
         IReadOnlyList<ArtifactStateRow> activeArtifacts = await ActiveArtifactRowsAsync();
-        string lastDecision = await decisionLedger.LastDecisionIdAsync();
-        int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json")).Count;
+        string lastDecision = await _decisionLedger.LastDecisionIdAsync();
+        int splitFamilyCount = (await _artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json")).Count;
 
         return new RoadmapStateSummarySnapshot(
             activeArtifacts,
@@ -182,7 +187,7 @@ internal sealed class RoadmapTransitionPersistence(
         var rows = new List<ArtifactStateRow>();
         foreach (string path in paths)
         {
-            rows.Add(new ArtifactStateRow(Path.GetFileName(path), path, (await artifacts.GetStatusAsync(path)).ToString()));
+            rows.Add(new ArtifactStateRow(Path.GetFileName(path), path, (await _artifacts.GetStatusAsync(path)).ToString()));
         }
 
         return rows;
@@ -233,7 +238,7 @@ internal sealed class RoadmapTransitionPersistence(
 
             This fallback artifact exists only to keep workflow state recoverable when validator evidence is unavailable.
             """;
-        string fallbackPath = await artifacts.WriteNumberedEvidenceAsync(
+        string fallbackPath = await _artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "invariant-failure-missing-evidence",
             RoadmapBlockedArtifact.Render(

@@ -16,6 +16,10 @@ internal sealed class RoadmapPromptTransitionRunner(
     TransitionJournalStore journalStore,
     RoadmapTransitionPersistence transitionPersistence)
 {
+    private readonly TransitionInputResolver _inputResolver = inputResolver;
+    private readonly RoadmapPromptRunner _promptRunner = promptRunner;
+    private readonly TransitionJournalStore _journalStore = journalStore;
+    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
     public async Task<string> RunNormalAsync(
         RoadmapState from,
         RoadmapState to,
@@ -51,7 +55,7 @@ internal sealed class RoadmapPromptTransitionRunner(
         CancellationToken cancellationToken,
         TransitionInputContext? inputContext = null)
     {
-        TransitionInputSnapshot inputSnapshot = await inputResolver.ResolveAsync(new TransitionInputRequest(
+        TransitionInputSnapshot inputSnapshot = await _inputResolver.ResolveAsync(new TransitionInputRequest(
             prompt,
             projectionPath,
             projectContext,
@@ -61,24 +65,24 @@ internal sealed class RoadmapPromptTransitionRunner(
         DateTimeOffset started = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
         string outputList = string.Join(", ", outputs);
-        await transitionPersistence.SaveAsync(to, TransitionStatus.Started, from, to, prompt, projectionPath, outputList, "Pending", started, null, null, null);
-        await journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, 0, "Started", "None", null, inputSnapshot));
+        await _transitionPersistence.SaveAsync(to, TransitionStatus.Started, from, to, prompt, projectionPath, outputList, "Pending", started, null, null, null);
+        await _journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, 0, "Started", "None", null, inputSnapshot));
 
         try
         {
-            string output = await promptRunner.RunRuntimePromptAsync(prompt, projectContext, secondaryInput, cancellationToken);
+            string output = await _promptRunner.RunRuntimePromptAsync(prompt, projectContext, secondaryInput, cancellationToken);
             stopwatch.Stop();
             DateTimeOffset completed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionCompleted", correlationId, completed, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Completed", "None", null, inputSnapshot));
-            await transitionPersistence.SaveAsync(to, TransitionStatus.Completed, from, to, prompt, projectionPath, outputList, "Completed", started, completed, null, null);
+            await _journalStore.AppendAsync(new TransitionJournalRecord("TransitionCompleted", correlationId, completed, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Completed", "None", null, inputSnapshot));
+            await _transitionPersistence.SaveAsync(to, TransitionStatus.Completed, from, to, prompt, projectionPath, outputList, "Completed", started, completed, null, null);
             return new PromptTransitionCompletion(correlationId, started, completed, stopwatch.ElapsedMilliseconds, output, inputSnapshot);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             stopwatch.Stop();
             DateTimeOffset failed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message, inputSnapshot));
-            await transitionPersistence.SaveAsync(
+            await _journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, to, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message, inputSnapshot));
+            await _transitionPersistence.SaveAsync(
                 RoadmapState.EvidenceBlocked,
                 TransitionStatus.Failed,
                 from,
@@ -108,7 +112,7 @@ internal sealed class RoadmapPromptTransitionRunner(
         CancellationToken cancellationToken,
         TransitionInputContext? inputContext = null)
     {
-        TransitionInputSnapshot inputSnapshot = await inputResolver.ResolveAsync(new TransitionInputRequest(
+        TransitionInputSnapshot inputSnapshot = await _inputResolver.ResolveAsync(new TransitionInputRequest(
             prompt,
             projectionPath,
             projectContext,
@@ -118,24 +122,24 @@ internal sealed class RoadmapPromptTransitionRunner(
         DateTimeOffset started = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
         string outputList = string.Join(", ", outputs);
-        await transitionPersistence.SaveAsync(from, TransitionStatus.Started, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Started", started, null, null, null);
-        await journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, promotionTarget, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, 0, "Started", "None", null, inputSnapshot));
+        await _transitionPersistence.SaveAsync(from, TransitionStatus.Started, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Started", started, null, null, null);
+        await _journalStore.AppendAsync(new TransitionJournalRecord("TransitionStarted", correlationId, started, from, promotionTarget, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, 0, "Started", "None", null, inputSnapshot));
 
         try
         {
-            string output = await promptRunner.RunRuntimePromptAsync(prompt, projectContext, secondaryInput, cancellationToken);
+            string output = await _promptRunner.RunRuntimePromptAsync(prompt, projectContext, secondaryInput, cancellationToken);
             stopwatch.Stop();
             DateTimeOffset completed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord("PromptCompleted", correlationId, completed, from, promotionTarget, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "PromptCompleted", "Output produced", null, inputSnapshot));
-            await transitionPersistence.SaveAsync(from, TransitionStatus.PromptCompleted, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Completed", started, completed, null, null);
+            await _journalStore.AppendAsync(new TransitionJournalRecord("PromptCompleted", correlationId, completed, from, promotionTarget, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "PromptCompleted", "Output produced", null, inputSnapshot));
+            await _transitionPersistence.SaveAsync(from, TransitionStatus.PromptCompleted, from, promotionTarget, prompt, projectionPath, outputList, "Prompt Completed", started, completed, null, null);
             return new PromptTransitionCompletion(correlationId, started, completed, stopwatch.ElapsedMilliseconds, output, inputSnapshot);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             stopwatch.Stop();
             DateTimeOffset failed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, promotionTarget, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message, inputSnapshot));
-            await transitionPersistence.SaveAsync(
+            await _journalStore.AppendAsync(new TransitionJournalRecord("TransitionFailed", correlationId, failed, from, promotionTarget, prompt, projectionPath, prompt, inputSnapshot.ToInputArtifactHashes(), outputs, stopwatch.ElapsedMilliseconds, "Failed", "None", exception.Message, inputSnapshot));
+            await _transitionPersistence.SaveAsync(
                 RoadmapState.EvidenceBlocked,
                 TransitionStatus.Failed,
                 from,

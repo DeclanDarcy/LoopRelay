@@ -9,20 +9,22 @@ namespace LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 internal sealed partial class RoadmapArtifacts(IArtifactStore store, Repository repository)
 {
-    public Repository Repository => repository;
+    private readonly IArtifactStore _store = store;
+    private readonly Repository _repository = repository;
+    public Repository Repository => _repository;
 
-    public Task<bool> ExistsAsync(string relativePath) => store.ExistsAsync(Resolve(relativePath));
+    public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));
 
-    public Task<string?> ReadAsync(string relativePath) => store.ReadAsync(Resolve(relativePath));
+    public Task<string?> ReadAsync(string relativePath) => _store.ReadAsync(Resolve(relativePath));
 
-    public Task WriteAsync(string relativePath, string content) => store.WriteAsync(Resolve(relativePath), content);
+    public Task WriteAsync(string relativePath, string content) => _store.WriteAsync(Resolve(relativePath), content);
 
-    public Task DeleteAsync(string relativePath) => store.DeleteAsync(Resolve(relativePath));
+    public Task DeleteAsync(string relativePath) => _store.DeleteAsync(Resolve(relativePath));
 
     public async Task<IReadOnlyList<string>> ListAsync(string relativeDirectory, string searchPattern)
     {
-        IReadOnlyList<string> files = await store.ListAsync(Resolve(relativeDirectory), searchPattern);
-        return files.Select(path => ArtifactPath.ToRepositoryRelativePath(repository, path)).ToList();
+        IReadOnlyList<string> files = await _store.ListAsync(Resolve(relativeDirectory), searchPattern);
+        return files.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToList();
     }
 
     public async Task<string> ReadRequiredAsync(string relativePath)
@@ -105,7 +107,7 @@ internal sealed partial class RoadmapArtifacts(IArtifactStore store, Repository 
         return string.IsNullOrWhiteSpace(content) ? ArtifactStatus.Empty : ArtifactStatus.Present;
     }
 
-    public string Resolve(string relativePath) => ArtifactPath.ResolveRepositoryPath(repository, relativePath);
+    public string Resolve(string relativePath) => ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
 
     [GeneratedRegex(@"\.(?<number>\d{4})\.md$", RegexOptions.CultureInvariant)]
     private static partial Regex NumberedEvidenceRegex();

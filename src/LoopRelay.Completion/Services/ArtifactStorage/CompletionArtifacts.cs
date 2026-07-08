@@ -8,26 +8,28 @@ namespace LoopRelay.Completion.Services.ArtifactStorage;
 
 public sealed partial class CompletionArtifacts(IArtifactStore store, Repository repository)
 {
-    public Repository Repository => repository;
+    private readonly IArtifactStore _store = store;
+    private readonly Repository _repository = repository;
+    public Repository Repository => _repository;
 
-    public Task<bool> ExistsAsync(string relativePath) => store.ExistsAsync(Resolve(relativePath));
+    public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));
 
-    public Task<string?> ReadAsync(string relativePath) => store.ReadAsync(Resolve(relativePath));
+    public Task<string?> ReadAsync(string relativePath) => _store.ReadAsync(Resolve(relativePath));
 
-    public Task WriteAsync(string relativePath, string content) => store.WriteAsync(Resolve(relativePath), content);
+    public Task WriteAsync(string relativePath, string content) => _store.WriteAsync(Resolve(relativePath), content);
 
-    public Task DeleteAsync(string relativePath) => store.DeleteAsync(Resolve(relativePath));
+    public Task DeleteAsync(string relativePath) => _store.DeleteAsync(Resolve(relativePath));
 
     public async Task<IReadOnlyList<string>> ListAsync(string relativeDirectory, string searchPattern)
     {
-        IReadOnlyList<string> files = await store.ListAsync(Resolve(relativeDirectory), searchPattern);
-        return files.Select(path => ArtifactPath.ToRepositoryRelativePath(repository, path)).ToArray();
+        IReadOnlyList<string> files = await _store.ListAsync(Resolve(relativeDirectory), searchPattern);
+        return files.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToArray();
     }
 
     public async Task<IReadOnlyList<string>> ListDirectoriesAsync(string relativeDirectory)
     {
-        IReadOnlyList<string> directories = await store.ListDirectoriesAsync(Resolve(relativeDirectory));
-        return directories.Select(path => ArtifactPath.ToRepositoryRelativePath(repository, path)).ToArray();
+        IReadOnlyList<string> directories = await _store.ListDirectoriesAsync(Resolve(relativeDirectory));
+        return directories.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToArray();
     }
 
     public async Task<string> ReadRequiredAsync(string relativePath)
@@ -107,7 +109,7 @@ public sealed partial class CompletionArtifacts(IArtifactStore store, Repository
         }
     }
 
-    public string Resolve(string relativePath) => ArtifactPath.ResolveRepositoryPath(repository, relativePath);
+    public string Resolve(string relativePath) => ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
 
     private static string RelativeSuffix(string sourceDirectory, string sourcePath)
     {

@@ -11,6 +11,8 @@ internal sealed class TransitionInputResolver(
     RoadmapArtifacts artifacts,
     ExecutionPreparationProvenanceService executionPreparation)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     public async Task<TransitionInputSnapshot> ResolveAsync(TransitionInputRequest request)
     {
         var inputs = new TransitionInputAccumulator();
@@ -22,7 +24,7 @@ internal sealed class TransitionInputResolver(
 
         await AddPromptInputsAsync(request, inputs);
 
-        IReadOnlyList<TransitionArtifactInput> artifactInputs = await inputs.SnapshotAsync(artifacts);
+        IReadOnlyList<TransitionArtifactInput> artifactInputs = await inputs.SnapshotAsync(_artifacts);
         string? projectionHash = artifactInputs
             .FirstOrDefault(input => string.Equals(input.Path, request.ProjectionPath, StringComparison.Ordinal))
             ?.Hash;
@@ -92,7 +94,7 @@ internal sealed class TransitionInputResolver(
 
     private async Task AddRoadmapSourceInputsAsync(TransitionInputAccumulator inputs)
     {
-        IReadOnlyList<string> roadmapFiles = await artifacts.RequireRoadmapSourcePathsAsync();
+        IReadOnlyList<string> roadmapFiles = await _artifacts.RequireRoadmapSourcePathsAsync();
         foreach (string path in roadmapFiles)
         {
             inputs.AddRequired(path, TransitionInputRole.RoadmapSource);
@@ -101,7 +103,7 @@ internal sealed class TransitionInputResolver(
 
     private async Task AddCompletedEpicInputsAsync(TransitionInputAccumulator inputs)
     {
-        IReadOnlyList<string> completedEpics = await artifacts.ListAsync(RoadmapArtifactPaths.CompletedEpicsDirectory, "*.md");
+        IReadOnlyList<string> completedEpics = await _artifacts.ListAsync(RoadmapArtifactPaths.CompletedEpicsDirectory, "*.md");
         foreach (string path in completedEpics.Order(StringComparer.Ordinal))
         {
             inputs.AddOptional(path, TransitionInputRole.CompletedEpic);
@@ -110,7 +112,7 @@ internal sealed class TransitionInputResolver(
 
     private async Task AddCurrentEpicOrSelectionInputAsync(TransitionInputAccumulator inputs)
     {
-        if (await artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic))
+        if (await _artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic))
         {
             inputs.AddRequired(RoadmapArtifactPaths.ActiveEpic, TransitionInputRole.ActiveEpic);
             return;
@@ -121,7 +123,7 @@ internal sealed class TransitionInputResolver(
 
     private async Task AddMilestoneSpecInputsAsync(TransitionInputAccumulator inputs)
     {
-        IReadOnlyList<string> specs = await executionPreparation.RequireFreshMilestoneSpecPathsAsync();
+        IReadOnlyList<string> specs = await _executionPreparation.RequireFreshMilestoneSpecPathsAsync();
         foreach (string path in specs.Order(StringComparer.Ordinal))
         {
             inputs.AddRequired(path, TransitionInputRole.MilestoneSpec);

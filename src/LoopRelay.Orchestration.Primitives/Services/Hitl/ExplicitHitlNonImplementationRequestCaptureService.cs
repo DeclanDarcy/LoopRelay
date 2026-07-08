@@ -11,6 +11,7 @@ namespace LoopRelay.Orchestration.Services.Hitl;
 public sealed class ExplicitHitlNonImplementationRequestCaptureService(
     NonImplementationReviewLedgerStore ledgerStore)
 {
+    private readonly NonImplementationReviewLedgerStore _ledgerStore = ledgerStore;
     public const string SectionHeading = "## HITL-Requested Non-Implementation Deliverables";
 
     public async Task<ExplicitHitlNonImplementationRequestCaptureResult> CaptureFromSourceAsync(
@@ -28,7 +29,7 @@ public sealed class ExplicitHitlNonImplementationRequestCaptureService(
             return new ExplicitHitlNonImplementationRequestCaptureResult(0, Array.Empty<NonImplementationHitlRequestEntry>());
         }
 
-        NonImplementationReviewLedgerDocument document = await ledgerStore.LoadOrCreateAsync();
+        NonImplementationReviewLedgerDocument document = await _ledgerStore.LoadOrCreateAsync();
         var requests = document.HitlRequests.ToList();
         var captured = new List<NonImplementationHitlRequestEntry>();
         foreach (NonImplementationHitlRequestEntry request in parsed)
@@ -44,7 +45,7 @@ public sealed class ExplicitHitlNonImplementationRequestCaptureService(
 
         if (captured.Count > 0)
         {
-            await ledgerStore.SaveAsync(document with { HitlRequests = requests });
+            await _ledgerStore.SaveAsync(document with { HitlRequests = requests });
         }
 
         return new ExplicitHitlNonImplementationRequestCaptureResult(captured.Count, captured);
@@ -52,7 +53,7 @@ public sealed class ExplicitHitlNonImplementationRequestCaptureService(
 
     public async Task<int> AttachRequestEvidenceAsync()
     {
-        NonImplementationReviewLedgerDocument document = await ledgerStore.LoadOrCreateAsync();
+        NonImplementationReviewLedgerDocument document = await _ledgerStore.LoadOrCreateAsync();
         var entries = new List<NonImplementationReviewLedgerEntry>(document.Entries.Count);
         int changed = 0;
         foreach (NonImplementationReviewLedgerEntry entry in document.Entries)
@@ -68,7 +69,7 @@ public sealed class ExplicitHitlNonImplementationRequestCaptureService(
 
         if (changed > 0)
         {
-            await ledgerStore.SaveAsync(document with { Entries = entries });
+            await _ledgerStore.SaveAsync(document with { Entries = entries });
         }
 
         return changed;

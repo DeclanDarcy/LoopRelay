@@ -14,11 +14,11 @@ internal sealed class AgentsSubmodulePublisher
     public const string PartialExitMessage = "Orchestration loop: partial state on interrupted exit";
     public const string GitlinkPointerMessage = "Orchestration loop: record .agents submodule pointer";
 
-    private readonly Infrastructure.Services.Git.AgentsSubmodulePublisher publisher;
+    private readonly Infrastructure.Services.Git.AgentsSubmodulePublisher _publisher;
 
     public AgentsSubmodulePublisher(IProcessRunner processRunner, Repository repository, ILoopConsole console)
     {
-        publisher = new Infrastructure.Services.Git.AgentsSubmodulePublisher(
+        _publisher = new Infrastructure.Services.Git.AgentsSubmodulePublisher(
             processRunner,
             repository,
             console,
@@ -29,10 +29,10 @@ internal sealed class AgentsSubmodulePublisher
     {
         try
         {
-            bool committed = await publisher.PublishAgentsAsync(commitMessage, cancellationToken);
+            bool committed = await _publisher.PublishAgentsAsync(commitMessage, cancellationToken);
             if (committed)
             {
-                await publisher.RecordParentGitlinkAsync(GitlinkPointerMessage, cancellationToken);
+                await _publisher.RecordParentGitlinkAsync(GitlinkPointerMessage, cancellationToken);
             }
 
             return committed;

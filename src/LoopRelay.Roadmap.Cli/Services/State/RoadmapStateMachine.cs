@@ -43,6 +43,26 @@ internal sealed class RoadmapStateMachine(
     ArtifactLifecycleStore lifecycleStore,
     ILoopConsole console)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly Projections.ProjectContextLoader _projectContextLoader = projectContextLoader;
+    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
+    private readonly RoadmapStateStore _stateStore = stateStore;
+    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
+    private readonly BootstrapRoadmapCompletionContextTransition _bootstrapRoadmapCompletionContextTransition = bootstrapRoadmapCompletionContextTransition;
+    private readonly SelectNextEpicTransition _selectNextEpicTransition = selectNextEpicTransition;
+    private readonly CreateNewEpicTransition _createNewEpicTransition = createNewEpicTransition;
+    private readonly EpicPreparationAuditTransition _epicPreparationAuditTransition = epicPreparationAuditTransition;
+    private readonly SplitEpicTransition _splitEpicTransition = splitEpicTransition;
+    private readonly GenerateMilestoneDeepDivesTransition _generateMilestoneDeepDivesTransition = generateMilestoneDeepDivesTransition;
+    private readonly CompletionCertificationTransition _completionCertificationTransition = completionCertificationTransition;
+    private readonly ActiveSelectionReader _activeSelectionReader = activeSelectionReader;
+    private readonly RoadmapStartupPlanner _startupPlanner = startupPlanner;
+    private readonly RoadmapResumePlanner _resumePlanner = resumePlanner;
+    private readonly RoadmapUnblockPlanner _unblockPlanner = unblockPlanner;
+    private readonly DecisionRecorder _decisionRecorder = decisionRecorder;
+    private readonly TransitionJournalStore _journalStore = journalStore;
+    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
+    private readonly ILoopConsole _console = console;
     public Task<RoadmapOutcome> ExecuteAsync(
         RoadmapCliCommand command,
         CancellationToken cancellationToken) =>
@@ -58,19 +78,19 @@ internal sealed class RoadmapStateMachine(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        RoadmapStateDocument? persistedState = await stateStore.LoadAsync();
+        RoadmapStateDocument? persistedState = await _stateStore.LoadAsync();
         if (persistedState is null)
         {
-            console.Info("No persisted roadmap state exists.");
+            _console.Info("No persisted roadmap state exists.");
             return RoadmapOutcome.Paused;
         }
 
-        RoadmapStartupPlan startupPlan = startupPlanner.Plan(persistedState);
-        console.Info($"Status: {persistedState.CurrentState}. {startupPlan.Reason}");
-        console.Info($"Transition intent: {persistedState.TransitionIntent.Intent} -> {persistedState.TransitionIntent.DispatchState}");
+        RoadmapStartupPlan startupPlan = _startupPlanner.Plan(persistedState);
+        _console.Info($"Status: {persistedState.CurrentState}. {startupPlan.Reason}");
+        _console.Info($"Transition intent: {persistedState.TransitionIntent.Intent} -> {persistedState.TransitionIntent.DispatchState}");
         foreach (BlockerRow blocker in persistedState.Blockers)
         {
-            console.Warn($"{blocker.Blocker} Required next step: {blocker.RequiredNextStep}");
+            _console.Warn($"{blocker.Blocker} Required next step: {blocker.RequiredNextStep}");
         }
 
         return startupPlan.ReportOutcome ?? RoadmapOutcome.Paused;
@@ -78,9 +98,9 @@ internal sealed class RoadmapStateMachine(
 
     public async Task<RoadmapOutcome> UnblockAsync(CancellationToken cancellationToken)
     {
-        RoadmapStateDocument? persistedState = await stateStore.LoadAsync();
-        RoadmapUnblockPlan unblockPlan = await unblockPlanner.PlanAsync(persistedState, cancellationToken);
-        console.Info($"Unblock plan: {unblockPlan.Status} for {unblockPlan.TransitionIntent.Intent}. {unblockPlan.Reason}");
+        RoadmapStateDocument? persistedState = await _stateStore.LoadAsync();
+        RoadmapUnblockPlan unblockPlan = await _unblockPlanner.PlanAsync(persistedState, cancellationToken);
+        _console.Info($"Unblock plan: {unblockPlan.Status} for {unblockPlan.TransitionIntent.Intent}. {unblockPlan.Reason}");
 
         if (persistedState is null)
         {
@@ -109,9 +129,9 @@ internal sealed class RoadmapStateMachine(
 
     public async Task<RoadmapOutcome> RunAsync(CancellationToken cancellationToken)
     {
-        RoadmapStateDocument? persistedState = await stateStore.LoadAsync();
-        RoadmapStartupPlan startupPlan = startupPlanner.Plan(persistedState);
-        console.Info($"Startup plan: {startupPlan.Action} from {startupPlan.SourceState}. {startupPlan.Reason}");
+        RoadmapStateDocument? persistedState = await _stateStore.LoadAsync();
+        RoadmapStartupPlan startupPlan = _startupPlanner.Plan(persistedState);
+        _console.Info($"Startup plan: {startupPlan.Action} from {startupPlan.SourceState}. {startupPlan.Reason}");
 
         if (startupPlan.PreflightRequirement == RoadmapPreflightRequirement.None)
         {
@@ -121,21 +141,21 @@ internal sealed class RoadmapStateMachine(
         ProjectContext projectContext;
         try
         {
-            console.Phase("Project Context preflight");
-            projectContext = await projectContextLoader.LoadAsync(cancellationToken);
-            await contractRegistry.EmitSnapshotAsync(artifacts);
+            _console.Phase("Project Context preflight");
+            projectContext = await _projectContextLoader.LoadAsync(cancellationToken);
+            await _contractRegistry.EmitSnapshotAsync(_artifacts);
         }
         catch (RoadmapStepException exception)
         {
             await ReportEphemeralBlockerAsync("Project Context preflight", exception.Message, persistedState?.CurrentState);
-            console.Error(exception.Message);
+            _console.Error(exception.Message);
             return RoadmapOutcome.PreflightBlocked;
         }
 
         try
         {
-            RoadmapResumePlan resumePlan = await resumePlanner.PlanAsync(persistedState, projectContext, cancellationToken);
-            console.Info($"Resume plan: {resumePlan.Action} from {resumePlan.SourceState}. {resumePlan.Reason}");
+            RoadmapResumePlan resumePlan = await _resumePlanner.PlanAsync(persistedState, projectContext, cancellationToken);
+            _console.Info($"Resume plan: {resumePlan.Action} from {resumePlan.SourceState}. {resumePlan.Reason}");
             return await ExecuteResumePlanAsync(resumePlan, projectContext, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -145,19 +165,19 @@ internal sealed class RoadmapStateMachine(
         }
         catch (RoadmapStepException exception) when (exception.Persistence == RoadmapFailurePersistence.AlreadyPersisted)
         {
-            console.Error(exception.Message);
+            _console.Error(exception.Message);
             return RoadmapOutcome.Failed;
         }
         catch (RoadmapStepException exception)
         {
             await ReportEphemeralBlockerAsync("Roadmap state machine", exception.Message);
-            console.Error(exception.Message);
+            _console.Error(exception.Message);
             return RoadmapOutcome.Failed;
         }
         catch (Exception exception)
         {
             await ReportEphemeralBlockerAsync("Roadmap state machine", exception.Message);
-            console.Error(exception.Message);
+            _console.Error(exception.Message);
             return RoadmapOutcome.Failed;
         }
     }
@@ -195,17 +215,17 @@ internal sealed class RoadmapStateMachine(
 
             case RoadmapResumeAction.ContinueSelectionDecision:
             {
-                string selectionOutput = await activeSelectionReader.ReadAsync(cancellationToken);
+                string selectionOutput = await _activeSelectionReader.ReadAsync(cancellationToken);
                 SelectionDecision selection = new SelectionParser().Parse(selectionOutput);
                 return await ContinueAfterSelectionAsync(selection, projectContext, cancellationToken);
             }
 
             case RoadmapResumeAction.GenerateMilestoneSpecs:
-                await generateMilestoneDeepDivesTransition.ExecuteAsync(projectContext, cancellationToken);
+                await _generateMilestoneDeepDivesTransition.ExecuteAsync(projectContext, cancellationToken);
                 return RoadmapOutcome.Paused;
 
             case RoadmapResumeAction.EvaluateCompletionClaim:
-                return await completionCertificationTransition.ExecuteAsync(
+                return await _completionCertificationTransition.ExecuteAsync(
                     projectContext,
                     DateTimeOffset.UtcNow,
                     await ReadPersistedExecutionEvidencePathAsync(),
@@ -216,7 +236,7 @@ internal sealed class RoadmapStateMachine(
                 return resumePlan.TerminalOutcome ?? RoadmapOutcome.Paused;
 
             case RoadmapResumeAction.Block:
-                console.Warn(resumePlan.Reason);
+                _console.Warn(resumePlan.Reason);
                 await ReportEphemeralBlockerAsync("Resume planning", resumePlan.Reason, resumePlan.SourceState);
                 return RoadmapOutcome.Paused;
 
@@ -265,7 +285,7 @@ internal sealed class RoadmapStateMachine(
 
         if (route.OutcomeKind is RoadmapExecutionOutcomeKind.ContinueRequired or RoadmapExecutionOutcomeKind.ExecutionBlocked)
         {
-            await lifecycleStore.UpsertAsync(
+            await _lifecycleStore.UpsertAsync(
                 RoadmapArtifactPaths.ActiveEpic,
                 ArtifactLifecycleState.Executing,
                 $"Unblock review routed execution disposition: {validation.Disposition.StatusText}.");
@@ -319,7 +339,7 @@ internal sealed class RoadmapStateMachine(
         string reviewPath = await WriteUnblockReviewEvidenceAsync(persistedState, unblockPlan, success: true);
         await RecordUnblockJournalAsync(persistedState, unblockPlan, reviewPath, "Recovered", null);
 
-        return await completionCertificationTransition.RecoverAsync(
+        return await _completionCertificationTransition.RecoverAsync(
             certification,
             route,
             persistedState.LastTransition.Projection,
@@ -335,7 +355,7 @@ internal sealed class RoadmapStateMachine(
     {
         string reviewPath = await WriteUnblockReviewEvidenceAsync(persistedState, unblockPlan, success: true);
         await RecordUnblockJournalAsync(persistedState, unblockPlan, reviewPath, "Recovered", null);
-        await lifecycleStore.UpsertAsync(
+        await _lifecycleStore.UpsertAsync(
             RoadmapArtifactPaths.ActiveEpic,
             ArtifactLifecycleState.Executing,
             "Execution runtime failure was unblocked for a safe retry.");
@@ -375,7 +395,7 @@ internal sealed class RoadmapStateMachine(
             unblockPlan.Status.ToString(),
             unblockPlan.Reason);
 
-        await transitionPersistence.RefreshAndSaveAsync(persistedState with
+        await _transitionPersistence.RefreshAndSaveAsync(persistedState with
         {
             Blockers = AppendUnblockReviewBlocker(
                 persistedState.Blockers,
@@ -391,11 +411,11 @@ internal sealed class RoadmapStateMachine(
         bool success)
     {
         string content = RenderUnblockReviewEvidence(persistedState, unblockPlan, success, DateTimeOffset.UtcNow);
-        string path = await artifacts.WriteNumberedEvidenceAsync(
+        string path = await _artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "unblock-review",
             content);
-        await lifecycleStore.UpsertAsync(
+        await _lifecycleStore.UpsertAsync(
             path,
             success ? ArtifactLifecycleState.Ready : ArtifactLifecycleState.Blocked,
             unblockPlan.Reason);
@@ -426,7 +446,7 @@ internal sealed class RoadmapStateMachine(
                 .Distinct(StringComparer.Ordinal),
             reviewPath,
         ];
-        await journalStore.AppendAsync(new TransitionJournalRecord(
+        await _journalStore.AppendAsync(new TransitionJournalRecord(
             unblockPlan.Status == RoadmapUnblockPlanStatus.Success ? "UnblockReviewCompleted" : "UnblockReviewBlocked",
             Guid.NewGuid().ToString("N"),
             DateTimeOffset.UtcNow,
@@ -448,9 +468,9 @@ internal sealed class RoadmapStateMachine(
         ProjectContext projectContext,
         CancellationToken cancellationToken)
     {
-        if (await artifacts.GetStatusAsync(RoadmapArtifactPaths.RoadmapCompletionContext) != ArtifactStatus.Present)
+        if (await _artifacts.GetStatusAsync(RoadmapArtifactPaths.RoadmapCompletionContext) != ArtifactStatus.Present)
         {
-            await bootstrapRoadmapCompletionContextTransition.ExecuteAsync(projectContext, cancellationToken);
+            await _bootstrapRoadmapCompletionContextTransition.ExecuteAsync(projectContext, cancellationToken);
         }
 
         return await RunSelectionAndFollowingAsync(projectContext, cancellationToken);
@@ -460,7 +480,7 @@ internal sealed class RoadmapStateMachine(
         ProjectContext projectContext,
         CancellationToken cancellationToken)
     {
-        SelectionDecision selection = await selectNextEpicTransition.ExecuteAsync(projectContext, cancellationToken);
+        SelectionDecision selection = await _selectNextEpicTransition.ExecuteAsync(projectContext, cancellationToken);
         return await ContinueAfterSelectionAsync(selection, projectContext, cancellationToken);
     }
 
@@ -472,7 +492,7 @@ internal sealed class RoadmapStateMachine(
         switch (selection.RecommendedOutcome)
         {
             case "Select Existing Epic":
-                EpicPreparationResult preparation = await epicPreparationAuditTransition.ExecuteAsync(selection, projectContext, cancellationToken);
+                EpicPreparationResult preparation = await _epicPreparationAuditTransition.ExecuteAsync(selection, projectContext, cancellationToken);
                 if (preparation == EpicPreparationResult.Retired)
                 {
                     return RoadmapOutcome.Paused;
@@ -485,7 +505,7 @@ internal sealed class RoadmapStateMachine(
 
                 break;
             case "Select New Intermediary Epic":
-                ArtifactPromotionResult createPromotion = await createNewEpicTransition.ExecuteAsync(projectContext, cancellationToken);
+                ArtifactPromotionResult createPromotion = await _createNewEpicTransition.ExecuteAsync(projectContext, cancellationToken);
                 if (!createPromotion.Promoted)
                 {
                     return RoadmapOutcome.Paused;
@@ -493,7 +513,7 @@ internal sealed class RoadmapStateMachine(
 
                 break;
             case "Select Split Epic":
-                ArtifactPromotionResult splitPromotion = await splitEpicTransition.ExecuteAsync(projectContext, cancellationToken);
+                ArtifactPromotionResult splitPromotion = await _splitEpicTransition.ExecuteAsync(projectContext, cancellationToken);
                 if (!splitPromotion.Promoted)
                 {
                     return RoadmapOutcome.Paused;
@@ -501,26 +521,26 @@ internal sealed class RoadmapStateMachine(
 
                 break;
             case "Strategic Investigation Required":
-                await decisionRecorder.AppendAsync(RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
+                await _decisionRecorder.AppendAsync(RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
                 await SaveStateAsync(RoadmapState.StrategicInvestigationRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
                 return RoadmapOutcome.Paused;
             case "Roadmap Revision Required":
-                await decisionRecorder.AppendAsync(RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
+                await _decisionRecorder.AppendAsync(RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
                 await SaveStateAsync(RoadmapState.RoadmapRevisionRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
                 return RoadmapOutcome.Paused;
             default:
-                await decisionRecorder.AppendAsync(RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
+                await _decisionRecorder.AppendAsync(RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
                 await SaveStateAsync(RoadmapState.NoSuitableInitiative, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
                 return RoadmapOutcome.Paused;
         }
 
-        await generateMilestoneDeepDivesTransition.ExecuteAsync(projectContext, cancellationToken);
+        await _generateMilestoneDeepDivesTransition.ExecuteAsync(projectContext, cancellationToken);
         return RoadmapOutcome.Paused;
     }
 
     private async Task<string> ReadPersistedExecutionEvidencePathAsync()
     {
-        RoadmapStateDocument? state = await stateStore.LoadAsync();
+        RoadmapStateDocument? state = await _stateStore.LoadAsync();
         IReadOnlyList<string> candidates = (state?.TransitionIntent.EvidencePaths ?? [])
             .Concat(RoadmapTransitionPersistence.ParseOutputEvidencePaths(state?.LastTransition.Output ?? string.Empty))
             .Where(path => path.StartsWith(RoadmapArtifactPaths.ExecutionEvidenceDirectory, StringComparison.Ordinal))
@@ -529,7 +549,7 @@ internal sealed class RoadmapStateMachine(
 
         foreach (string path in candidates)
         {
-            if (await artifacts.GetStatusAsync(path) == ArtifactStatus.Present)
+            if (await _artifacts.GetStatusAsync(path) == ArtifactStatus.Present)
             {
                 return path;
             }
@@ -554,7 +574,7 @@ internal sealed class RoadmapStateMachine(
         RoadmapTransitionIntent? transitionIntent = null,
         IReadOnlyList<string>? nextTransitions = null)
     {
-        await transitionPersistence.SaveAsync(
+        await _transitionPersistence.SaveAsync(
             current,
             status,
             from,
@@ -576,16 +596,16 @@ internal sealed class RoadmapStateMachine(
 
     private async Task ReportEphemeralBlockerAsync(string source, string reason, RoadmapState? preservedState = null)
     {
-        preservedState ??= (await stateStore.LoadAsync())?.CurrentState;
+        preservedState ??= (await _stateStore.LoadAsync())?.CurrentState;
         string stateMessage = preservedState is null
             ? "No persisted roadmap state was written."
             : $"Persisted roadmap state remains {preservedState}.";
-        console.Warn($"{source} blocked: {OneLine(reason)} {stateMessage} Fix the condition and rerun, or update state manually if this should be a durable blocker.");
+        _console.Warn($"{source} blocked: {OneLine(reason)} {stateMessage} Fix the condition and rerun, or update state manually if this should be a durable blocker.");
     }
 
     private async Task WriteCancelledStateAsync()
     {
-        RoadmapStateDocument? existing = await stateStore.LoadAsync();
+        RoadmapStateDocument? existing = await _stateStore.LoadAsync();
         RoadmapTransitionSummary interrupted = existing?.LastTransition ?? new RoadmapTransitionSummary(
             RoadmapState.CoreReady,
             RoadmapState.Cancelled,

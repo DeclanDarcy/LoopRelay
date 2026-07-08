@@ -19,14 +19,17 @@ public sealed class InputWaitProgressAgentRuntime(
     IInputWaitProgressRenderer renderer,
     IInputWaitObservationSink? observationSink = null) : IAgentRuntime
 {
-    private readonly IInputWaitObservationSink observationSinkField =
+    private readonly IAgentRuntime _inner = inner;
+    private readonly IAgentTokenEstimator _tokenEstimator = tokenEstimator;
+    private readonly IInputWaitProgressRenderer _renderer = renderer;
+    private readonly IInputWaitObservationSink _observationSinkField =
         observationSink ?? NullInputWaitObservationSink.Instance;
 
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec,
         CancellationToken cancellationToken = default)
     {
-        IAgentSession session = await inner.OpenSessionAsync(spec, cancellationToken);
+        IAgentSession session = await _inner.OpenSessionAsync(spec, cancellationToken);
         return new InputWaitProgressAgentSession(this, session);
     }
 
@@ -43,11 +46,11 @@ public sealed class InputWaitProgressAgentRuntime(
             ModelFrom(spec),
             prompt,
             onChunk,
-            (wrapped, token) => inner.RunOneShotAsync(spec, prompt, wrapped, token),
+            (wrapped, token) => _inner.RunOneShotAsync(spec, prompt, wrapped, token),
             cancellationToken);
 
     public ValueTask CloseSessionAsync(IAgentSession session) =>
-        inner.CloseSessionAsync(session is InputWaitProgressAgentSession progress ? progress.Inner : session);
+        _inner.CloseSessionAsync(session is InputWaitProgressAgentSession progress ? progress.Inner : session);
 
     private async Task<AgentTurnResult> RunWithProgressAsync(
         string repositoryId,
@@ -60,9 +63,9 @@ public sealed class InputWaitProgressAgentRuntime(
         Func<Func<AgentStreamChunk, Task>, CancellationToken, Task<AgentTurnResult>> run,
         CancellationToken cancellationToken)
     {
-        Estimate estimate = EstimatePrompt(prompt, tokenEstimator);
+        Estimate estimate = EstimatePrompt(prompt, _tokenEstimator);
         await using var tracker = new InputWaitTurnTracker(
-            renderer,
+            _renderer,
             repositoryId,
             sessionId,
             role,
@@ -115,7 +118,7 @@ public sealed class InputWaitProgressAgentRuntime(
     {
         try
         {
-            await observationSinkField.RecordAsync(observation, cancellationToken);
+            await _observationSinkField.RecordAsync(observation, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

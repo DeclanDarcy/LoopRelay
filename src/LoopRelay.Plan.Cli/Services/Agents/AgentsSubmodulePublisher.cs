@@ -16,11 +16,11 @@ internal sealed class AgentsSubmodulePublisher
     public const string ExtractDetailsMessage = "Plan pipeline: extract details";
     public const string GitlinkPointerMessage = "Plan pipeline: record .agents submodule pointer";
 
-    private readonly Infrastructure.Services.Git.AgentsSubmodulePublisher publisher;
+    private readonly Infrastructure.Services.Git.AgentsSubmodulePublisher _publisher;
 
     public AgentsSubmodulePublisher(IProcessRunner processRunner, Repository repository, ILoopConsole console)
     {
-        publisher = new Infrastructure.Services.Git.AgentsSubmodulePublisher(
+        _publisher = new Infrastructure.Services.Git.AgentsSubmodulePublisher(
             processRunner,
             repository,
             console,
@@ -31,7 +31,7 @@ internal sealed class AgentsSubmodulePublisher
     {
         try
         {
-            return await publisher.PublishAgentsAsync(commitMessage, cancellationToken);
+            return await _publisher.PublishAgentsAsync(commitMessage, cancellationToken);
         }
         catch (AgentsSubmodulePublisherException ex)
         {
@@ -43,7 +43,7 @@ internal sealed class AgentsSubmodulePublisher
     {
         try
         {
-            await publisher.RecordParentGitlinkAsync(GitlinkPointerMessage, cancellationToken);
+            await _publisher.RecordParentGitlinkAsync(GitlinkPointerMessage, cancellationToken);
         }
         catch (AgentsSubmodulePublisherException ex)
         {

@@ -14,15 +14,20 @@ public sealed class AgentRuntime(
     AgentSessionRegistry registry,
     IPermissionGateway? permissionGateway = null) : IAgentRuntime
 {
+    private readonly IAgentProcessLauncher _launcher = launcher;
+    private readonly IAgentTurnBoundaryDetector _boundaryDetector = boundaryDetector;
+    private readonly IAgentTokenEstimator _tokenEstimator = tokenEstimator;
+    private readonly AgentSessionRegistry _registry = registry;
+    private readonly IPermissionGateway? _permissionGateway = permissionGateway;
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec,
         CancellationToken cancellationToken = default)
     {
-        IAgentProcess process = await launcher.LaunchAsync(spec, AgentSessionMode.Persistent, cancellationToken);
+        IAgentProcess process = await _launcher.LaunchAsync(spec, AgentSessionMode.Persistent, cancellationToken);
         // Held-open sessions speak the Codex app-server JSON-RPC protocol over the process's stdio.
-        var session = new CodexAppServerSession(spec, process, tokenEstimator, permissionGateway);
+        var session = new CodexAppServerSession(spec, process, _tokenEstimator, _permissionGateway);
 
-        if (!registry.TryAdd(new AgentSessionKey(spec.RepositoryId, spec.SessionId), session))
+        if (!_registry.TryAdd(new AgentSessionKey(spec.RepositoryId, spec.SessionId), session))
         {
             await session.DisposeAsync();
             throw new InvalidOperationException(
@@ -66,7 +71,7 @@ public sealed class AgentRuntime(
         // is not (or no longer) registered — already removed, or never added — fall back to disposing it directly
         // so it is still disposed exactly once.
         var key = new AgentSessionKey(session.RepositoryId, session.SessionId);
-        if (!await registry.RemoveAsync(key).ConfigureAwait(false))
+        if (!await _registry.RemoveAsync(key).ConfigureAwait(false))
         {
             await session.DisposeAsync().ConfigureAwait(false);
         }
@@ -78,13 +83,13 @@ public sealed class AgentRuntime(
         Func<AgentStreamChunk, Task>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
-        IAgentProcess process = await launcher.LaunchAsync(spec, AgentSessionMode.OneShot, cancellationToken);
+        IAgentProcess process = await _launcher.LaunchAsync(spec, AgentSessionMode.OneShot, cancellationToken);
         await using var session = new AgentSession(
             spec,
             AgentSessionMode.OneShot,
             process,
-            boundaryDetector,
-            tokenEstimator);
+            _boundaryDetector,
+            _tokenEstimator);
 
         return await session.RunTurnAsync(prompt, onChunk, cancellationToken);
     }

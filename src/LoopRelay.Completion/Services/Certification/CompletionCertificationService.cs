@@ -22,22 +22,26 @@ public sealed class CompletionCertificationService(
     CompletionCertificationRouter? router = null,
     ICompletionObserver? observer = null) : ICompletionCertificationService
 {
-    private readonly CompletionCertificationPolicy policy = policy ?? new CompletionCertificationPolicy();
-    private readonly CompletionCertificationRouter router = router ?? new CompletionCertificationRouter();
-    private readonly ICompletionObserver observer = observer ?? NullCompletionObserver.Instance;
+    private readonly IArtifactStore _store = store;
+    private readonly IProjectContextProjectionService _projectionService = projectionService;
+    private readonly ICompletionPromptRunner _promptRunner = promptRunner;
+    private readonly ICompletedEpicArchiveService _archiveService = archiveService;
+    private readonly CompletionCertificationPolicy _policy = policy ?? new CompletionCertificationPolicy();
+    private readonly CompletionCertificationRouter _router = router ?? new CompletionCertificationRouter();
+    private readonly ICompletionObserver _observer = observer ?? NullCompletionObserver.Instance;
 
     public async Task<CompletionCertificationResult> CertifyPlanCompletionAsync(
         CompletionCertificationRequest request,
         CancellationToken cancellationToken = default)
     {
-        var artifacts = new ArtifactStorage.CompletionArtifacts(store, request.Repository);
+        var artifacts = new ArtifactStorage.CompletionArtifacts(_store, request.Repository);
         var contextBuilder = new CompletionPromptContextBuilder(artifacts);
         string? evaluationPath = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            this.observer.Phase("Completion Certification");
+            _observer.Phase("Completion Certification");
             if (string.IsNullOrWhiteSpace(await artifacts.ReadAsync(request.ActiveEpicPath)))
             {
                 return await BlockAsync(
@@ -70,15 +74,15 @@ public sealed class CompletionCertificationService(
 
             string claimPath = await WriteExecutionCompletionClaimAsync(artifacts, request, milestonePaths);
 
-            this.observer.Phase("Evaluate epic completion and drift");
-            ProjectContextProjectionResult evaluationProjection = await projectionService.EnsureFreshAsync(
+            _observer.Phase("Evaluate epic completion and drift");
+            ProjectContextProjectionResult evaluationProjection = await _projectionService.EnsureFreshAsync(
                 CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift,
                 cancellationToken);
             string evaluationContext = await contextBuilder.BuildEvaluationContextAsync(
                 request,
                 evaluationProjection.Content,
                 claimPath);
-            string evaluationOutput = await promptRunner.RunAsync(
+            string evaluationOutput = await _promptRunner.RunAsync(
                 new CompletionRuntimePromptInvocation(
                     CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift,
                     ProjectContext: evaluationContext),
@@ -105,7 +109,7 @@ public sealed class CompletionCertificationService(
                     [claimPath, evaluationPath]);
             }
 
-            CompletionCertificationPolicyResult certification = this.policy.Validate(decision);
+            CompletionCertificationPolicyResult certification = _policy.Validate(decision);
             if (!certification.IsValid)
             {
                 return await BlockAsync(
@@ -118,7 +122,7 @@ public sealed class CompletionCertificationService(
                     [claimPath, evaluationPath]);
             }
 
-            CompletionCertificationRoute route = this.router.Route(decision);
+            CompletionCertificationRoute route = _router.Route(decision);
             if (!route.ShouldCloseEpic)
             {
                 return await BlockAsync(
@@ -131,15 +135,15 @@ public sealed class CompletionCertificationService(
                     [claimPath, evaluationPath]);
             }
 
-            CompletedEpicArchiveResult archive = await archiveService.ArchiveAndSynthesizeAsync(
+            CompletedEpicArchiveResult archive = await _archiveService.ArchiveAndSynthesizeAsync(
                 new CompletedEpicArchiveRequest(
                     request.Repository,
                     request.ActiveEpicPath,
                     request.CompletedEpicArchiveRoot),
                 cancellationToken);
 
-            this.observer.Phase("Update roadmap completion context");
-            ProjectContextProjectionResult updateProjection = await projectionService.EnsureFreshAsync(
+            _observer.Phase("Update roadmap completion context");
+            ProjectContextProjectionResult updateProjection = await _projectionService.EnsureFreshAsync(
                 CompletionRuntimePromptNames.UpdateRoadmapCompletionContext,
                 cancellationToken);
             string updateContext = await contextBuilder.BuildCompletionUpdateContextAsync(
@@ -151,7 +155,7 @@ public sealed class CompletionCertificationService(
                 ArchivedNonImplementationReviewEvidencePaths(
                     archive.ArchiveDirectory,
                     request.NonImplementationReviewEvidencePaths));
-            string updatedRoadmapCompletionContext = await promptRunner.RunAsync(
+            string updatedRoadmapCompletionContext = await _promptRunner.RunAsync(
                 new CompletionRuntimePromptInvocation(
                     CompletionRuntimePromptNames.UpdateRoadmapCompletionContext,
                     ProjectContext: updateContext,
@@ -200,13 +204,13 @@ public sealed class CompletionCertificationService(
         CompletionCertificationRequest request,
         CancellationToken cancellationToken)
     {
-        this.observer.Phase("Bootstrap roadmap completion context");
-        ProjectContextProjectionResult projection = await projectionService.EnsureFreshAsync(
+        _observer.Phase("Bootstrap roadmap completion context");
+        ProjectContextProjectionResult projection = await _projectionService.EnsureFreshAsync(
             CompletionRuntimePromptNames.CreateRoadmapCompletionContext,
             cancellationToken);
         string completedEpicEvidence = await new CompletedEpicEvidenceLoader(artifacts).RenderAsync();
         string context = contextBuilder.BuildRoadmapCompletionBootstrapContext(projection.Content);
-        string output = await promptRunner.RunAsync(
+        string output = await _promptRunner.RunAsync(
             new CompletionRuntimePromptInvocation(
                 CompletionRuntimePromptNames.CreateRoadmapCompletionContext,
                 ProjectContext: context,

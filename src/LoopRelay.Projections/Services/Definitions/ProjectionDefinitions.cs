@@ -5,11 +5,11 @@ namespace LoopRelay.Projections.Services.Definitions;
 
 public sealed class ProjectionDefinitionRegistry
 {
-    private readonly IReadOnlyDictionary<string, ProjectionDefinition> definitions;
+    private readonly IReadOnlyDictionary<string, ProjectionDefinition> _definitions;
 
     public ProjectionDefinitionRegistry(IEnumerable<ProjectionDefinition> definitions)
     {
-        this.definitions = definitions.ToDictionary(
+        _definitions = definitions.ToDictionary(
             definition => definition.RuntimePromptName,
             StringComparer.Ordinal);
     }
@@ -31,10 +31,10 @@ public sealed class ProjectionDefinitionRegistry
             Define(ProjectionRuntimePromptNames.DecisionSession, "ProjectionForDecisionSession", "# Execution Agent System Prompt Projection", ProjectionRuntimePromptNames.DecisionSession),
         ]);
 
-    public IReadOnlyCollection<ProjectionDefinition> All => definitions.Values.ToList();
+    public IReadOnlyCollection<ProjectionDefinition> All => _definitions.Values.ToList();
 
     public ProjectionDefinition Get(string runtimePromptName) =>
-        definitions.TryGetValue(runtimePromptName, out ProjectionDefinition? definition)
+        _definitions.TryGetValue(runtimePromptName, out ProjectionDefinition? definition)
             ? definition
             : throw new ArgumentOutOfRangeException(nameof(runtimePromptName), runtimePromptName, "No projection registered for runtime prompt.");
 

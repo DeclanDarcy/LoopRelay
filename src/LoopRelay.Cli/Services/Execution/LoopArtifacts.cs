@@ -12,25 +12,27 @@ namespace LoopRelay.Cli.Services.Execution;
 /// </summary>
 internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
 {
-    public Repository Repository => repository;
+    private readonly IArtifactStore _store = store;
+    private readonly Repository _repository = repository;
+    public Repository Repository => _repository;
 
-    public IArtifactStore Store => store;
+    public IArtifactStore Store => _store;
 
     public Task<bool> ExistsAsync(string relativePath) =>
-        store.ExistsAsync(Resolve(relativePath));
+        _store.ExistsAsync(Resolve(relativePath));
 
     public Task<string?> ReadAsync(string relativePath) =>
-        store.ReadAsync(Resolve(relativePath));
+        _store.ReadAsync(Resolve(relativePath));
 
     public Task WriteAsync(string relativePath, string content) =>
-        store.WriteAsync(Resolve(relativePath), content);
+        _store.WriteAsync(Resolve(relativePath), content);
 
     // Absolute-path access for callers that already resolved and validated their target path.
-    public Task<bool> ExistsAbsoluteAsync(string absolutePath) => store.ExistsAsync(absolutePath);
+    public Task<bool> ExistsAbsoluteAsync(string absolutePath) => _store.ExistsAsync(absolutePath);
 
-    public Task<string?> ReadAbsoluteAsync(string absolutePath) => store.ReadAsync(absolutePath);
+    public Task<string?> ReadAbsoluteAsync(string absolutePath) => _store.ReadAsync(absolutePath);
 
-    public Task WriteAbsoluteAsync(string absolutePath, string content) => store.WriteAsync(absolutePath, content);
+    public Task WriteAbsoluteAsync(string absolutePath, string content) => _store.WriteAsync(absolutePath, content);
 
     public Task<string?> ReadPlanAsync() => ReadAsync(OrchestrationArtifactPaths.Plan);
 
@@ -82,12 +84,12 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
     public async Task<bool> RetireLiveDecisionsAsync()
     {
         string live = Resolve(OrchestrationArtifactPaths.Decisions);
-        if (!await store.ExistsAsync(live))
+        if (!await _store.ExistsAsync(live))
         {
             return false;
         }
 
-        await store.DeleteAsync(live);
+        await _store.DeleteAsync(live);
         return true;
     }
 
@@ -98,12 +100,12 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
             OrchestrationArtifactPaths.HistoricalDecisionSearchPattern,
             "decisions");
         string target = Resolve(OrchestrationArtifactPaths.HistoricalDecision(sequence));
-        if (await store.ExistsAsync(target))
+        if (await _store.ExistsAsync(target))
         {
             throw new IOException($"Historical artifact already exists: {OrchestrationArtifactPaths.HistoricalDecision(sequence)}");
         }
-        await store.WriteAsync(target, decisions);
-        await store.WriteAsync(Resolve(OrchestrationArtifactPaths.Decisions), decisions);
+        await _store.WriteAsync(target, decisions);
+        await _store.WriteAsync(Resolve(OrchestrationArtifactPaths.Decisions), decisions);
     }
 
     public async Task EnsureOperationalContextAsync()
@@ -121,12 +123,12 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
     }
 
     private string Resolve(string relativePath) =>
-        ArtifactPath.ResolveRepositoryPath(repository, relativePath);
+        ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
 
     private async Task<string?> RotateAsync(
         string liveRelative, string directoryRelative, string searchPattern, string baseName, Func<int, string> historical)
     {
-        string? content = await store.ReadAsync(Resolve(liveRelative));
+        string? content = await _store.ReadAsync(Resolve(liveRelative));
         if (content is null)
         {
             return null;
@@ -134,20 +136,20 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
 
         int sequence = await NextSequenceAsync(directoryRelative, searchPattern, baseName);
         string target = Resolve(historical(sequence));
-        if (await store.ExistsAsync(target))
+        if (await _store.ExistsAsync(target))
         {
             throw new IOException($"Historical artifact already exists: {historical(sequence)}");
         }
 
-        await store.WriteAsync(target, content);
-        await store.DeleteAsync(Resolve(liveRelative));
+        await _store.WriteAsync(target, content);
+        await _store.DeleteAsync(Resolve(liveRelative));
         return content;
     }
 
     private async Task<(string? Content, string? RelativePath)> ReadLatestAsync(
         string liveRelative, string directoryRelative, string searchPattern, string baseName, Func<int, string> historical)
     {
-        string? live = await store.ReadAsync(Resolve(liveRelative));
+        string? live = await _store.ReadAsync(Resolve(liveRelative));
         if (live is not null)
         {
             return (live, liveRelative);
@@ -160,7 +162,7 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
         }
 
         string rel = historical(highest);
-        return (await store.ReadAsync(Resolve(rel)), rel);
+        return (await _store.ReadAsync(Resolve(rel)), rel);
     }
 
     private async Task<int> NextSequenceAsync(string directoryRelative, string searchPattern, string baseName) =>
@@ -168,7 +170,7 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
 
     private async Task<int> HighestSequenceAsync(string directoryRelative, string searchPattern, string baseName)
     {
-        IReadOnlyList<string> files = await store.ListAsync(Resolve(directoryRelative), searchPattern);
+        IReadOnlyList<string> files = await _store.ListAsync(Resolve(directoryRelative), searchPattern);
         int max = 0;
         foreach (string file in files)
         {

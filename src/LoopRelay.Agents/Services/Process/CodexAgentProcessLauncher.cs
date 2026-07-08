@@ -9,15 +9,17 @@ public sealed class CodexAgentProcessLauncher(
     IProcessRunner processRunner,
     IAgentExecutableResolver executableResolver) : IAgentProcessLauncher
 {
+    private readonly IProcessRunner _processRunner = processRunner;
+    private readonly IAgentExecutableResolver _executableResolver = executableResolver;
     public Task<IAgentProcess> LaunchAsync(
         AgentSessionSpec spec,
         AgentSessionMode mode,
         CancellationToken cancellationToken = default)
     {
-        string executable = executableResolver.Resolve();
+        string executable = _executableResolver.Resolve();
         IReadOnlyList<string> arguments = CodexAgentArgumentBuilder.Build(spec, mode);
         string workingDirectory = spec.WorkingDirectory ?? Directory.GetCurrentDirectory();
 
-        return processRunner.StartInteractiveAsync(executable, arguments, workingDirectory, cancellationToken);
+        return _processRunner.StartInteractiveAsync(executable, arguments, workingDirectory, cancellationToken);
     }
 }

@@ -17,6 +17,10 @@ internal sealed class SelectionProvenanceService(
     RoadmapPromptContextBuilder contextBuilder,
     TransitionInputResolver inputResolver)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly SelectionProvenanceManifestStore _manifestStore = manifestStore;
+    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
+    private readonly TransitionInputResolver _inputResolver = inputResolver;
     public const string SelectionArtifactKind = "SelectionDecision";
     public const string SelectionGenerator = "SelectNextEpic:v1";
     public const string SelectionCycleInputKind = "SelectionCycle";
@@ -35,8 +39,8 @@ internal sealed class SelectionProvenanceService(
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        string context = await contextBuilder.BuildSelectionContextAsync(projectionContent, retiredEpics);
-        return await inputResolver.ResolveAsync(new TransitionInputRequest(
+        string context = await _contextBuilder.BuildSelectionContextAsync(projectionContent, retiredEpics);
+        return await _inputResolver.ResolveAsync(new TransitionInputRequest(
             "SelectNextEpic",
             RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"],
             context,
@@ -57,8 +61,8 @@ internal sealed class SelectionProvenanceService(
             RoadmapArtifactPaths.Selection,
             RoadmapHash.Sha256(selectionContent),
             DateTimeOffset.UtcNow);
-        SelectionProvenanceManifest manifest = (await manifestStore.LoadAsync()).UpsertActive(entry);
-        await manifestStore.SaveAsync(manifest);
+        SelectionProvenanceManifest manifest = (await _manifestStore.LoadAsync()).UpsertActive(entry);
+        await _manifestStore.SaveAsync(manifest);
     }
 
     public async Task<DerivedArtifactFreshness> EvaluateActiveSelectionFreshnessAsync(
@@ -67,7 +71,7 @@ internal sealed class SelectionProvenanceService(
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        SelectionProvenanceManifest manifest = await manifestStore.LoadAsync();
+        SelectionProvenanceManifest manifest = await _manifestStore.LoadAsync();
         IReadOnlyList<DerivedArtifactManifestEntry> activeSelections = manifest.ActiveSelections;
         if (activeSelections.Count == 0)
         {
@@ -86,7 +90,7 @@ internal sealed class SelectionProvenanceService(
             return DerivedArtifactFreshness.Unknown(DerivedArtifactStaleReason.UnknownProvenance);
         }
 
-        string? selectionContent = await artifacts.ReadAsync(RoadmapArtifactPaths.Selection);
+        string? selectionContent = await _artifacts.ReadAsync(RoadmapArtifactPaths.Selection);
         string? selectionHash = string.IsNullOrWhiteSpace(selectionContent)
             ? null
             : RoadmapHash.Sha256(selectionContent);
@@ -101,13 +105,13 @@ internal sealed class SelectionProvenanceService(
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        SelectionProvenanceManifest manifest = await manifestStore.LoadAsync();
+        SelectionProvenanceManifest manifest = await _manifestStore.LoadAsync();
         if (manifest.ActiveSelections.Count == 0)
         {
             return;
         }
 
-        await manifestStore.SaveAsync(manifest.SupersedeActive(reasons));
+        await _manifestStore.SaveAsync(manifest.SupersedeActive(reasons));
     }
 
     private static DerivedArtifactProvenance CreateProvenance(

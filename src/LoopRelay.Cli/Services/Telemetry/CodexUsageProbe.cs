@@ -35,7 +35,7 @@ internal sealed class CodexUsageProbe : ICodexUsageProbe
 
     private const int RateLimitsRequestId = 2;
 
-    private readonly Func<CancellationToken, Task<string?>> readRateLimitsJson;
+    private readonly Func<CancellationToken, Task<string?>> _readRateLimitsJson;
 
     public CodexUsageProbe(
         IProcessRunner processRunner, IAgentExecutableResolver executableResolver, Repository repository)
@@ -47,18 +47,18 @@ internal sealed class CodexUsageProbe : ICodexUsageProbe
     internal CodexUsageProbe(
         IProcessRunner processRunner, IAgentExecutableResolver executableResolver, Repository repository,
         TimeSpan scrapeTimeout)
-        => readRateLimitsJson = ct => ReadRateLimitsAsync(processRunner, executableResolver, repository, scrapeTimeout, ct);
+        => _readRateLimitsJson = ct => ReadRateLimitsAsync(processRunner, executableResolver, repository, scrapeTimeout, ct);
 
     /// <summary>Test seam: supply the raw rate-limits response JSON directly, bypassing the live codex session.</summary>
     internal CodexUsageProbe(Func<CancellationToken, Task<string?>> readRateLimitsJson)
-        => this.readRateLimitsJson = readRateLimitsJson;
+        => _readRateLimitsJson = readRateLimitsJson;
 
     public async Task<CodexUsageStatus?> QueryAsync(CancellationToken cancellationToken)
     {
         string? json;
         try
         {
-            json = await readRateLimitsJson(cancellationToken);
+            json = await _readRateLimitsJson(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

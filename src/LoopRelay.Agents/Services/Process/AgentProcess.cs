@@ -7,6 +7,7 @@ namespace LoopRelay.Agents.Services.Process;
 
 internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentProcess
 {
+    private readonly System.Diagnostics.Process _process = process;
     /// <summary>How much of the standard-error stream is retained for diagnostics (last-writer-wins tail).</summary>
     private const int ErrorTailCapacity = 8192;
 
@@ -27,7 +28,7 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
 
     public AgentProcessState State { get; private set; } = AgentProcessState.Running;
 
-    public int ProcessId => process.Id;
+    public int ProcessId => _process.Id;
 
     public int? ExitCode { get; private set; }
 
@@ -36,7 +37,7 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
         get
         {
             CaptureExitStateIfAvailable();
-            return process.HasExited;
+            return _process.HasExited;
         }
     }
 
@@ -58,9 +59,9 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
         }
     }
 
-    internal StreamReader StandardOutput => process.StandardOutput;
+    internal StreamReader StandardOutput => _process.StandardOutput;
 
-    internal StreamReader StandardError => process.StandardError;
+    internal StreamReader StandardError => _process.StandardError;
 
     public void StartCompletionObservation()
     {
@@ -88,7 +89,7 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
             // Capture the reader once: Process.Dispose nulls the StandardError property (making the
             // getter throw mid-drain) but does not close a sync-mode reader someone already holds, so
             // a cached reference can still drain the final buffered stderr to EOF after teardown.
-            StreamReader reader = process.StandardError;
+            StreamReader reader = _process.StandardError;
             char[] buffer = new char[4096];
             int read;
             while ((read = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) > 0)
@@ -121,8 +122,8 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
             throw new InvalidOperationException("Cannot write to standard input after it has been completed.");
         }
 
-        await process.StandardInput.WriteAsync(text.AsMemory(), cancellationToken);
-        await process.StandardInput.FlushAsync(cancellationToken);
+        await _process.StandardInput.WriteAsync(text.AsMemory(), cancellationToken);
+        await _process.StandardInput.FlushAsync(cancellationToken);
     }
 
     public Task CompleteInputAsync(CancellationToken cancellationToken = default)
@@ -132,7 +133,7 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
         if (!inputCompleted)
         {
             inputCompleted = true;
-            process.StandardInput.Close();
+            _process.StandardInput.Close();
         }
 
         return Task.CompletedTask;
@@ -147,7 +148,7 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
     public async IAsyncEnumerable<string> ReadOutputLinesAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        while (await process.StandardOutput.ReadLineAsync(cancellationToken) is { } line)
+        while (await _process.StandardOutput.ReadLineAsync(cancellationToken) is { } line)
         {
             yield return line;
         }
@@ -176,7 +177,7 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
         {
             if (ExitCode is null)
             {
-                await process.WaitForExitAsync(bounded.Token).ConfigureAwait(false);
+                await _process.WaitForExitAsync(bounded.Token).ConfigureAwait(false);
                 CaptureExitStateIfAvailable();
             }
         }
@@ -217,13 +218,13 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
 
         disposed = true;
 
-        if (!process.HasExited)
+        if (!_process.HasExited)
         {
-            process.Kill(entireProcessTree: true);
+            _process.Kill(entireProcessTree: true);
             State = AgentProcessState.Canceled;
         }
 
-        process.Dispose();
+        _process.Dispose();
         await ValueTask.CompletedTask;
     }
 
@@ -231,7 +232,7 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
     {
         try
         {
-            await process.WaitForExitAsync();
+            await _process.WaitForExitAsync();
             CaptureExitStateIfAvailable();
             completion.TrySetResult();
         }
@@ -245,19 +246,19 @@ internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentP
             if (!disposed)
             {
                 disposed = true;
-                process.Dispose();
+                _process.Dispose();
             }
         }
     }
 
     private void CaptureExitStateIfAvailable()
     {
-        if (!process.HasExited)
+        if (!_process.HasExited)
         {
             return;
         }
 
-        ExitCode = process.ExitCode;
+        ExitCode = _process.ExitCode;
         State = AgentProcessState.Exited;
     }
 }

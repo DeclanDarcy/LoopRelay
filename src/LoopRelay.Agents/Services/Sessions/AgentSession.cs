@@ -17,11 +17,11 @@ namespace LoopRelay.Agents.Services.Sessions;
 /// </summary>
 public sealed class AgentSession : IAgentSession
 {
-    private readonly AgentSessionSpec spec;
-    private readonly AgentSessionMode mode;
-    private readonly IAgentProcess process;
-    private readonly IAgentTurnBoundaryDetector boundaryDetector;
-    private readonly IAgentTokenEstimator tokenEstimator;
+    private readonly AgentSessionSpec _spec;
+    private readonly AgentSessionMode _mode;
+    private readonly IAgentProcess _process;
+    private readonly IAgentTurnBoundaryDetector _boundaryDetector;
+    private readonly IAgentTokenEstimator _tokenEstimator;
     private readonly SemaphoreSlim turnGate = new(1, 1);
     private readonly Channel<string> lines = Channel.CreateUnbounded<string>(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
@@ -38,23 +38,23 @@ public sealed class AgentSession : IAgentSession
         IAgentTurnBoundaryDetector boundaryDetector,
         IAgentTokenEstimator tokenEstimator)
     {
-        this.spec = spec;
-        this.mode = mode;
-        this.process = process;
-        this.boundaryDetector = boundaryDetector;
-        this.tokenEstimator = tokenEstimator;
+        _spec = spec;
+        _mode = mode;
+        _process = process;
+        _boundaryDetector = boundaryDetector;
+        _tokenEstimator = tokenEstimator;
         pumpTask = Task.Run(PumpOutputAsync);
     }
 
-    public SessionIdentity SessionId => spec.SessionId;
+    public SessionIdentity SessionId => _spec.SessionId;
 
-    public string RepositoryId => spec.RepositoryId;
+    public string RepositoryId => _spec.RepositoryId;
 
-    public SessionRole Role => spec.Role;
+    public SessionRole Role => _spec.Role;
 
-    public AgentSessionMode Mode => mode;
+    public AgentSessionMode Mode => _mode;
 
-    public AgentProcessState State => process.State;
+    public AgentProcessState State => _process.State;
 
     public int CompletedTurns => completedTurns;
 
@@ -79,11 +79,11 @@ public sealed class AgentSession : IAgentSession
             int turnIndex = completedTurns + 1;
 
             AgentTurnProgress.Notify(observer => observer.RequestWriteStarted());
-            await process.WritePromptAsync(EnsureTrailingNewline(prompt), linked.Token);
+            await _process.WritePromptAsync(EnsureTrailingNewline(prompt), linked.Token);
 
-            if (mode == AgentSessionMode.OneShot)
+            if (_mode == AgentSessionMode.OneShot)
             {
-                await process.CompleteInputAsync(linked.Token);
+                await _process.CompleteInputAsync(linked.Token);
             }
 
             AgentTurnProgress.Notify(observer => observer.RequestSubmitted());
@@ -92,7 +92,7 @@ public sealed class AgentSession : IAgentSession
                 await ReadTurnAsync(turnIndex, onChunk, linked.Token);
 
             AgentTokenUsage usage = boundaryUsage
-                ?? new AgentTokenUsage(tokenEstimator.Estimate(prompt), tokenEstimator.Estimate(output));
+                ?? new AgentTokenUsage(_tokenEstimator.Estimate(prompt), _tokenEstimator.Estimate(output));
 
             completedTurns = turnIndex;
             totalUsage = totalUsage.Add(usage);
@@ -104,7 +104,7 @@ public sealed class AgentSession : IAgentSession
                 usage,
                 // Failure-only diagnostics: the retained stderr tail explains WHY the process failed
                 // (e.g. codex's "Not inside a trusted directory" refusal) instead of a bare state.
-                completed ? null : process.ErrorSnapshot);
+                completed ? null : _process.ErrorSnapshot);
         }
         finally
         {
@@ -116,7 +116,7 @@ public sealed class AgentSession : IAgentSession
     {
         cancellationToken.ThrowIfCancellationRequested();
         await sessionCts.CancelAsync();
-        await process.DisposeAsync();
+        await _process.DisposeAsync();
     }
 
     public async ValueTask DisposeAsync()
@@ -135,9 +135,9 @@ public sealed class AgentSession : IAgentSession
 
         try
         {
-            if (mode == AgentSessionMode.Persistent && !process.HasExited)
+            if (_mode == AgentSessionMode.Persistent && !_process.HasExited)
             {
-                await process.CompleteInputAsync();
+                await _process.CompleteInputAsync();
             }
         }
         catch
@@ -145,7 +145,7 @@ public sealed class AgentSession : IAgentSession
             // Best-effort stdin completion during teardown.
         }
 
-        await process.DisposeAsync();
+        await _process.DisposeAsync();
 
         try
         {
@@ -178,7 +178,7 @@ public sealed class AgentSession : IAgentSession
                 // The boundary detector classifies every line in both modes: a real Codex turn
                 // emits a turn-completed event before the process stream ends, while a one-shot
                 // process that emits no boundary still terminates the turn on stream end below.
-                AgentLineInspection inspection = boundaryDetector.Inspect(line);
+                AgentLineInspection inspection = _boundaryDetector.Inspect(line);
 
                 if (inspection.Classification == AgentLineClassification.TurnCompleted)
                 {
@@ -235,14 +235,14 @@ public sealed class AgentSession : IAgentSession
         // to run at all) previously mapped to Completed because the exit code was never consulted.
         // A null exit code means the process cannot report one (fakes/unknown) — legacy behavior.
         // For persistent sessions a stream end is always an unexpected exit.
-        return (output.ToString(), null, mode == AgentSessionMode.OneShot && process.ExitCode is null or 0);
+        return (output.ToString(), null, _mode == AgentSessionMode.OneShot && _process.ExitCode is null or 0);
     }
 
     private async Task PumpOutputAsync()
     {
         try
         {
-            await foreach (string line in process.ReadOutputLinesAsync(sessionCts.Token))
+            await foreach (string line in _process.ReadOutputLinesAsync(sessionCts.Token))
             {
                 lines.Writer.TryWrite(line);
             }

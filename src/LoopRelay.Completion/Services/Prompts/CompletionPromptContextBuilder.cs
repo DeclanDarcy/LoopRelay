@@ -8,6 +8,7 @@ namespace LoopRelay.Completion.Services.Prompts;
 
 internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionArtifacts artifacts)
 {
+    private readonly CompletionArtifacts _artifacts = artifacts;
     public async Task<string> BuildEvaluationContextAsync(
         CompletionCertificationRequest request,
         string projectionContent,
@@ -16,25 +17,25 @@ internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionA
         var sections = new List<ContextSection>
         {
             Section("Projection Content", projectionContent),
-            Section("Active Epic", await artifacts.ReadRequiredAsync(request.ActiveEpicPath)),
-            Section("Execution Plan", await artifacts.ReadRequiredAsync(request.ExecutionPlanPath)),
+            Section("Active Epic", await _artifacts.ReadRequiredAsync(request.ActiveEpicPath)),
+            Section("Execution Plan", await _artifacts.ReadRequiredAsync(request.ExecutionPlanPath)),
         };
 
         if (!string.IsNullOrWhiteSpace(request.DetailsPath) &&
-            await artifacts.ReadAsync(request.DetailsPath) is { } details)
+            await _artifacts.ReadAsync(request.DetailsPath) is { } details)
         {
             sections.Add(Section("Execution Details", details));
         }
 
-        IReadOnlyList<string> milestonePaths = await artifacts.ListAsync(
+        IReadOnlyList<string> milestonePaths = await _artifacts.ListAsync(
             request.MilestoneDirectory,
             CompletionArtifactPaths.MilestoneSearchPattern);
         foreach (string milestonePath in milestonePaths.Order(StringComparer.Ordinal))
         {
-            sections.Add(Section($"Executed Milestone Evidence: {milestonePath}", await artifacts.ReadRequiredAsync(milestonePath)));
+            sections.Add(Section($"Executed Milestone Evidence: {milestonePath}", await _artifacts.ReadRequiredAsync(milestonePath)));
         }
 
-        sections.Add(Section($"Execution Completion Claim: {executionEvidencePath}", await artifacts.ReadRequiredAsync(executionEvidencePath)));
+        sections.Add(Section($"Execution Completion Claim: {executionEvidencePath}", await _artifacts.ReadRequiredAsync(executionEvidencePath)));
 
         foreach (ContextSection handoff in await BuildHandoffSectionsAsync())
         {
@@ -61,9 +62,9 @@ internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionA
         var sections = new List<ContextSection>
         {
             Section("Projection Content", projectionContent),
-            Section("Current Roadmap Completion Context", await artifacts.ReadRequiredAsync(roadmapCompletionContextPath)),
+            Section("Current Roadmap Completion Context", await _artifacts.ReadRequiredAsync(roadmapCompletionContextPath)),
             Section($"Completed Epic Synthesis: {completedEpicSynthesisPath}", completedEpic),
-            Section($"Latest Completion Evaluation: {evaluationEvidencePath}", await artifacts.ReadRequiredAsync(evaluationEvidencePath)),
+            Section($"Latest Completion Evaluation: {evaluationEvidencePath}", await _artifacts.ReadRequiredAsync(evaluationEvidencePath)),
         };
 
         await AddNonImplementationReviewSummarySectionsAsync(sections, nonImplementationReviewEvidencePaths);
@@ -84,13 +85,13 @@ internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionA
 
     private async Task<IReadOnlyList<ContextSection>> BuildHandoffSectionsAsync()
     {
-        IReadOnlyList<string> paths = await artifacts.ListAsync(
+        IReadOnlyList<string> paths = await _artifacts.ListAsync(
             CompletionArtifactPaths.HandoffsDirectory,
             "*.md");
         var sections = new List<ContextSection>();
         foreach (string path in paths.Order(StringComparer.Ordinal).TakeLast(5))
         {
-            if (await artifacts.ReadAsync(path) is { } content)
+            if (await _artifacts.ReadAsync(path) is { } content)
             {
                 sections.Add(Section($"Recent Handoff: {path}", content));
             }
@@ -115,7 +116,7 @@ internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionA
 
     private async Task AddOptionalSectionAsync(List<ContextSection> sections, string title, string relativePath)
     {
-        string? content = await artifacts.ReadAsync(relativePath);
+        string? content = await _artifacts.ReadAsync(relativePath);
         if (!string.IsNullOrWhiteSpace(content))
         {
             sections.Add(Section(title, content));

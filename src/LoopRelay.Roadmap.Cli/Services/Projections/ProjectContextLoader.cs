@@ -9,6 +9,7 @@ namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
     public async Task<ProjectContext> LoadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -17,7 +18,7 @@ internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
         var contents = new List<(string Path, string FileName, string Content)>();
         foreach (string path in RoadmapArtifactPaths.ProjectContextSourceFiles)
         {
-            string? content = await artifacts.ReadAsync(path);
+            string? content = await _artifacts.ReadAsync(path);
             if (content is null)
             {
                 missing.Add(path);
@@ -28,7 +29,7 @@ internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
             }
         }
 
-        IReadOnlyList<string> numberedFiles = await artifacts.ListAsync(RoadmapArtifactPaths.ProjectContextDirectory, "*.md");
+        IReadOnlyList<string> numberedFiles = await _artifacts.ListAsync(RoadmapArtifactPaths.ProjectContextDirectory, "*.md");
         string[] extras = numberedFiles
             .Where(path => NumberedProjectContextFileRegex().IsMatch(Path.GetFileName(path)))
             .Where(path => !Enumerable.Contains(RoadmapArtifactPaths.ProjectContextSourceFiles, path, StringComparer.Ordinal))

@@ -10,9 +10,9 @@ public sealed class RuntimePrerequisiteDoctor(
     public const string CodexExecutableVariable = "CODEX_EXECUTABLE";
     public const string DecisionResumeVariable = "LoopRelay_DECISION_RESUME";
 
-    private readonly Func<string, string?> getEnvironmentVariable =
+    private readonly Func<string, string?> _getEnvironmentVariable =
         getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
-    private readonly Func<string, bool> fileExists = fileExists ?? File.Exists;
+    private readonly Func<string, bool> _fileExists = fileExists ?? File.Exists;
 
     public IReadOnlyList<RuntimeDiagnostic> Inspect()
     {
@@ -24,7 +24,7 @@ public sealed class RuntimePrerequisiteDoctor(
 
     private void InspectCodexExecutable(List<RuntimeDiagnostic> diagnostics)
     {
-        string? value = getEnvironmentVariable(CodexExecutableVariable);
+        string? value = _getEnvironmentVariable(CodexExecutableVariable);
         if (string.IsNullOrWhiteSpace(value))
         {
             diagnostics.Add(new RuntimeDiagnostic(
@@ -34,7 +34,7 @@ public sealed class RuntimePrerequisiteDoctor(
             return;
         }
 
-        if (LooksLikePath(value) && !fileExists(value))
+        if (LooksLikePath(value) && !_fileExists(value))
         {
             diagnostics.Add(new RuntimeDiagnostic(
                 "runtime.codex_executable.not_found",
@@ -45,7 +45,7 @@ public sealed class RuntimePrerequisiteDoctor(
 
     private void InspectDecisionResume(List<RuntimeDiagnostic> diagnostics)
     {
-        string? value = getEnvironmentVariable(DecisionResumeVariable);
+        string? value = _getEnvironmentVariable(DecisionResumeVariable);
         if (string.IsNullOrWhiteSpace(value))
         {
             diagnostics.Add(new RuntimeDiagnostic(

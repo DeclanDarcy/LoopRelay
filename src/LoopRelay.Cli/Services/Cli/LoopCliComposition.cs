@@ -35,7 +35,7 @@ namespace LoopRelay.Cli.Services.Cli;
 
 internal sealed class LoopCliComposition : IAsyncDisposable
 {
-    private readonly ServiceProvider provider;
+    private readonly ServiceProvider _provider;
 
     private LoopCliComposition(
         ServiceProvider provider,
@@ -43,7 +43,7 @@ internal sealed class LoopCliComposition : IAsyncDisposable
         IAgentExecutableResolver executableResolver,
         LoopRunner loop)
     {
-        this.provider = provider;
+        _provider = provider;
         Console = console;
         ExecutableResolver = executableResolver;
         Loop = loop;
@@ -191,11 +191,11 @@ internal sealed class LoopCliComposition : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Loop.DisposeAsync();
-        if (provider.GetService<AgentSessionRegistry>() is { } registry)
+        if (_provider.GetService<AgentSessionRegistry>() is { } registry)
         {
             await registry.DisposeAsync();
         }
 
-        await provider.DisposeAsync();
+        await _provider.DisposeAsync();
     }
 }

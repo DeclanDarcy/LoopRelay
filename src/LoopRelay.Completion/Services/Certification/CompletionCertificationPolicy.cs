@@ -51,10 +51,10 @@ public sealed class CompletionCertificationPolicy
             "Evidence gathering requires an inconclusive certification with unresolved drift or evidence quality."),
     ];
 
-    private readonly IReadOnlyDictionary<string, CompletionCertificationPolicyRule> rules;
-    private readonly IReadOnlySet<string> allowedCompletionStatuses;
-    private readonly IReadOnlySet<string> allowedDriftClassifications;
-    private readonly IReadOnlySet<string> allowedRecommendations;
+    private readonly IReadOnlyDictionary<string, CompletionCertificationPolicyRule> _rules;
+    private readonly IReadOnlySet<string> _allowedCompletionStatuses;
+    private readonly IReadOnlySet<string> _allowedDriftClassifications;
+    private readonly IReadOnlySet<string> _allowedRecommendations;
 
     public CompletionCertificationPolicy()
         : this(
@@ -71,10 +71,10 @@ public sealed class CompletionCertificationPolicy
         IReadOnlyList<string> allowedDriftClassifications,
         IReadOnlyList<string> allowedRecommendations)
     {
-        this.rules = rules.ToDictionary(rule => rule.ClosureRecommendation, StringComparer.Ordinal);
-        this.allowedCompletionStatuses = allowedCompletionStatuses.ToHashSet(StringComparer.Ordinal);
-        this.allowedDriftClassifications = allowedDriftClassifications.ToHashSet(StringComparer.Ordinal);
-        this.allowedRecommendations = allowedRecommendations.ToHashSet(StringComparer.Ordinal);
+        _rules = rules.ToDictionary(rule => rule.ClosureRecommendation, StringComparer.Ordinal);
+        _allowedCompletionStatuses = allowedCompletionStatuses.ToHashSet(StringComparer.Ordinal);
+        _allowedDriftClassifications = allowedDriftClassifications.ToHashSet(StringComparer.Ordinal);
+        _allowedRecommendations = allowedRecommendations.ToHashSet(StringComparer.Ordinal);
 
         EnsureVocabularyCoverage("completion statuses", CoveredCompletionStatuses, allowedCompletionStatuses);
         EnsureVocabularyCoverage("drift classifications", CoveredDriftClassifications, allowedDriftClassifications);
@@ -82,32 +82,32 @@ public sealed class CompletionCertificationPolicy
         EnsureRuleVocabulary();
     }
 
-    public IReadOnlyCollection<CompletionCertificationPolicyRule> Rules => this.rules.Values.ToList();
+    public IReadOnlyCollection<CompletionCertificationPolicyRule> Rules => _rules.Values.ToList();
 
     public CompletionCertificationPolicyResult Validate(CompletionEvaluationDecision decision)
     {
-        if (!this.allowedCompletionStatuses.Contains(decision.OverallCompletionStatus))
+        if (!_allowedCompletionStatuses.Contains(decision.OverallCompletionStatus))
         {
             return CompletionCertificationPolicyResult.Invalid(
                 decision,
                 $"Completion status `{decision.OverallCompletionStatus}` is not covered by completion certification policy.");
         }
 
-        if (!this.allowedDriftClassifications.Contains(decision.OverallDriftClassification))
+        if (!_allowedDriftClassifications.Contains(decision.OverallDriftClassification))
         {
             return CompletionCertificationPolicyResult.Invalid(
                 decision,
                 $"Drift classification `{decision.OverallDriftClassification}` is not covered by completion certification policy.");
         }
 
-        if (!this.allowedRecommendations.Contains(decision.ClosureRecommendation))
+        if (!_allowedRecommendations.Contains(decision.ClosureRecommendation))
         {
             return CompletionCertificationPolicyResult.Invalid(
                 decision,
                 $"Closure recommendation `{decision.ClosureRecommendation}` is not covered by completion certification policy.");
         }
 
-        if (!this.rules.TryGetValue(decision.ClosureRecommendation, out CompletionCertificationPolicyRule? rule))
+        if (!_rules.TryGetValue(decision.ClosureRecommendation, out CompletionCertificationPolicyRule? rule))
         {
             return CompletionCertificationPolicyResult.Invalid(
                 decision,
@@ -151,7 +151,7 @@ public sealed class CompletionCertificationPolicy
     private void EnsureRecommendationCoverage(IReadOnlyList<string> allowedRecommendations)
     {
         string[] missing = allowedRecommendations
-            .Where(recommendation => !this.rules.ContainsKey(recommendation))
+            .Where(recommendation => !_rules.ContainsKey(recommendation))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
@@ -163,15 +163,15 @@ public sealed class CompletionCertificationPolicy
 
     private void EnsureRuleVocabulary()
     {
-        foreach (CompletionCertificationPolicyRule rule in this.rules.Values)
+        foreach (CompletionCertificationPolicyRule rule in _rules.Values)
         {
-            if (!this.allowedRecommendations.Contains(rule.ClosureRecommendation))
+            if (!_allowedRecommendations.Contains(rule.ClosureRecommendation))
             {
                 throw new InvalidOperationException($"Completion certification policy rule uses unsupported recommendation `{rule.ClosureRecommendation}`.");
             }
 
             string[] unsupportedStatuses = rule.AllowedCompletionStatuses
-                .Where(status => !this.allowedCompletionStatuses.Contains(status))
+                .Where(status => !_allowedCompletionStatuses.Contains(status))
                 .ToArray();
             if (unsupportedStatuses.Length > 0)
             {
@@ -179,7 +179,7 @@ public sealed class CompletionCertificationPolicy
             }
 
             string[] unsupportedDrift = rule.AllowedDriftClassifications
-                .Where(drift => !this.allowedDriftClassifications.Contains(drift))
+                .Where(drift => !_allowedDriftClassifications.Contains(drift))
                 .ToArray();
             if (unsupportedDrift.Length > 0)
             {

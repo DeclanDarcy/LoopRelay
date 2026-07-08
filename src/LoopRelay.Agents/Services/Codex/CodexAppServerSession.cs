@@ -35,10 +35,10 @@ namespace LoopRelay.Agents.Services.Codex;
 /// </summary>
 public sealed class CodexAppServerSession : IAgentSession
 {
-    private readonly AgentSessionSpec spec;
-    private readonly IAgentProcess process;
-    private readonly IAgentTokenEstimator tokenEstimator;
-    private readonly IPermissionGateway? permissionGateway;
+    private readonly AgentSessionSpec _spec;
+    private readonly IAgentProcess _process;
+    private readonly IAgentTokenEstimator _tokenEstimator;
+    private readonly IPermissionGateway? _permissionGateway;
 
     private readonly SemaphoreSlim turnGate = new(1, 1);
     private readonly Channel<string> outbound = Channel.CreateUnbounded<string>(
@@ -63,23 +63,23 @@ public sealed class CodexAppServerSession : IAgentSession
         IAgentTokenEstimator tokenEstimator,
         IPermissionGateway? permissionGateway = null)
     {
-        this.spec = spec;
-        this.process = process;
-        this.tokenEstimator = tokenEstimator;
-        this.permissionGateway = permissionGateway;
+        _spec = spec;
+        _process = process;
+        _tokenEstimator = tokenEstimator;
+        _permissionGateway = permissionGateway;
         pumpTask = Task.Run(PumpAsync);
         writerTask = Task.Run(WriteLoopAsync);
     }
 
-    public SessionIdentity SessionId => spec.SessionId;
+    public SessionIdentity SessionId => _spec.SessionId;
 
-    public string RepositoryId => spec.RepositoryId;
+    public string RepositoryId => _spec.RepositoryId;
 
-    public SessionRole Role => spec.Role;
+    public SessionRole Role => _spec.Role;
 
     public AgentSessionMode Mode => AgentSessionMode.Persistent;
 
-    public AgentProcessState State => process.State;
+    public AgentProcessState State => _process.State;
 
     public int CompletedTurns => completedTurns;
 
@@ -111,7 +111,7 @@ public sealed class CodexAppServerSession : IAgentSession
                 long requestId = NextId();
                 CodexAppServerMessage ack = await SendRequestAsync(
                     requestId,
-                    CodexAppServerProtocol.TurnStart(requestId, threadId!, prompt, MapEffort(spec.Effort)),
+                    CodexAppServerProtocol.TurnStart(requestId, threadId!, prompt, MapEffort(_spec.Effort)),
                     linked.Token,
                     () => AgentTurnProgress.Notify(progress, observer => observer.RequestWriteStarted()),
                     () => AgentTurnProgress.Notify(progress, observer => observer.RequestSubmitted()));
@@ -137,7 +137,7 @@ public sealed class CodexAppServerSession : IAgentSession
 
             CodexAppServerTurnOutcome outcome = turn.Reader.Result();
             AgentTokenUsage usage = outcome.Usage
-                ?? new AgentTokenUsage(tokenEstimator.Estimate(prompt), tokenEstimator.Estimate(outcome.Output));
+                ?? new AgentTokenUsage(_tokenEstimator.Estimate(prompt), _tokenEstimator.Estimate(outcome.Output));
 
             completedTurns = turnIndex;
             Volatile.Write(ref totalUsage, totalUsage.Add(usage));
@@ -151,7 +151,7 @@ public sealed class CodexAppServerSession : IAgentSession
                 usage,
                 outcome.State == AgentTurnState.Completed
                     ? null
-                    : NonWhitespace(outcome.FailureMessage) ?? NonWhitespace(process.ErrorSnapshot));
+                    : NonWhitespace(outcome.FailureMessage) ?? NonWhitespace(_process.ErrorSnapshot));
         }
         finally
         {
@@ -186,7 +186,7 @@ public sealed class CodexAppServerSession : IAgentSession
     {
         cancellationToken.ThrowIfCancellationRequested();
         await sessionCts.CancelAsync();
-        await process.DisposeAsync();
+        await _process.DisposeAsync();
     }
 
     public async ValueTask DisposeAsync()
@@ -208,7 +208,7 @@ public sealed class CodexAppServerSession : IAgentSession
         }
 
         outbound.Writer.TryComplete();
-        await process.DisposeAsync();
+        await _process.DisposeAsync();
 
         try
         {
@@ -248,11 +248,11 @@ public sealed class CodexAppServerSession : IAgentSession
         Enqueue(CodexAppServerProtocol.Initialized());
 
         long threadRequestId = NextId();
-        bool resuming = spec.ResumeThreadId is { Length: > 0 };
+        bool resuming = _spec.ResumeThreadId is { Length: > 0 };
         string threadFrame = resuming
             ? CodexAppServerProtocol.ThreadResume(
-                threadRequestId, spec.ResumeThreadId!, spec.WorkingDirectory, Sandbox(), ApprovalPolicy())
-            : CodexAppServerProtocol.ThreadStart(threadRequestId, spec.WorkingDirectory, Sandbox(), ApprovalPolicy());
+                threadRequestId, _spec.ResumeThreadId!, _spec.WorkingDirectory, Sandbox(), ApprovalPolicy())
+            : CodexAppServerProtocol.ThreadStart(threadRequestId, _spec.WorkingDirectory, Sandbox(), ApprovalPolicy());
         CodexAppServerMessage threadResponse = await SendRequestAsync(threadRequestId, threadFrame, cancellationToken);
         if (resuming && threadResponse.ErrorMessage is { } resumeError)
         {
@@ -282,7 +282,7 @@ public sealed class CodexAppServerSession : IAgentSession
     {
         try
         {
-            await foreach (string line in process.ReadOutputLinesAsync(sessionCts.Token))
+            await foreach (string line in _process.ReadOutputLinesAsync(sessionCts.Token))
             {
                 Dispatch(line, CodexAppServerMessage.Parse(line));
             }
@@ -329,7 +329,7 @@ public sealed class CodexAppServerSession : IAgentSession
         {
             await foreach (string frame in outbound.Reader.ReadAllAsync(sessionCts.Token))
             {
-                await process.WritePromptAsync(frame, sessionCts.Token);
+                await _process.WritePromptAsync(frame, sessionCts.Token);
             }
         }
         catch (OperationCanceledException)
@@ -429,7 +429,7 @@ public sealed class CodexAppServerSession : IAgentSession
 
     private void EnqueueApprovalResponse(string rawLine, CodexAppServerMessage message)
     {
-        if (permissionGateway is null)
+        if (_permissionGateway is null)
         {
             Enqueue(CodexAppServerProtocol.ApprovalResponse(message.Id!, CodexAppServerProtocol.DeclineDecision));
             return;
@@ -437,12 +437,12 @@ public sealed class CodexAppServerSession : IAgentSession
 
         try
         {
-            byte[] response = permissionGateway.Evaluate(
+            byte[] response = _permissionGateway.Evaluate(
                 Encoding.UTF8.GetBytes(rawLine),
                 new PermissionGatewayContext(
-                    spec.RepositoryId,
-                    spec.WorkingDirectory ?? ".",
-                    spec.OperationPermissionProfile));
+                    _spec.RepositoryId,
+                    _spec.WorkingDirectory ?? ".",
+                    _spec.OperationPermissionProfile));
             EnqueueCompleteFrame(Encoding.UTF8.GetString(response));
         }
         catch
@@ -455,9 +455,9 @@ public sealed class CodexAppServerSession : IAgentSession
 
     // The Identifier IS the codex sandbox mode (read-only | workspace-write | danger-full-access). Emit it
     // verbatim so every mode is reachable — a prior bool mapping could only ever produce the first two.
-    private string Sandbox() => spec.Sandbox.Identifier;
+    private string Sandbox() => _spec.Sandbox.Identifier;
 
-    private string? ApprovalPolicy() => spec.Sandbox.RequiresApproval ? null : "never";
+    private string? ApprovalPolicy() => _spec.Sandbox.RequiresApproval ? null : "never";
 
     private static string MapEffort(EffortProfile effort) =>
         effort.Identifier is { Length: > 0 } identifier

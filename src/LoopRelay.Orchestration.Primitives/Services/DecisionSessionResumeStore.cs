@@ -17,6 +17,8 @@ namespace LoopRelay.Orchestration.Services;
 public sealed class FileDecisionSessionResumeStore(Repository repository, Action<string>? onWarning = null)
     : IDecisionSessionResumeStore
 {
+    private readonly Repository _repository = repository;
+    private readonly Action<string>? _onWarning = onWarning;
     public const string DirectoryName = ".LoopRelay";
     public const string FileName = "decision-session.json";
 
@@ -26,7 +28,7 @@ public sealed class FileDecisionSessionResumeStore(Repository repository, Action
         PropertyNameCaseInsensitive = true
     };
 
-    private string DirectoryPath => Path.Combine(repository.Path, DirectoryName);
+    private string DirectoryPath => Path.Combine(_repository.Path, DirectoryName);
 
     private string FilePath => Path.Combine(DirectoryPath, FileName);
 
@@ -45,7 +47,7 @@ public sealed class FileDecisionSessionResumeStore(Repository repository, Action
                 || state.SchemaVersion != DecisionSessionResumeState.CurrentSchemaVersion
                 || string.IsNullOrWhiteSpace(state.ThreadId))
             {
-                onWarning?.Invoke(
+                _onWarning?.Invoke(
                     $"Ignoring unusable decision-session resume state at {FilePath} (schema/content mismatch) — deleting it.");
                 File.Delete(FilePath);
                 return null;
@@ -55,7 +57,7 @@ public sealed class FileDecisionSessionResumeStore(Repository repository, Action
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            onWarning?.Invoke($"Could not read decision-session resume state at {FilePath}: {ex.Message} — deleting it.");
+            _onWarning?.Invoke($"Could not read decision-session resume state at {FilePath}: {ex.Message} — deleting it.");
             TryDelete();
             return null;
         }
@@ -72,7 +74,7 @@ public sealed class FileDecisionSessionResumeStore(Repository repository, Action
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            onWarning?.Invoke($"Could not persist decision-session resume state at {FilePath}: {ex.Message}");
+            _onWarning?.Invoke($"Could not persist decision-session resume state at {FilePath}: {ex.Message}");
         }
     }
 
@@ -98,7 +100,7 @@ public sealed class FileDecisionSessionResumeStore(Repository repository, Action
         }
         catch (Exception ex)
         {
-            onWarning?.Invoke($"Could not protect {DirectoryPath}: {ex.Message}");
+            _onWarning?.Invoke($"Could not protect {DirectoryPath}: {ex.Message}");
         }
     }
 
@@ -113,7 +115,7 @@ public sealed class FileDecisionSessionResumeStore(Repository repository, Action
         }
         catch (Exception ex)
         {
-            onWarning?.Invoke($"Could not delete decision-session resume state at {FilePath}: {ex.Message}");
+            _onWarning?.Invoke($"Could not delete decision-session resume state at {FilePath}: {ex.Message}");
         }
     }
 

@@ -6,6 +6,7 @@ namespace LoopRelay.Completion.Services.ArtifactStorage;
 
 public sealed class CompletedEpicEvidenceLoader(CompletionArtifacts artifacts)
 {
+    private readonly CompletionArtifacts _artifacts = artifacts;
     public const int MaxRenderedContentPerEpic = 4_000;
     public const int MaxTotalRenderedCharacters = 16_000;
 
@@ -23,11 +24,11 @@ public sealed class CompletedEpicEvidenceLoader(CompletionArtifacts artifacts)
 
     public async Task<IReadOnlyList<CompletedEpicEvidence>> LoadAsync()
     {
-        IReadOnlyList<string> paths = await artifacts.ListAsync(CompletionArtifactPaths.CompletedEpicsDirectory, "*.md");
+        IReadOnlyList<string> paths = await _artifacts.ListAsync(CompletionArtifactPaths.CompletedEpicsDirectory, "*.md");
         var evidence = new List<CompletedEpicEvidence>();
         foreach (string path in paths.Order(StringComparer.Ordinal))
         {
-            string? content = await artifacts.ReadAsync(path);
+            string? content = await _artifacts.ReadAsync(path);
             if (content is null)
             {
                 continue;

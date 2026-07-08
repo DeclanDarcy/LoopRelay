@@ -11,34 +11,35 @@ namespace LoopRelay.Plan.Cli.Services.Execution;
 /// </summary>
 internal sealed class PreflightGate(PlanArtifacts artifacts)
 {
+    private readonly PlanArtifacts _artifacts = artifacts;
     public async Task<IReadOnlyList<string>> CheckAsync()
     {
         var violations = new List<string>();
 
-        if (await artifacts.ExistsAsync(OrchestrationArtifactPaths.Plan))
+        if (await _artifacts.ExistsAsync(OrchestrationArtifactPaths.Plan))
         {
             violations.Add($"{OrchestrationArtifactPaths.Plan} already exists — archive or delete it before planning");
         }
 
-        if (await artifacts.ExistsAsync(OrchestrationArtifactPaths.OperationalContext))
+        if (await _artifacts.ExistsAsync(OrchestrationArtifactPaths.OperationalContext))
         {
             violations.Add(
                 $"{OrchestrationArtifactPaths.OperationalContext} already exists — archive or delete it before planning");
         }
 
-        if (await artifacts.ExistsAsync(OrchestrationArtifactPaths.Details))
+        if (await _artifacts.ExistsAsync(OrchestrationArtifactPaths.Details))
         {
             violations.Add($"{OrchestrationArtifactPaths.Details} already exists — archive or delete it before planning");
         }
 
-        IReadOnlyList<string> milestones = await artifacts.ListMilestonesRelativeAsync();
+        IReadOnlyList<string> milestones = await _artifacts.ListMilestonesRelativeAsync();
         if (milestones.Count > 0)
         {
             violations.Add(
                 $"{OrchestrationArtifactPaths.MilestonesDirectory} is not empty — archive or delete its contents before planning");
         }
 
-        if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.SpecsEpic))
+        if (!await _artifacts.ExistsAsync(OrchestrationArtifactPaths.SpecsEpic))
         {
             violations.Add(
                 $"{OrchestrationArtifactPaths.SpecsEpic} not found — author the epic before running the planning pipeline");

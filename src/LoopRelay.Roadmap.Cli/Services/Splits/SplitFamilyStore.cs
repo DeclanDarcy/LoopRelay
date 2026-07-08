@@ -10,6 +10,7 @@ namespace LoopRelay.Roadmap.Cli.Services.Splits;
 
 internal sealed class SplitFamilyStore(RoadmapArtifacts artifacts)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
     public async Task<string> WriteAsync(SplitFamily family)
     {
         string jsonPath = RoadmapArtifactPaths.SplitFamilyJson(family.FamilyId);
@@ -20,7 +21,7 @@ internal sealed class SplitFamilyStore(RoadmapArtifacts artifacts)
 
     public async Task<bool> ExistsForChildAsync(string childEpicPath)
     {
-        IReadOnlyList<string> structuredFamilies = await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json");
+        IReadOnlyList<string> structuredFamilies = await _artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json");
         foreach (string path in structuredFamilies.Order(StringComparer.Ordinal))
         {
             SplitFamilyPersistenceDocument? document = await StructuredStore(path).LoadAsync();
@@ -30,16 +31,16 @@ internal sealed class SplitFamilyStore(RoadmapArtifacts artifacts)
             }
         }
 
-        IReadOnlyList<string> legacyFamilies = await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md");
+        IReadOnlyList<string> legacyFamilies = await _artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.md");
         foreach (string path in legacyFamilies.Order(StringComparer.Ordinal))
         {
             string familyId = FamilyIdFromPath(path);
-            if (await artifacts.ExistsAsync(RoadmapArtifactPaths.SplitFamilyJson(familyId)))
+            if (await _artifacts.ExistsAsync(RoadmapArtifactPaths.SplitFamilyJson(familyId)))
             {
                 continue;
             }
 
-            string? content = await artifacts.ReadAsync(path);
+            string? content = await _artifacts.ReadAsync(path);
             if (string.IsNullOrWhiteSpace(content))
             {
                 continue;
@@ -91,7 +92,7 @@ internal sealed class SplitFamilyStore(RoadmapArtifacts artifacts)
 
     private StructuredDocumentStore<SplitFamilyPersistenceDocument> StructuredStore(string path) =>
         new(
-            artifacts,
+            _artifacts,
             path,
             SplitFamilyPersistenceDocument.CurrentSchemaVersion,
             document => document.SchemaVersion,

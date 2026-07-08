@@ -30,74 +30,82 @@ internal sealed class PlanPipeline(
     PlanArtifacts artifacts,
     ILoopConsole console) : IAsyncDisposable
 {
+    private readonly PreflightGate _preflight = preflight;
+    private readonly PlanSession _planSession = planSession;
+    private readonly ReviewStep _review = review;
+    private readonly IProjectContextProjectionService _projectionService = projectionService;
+    private readonly PermissionedArtifactOperationStep _artifactOperation = artifactOperation;
+    private readonly AgentsSubmodulePublisher _publisher = publisher;
+    private readonly PlanArtifacts _artifacts = artifacts;
+    private readonly ILoopConsole _console = console;
     public async Task<PlanOutcome> RunAsync(CancellationToken cancellationToken)
     {
         try
         {
-            console.Phase("Preflight");
-            IReadOnlyList<string> violations = await preflight.CheckAsync();
+            _console.Phase("Preflight");
+            IReadOnlyList<string> violations = await _preflight.CheckAsync();
             if (violations.Count > 0)
             {
                 foreach (string violation in violations)
                 {
-                    console.Error(violation);
+                    _console.Error(violation);
                 }
 
                 return PlanOutcome.PreflightBlocked;
             }
 
-            console.Phase("Write Plan");
-            await planSession.WritePlanAsync(cancellationToken);
+            _console.Phase("Write Plan");
+            await _planSession.WritePlanAsync(cancellationToken);
             bool agentsCommitted =
-                await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.WritePlanMessage, cancellationToken);
+                await _publisher.PublishAgentsAsync(AgentsSubmodulePublisher.WritePlanMessage, cancellationToken);
 
-            console.Phase("Generate Adversarial Review Projection");
-            ProjectContextProjectionResult adversarialProjection = await projectionService.EnsureFreshAsync(
+            _console.Phase("Generate Adversarial Review Projection");
+            ProjectContextProjectionResult adversarialProjection = await _projectionService.EnsureFreshAsync(
                 ProjectionRuntimePromptNames.AdversarialPlanReview,
                 cancellationToken);
             agentsCommitted |=
-                await publisher.PublishAgentsAsync(
+                await _publisher.PublishAgentsAsync(
                     AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage,
                     cancellationToken);
 
-            console.Phase("Adversarial Review");
+            _console.Phase("Adversarial Review");
             // No publish after this step: the review runs read-only and writes nothing, so there is nothing to publish.
-            string output1 = await review.RunAsync(adversarialProjection.Content, cancellationToken);
+            string output1 = await _review.RunAsync(adversarialProjection.Content, cancellationToken);
 
-            console.Phase("Revise Plan");
-            await planSession.ReviseAsync(output1, cancellationToken);
+            _console.Phase("Revise Plan");
+            await _planSession.ReviseAsync(output1, cancellationToken);
             // Eager close: the codex planning process must not outlive its last turn. The artifact operations below
             // do not need the planning session, so it is torn down here rather than held until DisposeAsync.
-            await planSession.CloseAsync();
+            await _planSession.CloseAsync();
 
             // Seed operational_context.md from the revised plan — the execution loop's Decision Runtime starts
             // from a context that IS the plan. Defensive null-guard only: ReviseAsync's gate already proved
             // plan.md exists and is non-whitespace.
-            string plan = await artifacts.ReadAsync(OrchestrationArtifactPaths.Plan)
+            string plan = await _artifacts.ReadAsync(OrchestrationArtifactPaths.Plan)
                 ?? throw new PlanStepException($"{OrchestrationArtifactPaths.Plan} disappeared after Revise Plan.");
-            await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalContext, plan);
-            console.Info(
+            await _artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalContext, plan);
+            _console.Info(
                 $"Seeded {OrchestrationArtifactPaths.OperationalContext} from {OrchestrationArtifactPaths.Plan}.");
             // One commit covers both the revised plan.md and the operational_context.md seeded from it.
             agentsCommitted |=
-                await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.RevisePlanMessage, cancellationToken);
+                await _publisher.PublishAgentsAsync(AgentsSubmodulePublisher.RevisePlanMessage, cancellationToken);
 
-            console.Phase("Collect Details");
-            ArtifactOperationPlan collectDetails = await OneShotSteps.CollectDetailsAsync(artifacts);
-            await artifactOperation.RunAsync(collectDetails, cancellationToken);
-            if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.Details))
+            _console.Phase("Collect Details");
+            ArtifactOperationPlan collectDetails = await OneShotSteps.CollectDetailsAsync(_artifacts);
+            await _artifactOperation.RunAsync(collectDetails, cancellationToken);
+            if (!await _artifacts.ExistsAsync(OrchestrationArtifactPaths.Details))
             {
                 throw new PlanStepException(
                     $"{OrchestrationArtifactPaths.Details} was not present after Collect Details.");
             }
 
             agentsCommitted |=
-                await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.CollectDetailsMessage, cancellationToken);
+                await _publisher.PublishAgentsAsync(AgentsSubmodulePublisher.CollectDetailsMessage, cancellationToken);
 
-            console.Phase("Extract Milestones");
-            ArtifactOperationPlan extractMilestones = await OneShotSteps.ExtractMilestonesAsync(artifacts);
-            await artifactOperation.RunAsync(extractMilestones, cancellationToken);
-            IReadOnlyList<string> milestones = await artifacts.ListMilestonesRelativeAsync();
+            _console.Phase("Extract Milestones");
+            ArtifactOperationPlan extractMilestones = await OneShotSteps.ExtractMilestonesAsync(_artifacts);
+            await _artifactOperation.RunAsync(extractMilestones, cancellationToken);
+            IReadOnlyList<string> milestones = await _artifacts.ListMilestonesRelativeAsync();
             if (milestones.Count == 0)
             {
                 throw new PlanStepException(
@@ -105,22 +113,22 @@ internal sealed class PlanPipeline(
             }
 
             agentsCommitted |=
-                await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.ExtractMilestonesMessage, cancellationToken);
+                await _publisher.PublishAgentsAsync(AgentsSubmodulePublisher.ExtractMilestonesMessage, cancellationToken);
 
-            console.Phase("Extract Details");
-            ArtifactOperationPlan extractDetails = await OneShotSteps.ExtractDetailsAsync(artifacts);
-            await artifactOperation.RunAsync(extractDetails, cancellationToken);
+            _console.Phase("Extract Details");
+            ArtifactOperationPlan extractDetails = await OneShotSteps.ExtractDetailsAsync(_artifacts);
+            await _artifactOperation.RunAsync(extractDetails, cancellationToken);
             agentsCommitted |=
-                await publisher.PublishAgentsAsync(AgentsSubmodulePublisher.ExtractDetailsMessage, cancellationToken);
+                await _publisher.PublishAgentsAsync(AgentsSubmodulePublisher.ExtractDetailsMessage, cancellationToken);
 
             // Any step commit moved the submodule HEAD, so the parent gitlink pointer necessarily lags — the
             // control flow already proves it; no status probe.
             if (agentsCommitted)
             {
-                await publisher.RecordParentGitlinkAsync(cancellationToken);
+                await _publisher.RecordParentGitlinkAsync(cancellationToken);
             }
 
-            console.Info(
+            _console.Info(
                 $"Planning pipeline complete. Produced {OrchestrationArtifactPaths.Plan}, "
                 + $"{OrchestrationArtifactPaths.Details}, and {milestones.Count} milestone file(s) under "
                 + $"{OrchestrationArtifactPaths.MilestonesDirectory}.");
@@ -135,7 +143,7 @@ internal sealed class PlanPipeline(
         }
         catch (PlanStepException ex)
         {
-            console.Error(ex.Message);
+            _console.Error(ex.Message);
             return PlanOutcome.Failed;
         }
         catch (Exception ex)
@@ -143,10 +151,10 @@ internal sealed class PlanPipeline(
             // Anything else (Win32Exception on a bad CODEX_EXECUTABLE, IOException on app-server handshake
             // death, ...) must still honor the documented exit-code contract: surface the message, exit Failed —
             // never crash with a bare stack trace.
-            console.Error(ex.Message);
+            _console.Error(ex.Message);
             return PlanOutcome.Failed;
         }
     }
 
-    public async ValueTask DisposeAsync() => await planSession.DisposeAsync();
+    public async ValueTask DisposeAsync() => await _planSession.DisposeAsync();
 }

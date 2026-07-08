@@ -31,6 +31,17 @@ internal sealed class LoopRunner(
     INonImplementationCompletionReviewService completionReview,
     ILoopConsole console) : IAsyncDisposable
 {
+    private readonly MilestoneGate _gate = gate;
+    private readonly LoopArtifacts _artifacts = artifacts;
+    private readonly ExecutionStep _execution = execution;
+    private readonly DecisionSession _decision = decision;
+    private readonly AgentsSubmodulePublisher _submodulePublisher = submodulePublisher;
+    private readonly CommitGate _commitGate = commitGate;
+    private readonly IDecisionSessionResumeStore _resumeStore = resumeStore;
+    private readonly ICompletionCertificationService _completionCertification = completionCertification;
+    private readonly INonImplementationPostExecutionReviewService _postExecutionReview = postExecutionReview;
+    private readonly INonImplementationCompletionReviewService _completionReview = completionReview;
+    private readonly ILoopConsole _console = console;
     public async Task<LoopOutcome> RunAsync(CancellationToken cancellationToken)
     {
         try
@@ -43,16 +54,16 @@ internal sealed class LoopRunner(
                 // A finished epic needs no Codex work, so return immediately. Usage-limit handling runs
                 // per-turn inside GatedAgentRuntime, so a completed epic never opens a session and thus never
                 // waits on a (potentially multi-day) quota reset.
-                if (await gate.IsEpicCompleteAsync())
+                if (await _gate.IsEpicCompleteAsync())
                 {
                     NonImplementationCompletionReviewResult review =
-                        await completionReview.ReviewAsync(cancellationToken);
+                        await _completionReview.ReviewAsync(cancellationToken);
                     if (review.IsBlocked)
                     {
-                        await submodulePublisher.PublishAsync(
+                        await _submodulePublisher.PublishAsync(
                             AgentsSubmodulePublisher.CompletionCertificationMessage,
                             cancellationToken);
-                        console.Warn(
+                        _console.Warn(
                             "Non-implementation completion review blocked final evaluation. " +
                             $"Evidence: {FormatEvidence(review.EvidencePaths)}");
                         return LoopOutcome.CompletionBlocked;
@@ -60,38 +71,38 @@ internal sealed class LoopRunner(
 
                     if (review.AppliedDeletePaths.Count > 0)
                     {
-                        await commitGate.CommitPushIfChangedAsync(cancellationToken);
+                        await _commitGate.CommitPushIfChangedAsync(cancellationToken);
                     }
 
-                    CompletionCertificationResult completion = await completionCertification.CertifyPlanCompletionAsync(
+                    CompletionCertificationResult completion = await _completionCertification.CertifyPlanCompletionAsync(
                         new CompletionCertificationRequest(
-                            artifacts.Repository,
+                            _artifacts.Repository,
                             NonImplementationReviewEvidencePaths: review.EvidencePaths),
                         cancellationToken);
-                    await submodulePublisher.PublishAsync(
+                    await _submodulePublisher.PublishAsync(
                         AgentsSubmodulePublisher.CompletionCertificationMessage,
                         cancellationToken);
 
                     if (completion.Outcome == CompletionCertificationServiceOutcome.Blocked)
                     {
-                        console.Warn($"Completion certification blocked: {completion.Message} Evidence: {FormatEvidence(completion.EvidencePaths)}");
+                        _console.Warn($"Completion certification blocked: {completion.Message} Evidence: {FormatEvidence(completion.EvidencePaths)}");
                         return LoopOutcome.CompletionBlocked;
                     }
 
                     if (completion.Outcome == CompletionCertificationServiceOutcome.Failed)
                     {
-                        console.Error($"Completion certification failed: {completion.Message} Evidence: {FormatEvidence(completion.EvidencePaths)}");
+                        _console.Error($"Completion certification failed: {completion.Message} Evidence: {FormatEvidence(completion.EvidencePaths)}");
                         return LoopOutcome.Failed;
                     }
 
                     // A finished epic obsoletes the persisted decision-session resume state — the next epic must start
                     // from a fresh decision process primed with its own operational context. Idempotent by design: this
                     // fires again on every re-run against a completed epic, and deleting nothing is a no-op.
-                    await resumeStore.ClearAsync(cancellationToken);
+                    await _resumeStore.ClearAsync(cancellationToken);
                     return LoopOutcome.EpicCompleted;
                 }
 
-                await artifacts.EnsureOperationalContextAsync();
+                await _artifacts.EnsureOperationalContextAsync();
 
                 // ---- Sequence this slice: execution-first, decision-first, or skip-to-execution ----
                 // The decision session only earns its keep once there is a handoff to fold into the next agent's
@@ -111,20 +122,20 @@ internal sealed class LoopRunner(
                 //    prior session to adapt from, so no decision session runs and no decisions.md is produced.
                 //  * Otherwise (a handoff exists) the decision session folds that handoff into decisions.md — the
                 //    next agent's system prompt — and then execution continues from it.
-                if (await artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions))
+                if (await _artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions))
                 {
-                    console.Info("Found an unrotated decisions.md — skipping the decision session and executing it directly.");
+                    _console.Info("Found an unrotated decisions.md — skipping the decision session and executing it directly.");
                 }
-                else if ((await artifacts.ReadLatestHandoffAsync()).Content is null)
+                else if ((await _artifacts.ReadLatestHandoffAsync()).Content is null)
                 {
-                    console.Info("No handoff yet — starting the first execution directly from the plan.");
+                    _console.Info("No handoff yet — starting the first execution directly from the plan.");
                 }
                 else
                 {
-                    await decision.RunAsync(cancellationToken);
+                    await _decision.RunAsync(cancellationToken);
 
                     // Archive the handoff the decision just consumed so execution writes onto a clean slate.
-                    await artifacts.RotateLiveHandoffAsync();
+                    await _artifacts.RotateLiveHandoffAsync();
                 }
 
                 // ---- Persist context BEFORE invoking codex ----
@@ -132,7 +143,7 @@ internal sealed class LoopRunner(
                 // push the submodule now, before the execution turn opens, so the exact context codex is
                 // about to consume (operational_context, decisions, the rotated handoff) is persisted and
                 // shared to the submodule's own remote first.
-                await submodulePublisher.PublishAsync(
+                await _submodulePublisher.PublishAsync(
                     AgentsSubmodulePublisher.ContextUpdateMessage, cancellationToken);
 
                 // ---- Execution ----
@@ -140,15 +151,15 @@ internal sealed class LoopRunner(
                 // the execution turn writes milestone files), so the stall gate can credit an iteration whose
                 // only progress is ticking milestone boxes — those live inside the ignored `.agents/`, so the
                 // working-tree probe alone would misread pure box-ticking as a stall.
-                int uncheckedMilestonesBefore = (await gate.GetUntickedItemsAsync()).Count;
+                int uncheckedMilestonesBefore = (await _gate.GetUntickedItemsAsync()).Count;
                 RepositorySliceBaseline reviewBaseline =
-                    await postExecutionReview.CapturePreSliceBaselineAsync(cancellationToken);
+                    await _postExecutionReview.CapturePreSliceBaselineAsync(cancellationToken);
 
                 // Consume decisions.md, do the work, and write the next handoff.
-                await execution.RunAsync(cancellationToken);
+                await _execution.RunAsync(cancellationToken);
                 NonImplementationPostExecutionReviewResult reviewResult =
-                    await postExecutionReview.ReviewAfterExecutionAsync(reviewBaseline, cancellationToken);
-                console.Info(
+                    await _postExecutionReview.ReviewAfterExecutionAsync(reviewBaseline, cancellationToken);
+                _console.Info(
                     $"Non-implementation review completed for {reviewResult.ExecutionSliceId}: " +
                     $"{reviewResult.Summary.ChangedFileCount} changed, " +
                     $"{reviewResult.Summary.SemanticCandidateCount} semantic candidate(s), " +
@@ -162,22 +173,22 @@ internal sealed class LoopRunner(
                 // mid-slice (after this point) re-runs a decision rather than re-executing stale decisions. The
                 // numbered snapshot written at persist time is the retained history. Retired BEFORE the post-codex
                 // publish so the submodule commit captures the consumed state.
-                await artifacts.RetireLiveDecisionsAsync();
+                await _artifacts.RetireLiveDecisionsAsync();
 
                 // ---- Persist codex's writes ----
                 // Publish codex's `.agents/` output (the new handoff, milestone box-checks, final decisions) to
                 // the submodule. CommitGate ignores `.agents/`, and the epic-complete check short-circuits at
                 // the TOP of the next iteration BEFORE its pre-codex publish — so without this the completing
                 // (and stalling) iteration's state would never reach the submodule remote.
-                await submodulePublisher.PublishAsync(
+                await _submodulePublisher.PublishAsync(
                     AgentsSubmodulePublisher.ExecutionHandoffMessage, cancellationToken);
 
                 // decision.RunAsync verifies decisions.md and execution.RunAsync verifies handoff.md (each throws
                 // if its artifact is missing). Commit and push the working tree, then apply the stall gate: stop
                 // if no substantive change recurs. A drop in unchecked milestone items across the execution turn
                 // counts as substantive progress even when no real repository file changed.
-                int uncheckedMilestonesAfter = (await gate.GetUntickedItemsAsync()).Count;
-                if (await commitGate.CommitPushAndEvaluateAsync(
+                int uncheckedMilestonesAfter = (await _gate.GetUntickedItemsAsync()).Count;
+                if (await _commitGate.CommitPushAndEvaluateAsync(
                         uncheckedMilestonesBefore, uncheckedMilestonesAfter, cancellationToken))
                 {
                     return LoopOutcome.Stalled;
@@ -186,13 +197,13 @@ internal sealed class LoopRunner(
         }
         catch (OperationCanceledException)
         {
-            console.Warn("Cancellation requested — stopping the loop.");
+            _console.Warn("Cancellation requested — stopping the loop.");
             await SalvageSubmoduleOnExitAsync();
             return LoopOutcome.Cancelled;
         }
         catch (NonImplementationPostExecutionReviewException ex)
         {
-            console.Error(
+            _console.Error(
                 $"Post-execution non-implementation review failed: {ex.Message} " +
                 $"Evidence: {FormatEvidence(ex.EvidencePaths)}");
             await SalvageSubmoduleOnExitAsync();
@@ -200,7 +211,7 @@ internal sealed class LoopRunner(
         }
         catch (LoopStepException ex)
         {
-            console.Error(ex.Message);
+            _console.Error(ex.Message);
             await SalvageSubmoduleOnExitAsync();
             return LoopOutcome.Failed;
         }
@@ -214,16 +225,16 @@ internal sealed class LoopRunner(
     {
         try
         {
-            await submodulePublisher.PublishAsync(AgentsSubmodulePublisher.PartialExitMessage, CancellationToken.None);
+            await _submodulePublisher.PublishAsync(AgentsSubmodulePublisher.PartialExitMessage, CancellationToken.None);
         }
         catch (Exception ex)
         {
-            console.Warn($"Could not publish partial .agents state on exit: {ex.Message}");
+            _console.Warn($"Could not publish partial .agents state on exit: {ex.Message}");
         }
     }
 
     private static string FormatEvidence(IReadOnlyList<string> evidencePaths) =>
         evidencePaths.Count == 0 ? "None" : string.Join(", ", evidencePaths);
 
-    public ValueTask DisposeAsync() => decision.DisposeAsync();
+    public ValueTask DisposeAsync() => _decision.DisposeAsync();
 }

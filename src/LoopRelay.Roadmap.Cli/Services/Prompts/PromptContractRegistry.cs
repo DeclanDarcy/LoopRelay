@@ -8,11 +8,11 @@ namespace LoopRelay.Roadmap.Cli.Services.Prompts;
 
 internal sealed class PromptContractRegistry
 {
-    private readonly IReadOnlyDictionary<string, PromptContract> contracts;
+    private readonly IReadOnlyDictionary<string, PromptContract> _contracts;
 
     public PromptContractRegistry(ProjectionRegistry projectionRegistry)
     {
-        contracts = new[]
+        _contracts = new[]
         {
             Contract("CreateRoadmapCompletionContext", [], [RoadmapArtifactPaths.RoadmapCompletionContext], [], "RoadmapCompletionContextWriter", StaleProjectionPolicy.Block, "None", optionalInputs: [RoadmapArtifactPaths.CompletedEpicsPattern]),
             Contract("UpdateRoadmapCompletionContext", [RoadmapArtifactPaths.RoadmapCompletionContext, RoadmapArtifactPaths.ActiveEpic], [RoadmapArtifactPaths.RoadmapCompletionContext], ["Close Epic", "Close With Follow-Up"], "RoadmapCompletionContextWriter", StaleProjectionPolicy.Block, "None"),
@@ -28,7 +28,7 @@ internal sealed class PromptContractRegistry
 
         string[] missing = projectionRegistry.All
             .Select(definition => definition.RuntimePromptName)
-            .Where(runtimePromptName => !contracts.ContainsKey(runtimePromptName))
+            .Where(runtimePromptName => !_contracts.ContainsKey(runtimePromptName))
             .ToArray();
         if (missing.Length > 0)
         {
@@ -36,14 +36,14 @@ internal sealed class PromptContractRegistry
         }
     }
 
-    public IReadOnlyCollection<PromptContract> All => contracts.Values.ToList();
+    public IReadOnlyCollection<PromptContract> All => _contracts.Values.ToList();
 
     public PromptContract Get(string runtimePromptName) =>
-        contracts.TryGetValue(runtimePromptName, out PromptContract? contract)
+        _contracts.TryGetValue(runtimePromptName, out PromptContract? contract)
             ? contract
             : throw new ArgumentOutOfRangeException(nameof(runtimePromptName), runtimePromptName, "No prompt contract registered.");
 
-    public bool Contains(string runtimePromptName) => contracts.ContainsKey(runtimePromptName);
+    public bool Contains(string runtimePromptName) => _contracts.ContainsKey(runtimePromptName);
 
     public async Task EmitSnapshotAsync(RoadmapArtifacts artifacts)
     {

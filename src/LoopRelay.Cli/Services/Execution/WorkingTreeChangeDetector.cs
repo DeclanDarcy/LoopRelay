@@ -23,9 +23,11 @@ namespace LoopRelay.Cli.Services.Execution;
 /// </summary>
 internal sealed class WorkingTreeChangeDetector(IProcessRunner processRunner, Repository repository)
 {
+    private readonly IProcessRunner _processRunner = processRunner;
+    private readonly Repository _repository = repository;
     public async Task<IReadOnlyList<string>> GetRealChangedPathsAsync()
     {
-        ProcessRunResult result = await processRunner.RunAsync("git", ["status", "--porcelain"], repository.Path);
+        ProcessRunResult result = await _processRunner.RunAsync("git", ["status", "--porcelain"], _repository.Path);
         if (result.ExitCode != 0)
         {
             throw new LoopStepException($"git status failed: {result.StandardError}");

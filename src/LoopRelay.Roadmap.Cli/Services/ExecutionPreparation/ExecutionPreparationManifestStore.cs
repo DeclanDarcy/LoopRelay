@@ -12,10 +12,11 @@ internal sealed class ExecutionPreparationManifestStore(RoadmapArtifacts artifac
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() },
     };
+    private readonly RoadmapArtifacts _artifacts = artifacts;
 
     public async Task<ExecutionPreparationManifest> LoadAsync()
     {
-        string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.ExecutionPreparationManifest);
+        string? content = await _artifacts.ReadAsync(RoadmapArtifactPaths.ExecutionPreparationManifest);
         if (string.IsNullOrWhiteSpace(content))
         {
             return ExecutionPreparationManifest.Empty;
@@ -35,6 +36,6 @@ internal sealed class ExecutionPreparationManifestStore(RoadmapArtifacts artifac
     public async Task SaveAsync(ExecutionPreparationManifest manifest)
     {
         string content = JsonSerializer.Serialize(manifest, JsonOptions) + Environment.NewLine;
-        await artifacts.WriteAsync(RoadmapArtifactPaths.ExecutionPreparationManifest, content);
+        await _artifacts.WriteAsync(RoadmapArtifactPaths.ExecutionPreparationManifest, content);
     }
 }

@@ -9,13 +9,15 @@ internal sealed partial class ExecutionCompatibilityMaterializer(
     RoadmapArtifacts artifacts,
     ExecutionPreparationProvenanceService provenanceService)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly ExecutionPreparationProvenanceService _provenanceService = provenanceService;
     public async Task MaterializeAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        string operationalContext = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.OperationalContext);
-        string executionPrompt = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ExecutionPrompt);
-        string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        IReadOnlyList<string> specs = await provenanceService.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
+        string operationalContext = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.OperationalContext);
+        string executionPrompt = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ExecutionPrompt);
+        string activeEpic = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
+        IReadOnlyList<string> specs = await _provenanceService.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
         if (specs.Count == 0)
         {
             throw new RoadmapStepException("Cannot materialize execution compatibility artifacts without specs.");
@@ -45,7 +47,7 @@ internal sealed partial class ExecutionCompatibilityMaterializer(
         var milestonePaths = new List<string>();
         foreach (string spec in specs.Order(StringComparer.Ordinal))
         {
-            string specContent = await artifacts.ReadRequiredAsync(spec);
+            string specContent = await _artifacts.ReadRequiredAsync(spec);
             IReadOnlyList<string> checklist = DeriveChecklist(specContent);
             if (checklist.Count == 0)
             {
@@ -72,12 +74,12 @@ internal sealed partial class ExecutionCompatibilityMaterializer(
                 specContent,
             ]);
 
-            await artifacts.WriteAsync(milestonePath, string.Join(Environment.NewLine, milestone) + Environment.NewLine);
+            await _artifacts.WriteAsync(milestonePath, string.Join(Environment.NewLine, milestone) + Environment.NewLine);
             index++;
         }
 
-        await artifacts.WriteAsync(RoadmapArtifactPaths.ExecutionPlan, string.Join(Environment.NewLine, plan) + Environment.NewLine);
-        await provenanceService.RecordCompatibilityArtifactsAsync(milestonePaths, cancellationToken);
+        await _artifacts.WriteAsync(RoadmapArtifactPaths.ExecutionPlan, string.Join(Environment.NewLine, plan) + Environment.NewLine);
+        await _provenanceService.RecordCompatibilityArtifactsAsync(milestonePaths, cancellationToken);
     }
 
     private static IReadOnlyList<string> DeriveChecklist(string specContent)

@@ -20,12 +20,17 @@ internal sealed class PermissionedArtifactOperationStep(
     ILoopConsole console,
     Repository repository)
 {
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly IArtifactStore _store = store;
+    private readonly PlanArtifacts _artifacts = artifacts;
+    private readonly ILoopConsole _console = console;
+    private readonly Repository _repository = repository;
     public async Task RunAsync(ArtifactOperationPlan operation, CancellationToken cancellationToken)
     {
         string? changedGuardSnapshot = null;
         foreach (string read in operation.AllowedReads)
         {
-            string? content = await artifacts.ReadAsync(read);
+            string? content = await _artifacts.ReadAsync(read);
             if (content is null)
             {
                 throw new PlanStepException(
@@ -45,17 +50,17 @@ internal sealed class PermissionedArtifactOperationStep(
                 + "AllowedReads, so there is no pre-turn snapshot to compare against.");
         }
 
-        OperationPermissionProfile profile = operation.ToPermissionProfile(repository);
+        OperationPermissionProfile profile = operation.ToPermissionProfile(_repository);
         ArtifactMutationTransaction transaction =
-            await ArtifactMutationTransaction.CaptureAsync(store, repository, profile);
+            await ArtifactMutationTransaction.CaptureAsync(_store, _repository, profile);
 
         IAgentSession? session = null;
         bool keepChanges = false;
         try
         {
-            var renderer = new ConsoleTurnRenderer(console);
-            session = await runtime.OpenSessionAsync(
-                AgentSpecs.ScopedArtifactOperation(repository, profile),
+            var renderer = new ConsoleTurnRenderer(_console);
+            session = await _runtime.OpenSessionAsync(
+                AgentSpecs.ScopedArtifactOperation(_repository, profile),
                 cancellationToken);
             AgentTurnResult result = await session.RunTurnAsync(
                 operation.Prompt,
@@ -86,7 +91,7 @@ internal sealed class PermissionedArtifactOperationStep(
         {
             if (session is not null)
             {
-                await runtime.CloseSessionAsync(session);
+                await _runtime.CloseSessionAsync(session);
             }
         }
     }
@@ -107,7 +112,7 @@ internal sealed class PermissionedArtifactOperationStep(
     {
         foreach (string requiredOutput in operation.RequiredOutputs)
         {
-            if (!await artifacts.ExistsAsync(requiredOutput))
+            if (!await _artifacts.ExistsAsync(requiredOutput))
             {
                 throw new PlanStepException($"{operation.Label} did not produce {requiredOutput}.");
             }
@@ -115,7 +120,7 @@ internal sealed class PermissionedArtifactOperationStep(
 
         if (operation.RequiredOutputGlob is { } requiredGlob)
         {
-            IReadOnlyList<string> matches = await artifacts.ListAbsoluteAsync(
+            IReadOnlyList<string> matches = await _artifacts.ListAbsoluteAsync(
                 Resolve(requiredGlob.Directory),
                 requiredGlob.Pattern);
             if (matches.Count == 0)
@@ -129,7 +134,7 @@ internal sealed class PermissionedArtifactOperationStep(
                 int total = 0;
                 foreach (string match in matches)
                 {
-                    string content = await artifacts.ReadAbsoluteAsync(match) ?? string.Empty;
+                    string content = await _artifacts.ReadAbsoluteAsync(match) ?? string.Empty;
                     (int matchTotal, _) = MilestoneChecklist.CountCheckboxes(content);
                     total += matchTotal;
                 }
@@ -143,13 +148,13 @@ internal sealed class PermissionedArtifactOperationStep(
 
         if (operation.ChangedGuard is { } changedGuard)
         {
-            if (!await artifacts.ExistsAsync(changedGuard))
+            if (!await _artifacts.ExistsAsync(changedGuard))
             {
                 throw new PlanStepException(
                     $"{operation.Label} left {changedGuard} missing — it must remain present.");
             }
 
-            string changedContent = await artifacts.ReadAsync(changedGuard) ?? string.Empty;
+            string changedContent = await _artifacts.ReadAsync(changedGuard) ?? string.Empty;
             if (string.Equals(changedContent, changedGuardSnapshot ?? string.Empty, StringComparison.Ordinal))
             {
                 throw new PlanStepException(
@@ -159,7 +164,7 @@ internal sealed class PermissionedArtifactOperationStep(
     }
 
     private string Resolve(string relativePath) =>
-        ArtifactPath.ResolveRepositoryPath(repository, relativePath);
+        ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
 
     private static string WithDiagnostics(string message, string? diagnostics) =>
         string.IsNullOrWhiteSpace(diagnostics)

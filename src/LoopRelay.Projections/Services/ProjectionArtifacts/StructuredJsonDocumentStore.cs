@@ -12,9 +12,12 @@ internal sealed class StructuredJsonDocumentStore<TDocument>(
     Func<TDocument, IReadOnlyList<string>> validate)
     where TDocument : class
 {
+    private readonly ProjectionArtifacts _artifacts = artifacts;
+    private readonly Func<TDocument, string?> _getSchemaVersion = getSchemaVersion;
+    private readonly Func<TDocument, IReadOnlyList<string>> _validate = validate;
     public async Task<TDocument?> LoadAsync()
     {
-        string? content = await artifacts.ReadAsync(path);
+        string? content = await _artifacts.ReadAsync(path);
         if (string.IsNullOrWhiteSpace(content))
         {
             return null;
@@ -39,19 +42,19 @@ internal sealed class StructuredJsonDocumentStore<TDocument>(
     {
         Validate(document);
         string content = JsonSerializer.Serialize(document, ProjectionJson.Options) + Environment.NewLine;
-        await artifacts.WriteAsync(path, content);
+        await _artifacts.WriteAsync(path, content);
     }
 
     private void Validate(TDocument document)
     {
-        string? schemaVersion = getSchemaVersion(document);
+        string? schemaVersion = _getSchemaVersion(document);
         if (!string.Equals(schemaVersion, expectedSchemaVersion, StringComparison.Ordinal))
         {
             throw new ProjectionException(
                 $"Canonical structured persistence at {path} has unsupported schema version `{schemaVersion ?? "null"}`; expected `{expectedSchemaVersion}`.");
         }
 
-        IReadOnlyList<string> errors = validate(document);
+        IReadOnlyList<string> errors = _validate(document);
         if (errors.Count > 0)
         {
             throw new ProjectionException(

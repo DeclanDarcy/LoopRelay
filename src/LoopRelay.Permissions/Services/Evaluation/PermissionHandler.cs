@@ -17,12 +17,18 @@ public sealed class PermissionHandler(
     IInvariantGuard guard) : IPermissionHandler
 {
     private static readonly PermissionEvaluationFlow EvaluationFlow = PermissionEvaluationFlow.Default;
+    private readonly ICommandParser _parser = parser;
+    private readonly ICommandCanonicalizer _canonicalizer = canonicalizer;
+    private readonly IFingerprintService _fingerprint = fingerprint;
+    private readonly IPermissionCache _cache = cache;
+    private readonly IPermissionEvaluatorEngine _engine = engine;
+    private readonly IInvariantGuard _guard = guard;
 
     public PermissionResult Evaluate(PermissionRequest request)
     {
         GuardEvaluationFlow(EvaluationFlow);
 
-        ParseResult parsed = parser.Parse(request.ToolName, request.RawCommand);
+        ParseResult parsed = _parser.Parse(request.ToolName, request.RawCommand);
         if (parsed.HasUnknownSyntax)
         {
             return Deny(parsed.UnknownSyntaxReason);
@@ -33,26 +39,26 @@ public sealed class PermissionHandler(
             return Deny("Empty command");
         }
 
-        CanonicalCommand[] canonical = canonicalizer.Canonicalize(parsed.Commands);
-        string key = fingerprint.Compute(
+        CanonicalCommand[] canonical = _canonicalizer.Canonicalize(parsed.Commands);
+        string key = _fingerprint.Compute(
             request.ToolName,
             request.RepoIdentity,
             request.WorkingDirectory,
             canonical);
 
-        if (cache.TryGet(key, out CacheEntry cached))
+        if (_cache.TryGet(key, out CacheEntry cached))
         {
             return new PermissionResult(cached.Decision, cached.Reason);
         }
 
-        EvalResult evaluated = engine.Evaluate(canonical);
-        EvalResult guarded = guard.Enforce(canonical, evaluated);
+        EvalResult evaluated = _engine.Evaluate(canonical);
+        EvalResult guarded = _guard.Enforce(canonical, evaluated);
 
-        cache.Set(key, new CacheEntry(guarded.Decision, guarded.Reason));
+        _cache.Set(key, new CacheEntry(guarded.Decision, guarded.Reason));
         return new PermissionResult(guarded.Decision, guarded.Reason);
     }
 
-    public void ClearCache() => cache.Clear();
+    public void ClearCache() => _cache.Clear();
 
     private static PermissionResult Deny(string? reason) =>
         new(RuleDecision.Deny, reason ?? "Unknown error");

@@ -12,8 +12,8 @@ internal sealed partial class SplitEpicBundleInterpreter(
     IArtifactOutputClassifier? classifier = null,
     IArtifactValidator? validator = null)
 {
-    private readonly IArtifactOutputClassifier classifier = classifier ?? new ArtifactManagement.EpicAuthoringOutputClassifier();
-    private readonly IArtifactValidator validator = validator ?? new EpicArtifactValidator();
+    private readonly IArtifactOutputClassifier _classifier = classifier ?? new ArtifactManagement.EpicAuthoringOutputClassifier();
+    private readonly IArtifactValidator _validator = validator ?? new EpicArtifactValidator();
 
     public SplitEpicBundleInterpretation Interpret(BundleExtractionResult bundle, string rawOutput)
     {
@@ -48,14 +48,14 @@ internal sealed partial class SplitEpicBundleInterpreter(
                 continue;
             }
 
-            ArtifactOutputClassification classification = classifier.Classify(file.Content);
+            ArtifactOutputClassification classification = _classifier.Classify(file.Content);
             if (classification.Kind != ArtifactOutputKind.Promotable)
             {
                 rejectedFiles.Add(new SplitEpicBundleRejection(file.Path, classification.Reason));
                 continue;
             }
 
-            ArtifactValidationResult validation = validator.Validate(file.Content);
+            ArtifactValidationResult validation = _validator.Validate(file.Content);
             if (!validation.IsValid)
             {
                 rejectedFiles.Add(new SplitEpicBundleRejection(

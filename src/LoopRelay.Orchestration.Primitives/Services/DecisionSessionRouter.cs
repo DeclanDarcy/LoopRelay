@@ -13,22 +13,22 @@ namespace LoopRelay.Orchestration.Services;
 /// </summary>
 public sealed class DecisionSessionRouter : IDecisionSessionRouter
 {
-    private readonly DecisionSessionRouterOptions options;
+    private readonly DecisionSessionRouterOptions _options;
 
     public DecisionSessionRouter(DecisionSessionRouterOptions? options = null)
     {
-        this.options = options ?? new DecisionSessionRouterOptions();
+        _options = options ?? new DecisionSessionRouterOptions();
     }
 
     public DecisionRoute Evaluate(RouterInputs inputs)
     {
         // Hard capacity guard: recycle before the window overflows, independent of the economic policy.
-        if (inputs.OccupancyTokens >= options.CapacityGuardTokens)
+        if (inputs.OccupancyTokens >= _options.CapacityGuardTokens)
         {
             return DecisionRoute.Transfer;
         }
 
-        bool economicTransfer = options.Policy switch
+        bool economicTransfer = _options.Policy switch
         {
             // Marginal: do the next cycle only while it is cheaper than the current amortized average (R+C)/n.
             // n == 0 (just-reseeded process) always continues — never recycle a process that has done no work

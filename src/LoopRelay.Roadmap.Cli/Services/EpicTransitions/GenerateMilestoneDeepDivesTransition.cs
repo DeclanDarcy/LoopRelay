@@ -35,14 +35,28 @@ internal sealed class GenerateMilestoneDeepDivesTransition(
     HitlArtifactCapture hitlArtifactCapture,
     ILoopConsole console)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
+    private readonly ProjectionCache _projectionCache = projectionCache;
+    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
+    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
+    private readonly BundleFileExtractor _bundleExtractor = bundleExtractor;
+    private readonly BundleManifestWriter _bundleManifestWriter = bundleManifestWriter;
+    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
+    private readonly InvariantValidator _invariantValidator = invariantValidator;
+    private readonly TransitionJournalStore _journalStore = journalStore;
+    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
+    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
+    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
+    private readonly ILoopConsole _console = console;
     public async Task ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "GenerateMilestoneDeepDivesForEpic";
-        console.Phase("Generate milestone deep dives");
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = await contextBuilder.BuildMilestoneContextAsync(projection.Content);
-        PromptTransitionCompletion completion = await promptTransitionRunner.RunPromotionCandidateAsync(
+        _console.Phase("Generate milestone deep dives");
+        PromptContract contract = _contractRegistry.Get(runtimePrompt);
+        ProjectionCacheResult projection = await _projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
+        string context = await _contextBuilder.BuildMilestoneContextAsync(projection.Content);
+        PromptTransitionCompletion completion = await _promptTransitionRunner.RunPromotionCandidateAsync(
             RoadmapState.ActiveEpicReady,
             RoadmapState.MilestoneSpecsReady,
             runtimePrompt,
@@ -54,28 +68,28 @@ internal sealed class GenerateMilestoneDeepDivesTransition(
 
         try
         {
-            BundleExtractionResult bundle = bundleExtractor.Extract(completion.Output);
+            BundleExtractionResult bundle = _bundleExtractor.Extract(completion.Output);
             if (bundle.IsBlocked || bundle.Files.Count == 0)
             {
                 throw new RoadmapStepException(bundle.BlockedReason ?? "Milestone deep dive output did not contain specs.");
             }
 
-            await bundleExtractor.WriteExtractedFilesAsync(artifacts, bundle);
-            await bundleManifestWriter.WriteAsync($"{RoadmapArtifactPaths.SpecsDirectory}/bundle-manifest.md", runtimePrompt, projection.Definition.ProjectionPath, bundle, "Valid");
+            await _bundleExtractor.WriteExtractedFilesAsync(_artifacts, bundle);
+            await _bundleManifestWriter.WriteAsync($"{RoadmapArtifactPaths.SpecsDirectory}/bundle-manifest.md", runtimePrompt, projection.Definition.ProjectionPath, bundle, "Valid");
             foreach (ExtractedBundleFile file in bundle.Files)
             {
-                await lifecycleStore.UpsertAsync(file.Path, ArtifactLifecycleState.Ready);
-                await hitlArtifactCapture.CaptureAsync(file.Path, file.Content);
+                await _lifecycleStore.UpsertAsync(file.Path, ArtifactLifecycleState.Ready);
+                await _hitlArtifactCapture.CaptureAsync(file.Path, file.Content);
             }
 
-            await executionPreparation.RecordMilestoneSpecsAsync(
+            await _executionPreparation.RecordMilestoneSpecsAsync(
                 bundle.Files.Select(file => file.Path).ToArray(),
                 cancellationToken);
 
-            InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.MilestoneSpecsReady, projectContext.Hash, cancellationToken);
+            InvariantValidationResult invariant = await _invariantValidator.ValidateAsync(RoadmapState.MilestoneSpecsReady, projectContext.Hash, cancellationToken);
             if (!invariant.IsValid)
             {
-                await transitionPersistence.PersistInvariantFailureAndThrowAsync(
+                await _transitionPersistence.PersistInvariantFailureAndThrowAsync(
                     invariant,
                     RoadmapState.ActiveEpicReady,
                     RoadmapState.MilestoneSpecsReady,
@@ -84,7 +98,7 @@ internal sealed class GenerateMilestoneDeepDivesTransition(
             }
 
             DateTimeOffset completed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord(
+            await _journalStore.AppendAsync(new TransitionJournalRecord(
                 "MilestoneSpecsMaterialized",
                 completion.CorrelationId,
                 completed,
@@ -100,7 +114,7 @@ internal sealed class GenerateMilestoneDeepDivesTransition(
                 "Milestone Specs Ready",
                 null,
                 completion.InputSnapshot));
-            await transitionPersistence.SaveAsync(
+            await _transitionPersistence.SaveAsync(
                 RoadmapState.MilestoneSpecsReady,
                 TransitionStatus.Completed,
                 RoadmapState.ActiveEpicReady,
@@ -135,11 +149,11 @@ internal sealed class GenerateMilestoneDeepDivesTransition(
     {
         const string runtimePrompt = "GenerateMilestoneDeepDivesForEpic";
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
-        string evidencePath = await artifacts.WriteNumberedEvidenceAsync(
+        string evidencePath = await _artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "milestone-spec-generation-failed",
             RenderMilestoneSpecGenerationFailure(reason, completion.Output, failedAt));
-        await journalStore.AppendAsync(new TransitionJournalRecord(
+        await _journalStore.AppendAsync(new TransitionJournalRecord(
             "MilestoneSpecGenerationFailed",
             completion.CorrelationId,
             failedAt,
@@ -155,7 +169,7 @@ internal sealed class GenerateMilestoneDeepDivesTransition(
             "Milestone Spec Generation Failed",
             reason,
             completion.InputSnapshot));
-        await transitionPersistence.SaveAsync(
+        await _transitionPersistence.SaveAsync(
             RoadmapState.EvidenceBlocked,
             TransitionStatus.Paused,
             RoadmapState.ActiveEpicReady,

@@ -7,25 +7,25 @@ namespace LoopRelay.Infrastructure.Services.Console;
 /// </summary>
 public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = null) : ILoopConsole
 {
-    private readonly TextWriter outWriter = output ?? System.Console.Out;
-    private readonly TextWriter errWriter = error ?? System.Console.Error;
-    private readonly bool progressInteractive = output is null && error is null && !System.Console.IsErrorRedirected;
+    private readonly TextWriter _outWriter = output ?? System.Console.Out;
+    private readonly TextWriter _errWriter = error ?? System.Console.Error;
+    private readonly bool _progressInteractive = output is null && error is null && !System.Console.IsErrorRedirected;
     private bool midLine;
     private bool progressLineActive;
     private int progressLineLength;
 
-    public bool IsProgressInteractive => progressInteractive;
+    public bool IsProgressInteractive => _progressInteractive;
 
     public void Phase(string phase)
     {
         EnsureLineStart();
-        outWriter.WriteLine($"\n=== {phase} ===");
+        _outWriter.WriteLine($"\n=== {phase} ===");
     }
 
     public void Message(string content)
     {
         EnsureLineStart();
-        outWriter.WriteLine(content);
+        _outWriter.WriteLine(content);
     }
 
     public void Delta(string text)
@@ -35,7 +35,7 @@ public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = n
             return;
         }
 
-        outWriter.Write(text);
+        _outWriter.Write(text);
         midLine = text[^1] != '\n';
     }
 
@@ -47,26 +47,26 @@ public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = n
         }
 
         EnsureLineStart();
-        outWriter.WriteLine($"  {summary}");
+        _outWriter.WriteLine($"  {summary}");
     }
 
     public void Info(string text)
     {
         EnsureLineStart();
-        outWriter.WriteLine($"[ok] {text}");
+        _outWriter.WriteLine($"[ok] {text}");
     }
 
     public void Warn(string text)
     {
         EnsureLineStart();
-        outWriter.WriteLine($"[warn] {text}");
+        _outWriter.WriteLine($"[warn] {text}");
     }
 
     public void Error(string text)
     {
         ProgressComplete();
         EnsureLineStart();
-        errWriter.WriteLine($"[error] {text}");
+        _errWriter.WriteLine($"[error] {text}");
     }
 
     public void Progress(string text)
@@ -76,19 +76,19 @@ public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = n
             return;
         }
 
-        if (!progressInteractive)
+        if (!_progressInteractive)
         {
-            errWriter.WriteLine(text);
+            _errWriter.WriteLine(text);
             return;
         }
 
-        errWriter.Write('\r');
-        errWriter.Write(text);
+        _errWriter.Write('\r');
+        _errWriter.Write(text);
         if (progressLineLength > text.Length)
         {
-            errWriter.Write(new string(' ', progressLineLength - text.Length));
-            errWriter.Write('\r');
-            errWriter.Write(text);
+            _errWriter.Write(new string(' ', progressLineLength - text.Length));
+            _errWriter.Write('\r');
+            _errWriter.Write(text);
         }
 
         progressLineLength = text.Length;
@@ -97,11 +97,11 @@ public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = n
 
     public void ProgressComplete(string? text = null)
     {
-        if (!progressInteractive)
+        if (!_progressInteractive)
         {
             if (!string.IsNullOrWhiteSpace(text))
             {
-                errWriter.WriteLine(text);
+                _errWriter.WriteLine(text);
             }
 
             return;
@@ -109,16 +109,16 @@ public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = n
 
         if (progressLineActive)
         {
-            errWriter.Write('\r');
-            errWriter.Write(new string(' ', progressLineLength));
-            errWriter.Write('\r');
+            _errWriter.Write('\r');
+            _errWriter.Write(new string(' ', progressLineLength));
+            _errWriter.Write('\r');
             progressLineActive = false;
             progressLineLength = 0;
         }
 
         if (!string.IsNullOrWhiteSpace(text))
         {
-            errWriter.WriteLine(text);
+            _errWriter.WriteLine(text);
         }
     }
 
@@ -129,7 +129,7 @@ public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = n
             return;
         }
 
-        outWriter.WriteLine();
+        _outWriter.WriteLine();
         midLine = false;
     }
 }

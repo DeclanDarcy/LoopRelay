@@ -5,7 +5,7 @@ namespace LoopRelay.Roadmap.Cli.Services.Execution;
 
 internal sealed class ExecutionDispositionPolicy
 {
-    private readonly IReadOnlyDictionary<(ExecutionDispositionStatus Status, ExecutionDispositionCommand Command), ExecutionDispositionRoute> routes;
+    private readonly IReadOnlyDictionary<(ExecutionDispositionStatus Status, ExecutionDispositionCommand Command), ExecutionDispositionRoute> _routes;
 
     public ExecutionDispositionPolicy()
         : this(ExecutionDispositionProtocol.Routes)
@@ -67,10 +67,10 @@ internal sealed class ExecutionDispositionPolicy
                 $"Missing statuses: {statusMessage}. Missing commands: {commandMessage}.");
         }
 
-        this.routes = materialized.ToDictionary(route => (route.Status, route.Command));
+        _routes = materialized.ToDictionary(route => (route.Status, route.Command));
     }
 
-    public IReadOnlyList<ExecutionDispositionRoute> AllRoutes => routes.Values.ToArray();
+    public IReadOnlyList<ExecutionDispositionRoute> AllRoutes => _routes.Values.ToArray();
 
     public ExecutionDispositionValidationResult Validate(ExecutionDisposition disposition)
     {
@@ -88,14 +88,14 @@ internal sealed class ExecutionDispositionPolicy
                 $"Execution disposition protocol includes unsupported command `{disposition.NextStep}`.");
         }
 
-        if (routes.TryGetValue((disposition.Status, disposition.NextStep), out ExecutionDispositionRoute? route))
+        if (_routes.TryGetValue((disposition.Status, disposition.NextStep), out ExecutionDispositionRoute? route))
         {
             return ExecutionDispositionValidationResult.Valid(disposition, route);
         }
 
         string expectedCommands = string.Join(
             " or ",
-            routes.Values
+            _routes.Values
                 .Where(candidate => candidate.Status == disposition.Status)
                 .Select(candidate => $"`{ExecutionDispositionProtocol.CommandText(candidate.Command)}`"));
         if (string.IsNullOrWhiteSpace(expectedCommands))

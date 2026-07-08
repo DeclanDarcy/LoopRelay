@@ -5,6 +5,7 @@ namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class DecisionRecorder(Decisions.DecisionLedgerStore decisionLedger)
 {
+    private readonly Decisions.DecisionLedgerStore _decisionLedger = decisionLedger;
     public async Task AppendAsync(
         RoadmapState state,
         string transition,
@@ -14,8 +15,8 @@ internal sealed class DecisionRecorder(Decisions.DecisionLedgerStore decisionLed
         string confidence,
         string rationale)
     {
-        string id = await decisionLedger.NextDecisionIdAsync();
-        await decisionLedger.AppendAsync(new DecisionLedgerEntry(
+        string id = await _decisionLedger.NextDecisionIdAsync();
+        await _decisionLedger.AppendAsync(new DecisionLedgerEntry(
             id,
             DateTimeOffset.UtcNow,
             state,

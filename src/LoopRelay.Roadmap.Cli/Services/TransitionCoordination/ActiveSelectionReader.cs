@@ -14,24 +14,27 @@ internal sealed class ActiveSelectionReader(
     State.RoadmapStateStore stateStore,
     SelectionProvenanceService selectionProvenance)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly State.RoadmapStateStore _stateStore = stateStore;
+    private readonly SelectionProvenanceService _selectionProvenance = selectionProvenance;
     public async Task<string> ReadAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        string selection = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
+        string selection = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
         string projectionPath = RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
-        string? selectionProjection = await artifacts.ReadAsync(projectionPath);
+        string? selectionProjection = await _artifacts.ReadAsync(projectionPath);
         if (string.IsNullOrWhiteSpace(selectionProjection))
         {
             throw new RoadmapStepException("Active selection cannot be used because its SelectNextEpic projection is missing.");
         }
 
-        RoadmapStateDocument? state = await stateStore.LoadAsync();
+        RoadmapStateDocument? state = await _stateStore.LoadAsync();
         IReadOnlyList<RetiredEpic> retiredEpics = state?.RetiredEpics ?? [];
-        TransitionInputSnapshot currentCycle = await selectionProvenance.CaptureCurrentCycleAsync(
+        TransitionInputSnapshot currentCycle = await _selectionProvenance.CaptureCurrentCycleAsync(
             selectionProjection,
             retiredEpics,
             cancellationToken);
-        DerivedArtifactFreshness freshness = await selectionProvenance.EvaluateActiveSelectionFreshnessAsync(
+        DerivedArtifactFreshness freshness = await _selectionProvenance.EvaluateActiveSelectionFreshnessAsync(
             currentCycle,
             retiredEpics,
             cancellationToken);

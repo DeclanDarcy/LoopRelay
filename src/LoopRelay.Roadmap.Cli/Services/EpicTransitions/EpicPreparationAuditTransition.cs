@@ -32,18 +32,31 @@ internal sealed class EpicPreparationAuditTransition(
     ActiveEpicRewriteTransition activeEpicRewriteTransition,
     ILoopConsole console)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
+    private readonly ProjectionCache _projectionCache = projectionCache;
+    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
+    private readonly ActiveSelectionReader _activeSelectionReader = activeSelectionReader;
+    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
+    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
+    private readonly DecisionRecorder _decisionRecorder = decisionRecorder;
+    private readonly State.RoadmapStateStore _stateStore = stateStore;
+    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
+    private readonly SelectionSuperseder _selectionSuperseder = selectionSuperseder;
+    private readonly ActiveEpicRewriteTransition _activeEpicRewriteTransition = activeEpicRewriteTransition;
+    private readonly ILoopConsole _console = console;
     public async Task<EpicPreparationResult> ExecuteAsync(
         SelectionDecision selectionDecision,
         ProjectContext projectContext,
         CancellationToken cancellationToken)
     {
         const string runtimePrompt = "EpicPreparationAudit";
-        console.Phase("Audit selected epic");
-        string selection = await activeSelectionReader.ReadAsync(cancellationToken);
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = contextBuilder.BuildAuditContext(projection.Content, selection);
-        string output = await promptTransitionRunner.RunNormalAsync(
+        _console.Phase("Audit selected epic");
+        string selection = await _activeSelectionReader.ReadAsync(cancellationToken);
+        PromptContract contract = _contractRegistry.Get(runtimePrompt);
+        ProjectionCacheResult projection = await _projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
+        string context = _contextBuilder.BuildAuditContext(projection.Content, selection);
+        string output = await _promptTransitionRunner.RunNormalAsync(
             RoadmapState.ExistingEpicSelected,
             RoadmapState.EpicPreparationAudit,
             runtimePrompt,
@@ -52,20 +65,20 @@ internal sealed class EpicPreparationAuditTransition(
             selection,
             [RoadmapArtifactPaths.AuditEvidenceDirectory],
             cancellationToken);
-        string auditPath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.AuditEvidenceDirectory, "epic-preparation-audit", output);
-        await hitlArtifactCapture.CaptureAsync(auditPath, output);
+        string auditPath = await _artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.AuditEvidenceDirectory, "epic-preparation-audit", output);
+        await _hitlArtifactCapture.CaptureAsync(auditPath, output);
         EpicPreparationAuditDecision decision = new EpicPreparationAuditParser().Parse(output);
-        await decisionRecorder.AppendAsync(RoadmapState.EpicPreparationAudit, runtimePrompt, projection.Definition.ProjectionPath, auditPath, decision.Disposition, decision.Confidence, decision.RecommendedNextStep);
+        await _decisionRecorder.AppendAsync(RoadmapState.EpicPreparationAudit, runtimePrompt, projection.Definition.ProjectionPath, auditPath, decision.Disposition, decision.Confidence, decision.RecommendedNextStep);
 
         if (decision.Disposition == "Retire")
         {
-            RoadmapStateDocument? existing = await stateStore.LoadAsync();
+            RoadmapStateDocument? existing = await _stateStore.LoadAsync();
             DateTimeOffset retiredAt = DateTimeOffset.UtcNow;
             RetiredEpic retired = RetiredEpic.FromSelectionAndAudit(selectionDecision, decision, auditPath, retiredAt);
             IReadOnlyList<RetiredEpic> retiredEpics = RetiredEpic.Upsert(existing?.RetiredEpics ?? [], retired);
-            await decisionRecorder.AppendAsync(RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", decision.Confidence, $"{retired.IdentityKind} {retired.StableIdentity}: {decision.PrimaryReason}");
-            await transitionPersistence.SaveAsync(RoadmapState.RetireEpic, TransitionStatus.Completed, RoadmapState.EpicPreparationAudit, RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", retiredAt, retiredAt, retiredEpics, null);
-            await selectionSuperseder.SupersedeForRetiredEpicAsync();
+            await _decisionRecorder.AppendAsync(RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", decision.Confidence, $"{retired.IdentityKind} {retired.StableIdentity}: {decision.PrimaryReason}");
+            await _transitionPersistence.SaveAsync(RoadmapState.RetireEpic, TransitionStatus.Completed, RoadmapState.EpicPreparationAudit, RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", retiredAt, retiredAt, retiredEpics, null);
+            await _selectionSuperseder.SupersedeForRetiredEpicAsync();
             return EpicPreparationResult.Retired;
         }
 
@@ -76,11 +89,11 @@ internal sealed class EpicPreparationAuditTransition(
 
         if (decision.Disposition == "Realign")
         {
-            ArtifactPromotionResult promotion = await activeEpicRewriteTransition.ExecuteAsync("RealignEpic", RoadmapState.RealignEpic, projectContext, auditPath, cancellationToken);
+            ArtifactPromotionResult promotion = await _activeEpicRewriteTransition.ExecuteAsync("RealignEpic", RoadmapState.RealignEpic, projectContext, auditPath, cancellationToken);
             return promotion.Promoted ? EpicPreparationResult.ActiveEpicReady : EpicPreparationResult.Blocked;
         }
 
-        ArtifactPromotionResult reimaginePromotion = await activeEpicRewriteTransition.ExecuteAsync("ReimagineEpic", RoadmapState.ReimagineEpic, projectContext, auditPath, cancellationToken);
+        ArtifactPromotionResult reimaginePromotion = await _activeEpicRewriteTransition.ExecuteAsync("ReimagineEpic", RoadmapState.ReimagineEpic, projectContext, auditPath, cancellationToken);
         return reimaginePromotion.Promoted ? EpicPreparationResult.ActiveEpicReady : EpicPreparationResult.Blocked;
     }
 }

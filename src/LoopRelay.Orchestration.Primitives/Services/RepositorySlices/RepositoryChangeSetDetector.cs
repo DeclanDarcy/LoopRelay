@@ -9,6 +9,8 @@ namespace LoopRelay.Orchestration.Services.RepositorySlices;
 
 public sealed class RepositoryChangeSetDetector(IProcessRunner processRunner, Repository repository)
 {
+    private readonly IProcessRunner _processRunner = processRunner;
+    private readonly Repository _repository = repository;
     public async Task<RepositorySliceSnapshot> CaptureSnapshotAsync(
         string executionSliceId,
         DateTimeOffset? capturedAtUtc = null)
@@ -24,7 +26,7 @@ public sealed class RepositoryChangeSetDetector(IProcessRunner processRunner, Re
         var files = new List<RepositoryFileSnapshotEntry>(statusEntries.Count);
         foreach (GitStatusEntry status in statusEntries.OrderBy(entry => entry.Path, StringComparer.Ordinal))
         {
-            string fullPath = ArtifactPath.ResolveRepositoryPath(repository, status.Path);
+            string fullPath = ArtifactPath.ResolveRepositoryPath(_repository, status.Path);
             bool fileExists = File.Exists(fullPath);
             bool directoryExists = Directory.Exists(fullPath);
             long? size = fileExists ? new FileInfo(fullPath).Length : null;
@@ -55,10 +57,10 @@ public sealed class RepositoryChangeSetDetector(IProcessRunner processRunner, Re
 
     private async Task<IReadOnlyList<GitStatusEntry>> GetStatusEntriesAsync()
     {
-        ProcessRunResult result = await processRunner.RunAsync(
+        ProcessRunResult result = await _processRunner.RunAsync(
             "git",
             ["status", "--porcelain", "--untracked-files=all"],
-            repository.Path);
+            _repository.Path);
         if (result.ExitCode != 0)
         {
             throw new RepositoryChangeSetDetectionException($"git status failed: {result.StandardError}");
@@ -69,10 +71,10 @@ public sealed class RepositoryChangeSetDetector(IProcessRunner processRunner, Re
 
     private async Task<IReadOnlyList<RepositoryGitDiffNameStatus>> GetDiffMetadataAsync()
     {
-        ProcessRunResult result = await processRunner.RunAsync(
+        ProcessRunResult result = await _processRunner.RunAsync(
             "git",
             ["diff", "--name-status", "--find-renames", "HEAD", "--"],
-            repository.Path);
+            _repository.Path);
         if (result.ExitCode != 0)
         {
             throw new RepositoryChangeSetDetectionException($"git diff --name-status failed: {result.StandardError}");

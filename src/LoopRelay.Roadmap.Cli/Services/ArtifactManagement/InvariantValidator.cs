@@ -24,8 +24,16 @@ internal sealed class InvariantValidator(
     SplitFamilyStore splitFamilyStore,
     ExecutionPreparationProvenanceService executionPreparation)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly Projections.ProjectContextLoader _projectContextLoader = projectContextLoader;
+    private readonly ProjectionRegistry _projectionRegistry = projectionRegistry;
+    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
+    private readonly ProjectionManifestStore _manifestStore = manifestStore;
+    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
+    private readonly SplitFamilyStore _splitFamilyStore = splitFamilyStore;
+    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     private readonly EpicArtifactValidator epicValidator = new();
-    private readonly ProjectionProvenanceFactory provenanceFactory = new(projectionRegistry);
+    private readonly ProjectionProvenanceFactory _provenanceFactory = new(projectionRegistry);
 
     public async Task<InvariantValidationResult> ValidateAsync(
         RoadmapState state,
@@ -34,7 +42,7 @@ internal sealed class InvariantValidator(
     {
         try
         {
-            ProjectContext projectContext = await projectContextLoader.LoadAsync(cancellationToken);
+            ProjectContext projectContext = await _projectContextLoader.LoadAsync(cancellationToken);
             if (!string.Equals(projectContext.Hash, expectedProjectContextHash, StringComparison.Ordinal))
             {
                 return await FailAsync(
@@ -45,15 +53,15 @@ internal sealed class InvariantValidator(
                     "Restore the Project Context evidence to the preflight hash or restart the workflow with the current Project Context.");
             }
 
-            foreach (ProjectionDefinition projection in projectionRegistry.All)
+            foreach (ProjectionDefinition projection in _projectionRegistry.All)
             {
-                _ = contractRegistry.Get(projection.RuntimePromptName);
+                _ = _contractRegistry.Get(projection.RuntimePromptName);
             }
 
-            ProjectionManifest manifest = await manifestStore.LoadAsync();
-            foreach (ProjectionDefinition projection in projectionRegistry.All)
+            ProjectionManifest manifest = await _manifestStore.LoadAsync();
+            foreach (ProjectionDefinition projection in _projectionRegistry.All)
             {
-                if (!await artifacts.ExistsAsync(projection.ProjectionPath))
+                if (!await _artifacts.ExistsAsync(projection.ProjectionPath))
                 {
                     continue;
                 }
@@ -80,7 +88,7 @@ internal sealed class InvariantValidator(
                 }
 
                 ProjectionFreshness freshness = ProjectionFreshnessEvaluator.Evaluate(
-                    provenanceFactory.Create(projection, projectContext),
+                    _provenanceFactory.Create(projection, projectContext),
                     entry);
                 if (!freshness.IsFresh)
                 {
@@ -92,7 +100,7 @@ internal sealed class InvariantValidator(
                 }
             }
 
-            IReadOnlyList<ArtifactLifecycleEntry> lifecycle = await lifecycleStore.LoadAsync();
+            IReadOnlyList<ArtifactLifecycleEntry> lifecycle = await _lifecycleStore.LoadAsync();
             int activeEpics = lifecycle.Count(entry =>
                 (entry.State is ArtifactLifecycleState.Ready or ArtifactLifecycleState.Executing) &&
                 (string.Equals(entry.Path, RoadmapArtifactPaths.ActiveEpic, StringComparison.OrdinalIgnoreCase) ||
@@ -127,9 +135,9 @@ internal sealed class InvariantValidator(
 
             if (state is RoadmapState.ExecutionPromptReady or RoadmapState.ExecutionLoop)
             {
-                if (!await artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic) ||
-                    !await artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext) ||
-                    !await artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt))
+                if (!await _artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic) ||
+                    !await _artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext) ||
+                    !await _artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt))
                 {
                     return await FailAsync(
                         state,
@@ -161,7 +169,7 @@ internal sealed class InvariantValidator(
                     $"Split child promotion target is not a valid split child epic path: {childEpicPath}.");
             }
 
-            bool exists = await splitFamilyStore.ExistsForChildAsync(childEpicPath);
+            bool exists = await _splitFamilyStore.ExistsForChildAsync(childEpicPath);
             if (!exists)
             {
                 return await FailAsync(
@@ -171,7 +179,7 @@ internal sealed class InvariantValidator(
                     $"Split child {childEpicPath} has no split-family artifact.");
             }
 
-            string content = await artifacts.ReadRequiredAsync(childEpicPath);
+            string content = await _artifacts.ReadRequiredAsync(childEpicPath);
             ArtifactValidationResult validation = epicValidator.Validate(content);
             return validation.IsValid
                 ? InvariantValidationResult.Valid()
@@ -198,7 +206,7 @@ internal sealed class InvariantValidator(
             return InvariantValidationResult.Valid();
         }
 
-        if (!await artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic))
+        if (!await _artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic))
         {
             return await FailAsync(
                 state,
@@ -208,7 +216,7 @@ internal sealed class InvariantValidator(
                 "Restore or promote an active epic before continuing.");
         }
 
-        string content = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
+        string content = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
         ArtifactValidationResult validation = epicValidator.Validate(content);
         return validation.IsValid
             ? InvariantValidationResult.Valid()
@@ -255,7 +263,7 @@ internal sealed class InvariantValidator(
             return InvariantValidationResult.Valid();
         }
 
-        ExecutionPreparationReadiness readiness = await executionPreparation.EvaluateReadinessAsync(
+        ExecutionPreparationReadiness readiness = await _executionPreparation.EvaluateReadinessAsync(
             requireSpecs,
             requireOperationalContext,
             requireExecutionPrompt,
@@ -284,11 +292,11 @@ internal sealed class InvariantValidator(
     private async Task<InvariantValidationResult> ValidateSpecsBelongToActiveEpicAsync(RoadmapState state)
     {
         IReadOnlyList<string> specs = RequiresMilestoneSpecs(state)
-            ? await executionPreparation.RequireFreshMilestoneSpecPathsAsync()
+            ? await _executionPreparation.RequireFreshMilestoneSpecPathsAsync()
             : [];
         foreach (string spec in specs)
         {
-            string content = await artifacts.ReadRequiredAsync(spec);
+            string content = await _artifacts.ReadRequiredAsync(spec);
             string? declaredEpicPath = FindDeclaredEpicPath(content);
             if (declaredEpicPath is not null &&
                 !string.Equals(declaredEpicPath, RoadmapArtifactPaths.ActiveEpic, StringComparison.OrdinalIgnoreCase))
@@ -355,7 +363,7 @@ internal sealed class InvariantValidator(
             "None",
             details,
             createdAt);
-        string path = await artifacts.WriteNumberedEvidenceAsync(
+        string path = await _artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.OrchestrationEvidenceDirectory,
             "invariant-failure",
             content);

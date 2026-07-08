@@ -18,14 +18,19 @@ internal sealed class RoadmapExecutionBridge(
     ILoopConsole console,
     RoadmapExecutionOptions? options = null) : IRoadmapExecutionBridge
 {
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly Repository _repository = repository;
+    private readonly ILoopConsole _console = console;
+    private readonly RoadmapExecutionOptions? _options = options;
     public async Task<RoadmapExecutionTransportResult> RunAsync(CancellationToken cancellationToken)
     {
-        RoadmapExecutionOptions effectiveOptions = options ?? RoadmapExecutionOptions.Default;
+        RoadmapExecutionOptions effectiveOptions = _options ?? RoadmapExecutionOptions.Default;
         effectiveOptions.Validate();
 
-        string prompt = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ExecutionPrompt);
-        var renderer = new ConsoleTurnRenderer(console);
-        AgentSessionSpec spec = AgentSpecs.ExecutionBridge(repository, effectiveOptions);
+        string prompt = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ExecutionPrompt);
+        var renderer = new ConsoleTurnRenderer(_console);
+        AgentSessionSpec spec = AgentSpecs.ExecutionBridge(_repository, effectiveOptions);
         bool persistent = spec.Sandbox.RequiresApproval;
         string evidencePath = await WriteExecutionPostureEvidenceAsync(
             spec,
@@ -38,20 +43,20 @@ internal sealed class RoadmapExecutionBridge(
             IAgentSession? session = null;
             try
             {
-                session = await runtime.OpenSessionAsync(spec, cancellationToken);
+                session = await _runtime.OpenSessionAsync(spec, cancellationToken);
                 result = await session.RunTurnAsync(prompt, renderer.Stream, cancellationToken);
             }
             finally
             {
                 if (session is not null)
                 {
-                    await runtime.CloseSessionAsync(session);
+                    await _runtime.CloseSessionAsync(session);
                 }
             }
         }
         else
         {
-            result = await runtime.RunOneShotAsync(
+            result = await _runtime.RunOneShotAsync(
                 spec,
                 prompt,
                 renderer.Stream,
@@ -91,7 +96,7 @@ internal sealed class RoadmapExecutionBridge(
             | Recorded At | {DateTimeOffset.UtcNow:O} |
             """;
 
-        return await artifacts.WriteNumberedEvidenceAsync(
+        return await _artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.ExecutionEvidenceDirectory,
             "execution-trust-posture",
             content);

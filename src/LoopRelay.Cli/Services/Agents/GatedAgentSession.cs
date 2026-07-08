@@ -24,6 +24,11 @@ internal sealed class GatedAgentSession(
     DateTimeOffset openedAtUtc,
     InputWaitObservationStore? inputWaitObservations = null) : IAgentSession
 {
+    private readonly IAgentSession _inner = inner;
+    private readonly IUsageLimitDetector _usageLimit = usageLimit;
+    private readonly ISessionTelemetryRecorder _recorder = recorder;
+    private readonly DateTimeOffset _openedAtUtc = openedAtUtc;
+    private readonly InputWaitObservationStore? _inputWaitObservations = inputWaitObservations;
     /// <summary>Wait-and-retry attempts per logical turn before the failure propagates. Covers cascading
     /// windows (a 5h reset followed by a weekly limit) without masking a persistently broken codex. Lives
     /// here — not on the detector — because the seam that runs the retry loop owns the retry policy.</summary>
@@ -31,16 +36,16 @@ internal sealed class GatedAgentSession(
 
     private string? cachedLogPath;
 
-    internal IAgentSession Inner => inner;
+    internal IAgentSession Inner => _inner;
 
-    public SessionIdentity SessionId => inner.SessionId;
-    public string RepositoryId => inner.RepositoryId;
-    public SessionRole Role => inner.Role;
-    public AgentSessionMode Mode => inner.Mode;
-    public AgentProcessState State => inner.State;
-    public int CompletedTurns => inner.CompletedTurns;
-    public AgentTokenUsage TotalUsage => inner.TotalUsage;
-    public string? ThreadId => inner.ThreadId;
+    public SessionIdentity SessionId => _inner.SessionId;
+    public string RepositoryId => _inner.RepositoryId;
+    public SessionRole Role => _inner.Role;
+    public AgentSessionMode Mode => _inner.Mode;
+    public AgentProcessState State => _inner.State;
+    public int CompletedTurns => _inner.CompletedTurns;
+    public AgentTokenUsage TotalUsage => _inner.TotalUsage;
+    public string? ThreadId => _inner.ThreadId;
 
     public async Task<AgentTurnResult> RunTurnAsync(
         string prompt,
@@ -50,14 +55,14 @@ internal sealed class GatedAgentSession(
         AgentTurnResult result;
         for (int attempt = 0; ; attempt++)
         {
-            result = await inner.RunTurnAsync(prompt, onChunk, cancellationToken);
-            cachedLogPath = await recorder.RecordTurnAsync(
-                repoName, workingDirectory, inner.SessionId, inner.Role, openedAtUtc,
+            result = await _inner.RunTurnAsync(prompt, onChunk, cancellationToken);
+            cachedLogPath = await _recorder.RecordTurnAsync(
+                repoName, workingDirectory, _inner.SessionId, _inner.Role, _openedAtUtc,
                 cachedLogPath, result,
-                inputWaitObservations?.Take(inner.SessionId, result.TurnIndex),
+                _inputWaitObservations?.Take(_inner.SessionId, result.TurnIndex),
                 cancellationToken);
 
-            UsageLimitHit? hit = usageLimit.Detect(result);
+            UsageLimitHit? hit = _usageLimit.Detect(result);
             if (hit is null)
             {
                 break;
@@ -65,7 +70,7 @@ internal sealed class GatedAgentSession(
 
             if (attempt >= MaxUsageLimitRetriesPerTurn)
             {
-                usageLimit.WarnRetriesExhausted(MaxUsageLimitRetriesPerTurn);
+                _usageLimit.WarnRetriesExhausted(MaxUsageLimitRetriesPerTurn);
                 break;
             }
 
@@ -73,14 +78,14 @@ internal sealed class GatedAgentSession(
             // died the session is unrecoverable: a retry would throw OperationCanceledException off the
             // dead session's linked token, which LoopRunner misreads as user cancellation. Retry only a
             // demonstrably live session, re-checking after the potentially multi-day wait.
-            if (inner.State != AgentProcessState.Running)
+            if (_inner.State != AgentProcessState.Running)
             {
                 break;
             }
 
-            await usageLimit.WaitOutAsync(hit, cancellationToken);
+            await _usageLimit.WaitOutAsync(hit, cancellationToken);
 
-            if (inner.State != AgentProcessState.Running)
+            if (_inner.State != AgentProcessState.Running)
             {
                 break;
             }
@@ -89,7 +94,7 @@ internal sealed class GatedAgentSession(
         return result;
     }
 
-    public Task CancelAsync(CancellationToken cancellationToken = default) => inner.CancelAsync(cancellationToken);
+    public Task CancelAsync(CancellationToken cancellationToken = default) => _inner.CancelAsync(cancellationToken);
 
-    public ValueTask DisposeAsync() => inner.DisposeAsync();
+    public ValueTask DisposeAsync() => _inner.DisposeAsync();
 }

@@ -12,18 +12,21 @@ internal sealed class OperationalContextGenerator(
     ArtifactLifecycleStore lifecycleStore,
     ExecutionPreparationProvenanceService provenanceService)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
+    private readonly ExecutionPreparationProvenanceService _provenanceService = provenanceService;
     public async Task<string> GenerateAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        IReadOnlyList<string> specs = await provenanceService.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
+        string activeEpic = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
+        IReadOnlyList<string> specs = await _provenanceService.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
         if (specs.Count == 0)
         {
             throw new RoadmapStepException("Cannot generate operational context without milestone specs.");
         }
 
-        string ledger = await artifacts.ReadAsync(RoadmapArtifactPaths.DecisionLedgerJson) ?? "No roadmap decisions recorded.";
-        IReadOnlyList<ArtifactLifecycleEntry> lifecycle = await lifecycleStore.LoadAsync();
+        string ledger = await _artifacts.ReadAsync(RoadmapArtifactPaths.DecisionLedgerJson) ?? "No roadmap decisions recorded.";
+        IReadOnlyList<ArtifactLifecycleEntry> lifecycle = await _lifecycleStore.LoadAsync();
 
         var lines = new List<string>
         {
@@ -41,7 +44,7 @@ internal sealed class OperationalContextGenerator(
         {
             lines.Add($"### {spec}");
             lines.Add(string.Empty);
-            lines.Add(await artifacts.ReadRequiredAsync(spec));
+            lines.Add(await _artifacts.ReadRequiredAsync(spec));
             lines.Add(string.Empty);
         }
 
@@ -63,9 +66,9 @@ internal sealed class OperationalContextGenerator(
         }
 
         string content = EnsureNoRawProjectContext(string.Join(Environment.NewLine, lines) + Environment.NewLine);
-        await artifacts.WriteAsync(RoadmapArtifactPaths.OperationalContext, content);
-        await provenanceService.RecordOperationalContextAsync(content, cancellationToken);
-        await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.OperationalContext, ArtifactLifecycleState.Ready);
+        await _artifacts.WriteAsync(RoadmapArtifactPaths.OperationalContext, content);
+        await _provenanceService.RecordOperationalContextAsync(content, cancellationToken);
+        await _lifecycleStore.UpsertAsync(RoadmapArtifactPaths.OperationalContext, ArtifactLifecycleState.Ready);
         return content;
     }
 

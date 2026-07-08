@@ -23,6 +23,7 @@ public sealed class ProjectionValidator(ProjectionDefinitionRegistry registry)
         "## Codebase Facts",
         "## Runtime State",
     ];
+    private readonly ProjectionDefinitionRegistry _registry = registry;
 
     public ProjectionValidationResult Validate(string runtimePromptName, string content)
     {
@@ -31,7 +32,7 @@ public sealed class ProjectionValidator(ProjectionDefinitionRegistry registry)
             return ProjectionValidationResult.Invalid("Projection content is empty.");
         }
 
-        ProjectionDefinition definition = registry.Get(runtimePromptName);
+        ProjectionDefinition definition = _registry.Get(runtimePromptName);
         if (!content.Contains(definition.RequiredTitle, StringComparison.Ordinal))
         {
             return ProjectionValidationResult.Invalid($"Projection is missing required title `{definition.RequiredTitle}`.");

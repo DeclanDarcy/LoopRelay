@@ -12,6 +12,7 @@ namespace LoopRelay.Orchestration.Services.NonImplementationLedger;
 
 public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
 {
+    private readonly IArtifactStore _artifacts = artifacts;
     public const int SchemaVersion = NonImplementationReviewLedgerDocument.CurrentSchemaVersion;
 
     public const string LedgerPath = OrchestrationArtifactPaths.NonImplementationLedger;
@@ -32,7 +33,7 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
 
     public async Task<NonImplementationReviewLedgerDocument> LoadOrCreateAsync()
     {
-        string? content = await artifacts.ReadAsync(LedgerPath);
+        string? content = await _artifacts.ReadAsync(LedgerPath);
         if (content is null)
         {
             return NonImplementationReviewLedgerDocument.Empty();
@@ -48,7 +49,7 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
         document = Normalize(document);
         Validate(document);
         string content = JsonSerializer.Serialize(document, JsonOptions);
-        await artifacts.WriteAsync(LedgerPath, content + Environment.NewLine);
+        await _artifacts.WriteAsync(LedgerPath, content + Environment.NewLine);
     }
 
     public async Task<IReadOnlyList<NonImplementationReviewLedgerEntry>> LoadConfirmedNonImplementationAsync()

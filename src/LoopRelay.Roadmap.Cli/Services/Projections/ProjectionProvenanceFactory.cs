@@ -5,8 +5,9 @@ namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal sealed class ProjectionProvenanceFactory(ProjectionRegistry registry)
 {
+    private readonly ProjectionRegistry _registry = registry;
     public ProjectionProvenance Create(string runtimePromptName, ProjectContext projectContext) =>
-        Create(registry.Get(runtimePromptName), projectContext);
+        Create(_registry.Get(runtimePromptName), projectContext);
 
     public ProjectionProvenance Create(ProjectionDefinition definition, ProjectContext projectContext) =>
         ProjectionProvenance.Create(

@@ -22,6 +22,12 @@ internal sealed class RoadmapUnblockPlanner(
     CompletionCertificationRouter completionRouter,
     ExecutionPreparationProvenanceService executionPreparation)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly Projections.ProjectContextLoader _projectContextLoader = projectContextLoader;
+    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
+    private readonly CompletionCertificationPolicy _completionPolicy = completionPolicy;
+    private readonly CompletionCertificationRouter _completionRouter = completionRouter;
+    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     private readonly ExecutionDispositionParser executionDispositionParser = new();
     private readonly ExecutionDispositionPolicy executionDispositionPolicy = new();
 
@@ -96,8 +102,8 @@ internal sealed class RoadmapUnblockPlanner(
         ProjectContext projectContext;
         try
         {
-            projectContext = await projectContextLoader.LoadAsync(cancellationToken);
-            await contractRegistry.EmitSnapshotAsync(artifacts);
+            projectContext = await _projectContextLoader.LoadAsync(cancellationToken);
+            await _contractRegistry.EmitSnapshotAsync(_artifacts);
         }
         catch (RoadmapStepException exception)
         {
@@ -112,7 +118,7 @@ internal sealed class RoadmapUnblockPlanner(
 
         try
         {
-            _ = await artifacts.ReadRoadmapSourceAsync();
+            _ = await _artifacts.ReadRoadmapSourceAsync();
         }
         catch (RoadmapStepException exception)
         {
@@ -191,7 +197,7 @@ internal sealed class RoadmapUnblockPlanner(
                 "Restore the original execution evidence relationship before running unblock again.");
         }
 
-        string? content = await artifacts.ReadAsync(evidencePath);
+        string? content = await _artifacts.ReadAsync(evidencePath);
         if (string.IsNullOrWhiteSpace(content))
         {
             return RoadmapUnblockPlan.Failed(
@@ -281,7 +287,7 @@ internal sealed class RoadmapUnblockPlanner(
                 "Restore the original completion evaluation relationship before running unblock again.");
         }
 
-        string? content = await artifacts.ReadAsync(evaluationPath);
+        string? content = await _artifacts.ReadAsync(evaluationPath);
         if (string.IsNullOrWhiteSpace(content))
         {
             return RoadmapUnblockPlan.Failed(
@@ -296,7 +302,7 @@ internal sealed class RoadmapUnblockPlanner(
         try
         {
             CompletionEvaluationDecision decision = new CompletionEvaluationParser().Parse(content);
-            CompletionCertificationPolicyResult certification = completionPolicy.Validate(decision);
+            CompletionCertificationPolicyResult certification = _completionPolicy.Validate(decision);
             if (!certification.IsValid)
             {
                 return RoadmapUnblockPlan.Failed(
@@ -308,7 +314,7 @@ internal sealed class RoadmapUnblockPlanner(
                     "Correct the completion evaluation fields and run `unblock` again.");
             }
 
-            CompletionCertificationRoute route = completionRouter.Route(decision);
+            CompletionCertificationRoute route = _completionRouter.Route(decision);
             return RoadmapUnblockPlan.CompletionCertificationRecovered(
                 state.CurrentState,
                 state.TransitionIntent,
@@ -348,7 +354,7 @@ internal sealed class RoadmapUnblockPlanner(
         IReadOnlyList<RoadmapUnblockEvidence> baseEvidence = await HashExistingEvidenceAsync(state.TransitionIntent.EvidencePaths);
         try
         {
-            projectContext = await projectContextLoader.LoadAsync(cancellationToken);
+            projectContext = await _projectContextLoader.LoadAsync(cancellationToken);
         }
         catch (RoadmapStepException exception)
         {
@@ -401,7 +407,7 @@ internal sealed class RoadmapUnblockPlanner(
     {
         try
         {
-            ProjectContext context = await projectContextLoader.LoadAsync(cancellationToken);
+            ProjectContext context = await _projectContextLoader.LoadAsync(cancellationToken);
             return new ProjectContextHealth(true, "Project Context is valid.", context.Hash);
         }
         catch (RoadmapStepException exception)
@@ -430,7 +436,7 @@ internal sealed class RoadmapUnblockPlanner(
         var evidence = new List<RoadmapUnblockEvidence>();
         foreach (string path in paths.Distinct(StringComparer.Ordinal))
         {
-            string? content = await artifacts.ReadAsync(path);
+            string? content = await _artifacts.ReadAsync(path);
             evidence.Add(new RoadmapUnblockEvidence(
                 path,
                 "TransitionIntentEvidence",
@@ -446,7 +452,7 @@ internal sealed class RoadmapUnblockPlanner(
         var evidence = new List<RoadmapUnblockEvidence>();
         foreach (string path in RoadmapArtifactPaths.ProjectContextSourceFiles)
         {
-            string? content = await artifacts.ReadAsync(path);
+            string? content = await _artifacts.ReadAsync(path);
             if (!string.IsNullOrWhiteSpace(content))
             {
                 evidence.Add(new RoadmapUnblockEvidence(path, "ProjectContextSource", RoadmapHash.Sha256(content), "Present"));
@@ -459,10 +465,10 @@ internal sealed class RoadmapUnblockPlanner(
     private async Task<IReadOnlyList<RoadmapUnblockEvidence>> HashRoadmapSourceAsync()
     {
         var evidence = new List<RoadmapUnblockEvidence>();
-        IReadOnlyList<string> roadmapFiles = await artifacts.ListAsync(RoadmapArtifactPaths.RoadmapDirectory, "*.md");
+        IReadOnlyList<string> roadmapFiles = await _artifacts.ListAsync(RoadmapArtifactPaths.RoadmapDirectory, "*.md");
         foreach (string path in roadmapFiles.Order(StringComparer.Ordinal))
         {
-            string? content = await artifacts.ReadAsync(path);
+            string? content = await _artifacts.ReadAsync(path);
             if (!string.IsNullOrWhiteSpace(content))
             {
                 evidence.Add(new RoadmapUnblockEvidence(path, "RoadmapSource", RoadmapHash.Sha256(content), "Present"));
@@ -483,7 +489,7 @@ internal sealed class RoadmapUnblockPlanner(
             RoadmapArtifactPaths.ExecutionPlan,
         })
         {
-            string? content = await artifacts.ReadAsync(path);
+            string? content = await _artifacts.ReadAsync(path);
             evidence.Add(new RoadmapUnblockEvidence(
                 path,
                 "ExecutionReadiness",
@@ -491,10 +497,10 @@ internal sealed class RoadmapUnblockPlanner(
                 string.IsNullOrWhiteSpace(content) ? "MissingOrEmpty" : "Present"));
         }
 
-        IReadOnlyList<string> specs = await executionPreparation.RequireFreshMilestoneSpecPathsAsync();
+        IReadOnlyList<string> specs = await _executionPreparation.RequireFreshMilestoneSpecPathsAsync();
         foreach (string spec in specs)
         {
-            string content = await artifacts.ReadRequiredAsync(spec);
+            string content = await _artifacts.ReadRequiredAsync(spec);
             evidence.Add(new RoadmapUnblockEvidence(spec, "MilestoneSpec", RoadmapHash.Sha256(content), "Present"));
         }
 
@@ -502,7 +508,7 @@ internal sealed class RoadmapUnblockPlanner(
             .ExpectedCompatibilityMilestonePaths(specs.Count);
         foreach (string milestone in milestones)
         {
-            string? content = await artifacts.ReadAsync(milestone);
+            string? content = await _artifacts.ReadAsync(milestone);
             evidence.Add(new RoadmapUnblockEvidence(
                 milestone,
                 "ExecutionCompatibility",

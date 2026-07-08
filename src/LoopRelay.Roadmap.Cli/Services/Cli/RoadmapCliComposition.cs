@@ -36,7 +36,7 @@ namespace LoopRelay.Roadmap.Cli.Services.Cli;
 
 internal sealed class RoadmapCliComposition : IAsyncDisposable
 {
-    private readonly ServiceProvider provider;
+    private readonly ServiceProvider _provider;
 
     private RoadmapCliComposition(
         ServiceProvider provider,
@@ -44,7 +44,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         IAgentExecutableResolver executableResolver,
         RoadmapStateMachine machine)
     {
-        this.provider = provider;
+        _provider = provider;
         Console = console;
         ExecutableResolver = executableResolver;
         Machine = machine;
@@ -319,11 +319,11 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (provider.GetService<AgentSessionRegistry>() is { } registry)
+        if (_provider.GetService<AgentSessionRegistry>() is { } registry)
         {
             await registry.DisposeAsync();
         }
 
-        await provider.DisposeAsync();
+        await _provider.DisposeAsync();
     }
 }

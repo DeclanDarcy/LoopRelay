@@ -12,11 +12,13 @@ internal sealed class RoadmapPromptContextBuilder(
     RoadmapArtifacts artifacts,
     ExecutionPreparationProvenanceService executionPreparation)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     private const string ProjectContextMarker = "<!-- BEGIN PROJECT-CONTEXT FILE:";
 
     public async Task<string> BuildSelectionContextAsync(string projectionContent, IReadOnlyList<RetiredEpic> retiredEpics)
     {
-        string completion = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
+        string completion = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
         string roadmapSources = await RenderRoadmapSourceReferencesAsync();
         return ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
@@ -50,7 +52,7 @@ internal sealed class RoadmapPromptContextBuilder(
 
     public async Task<string> BuildMilestoneContextAsync(string projectionContent)
     {
-        string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
+        string activeEpic = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
         return ValidateNoRawProjectContext(Build([
             Section("Projection Content", projectionContent),
             Section("Active Epic", activeEpic),
@@ -59,9 +61,9 @@ internal sealed class RoadmapPromptContextBuilder(
 
     public async Task<string> BuildCompletionEvaluationContextAsync(string projectionContent, string executionEvidencePath)
     {
-        string activeEpic = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        string executionEvidence = await artifacts.ReadRequiredAsync(executionEvidencePath);
-        IReadOnlyList<string> specs = await executionPreparation.RequireFreshMilestoneSpecPathsAsync();
+        string activeEpic = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
+        string executionEvidence = await _artifacts.ReadRequiredAsync(executionEvidencePath);
+        IReadOnlyList<string> specs = await _executionPreparation.RequireFreshMilestoneSpecPathsAsync();
         var sections = new List<ContextSection>
         {
             Section("Projection Content", projectionContent),
@@ -72,7 +74,7 @@ internal sealed class RoadmapPromptContextBuilder(
 
         foreach (string spec in specs.Order(StringComparer.Ordinal))
         {
-            sections.Add(Section($"Milestone Spec: {spec}", await artifacts.ReadRequiredAsync(spec)));
+            sections.Add(Section($"Milestone Spec: {spec}", await _artifacts.ReadRequiredAsync(spec)));
         }
 
         await AddNonImplementationReviewSectionsAsync(sections);
@@ -86,8 +88,8 @@ internal sealed class RoadmapPromptContextBuilder(
         string completedEpicSynthesisPath,
         string completedEpicSynthesis)
     {
-        string completion = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
-        string evaluation = await artifacts.ReadRequiredAsync(latestEvaluationPath);
+        string completion = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
+        string evaluation = await _artifacts.ReadRequiredAsync(latestEvaluationPath);
         var sections = new List<ContextSection>
         {
             Section("Projection Content", projectionContent),
@@ -114,7 +116,7 @@ internal sealed class RoadmapPromptContextBuilder(
 
     private async Task AddOptionalSectionAsync(List<ContextSection> sections, string title, string relativePath)
     {
-        string? content = await artifacts.ReadAsync(relativePath);
+        string? content = await _artifacts.ReadAsync(relativePath);
         if (!string.IsNullOrWhiteSpace(content))
         {
             sections.Add(Section(title, content));
@@ -165,7 +167,7 @@ internal sealed class RoadmapPromptContextBuilder(
 
     private async Task<string> RenderRoadmapSourceReferencesAsync()
     {
-        IReadOnlyList<string> sourcePaths = await artifacts.RequireRoadmapSourcePathsAsync();
+        IReadOnlyList<string> sourcePaths = await _artifacts.RequireRoadmapSourcePathsAsync();
         var builder = new StringBuilder();
         builder.AppendLine("Roadmap epic bodies are intentionally not embedded in this prompt context.");
         builder

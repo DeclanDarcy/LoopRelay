@@ -17,9 +17,9 @@ public sealed class NonImplementationSemanticConfirmer
         WriteIndented = true,
     };
 
-    private readonly NonImplementationReviewLedgerStore ledgerStore;
-    private readonly INonImplementationReviewRunner runner;
-    private readonly NonImplementationSemanticConfirmerOptions options;
+    private readonly NonImplementationReviewLedgerStore _ledgerStore;
+    private readonly INonImplementationReviewRunner _runner;
+    private readonly NonImplementationSemanticConfirmerOptions _options;
 
     static NonImplementationSemanticConfirmer()
     {
@@ -34,10 +34,10 @@ public sealed class NonImplementationSemanticConfirmer
         ArgumentNullException.ThrowIfNull(ledgerStore);
         ArgumentNullException.ThrowIfNull(runner);
 
-        this.options = options ?? NonImplementationSemanticConfirmerOptions.Default;
-        ArgumentException.ThrowIfNullOrWhiteSpace(this.options.PromptName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(this.options.ConfirmationPromptSourceHash);
-        if (this.options.MaxPromptPayloadCharacters <= 0)
+        _options = options ?? NonImplementationSemanticConfirmerOptions.Default;
+        ArgumentException.ThrowIfNullOrWhiteSpace(_options.PromptName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(_options.ConfirmationPromptSourceHash);
+        if (_options.MaxPromptPayloadCharacters <= 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(options),
@@ -45,8 +45,8 @@ public sealed class NonImplementationSemanticConfirmer
         }
 
         runner.Capabilities.EnsureReadOnly();
-        this.ledgerStore = ledgerStore;
-        this.runner = runner;
+        _ledgerStore = ledgerStore;
+        _runner = runner;
     }
 
     public async Task<NonImplementationSemanticConfirmationBatchResult> ConfirmAsync(
@@ -72,9 +72,9 @@ public sealed class NonImplementationSemanticConfirmer
             }
 
             NonImplementationReviewLedgerEntry? reusable =
-                await ledgerStore.FindReusableSemanticDispositionAsync(
+                await _ledgerStore.FindReusableSemanticDispositionAsync(
                     classification,
-                    options.ConfirmationPromptSourceHash);
+                    _options.ConfirmationPromptSourceHash);
             if (reusable is not null)
             {
                 skipped.Add(reusable);
@@ -82,28 +82,28 @@ public sealed class NonImplementationSemanticConfirmer
             }
 
             NonImplementationReviewLedgerEntry pending =
-                await ledgerStore.UpsertPendingCandidateAsync(
+                await _ledgerStore.UpsertPendingCandidateAsync(
                     classification,
-                    options.ConfirmationPromptSourceHash,
+                    _options.ConfirmationPromptSourceHash,
                     seenAtUtc,
                     discoveryContext);
 
             string prompt = LoopRelay.Core.Prompts.ConfirmNonImplementationCandidate.Render(
                 BuildPromptPayload(pending, classification));
             var request = new NonImplementationReviewRunnerRequest(
-                options.PromptName,
+                _options.PromptName,
                 prompt,
-                options.MaxPromptPayloadCharacters);
+                _options.MaxPromptPayloadCharacters);
             request.Constraints.EnsureReadOnly();
 
             NonImplementationReviewRunnerResponse response =
-                await runner.RunAsync(request, cancellationToken);
+                await _runner.RunAsync(request, cancellationToken);
             Models.NonImplementationSemanticConfirmation.NonImplementationSemanticConfirmation confirmation =
                 NonImplementationSemanticConfirmationParser.ParseAndValidate(
                     response.StructuredText,
                     pending);
             NonImplementationReviewLedgerEntry updated =
-                await ledgerStore.RecordSemanticConfirmationAsync(confirmation);
+                await _ledgerStore.RecordSemanticConfirmationAsync(confirmation);
             confirmed.Add(updated);
         }
 

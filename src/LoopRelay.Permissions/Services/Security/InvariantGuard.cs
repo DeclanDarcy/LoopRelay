@@ -9,7 +9,7 @@ namespace LoopRelay.Permissions.Services.Security;
 
 public sealed class InvariantGuard : IInvariantGuard
 {
-    private readonly PermissionPolicyOptions policy;
+    private readonly PermissionPolicyOptions _policy;
 
     public InvariantGuard()
         : this(PermissionPolicyOptions.Default)
@@ -18,12 +18,12 @@ public sealed class InvariantGuard : IInvariantGuard
 
     public InvariantGuard(PermissionPolicyOptions policy)
     {
-        this.policy = PermissionPolicyFactory.MergeWithMinimum(policy);
+        _policy = PermissionPolicyFactory.MergeWithMinimum(policy);
     }
 
     public EvalResult Enforce(CanonicalCommand[] commands, EvalResult result)
     {
-        PermissionHardDenyOptions hardDeny = policy.HardDeny;
+        PermissionHardDenyOptions hardDeny = _policy.HardDeny;
 
         foreach (ref readonly CanonicalCommand command in commands.AsSpan())
         {

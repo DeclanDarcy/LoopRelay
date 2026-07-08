@@ -6,36 +6,37 @@ namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
 public sealed class ConsoleInputWaitProgressRenderer(ILoopConsole console) : IInputWaitProgressRenderer
 {
+    private readonly ILoopConsole _console = console;
     public TimeSpan RefreshInterval =>
-        console.IsProgressInteractive ? TimeSpan.FromSeconds(1) : TimeSpan.FromSeconds(30);
+        _console.IsProgressInteractive ? TimeSpan.FromSeconds(1) : TimeSpan.FromSeconds(30);
 
     public void Started(InputWaitProgressSnapshot snapshot)
     {
-        if (console.IsProgressInteractive)
+        if (_console.IsProgressInteractive)
         {
-            console.Progress(StatusLine(snapshot));
+            _console.Progress(StatusLine(snapshot));
             return;
         }
 
-        console.Progress($"[codex] submitted turn: promptTokensEstimated={snapshot.PromptTokensEstimated}");
+        _console.Progress($"[codex] submitted turn: promptTokensEstimated={snapshot.PromptTokensEstimated}");
     }
 
     public void Waiting(InputWaitProgressSnapshot snapshot)
     {
-        if (console.IsProgressInteractive)
+        if (_console.IsProgressInteractive)
         {
-            console.Progress(StatusLine(snapshot));
+            _console.Progress(StatusLine(snapshot));
             return;
         }
 
-        console.Progress($"[codex] waiting for first output: elapsed={FormatElapsedCompact(snapshot.Elapsed)}");
+        _console.Progress($"[codex] waiting for first output: elapsed={FormatElapsedCompact(snapshot.Elapsed)}");
     }
 
     public void FirstOutput(InputWaitProgressSnapshot snapshot) =>
-        console.ProgressComplete($"[codex] first output: elapsed={FormatElapsedCompact(snapshot.Elapsed)}");
+        _console.ProgressComplete($"[codex] first output: elapsed={FormatElapsedCompact(snapshot.Elapsed)}");
 
     public void CompletedWithoutOutput(InputWaitProgressSnapshot snapshot) =>
-        console.ProgressComplete($"[codex] completed before visible output: elapsed={FormatElapsedCompact(snapshot.Elapsed)}");
+        _console.ProgressComplete($"[codex] completed before visible output: elapsed={FormatElapsedCompact(snapshot.Elapsed)}");
 
     private static string StatusLine(InputWaitProgressSnapshot snapshot) =>
         $"[codex] processing input | {FormatTokens(snapshot.PromptTokensEstimated)} prompt tokens estimated | {FormatElapsed(snapshot.Elapsed)} elapsed";

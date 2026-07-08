@@ -8,7 +8,7 @@ namespace LoopRelay.Permissions.Services.Evaluation;
 
 public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
 {
-    private readonly PermissionPolicyOptions policy;
+    private readonly PermissionPolicyOptions _policy;
 
     public PermissionEvaluatorEngine()
         : this(PermissionPolicyOptions.Default)
@@ -17,7 +17,7 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
 
     public PermissionEvaluatorEngine(PermissionPolicyOptions policy)
     {
-        this.policy = PermissionPolicyFactory.MergeWithMinimum(policy);
+        _policy = PermissionPolicyFactory.MergeWithMinimum(policy);
     }
 
     public EvalResult Evaluate(CanonicalCommand[] commands)
@@ -73,7 +73,7 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
 
     private EvalResult? CheckHardDeny(in CanonicalCommand command)
     {
-        PermissionHardDenyOptions hardDeny = policy.HardDeny;
+        PermissionHardDenyOptions hardDeny = _policy.HardDeny;
 
         if (hardDeny.PrivilegeEscalationCommands.Contains(command.Command))
         {
@@ -119,7 +119,7 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
 
     private EvalResult? CheckReviewRequired(in CanonicalCommand command)
     {
-        PermissionReviewRequiredOptions reviewRequired = policy.ReviewRequired;
+        PermissionReviewRequiredOptions reviewRequired = _policy.ReviewRequired;
 
         if (reviewRequired.GitCommit && command.Command == "git" && command.Subcommand == "commit")
         {
@@ -152,14 +152,14 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
 
     private EvalResult? CheckAllowList(in CanonicalCommand command)
     {
-        PermissionAllowOptions allow = policy.Allow;
+        PermissionAllowOptions allow = _policy.Allow;
 
-        if (policy.SafeTools.Contains(command.Command))
+        if (_policy.SafeTools.Contains(command.Command))
         {
             return new EvalResult(RuleDecision.Allow, $"Tool '{command.Command}' is always safe");
         }
 
-        if (policy.SafeBashCommands.Contains(command.Command))
+        if (_policy.SafeBashCommands.Contains(command.Command))
         {
             return new EvalResult(RuleDecision.Allow, $"Command '{command.Command}' is read-only and safe");
         }

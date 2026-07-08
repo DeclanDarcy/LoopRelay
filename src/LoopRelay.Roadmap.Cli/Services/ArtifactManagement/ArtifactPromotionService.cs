@@ -6,6 +6,8 @@ namespace LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
 internal sealed class ArtifactPromotionService(RoadmapArtifacts artifacts, ArtifactLifecycleStore lifecycleStore)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
     public async Task<ArtifactPromotionResult> PromoteAsync(ArtifactPromotionRequest request)
     {
         ArtifactOutputClassification classification = request.Classifier.Classify(request.CandidateContent);
@@ -26,8 +28,8 @@ internal sealed class ArtifactPromotionService(RoadmapArtifacts artifacts, Artif
                 validation.Error ?? $"{request.ArtifactName} failed validation.");
         }
 
-        await artifacts.WriteAsync(request.TargetPath, request.CandidateContent);
-        await lifecycleStore.UpsertAsync(
+        await _artifacts.WriteAsync(request.TargetPath, request.CandidateContent);
+        await _lifecycleStore.UpsertAsync(
             request.TargetPath,
             request.PromotedLifecycleState,
             request.LifecycleNotes);
@@ -40,11 +42,11 @@ internal sealed class ArtifactPromotionService(RoadmapArtifacts artifacts, Artif
         ArtifactPromotionStatus status,
         string reason)
     {
-        string evidencePath = await artifacts.WriteNumberedEvidenceAsync(
+        string evidencePath = await _artifacts.WriteNumberedEvidenceAsync(
             request.EvidenceDirectory,
             request.EvidenceStem,
             request.CandidateContent);
-        await lifecycleStore.UpsertAsync(evidencePath, ArtifactLifecycleState.Blocked, reason);
+        await _lifecycleStore.UpsertAsync(evidencePath, ArtifactLifecycleState.Blocked, reason);
 
         return ArtifactPromotionResult.NotPromoted(
             status,

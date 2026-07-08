@@ -12,10 +12,11 @@ internal sealed class SelectionProvenanceManifestStore(RoadmapArtifacts artifact
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() },
     };
+    private readonly RoadmapArtifacts _artifacts = artifacts;
 
     public async Task<SelectionProvenanceManifest> LoadAsync()
     {
-        string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.SelectionProvenanceManifest);
+        string? content = await _artifacts.ReadAsync(RoadmapArtifactPaths.SelectionProvenanceManifest);
         if (string.IsNullOrWhiteSpace(content))
         {
             return SelectionProvenanceManifest.Empty;
@@ -35,6 +36,6 @@ internal sealed class SelectionProvenanceManifestStore(RoadmapArtifacts artifact
     public async Task SaveAsync(SelectionProvenanceManifest manifest)
     {
         string content = JsonSerializer.Serialize(manifest, JsonOptions) + Environment.NewLine;
-        await artifacts.WriteAsync(RoadmapArtifactPaths.SelectionProvenanceManifest, content);
+        await _artifacts.WriteAsync(RoadmapArtifactPaths.SelectionProvenanceManifest, content);
     }
 }

@@ -23,7 +23,7 @@ namespace LoopRelay.Plan.Cli.Services.Cli;
 
 internal sealed class PlanCliComposition : IAsyncDisposable
 {
-    private readonly ServiceProvider provider;
+    private readonly ServiceProvider _provider;
 
     private PlanCliComposition(
         ServiceProvider provider,
@@ -31,7 +31,7 @@ internal sealed class PlanCliComposition : IAsyncDisposable
         IAgentExecutableResolver executableResolver,
         PlanPipeline pipeline)
     {
-        this.provider = provider;
+        _provider = provider;
         Console = console;
         ExecutableResolver = executableResolver;
         Pipeline = pipeline;
@@ -96,11 +96,11 @@ internal sealed class PlanCliComposition : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Pipeline.DisposeAsync();
-        if (provider.GetService<AgentSessionRegistry>() is { } registry)
+        if (_provider.GetService<AgentSessionRegistry>() is { } registry)
         {
             await registry.DisposeAsync();
         }
 
-        await provider.DisposeAsync();
+        await _provider.DisposeAsync();
     }
 }

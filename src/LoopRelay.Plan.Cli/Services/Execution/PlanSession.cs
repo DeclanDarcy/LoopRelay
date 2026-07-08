@@ -29,18 +29,23 @@ internal sealed class PlanSession(
     string? promptPolicy = null,
     ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null) : IAsyncDisposable
 {
-    private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly PlanArtifacts _artifacts = artifacts;
+    private readonly ILoopConsole _console = console;
+    private readonly Repository _repository = repository;
+    private readonly ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = hitlRequestCapture;
+    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
     private IAgentSession? session;
     private bool closed;
 
     public async Task WritePlanAsync(CancellationToken cancellationToken)
     {
-        session = await runtime.OpenSessionAsync(AgentSpecs.PlanAuthoring(repository), cancellationToken);
+        session = await _runtime.OpenSessionAsync(AgentSpecs.PlanAuthoring(_repository), cancellationToken);
         closed = false; // guards the session just opened; a prior session (if any) was already closed by then
 
-        var renderer = new ConsoleTurnRenderer(console);
+        var renderer = new ConsoleTurnRenderer(_console);
         AgentTurnResult result = await session.RunTurnAsync(
-            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(WritePlan.Text, promptPolicy),
+            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(WritePlan.Text, _promptPolicy),
             renderer.Stream,
             cancellationToken);
         if (result.State != AgentTurnState.Completed)
@@ -65,9 +70,9 @@ internal sealed class PlanSession(
 
         // Turn 2 on the SAME held-open session — never reopen. The server holds thread state, so this turn
         // sends only the review-feedback delta rather than re-sending the whole transcript.
-        var renderer = new ConsoleTurnRenderer(console);
+        var renderer = new ConsoleTurnRenderer(_console);
         AgentTurnResult result = await session.RunTurnAsync(
-            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(RevisePlan.Render(feedback), promptPolicy),
+            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(RevisePlan.Render(feedback), _promptPolicy),
             renderer.Stream,
             cancellationToken);
         if (result.State != AgentTurnState.Completed)
@@ -86,7 +91,7 @@ internal sealed class PlanSession(
     // A revise turn that truncates or blanks the plan must not pass — every downstream step seeds from it.
     private async Task VerifyPlanGateAsync(string? diagnostics)
     {
-        string? plan = await artifacts.ReadAsync(OrchestrationArtifactPaths.Plan);
+        string? plan = await _artifacts.ReadAsync(OrchestrationArtifactPaths.Plan);
         if (string.IsNullOrWhiteSpace(plan))
         {
             await CloseAsync();
@@ -105,15 +110,15 @@ internal sealed class PlanSession(
 
     private async Task CapturePlanHitlRequestsAsync()
     {
-        if (hitlRequestCapture is null)
+        if (_hitlRequestCapture is null)
         {
             return;
         }
 
-        string? plan = await artifacts.ReadAsync(OrchestrationArtifactPaths.Plan);
+        string? plan = await _artifacts.ReadAsync(OrchestrationArtifactPaths.Plan);
         if (!string.IsNullOrWhiteSpace(plan))
         {
-            await hitlRequestCapture.CaptureFromSourceAsync(OrchestrationArtifactPaths.Plan, plan);
+            await _hitlRequestCapture.CaptureFromSourceAsync(OrchestrationArtifactPaths.Plan, plan);
         }
     }
 
@@ -128,7 +133,7 @@ internal sealed class PlanSession(
         }
 
         closed = true;
-        await runtime.CloseSessionAsync(session);
+        await _runtime.CloseSessionAsync(session);
     }
 
     public async ValueTask DisposeAsync() => await CloseAsync();

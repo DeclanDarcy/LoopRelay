@@ -13,6 +13,8 @@ public sealed class RepositorySliceBaselineStore(
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
     };
+    private readonly RepositoryChangeSetDetector _detector = detector;
+    private readonly IArtifactStore? _artifacts = artifacts;
 
     public async Task<RepositorySliceBaseline> CapturePreSliceAsync(
         string? executionSliceId = null,
@@ -21,13 +23,13 @@ public sealed class RepositorySliceBaselineStore(
         string sliceId = string.IsNullOrWhiteSpace(executionSliceId)
             ? NewExecutionSliceId()
             : executionSliceId.Trim();
-        RepositorySliceSnapshot snapshot = await detector.CaptureSnapshotAsync(sliceId, capturedAtUtc);
+        RepositorySliceSnapshot snapshot = await _detector.CaptureSnapshotAsync(sliceId, capturedAtUtc);
         string? persistedPath = null;
 
-        if (artifacts is not null)
+        if (_artifacts is not null)
         {
             persistedPath = OrchestrationArtifactPaths.NonImplementationSliceBaseline(sliceId);
-            await artifacts.WriteAsync(persistedPath, Serialize(snapshot));
+            await _artifacts.WriteAsync(persistedPath, Serialize(snapshot));
         }
 
         return new RepositorySliceBaseline(sliceId, snapshot, persistedPath);
@@ -40,10 +42,10 @@ public sealed class RepositorySliceBaselineStore(
         ArgumentNullException.ThrowIfNull(baseline);
 
         RepositorySliceSnapshot snapshot =
-            await detector.CaptureSnapshotAsync(baseline.ExecutionSliceId, capturedAtUtc);
-        if (artifacts is not null)
+            await _detector.CaptureSnapshotAsync(baseline.ExecutionSliceId, capturedAtUtc);
+        if (_artifacts is not null)
         {
-            await artifacts.WriteAsync(
+            await _artifacts.WriteAsync(
                 OrchestrationArtifactPaths.NonImplementationSlicePostSnapshot(baseline.ExecutionSliceId),
                 Serialize(snapshot));
         }

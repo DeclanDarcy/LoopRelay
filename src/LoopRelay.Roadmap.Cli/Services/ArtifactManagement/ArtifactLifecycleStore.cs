@@ -10,7 +10,8 @@ namespace LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
 internal sealed class ArtifactLifecycleStore(RoadmapArtifacts artifacts)
 {
-    private readonly StructuredDocumentStore<ArtifactLifecyclePersistenceDocument> structuredStore = new(
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly StructuredDocumentStore<ArtifactLifecyclePersistenceDocument> _structuredStore = new(
         artifacts,
         RoadmapArtifactPaths.LifecycleJson,
         ArtifactLifecyclePersistenceDocument.CurrentSchemaVersion,
@@ -19,13 +20,13 @@ internal sealed class ArtifactLifecycleStore(RoadmapArtifacts artifacts)
 
     public async Task<IReadOnlyList<ArtifactLifecycleEntry>> LoadAsync()
     {
-        ArtifactLifecyclePersistenceDocument? structured = await structuredStore.LoadAsync();
+        ArtifactLifecyclePersistenceDocument? structured = await _structuredStore.LoadAsync();
         if (structured is not null)
         {
             return structured.ToDomain();
         }
 
-        string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.Lifecycle);
+        string? content = await _artifacts.ReadAsync(RoadmapArtifactPaths.Lifecycle);
         if (string.IsNullOrWhiteSpace(content))
         {
             return [];
@@ -59,7 +60,7 @@ internal sealed class ArtifactLifecycleStore(RoadmapArtifacts artifacts)
     public async Task SaveAsync(IReadOnlyList<ArtifactLifecycleEntry> entries)
     {
         ArtifactLifecyclePersistenceDocument persisted = ArtifactLifecyclePersistenceDocument.FromDomain(entries);
-        await structuredStore.SaveAsync(persisted);
+        await _structuredStore.SaveAsync(persisted);
     }
 
     private static IReadOnlyList<ArtifactLifecycleEntry> ParseLegacyMarkdown(string content)

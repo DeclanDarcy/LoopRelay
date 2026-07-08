@@ -15,14 +15,17 @@ internal sealed class ProjectionPromptRunner(
     Repository repository,
     ILoopConsole console) : IProjectionPromptRunner
 {
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly Repository _repository = repository;
+    private readonly ILoopConsole _console = console;
     public async Task<string> RunProjectionPromptAsync(
         ProjectionDefinition definition,
         string prompt,
         CancellationToken cancellationToken = default)
     {
-        var renderer = new ConsoleTurnRenderer(console);
-        AgentTurnResult result = await runtime.RunOneShotAsync(
-            AgentSpecs.Decision(repository),
+        var renderer = new ConsoleTurnRenderer(_console);
+        AgentTurnResult result = await _runtime.RunOneShotAsync(
+            AgentSpecs.Decision(_repository),
             prompt,
             renderer.Stream,
             cancellationToken);

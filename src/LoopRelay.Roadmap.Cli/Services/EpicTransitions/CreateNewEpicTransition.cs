@@ -20,15 +20,22 @@ internal sealed class CreateNewEpicTransition(
     ActiveEpicPromotionCoordinator activeEpicPromotionCoordinator,
     ILoopConsole console)
 {
+    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
+    private readonly ProjectionCache _projectionCache = projectionCache;
+    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
+    private readonly ActiveSelectionReader _activeSelectionReader = activeSelectionReader;
+    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
+    private readonly ActiveEpicPromotionCoordinator _activeEpicPromotionCoordinator = activeEpicPromotionCoordinator;
+    private readonly ILoopConsole _console = console;
     public async Task<ArtifactPromotionResult> ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "CreateNewEpic";
-        console.Phase("Create new epic");
-        string selection = await activeSelectionReader.ReadAsync(cancellationToken);
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
-        PromptTransitionCompletion completion = await promptTransitionRunner.RunPromotionCandidateAsync(
+        _console.Phase("Create new epic");
+        string selection = await _activeSelectionReader.ReadAsync(cancellationToken);
+        PromptContract contract = _contractRegistry.Get(runtimePrompt);
+        ProjectionCacheResult projection = await _projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
+        string context = _contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
+        PromptTransitionCompletion completion = await _promptTransitionRunner.RunPromotionCandidateAsync(
             RoadmapState.NewEpicProposed,
             RoadmapState.ActiveEpicReady,
             runtimePrompt,
@@ -37,7 +44,7 @@ internal sealed class CreateNewEpicTransition(
             selection,
             [RoadmapArtifactPaths.ActiveEpic],
             cancellationToken);
-        return await activeEpicPromotionCoordinator.PromoteAsync(
+        return await _activeEpicPromotionCoordinator.PromoteAsync(
             RoadmapState.NewEpicProposed,
             runtimePrompt,
             projection.Definition.ProjectionPath,

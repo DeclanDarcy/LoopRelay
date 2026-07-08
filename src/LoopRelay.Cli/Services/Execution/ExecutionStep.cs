@@ -35,30 +35,36 @@ internal sealed class ExecutionStep(
     MilestoneGate milestones,
     string? promptPolicy = null)
 {
-    private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly LoopArtifacts _artifacts = artifacts;
+    private readonly ILoopConsole _console = console;
+    private readonly Repository _repository = repository;
+    private readonly WorkingTreeChangeDetector _changeDetector = changeDetector;
+    private readonly MilestoneGate _milestones = milestones;
+    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        string? plan = await artifacts.ReadPlanAsync();
+        string? plan = await _artifacts.ReadPlanAsync();
         // .agents/details.md is the optional plan addendum, injected directly after the plan in every execution
         // prompt (read like the plan: null when absent, rendered as empty) so a non-self-contained plan carries
         // its detail inline and the agent never has to chase the file on disk.
-        string? details = await artifacts.ReadDetailsAsync();
+        string? details = await _artifacts.ReadDetailsAsync();
 
         // First execution of a fresh plan (no decisions.md) starts straight from the plan via StartExecution —
         // the self-contained plan is context enough to get going. Once a decision has produced decisions.md (the
         // execution agent's system prompt), execution CONTINUES from it. The handoff is consumed by the decision
         // session, not rendered here.
-        bool hasDecisions = await artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions);
+        bool hasDecisions = await _artifacts.ExistsAsync(OrchestrationArtifactPaths.Decisions);
         string executionPrompt;
         string workPhase;
         if (hasDecisions)
         {
-            (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
+            (string? decisions, _) = await _artifacts.ReadLatestDecisionsAsync();
             executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
                 // TODO:
                 ContinueExecution.Render(plan, details, decisions, "TODO"),
-                promptPolicy);
+                _promptPolicy);
             workPhase = "Execution: ContinueExecution";
         }
         else
@@ -66,22 +72,22 @@ internal sealed class ExecutionStep(
             executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
                 // TODO:
                 StartExecution.Render(plan, details, "TODO"),
-                promptPolicy);
+                _promptPolicy);
             workPhase = "Execution: StartExecution";
         }
 
         // The execution agent runs codex with full access (no sandbox): it needs to build, run tools, touch
         // git, and reach outside the workspace to do real work. This is the ONE session granted danger-full-access
         // — the decision session stays read-only and the context-update evolution keeps its own posture.
-        IAgentSession session = await runtime.OpenSessionAsync(
+        IAgentSession session = await _runtime.OpenSessionAsync(
             AgentSpecs.Operational(
-                repository, AgentEffortLevel.Medium, identifier: null, sandboxIdentifier: "danger-full-access"),
+                _repository, AgentEffortLevel.Medium, identifier: null, sandboxIdentifier: "danger-full-access"),
             cancellationToken);
         try
         {
             // Turn 1 - do the work. The prompt no longer asks for a handoff.
-            console.Phase(workPhase);
-            var workRenderer = new ConsoleTurnRenderer(console);
+            _console.Phase(workPhase);
+            var workRenderer = new ConsoleTurnRenderer(_console);
             AgentTurnResult work = await session.RunTurnAsync(executionPrompt, workRenderer.Stream, cancellationToken);
             if (work.State != AgentTurnState.Completed)
             {
@@ -95,7 +101,7 @@ internal sealed class ExecutionStep(
             // real, non-.agents paths), so the handoff and the end-of-iteration stall gate can never tell
             // different stories about the same slice. An EMPTY unticked list still takes the no-changes
             // path — the rule is purely change-detection; the prompt then simply has no items to enumerate.
-            IReadOnlyList<string> changed = await changeDetector.GetRealChangedPathsAsync();
+            IReadOnlyList<string> changed = await _changeDetector.GetRealChangedPathsAsync();
             string handoffPrompt;
             string handoffPhase;
             if (changed.Count > 0)
@@ -105,14 +111,14 @@ internal sealed class ExecutionStep(
             }
             else
             {
-                IReadOnlyList<string> unticked = await milestones.GetUntickedItemsAsync();
+                IReadOnlyList<string> unticked = await _milestones.GetUntickedItemsAsync();
                 handoffPrompt = GenerateNoChangesHandoff.Render(string.Join("\n", unticked));
                 handoffPhase = "Execution: GenerateNoChangesHandoff";
             }
 
             // Turn 2 - request the handoff on the same held-open session (delta only).
-            console.Phase(handoffPhase);
-            var handoffRenderer = new ConsoleTurnRenderer(console);
+            _console.Phase(handoffPhase);
+            var handoffRenderer = new ConsoleTurnRenderer(_console);
             AgentTurnResult handoffTurn = await session.RunTurnAsync(
                 handoffPrompt, handoffRenderer.Stream, cancellationToken);
             if (handoffTurn.State != AgentTurnState.Completed)
@@ -122,17 +128,17 @@ internal sealed class ExecutionStep(
 
             handoffRenderer.EchoIfSilent(handoffTurn.Output);
 
-            if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.LiveHandoff))
+            if (!await _artifacts.ExistsAsync(OrchestrationArtifactPaths.LiveHandoff))
             {
                 throw new LoopStepException(
                     "Execution completed but .agents/handoffs/handoff.md was not written.");
             }
 
-            console.Info("New handoff.md verified.");
+            _console.Info("New handoff.md verified.");
         }
         finally
         {
-            await runtime.CloseSessionAsync(session);
+            await _runtime.CloseSessionAsync(session);
         }
     }
 }

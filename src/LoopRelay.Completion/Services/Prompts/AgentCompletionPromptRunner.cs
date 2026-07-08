@@ -15,7 +15,9 @@ public sealed class AgentCompletionPromptRunner(
     Repository repository,
     string? promptPolicy = null) : ICompletionPromptRunner
 {
-    private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly Repository _repository = repository;
+    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
 
     public async Task<string> RunAsync(
         CompletionRuntimePromptInvocation invocation,
@@ -23,15 +25,15 @@ public sealed class AgentCompletionPromptRunner(
     {
         string prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
             CompletionPromptCatalog.RenderRuntime(invocation),
-            promptPolicy);
+            _promptPolicy);
         AgentSessionSpec spec = string.Equals(
             invocation.RuntimePromptName,
             CompletionRuntimePromptNames.SynthesizeCompletedEpic,
             StringComparison.Ordinal)
-            ? WritablePlanning(repository)
-            : ReadOnlyPlanning(repository);
+            ? WritablePlanning(_repository)
+            : ReadOnlyPlanning(_repository);
 
-        AgentTurnResult result = await runtime.RunOneShotAsync(
+        AgentTurnResult result = await _runtime.RunOneShotAsync(
             spec,
             prompt,
             onChunk: null,

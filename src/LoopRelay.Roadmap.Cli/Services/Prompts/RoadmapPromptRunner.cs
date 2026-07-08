@@ -16,7 +16,10 @@ internal sealed class RoadmapPromptRunner(
     ILoopConsole console,
     string? promptPolicy = null)
 {
-    private readonly string promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
+    private readonly IAgentRuntime _runtime = runtime;
+    private readonly Repository _repository = repository;
+    private readonly ILoopConsole _console = console;
+    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
 
     public async Task<string> RunProjectionPromptAsync(
         ProjectionDefinition projection,
@@ -35,15 +38,15 @@ internal sealed class RoadmapPromptRunner(
     {
         string prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
             RoadmapPromptCatalog.RenderRuntime(runtimePromptName, projectContext, secondaryInput),
-            promptPolicy);
+            _promptPolicy);
         return await RunOneShotAsync(runtimePromptName, prompt, cancellationToken);
     }
 
     private async Task<string> RunOneShotAsync(string label, string prompt, CancellationToken cancellationToken)
     {
-        var renderer = new ConsoleTurnRenderer(console);
-        AgentTurnResult result = await runtime.RunOneShotAsync(
-            AgentSpecs.ReadOnlyPlanning(repository),
+        var renderer = new ConsoleTurnRenderer(_console);
+        AgentTurnResult result = await _runtime.RunOneShotAsync(
+            AgentSpecs.ReadOnlyPlanning(_repository),
             prompt,
             renderer.Stream,
             cancellationToken);

@@ -16,7 +16,8 @@ namespace LoopRelay.Roadmap.Cli.Services.State;
 
 internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
 {
-    private readonly StructuredDocumentStore<RoadmapStatePersistenceDocument> structuredStore = new(
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly StructuredDocumentStore<RoadmapStatePersistenceDocument> _structuredStore = new(
         artifacts,
         RoadmapArtifactPaths.StateJson,
         RoadmapStatePersistenceDocument.CurrentSchemaVersion,
@@ -26,18 +27,18 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
     public async Task SaveAsync(RoadmapStateDocument document)
     {
         RoadmapStatePersistenceDocument persisted = RoadmapStatePersistenceDocument.FromDomain(document);
-        await structuredStore.SaveAsync(persisted);
+        await _structuredStore.SaveAsync(persisted);
     }
 
     public async Task<RoadmapStateDocument?> LoadAsync()
     {
-        RoadmapStatePersistenceDocument? structured = await structuredStore.LoadAsync();
+        RoadmapStatePersistenceDocument? structured = await _structuredStore.LoadAsync();
         if (structured is not null)
         {
             return structured.ToDomain();
         }
 
-        string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.State);
+        string? content = await _artifacts.ReadAsync(RoadmapArtifactPaths.State);
         if (string.IsNullOrWhiteSpace(content))
         {
             return null;

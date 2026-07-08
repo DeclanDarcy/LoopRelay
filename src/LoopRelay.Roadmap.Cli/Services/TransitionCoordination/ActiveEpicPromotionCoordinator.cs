@@ -16,6 +16,10 @@ internal sealed class ActiveEpicPromotionCoordinator(
     TransitionJournalStore journalStore,
     RoadmapTransitionPersistence transitionPersistence)
 {
+    private readonly ArtifactPromotionService _promotionService = promotionService;
+    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
+    private readonly TransitionJournalStore _journalStore = journalStore;
+    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
     public async Task<ArtifactPromotionResult> PromoteAsync(
         RoadmapState from,
         string prompt,
@@ -23,7 +27,7 @@ internal sealed class ActiveEpicPromotionCoordinator(
         PromptTransitionCompletion completion,
         string? lifecycleNotes = null)
     {
-        ArtifactPromotionResult result = await promotionService.PromoteAsync(new ArtifactPromotionRequest(
+        ArtifactPromotionResult result = await _promotionService.PromoteAsync(new ArtifactPromotionRequest(
             RoadmapArtifactPaths.ActiveEpic,
             completion.Output,
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
@@ -37,8 +41,8 @@ internal sealed class ActiveEpicPromotionCoordinator(
         DateTimeOffset completed = DateTimeOffset.UtcNow;
         if (result.Promoted)
         {
-            await hitlArtifactCapture.CaptureAsync(RoadmapArtifactPaths.ActiveEpic, completion.Output);
-            await journalStore.AppendAsync(new TransitionJournalRecord(
+            await _hitlArtifactCapture.CaptureAsync(RoadmapArtifactPaths.ActiveEpic, completion.Output);
+            await _journalStore.AppendAsync(new TransitionJournalRecord(
                 "ArtifactPromoted",
                 completion.CorrelationId,
                 completed,
@@ -54,7 +58,7 @@ internal sealed class ActiveEpicPromotionCoordinator(
                 "Active epic promoted",
                 null,
                 completion.InputSnapshot));
-            await transitionPersistence.SaveAsync(
+            await _transitionPersistence.SaveAsync(
                 RoadmapState.ActiveEpicReady,
                 TransitionStatus.Completed,
                 from,
@@ -79,7 +83,7 @@ internal sealed class ActiveEpicPromotionCoordinator(
             _ => "Artifact Promotion Rejected",
         };
 
-        await journalStore.AppendAsync(new TransitionJournalRecord(
+        await _journalStore.AppendAsync(new TransitionJournalRecord(
             "ArtifactPromotionBlocked",
             completion.CorrelationId,
             completed,
@@ -95,7 +99,7 @@ internal sealed class ActiveEpicPromotionCoordinator(
             decision,
             result.Reason,
             completion.InputSnapshot));
-        await transitionPersistence.SaveAsync(
+        await _transitionPersistence.SaveAsync(
             RoadmapState.EvidenceBlocked,
             TransitionStatus.Paused,
             from,

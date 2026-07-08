@@ -34,6 +34,10 @@ namespace LoopRelay.Cli.Services.Execution;
 internal sealed class CommitGate(
     WorkingTreeChangeDetector changeDetector, IProcessRunner processRunner, Repository repository, ILoopConsole console)
 {
+    private readonly WorkingTreeChangeDetector _changeDetector = changeDetector;
+    private readonly IProcessRunner _processRunner = processRunner;
+    private readonly Repository _repository = repository;
+    private readonly ILoopConsole _console = console;
     internal const int MaxNoChangesCount = 2;
 
     private const string CommitMessage = "Orchestration loop: automated execution and decision iteration";
@@ -60,7 +64,7 @@ internal sealed class CommitGate(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        IReadOnlyList<string> changed = await changeDetector.GetRealChangedPathsAsync();
+        IReadOnlyList<string> changed = await _changeDetector.GetRealChangedPathsAsync();
 
         if (changed.Count > 0)
         {
@@ -77,19 +81,19 @@ internal sealed class CommitGate(
             // exactly like a code change. Only a REDUCTION counts: an execution that merely rewrote or added
             // milestone items still falls through to the no-progress branch.
             noChangesCount = 0;
-            console.Info(
+            _console.Info(
                 $"No repository changes, but unchecked milestone items fell from {uncheckedMilestonesBefore} " +
                 $"to {uncheckedMilestonesAfter} — counting as substantive progress.");
         }
         else
         {
             noChangesCount++;
-            console.Info($"No substantive changes this iteration ({noChangesCount}/{MaxNoChangesCount}).");
+            _console.Info($"No substantive changes this iteration ({noChangesCount}/{MaxNoChangesCount}).");
         }
 
         if (noChangesCount > MaxNoChangesCount)
         {
-            console.Warn(
+            _console.Warn(
                 $"No substantive changes across {noChangesCount} consecutive iterations — stalling the loop.");
             return true;
         }
@@ -105,7 +109,7 @@ internal sealed class CommitGate(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        IReadOnlyList<string> changed = await changeDetector.GetRealChangedPathsAsync();
+        IReadOnlyList<string> changed = await _changeDetector.GetRealChangedPathsAsync();
         if (changed.Count == 0)
         {
             return false;
@@ -114,13 +118,13 @@ internal sealed class CommitGate(
         await RunGitAsync("add", AddExcludingAgents);
         await RunGitAsync("commit", ["commit", "-m", NonImplementationReviewDecisionMessage]);
         await RunGitAsync("push", ["push"]);
-        console.Info("Committed and pushed approved non-implementation review repository changes.");
+        _console.Info("Committed and pushed approved non-implementation review repository changes.");
         return true;
     }
 
     private async Task RunGitAsync(string label, IReadOnlyList<string> arguments)
     {
-        ProcessRunResult result = await processRunner.RunAsync("git", arguments, repository.Path);
+        ProcessRunResult result = await _processRunner.RunAsync("git", arguments, _repository.Path);
         if (result.ExitCode != 0)
         {
             throw new LoopStepException($"git {label} failed: {result.StandardError}");

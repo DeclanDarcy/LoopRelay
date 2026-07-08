@@ -30,6 +30,13 @@ internal sealed class RoadmapResumePlanner(
     SelectionProvenanceService selectionProvenance,
     ExecutionPreparationProvenanceService executionPreparation)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
+    private readonly ProjectionManifestStore _manifestStore = manifestStore;
+    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
+    private readonly ProjectionProvenanceFactory _provenanceFactory = provenanceFactory;
+    private readonly SelectionProvenanceService _selectionProvenance = selectionProvenance;
+    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     private readonly EpicArtifactValidator epicValidator = new();
 
     public async Task<RoadmapResumePlan> PlanAsync(
@@ -39,10 +46,10 @@ internal sealed class RoadmapResumePlanner(
     {
         cancellationToken.ThrowIfCancellationRequested();
         RoadmapArtifactSnapshot snapshot = await RoadmapArtifactSnapshot.CaptureAsync(
-            artifacts,
-            manifestStore,
-            lifecycleStore,
-            executionPreparation);
+            _artifacts,
+            _manifestStore,
+            _lifecycleStore,
+            _executionPreparation);
 
         if (persistedState is null)
         {
@@ -262,7 +269,7 @@ internal sealed class RoadmapResumePlanner(
         ProjectContext projectContext,
         bool requireOutputs)
     {
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
+        PromptContract contract = _contractRegistry.Get(runtimePrompt);
         ResumeSafety projectionSafety = ValidateProjection(runtimePrompt, snapshot, projectContext);
         if (!projectionSafety.IsSafe)
         {
@@ -298,7 +305,7 @@ internal sealed class RoadmapResumePlanner(
         RoadmapArtifactSnapshot snapshot,
         ProjectContext projectContext)
     {
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
+        PromptContract contract = _contractRegistry.Get(runtimePrompt);
         ProjectionManifestEntry? entry = snapshot.Manifest.Find(runtimePrompt);
         if (entry is null)
         {
@@ -312,7 +319,7 @@ internal sealed class RoadmapResumePlanner(
         }
 
         ProjectionFreshness freshness = ProjectionFreshnessEvaluator.Evaluate(
-            provenanceFactory.Create(runtimePrompt, projectContext),
+            _provenanceFactory.Create(runtimePrompt, projectContext),
             entry);
         if (contract.StaleProjectionPolicy == StaleProjectionPolicy.Block && !freshness.IsFresh)
         {
@@ -327,17 +334,17 @@ internal sealed class RoadmapResumePlanner(
         IReadOnlyList<RetiredEpic> retiredEpics,
         CancellationToken cancellationToken)
     {
-        string? projectionContent = await artifacts.ReadAsync(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"]);
+        string? projectionContent = await _artifacts.ReadAsync(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"]);
         if (string.IsNullOrWhiteSpace(projectionContent))
         {
             return ResumeSafety.Unsafe("Active selection cannot be reused because the SelectNextEpic projection is missing.");
         }
 
-        TransitionInputSnapshot currentCycle = await selectionProvenance.CaptureCurrentCycleAsync(
+        TransitionInputSnapshot currentCycle = await _selectionProvenance.CaptureCurrentCycleAsync(
             projectionContent,
             retiredEpics,
             cancellationToken);
-        DerivedArtifactFreshness freshness = await selectionProvenance.EvaluateActiveSelectionFreshnessAsync(
+        DerivedArtifactFreshness freshness = await _selectionProvenance.EvaluateActiveSelectionFreshnessAsync(
             currentCycle,
             retiredEpics,
             cancellationToken);
@@ -354,7 +361,7 @@ internal sealed class RoadmapResumePlanner(
         string prompt = persistedState.LastTransition.Prompt;
         if (string.IsNullOrWhiteSpace(prompt) ||
             string.Equals(prompt, "None", StringComparison.OrdinalIgnoreCase) ||
-            !contractRegistry.Contains(prompt))
+            !_contractRegistry.Contains(prompt))
         {
             return ResumeSafety.Safe("Last transition has no runtime prompt contract to validate.");
         }
@@ -402,7 +409,7 @@ internal sealed class RoadmapResumePlanner(
             return ResumeSafety.Unsafe("Active epic is missing or its lifecycle state is not usable.");
         }
 
-        string? activeEpic = await artifacts.ReadAsync(RoadmapArtifactPaths.ActiveEpic);
+        string? activeEpic = await _artifacts.ReadAsync(RoadmapArtifactPaths.ActiveEpic);
         ArtifactValidationResult epicValidation = epicValidator.Validate(activeEpic ?? string.Empty);
         if (!epicValidation.IsValid)
         {
@@ -411,7 +418,7 @@ internal sealed class RoadmapResumePlanner(
 
         if (requireSpecs || requireOperationalContext || requireExecutionPrompt)
         {
-            ExecutionPreparationReadiness readiness = await executionPreparation.EvaluateReadinessAsync(
+            ExecutionPreparationReadiness readiness = await _executionPreparation.EvaluateReadinessAsync(
                 requireSpecs,
                 requireOperationalContext,
                 requireExecutionPrompt,
@@ -441,7 +448,7 @@ internal sealed class RoadmapResumePlanner(
         IReadOnlyList<string> milestoneSpecPaths;
         try
         {
-            milestoneSpecPaths = await executionPreparation.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
+            milestoneSpecPaths = await _executionPreparation.RequireFreshMilestoneSpecPathsAsync(cancellationToken);
         }
         catch (RoadmapStepException exception)
         {
@@ -455,7 +462,7 @@ internal sealed class RoadmapResumePlanner(
 
         foreach (string spec in milestoneSpecPaths)
         {
-            string content = await artifacts.ReadRequiredAsync(spec);
+            string content = await _artifacts.ReadRequiredAsync(spec);
             string? declaredEpicPath = FindDeclaredEpicPath(content);
             if (declaredEpicPath is not null &&
                 !string.Equals(declaredEpicPath, RoadmapArtifactPaths.ActiveEpic, StringComparison.OrdinalIgnoreCase))

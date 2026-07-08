@@ -19,13 +19,17 @@ public sealed class NonImplementationPostExecutionReviewService(
     NonImplementationSemanticConfirmer semanticConfirmer,
     IArtifactStore artifacts) : INonImplementationPostExecutionReviewService
 {
+    private readonly RepositorySliceBaselineStore _baselineStore = baselineStore;
+    private readonly NonImplementationArtifactClassifier _classifier = classifier;
+    private readonly NonImplementationSemanticConfirmer _semanticConfirmer = semanticConfirmer;
+    private readonly IArtifactStore _artifacts = artifacts;
     public async Task<RepositorySliceBaseline> CapturePreSliceBaselineAsync(
         CancellationToken cancellationToken = default)
     {
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return await baselineStore.CapturePreSliceAsync();
+            return await _baselineStore.CapturePreSliceAsync();
         }
         catch (Exception ex) when (
             ex is not OperationCanceledException &&
@@ -47,7 +51,7 @@ public sealed class NonImplementationPostExecutionReviewService(
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            RepositorySliceSnapshot postSnapshot = await baselineStore.CapturePostSliceAsync(baseline);
+            RepositorySliceSnapshot postSnapshot = await _baselineStore.CapturePostSliceAsync(baseline);
             return await ReviewCoreAsync(baseline, postSnapshot, cancellationToken);
         }
         catch (Exception ex) when (
@@ -91,11 +95,11 @@ public sealed class NonImplementationPostExecutionReviewService(
         CancellationToken cancellationToken)
     {
         DateTimeOffset reviewedAtUtc = DateTimeOffset.UtcNow;
-        RepositorySliceDelta delta = baselineStore.ComputeDelta(baseline, postSnapshot);
+        RepositorySliceDelta delta = _baselineStore.ComputeDelta(baseline, postSnapshot);
         NonImplementationArtifactClassificationSet classificationSet =
-            await classifier.ClassifyAsync(delta);
+            await _classifier.ClassifyAsync(delta);
         NonImplementationSemanticConfirmationBatchResult semantic =
-            await semanticConfirmer.ConfirmAsync(
+            await _semanticConfirmer.ConfirmAsync(
                 classificationSet,
                 reviewedAtUtc,
                 discoveryContext: $"post-execution slice {baseline.ExecutionSliceId}",
@@ -104,7 +108,7 @@ public sealed class NonImplementationPostExecutionReviewService(
         NonImplementationPostExecutionReviewSummary summary =
             BuildSummary(delta, classificationSet, semantic);
         string reviewPath = OrchestrationArtifactPaths.NonImplementationSliceReview(baseline.ExecutionSliceId);
-        await artifacts.WriteAsync(
+        await _artifacts.WriteAsync(
             reviewPath,
             RenderReviewEvidence(
                 baseline,
@@ -134,7 +138,7 @@ public sealed class NonImplementationPostExecutionReviewService(
 
         string postSnapshotPath = OrchestrationArtifactPaths.NonImplementationSlicePostSnapshot(
             baseline.ExecutionSliceId);
-        if (await artifacts.ExistsAsync(postSnapshotPath))
+        if (await _artifacts.ExistsAsync(postSnapshotPath))
         {
             paths.Add(postSnapshotPath);
         }
@@ -154,7 +158,7 @@ public sealed class NonImplementationPostExecutionReviewService(
         IReadOnlyList<string> evidencePaths = [];
         try
         {
-            await artifacts.WriteAsync(failurePath, RenderFailureEvidence(baseline, operation, ex));
+            await _artifacts.WriteAsync(failurePath, RenderFailureEvidence(baseline, operation, ex));
             evidencePaths = [failurePath];
         }
         catch

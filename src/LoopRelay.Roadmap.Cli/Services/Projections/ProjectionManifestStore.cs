@@ -10,7 +10,8 @@ namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
 {
-    private readonly StructuredDocumentStore<ProjectionManifestPersistenceDocument> structuredStore = new(
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly StructuredDocumentStore<ProjectionManifestPersistenceDocument> _structuredStore = new(
         artifacts,
         RoadmapArtifactPaths.ProjectionsManifestJson,
         ProjectionManifestPersistenceDocument.CurrentSchemaVersion,
@@ -19,13 +20,13 @@ internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
 
     public async Task<ProjectionManifest> LoadAsync()
     {
-        ProjectionManifestPersistenceDocument? structured = await structuredStore.LoadAsync();
+        ProjectionManifestPersistenceDocument? structured = await _structuredStore.LoadAsync();
         if (structured is not null)
         {
             return structured.ToDomain();
         }
 
-        string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.ProjectionsManifest);
+        string? content = await _artifacts.ReadAsync(RoadmapArtifactPaths.ProjectionsManifest);
         if (string.IsNullOrWhiteSpace(content))
         {
             return ProjectionManifest.Empty;
@@ -48,7 +49,7 @@ internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
     public async Task SaveAsync(ProjectionManifest manifest)
     {
         ProjectionManifestPersistenceDocument persisted = ProjectionManifestPersistenceDocument.FromDomain(manifest);
-        await structuredStore.SaveAsync(persisted);
+        await _structuredStore.SaveAsync(persisted);
     }
 
     public async Task UpsertAsync(ProjectionManifestEntry entry)

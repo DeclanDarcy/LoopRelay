@@ -13,21 +13,21 @@ namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
 internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncDisposable
 {
-    private readonly IInputWaitProgressRenderer renderer;
-    private readonly string repositoryId;
-    private readonly SessionIdentity sessionId;
-    private readonly SessionRole sessionRole;
-    private readonly string transport;
-    private readonly string? model;
-    private readonly int promptChars;
-    private readonly int promptBytes;
-    private readonly int promptTokensEstimated;
-    private readonly string tokenEstimateSource;
-    private readonly string estimatorVersion;
+    private readonly IInputWaitProgressRenderer _renderer;
+    private readonly string _repositoryId;
+    private readonly SessionIdentity _sessionId;
+    private readonly SessionRole _sessionRole;
+    private readonly string _transport;
+    private readonly string? _model;
+    private readonly int _promptChars;
+    private readonly int _promptBytes;
+    private readonly int _promptTokensEstimated;
+    private readonly string _tokenEstimateSource;
+    private readonly string _estimatorVersion;
     private readonly object gate = new();
     private readonly CancellationTokenSource renderCts = new();
     private readonly long startedTimestamp = Stopwatch.GetTimestamp();
-    private readonly Func<DateTimeOffset> utcNow;
+    private readonly Func<DateTimeOffset> _utcNow;
     private Task? renderTask;
     private bool firstOutputRendered;
     private bool completed;
@@ -54,28 +54,28 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
         string estimatorVersion,
         Func<DateTimeOffset>? utcNow = null)
     {
-        this.renderer = renderer;
-        this.repositoryId = repositoryId;
-        this.sessionId = sessionId;
-        this.sessionRole = sessionRole;
-        this.transport = transport;
-        this.model = model;
-        this.promptChars = promptChars;
-        this.promptBytes = promptBytes;
-        this.promptTokensEstimated = promptTokensEstimated;
-        this.tokenEstimateSource = tokenEstimateSource;
-        this.estimatorVersion = estimatorVersion;
-        this.utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
+        _renderer = renderer;
+        _repositoryId = repositoryId;
+        _sessionId = sessionId;
+        _sessionRole = sessionRole;
+        _transport = transport;
+        _model = model;
+        _promptChars = promptChars;
+        _promptBytes = promptBytes;
+        _promptTokensEstimated = promptTokensEstimated;
+        _tokenEstimateSource = tokenEstimateSource;
+        _estimatorVersion = estimatorVersion;
+        _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
     }
 
     public void Start()
     {
         lock (gate)
         {
-            promptPreparedAt ??= utcNow();
+            promptPreparedAt ??= _utcNow();
         }
 
-        SafeRender(() => renderer.Started(Snapshot()));
+        SafeRender(() => _renderer.Started(Snapshot()));
         renderTask = Task.Run(RenderLoopAsync);
     }
 
@@ -103,7 +103,7 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
         bool shouldRender;
         lock (gate)
         {
-            firstOutputAt ??= utcNow();
+            firstOutputAt ??= _utcNow();
             shouldRender = !firstOutputRendered;
             firstOutputRendered = true;
         }
@@ -113,7 +113,7 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
             return;
         }
 
-        SafeRender(() => renderer.FirstOutput(Snapshot()));
+        SafeRender(() => _renderer.FirstOutput(Snapshot()));
         renderCts.Cancel();
     }
 
@@ -125,7 +125,7 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
         bool renderCompletedWithoutOutput;
         lock (gate)
         {
-            completedAt ??= utcNow();
+            completedAt ??= _utcNow();
             completed = true;
             renderCompletedWithoutOutput = !firstOutputRendered;
         }
@@ -145,7 +145,7 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
 
         if (renderCompletedWithoutOutput)
         {
-            SafeRender(() => renderer.CompletedWithoutOutput(Snapshot()));
+            SafeRender(() => _renderer.CompletedWithoutOutput(Snapshot()));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -177,7 +177,7 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
     {
         try
         {
-            using var timer = new PeriodicTimer(renderer.RefreshInterval);
+            using var timer = new PeriodicTimer(_renderer.RefreshInterval);
             while (await timer.WaitForNextTickAsync(renderCts.Token))
             {
                 if (!RenderWaitingIfStillWaiting())
@@ -207,7 +207,7 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
 
             // Keep timer renders ordered before first-output renders; otherwise a tick can repaint
             // "processing input" after visible output has already started.
-            SafeRender(() => renderer.Waiting(SnapshotWithoutLock()));
+            SafeRender(() => _renderer.Waiting(SnapshotWithoutLock()));
             return true;
         }
     }
@@ -217,16 +217,16 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
         lock (gate)
         {
             return new InputWaitObservation(
-                repositoryId,
-                sessionId,
-                sessionRole,
+                _repositoryId,
+                _sessionId,
+                _sessionRole,
                 turnIndex,
-                transport,
-                model,
-                promptChars,
-                promptBytes,
-                promptTokensEstimated,
-                tokenEstimateSource,
+                _transport,
+                _model,
+                _promptChars,
+                _promptBytes,
+                _promptTokensEstimated,
+                _tokenEstimateSource,
                 promptPreparedAt,
                 requestWriteStartedAt,
                 requestSubmittedAt,
@@ -235,15 +235,15 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
                 firstOutputAt,
                 completedAt,
                 status,
-                estimatorVersion);
+                _estimatorVersion);
         }
     }
 
     private InputWaitProgressSnapshot Snapshot() =>
-        new(promptTokensEstimated, Stopwatch.GetElapsedTime(startedTimestamp), HasFirstOutput());
+        new(_promptTokensEstimated, Stopwatch.GetElapsedTime(startedTimestamp), HasFirstOutput());
 
     private InputWaitProgressSnapshot SnapshotWithoutLock() =>
-        new(promptTokensEstimated, Stopwatch.GetElapsedTime(startedTimestamp), firstOutputAt is not null);
+        new(_promptTokensEstimated, Stopwatch.GetElapsedTime(startedTimestamp), firstOutputAt is not null);
 
     private bool HasFirstOutput()
     {
@@ -257,7 +257,7 @@ internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncD
     {
         lock (gate)
         {
-            field ??= utcNow();
+            field ??= _utcNow();
         }
     }
 

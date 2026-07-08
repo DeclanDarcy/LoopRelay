@@ -9,6 +9,8 @@ internal sealed class SelectionSuperseder(
     SelectionProvenanceService selectionProvenance,
     ArtifactLifecycleStore lifecycleStore)
 {
+    private readonly SelectionProvenanceService _selectionProvenance = selectionProvenance;
+    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
     public Task SupersedeForRetiredEpicAsync() =>
         SupersedeAsync(
             [DerivedArtifactStaleReason.RetiredEpicStateDrift],
@@ -23,8 +25,8 @@ internal sealed class SelectionSuperseder(
         IReadOnlyList<DerivedArtifactStaleReason> reasons,
         string lifecycleNotes)
     {
-        await selectionProvenance.SupersedeActiveSelectionAsync(reasons);
-        await lifecycleStore.UpsertAsync(
+        await _selectionProvenance.SupersedeActiveSelectionAsync(reasons);
+        await _lifecycleStore.UpsertAsync(
             RoadmapArtifactPaths.Selection,
             ArtifactLifecycleState.Superseded,
             lifecycleNotes);

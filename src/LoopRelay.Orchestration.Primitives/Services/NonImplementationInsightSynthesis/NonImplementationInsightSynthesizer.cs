@@ -24,10 +24,10 @@ public sealed class NonImplementationInsightSynthesizer
         WriteIndented = true,
     };
 
-    private readonly NonImplementationReviewLedgerStore ledgerStore;
-    private readonly INonImplementationReviewRunner runner;
-    private readonly IArtifactStore artifacts;
-    private readonly NonImplementationInsightSynthesizerOptions options;
+    private readonly NonImplementationReviewLedgerStore _ledgerStore;
+    private readonly INonImplementationReviewRunner _runner;
+    private readonly IArtifactStore _artifacts;
+    private readonly NonImplementationInsightSynthesizerOptions _options;
 
     static NonImplementationInsightSynthesizer()
     {
@@ -44,17 +44,17 @@ public sealed class NonImplementationInsightSynthesizer
         ArgumentNullException.ThrowIfNull(runner);
         ArgumentNullException.ThrowIfNull(artifacts);
 
-        this.options = options ?? NonImplementationInsightSynthesizerOptions.Default;
-        ArgumentException.ThrowIfNullOrWhiteSpace(this.options.PromptName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(this.options.SynthesisPromptSourceHash);
-        if (this.options.MaxPromptPayloadCharacters <= 0)
+        _options = options ?? NonImplementationInsightSynthesizerOptions.Default;
+        ArgumentException.ThrowIfNullOrWhiteSpace(_options.PromptName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(_options.SynthesisPromptSourceHash);
+        if (_options.MaxPromptPayloadCharacters <= 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(options),
                 "Maximum prompt payload characters must be positive.");
         }
 
-        if (this.options.MaxFileContentCharacters <= 0)
+        if (_options.MaxFileContentCharacters <= 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(options),
@@ -62,15 +62,15 @@ public sealed class NonImplementationInsightSynthesizer
         }
 
         runner.Capabilities.EnsureReadOnly();
-        this.ledgerStore = ledgerStore;
-        this.runner = runner;
-        this.artifacts = artifacts;
+        _ledgerStore = ledgerStore;
+        _runner = runner;
+        _artifacts = artifacts;
     }
 
     public async Task<NonImplementationInsightSynthesisResult> SynthesizeAsync(
         CancellationToken cancellationToken = default)
     {
-        NonImplementationReviewLedgerDocument document = await ledgerStore.LoadOrCreateAsync();
+        NonImplementationReviewLedgerDocument document = await _ledgerStore.LoadOrCreateAsync();
         IReadOnlyList<NonImplementationReviewLedgerEntry> confirmed = document.Entries
             .Where(entry =>
                 entry.SemanticDisposition == NonImplementationSemanticDisposition.ConfirmedNonImplementation &&
@@ -87,12 +87,12 @@ public sealed class NonImplementationInsightSynthesizer
             .ThenBy(entry => entry.EntryId, StringComparer.Ordinal)
             .ToArray();
 
-        string? existing = await artifacts.ReadAsync(OrchestrationArtifactPaths.NonImplementationSynthesis);
+        string? existing = await _artifacts.ReadAsync(OrchestrationArtifactPaths.NonImplementationSynthesis);
         if (confirmed.Count == 0)
         {
             return new NonImplementationInsightSynthesisResult(
                 OrchestrationArtifactPaths.NonImplementationSynthesis,
-                options.SynthesisPromptSourceHash,
+                _options.SynthesisPromptSourceHash,
                 Generated: false,
                 ReusedExisting: false,
                 SkippedNoConfirmedEntries: true,
@@ -107,7 +107,7 @@ public sealed class NonImplementationInsightSynthesizer
             .ToArray();
         var metadata = new NonImplementationInsightSynthesisMetadata(
             MetadataSchemaVersion,
-            options.SynthesisPromptSourceHash,
+            _options.SynthesisPromptSourceHash,
             sources);
         bool existingFresh =
             existing is not null &&
@@ -118,7 +118,7 @@ public sealed class NonImplementationInsightSynthesizer
         {
             return new NonImplementationInsightSynthesisResult(
                 OrchestrationArtifactPaths.NonImplementationSynthesis,
-                options.SynthesisPromptSourceHash,
+                _options.SynthesisPromptSourceHash,
                 Generated: false,
                 ReusedExisting: true,
                 SkippedNoConfirmedEntries: false,
@@ -130,19 +130,19 @@ public sealed class NonImplementationInsightSynthesizer
         string prompt = LoopRelay.Core.Prompts.SynthesizeNonImplementationInsights.Render(
             await BuildPromptPayloadAsync(confirmed, uncertain, cancellationToken));
         var request = new NonImplementationReviewRunnerRequest(
-            options.PromptName,
+            _options.PromptName,
             prompt,
-            options.MaxPromptPayloadCharacters);
+            _options.MaxPromptPayloadCharacters);
         request.Constraints.EnsureReadOnly();
 
         NonImplementationReviewRunnerResponse response =
-            await runner.RunAsync(request, cancellationToken);
+            await _runner.RunAsync(request, cancellationToken);
         string content = RenderSynthesisArtifact(metadata, response.StructuredText);
-        await artifacts.WriteAsync(OrchestrationArtifactPaths.NonImplementationSynthesis, content);
+        await _artifacts.WriteAsync(OrchestrationArtifactPaths.NonImplementationSynthesis, content);
 
         return new NonImplementationInsightSynthesisResult(
             OrchestrationArtifactPaths.NonImplementationSynthesis,
-            options.SynthesisPromptSourceHash,
+            _options.SynthesisPromptSourceHash,
             Generated: true,
             ReusedExisting: false,
             SkippedNoConfirmedEntries: false,
@@ -194,14 +194,14 @@ public sealed class NonImplementationInsightSynthesizer
         }
         else
         {
-            string? fileContent = await artifacts.ReadAsync(entry.Path);
+            string? fileContent = await _artifacts.ReadAsync(entry.Path);
             if (fileContent is null)
             {
                 contentOmittedReason = "File was not present when synthesis ran.";
             }
-            else if (fileContent.Length > options.MaxFileContentCharacters)
+            else if (fileContent.Length > _options.MaxFileContentCharacters)
             {
-                content = fileContent[..options.MaxFileContentCharacters];
+                content = fileContent[.._options.MaxFileContentCharacters];
                 contentTruncated = true;
             }
             else

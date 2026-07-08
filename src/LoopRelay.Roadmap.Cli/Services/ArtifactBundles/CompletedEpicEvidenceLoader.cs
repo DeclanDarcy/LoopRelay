@@ -7,6 +7,7 @@ namespace LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 
 internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts artifacts)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
     internal const int MaxRenderedContentPerEpic = 4_000;
     internal const int MaxTotalRenderedCharacters = 16_000;
 
@@ -24,11 +25,11 @@ internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts artifacts)
 
     public async Task<IReadOnlyList<CompletedEpicEvidence>> LoadAsync()
     {
-        IReadOnlyList<string> paths = await artifacts.ListAsync(RoadmapArtifactPaths.CompletedEpicsDirectory, "*.md");
+        IReadOnlyList<string> paths = await _artifacts.ListAsync(RoadmapArtifactPaths.CompletedEpicsDirectory, "*.md");
         var evidence = new List<CompletedEpicEvidence>();
         foreach (string path in paths.Order(StringComparer.Ordinal))
         {
-            string? content = await artifacts.ReadAsync(path);
+            string? content = await _artifacts.ReadAsync(path);
             if (content is null)
             {
                 continue;

@@ -22,6 +22,12 @@ internal sealed class SessionTelemetryRecorder(
     IClock clock,
     ILoopConsole console) : ISessionTelemetryRecorder
 {
+    private readonly ICodexUsageProbe _probe = probe;
+    private readonly ICodexRolloutLocator _locator = locator;
+    private readonly ISessionTelemetrySink _sink = sink;
+    private readonly IDecisionCostModel _costModel = costModel;
+    private readonly IClock _clock = clock;
+    private readonly ILoopConsole _console = console;
     public async Task<string?> RecordTurnAsync(
         string repoName,
         string workingDirectory,
@@ -37,11 +43,11 @@ internal sealed class SessionTelemetryRecorder(
         try
         {
             CodexUsageStatus? post = await ProbePostAsync(cancellationToken);
-            path ??= locator.Resolve(workingDirectory, openedAtUtc);
+            path ??= _locator.Resolve(workingDirectory, openedAtUtc);
 
             AgentTokenUsage usage = result.Usage;
             var record = new SessionTelemetryRecord(
-                clock.UtcNow,
+                _clock.UtcNow,
                 repoName,
                 path,
                 sessionId.Value.ToString(),
@@ -50,7 +56,7 @@ internal sealed class SessionTelemetryRecorder(
                 usage.PromptTokens,
                 usage.OutputTokens,
                 usage.CachedInputTokens,
-                costModel.Measure(usage),
+                _costModel.Measure(usage),
                 post?.FiveHourRemainingPercent,
                 post?.WeeklyRemainingPercent,
                 inputWait?.Transport,
@@ -72,7 +78,7 @@ internal sealed class SessionTelemetryRecorder(
                 inputWait?.Status,
                 inputWait?.EstimatorVersion);
 
-            sink.Append(record);
+            _sink.Append(record);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -80,7 +86,7 @@ internal sealed class SessionTelemetryRecorder(
         }
         catch (Exception ex)
         {
-            console.Warn($"Session telemetry not recorded: {ex.Message}");
+            _console.Warn($"Session telemetry not recorded: {ex.Message}");
         }
 
         return path;
@@ -92,7 +98,7 @@ internal sealed class SessionTelemetryRecorder(
     {
         try
         {
-            return await probe.QueryAsync(cancellationToken);
+            return await _probe.QueryAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

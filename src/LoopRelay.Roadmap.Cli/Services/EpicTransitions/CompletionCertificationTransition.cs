@@ -45,6 +45,24 @@ internal sealed class CompletionCertificationTransition(
     ILoopConsole console,
     INonImplementationCompletionReviewService? nonImplementationCompletionReview = null)
 {
+    private readonly RoadmapArtifacts _artifacts = artifacts;
+    private readonly Projections.ProjectContextLoader _projectContextLoader = projectContextLoader;
+    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
+    private readonly ProjectionCache _projectionCache = projectionCache;
+    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
+    private readonly TransitionInputResolver _inputResolver = inputResolver;
+    private readonly CompletionCertificationPolicy _completionPolicy = completionPolicy;
+    private readonly CompletionCertificationRouter _completionRouter = completionRouter;
+    private readonly ICompletedEpicArchiveService _completionArchive = completionArchive;
+    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
+    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
+    private readonly RoadmapCompletionContextUpdateTransition _completionContextUpdateTransition = completionContextUpdateTransition;
+    private readonly DecisionRecorder _decisionRecorder = decisionRecorder;
+    private readonly TransitionJournalStore _journalStore = journalStore;
+    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
+    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
+    private readonly ILoopConsole _console = console;
+    private readonly INonImplementationCompletionReviewService? _nonImplementationCompletionReview = nonImplementationCompletionReview;
     public async Task<RoadmapOutcome> ExecuteAsync(
         ProjectContext projectContext,
         DateTimeOffset executionStarted,
@@ -58,7 +76,7 @@ internal sealed class CompletionCertificationTransition(
         {
             ExecutionDispositionRoute completionClaimRoute = completionRoute
                 ?? throw new RoadmapStepException("Completion certification requires a validated execution completion route.");
-            await transitionPersistence.SaveAsync(
+            await _transitionPersistence.SaveAsync(
                 completionClaimRoute.TargetState,
                 TransitionStatus.Completed,
                 RoadmapState.ExecutionLoop,
@@ -76,21 +94,21 @@ internal sealed class CompletionCertificationTransition(
         }
 
         string runtimePrompt = ExecutionDispositionProtocol.CommandText(ExecutionDispositionCommand.EvaluateEpicCompletionAndDrift);
-        if (nonImplementationCompletionReview is not null)
+        if (_nonImplementationCompletionReview is not null)
         {
             NonImplementationCompletionReviewResult review =
-                await nonImplementationCompletionReview.ReviewAsync(cancellationToken);
+                await _nonImplementationCompletionReview.ReviewAsync(cancellationToken);
             if (review.IsBlocked)
             {
                 return await PersistNonImplementationCompletionReviewBlockedAsync(review);
             }
         }
 
-        console.Phase("Evaluate epic completion and drift");
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = await contextBuilder.BuildCompletionEvaluationContextAsync(projection.Content, executionEvidencePath);
-        string output = await promptTransitionRunner.RunNormalAsync(
+        _console.Phase("Evaluate epic completion and drift");
+        PromptContract contract = _contractRegistry.Get(runtimePrompt);
+        ProjectionCacheResult projection = await _projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
+        string context = await _contextBuilder.BuildCompletionEvaluationContextAsync(projection.Content, executionEvidencePath);
+        string output = await _promptTransitionRunner.RunNormalAsync(
             RoadmapState.EpicCompletionDetected,
             RoadmapState.CompletionEvaluationAndContextUpdate,
             runtimePrompt,
@@ -100,11 +118,11 @@ internal sealed class CompletionCertificationTransition(
             [RoadmapArtifactPaths.EvaluationEvidenceDirectory],
             cancellationToken,
             TransitionInputContext.ExecutionEvidence(executionEvidencePath));
-        string evaluationPath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "epic-completion-and-drift", output);
-        await hitlArtifactCapture.CaptureAsync(evaluationPath, output);
+        string evaluationPath = await _artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "epic-completion-and-drift", output);
+        await _hitlArtifactCapture.CaptureAsync(evaluationPath, output);
         CompletionEvaluationDecision decision = new CompletionEvaluationParser().Parse(output);
-        CompletionCertificationPolicyResult certification = completionPolicy.Validate(decision);
-        await decisionRecorder.AppendAsync(
+        CompletionCertificationPolicyResult certification = _completionPolicy.Validate(decision);
+        await _decisionRecorder.AppendAsync(
             RoadmapState.CompletionEvaluationAndContextUpdate,
             runtimePrompt,
             projection.Definition.ProjectionPath,
@@ -121,7 +139,7 @@ internal sealed class CompletionCertificationTransition(
                 evaluationPath);
         }
 
-        CompletionCertificationRoute route = completionRouter.Route(certification.Decision);
+        CompletionCertificationRoute route = _completionRouter.Route(certification.Decision);
         RoadmapCompletionRoute roadmapRoute = RoadmapCompletionRouteMapper.Map(route);
         CompletedEpicArchiveResult? archive = await RunCloseRouteEffectsAsync(
             roadmapRoute,
@@ -131,7 +149,7 @@ internal sealed class CompletionCertificationTransition(
 
         if (roadmapRoute.ActiveEpicLifecycleState is { } activeEpicLifecycleState)
         {
-            await lifecycleStore.UpsertAsync(
+            await _lifecycleStore.UpsertAsync(
                 RoadmapArtifactPaths.ActiveEpic,
                 activeEpicLifecycleState,
                 $"Completion certification route: {roadmapRoute.ClosureRecommendation}");
@@ -156,7 +174,7 @@ internal sealed class CompletionCertificationTransition(
         CancellationToken cancellationToken)
     {
         RoadmapCompletionRoute roadmapRoute = RoadmapCompletionRouteMapper.Map(route);
-        await decisionRecorder.AppendAsync(
+        await _decisionRecorder.AppendAsync(
             RoadmapState.CompletionEvaluationAndContextUpdate,
             "UnblockReview",
             projectionPath,
@@ -168,7 +186,7 @@ internal sealed class CompletionCertificationTransition(
         CompletedEpicArchiveResult? archive = null;
         if (roadmapRoute.RequiresRoadmapCompletionContextUpdate)
         {
-            ProjectContext projectContext = await projectContextLoader.LoadAsync(cancellationToken);
+            ProjectContext projectContext = await _projectContextLoader.LoadAsync(cancellationToken);
             archive = await RunCloseRouteEffectsAsync(
                 roadmapRoute,
                 projectContext,
@@ -178,7 +196,7 @@ internal sealed class CompletionCertificationTransition(
 
         if (roadmapRoute.ActiveEpicLifecycleState is { } activeEpicLifecycleState)
         {
-            await lifecycleStore.UpsertAsync(
+            await _lifecycleStore.UpsertAsync(
                 RoadmapArtifactPaths.ActiveEpic,
                 activeEpicLifecycleState,
                 $"Completion certification unblock route: {roadmapRoute.ClosureRecommendation}");
@@ -205,10 +223,10 @@ internal sealed class CompletionCertificationTransition(
             return null;
         }
 
-        CompletedEpicArchiveResult archive = await completionArchive.ArchiveAndSynthesizeAsync(
-            new CompletedEpicArchiveRequest(artifacts.Repository),
+        CompletedEpicArchiveResult archive = await _completionArchive.ArchiveAndSynthesizeAsync(
+            new CompletedEpicArchiveRequest(_artifacts.Repository),
             cancellationToken);
-        await completionContextUpdateTransition.ExecuteAsync(
+        await _completionContextUpdateTransition.ExecuteAsync(
             projectContext,
             evaluationPath,
             archive.SynthesisPath,
@@ -236,7 +254,7 @@ internal sealed class CompletionCertificationTransition(
             ? ["- Human review decisions are pending."]
             : review.BlockerMessages.Select(message => $"- {message}"));
         string details = string.Join(Environment.NewLine, detailsLines);
-        string blockerPath = await artifacts.WriteNumberedEvidenceAsync(
+        string blockerPath = await _artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "non-implementation-completion-review-blocked",
             RoadmapBlockedArtifact.Render(
@@ -249,7 +267,7 @@ internal sealed class CompletionCertificationTransition(
                 blockedAt));
         IReadOnlyList<string> outputs = [..review.EvidencePaths, blockerPath];
 
-        await transitionPersistence.SaveAsync(
+        await _transitionPersistence.SaveAsync(
             RoadmapState.EvidenceBlocked,
             TransitionStatus.Paused,
             RoadmapState.EpicCompletionDetected,
@@ -289,13 +307,13 @@ internal sealed class CompletionCertificationTransition(
                 $"Target State: {route.TargetState}",
                 $"Transition Status: {route.TransitionStatus}",
             ]);
-        TransitionInputSnapshot inputSnapshot = await inputResolver.ResolveAsync(new TransitionInputRequest(
+        TransitionInputSnapshot inputSnapshot = await _inputResolver.ResolveAsync(new TransitionInputRequest(
             "CompletionCertificationRouting",
             projectionPath,
             routingContext,
             string.Empty,
             TransitionInputContext.CompletionEvaluation(evaluationPath)));
-        await journalStore.AppendAsync(new TransitionJournalRecord(
+        await _journalStore.AppendAsync(new TransitionJournalRecord(
             "TransitionCompleted",
             Guid.NewGuid().ToString("N"),
             completed,
@@ -311,7 +329,7 @@ internal sealed class CompletionCertificationTransition(
             decision.ClosureRecommendation,
             null,
             inputSnapshot));
-        await transitionPersistence.SaveAsync(
+        await _transitionPersistence.SaveAsync(
             route.TargetState,
             route.TransitionStatus,
             RoadmapState.CompletionEvaluationAndContextUpdate,
@@ -371,7 +389,7 @@ internal sealed class CompletionCertificationTransition(
             | Blocked Transition | {blockedTransition} |
             | Required Next Step | {requiredNextStep} |
             """;
-        string blockerPath = await artifacts.WriteNumberedEvidenceAsync(
+        string blockerPath = await _artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "invalid-completion-certification",
             RoadmapBlockedArtifact.Render(
@@ -391,14 +409,14 @@ internal sealed class CompletionCertificationTransition(
                 $"Blocked Transition: {blockedTransition}",
                 $"Validation Failure: {reason}",
             ]);
-        TransitionInputSnapshot inputSnapshot = await inputResolver.ResolveAsync(new TransitionInputRequest(
+        TransitionInputSnapshot inputSnapshot = await _inputResolver.ResolveAsync(new TransitionInputRequest(
             "CompletionCertificationRouting",
             projectionPath,
             routingContext,
             string.Empty,
             TransitionInputContext.CompletionEvaluation(evaluationPath)));
         IReadOnlyList<string> outputs = [evaluationPath, blockerPath];
-        await journalStore.AppendAsync(new TransitionJournalRecord(
+        await _journalStore.AppendAsync(new TransitionJournalRecord(
             "CompletionCertificationRejected",
             Guid.NewGuid().ToString("N"),
             blockedAt,
@@ -414,7 +432,7 @@ internal sealed class CompletionCertificationTransition(
             "Invalid Completion Certification",
             reason,
             inputSnapshot));
-        await transitionPersistence.SaveAsync(
+        await _transitionPersistence.SaveAsync(
             RoadmapState.EvidenceBlocked,
             TransitionStatus.Paused,
             RoadmapState.CompletionEvaluationAndContextUpdate,
