@@ -120,6 +120,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             stateStore,
             selectionProvenance);
         var lifecycle = new ArtifactLifecycleStore(artifacts);
+        var selectionSuperseder = new SelectionSuperseder(selectionProvenance, lifecycle);
         var startupPlanner = new RoadmapStartupPlanner();
         var projectContextLoader = new ProjectContextLoader(artifacts);
         var resumePlanner = new RoadmapResumePlanner(
@@ -174,6 +175,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             resumePlanner,
             unblockPlanner,
             selectionProvenance,
+            selectionSuperseder,
             decisionRecorder,
             journal,
             lifecycle,

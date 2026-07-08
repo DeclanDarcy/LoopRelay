@@ -2,15 +2,15 @@
 
 ## Work Items
 
-- [ ] Move existing private helper behavior into the shared services listed in
+- [x] Move existing private helper behavior into the shared services listed in
   the plan.
-- [ ] Keep `RoadmapStateMachine` calling the same operations through the new
+- [x] Keep `RoadmapStateMachine` calling the same operations through the new
   services.
-- [ ] Do not move transition bodies yet.
+- [x] Do not move transition bodies yet.
 
 ## Acceptance
 
-- [ ] `RoadmapStateMachine` behavior is unchanged.
+- [x] `RoadmapStateMachine` behavior is unchanged.
 - [x] Existing constructor wiring is updated in `RoadmapCliComposition` and
   `StateMachineFactory`.
 - [x] No handler is introduced until shared helper tests pass.
@@ -223,18 +223,18 @@ This service must update both provenance and lifecycle.
 
 ### Retire Branch
 
-- [ ] Supersede active trusted selection provenance with
+- [x] Supersede active trusted selection provenance with
   `RetiredEpicStateDrift`.
-- [ ] Mark `.agents/selection.md` lifecycle `Superseded`.
-- [ ] Lifecycle note:
+- [x] Mark `.agents/selection.md` lifecycle `Superseded`.
+- [x] Lifecycle note:
   `Retired epic state changed after EpicPreparationAudit.`
 
 ### Completion-Context Update
 
-- [ ] Supersede active trusted selection provenance with
+- [x] Supersede active trusted selection provenance with
   `RoadmapCompletionContextDrift`.
-- [ ] Mark `.agents/selection.md` lifecycle `Superseded`.
-- [ ] Lifecycle note:
+- [x] Mark `.agents/selection.md` lifecycle `Superseded`.
+- [x] Lifecycle note:
   `Roadmap completion context changed after completion certification.`
 
 ## Equivalence Checks

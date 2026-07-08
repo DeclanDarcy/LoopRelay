@@ -22,6 +22,7 @@ internal sealed class RoadmapStateMachine(
     RoadmapResumePlanner resumePlanner,
     RoadmapUnblockPlanner unblockPlanner,
     SelectionProvenanceService selectionProvenance,
+    SelectionSuperseder selectionSuperseder,
     DecisionRecorder decisionRecorder,
     TransitionJournalStore journalStore,
     ArtifactLifecycleStore lifecycleStore,
@@ -627,9 +628,7 @@ internal sealed class RoadmapStateMachine(
             IReadOnlyList<RetiredEpic> retiredEpics = RetiredEpic.Upsert(existing?.RetiredEpics ?? [], retired);
             await decisionRecorder.AppendAsync(RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", decision.Confidence, $"{retired.IdentityKind} {retired.StableIdentity}: {decision.PrimaryReason}");
             await SaveStateAsync(RoadmapState.RetireEpic, TransitionStatus.Completed, RoadmapState.EpicPreparationAudit, RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", retiredAt, retiredAt, retiredEpics, null);
-            await SupersedeActiveSelectionAsync(
-                [DerivedArtifactStaleReason.RetiredEpicStateDrift],
-                "Retired epic state changed after EpicPreparationAudit.");
+            await selectionSuperseder.SupersedeForRetiredEpicAsync();
             return EpicPreparationResult.Retired;
         }
 
@@ -1219,9 +1218,7 @@ internal sealed class RoadmapStateMachine(
         await artifacts.WriteAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
         await hitlArtifactCapture.CaptureAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
         await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.EvaluationEvidenceDirectory, "roadmap-completion-update", output);
-        await SupersedeActiveSelectionAsync(
-            [DerivedArtifactStaleReason.RoadmapCompletionContextDrift],
-            "Roadmap completion context changed after completion certification.");
+        await selectionSuperseder.SupersedeForRoadmapCompletionContextAsync();
         await decisionRecorder.AppendAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.RoadmapCompletionContext, "Roadmap Completion Context Updated", "Unclear", "Completion context updated after certification.");
     }
 
@@ -1458,17 +1455,6 @@ internal sealed class RoadmapStateMachine(
                 details,
                 failedAt));
         return [fallbackPath];
-    }
-
-    private async Task SupersedeActiveSelectionAsync(
-        IReadOnlyList<DerivedArtifactStaleReason> reasons,
-        string lifecycleNotes)
-    {
-        await selectionProvenance.SupersedeActiveSelectionAsync(reasons);
-        await lifecycleStore.UpsertAsync(
-            RoadmapArtifactPaths.Selection,
-            ArtifactLifecycleState.Superseded,
-            lifecycleNotes);
     }
 
     private async Task SaveStateAsync(

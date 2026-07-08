@@ -497,6 +497,7 @@ internal static class StateMachineFactory
             repo.Artifacts,
             stateStore,
             selectionProvenance);
+        var selectionSuperseder = new Cli.SelectionSuperseder(selectionProvenance, lifecycle);
         var hitlArtifactCapture = new Cli.HitlArtifactCapture(hitlRequestCapture);
         var activeEpicPromotionCoordinator = new Cli.ActiveEpicPromotionCoordinator(
             new Cli.ArtifactPromotionService(repo.Artifacts, lifecycle),
@@ -524,6 +525,7 @@ internal static class StateMachineFactory
             resumePlanner,
             unblockPlanner,
             selectionProvenance,
+            selectionSuperseder,
             decisionRecorder,
             journal,
             lifecycle,
