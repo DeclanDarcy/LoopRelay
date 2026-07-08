@@ -168,6 +168,14 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             hitlArtifactCapture,
             journal,
             transitionPersistence);
+        var createNewEpicTransition = new CreateNewEpicTransition(
+            contractRegistry,
+            projectionCache,
+            contextBuilder,
+            activeSelectionReader,
+            promptTransitionRunner,
+            activeEpicPromotionCoordinator,
+            console);
         var invariants = new InvariantValidator(
             artifacts,
             projectContextLoader,
@@ -192,6 +200,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             promptTransitionRunner,
             bootstrapRoadmapCompletionContextTransition,
             selectNextEpicTransition,
+            createNewEpicTransition,
             activeSelectionReader,
             startupPlanner,
             resumePlanner,

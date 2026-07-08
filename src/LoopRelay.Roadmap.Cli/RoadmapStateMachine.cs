@@ -19,6 +19,7 @@ internal sealed class RoadmapStateMachine(
     RoadmapPromptTransitionRunner promptTransitionRunner,
     BootstrapRoadmapCompletionContextTransition bootstrapRoadmapCompletionContextTransition,
     SelectNextEpicTransition selectNextEpicTransition,
+    CreateNewEpicTransition createNewEpicTransition,
     ActiveSelectionReader activeSelectionReader,
     RoadmapStartupPlanner startupPlanner,
     RoadmapResumePlanner resumePlanner,
@@ -512,7 +513,7 @@ internal sealed class RoadmapStateMachine(
 
                 break;
             case "Select New Intermediary Epic":
-                ArtifactPromotionResult createPromotion = await CreateNewEpicAsync(projectContext, cancellationToken);
+                ArtifactPromotionResult createPromotion = await createNewEpicTransition.ExecuteAsync(projectContext, cancellationToken);
                 if (!createPromotion.Promoted)
                 {
                     return RoadmapOutcome.Paused;
@@ -613,18 +614,6 @@ internal sealed class RoadmapStateMachine(
             cancellationToken,
             TransitionInputContext.AuditEvidence(auditPath));
         return await activeEpicPromotionCoordinator.PromoteAsync(state, runtimePrompt, projection.Definition.ProjectionPath, completion);
-    }
-
-    private async Task<ArtifactPromotionResult> CreateNewEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)
-    {
-        const string runtimePrompt = "CreateNewEpic";
-        console.Phase("Create new epic");
-        string selection = await activeSelectionReader.ReadAsync(cancellationToken);
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
-        PromptTransitionCompletion completion = await promptTransitionRunner.RunPromotionCandidateAsync(RoadmapState.NewEpicProposed, RoadmapState.ActiveEpicReady, runtimePrompt, projection.Definition.ProjectionPath, context, selection, [RoadmapArtifactPaths.ActiveEpic], cancellationToken);
-        return await activeEpicPromotionCoordinator.PromoteAsync(RoadmapState.NewEpicProposed, runtimePrompt, projection.Definition.ProjectionPath, completion);
     }
 
     private async Task<ArtifactPromotionResult> SplitEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)

@@ -2,66 +2,66 @@
 
 ## Work Items
 
-- [ ] Introduce `ActiveEpicPromotionCoordinator` before moving these handlers.
-- [ ] Use the coordinator for the shared final promotion behavior required by
+- [x] Introduce `ActiveEpicPromotionCoordinator` before moving these handlers.
+- [x] Use the coordinator for the shared final promotion behavior required by
   `CreateNewEpic`, `RealignEpic`, `ReimagineEpic`, and `SplitEpic`.
 
 ## ActiveEpicPromotionCoordinator Rules Used By This Milestone
 
 ### Input Rules
 
-- [ ] Target is always `.agents/epic.md`.
-- [ ] Evidence directory is `.agents/evidence/blockers`.
-- [ ] Evidence stem is `active-epic-promotion`.
-- [ ] Artifact name is `active epic`.
-- [ ] Classifier is `EpicAuthoringOutputClassifier`.
-- [ ] Validator is `EpicArtifactValidator`.
-- [ ] Promoted lifecycle state is `Ready`.
+- [x] Target is always `.agents/epic.md`.
+- [x] Evidence directory is `.agents/evidence/blockers`.
+- [x] Evidence stem is `active-epic-promotion`.
+- [x] Artifact name is `active epic`.
+- [x] Classifier is `EpicAuthoringOutputClassifier`.
+- [x] Validator is `EpicArtifactValidator`.
+- [x] Promoted lifecycle state is `Ready`.
 
 ### Classification Rules
 
-- [ ] No top-level markdown heading: `Ambiguous`.
-- [ ] First top-level heading contains `Blocked`: `Blocked`.
-- [ ] First top-level heading matches `# Epic: ...`: `Promotable`.
-- [ ] Heading resembles `# Epic` without the required colon form, or content
+- [x] No top-level markdown heading: `Ambiguous`.
+- [x] First top-level heading contains `Blocked`: `Blocked`.
+- [x] First top-level heading matches `# Epic: ...`: `Promotable`.
+- [x] Heading resembles `# Epic` without the required colon form, or content
   contains `## Epic Metadata` while the first heading is wrong: `Malformed`.
-- [ ] Otherwise: `Ambiguous`.
+- [x] Otherwise: `Ambiguous`.
 
 ### Validation Rules For Promotable Output
 
-- [ ] Reject blank content.
-- [ ] Reject anything that reclassifies as non-promotable.
-- [ ] Require headings `## Epic Metadata`, `## Desired Capability`,
+- [x] Reject blank content.
+- [x] Reject anything that reclassifies as non-promotable.
+- [x] Require headings `## Epic Metadata`, `## Desired Capability`,
   `## Acceptance Criteria`, and `## Milestone Roadmap`.
-- [ ] Require either `## Strategic Purpose` or `## Strategic Continuity`.
-- [ ] Require non-empty `Epic ID` and `Status` in the metadata field table.
-- [ ] Require at least one milestone row with columns `Milestone ID`,
+- [x] Require either `## Strategic Purpose` or `## Strategic Continuity`.
+- [x] Require non-empty `Epic ID` and `Status` in the metadata field table.
+- [x] Require at least one milestone row with columns `Milestone ID`,
   `Milestone Name`, `Purpose`, `Outcome`, `Depends On`, and
   `Completion Signal`.
-- [ ] Require non-empty values for `Milestone ID`, `Milestone Name`, `Purpose`,
+- [x] Require non-empty values for `Milestone ID`, `Milestone Name`, `Purpose`,
   `Outcome`, and `Completion Signal`.
 
 ### Promotion Success
 
-- [ ] Write `.agents/epic.md`.
-- [ ] Mark `.agents/epic.md` lifecycle `Ready` with the caller-supplied note.
-- [ ] Capture HITL requests from `.agents/epic.md`.
-- [ ] Append `ArtifactPromoted` with prompt contract key
+- [x] Write `.agents/epic.md`.
+- [x] Mark `.agents/epic.md` lifecycle `Ready` with the caller-supplied note.
+- [x] Capture HITL requests from `.agents/epic.md`.
+- [x] Append `ArtifactPromoted` with prompt contract key
   `ArtifactPromotionService`, result `Promoted`, parser decision
   `Active epic promoted`, and the original prompt input snapshot.
-- [ ] Save state `ActiveEpicReady` / `Completed`, decision
+- [x] Save state `ActiveEpicReady` / `Completed`, decision
   `Artifact Promoted`, output `.agents/epic.md`.
 
 ### Promotion Rejection
 
-- [ ] Write exact rejected output to
+- [x] Write exact rejected output to
   `.agents/evidence/blockers/active-epic-promotion.NNNN.md`.
-- [ ] Mark evidence lifecycle `Blocked` with the rejection reason.
-- [ ] Append `ArtifactPromotionBlocked`.
-- [ ] Save `EvidenceBlocked` / `Paused`.
-- [ ] Use transition intent `ResolveArtifactPromotionBlocker`.
-- [ ] Use next transition `Resolve blocker and rerun`.
-- [ ] Map promotion status to decision text:
+- [x] Mark evidence lifecycle `Blocked` with the rejection reason.
+- [x] Append `ArtifactPromotionBlocked`.
+- [x] Save `EvidenceBlocked` / `Paused`.
+- [x] Use transition intent `ResolveArtifactPromotionBlocker`.
+- [x] Use next transition `Resolve blocker and rerun`.
+- [x] Map promotion status to decision text:
   - blocked: `Artifact Promotion Blocked`
   - ambiguous: `Artifact Promotion Ambiguous`
   - structurally invalid: `Artifact Promotion Invalid`
@@ -77,53 +77,53 @@ Task<ArtifactPromotionResult> ExecuteAsync(ProjectContext projectContext, Cancel
 
 ### Boundary
 
-- [ ] Handler returns `ArtifactPromotionResult`.
-- [ ] Caller controls milestone continuation.
-- [ ] Caller continues to milestone generation only when `Promoted == true`.
+- [x] Handler returns `ArtifactPromotionResult`.
+- [x] Caller controls milestone continuation.
+- [x] Caller continues to milestone generation only when `Promoted == true`.
 
 ### Prompt And Projection
 
-- [ ] Phase `Create new epic`.
-- [ ] Runtime prompt `CreateNewEpic`.
-- [ ] Projection prompt `ProjectionForCreateNewEpic`.
-- [ ] Source/target `NewEpicProposed -> ActiveEpicReady`.
-- [ ] Projection path `.agents/projections/create-new-epic.md`.
-- [ ] Output `.agents/epic.md`.
-- [ ] Secondary input is active selection content.
-- [ ] Envelope is the promotion-candidate prompt transition.
+- [x] Phase `Create new epic`.
+- [x] Runtime prompt `CreateNewEpic`.
+- [x] Projection prompt `ProjectionForCreateNewEpic`.
+- [x] Source/target `NewEpicProposed -> ActiveEpicReady`.
+- [x] Projection path `.agents/projections/create-new-epic.md`.
+- [x] Output `.agents/epic.md`.
+- [x] Secondary input is active selection content.
+- [x] Envelope is the promotion-candidate prompt transition.
 
 ### Required Precondition
 
-- [ ] Read and validate fresh active selection through `ActiveSelectionReader`.
+- [x] Read and validate fresh active selection through `ActiveSelectionReader`.
 
 ### Context
 
-- [ ] Runtime context is built through `BuildCreateOrSplitContext` with
+- [x] Runtime context is built through `BuildCreateOrSplitContext` with
   projection content, selection proposal, and repository inspection
   instructions.
-- [ ] Reject raw Project Context markers.
+- [x] Reject raw Project Context markers.
 
 ### Preserve
 
-- [ ] Prompt start state `NewEpicProposed` / `Started`, decision
+- [x] Prompt start state `NewEpicProposed` / `Started`, decision
   `Prompt Started`.
-- [ ] Prompt-completed state `NewEpicProposed` / `PromptCompleted`, decision
+- [x] Prompt-completed state `NewEpicProposed` / `PromptCompleted`, decision
   `Prompt Completed`.
-- [ ] After `PromptCompleted`, promote through
+- [x] After `PromptCompleted`, promote through
   `ActiveEpicPromotionCoordinator`.
-- [ ] Success state `ActiveEpicReady` / `Completed`, decision
+- [x] Success state `ActiveEpicReady` / `Completed`, decision
   `Artifact Promoted`, lifecycle note `Promoted by CreateNewEpic.`.
-- [ ] Rejection writes `active-epic-promotion.NNNN.md`, saves
+- [x] Rejection writes `active-epic-promotion.NNNN.md`, saves
   `EvidenceBlocked` / `Paused`, and returns not promoted.
-- [ ] Prompt runtime failure saves `EvidenceBlocked` / `Failed`, decision
+- [x] Prompt runtime failure saves `EvidenceBlocked` / `Failed`, decision
   `Runtime Failure`, intent `ResolveTransitionFailure`.
-- [ ] No decision-ledger entry from this transition.
+- [x] No decision-ledger entry from this transition.
 
 ### Input Snapshot
 
-- [ ] Required projection.
-- [ ] Required selection.
-- [ ] Secondary hash of selection content.
+- [x] Required projection.
+- [x] Required selection.
+- [x] Secondary hash of selection content.
 
 ## Realign and Reimagine Active Epic
 
