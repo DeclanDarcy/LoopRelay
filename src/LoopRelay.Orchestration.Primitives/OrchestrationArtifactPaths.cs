@@ -103,6 +103,15 @@ public static class OrchestrationArtifactPaths
     public static string NonImplementationSlicePostSnapshot(string executionSliceId) =>
         $"{NonImplementationSliceEvidenceDirectory(executionSliceId)}/post-snapshot.json";
 
+    public static string NonImplementationSliceReview(string executionSliceId) =>
+        $"{NonImplementationSliceEvidenceDirectory(executionSliceId)}/review.md";
+
+    public static string NonImplementationSliceFailure(string executionSliceId) =>
+        $"{NonImplementationSliceEvidenceDirectory(executionSliceId)}/review-failure.md";
+
+    public static string NonImplementationReviewFailure(string failureId) =>
+        $"{NonImplementationEvidenceDirectory}/{failureId}/review-failure.md";
+
     /// <summary>Directory holding the live handoff and its rotated history.</summary>
     public const string HandoffsDirectory = ".agents/handoffs";
 

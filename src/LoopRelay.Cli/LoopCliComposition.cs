@@ -58,8 +58,10 @@ internal sealed class LoopCliComposition : IAsyncDisposable
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
         var artifacts = new LoopArtifacts(store, repository);
+        var repositoryArtifacts = new RepositoryArtifactStore(store, repository);
+        var nonImplementationLedger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
         var hitlRequestCapture = new ExplicitHitlNonImplementationRequestCaptureService(
-            new NonImplementationReviewLedgerStore(new RepositoryArtifactStore(store, repository)));
+            nonImplementationLedger);
         var inputWaitObservations = new InputWaitObservationStore();
         var progressRuntime = new InputWaitProgressAgentRuntime(
             runtime,
@@ -107,6 +109,15 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             completionPromptRunner,
             completionArchive,
             observer: completionObserver);
+        var postExecutionReview = new NonImplementationPostExecutionReviewService(
+            new RepositorySliceBaselineStore(
+                new RepositoryChangeSetDetector(processRunner, repository),
+                repositoryArtifacts),
+            new NonImplementationArtifactClassifier(),
+            new NonImplementationSemanticConfirmer(
+                nonImplementationLedger,
+                new AgentNonImplementationReviewRunner(gatedRuntime, repository)),
+            repositoryArtifacts);
         var execution = new ExecutionStep(
             gatedRuntime,
             artifacts,
@@ -137,6 +148,7 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             commitGate,
             resumeStore,
             completionCertification,
+            postExecutionReview,
             console);
 
         return new LoopCliComposition(provider, console, executableResolver, loop);

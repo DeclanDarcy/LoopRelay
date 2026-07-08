@@ -1,5 +1,7 @@
 using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Abstractions;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Completion;
 
 namespace LoopRelay.Cli;
@@ -17,6 +19,7 @@ internal sealed class LoopRunner(
     CommitGate commitGate,
     IDecisionSessionResumeStore resumeStore,
     ICompletionCertificationService completionCertification,
+    INonImplementationPostExecutionReviewService postExecutionReview,
     ILoopConsole console) : IAsyncDisposable
 {
     public async Task<LoopOutcome> RunAsync(CancellationToken cancellationToken)
@@ -109,9 +112,20 @@ internal sealed class LoopRunner(
                 // only progress is ticking milestone boxes — those live inside the ignored `.agents/`, so the
                 // working-tree probe alone would misread pure box-ticking as a stall.
                 int uncheckedMilestonesBefore = (await gate.GetUntickedItemsAsync()).Count;
+                RepositorySliceBaseline reviewBaseline =
+                    await postExecutionReview.CapturePreSliceBaselineAsync(cancellationToken);
 
                 // Consume decisions.md, do the work, and write the next handoff.
                 await execution.RunAsync(cancellationToken);
+                NonImplementationPostExecutionReviewResult reviewResult =
+                    await postExecutionReview.ReviewAfterExecutionAsync(reviewBaseline, cancellationToken);
+                console.Info(
+                    $"Non-implementation review completed for {reviewResult.ExecutionSliceId}: " +
+                    $"{reviewResult.Summary.ChangedFileCount} changed, " +
+                    $"{reviewResult.Summary.SemanticCandidateCount} semantic candidate(s), " +
+                    $"{reviewResult.Summary.ConfirmedCount} confirmed, " +
+                    $"{reviewResult.Summary.ReusedSemanticDispositionCount} reused. " +
+                    $"Evidence: {FormatEvidence(reviewResult.EvidencePaths)}");
 
                 // ---- Retire the consumed decisions ----
                 // Execution has consumed decisions.md, so drop the live file. This is what makes the skip above
@@ -146,6 +160,14 @@ internal sealed class LoopRunner(
             console.Warn("Cancellation requested — stopping the loop.");
             await SalvageSubmoduleOnExitAsync();
             return LoopOutcome.Cancelled;
+        }
+        catch (NonImplementationPostExecutionReviewException ex)
+        {
+            console.Error(
+                $"Post-execution non-implementation review failed: {ex.Message} " +
+                $"Evidence: {FormatEvidence(ex.EvidencePaths)}");
+            await SalvageSubmoduleOnExitAsync();
+            return LoopOutcome.Failed;
         }
         catch (LoopStepException ex)
         {

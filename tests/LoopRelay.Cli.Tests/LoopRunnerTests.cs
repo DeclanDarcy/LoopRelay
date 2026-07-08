@@ -1,21 +1,39 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using LoopRelay.Agents.Models;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Completion;
 using LoopRelay.Cli;
+using LoopRelay.Infrastructure.Artifacts;
 using LoopRelay.Orchestration;
+using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 using Xunit;
 
 namespace LoopRelay.Cli.Tests;
 
 public class LoopRunnerTests
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
+    static LoopRunnerTests()
+    {
+        JsonOptions.Converters.Add(new JsonStringEnumConverter());
+    }
+
     private sealed record Harness(
         Cli.LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con,
-        FakeProcessRunner Git, FakeDecisionSessionResumeStore Resume, FakeCompletionCertificationService Completion);
+        FakeProcessRunner Git, FakeDecisionSessionResumeStore Resume, FakeCompletionCertificationService Completion,
+        FakeNonImplementationPostExecutionReviewService Review);
 
-    private static Harness New()
+    private static Harness New(FakeNonImplementationPostExecutionReviewService? review = null)
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
@@ -40,9 +58,10 @@ public class LoopRunnerTests
         var commitGate = new Cli.CommitGate(detector, git, repo, con);
         var resume = new FakeDecisionSessionResumeStore();
         var completion = new FakeCompletionCertificationService();
+        review ??= new FakeNonImplementationPostExecutionReviewService();
         return new Harness(
-            new Cli.LoopRunner(gate, art, exec, dec, submodulePublisher, commitGate, resume, completion, con),
-            rt, store, repo, con, git, resume, completion);
+            new Cli.LoopRunner(gate, art, exec, dec, submodulePublisher, commitGate, resume, completion, review, con),
+            rt, store, repo, con, git, resume, completion, review);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
@@ -559,6 +578,363 @@ public class LoopRunnerTests
         Assert.True(parentGitlinkCommit >= 0, "the parent .agents gitlink must be committed");
         Assert.True(codexExec >= 0, "codex must run");
         Assert.True(parentGitlinkCommit < codexExec, "the parent gitlink must be committed BEFORE codex runs");
+    }
+
+    [Fact]
+    public async Task Run_CapturesNonImplementationBaselineImmediatelyBeforeExecution()
+    {
+        var timeline = new List<string>();
+        var review = new FakeNonImplementationPostExecutionReviewService
+        {
+            OnCapturePre = () => timeline.Add("capture-pre"),
+            OnReview = () => timeline.Add("review"),
+        };
+        var h = New(review);
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            timeline.Add("execution-work");
+            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("executed");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H").Wait();
+            return Turns.Completed("handoff");
+        }));
+
+        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.True(timeline.IndexOf("capture-pre") >= 0);
+        Assert.True(timeline.IndexOf("execution-work") >= 0);
+        Assert.True(timeline.IndexOf("capture-pre") < timeline.IndexOf("execution-work"));
+        Assert.Single(review.CapturedBaselines);
+    }
+
+    [Fact]
+    public async Task Run_ReviewsAfterExecutionBeforePostExecutionAgentsPublish()
+    {
+        var timeline = new List<string>();
+        var review = new FakeNonImplementationPostExecutionReviewService
+        {
+            OnReview = () => timeline.Add("post-execution-review"),
+        };
+        var h = New(review);
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        h.Git.Handler = (wd, args) =>
+        {
+            bool submodule = wd.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);
+            if (args[0] == "status")
+            {
+                return FakeProcessRunner.Ok(submodule ? " M handoffs/handoff.md" : " M .agents");
+            }
+
+            if (args[0] == "branch")
+            {
+                return FakeProcessRunner.Ok("main");
+            }
+
+            if (submodule &&
+                args[0] == "commit" &&
+                args.Count >= 3 &&
+                args[2] == Cli.AgentsSubmodulePublisher.ExecutionHandoffMessage)
+            {
+                timeline.Add("post-execution-agents-publish");
+            }
+
+            return FakeProcessRunner.Ok();
+        };
+
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            timeline.Add("execution-work");
+            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("executed");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            timeline.Add("execution-handoff");
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H").Wait();
+            return Turns.Completed("handoff");
+        }));
+
+        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.True(timeline.IndexOf("execution-handoff") < timeline.IndexOf("post-execution-review"));
+        Assert.True(timeline.IndexOf("post-execution-review") < timeline.IndexOf("post-execution-agents-publish"));
+    }
+
+    [Fact]
+    public async Task Run_PostExecutionReviewFailureFailsLoopAndSkipsCompletionCertification()
+    {
+        var review = new FakeNonImplementationPostExecutionReviewService
+        {
+            Failure = new NonImplementationPostExecutionReviewException(
+                "review failed",
+                [".agents/evidence/non-implementation/slice-test/review-failure.md"]),
+        };
+        var h = New(review);
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("executed");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H").Wait();
+            return Turns.Completed("handoff");
+        }));
+
+        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.LoopOutcome.Failed, outcome);
+        Assert.Empty(h.Completion.Requests);
+        Assert.Contains(
+            h.Con.Events,
+            item => item.Kind == "error" &&
+                item.Text.Contains(".agents/evidence/non-implementation/slice-test/review-failure.md", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Run_GeneratedRootMarkdownReachesNonImplementationLedgerAfterOneExecutionSlice()
+    {
+        using var temp = TempLoopRepository.Create();
+        var store = new FileSystemArtifactStore();
+        var repo = temp.Repository;
+        var artifacts = new Cli.LoopArtifacts(store, repo);
+        var console = new RecordingLoopConsole();
+        var runtime = new FakeAgentRuntime(store);
+        var git = new FakeProcessRunner();
+        var detector = new Cli.WorkingTreeChangeDetector(git, repo);
+        var gate = new Cli.MilestoneGate(store, repo);
+        var execution = new Cli.ExecutionStep(runtime, artifacts, console, repo, detector, gate);
+        var decision = new Cli.DecisionSession(
+            runtime,
+            new DecisionSessionRouter(new DecisionSessionRouterOptions()),
+            artifacts,
+            console,
+            repo);
+        var submodulePublisher = new Cli.AgentsSubmodulePublisher(git, repo, console);
+        var commitGate = new Cli.CommitGate(detector, git, repo, console);
+        var resume = new FakeDecisionSessionResumeStore();
+        var completion = new FakeCompletionCertificationService();
+        var repositoryArtifacts = new RepositoryArtifactStore(store, repo);
+        var ledger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
+        var reviewRunner = new ConfirmingReviewRunner();
+        var review = new NonImplementationPostExecutionReviewService(
+            new RepositorySliceBaselineStore(
+                new RepositoryChangeSetDetector(git, repo),
+                repositoryArtifacts),
+            new NonImplementationArtifactClassifier(),
+            new NonImplementationSemanticConfirmer(ledger, reviewRunner),
+            repositoryArtifacts);
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [ ] t");
+        git.Handler = (wd, args) => GitForRootMarkdownLoop(temp.Root, wd, args);
+
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(repo, "ROOT_NOTE.md"), "# Root note\n\nDesign-only observation.").Wait();
+            s.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("executed");
+        }));
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H").Wait();
+            return Turns.Completed("handoff");
+        }));
+
+        var runner = new Cli.LoopRunner(
+            gate,
+            artifacts,
+            execution,
+            decision,
+            submodulePublisher,
+            commitGate,
+            resume,
+            completion,
+            review,
+            console);
+
+        Cli.LoopOutcome outcome = await runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        NonImplementationReviewLedgerEntry entry = Assert.Single((await ledger.LoadOrCreateAsync()).Entries);
+        Assert.Equal("ROOT_NOTE.md", entry.Path);
+        Assert.Equal(NonImplementationSemanticDisposition.ConfirmedNonImplementation, entry.SemanticDisposition);
+        Assert.Equal(NonImplementationResolutionState.Unresolved, entry.ResolutionState);
+        Assert.Single(reviewRunner.Requests);
+        string? evidence = await repositoryArtifacts.ReadAsync(
+            OrchestrationArtifactPaths.NonImplementationSliceReview(entry.ExecutionSliceId!));
+        Assert.Contains("ROOT_NOTE.md", evidence);
+    }
+
+    private static ProcessRunResult GitForRootMarkdownLoop(
+        string repositoryRoot,
+        string workingDirectory,
+        IReadOnlyList<string> args)
+    {
+        bool submodule = workingDirectory.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);
+        bool rootMarkdownExists = File.Exists(Path.Combine(repositoryRoot, "ROOT_NOTE.md"));
+        if (args[0] == "status" && args.Contains("--untracked-files=all"))
+        {
+            return FakeProcessRunner.Ok(rootMarkdownExists ? "?? ROOT_NOTE.md\n" : string.Empty);
+        }
+
+        if (args[0] == "diff")
+        {
+            return FakeProcessRunner.Ok();
+        }
+
+        if (args[0] == "status")
+        {
+            if (submodule)
+            {
+                return FakeProcessRunner.Ok(" M handoffs/handoff.md");
+            }
+
+            return FakeProcessRunner.Ok(rootMarkdownExists ? "?? ROOT_NOTE.md\n M .agents" : " M .agents");
+        }
+
+        if (args[0] == "branch")
+        {
+            return FakeProcessRunner.Ok("main");
+        }
+
+        if (args[0] == "rev-list")
+        {
+            return FakeProcessRunner.Ok("0");
+        }
+
+        return FakeProcessRunner.Ok();
+    }
+
+    private sealed class FakeNonImplementationPostExecutionReviewService : INonImplementationPostExecutionReviewService
+    {
+        public Action? OnCapturePre { get; init; }
+
+        public Action? OnReview { get; init; }
+
+        public NonImplementationPostExecutionReviewException? Failure { get; init; }
+
+        public List<RepositorySliceBaseline> CapturedBaselines { get; } = [];
+
+        public List<RepositorySliceBaseline> ReviewedBaselines { get; } = [];
+
+        public Task<RepositorySliceBaseline> CapturePreSliceBaselineAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            OnCapturePre?.Invoke();
+            var baseline = new RepositorySliceBaseline(
+                $"slice-test-{CapturedBaselines.Count + 1}",
+                new RepositorySliceSnapshot(
+                    $"slice-test-{CapturedBaselines.Count + 1}",
+                    DateTimeOffset.UnixEpoch,
+                    Array.Empty<RepositoryFileSnapshotEntry>()),
+                PersistedPath: null);
+            CapturedBaselines.Add(baseline);
+            return Task.FromResult(baseline);
+        }
+
+        public Task<NonImplementationPostExecutionReviewResult> ReviewAfterExecutionAsync(
+            RepositorySliceBaseline baseline,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            OnReview?.Invoke();
+            ReviewedBaselines.Add(baseline);
+            if (Failure is not null)
+            {
+                throw Failure;
+            }
+
+            return Task.FromResult(new NonImplementationPostExecutionReviewResult(
+                baseline.ExecutionSliceId,
+                [OrchestrationArtifactPaths.NonImplementationSliceReview(baseline.ExecutionSliceId)],
+                new NonImplementationPostExecutionReviewSummary(
+                    ChangedFileCount: 0,
+                    ClassifiedFileCount: 0,
+                    SemanticCandidateCount: 0,
+                    ConfirmedCount: 0,
+                    ReusedSemanticDispositionCount: 0,
+                    IgnoredCount: 0,
+                    ConfirmedNonImplementationCount: 0,
+                    FalsePositiveCount: 0,
+                    SemanticUncertaintyCount: 0)));
+        }
+    }
+
+    private sealed class ConfirmingReviewRunner : INonImplementationReviewRunner
+    {
+        public List<NonImplementationReviewRunnerRequest> Requests { get; } = [];
+
+        public Task<NonImplementationReviewRunnerResponse> RunAsync(
+            NonImplementationReviewRunnerRequest request,
+            CancellationToken cancellationToken)
+        {
+            Requests.Add(request);
+            using JsonDocument document = JsonDocument.Parse(ExtractInputPayload(request.PromptPayload));
+            JsonElement root = document.RootElement;
+            string json = JsonSerializer.Serialize(new
+            {
+                ledgerEntryId = root.GetProperty("ledgerEntryId").GetString(),
+                candidatePath = root.GetProperty("candidatePath").GetString(),
+                reviewedContentSha256 = root.GetProperty("reviewedContentSha256").GetString(),
+                reviewedFileDeleted = false,
+                deletedReviewedIdentity = (string?)null,
+                disposition = NonImplementationSemanticDisposition.ConfirmedNonImplementation,
+                rationale = "The file is a standalone design note.",
+                evidenceExcerptsOrPathFacts = new[] { "root Markdown note" },
+                uncertaintyNote = (string?)null,
+            }, JsonOptions);
+            return Task.FromResult(new NonImplementationReviewRunnerResponse(json));
+        }
+    }
+
+    private sealed class TempLoopRepository : IDisposable
+    {
+        private TempLoopRepository(string root)
+        {
+            Root = root;
+            Repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = root };
+        }
+
+        public string Root { get; }
+
+        public Repository Repository { get; }
+
+        public static TempLoopRepository Create()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "looprelay-cli-review", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(root, ".agents"));
+            return new TempLoopRepository(root);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Root))
+            {
+                Directory.Delete(Root, recursive: true);
+            }
+        }
+    }
+
+    private static string ExtractInputPayload(string prompt)
+    {
+        const string marker = "```json";
+        int start = prompt.IndexOf(marker, StringComparison.Ordinal);
+        int contentStart = prompt.IndexOf('\n', start);
+        int end = prompt.IndexOf("```", contentStart + 1, StringComparison.Ordinal);
+        return prompt[(contentStart + 1)..end].Trim();
     }
 
     // Scripts git so the `.agents` submodule always reads dirty (on branch main) and the parent reads clean,

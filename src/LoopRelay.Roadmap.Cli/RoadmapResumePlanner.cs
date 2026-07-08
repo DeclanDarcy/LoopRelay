@@ -211,7 +211,7 @@ internal sealed class RoadmapResumePlanner(
                 return RoadmapResumePlan.Terminal(
                     RoadmapOutcome.Paused,
                     state,
-                    $"Persisted roadmap state {state} belongs to legacy execution preparation and is no longer advanced by Roadmap CLI.");
+                    $"Persisted roadmap state {state} belongs to legacy execution preparation and is no longer advanced by Roadmap CLI; the main loop CLI is the active execution integration, with completion review refresh kept as the backstop.");
 
             case RoadmapState.EpicCompletionDetected:
                 return RoadmapResumePlan.EvaluateCompletionClaim(
