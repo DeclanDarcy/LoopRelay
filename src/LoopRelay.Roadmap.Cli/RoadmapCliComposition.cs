@@ -176,6 +176,15 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             promptTransitionRunner,
             activeEpicPromotionCoordinator,
             console);
+        var activeEpicRewriteTransition = new ActiveEpicRewriteTransition(
+            artifacts,
+            contractRegistry,
+            projectionCache,
+            contextBuilder,
+            activeSelectionReader,
+            promptTransitionRunner,
+            activeEpicPromotionCoordinator,
+            console);
         var invariants = new InvariantValidator(
             artifacts,
             projectContextLoader,
@@ -201,6 +210,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             bootstrapRoadmapCompletionContextTransition,
             selectNextEpicTransition,
             createNewEpicTransition,
+            activeEpicRewriteTransition,
             activeSelectionReader,
             startupPlanner,
             resumePlanner,

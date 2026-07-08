@@ -20,6 +20,7 @@ internal sealed class RoadmapStateMachine(
     BootstrapRoadmapCompletionContextTransition bootstrapRoadmapCompletionContextTransition,
     SelectNextEpicTransition selectNextEpicTransition,
     CreateNewEpicTransition createNewEpicTransition,
+    ActiveEpicRewriteTransition activeEpicRewriteTransition,
     ActiveSelectionReader activeSelectionReader,
     RoadmapStartupPlanner startupPlanner,
     RoadmapResumePlanner resumePlanner,
@@ -587,33 +588,12 @@ internal sealed class RoadmapStateMachine(
 
         if (decision.Disposition == "Realign")
         {
-            ArtifactPromotionResult promotion = await RewriteActiveEpicAsync("RealignEpic", RoadmapState.RealignEpic, projectContext, auditPath, cancellationToken);
+            ArtifactPromotionResult promotion = await activeEpicRewriteTransition.ExecuteAsync("RealignEpic", RoadmapState.RealignEpic, projectContext, auditPath, cancellationToken);
             return promotion.Promoted ? EpicPreparationResult.ActiveEpicReady : EpicPreparationResult.Blocked;
         }
 
-        ArtifactPromotionResult reimaginePromotion = await RewriteActiveEpicAsync("ReimagineEpic", RoadmapState.ReimagineEpic, projectContext, auditPath, cancellationToken);
+        ArtifactPromotionResult reimaginePromotion = await activeEpicRewriteTransition.ExecuteAsync("ReimagineEpic", RoadmapState.ReimagineEpic, projectContext, auditPath, cancellationToken);
         return reimaginePromotion.Promoted ? EpicPreparationResult.ActiveEpicReady : EpicPreparationResult.Blocked;
-    }
-
-    private async Task<ArtifactPromotionResult> RewriteActiveEpicAsync(string runtimePrompt, RoadmapState state, ProjectContext projectContext, string auditPath, CancellationToken cancellationToken)
-    {
-        console.Phase(runtimePrompt);
-        string selectionOrEpic = await artifacts.ReadAsync(RoadmapArtifactPaths.ActiveEpic) ?? await activeSelectionReader.ReadAsync(cancellationToken);
-        string audit = await artifacts.ReadRequiredAsync(auditPath);
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = contextBuilder.BuildRealignOrReimagineContext(projection.Content, selectionOrEpic, audit);
-        PromptTransitionCompletion completion = await promptTransitionRunner.RunPromotionCandidateAsync(
-            state,
-            RoadmapState.ActiveEpicReady,
-            runtimePrompt,
-            projection.Definition.ProjectionPath,
-            context,
-            audit,
-            [RoadmapArtifactPaths.ActiveEpic],
-            cancellationToken,
-            TransitionInputContext.AuditEvidence(auditPath));
-        return await activeEpicPromotionCoordinator.PromoteAsync(state, runtimePrompt, projection.Definition.ProjectionPath, completion);
     }
 
     private async Task<ArtifactPromotionResult> SplitEpicAsync(ProjectContext projectContext, CancellationToken cancellationToken)

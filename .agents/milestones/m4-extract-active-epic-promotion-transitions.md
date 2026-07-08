@@ -140,64 +140,64 @@ Task<ArtifactPromotionResult> ExecuteAsync(
 
 ### Boundary
 
-- [ ] Handler returns `ArtifactPromotionResult`.
-- [ ] Handler does not parse audit decisions.
-- [ ] Handler does not append audit decision records.
+- [x] Handler returns `ArtifactPromotionResult`.
+- [x] Handler does not parse audit decisions.
+- [x] Handler does not append audit decision records.
 
 ### Allowed Prompt And State Pairs
 
-- [ ] `RealignEpic`, `RoadmapState.RealignEpic`, projection
+- [x] `RealignEpic`, `RoadmapState.RealignEpic`, projection
   `.agents/projections/realign-epic.md`, projection prompt
   `ProjectionForRealignEpic`, lifecycle note `Promoted by RealignEpic.`.
-- [ ] `ReimagineEpic`, `RoadmapState.ReimagineEpic`, projection
+- [x] `ReimagineEpic`, `RoadmapState.ReimagineEpic`, projection
   `.agents/projections/reimagine-epic.md`, projection prompt
   `ProjectionForReimagineEpic`, lifecycle note `Promoted by ReimagineEpic.`.
 
 ### Common Behavior
 
-- [ ] Phase text exactly equals the prompt name.
-- [ ] Prefer `.agents/epic.md` as current epic input.
-- [ ] If `.agents/epic.md` is absent, fall back to fresh active selection
+- [x] Phase text exactly equals the prompt name.
+- [x] Prefer `.agents/epic.md` as current epic input.
+- [x] If `.agents/epic.md` is absent, fall back to fresh active selection
   through `ActiveSelectionReader`.
-- [ ] Require audit evidence at the supplied `auditPath`.
-- [ ] Context section order is `Projection Content`, `Current Epic`,
+- [x] Require audit evidence at the supplied `auditPath`.
+- [x] Context section order is `Projection Content`, `Current Epic`,
   `Audit Output`, `Repository Inspection Instructions`.
-- [ ] Audit evidence is both in the context and passed as secondary input.
-- [ ] Transition input roles are projection, active epic or selection, and audit
+- [x] Audit evidence is both in the context and passed as secondary input.
+- [x] Transition input roles are projection, active epic or selection, and audit
   evidence.
-- [ ] Prompt envelope is promotion-candidate.
-- [ ] Promotion target is `ActiveEpicReady`.
+- [x] Prompt envelope is promotion-candidate.
+- [x] Promotion target is `ActiveEpicReady`.
 
 ### Runtime Failure
 
-- [ ] Save `EvidenceBlocked` / `Failed`.
-- [ ] Output path `.agents/epic.md`.
-- [ ] Decision `Runtime Failure`.
-- [ ] Intent `ResolveTransitionFailure`.
-- [ ] Throw already-persisted failure.
+- [x] Save `EvidenceBlocked` / `Failed`.
+- [x] Output path `.agents/epic.md`.
+- [x] Decision `Runtime Failure`.
+- [x] Intent `ResolveTransitionFailure`.
+- [x] Throw already-persisted failure.
 
 ### Promotion Success
 
-- [ ] Overwrite `.agents/epic.md` only after classification and validation
+- [x] Overwrite `.agents/epic.md` only after classification and validation
   pass.
-- [ ] Lifecycle `Ready` with note `Promoted by {prompt}.`.
-- [ ] Append `ArtifactPromoted`.
-- [ ] Save `ActiveEpicReady` / `Completed`, decision `Artifact Promoted`.
-- [ ] No decision-ledger entry from the rewrite transition itself.
+- [x] Lifecycle `Ready` with note `Promoted by {prompt}.`.
+- [x] Append `ArtifactPromoted`.
+- [x] Save `ActiveEpicReady` / `Completed`, decision `Artifact Promoted`.
+- [x] No decision-ledger entry from the rewrite transition itself.
 
 ### Promotion Rejection
 
-- [ ] Preserve existing `.agents/epic.md`.
-- [ ] Write `.agents/evidence/blockers/active-epic-promotion.NNNN.md`.
-- [ ] Append `ArtifactPromotionBlocked`.
-- [ ] Save `EvidenceBlocked` / `Paused`.
-- [ ] Intent `ResolveArtifactPromotionBlocker`.
-- [ ] Return not promoted.
+- [x] Preserve existing `.agents/epic.md`.
+- [x] Write `.agents/evidence/blockers/active-epic-promotion.NNNN.md`.
+- [x] Append `ArtifactPromotionBlocked`.
+- [x] Save `EvidenceBlocked` / `Paused`.
+- [x] Intent `ResolveArtifactPromotionBlocker`.
+- [x] Return not promoted.
 
 ### Input Snapshot
 
-- [ ] Required projection.
-- [ ] Required active epic if `.agents/epic.md` exists.
-- [ ] Required selection if `.agents/epic.md` is absent.
-- [ ] Required audit evidence path.
-- [ ] Secondary hash of audit evidence content.
+- [x] Required projection.
+- [x] Required active epic if `.agents/epic.md` exists.
+- [x] Required selection if `.agents/epic.md` is absent.
+- [x] Required audit evidence path.
+- [x] Secondary hash of audit evidence content.
