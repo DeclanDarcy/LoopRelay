@@ -107,6 +107,11 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             stateStore,
             decisionLedger);
         var journal = new TransitionJournalStore(artifacts);
+        var promptTransitionRunner = new RoadmapPromptTransitionRunner(
+            inputResolver,
+            promptRunner,
+            journal,
+            transitionPersistence);
         var lifecycle = new ArtifactLifecycleStore(artifacts);
         var startupPlanner = new RoadmapStartupPlanner();
         var projectContextLoader = new ProjectContextLoader(artifacts);
@@ -149,9 +154,9 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             completionPolicy,
             completionRouter,
             completionArchive,
-            promptRunner,
             stateStore,
             transitionPersistence,
+            promptTransitionRunner,
             startupPlanner,
             resumePlanner,
             unblockPlanner,

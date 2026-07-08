@@ -480,6 +480,12 @@ internal static class StateMachineFactory
         var runner = new Cli.RoadmapPromptRunner(runtime, repo.Repository, effectiveConsole);
         var contextBuilder = new Cli.RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation);
         var inputResolver = new Cli.TransitionInputResolver(repo.Artifacts, executionPreparation);
+        var journal = new Cli.TransitionJournalStore(repo.Artifacts);
+        var promptTransitionRunner = new Cli.RoadmapPromptTransitionRunner(
+            inputResolver,
+            runner,
+            journal,
+            transitionPersistence);
         var selectionProvenance = new Cli.SelectionProvenanceService(
             repo.Artifacts,
             new Cli.SelectionProvenanceManifestStore(repo.Artifacts),
@@ -498,15 +504,15 @@ internal static class StateMachineFactory
             new CompletionCertificationPolicy(),
             new CompletionCertificationRouter(),
             completionArchive ?? new FakeCompletedEpicArchiveService(),
-            runner,
             stateStore,
             transitionPersistence,
+            promptTransitionRunner,
             new Cli.RoadmapStartupPlanner(),
             resumePlanner,
             unblockPlanner,
             selectionProvenance,
             decisionLedger,
-            new Cli.TransitionJournalStore(repo.Artifacts),
+            journal,
             lifecycle,
             new Cli.ArtifactPromotionService(repo.Artifacts, lifecycle),
             new BundleFileExtractor(),

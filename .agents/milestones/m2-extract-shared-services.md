@@ -57,16 +57,16 @@ variants distinct.
 Used by bootstrap, selection, epic preparation audit, completion evaluation, and
 completion-context update.
 
-- [ ] Resolve transition input snapshot first.
-- [ ] Save started state before `TransitionStarted`.
-- [ ] Started state uses current state equal to the target state, status
+- [x] Resolve transition input snapshot first.
+- [x] Save started state before `TransitionStarted`.
+- [x] Started state uses current state equal to the target state, status
   `Started`, decision `Pending`, and the runtime prompt output path.
-- [ ] Append `TransitionStarted`.
-- [ ] Run runtime prompt.
-- [ ] Append `TransitionCompleted`.
-- [ ] Save completed state after the completion journal record.
-- [ ] Completed state uses status `Completed` and decision `Completed`.
-- [ ] On non-cancellation runtime failure, append `TransitionFailed`, save
+- [x] Append `TransitionStarted`.
+- [x] Run runtime prompt.
+- [x] Append `TransitionCompleted`.
+- [x] Save completed state after the completion journal record.
+- [x] Completed state uses status `Completed` and decision `Completed`.
+- [x] On non-cancellation runtime failure, append `TransitionFailed`, save
   `EvidenceBlocked` with status `Failed`, intent `ResolveTransitionFailure`,
   next transition `Resolve blocker and rerun`, and throw
   `RoadmapStepException.AlreadyPersisted`.
@@ -76,29 +76,29 @@ completion-context update.
 Used by `CreateNewEpic`, `RealignEpic`, `ReimagineEpic`, and by milestone prompt
 generation before post-processing.
 
-- [ ] Resolve transition input snapshot first.
-- [ ] Save started state before `TransitionStarted`.
-- [ ] Current state remains the source state while the prompt is running.
-- [ ] Started state uses decision `Prompt Started`.
-- [ ] Append `TransitionStarted`.
-- [ ] Run runtime prompt.
-- [ ] Append `PromptCompleted` with parser decision `Output produced`.
-- [ ] Save prompt-completed state with status `PromptCompleted` and decision
+- [x] Resolve transition input snapshot first.
+- [x] Save started state before `TransitionStarted`.
+- [x] Current state remains the source state while the prompt is running.
+- [x] Started state uses decision `Prompt Started`.
+- [x] Append `TransitionStarted`.
+- [x] Run runtime prompt.
+- [x] Append `PromptCompleted` with parser decision `Output produced`.
+- [x] Save prompt-completed state with status `PromptCompleted` and decision
   `Prompt Completed`.
-- [ ] Return `PromptTransitionCompletion` with correlation id,
+- [x] Return `PromptTransitionCompletion` with correlation id,
   started/completed timestamps, elapsed milliseconds, raw output, and the
   original input snapshot.
-- [ ] On non-cancellation runtime failure, append `TransitionFailed`, save
+- [x] On non-cancellation runtime failure, append `TransitionFailed`, save
   `EvidenceBlocked` with status `Failed`, decision `Runtime Failure`, intent
   `ResolveTransitionFailure`, next transition `Resolve blocker and rerun`, and
   throw `RoadmapStepException.AlreadyPersisted`.
 
 ### Milestone Materialization
 
-- [ ] Milestone materialization uses the promotion-candidate prompt envelope for
+- [x] Milestone materialization uses the promotion-candidate prompt envelope for
   prompt start and prompt completion.
-- [ ] Success finalization is not `ArtifactPromoted`.
-- [ ] Append `MilestoneSpecsMaterialized` and save `MilestoneSpecsReady` only
+- [x] Success finalization is not `ArtifactPromoted`.
+- [x] Append `MilestoneSpecsMaterialized` and save `MilestoneSpecsReady` only
   after bundle extraction, spec writes, lifecycle/HITL,
   execution-preparation provenance, and invariant validation.
 
@@ -243,6 +243,6 @@ This service must update both provenance and lifecycle.
   transition intent, active artifacts, projection manifest counts, split-family
   count, and last decision id.
 - [x] Default `NextTransitions` values remain identical.
-- [ ] Runtime prompt failures still bypass generic failure overwrite by throwing
+- [x] Runtime prompt failures still bypass generic failure overwrite by throwing
   `RoadmapStepException.AlreadyPersisted`.
-- [ ] `OperationCanceledException` is not caught by prompt failure blocks.
+- [x] `OperationCanceledException` is not caught by prompt failure blocks.
