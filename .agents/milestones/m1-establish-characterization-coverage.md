@@ -39,7 +39,7 @@
 - [x] Add or confirm invalid parsed certification writes
   `CompletionCertificationRejected` and intent
   `ResolveInvalidCompletionCertification`.
-- [ ] Add or confirm close-route completion-context update superseding active
+- [x] Add or confirm close-route completion-context update superseding active
   selection after the context rewrite and excluding numbered update evidence
   from final route outputs.
 - [ ] Add or confirm archive and synthesis failures are not converted into
