@@ -11,24 +11,24 @@ Task<EpicPreparationResult> ExecuteAsync(
 
 ## Boundary
 
-- [ ] Handler returns `EpicPreparationResult`.
-- [ ] Selected-existing-epic routing after the result remains outside.
+- [x] Handler returns `EpicPreparationResult`.
+- [x] Selected-existing-epic routing after the result remains outside.
 
 ## Prompt And Projection
 
-- [ ] Phase `Audit selected epic`.
-- [ ] Runtime prompt `EpicPreparationAudit`.
-- [ ] Projection prompt `ProjectionForEpicPreparationAudit`.
-- [ ] State `ExistingEpicSelected -> EpicPreparationAudit`.
-- [ ] Projection path `.agents/projections/epic-preparation-audit.md`.
-- [ ] Output during prompt envelope `.agents/evidence/audits`.
-- [ ] Numbered evidence stem `epic-preparation-audit`.
-- [ ] Secondary input is active selection content.
-- [ ] Envelope is the normal prompt transition.
+- [x] Phase `Audit selected epic`.
+- [x] Runtime prompt `EpicPreparationAudit`.
+- [x] Projection prompt `ProjectionForEpicPreparationAudit`.
+- [x] State `ExistingEpicSelected -> EpicPreparationAudit`.
+- [x] Projection path `.agents/projections/epic-preparation-audit.md`.
+- [x] Output during prompt envelope `.agents/evidence/audits`.
+- [x] Numbered evidence stem `epic-preparation-audit`.
+- [x] Secondary input is active selection content.
+- [x] Envelope is the normal prompt transition.
 
 ## Required Precondition
 
-- [ ] Read and validate fresh active selection through `ActiveSelectionReader`
+- [x] Read and validate fresh active selection through `ActiveSelectionReader`
   before audit prompt execution.
 
 ## Audit Context Section Order
@@ -50,69 +50,69 @@ Task<EpicPreparationResult> ExecuteAsync(
 
 ## Parser Requirements
 
-- [ ] `## Audit Disposition` field table.
-- [ ] `## Selected Epic` field table.
-- [ ] Selected epic fields: `Epic ID`, `Epic Name`.
-- [ ] Disposition fields: `Disposition`, `Confidence`, `Primary Reason`,
+- [x] `## Audit Disposition` field table.
+- [x] `## Selected Epic` field table.
+- [x] Selected epic fields: `Epic ID`, `Epic Name`.
+- [x] Disposition fields: `Disposition`, `Confidence`, `Primary Reason`,
   `Evidence Strength`, `Recommended Next Step`.
-- [ ] Disposition must be one of `Realign`, `Reimagine`, `Retire`,
+- [x] Disposition must be one of `Realign`, `Reimagine`, `Retire`,
   `Insufficient Evidence`.
-- [ ] Recommended next step must be one of `Realign Epic`, `Reimagine Epic`,
+- [x] Recommended next step must be one of `Realign Epic`, `Reimagine Epic`,
   `Retire Epic`, `Gather More Evidence`.
 
 ## Audit Decision Ledger Entry
 
-- [ ] State, transition, prompt: `EpicPreparationAudit`.
-- [ ] Projection `.agents/projections/epic-preparation-audit.md`.
-- [ ] Output: numbered audit evidence path.
-- [ ] Decision: parsed disposition.
-- [ ] Confidence: parsed confidence.
-- [ ] Rationale: parsed recommended next step.
+- [x] State, transition, prompt: `EpicPreparationAudit`.
+- [x] Projection `.agents/projections/epic-preparation-audit.md`.
+- [x] Output: numbered audit evidence path.
+- [x] Decision: parsed disposition.
+- [x] Confidence: parsed confidence.
+- [x] Rationale: parsed recommended next step.
 
 ## Retire Branch
 
-- [ ] Load persisted state.
-- [ ] Build `RetiredEpic` from selection and audit.
-- [ ] Identity is first known audit `Epic ID`, then selection existing epic id.
-- [ ] Name is first known audit `Epic Name`, then selection existing epic name,
+- [x] Load persisted state.
+- [x] Build `RetiredEpic` from selection and audit.
+- [x] Identity is first known audit `Epic ID`, then selection existing epic id.
+- [x] Name is first known audit `Epic Name`, then selection existing epic name,
   then selection recommended initiative.
-- [ ] Reason is first known audit primary reason, then selection primary reason.
-- [ ] Throw if no stable identity can be built.
-- [ ] Upsert retired epics by stable identity.
-- [ ] Append second decision-ledger entry at state `RetireEpic`, decision
+- [x] Reason is first known audit primary reason, then selection primary reason.
+- [x] Throw if no stable identity can be built.
+- [x] Upsert retired epics by stable identity.
+- [x] Append second decision-ledger entry at state `RetireEpic`, decision
   `Retired Epic`, output audit evidence path.
-- [ ] Save state `RetireEpic` / `Completed`, from `EpicPreparationAudit` to
+- [x] Save state `RetireEpic` / `Completed`, from `EpicPreparationAudit` to
   `RetireEpic`, prompt `EpicPreparationAudit`, output audit evidence path,
   decision `Retired Epic`, with replacement retired epics.
-- [ ] Supersede active trusted selection provenance with
+- [x] Supersede active trusted selection provenance with
   `RetiredEpicStateDrift`.
-- [ ] Mark `.agents/selection.md` lifecycle `Superseded`.
-- [ ] Use lifecycle note
+- [x] Mark `.agents/selection.md` lifecycle `Superseded`.
+- [x] Use lifecycle note
   `Retired epic state changed after EpicPreparationAudit.`.
-- [ ] Return `EpicPreparationResult.Retired`.
+- [x] Return `EpicPreparationResult.Retired`.
 
 ## Insufficient-Evidence Branch
 
-- [ ] Throw `RoadmapStepException("Epic preparation audit requires more evidence.")`.
-- [ ] Audit transition, evidence, HITL capture, and audit decision are already
+- [x] Throw `RoadmapStepException("Epic preparation audit requires more evidence.")`.
+- [x] Audit transition, evidence, HITL capture, and audit decision are already
   durable.
-- [ ] Do not write a durable blocker inside the branch.
-- [ ] Outer `RunAsync` reports an ephemeral blocker and returns failed.
+- [x] Do not write a durable blocker inside the branch.
+- [x] Outer `RunAsync` reports an ephemeral blocker and returns failed.
 
 ## Realign And Reimagine Branches
 
-- [ ] Delegate to `ActiveEpicRewriteTransition`.
-- [ ] Return `EpicPreparationResult.ActiveEpicReady` when promoted.
-- [ ] Return `EpicPreparationResult.Blocked` when not promoted.
+- [x] Delegate to `ActiveEpicRewriteTransition`.
+- [x] Return `EpicPreparationResult.ActiveEpicReady` when promoted.
+- [x] Return `EpicPreparationResult.Blocked` when not promoted.
 
 ## Input Snapshot
 
-- [ ] Required projection.
-- [ ] Required selection.
-- [ ] Secondary hash of selection content.
+- [x] Required projection.
+- [x] Required selection.
+- [x] Secondary hash of selection content.
 
 ## Integration
 
-- [ ] Keep `ContinueAfterSelectionAsync` mapping `Retired` and `Blocked` to
+- [x] Keep `ContinueAfterSelectionAsync` mapping `Retired` and `Blocked` to
   `RoadmapOutcome.Paused`.
-- [ ] Keep `ActiveEpicReady` falling through to milestone generation.
+- [x] Keep `ActiveEpicReady` falling through to milestone generation.

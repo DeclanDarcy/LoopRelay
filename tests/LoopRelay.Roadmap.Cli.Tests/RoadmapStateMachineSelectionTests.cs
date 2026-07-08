@@ -542,6 +542,20 @@ internal static class StateMachineFactory
             promptTransitionRunner,
             activeEpicPromotionCoordinator,
             effectiveConsole);
+        var epicPreparationAuditTransition = new Cli.EpicPreparationAuditTransition(
+            repo.Artifacts,
+            contracts,
+            projectionCache,
+            contextBuilder,
+            activeSelectionReader,
+            promptTransitionRunner,
+            hitlArtifactCapture,
+            decisionRecorder,
+            stateStore,
+            transitionPersistence,
+            selectionSuperseder,
+            activeEpicRewriteTransition,
+            effectiveConsole);
         var invariants = new Cli.InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
         var resumePlanner = new Cli.RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new Cli.ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
         var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
@@ -561,7 +575,7 @@ internal static class StateMachineFactory
             bootstrapRoadmapCompletionContextTransition,
             selectNextEpicTransition,
             createNewEpicTransition,
-            activeEpicRewriteTransition,
+            epicPreparationAuditTransition,
             activeSelectionReader,
             new Cli.RoadmapStartupPlanner(),
             resumePlanner,
