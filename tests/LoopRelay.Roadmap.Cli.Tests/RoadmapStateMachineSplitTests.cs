@@ -35,6 +35,49 @@ public sealed class RoadmapStateMachineSplitTests
     }
 
     [Fact]
+    public async Task Partially_valid_split_bundle_writes_no_child_files_or_split_family()
+    {
+        using var repo = SeedRepo();
+        string existing = RoadmapSamples.ValidEpic("Existing Epic", "EPIC-OLD", "Ready");
+        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, existing);
+        string validChild = RoadmapSamples.ValidEpic("Valid Child", "EPIC-CHILD");
+        string splitOutput = $"""
+            # FILE: .agents/epic-1.md
+            {validChild}
+
+            # FILE: .agents/specs/not-a-child.md
+            # Not A Child Epic
+            """;
+        var runtime = SplitRuntime(splitOutput);
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.Equal(4, runtime.OneShotCalls);
+        Assert.Equal(existing, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
+        Assert.False(await repo.Artifacts.ExistsAsync(".agents/epic-1.md"));
+        Assert.False(await repo.Artifacts.ExistsAsync(".agents/specs/not-a-child.md"));
+        Assert.False(await repo.Artifacts.ExistsAsync(".agents/bundle-manifest.md"));
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
+        Assert.DoesNotContain(
+            await new Cli.ArtifactLifecycleStore(repo.Artifacts).LoadAsync(),
+            entry => entry.Path is ".agents/epic-1.md" or ".agents/specs/not-a-child.md");
+
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Paused, state.LastTransition.Status);
+        Assert.Equal("Split Bundle Rejected", state.LastTransition.Decision);
+        Assert.Equal("ResolveSplitEpicBlocker", state.TransitionIntent.Intent);
+        string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
+        string evidence = repo.Read(evidencePath);
+        Assert.Contains(".agents/epic-1.md", evidence, StringComparison.Ordinal);
+        Assert.Contains(".agents/specs/not-a-child.md", evidence, StringComparison.Ordinal);
+        Assert.Contains("## Raw Output", evidence, StringComparison.Ordinal);
+        Assert.Contains(validChild, evidence, StringComparison.Ordinal);
+        Assert.Contains("SplitBundleRejected", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Direct_active_epic_target_is_rejected_before_overwrite()
     {
         using var repo = SeedRepo();

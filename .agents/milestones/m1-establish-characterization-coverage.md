@@ -24,7 +24,7 @@
 - [x] Add or confirm `RealignEpic` and `ReimagineEpic` fallback to current
   selection only when `.agents/epic.md` is missing.
 - [x] Add or confirm promotion prompt completion is not artifact completion.
-- [ ] Add or confirm invalid split bundle writes no child files and no split
+- [x] Add or confirm invalid split bundle writes no child files and no split
   family.
 - [ ] Add or confirm split promotion uses selected child content and reuses the
   original prompt correlation id, timing, and input snapshot.
