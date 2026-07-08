@@ -1,4 +1,4 @@
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Decisions;
 
 /// <summary>
 /// The decision-session resume kill switch. Enabled by default; set

@@ -1,18 +1,38 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
-using LoopRelay.Agents.Services;
-using LoopRelay.Completion.Services;
+using LoopRelay.Agents.Services.Sessions;
+using LoopRelay.Completion.Services.ArtifactStorage;
+using LoopRelay.Completion.Services.Certification;
+using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Infrastructure.Services.Diagnostics;
+using LoopRelay.Orchestration.Services.Hitl;
+using LoopRelay.Orchestration.Services.NonImplementationCompletion;
+using LoopRelay.Orchestration.Services.NonImplementationInsightSynthesis;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
+using LoopRelay.Orchestration.Services.RepositorySlices;
 using LoopRelay.Permissions.Services.Configuration;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services.Transitions;
+using LoopRelay.Roadmap.Cli.Models.Invocation;
+using LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Decisions;
+using LoopRelay.Roadmap.Cli.Services.EpicTransitions;
+using LoopRelay.Roadmap.Cli.Services.Execution;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.Splits;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Cli;
 
 internal sealed class RoadmapCliComposition : IAsyncDisposable
 {
@@ -103,8 +123,8 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             store,
             new AgentCompletionPromptRunner(progressRuntime, repository, promptPolicy),
             new RoadmapCompletionObserver(console));
-        var stateStore = new RoadmapStateStore(artifacts);
-        var decisionLedger = new DecisionLedgerStore(artifacts);
+        var stateStore = new State.RoadmapStateStore(artifacts);
+        var decisionLedger = new Decisions.DecisionLedgerStore(artifacts);
         var decisionRecorder = new DecisionRecorder(decisionLedger);
         var journal = new TransitionJournalStore(artifacts);
         var transitionPersistence = new RoadmapTransitionPersistence(
@@ -145,7 +165,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             selectionProvenance);
         var selectionSuperseder = new SelectionSuperseder(selectionProvenance, lifecycle);
         var startupPlanner = new RoadmapStartupPlanner();
-        var projectContextLoader = new ProjectContextLoader(artifacts);
+        var projectContextLoader = new Projections.ProjectContextLoader(artifacts);
         var resumePlanner = new RoadmapResumePlanner(
             artifacts,
             contractRegistry,
@@ -162,8 +182,8 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             completionRouter,
             executionPreparation);
         var promotion = new ArtifactPromotionService(artifacts, lifecycle);
-        var bundleExtractor = new BundleFileExtractor();
-        var splitBundleInterpreter = new SplitEpicBundleInterpreter();
+        var bundleExtractor = new ArtifactBundles.BundleFileExtractor();
+        var splitBundleInterpreter = new Splits.SplitEpicBundleInterpreter();
         var bundleManifest = new BundleManifestWriter(artifacts);
         var splitFamilies = new SplitFamilyStore(artifacts);
         var activeEpicPromotionCoordinator = new ActiveEpicPromotionCoordinator(

@@ -1,7 +1,9 @@
 using System.Text.RegularExpressions;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Execution;
 
 internal sealed partial class ExecutionCompatibilityMaterializer(
     RoadmapArtifacts artifacts,

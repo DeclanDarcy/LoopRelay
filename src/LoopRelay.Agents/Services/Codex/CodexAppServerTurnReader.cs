@@ -1,9 +1,12 @@
 using System.Text;
 using System.Text.Json;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Codex;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Codex;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Primitives.Streams;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Codex;
 
 /// <summary>
 /// Accumulates a single Codex app-server turn from its notification stream: the agent reply text

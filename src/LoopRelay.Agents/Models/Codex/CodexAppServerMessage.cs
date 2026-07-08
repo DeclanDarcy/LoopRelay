@@ -1,7 +1,7 @@
 using System.Text.Json;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Codex;
 
-namespace LoopRelay.Agents.Models;
+namespace LoopRelay.Agents.Models.Codex;
 
 
 /// <summary>

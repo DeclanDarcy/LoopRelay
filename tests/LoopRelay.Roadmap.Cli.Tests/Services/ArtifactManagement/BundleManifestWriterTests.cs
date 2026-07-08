@@ -1,7 +1,9 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.ArtifactManagement;
 
 public sealed class BundleManifestWriterTests
 {

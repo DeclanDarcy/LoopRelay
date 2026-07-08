@@ -1,8 +1,9 @@
 using System.Collections.ObjectModel;
-using LoopRelay.Agents.Primitives;
-using LoopRelay.Permissions.Models;
+using LoopRelay.Agents.Models.Process;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Permissions.Models.Policy;
 
-namespace LoopRelay.Agents.Models;
+namespace LoopRelay.Agents.Models.Sessions;
 
 public sealed record AgentSessionSpec
 {

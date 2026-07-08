@@ -1,6 +1,6 @@
 using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.ArtifactStorage;
 
 public static class CompletionArtifactPaths
 {

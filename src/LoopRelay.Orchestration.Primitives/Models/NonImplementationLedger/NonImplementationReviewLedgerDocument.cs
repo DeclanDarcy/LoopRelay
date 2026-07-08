@@ -1,4 +1,7 @@
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationInsightSynthesis;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
+
+namespace LoopRelay.Orchestration.Models.NonImplementationLedger;
 
 public sealed record NonImplementationReviewLedgerDocument(
     int SchemaVersion,

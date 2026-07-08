@@ -1,6 +1,7 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Splits;
 
 internal sealed record SplitEpicBundleInterpretation(
     SplitEpicBundleInterpretationStatus Status,

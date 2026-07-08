@@ -1,10 +1,16 @@
 using System.Text.Json;
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.Manifests;
+using LoopRelay.Projections.Models.ProjectionArtifacts;
+using LoopRelay.Projections.Models.Provenance;
 using LoopRelay.Projections.Primitives;
+using LoopRelay.Projections.Services.ProjectionArtifacts;
+using LoopRelay.Projections.Services.Prompts;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.Manifests;
 
-public sealed class ProjectionManifestStore(ProjectionArtifacts artifacts)
+public sealed class ProjectionManifestStore(ProjectionArtifacts.ProjectionArtifacts artifacts)
 {
     private readonly StructuredJsonDocumentStore<ProjectionManifestPersistenceDocument> structuredStore = new(
         artifacts,

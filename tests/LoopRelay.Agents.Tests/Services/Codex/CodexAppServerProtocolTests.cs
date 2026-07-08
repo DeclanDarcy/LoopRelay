@@ -1,7 +1,7 @@
 using System.Text.Json;
-using LoopRelay.Agents.Services;
+using LoopRelay.Agents.Services.Codex;
 
-namespace LoopRelay.Agents.Tests.Services;
+namespace LoopRelay.Agents.Tests.Services.Codex;
 
 public sealed class CodexAppServerProtocolTests
 {

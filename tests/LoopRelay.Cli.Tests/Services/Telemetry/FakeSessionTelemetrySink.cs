@@ -1,7 +1,7 @@
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Telemetry;
 
 internal sealed class FakeSessionTelemetrySink : ISessionTelemetrySink
 {

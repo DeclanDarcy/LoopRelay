@@ -1,8 +1,10 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Sessions;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Execution;
 
 internal sealed class ScriptedAgentRuntime(params AgentTurnResult[] results) : IAgentRuntime
 {

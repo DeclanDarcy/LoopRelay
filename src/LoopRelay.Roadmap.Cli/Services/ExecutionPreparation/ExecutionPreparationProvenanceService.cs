@@ -1,7 +1,12 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.DerivedArtifacts;
+using LoopRelay.Roadmap.Cli.Services.State;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 
 internal sealed class ExecutionPreparationProvenanceService(
     RoadmapArtifacts artifacts,

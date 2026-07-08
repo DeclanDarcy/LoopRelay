@@ -1,6 +1,6 @@
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Models.NonImplementationCompletion;
 
 public sealed record NonImplementationCompletionReviewResult(
     NonImplementationCompletionReviewStatus Status,

@@ -1,8 +1,8 @@
 using LoopRelay.Cli.Models;
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Telemetry;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Usage;
 
 /// <summary>
 /// Parsing the codex app-server <c>account/rateLimits/read</c> response into a <see cref="CodexUsageStatus"/>.

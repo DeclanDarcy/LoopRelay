@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
 
 internal sealed record CompletedEpicEvidence(
     string Path,

@@ -1,7 +1,9 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
+using BundleFileExtractor = LoopRelay.Roadmap.Cli.Services.ArtifactBundles.BundleFileExtractor;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.ArtifactManagement;
 
 public sealed class BundleFileExtractorTests
 {
@@ -16,7 +18,7 @@ public sealed class BundleFileExtractorTests
         B
         """;
 
-        BundleExtractionResult result = new Cli.Services.BundleFileExtractor().Extract(markdown);
+        BundleExtractionResult result = new BundleFileExtractor().Extract(markdown);
 
         Assert.False(result.IsBlocked);
         Assert.Equal(2, result.Files.Count);
@@ -30,7 +32,7 @@ public sealed class BundleFileExtractorTests
         A
         """;
 
-        Assert.Throws<RoadmapStepException>(() => new Cli.Services.BundleFileExtractor().Extract(markdown));
+        Assert.Throws<RoadmapStepException>(() => new BundleFileExtractor().Extract(markdown));
     }
 
     [Fact]
@@ -43,13 +45,13 @@ public sealed class BundleFileExtractorTests
         B
         """;
 
-        Assert.Throws<RoadmapStepException>(() => new Cli.Services.BundleFileExtractor().Extract(markdown));
+        Assert.Throws<RoadmapStepException>(() => new BundleFileExtractor().Extract(markdown));
     }
 
     [Fact]
     public void No_files_is_typed_blocked_result()
     {
-        BundleExtractionResult result = new Cli.Services.BundleFileExtractor().Extract("# Blocked");
+        BundleExtractionResult result = new BundleFileExtractor().Extract("# Blocked");
 
         Assert.True(result.IsBlocked);
     }
@@ -62,7 +64,7 @@ public sealed class BundleFileExtractorTests
         A
         """;
 
-        BundleExtractionResult result = new Cli.Services.BundleFileExtractor().Extract(markdown, BundleExtractionPolicy.RepositorySafe);
+        BundleExtractionResult result = new BundleFileExtractor().Extract(markdown, BundleExtractionPolicy.RepositorySafe);
 
         Assert.False(result.IsBlocked);
         Assert.Equal("docs/split-output.md", Assert.Single(result.Files).Path);

@@ -1,6 +1,7 @@
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 
 internal sealed class BundleManifestWriter(RoadmapArtifacts artifacts)
 {

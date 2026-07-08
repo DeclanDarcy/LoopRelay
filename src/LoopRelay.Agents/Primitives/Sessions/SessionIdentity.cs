@@ -1,4 +1,4 @@
-namespace LoopRelay.Agents.Primitives;
+namespace LoopRelay.Agents.Primitives.Sessions;
 
 public readonly record struct SessionIdentity(Guid Value)
 {

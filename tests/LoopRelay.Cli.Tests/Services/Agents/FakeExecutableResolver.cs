@@ -1,6 +1,6 @@
 using LoopRelay.Agents.Abstractions;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Agents;
 
 internal sealed class FakeExecutableResolver : IAgentExecutableResolver
 {

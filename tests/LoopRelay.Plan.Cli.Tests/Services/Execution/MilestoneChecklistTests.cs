@@ -1,7 +1,7 @@
-using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Plan.Cli.Services.Execution;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.Execution;
 
 public class MilestoneChecklistTests
 {

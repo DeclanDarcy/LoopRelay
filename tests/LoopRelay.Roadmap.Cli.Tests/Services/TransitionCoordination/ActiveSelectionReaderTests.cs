@@ -1,9 +1,17 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
-using LoopRelay.Roadmap.Cli.Services.Transitions;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Tests.Services.Selection;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.TransitionCoordination;
 
 public sealed class ActiveSelectionReaderTests
 {
@@ -71,7 +79,7 @@ public sealed class ActiveSelectionReaderTests
 
     private static ActiveSelectionReader CreateReader(TempRepo repo)
     {
-        var stateStore = new Cli.Services.RoadmapStateStore(repo.Artifacts);
+        var stateStore = new RoadmapStateStore(repo.Artifacts);
         return new ActiveSelectionReader(
             repo.Artifacts,
             stateStore,
@@ -80,7 +88,7 @@ public sealed class ActiveSelectionReaderTests
 
     private static async Task SaveStateAsync(TempRepo repo, IReadOnlyList<RetiredEpic> retiredEpics)
     {
-        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(new RoadmapStateDocument(
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(new RoadmapStateDocument(
             RoadmapState.SelectNextStrategicInitiative,
             [],
             new RoadmapTransitionSummary(

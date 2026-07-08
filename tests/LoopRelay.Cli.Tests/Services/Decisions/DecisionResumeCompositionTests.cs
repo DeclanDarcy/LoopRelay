@@ -1,7 +1,7 @@
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Decisions;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Decisions;
 
 public sealed class DecisionResumeCompositionTests
 {

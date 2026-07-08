@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
 
 internal sealed record DerivedArtifactCausalInput(
     string Kind,

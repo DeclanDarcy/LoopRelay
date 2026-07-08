@@ -1,7 +1,7 @@
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Agents;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Agents;
 
 public class FileSystemCodexRolloutLocatorTests : IDisposable
 {

@@ -1,6 +1,7 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
 
 internal sealed record ExecutionPreparationManifest(
     string SchemaVersion,

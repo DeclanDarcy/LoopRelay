@@ -1,15 +1,37 @@
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Orchestration.Services.Hitl;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Decisions;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Cli;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using DecisionLedgerStore = LoopRelay.Roadmap.Cli.Services.Decisions.DecisionLedgerStore;
+using ProjectContextLoader = LoopRelay.Roadmap.Cli.Services.Projections.ProjectContextLoader;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.State;
 
 public sealed class RoadmapStateMachineSelectionTests
 {
@@ -105,7 +127,7 @@ public sealed class RoadmapStateMachineSelectionTests
         Assert.Contains("Projection refresh recommended", repo.Read(blockerPath), StringComparison.Ordinal);
         Assert.Contains("SelectNextEpic", repo.Read(blockerPath), StringComparison.Ordinal);
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.CoreReady, state.CurrentState);
         Assert.Equal("Preflight", state.LastTransition.Prompt);
         Assert.NotEqual(RoadmapState.SelectNextStrategicInitiative, state.LastTransition.To);
@@ -152,7 +174,7 @@ public sealed class RoadmapStateMachineSelectionTests
 
         SelectionProvenanceManifest manifest = await new SelectionProvenanceManifestStore(repo.Artifacts).LoadAsync();
         DerivedArtifactManifestEntry provenance = Assert.Single(manifest.ActiveSelections);
-        Assert.Equal(RoadmapArtifactPaths.Selection, provenance.ArtifactPath);
+        Assert.Equal((string?)RoadmapArtifactPaths.Selection, provenance.ArtifactPath);
         Assert.Equal(RoadmapHash.Sha256(invalidSelection), provenance.ArtifactHash);
 
         ArtifactLifecycleEntry lifecycle = Assert.Single(
@@ -161,10 +183,10 @@ public sealed class RoadmapStateMachineSelectionTests
         Assert.Equal(ArtifactLifecycleState.Ready, lifecycle.State);
         Assert.Equal(evidencePath, lifecycle.Notes);
 
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.DecisionLedgerJson));
-        Assert.Equal("None", await new Cli.Services.DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.DecisionLedgerJson));
+        Assert.Equal("None", await new DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.SelectNextStrategicInitiative, state.CurrentState);
         Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
         Assert.Equal("Completed", state.LastTransition.Decision);
@@ -197,11 +219,11 @@ public sealed class RoadmapStateMachineSelectionTests
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
         Assert.Equal(2, runtime.OneShotCalls);
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ProjectionPaths[downstreamPrompt]));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ProjectionPaths[downstreamPrompt]));
         AssertDownstreamPromptNotStarted(repo, downstreamPrompt);
         Assert.Contains(console.Errors, error => error.Contains("Active selection cannot be used because it does not belong to the current selection cycle", StringComparison.Ordinal));
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.SelectNextStrategicInitiative, state.CurrentState);
         Assert.Equal("SelectNextEpic", state.LastTransition.Prompt);
         Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
@@ -225,14 +247,14 @@ public sealed class RoadmapStateMachineSelectionTests
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
         Assert.Equal(4, runtime.OneShotCalls);
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ProjectionPaths["RealignEpic"]));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ProjectionPaths["RealignEpic"]));
         AssertDownstreamPromptNotStarted(repo, "RealignEpic");
         Assert.Contains(console.Errors, error => error.Contains("Active selection cannot be used because it does not belong to the current selection cycle", StringComparison.Ordinal));
 
         string auditPath = Assert.Single(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.AuditEvidenceDirectory, "epic-preparation-audit.*.md"));
         Assert.Contains("Disposition | Realign", repo.Read(auditPath), StringComparison.Ordinal);
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EpicPreparationAudit, state.CurrentState);
         Assert.Equal("EpicPreparationAudit", state.LastTransition.Prompt);
         Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
@@ -267,7 +289,7 @@ public sealed class RoadmapStateMachineSelectionTests
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         NonImplementationHitlRequestEntry request = Assert.Single((await ledger.LoadOrCreateAsync()).HitlRequests);
         Assert.Equal("docs/roadmap-note.md", request.DeliverablePathOrPattern);
-        Assert.Equal(RoadmapArtifactPaths.Selection, request.SourceArtifactPath);
+        Assert.Equal((string?)RoadmapArtifactPaths.Selection, request.SourceArtifactPath);
         Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
     }
 
@@ -282,7 +304,7 @@ public sealed class RoadmapStateMachineSelectionTests
 
     private static async Task SeedStaleSelectionProjectionManifestAsync(TempRepo repo)
     {
-        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         ProjectionProvenance provenance = new ProjectionProvenanceFactory(new ProjectionRegistry())
             .Create("SelectNextEpic", projectContext);
         ProjectionProvenance staleProvenance = provenance with

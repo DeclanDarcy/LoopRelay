@@ -1,6 +1,7 @@
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Sessions;
 
-namespace LoopRelay.Agents.Models;
+namespace LoopRelay.Agents.Models.Sessions;
 
 /// <summary>
 /// The outcome of one agent turn. <paramref name="Diagnostics"/> is failure-only context — the

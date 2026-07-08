@@ -1,6 +1,7 @@
+using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Models.NonImplementationLedger;
 
 public sealed record NonImplementationReviewLedgerEntry
 {

@@ -1,8 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Decisions;
 
 internal sealed class SelectionProvenanceManifestStore(RoadmapArtifacts artifacts)
 {

@@ -1,12 +1,13 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.RoadmapState;
 
 internal sealed record RoadmapWorkflowFailure(
     string JournalEvent,
-    RoadmapState OriginatingState,
-    RoadmapState AttemptedState,
-    RoadmapState FailureState,
+    Primitives.State.RoadmapState OriginatingState,
+    Primitives.State.RoadmapState AttemptedState,
+    Primitives.State.RoadmapState FailureState,
     TransitionStatus StateTransitionStatus,
     string Transition,
     string Projection,
@@ -21,9 +22,9 @@ internal sealed record RoadmapWorkflowFailure(
     TransitionInputSnapshot? InputSnapshot = null)
 {
     public static RoadmapWorkflowFailure InvariantFailure(
-        RoadmapState originatingState,
-        RoadmapState attemptedState,
-        RoadmapState failureState,
+        Primitives.State.RoadmapState originatingState,
+        Primitives.State.RoadmapState attemptedState,
+        Primitives.State.RoadmapState failureState,
         string transition,
         string projection,
         string failureCategory,
@@ -41,7 +42,7 @@ internal sealed record RoadmapWorkflowFailure(
             originatingState,
             attemptedState,
             failureState,
-            failureState == RoadmapState.Failed ? TransitionStatus.Failed : TransitionStatus.Paused,
+            failureState == Primitives.State.RoadmapState.Failed ? TransitionStatus.Failed : TransitionStatus.Paused,
             transition,
             projection,
             "InvariantValidator",

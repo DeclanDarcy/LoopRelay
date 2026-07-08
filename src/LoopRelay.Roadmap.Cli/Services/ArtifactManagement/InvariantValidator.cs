@@ -1,11 +1,22 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.Splits;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
 internal sealed class InvariantValidator(
     RoadmapArtifacts artifacts,
-    ProjectContextLoader projectContextLoader,
+    Projections.ProjectContextLoader projectContextLoader,
     ProjectionRegistry projectionRegistry,
     PromptContractRegistry contractRegistry,
     ProjectionManifestStore manifestStore,
@@ -141,7 +152,7 @@ internal sealed class InvariantValidator(
     {
         try
         {
-            if (!SplitEpicBundleInterpreter.IsChildEpicPath(childEpicPath))
+            if (!Splits.SplitEpicBundleInterpreter.IsChildEpicPath(childEpicPath))
             {
                 return await FailAsync(
                     RoadmapState.SplitChildSelection,

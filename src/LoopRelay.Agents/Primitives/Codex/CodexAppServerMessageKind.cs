@@ -1,4 +1,4 @@
-namespace LoopRelay.Agents.Primitives;
+namespace LoopRelay.Agents.Primitives.Codex;
 
 public enum CodexAppServerMessageKind
 {

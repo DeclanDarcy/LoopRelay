@@ -1,4 +1,4 @@
-namespace LoopRelay.Agents.Primitives;
+namespace LoopRelay.Agents.Primitives.Streams;
 
 /// <summary>
 /// What a streamed chunk represents. Agent-reply text (the accumulated turn Output) is surfaced as

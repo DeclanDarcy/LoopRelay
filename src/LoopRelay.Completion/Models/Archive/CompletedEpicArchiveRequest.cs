@@ -1,7 +1,7 @@
-using LoopRelay.Completion.Services;
+using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Core.Models.Repositories;
 
-namespace LoopRelay.Completion.Models;
+namespace LoopRelay.Completion.Models.Archive;
 
 public sealed record CompletedEpicArchiveRequest(
     Repository Repository,

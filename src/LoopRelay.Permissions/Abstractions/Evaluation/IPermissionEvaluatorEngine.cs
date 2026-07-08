@@ -1,7 +1,7 @@
-using LoopRelay.Permissions.Models;
-using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Primitives.Evaluation;
+using LoopRelay.Permissions.Primitives.Parsing;
 
-namespace LoopRelay.Permissions.Abstractions;
+namespace LoopRelay.Permissions.Abstractions.Evaluation;
 
 public interface IPermissionEvaluatorEngine
 {

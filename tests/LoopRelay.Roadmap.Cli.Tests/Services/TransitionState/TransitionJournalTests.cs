@@ -1,13 +1,23 @@
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Cli;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.TransitionState;
 
 public sealed class TransitionJournalTests
 {

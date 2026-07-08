@@ -1,14 +1,17 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Plan.Cli.Abstractions;
 using LoopRelay.Plan.Cli.Models;
+using LoopRelay.Plan.Cli.Services.Cli;
+using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 
-namespace LoopRelay.Plan.Cli.Services;
+namespace LoopRelay.Plan.Cli.Services.Execution;
 
 /// <summary>
 /// Pipeline steps 2-5: a persistent two-turn codex planning session held open across the review sandwiched

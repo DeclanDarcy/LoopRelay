@@ -1,4 +1,4 @@
-namespace LoopRelay.Agents.Models;
+namespace LoopRelay.Agents.Models.Process;
 
 public sealed class ProcessRunResult
 {

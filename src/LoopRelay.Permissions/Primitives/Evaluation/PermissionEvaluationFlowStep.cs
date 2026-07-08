@@ -1,4 +1,4 @@
-namespace LoopRelay.Permissions.Primitives;
+namespace LoopRelay.Permissions.Primitives.Evaluation;
 
 public enum PermissionEvaluationFlowStep
 {

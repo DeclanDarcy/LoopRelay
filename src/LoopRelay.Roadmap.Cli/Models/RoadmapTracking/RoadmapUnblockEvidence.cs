@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 
 internal sealed record RoadmapUnblockEvidence(
     string Path,

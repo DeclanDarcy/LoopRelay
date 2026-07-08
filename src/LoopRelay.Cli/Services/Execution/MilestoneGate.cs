@@ -3,7 +3,7 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Execution;
 
 /// <summary>
 /// LoopStart epic-complete gate. Aggregates GitHub task-list checkboxes (parsed with the canonical

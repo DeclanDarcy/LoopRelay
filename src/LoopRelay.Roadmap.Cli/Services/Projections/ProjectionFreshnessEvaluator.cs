@@ -1,7 +1,8 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.Projections;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal static class ProjectionFreshnessEvaluator
 {

@@ -1,9 +1,10 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Process;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Policy;
 
-namespace LoopRelay.Plan.Cli.Services;
+namespace LoopRelay.Plan.Cli.Services.Cli;
 
 /// <summary>
 /// The three codex session postures the planning pipeline needs, per the plan's Process Model table:

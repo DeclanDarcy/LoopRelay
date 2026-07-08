@@ -1,7 +1,12 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Services;
+using LoopRelay.Agents.Services.Codex;
+using LoopRelay.Agents.Services.Process;
+using LoopRelay.Agents.Services.Sessions;
+using LoopRelay.Agents.Services.Usage;
 using LoopRelay.Permissions.Extensions;
 using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Policy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

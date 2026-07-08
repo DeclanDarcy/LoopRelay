@@ -1,4 +1,4 @@
-namespace LoopRelay.Projections.Models;
+namespace LoopRelay.Projections.Models.Definitions;
 
 public sealed class ProjectionException : Exception
 {

@@ -1,4 +1,5 @@
 using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Definitions;
 
 namespace LoopRelay.Projections.Abstractions;
 

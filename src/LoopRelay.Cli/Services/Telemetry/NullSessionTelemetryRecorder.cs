@@ -1,9 +1,9 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Infrastructure.Models.Diagnostics;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Telemetry;
 
 /// <summary>No-op recorder used when session telemetry is disabled (also skips the post-probe cost).</summary>
 internal sealed class NullSessionTelemetryRecorder : ISessionTelemetryRecorder

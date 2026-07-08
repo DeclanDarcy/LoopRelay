@@ -1,7 +1,8 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Primitives.Execution;
+using LoopRelay.Roadmap.Cli.Primitives.State;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Execution;
 
 internal static class ExecutionDispositionProtocol
 {

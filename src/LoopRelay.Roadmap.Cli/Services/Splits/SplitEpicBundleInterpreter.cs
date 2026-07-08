@@ -1,15 +1,18 @@
 using System.Text.RegularExpressions;
 using LoopRelay.Roadmap.Cli.Abstractions;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Models.Splits;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Splits;
 
 internal sealed partial class SplitEpicBundleInterpreter(
     IArtifactOutputClassifier? classifier = null,
     IArtifactValidator? validator = null)
 {
-    private readonly IArtifactOutputClassifier classifier = classifier ?? new EpicAuthoringOutputClassifier();
+    private readonly IArtifactOutputClassifier classifier = classifier ?? new ArtifactManagement.EpicAuthoringOutputClassifier();
     private readonly IArtifactValidator validator = validator ?? new EpicArtifactValidator();
 
     public SplitEpicBundleInterpretation Interpret(BundleExtractionResult bundle, string rawOutput)

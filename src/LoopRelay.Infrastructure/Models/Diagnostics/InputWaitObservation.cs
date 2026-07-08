@@ -1,4 +1,5 @@
 using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Sessions;
 
 namespace LoopRelay.Infrastructure.Models.Diagnostics;
 

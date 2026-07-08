@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace LoopRelay.Permissions.Services;
+namespace LoopRelay.Permissions.Services.Policy;
 
 internal static partial class PermissionConstants
 {

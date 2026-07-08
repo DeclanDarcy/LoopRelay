@@ -1,7 +1,7 @@
 using System.Text;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Projections;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal static class MarkdownTableParser
 {

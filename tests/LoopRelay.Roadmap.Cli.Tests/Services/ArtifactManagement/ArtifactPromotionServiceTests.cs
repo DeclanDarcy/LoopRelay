@@ -1,8 +1,12 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Tests.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using EpicAuthoringOutputClassifier = LoopRelay.Roadmap.Cli.Services.ArtifactManagement.EpicAuthoringOutputClassifier;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.ArtifactManagement;
 
 public sealed class ArtifactPromotionServiceTests
 {
@@ -111,7 +115,7 @@ public sealed class ArtifactPromotionServiceTests
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "active-epic-promotion",
             "active epic",
-            new Cli.Services.EpicAuthoringOutputClassifier(),
+            new EpicAuthoringOutputClassifier(),
             new EpicArtifactValidator(),
             ArtifactLifecycleState.Ready,
             "Test promotion.");

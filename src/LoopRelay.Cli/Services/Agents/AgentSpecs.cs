@@ -1,9 +1,10 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Process;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Policy;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Agents;
 
 /// <summary>
 /// The two codex session postures copied verbatim from RepositoryOrchestrator.BuildOperationalSpec /

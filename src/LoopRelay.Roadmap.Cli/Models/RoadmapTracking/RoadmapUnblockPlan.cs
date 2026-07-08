@@ -1,18 +1,20 @@
-using LoopRelay.Completion.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Services.Execution;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 
 internal sealed record RoadmapUnblockPlan(
     RoadmapUnblockAction Action,
     RoadmapUnblockPlanStatus Status,
-    RoadmapState SourceState,
+    Primitives.State.RoadmapState SourceState,
     RoadmapTransitionIntent TransitionIntent,
     string Reason,
     IReadOnlyList<RoadmapUnblockEvidence> Evidence,
     string RequiredNextStep,
-    RoadmapState? TargetState,
+    Primitives.State.RoadmapState? TargetState,
     string Decision,
     string? PrimaryEvidencePath = null,
     ExecutionDispositionValidationResult? ExecutionValidation = null,
@@ -21,11 +23,11 @@ internal sealed record RoadmapUnblockPlan(
 {
     public static RoadmapUnblockPlan Success(
         RoadmapUnblockAction action,
-        RoadmapState sourceState,
+        Primitives.State.RoadmapState sourceState,
         RoadmapTransitionIntent transitionIntent,
         string reason,
         IReadOnlyList<RoadmapUnblockEvidence> evidence,
-        RoadmapState targetState,
+        Primitives.State.RoadmapState targetState,
         string decision) =>
         new(
             action,
@@ -39,7 +41,7 @@ internal sealed record RoadmapUnblockPlan(
             decision);
 
     public static RoadmapUnblockPlan ExecutionDispositionRecovered(
-        RoadmapState sourceState,
+        Primitives.State.RoadmapState sourceState,
         RoadmapTransitionIntent transitionIntent,
         string reason,
         IReadOnlyList<RoadmapUnblockEvidence> evidence,
@@ -59,7 +61,7 @@ internal sealed record RoadmapUnblockPlan(
             validation);
 
     public static RoadmapUnblockPlan CompletionCertificationRecovered(
-        RoadmapState sourceState,
+        Primitives.State.RoadmapState sourceState,
         RoadmapTransitionIntent transitionIntent,
         string reason,
         IReadOnlyList<RoadmapUnblockEvidence> evidence,
@@ -82,7 +84,7 @@ internal sealed record RoadmapUnblockPlan(
 
     public static RoadmapUnblockPlan Failed(
         RoadmapUnblockAction action,
-        RoadmapState sourceState,
+        Primitives.State.RoadmapState sourceState,
         RoadmapTransitionIntent transitionIntent,
         string reason,
         IReadOnlyList<RoadmapUnblockEvidence> evidence,
@@ -99,7 +101,7 @@ internal sealed record RoadmapUnblockPlan(
             "Unblock Review Failed");
 
     public static RoadmapUnblockPlan Unsupported(
-        RoadmapState sourceState,
+        Primitives.State.RoadmapState sourceState,
         RoadmapTransitionIntent transitionIntent,
         string reason,
         IReadOnlyList<RoadmapUnblockEvidence> evidence,

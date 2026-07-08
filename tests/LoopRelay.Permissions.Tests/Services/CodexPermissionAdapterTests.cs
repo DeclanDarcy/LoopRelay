@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Primitives.Requests;
 using LoopRelay.Permissions.Services.Codex;
 
 namespace LoopRelay.Permissions.Tests.Services;

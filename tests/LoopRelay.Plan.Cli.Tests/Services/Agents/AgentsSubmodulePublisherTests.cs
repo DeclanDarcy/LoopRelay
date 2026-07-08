@@ -1,9 +1,10 @@
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Plan.Cli.Models;
-using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Plan.Cli.Services.Agents;
+using LoopRelay.Plan.Cli.Tests.Services.Support;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.Agents;
 
 public class AgentsSubmodulePublisherTests
 {

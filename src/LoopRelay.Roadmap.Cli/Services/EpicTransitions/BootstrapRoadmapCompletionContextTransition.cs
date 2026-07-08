@@ -1,8 +1,16 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.Invocation;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
-namespace LoopRelay.Roadmap.Cli.Services.Transitions;
+namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class BootstrapRoadmapCompletionContextTransition(
     RoadmapArtifacts artifacts,

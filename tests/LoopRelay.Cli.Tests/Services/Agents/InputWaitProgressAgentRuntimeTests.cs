@@ -1,16 +1,20 @@
 using System.Collections.Concurrent;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
-using LoopRelay.Agents.Services;
-using LoopRelay.Cli.Services;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Primitives.Streams;
+using LoopRelay.Agents.Services.Usage;
+using LoopRelay.Cli.Services.Agents;
+using LoopRelay.Cli.Tests.Services.Support;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Infrastructure.Abstractions.Diagnostics;
 using LoopRelay.Infrastructure.Models.Diagnostics;
 using LoopRelay.Infrastructure.Services.Diagnostics;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Agents;
 
 public class InputWaitProgressAgentRuntimeTests
 {

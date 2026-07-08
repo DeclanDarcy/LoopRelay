@@ -1,15 +1,18 @@
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
-using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Plan.Cli.Models;
-using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Plan.Cli.Services.Execution;
+using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 using LoopRelay.Plan.Cli.Tests.Models;
+using LoopRelay.Plan.Cli.Tests.Services.Agents;
+using LoopRelay.Plan.Cli.Tests.Services.Support;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.Execution;
 
 public class PermissionedArtifactOperationStepTests
 {

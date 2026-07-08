@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
 
 internal sealed record ExecutionPreparationReadiness(
     bool IsFresh,

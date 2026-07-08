@@ -1,6 +1,6 @@
 using LoopRelay.Agents.Abstractions;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Usage;
 
 /// <summary>
 /// Deterministic token estimate (<c>(len + 3) / 4</c>) used as the governed fallback

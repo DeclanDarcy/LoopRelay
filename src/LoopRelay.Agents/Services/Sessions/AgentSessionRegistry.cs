@@ -1,10 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Sessions;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Sessions;
 
 /// <summary>
 /// Owns live agent sessions keyed by repository id and session id so a warm process can be

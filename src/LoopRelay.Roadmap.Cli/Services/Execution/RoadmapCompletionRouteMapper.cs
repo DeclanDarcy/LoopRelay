@@ -1,8 +1,10 @@
-using LoopRelay.Completion.Models;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Execution;
 
 internal static class RoadmapCompletionRouteMapper
 {

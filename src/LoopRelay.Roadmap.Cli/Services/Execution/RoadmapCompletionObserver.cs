@@ -1,7 +1,7 @@
 using LoopRelay.Completion.Abstractions;
 using LoopRelay.Roadmap.Cli.Abstractions;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Execution;
 
 internal sealed class RoadmapCompletionObserver(ILoopConsole console) : ICompletionObserver
 {

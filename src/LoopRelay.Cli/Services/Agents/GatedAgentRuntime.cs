@@ -1,8 +1,10 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Services.Telemetry;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Agents;
 
 /// <summary>
 /// Wraps an <see cref="IAgentRuntime"/> so every codex turn/one-shot emits one telemetry row per attempt,

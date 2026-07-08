@@ -1,12 +1,15 @@
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Primitives;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 
 internal sealed record RoadmapCompletionRoute(
     CompletionCertificationRoute Shared,
-    RoadmapState TargetState,
+    Primitives.State.RoadmapState TargetState,
     TransitionStatus TransitionStatus,
     RoadmapOutcome CliOutcome,
     ArtifactLifecycleState? ActiveEpicLifecycleState,

@@ -3,10 +3,10 @@ using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
-using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.PlanArtifactOperations;
 
 public class PlanArtifactsTests
 {

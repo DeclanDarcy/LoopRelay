@@ -1,6 +1,6 @@
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Provenance;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.Prompts;
 
 public static class ProjectionPromptCatalog
 {

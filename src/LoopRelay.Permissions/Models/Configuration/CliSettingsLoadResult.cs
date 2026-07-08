@@ -1,3 +1,5 @@
+using LoopRelay.Permissions.Models.Policy;
+
 namespace LoopRelay.Permissions.Models.Configuration;
 
 public sealed record CliSettingsLoadResult(

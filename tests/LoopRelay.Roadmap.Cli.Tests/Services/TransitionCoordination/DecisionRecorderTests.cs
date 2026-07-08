@@ -1,10 +1,13 @@
 using System.Text.Json;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
-using LoopRelay.Roadmap.Cli.Services.Transitions;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using DecisionLedgerStore = LoopRelay.Roadmap.Cli.Services.Decisions.DecisionLedgerStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.TransitionCoordination;
 
 public sealed class DecisionRecorderTests
 {
@@ -12,7 +15,7 @@ public sealed class DecisionRecorderTests
     public async Task Append_allocates_decision_id_and_preserves_entry_fields()
     {
         using var repo = new TempRepo();
-        var recorder = new DecisionRecorder(new Cli.Services.DecisionLedgerStore(repo.Artifacts));
+        var recorder = new DecisionRecorder(new DecisionLedgerStore(repo.Artifacts));
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         await recorder.AppendAsync(
@@ -43,7 +46,7 @@ public sealed class DecisionRecorderTests
     public async Task Append_allocates_next_id_from_existing_ledger()
     {
         using var repo = new TempRepo();
-        var store = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var store = new DecisionLedgerStore(repo.Artifacts);
         await store.AppendAsync(Entry("D0007"));
         var recorder = new DecisionRecorder(store);
 
@@ -66,7 +69,7 @@ public sealed class DecisionRecorderTests
     public async Task Append_keeps_output_argument_as_single_ledger_output()
     {
         using var repo = new TempRepo();
-        var recorder = new DecisionRecorder(new Cli.Services.DecisionLedgerStore(repo.Artifacts));
+        var recorder = new DecisionRecorder(new DecisionLedgerStore(repo.Artifacts));
 
         await recorder.AppendAsync(
             RoadmapState.CompletionEvaluationAndContextUpdate,

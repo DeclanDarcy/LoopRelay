@@ -1,11 +1,17 @@
 using LoopRelay.Completion.Abstractions;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Archive;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Completion.Models.Parsing;
+using LoopRelay.Completion.Models.Prompts;
+using LoopRelay.Completion.Services.ArtifactStorage;
+using LoopRelay.Completion.Services.Observers;
+using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Projections.Abstractions;
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.Certification;
 
 public sealed class CompletionCertificationService(
     IArtifactStore store,
@@ -24,7 +30,7 @@ public sealed class CompletionCertificationService(
         CompletionCertificationRequest request,
         CancellationToken cancellationToken = default)
     {
-        var artifacts = new CompletionArtifacts(store, request.Repository);
+        var artifacts = new ArtifactStorage.CompletionArtifacts(store, request.Repository);
         var contextBuilder = new CompletionPromptContextBuilder(artifacts);
         string? evaluationPath = null;
         try
@@ -189,7 +195,7 @@ public sealed class CompletionCertificationService(
     }
 
     private async Task BootstrapRoadmapCompletionContextAsync(
-        CompletionArtifacts artifacts,
+        ArtifactStorage.CompletionArtifacts artifacts,
         CompletionPromptContextBuilder contextBuilder,
         CompletionCertificationRequest request,
         CancellationToken cancellationToken)
@@ -214,7 +220,7 @@ public sealed class CompletionCertificationService(
     }
 
     private static async Task<string> WriteExecutionCompletionClaimAsync(
-        CompletionArtifacts artifacts,
+        ArtifactStorage.CompletionArtifacts artifacts,
         CompletionCertificationRequest request,
         IReadOnlyList<string> milestonePaths)
     {
@@ -271,7 +277,7 @@ public sealed class CompletionCertificationService(
     }
 
     private static async Task<CompletionCertificationResult> BlockAsync(
-        CompletionArtifacts artifacts,
+        ArtifactStorage.CompletionArtifacts artifacts,
         CompletionEvaluationDecision? decision,
         CompletionCertificationRoute? route,
         string? evaluationPath,
@@ -299,7 +305,7 @@ public sealed class CompletionCertificationService(
     }
 
     private static async Task<string> WriteBlockerEvidenceAsync(
-        CompletionArtifacts artifacts,
+        ArtifactStorage.CompletionArtifacts artifacts,
         string title,
         string reason,
         string? evaluationPath,

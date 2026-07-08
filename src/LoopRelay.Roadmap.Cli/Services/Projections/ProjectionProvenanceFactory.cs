@@ -1,6 +1,7 @@
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal sealed class ProjectionProvenanceFactory(ProjectionRegistry registry)
 {

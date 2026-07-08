@@ -1,4 +1,7 @@
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
+
+namespace LoopRelay.Orchestration.Models.NonImplementationSemanticConfirmation;
 
 public sealed record NonImplementationSemanticConfirmationBatchResult(
     IReadOnlyList<NonImplementationReviewLedgerEntry> ConfirmedEntries,

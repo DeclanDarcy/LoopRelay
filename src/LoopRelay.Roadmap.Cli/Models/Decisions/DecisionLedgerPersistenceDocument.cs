@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Decisions;
 
 internal sealed record DecisionLedgerPersistenceDocument(
     string SchemaVersion,

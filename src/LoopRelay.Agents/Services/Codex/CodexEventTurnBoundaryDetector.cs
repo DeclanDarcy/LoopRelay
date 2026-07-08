@@ -1,9 +1,9 @@
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Streams;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Codex;
 
 /// <summary>
 /// Parses Codex <c>exec --json</c> JSONL events into per-line turn inspections, replacing the earlier

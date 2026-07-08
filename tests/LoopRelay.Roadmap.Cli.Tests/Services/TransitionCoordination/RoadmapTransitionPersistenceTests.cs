@@ -1,10 +1,21 @@
 using System.Text.Json;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
-using LoopRelay.Roadmap.Cli.Services.Transitions;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using DecisionLedgerStore = LoopRelay.Roadmap.Cli.Services.Decisions.DecisionLedgerStore;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.TransitionCoordination;
 
 public sealed class RoadmapTransitionPersistenceTests
 {
@@ -25,8 +36,8 @@ public sealed class RoadmapTransitionPersistenceTests
             ManifestEntry("InvalidPrompt", ProjectionValidationStatus.Invalid, ProjectionStaleStatus.Fresh),
         ]));
 
-        var stateStore = new Cli.Services.RoadmapStateStore(repo.Artifacts);
-        var decisionLedger = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var stateStore = new RoadmapStateStore(repo.Artifacts);
+        var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
         await decisionLedger.AppendAsync(new DecisionLedgerEntry(
             "D0001",
             DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
@@ -120,8 +131,8 @@ public sealed class RoadmapTransitionPersistenceTests
         repo.Write(RoadmapArtifactPaths.ActiveEpic, "# Epic: Active\n");
 
         var manifestStore = new ProjectionManifestStore(repo.Artifacts);
-        var stateStore = new Cli.Services.RoadmapStateStore(repo.Artifacts);
-        var decisionLedger = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var stateStore = new RoadmapStateStore(repo.Artifacts);
+        var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
         var journalStore = new TransitionJournalStore(repo.Artifacts);
         var persistence = new RoadmapTransitionPersistence(
             repo.Artifacts,
@@ -161,7 +172,7 @@ public sealed class RoadmapTransitionPersistenceTests
         Assert.Equal(RoadmapState.ActiveEpicReady, saved.LastTransition.From);
         Assert.Equal(RoadmapState.MilestoneSpecsReady, saved.LastTransition.To);
         Assert.Equal("GenerateMilestoneDeepDivesForEpic", saved.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], saved.LastTransition.Projection);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], saved.LastTransition.Projection);
         Assert.Equal(string.Join(", ", evidencePaths), saved.LastTransition.Output);
         Assert.Equal("Invariant Failed: SpecEpicMismatch", saved.LastTransition.Decision);
         Assert.Equal(failedAt, saved.LastTransition.StartedAt);

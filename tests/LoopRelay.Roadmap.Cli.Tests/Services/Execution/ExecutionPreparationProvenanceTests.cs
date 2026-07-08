@@ -1,8 +1,27 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
+using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Decisions;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.Splits;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
+using LoopRelay.Roadmap.Cli.Tests.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using ExecutionCompatibilityMaterializer = LoopRelay.Roadmap.Cli.Services.Execution.ExecutionCompatibilityMaterializer;
+using ProjectContextLoader = LoopRelay.Roadmap.Cli.Services.Projections.ProjectContextLoader;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Execution;
 
 public sealed class ExecutionPreparationProvenanceTests
 {
@@ -107,7 +126,7 @@ public sealed class ExecutionPreparationProvenanceTests
         Assert.False((await provenance.EvaluateExecutionPromptFreshnessAsync()).IsFresh);
 
         await new ExecutionPromptGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
-        await new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
+        await new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
 
         ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
             requireSpecs: true,
@@ -122,12 +141,12 @@ public sealed class ExecutionPreparationProvenanceTests
     {
         using var repo = new TempRepo();
         ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo, specCount: 2);
-        Assert.True(await repo.Artifacts.ExistsAsync(".agents/milestones/m002.md"));
+        Assert.True((bool)await repo.Artifacts.ExistsAsync(".agents/milestones/m002.md"));
 
         await provenance.RecordMilestoneSpecsAsync([".agents/specs/a.md"]);
         await new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
         await new ExecutionPromptGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
-        await new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
+        await new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
 
         ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
             requireSpecs: true,
@@ -169,7 +188,7 @@ public sealed class ExecutionPreparationProvenanceTests
     {
         using var repo = new TempRepo();
         ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
-        ProjectContext context = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
+        ProjectContext context = await new ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
 
         switch (staleArtifact)
         {
@@ -213,7 +232,7 @@ public sealed class ExecutionPreparationProvenanceTests
         ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, specPaths.ToArray());
         await new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
         await new ExecutionPromptGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
-        await new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
+        await new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
         return provenance;
     }
 
@@ -221,7 +240,7 @@ public sealed class ExecutionPreparationProvenanceTests
     {
         repo.SeedProjectContext();
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
-        return await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
+        return await new ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
     }
 
     private static RoadmapResumePlanner CreatePlanner(
@@ -253,7 +272,7 @@ public sealed class ExecutionPreparationProvenanceTests
         var projections = new ProjectionRegistry();
         return new InvariantValidator(
             repo.Artifacts,
-            new Cli.Services.ProjectContextLoader(repo.Artifacts),
+            new ProjectContextLoader(repo.Artifacts),
             projections,
             new PromptContractRegistry(projections),
             new ProjectionManifestStore(repo.Artifacts),

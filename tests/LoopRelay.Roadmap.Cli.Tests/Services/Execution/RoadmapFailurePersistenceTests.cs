@@ -1,13 +1,36 @@
+using System.Collections;
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Roadmap.Cli.Abstractions;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
-using LoopRelay.Roadmap.Cli.Services.Transitions;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Decisions;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
+using LoopRelay.Roadmap.Cli.Tests.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.Selection;
+using LoopRelay.Roadmap.Cli.Tests.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using DecisionLedgerStore = LoopRelay.Roadmap.Cli.Services.Decisions.DecisionLedgerStore;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Execution;
 
 public sealed class RoadmapFailurePersistenceTests
 {
@@ -35,14 +58,14 @@ public sealed class RoadmapFailurePersistenceTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(TransitionStatus.Failed, state.LastTransition.Status);
         Assert.Equal(expectedDecision, state.LastTransition.Decision);
         Assert.Equal(expectedFromState, state.LastTransition.From);
         Assert.Equal(expectedToState, state.LastTransition.To);
         Assert.Equal(prompt, state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths[prompt], state.LastTransition.Projection);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths[prompt], state.LastTransition.Projection);
         Assert.Equal(expectedOutput, state.LastTransition.Output);
         Assert.Equal("ResolveTransitionFailure", state.TransitionIntent.Intent);
         Assert.Equal(RoadmapState.EvidenceBlocked, state.TransitionIntent.DispatchState);
@@ -51,7 +74,7 @@ public sealed class RoadmapFailurePersistenceTests
         string stateJson = repo.Read(RoadmapArtifactPaths.StateJson);
         Assert.DoesNotContain("RoadmapStateMachine", stateJson, StringComparison.Ordinal);
         Assert.DoesNotContain("ResolveBlocker", stateJson, StringComparison.Ordinal);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
         TransitionJournalRecord failed = ReadJournal(repo).Single(record =>
             record.Event == "TransitionFailed" &&
@@ -78,18 +101,18 @@ public sealed class RoadmapFailurePersistenceTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(TransitionStatus.Paused, state.LastTransition.Status);
         Assert.Equal(RoadmapState.NewEpicProposed, state.LastTransition.From);
         Assert.Equal(RoadmapState.ActiveEpicReady, state.LastTransition.To);
         Assert.Equal("CreateNewEpic", state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["CreateNewEpic"], state.LastTransition.Projection);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths["CreateNewEpic"], state.LastTransition.Projection);
         Assert.Equal(evidencePath, state.LastTransition.Output);
         Assert.Equal("ResolveArtifactPromotionBlocker", state.TransitionIntent.Intent);
         Assert.Equal(blocked, repo.Read(evidencePath));
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
         TransitionJournalRecord promotionBlocked = ReadJournal(repo).Single(record => record.Event == "ArtifactPromotionBlocked");
         Assert.Equal(state.LastTransition.From, promotionBlocked.PreviousState);
@@ -113,7 +136,7 @@ public sealed class RoadmapFailurePersistenceTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.NotEqual(RoadmapState.MilestoneSpecsReady, state.CurrentState);
@@ -121,13 +144,13 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Equal(RoadmapState.ActiveEpicReady, state.LastTransition.From);
         Assert.Equal(RoadmapState.MilestoneSpecsReady, state.LastTransition.To);
         Assert.Equal("GenerateMilestoneDeepDivesForEpic", state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], state.LastTransition.Projection);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], state.LastTransition.Projection);
         Assert.Equal(evidencePath, state.LastTransition.Output);
         Assert.Equal("Milestone Spec Generation Failed", state.LastTransition.Decision);
         Assert.Equal("ResolveMilestoneSpecGenerationFailure", state.TransitionIntent.Intent);
         Assert.Equal(RoadmapState.EvidenceBlocked, state.TransitionIntent.DispatchState);
         Assert.Contains("No FILE markers", Assert.Single(state.Blockers).Blocker, StringComparison.Ordinal);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SpecsDirectory, "*.md"));
         Assert.Equal(ArtifactStatus.Missing, await repo.Artifacts.GetStatusAsync($"{RoadmapArtifactPaths.SpecsDirectory}/bundle-manifest.md"));
         Assert.Equal(ArtifactStatus.Missing, await repo.Artifacts.GetStatusAsync(RoadmapArtifactPaths.ExecutionPreparationManifest));
 
@@ -184,7 +207,7 @@ public sealed class RoadmapFailurePersistenceTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Equal($"{RoadmapArtifactPaths.BlockerEvidenceDirectory}/milestone-spec-generation-failed.0001.md", evidencePath);
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
@@ -193,7 +216,7 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Equal(RoadmapState.ActiveEpicReady, state.LastTransition.From);
         Assert.Equal(RoadmapState.MilestoneSpecsReady, state.LastTransition.To);
         Assert.Equal("GenerateMilestoneDeepDivesForEpic", state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], state.LastTransition.Projection);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], state.LastTransition.Projection);
         Assert.Equal(evidencePath, state.LastTransition.Output);
         Assert.Equal("Milestone Spec Generation Failed", state.LastTransition.Decision);
         Assert.Equal("ResolveMilestoneSpecGenerationFailure", state.TransitionIntent.Intent);
@@ -263,20 +286,20 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Equal(RoadmapOutcome.Failed, outcome);
         const string evaluationPath = ".agents/evidence/evaluations/epic-completion-and-drift.0001.md";
         Assert.Equal(invalidEvaluation, repo.Read(evaluationPath));
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.DecisionLedgerJson));
-        Assert.Equal("None", await new Cli.Services.DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "invalid-completion-certification.*.md"));
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.DecisionLedgerJson));
+        Assert.Equal("None", await new DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "invalid-completion-certification.*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.CompletionEvaluationAndContextUpdate, state.CurrentState);
         Assert.NotEqual(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
         Assert.Equal(RoadmapState.EpicCompletionDetected, state.LastTransition.From);
         Assert.Equal(RoadmapState.CompletionEvaluationAndContextUpdate, state.LastTransition.To);
         Assert.Equal("EvaluateEpicCompletionAndDrift", state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"], state.LastTransition.Projection);
-        Assert.Equal(RoadmapArtifactPaths.EvaluationEvidenceDirectory, state.LastTransition.Output);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"], state.LastTransition.Projection);
+        Assert.Equal((string?)RoadmapArtifactPaths.EvaluationEvidenceDirectory, state.LastTransition.Output);
         Assert.Equal("Completed", state.LastTransition.Decision);
         Assert.Empty(state.Blockers);
         Assert.NotEqual("ResolveInvalidCompletionCertification", state.TransitionIntent.Intent);
@@ -319,7 +342,7 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Contains("Completion certification was parsed successfully", blocker, StringComparison.Ordinal);
         Assert.Contains("does not allow completion status `Not Complete`", blocker, StringComparison.Ordinal);
         Assert.Contains(evaluationPath, blocker, StringComparison.Ordinal);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
         var ledgerJsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         ledgerJsonOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
@@ -334,9 +357,9 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Equal("Close Epic", ledgerDecision.Decision);
         Assert.Equal("Unclear", ledgerDecision.Confidence);
         Assert.Equal("Not Complete", ledgerDecision.RationaleExcerpt);
-        Assert.Equal("D0001", await new Cli.Services.DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
+        Assert.Equal("D0001", await new DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("D0001", state.LastDecisionId);
         Assert.Equal(TransitionStatus.Paused, state.LastTransition.Status);
@@ -421,7 +444,7 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Equal(ArtifactLifecycleState.Superseded, selectionLifecycle.State);
         Assert.Equal("Roadmap completion context changed after completion certification.", selectionLifecycle.Notes);
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.SelectNextStrategicInitiative, state.CurrentState);
         Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
         Assert.Equal(RoadmapState.CompletionEvaluationAndContextUpdate, state.LastTransition.From);
@@ -485,9 +508,9 @@ public sealed class RoadmapFailurePersistenceTests
         string projectionPath = RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"];
         Assert.Equal(evaluation, repo.Read(evaluationPath));
         Assert.Equal("existing completion context", repo.Read(RoadmapArtifactPaths.RoadmapCompletionContext));
-        Assert.False(await repo.Artifacts.ExistsAsync(updateEvidencePath));
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "invalid-completion-certification.*.md"));
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(updateEvidencePath));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "invalid-completion-certification.*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
         var ledgerJsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         ledgerJsonOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
@@ -501,7 +524,7 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Equal([evaluationPath], ledgerDecision.OutputArtifactPaths);
         Assert.Equal("Close Epic", ledgerDecision.Decision);
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.CompletionEvaluationAndContextUpdate, state.CurrentState);
         Assert.NotEqual(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("None", state.LastDecisionId);
@@ -510,7 +533,7 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Equal(RoadmapState.CompletionEvaluationAndContextUpdate, state.LastTransition.To);
         Assert.Equal("EvaluateEpicCompletionAndDrift", state.LastTransition.Prompt);
         Assert.Equal(projectionPath, state.LastTransition.Projection);
-        Assert.Equal(RoadmapArtifactPaths.EvaluationEvidenceDirectory, state.LastTransition.Output);
+        Assert.Equal((string?)RoadmapArtifactPaths.EvaluationEvidenceDirectory, state.LastTransition.Output);
         Assert.Equal("Completed", state.LastTransition.Decision);
         Assert.Empty(state.Blockers);
         Assert.Equal("EvaluateEpicCompletionAndDrift", state.TransitionIntent.Intent);
@@ -537,19 +560,19 @@ public sealed class RoadmapFailurePersistenceTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(TransitionStatus.Paused, state.LastTransition.Status);
         Assert.Equal(RoadmapState.ActiveEpicReady, state.LastTransition.From);
         Assert.Equal(RoadmapState.MilestoneSpecsReady, state.LastTransition.To);
         Assert.Equal("PostMilestoneInvariantValidation", state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], state.LastTransition.Projection);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], state.LastTransition.Projection);
         Assert.Equal(evidencePath, state.LastTransition.Output);
         Assert.Equal("Invariant Failed: SpecEpicMismatch", state.LastTransition.Decision);
         Assert.Equal("ResolveInvariantViolation", state.TransitionIntent.Intent);
         Assert.Equal(RoadmapState.EvidenceBlocked, state.TransitionIntent.DispatchState);
-        Assert.StartsWith(RoadmapArtifactPaths.OrchestrationEvidenceDirectory, evidencePath, StringComparison.Ordinal);
+        Assert.StartsWith((string?)RoadmapArtifactPaths.OrchestrationEvidenceDirectory, evidencePath, StringComparison.Ordinal);
         Assert.Contains("SpecEpicMismatch", repo.Read(evidencePath), StringComparison.Ordinal);
         Assert.Contains(evidencePath, Assert.Single(state.Blockers).RequiredNextStep, StringComparison.Ordinal);
 
@@ -558,7 +581,7 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Contains("ResolveInvariantViolation", stateJson, StringComparison.Ordinal);
         Assert.DoesNotContain("ResolveBlocker", stateJson, StringComparison.Ordinal);
         Assert.DoesNotContain("RoadmapStateMachine", stateJson, StringComparison.Ordinal);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
         TransitionJournalRecord[] journal = ReadJournal(repo);
         Assert.Contains(journal, record =>
@@ -589,16 +612,16 @@ public sealed class RoadmapFailurePersistenceTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Equal(RoadmapState.Failed, state.CurrentState);
         Assert.Equal(TransitionStatus.Failed, state.LastTransition.Status);
         Assert.Equal("Invariant Failed: DuplicateActiveEpic", state.LastTransition.Decision);
         Assert.Equal("ResolveInvariantViolation", state.TransitionIntent.Intent);
         Assert.Equal(RoadmapState.Failed, state.TransitionIntent.DispatchState);
-        Assert.StartsWith(RoadmapArtifactPaths.OrchestrationEvidenceDirectory, evidencePath, StringComparison.Ordinal);
+        Assert.StartsWith((string?)RoadmapArtifactPaths.OrchestrationEvidenceDirectory, evidencePath, StringComparison.Ordinal);
         Assert.Contains("DuplicateActiveEpic", repo.Read(evidencePath), StringComparison.Ordinal);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
         TransitionJournalRecord invariantFailed = ReadJournal(repo).Single(record => record.Event == "InvariantFailed");
         Assert.Equal(RoadmapState.Failed.ToString(), invariantFailed.Result);
@@ -613,8 +636,8 @@ public sealed class RoadmapFailurePersistenceTests
         var persistence = new RoadmapTransitionPersistence(
             repo.Artifacts,
             new ProjectionManifestStore(repo.Artifacts),
-            new Cli.Services.RoadmapStateStore(repo.Artifacts),
-            new Cli.Services.DecisionLedgerStore(repo.Artifacts),
+            new RoadmapStateStore(repo.Artifacts),
+            new DecisionLedgerStore(repo.Artifacts),
             new TransitionJournalStore(repo.Artifacts));
         InvariantValidationResult invariant = InvariantValidationResult.Invalid(
             RoadmapState.EvidenceBlocked,
@@ -632,14 +655,14 @@ public sealed class RoadmapFailurePersistenceTests
                 "None"));
 
         Assert.Equal(RoadmapFailurePersistence.AlreadyPersisted, exception.Persistence);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string fallbackPath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("ResolveInvariantViolation", state.TransitionIntent.Intent);
         Assert.Equal(fallbackPath, state.LastTransition.Output);
-        Assert.StartsWith(RoadmapArtifactPaths.BlockerEvidenceDirectory, fallbackPath, StringComparison.Ordinal);
+        Assert.StartsWith((string?)RoadmapArtifactPaths.BlockerEvidenceDirectory, fallbackPath, StringComparison.Ordinal);
         Assert.Contains("without returning an evidence path", repo.Read(fallbackPath), StringComparison.Ordinal);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
 
         TransitionJournalRecord invariantFailed = ReadJournal(repo).Single(record => record.Event == "InvariantFailed");
         Assert.Equal([fallbackPath], invariantFailed.OutputPaths);
@@ -655,8 +678,8 @@ public sealed class RoadmapFailurePersistenceTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.PreflightBlocked, outcome);
-        Assert.Null(await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync());
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
+        Assert.Null(await new RoadmapStateStore(repo.Artifacts).LoadAsync());
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
     }
 
     [Fact]
@@ -668,7 +691,7 @@ public sealed class RoadmapFailurePersistenceTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.CoreReady, state.CurrentState);
         Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
         Assert.Equal("Preflight", state.LastTransition.Prompt);
@@ -676,7 +699,7 @@ public sealed class RoadmapFailurePersistenceTests
         Assert.Empty(state.Blockers);
         Assert.Equal("None", state.TransitionIntent.Intent);
         Assert.Equal(RoadmapState.CoreReady, state.TransitionIntent.DispatchState);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
     }
 
     private static TempRepo SeedRepo(bool includeCompletionContext)
@@ -726,7 +749,7 @@ public sealed class RoadmapFailurePersistenceTests
             ArtifactLifecycleState.Ready);
         await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, specPath);
         DateTimeOffset detectedAt = DateTimeOffset.UtcNow;
-        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(new RoadmapStateDocument(
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(new RoadmapStateDocument(
             RoadmapState.EpicCompletionDetected,
             [],
             new RoadmapTransitionSummary(

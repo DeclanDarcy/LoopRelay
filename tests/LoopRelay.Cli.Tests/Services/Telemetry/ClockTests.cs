@@ -1,7 +1,7 @@
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Telemetry;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Telemetry;
 
 public class ClockTests
 {

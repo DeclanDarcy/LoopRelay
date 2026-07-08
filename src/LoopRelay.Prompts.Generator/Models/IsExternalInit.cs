@@ -3,6 +3,8 @@
 // Declaring it internally lets the compiler bind init-only setters. No runtime
 // dependency; it is a compile-time marker only.
 
+// ReSharper disable once CheckNamespace
+
 namespace System.Runtime.CompilerServices
 {
     internal static class IsExternalInit { }

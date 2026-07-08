@@ -1,11 +1,12 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Process;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Execution;
 
 /// <summary>
 /// Commits and pushes the target repository's real working-tree changes at the end of each loop iteration,

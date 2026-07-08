@@ -1,6 +1,6 @@
 using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 internal static class RoadmapArtifactPaths
 {

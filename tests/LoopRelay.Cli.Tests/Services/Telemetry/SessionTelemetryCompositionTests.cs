@@ -1,13 +1,16 @@
 using System.Text.Json;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Abstractions;
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Telemetry;
+using LoopRelay.Cli.Tests.Services.Support;
+using LoopRelay.Cli.Tests.Services.Usage;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Telemetry;
 
 public class SessionTelemetryCompositionTests : IDisposable
 {

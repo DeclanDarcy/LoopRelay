@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.RoadmapState;
 
 internal sealed record ResumeSafety(bool IsSafe, string Reason)
 {

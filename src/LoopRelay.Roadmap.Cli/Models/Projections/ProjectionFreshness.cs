@@ -1,6 +1,6 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.Projections;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Projections;
 
 internal sealed record ProjectionFreshness(
     ProjectionStaleStatus Status,

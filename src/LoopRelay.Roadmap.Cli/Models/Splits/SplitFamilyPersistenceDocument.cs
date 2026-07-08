@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Splits;
 
 internal sealed record SplitFamilyPersistenceDocument(
     string SchemaVersion,

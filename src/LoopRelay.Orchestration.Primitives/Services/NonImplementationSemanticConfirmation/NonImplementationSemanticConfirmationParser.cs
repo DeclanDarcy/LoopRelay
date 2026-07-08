@@ -1,9 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
+using LoopRelay.Orchestration.Models.NonImplementationSemanticConfirmation;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 
-namespace LoopRelay.Orchestration.Services.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
 
 public static class NonImplementationSemanticConfirmationParser
 {
@@ -19,7 +21,7 @@ public static class NonImplementationSemanticConfirmationParser
         JsonOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
     }
 
-    public static NonImplementationSemanticConfirmation ParseAndValidate(
+    public static Models.NonImplementationSemanticConfirmation.NonImplementationSemanticConfirmation ParseAndValidate(
         string structuredText,
         NonImplementationReviewLedgerEntry expectedEntry)
     {
@@ -47,12 +49,12 @@ public static class NonImplementationSemanticConfirmationParser
                 ex);
         }
 
-        NonImplementationSemanticConfirmation confirmation = ToConfirmation(dto);
+        Models.NonImplementationSemanticConfirmation.NonImplementationSemanticConfirmation confirmation = ToConfirmation(dto);
         ValidateAgainstExpectedEntry(confirmation, expectedEntry);
         return confirmation;
     }
 
-    private static NonImplementationSemanticConfirmation ToConfirmation(SemanticConfirmationDto dto)
+    private static Models.NonImplementationSemanticConfirmation.NonImplementationSemanticConfirmation ToConfirmation(SemanticConfirmationDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.LedgerEntryId))
         {
@@ -107,7 +109,7 @@ public static class NonImplementationSemanticConfirmationParser
                 "Semantic confirmation output must include uncertaintyNote when disposition is Uncertain.");
         }
 
-        return new NonImplementationSemanticConfirmation(
+        return new Models.NonImplementationSemanticConfirmation.NonImplementationSemanticConfirmation(
             dto.LedgerEntryId.Trim(),
             NormalizePath(dto.CandidatePath),
             string.IsNullOrWhiteSpace(dto.ReviewedContentSha256) ? null : dto.ReviewedContentSha256.Trim(),
@@ -120,7 +122,7 @@ public static class NonImplementationSemanticConfirmationParser
     }
 
     private static void ValidateAgainstExpectedEntry(
-        NonImplementationSemanticConfirmation confirmation,
+        Models.NonImplementationSemanticConfirmation.NonImplementationSemanticConfirmation confirmation,
         NonImplementationReviewLedgerEntry expectedEntry)
     {
         if (!string.Equals(confirmation.LedgerEntryId, expectedEntry.EntryId, StringComparison.Ordinal))

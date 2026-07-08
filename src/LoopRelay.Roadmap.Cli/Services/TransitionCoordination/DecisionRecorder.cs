@@ -1,9 +1,9 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Primitives.State;
 
-namespace LoopRelay.Roadmap.Cli.Services.Transitions;
+namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
-internal sealed class DecisionRecorder(DecisionLedgerStore decisionLedger)
+internal sealed class DecisionRecorder(Decisions.DecisionLedgerStore decisionLedger)
 {
     public async Task AppendAsync(
         RoadmapState state,

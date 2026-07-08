@@ -1,8 +1,8 @@
 using LoopRelay.Completion.Abstractions;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Primitives;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Execution;
 
 internal sealed class FakeCompletionCertificationService : ICompletionCertificationService
 {

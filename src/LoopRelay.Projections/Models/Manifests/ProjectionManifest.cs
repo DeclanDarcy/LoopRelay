@@ -1,4 +1,4 @@
-namespace LoopRelay.Projections.Models;
+namespace LoopRelay.Projections.Models.Manifests;
 
 public sealed record ProjectionManifest(IReadOnlyList<ProjectionManifestEntry> Entries)
 {

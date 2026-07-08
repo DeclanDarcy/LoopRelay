@@ -1,6 +1,6 @@
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Definitions;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.Definitions;
 
 public sealed class ProjectionValidator(ProjectionDefinitionRegistry registry)
 {

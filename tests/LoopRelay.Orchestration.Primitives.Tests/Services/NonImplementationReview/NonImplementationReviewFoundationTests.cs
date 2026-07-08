@@ -1,11 +1,14 @@
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Services.Hitl;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Policy;
 
-namespace LoopRelay.Orchestration.Tests.Services;
+namespace LoopRelay.Orchestration.Tests.Services.NonImplementationReview;
 
 public sealed class NonImplementationReviewFoundationTests
 {

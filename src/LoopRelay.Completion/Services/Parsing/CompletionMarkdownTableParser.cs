@@ -1,7 +1,7 @@
 using System.Text;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Parsing;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.Parsing;
 
 internal static class CompletionMarkdownTableParser
 {

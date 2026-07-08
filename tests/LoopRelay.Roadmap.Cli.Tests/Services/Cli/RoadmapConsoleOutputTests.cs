@@ -1,8 +1,13 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Cli;
 
 public sealed class RoadmapConsoleOutputTests
 {
@@ -28,10 +33,10 @@ public sealed class RoadmapConsoleOutputTests
         Assert.Contains("Generate milestone deep dives", console.Phases);
         Assert.DoesNotContain("Generate operational context", console.Phases);
         Assert.DoesNotContain("Generate execution prompt", console.Phases);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.MilestoneSpecsReady, state.CurrentState);
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext));
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt));
     }
 
     private static TempRepo SeedRepo()

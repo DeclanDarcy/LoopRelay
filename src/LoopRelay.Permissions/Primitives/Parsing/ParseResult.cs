@@ -1,4 +1,4 @@
-namespace LoopRelay.Permissions.Primitives;
+namespace LoopRelay.Permissions.Primitives.Parsing;
 
 public readonly record struct ParseResult(
     ParsedCommand[] Commands,

@@ -1,4 +1,5 @@
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Core.Abstractions.Artifacts;
 
 namespace LoopRelay.Cli.Tests.Models;

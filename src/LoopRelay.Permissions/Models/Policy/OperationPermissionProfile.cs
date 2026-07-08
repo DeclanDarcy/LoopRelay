@@ -1,4 +1,4 @@
-namespace LoopRelay.Permissions.Models;
+namespace LoopRelay.Permissions.Models.Policy;
 
 public sealed record OperationPermissionProfile(
     string Label,

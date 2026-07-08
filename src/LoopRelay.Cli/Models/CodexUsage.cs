@@ -1,4 +1,5 @@
 using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Telemetry;
 
 namespace LoopRelay.Cli.Models;
 

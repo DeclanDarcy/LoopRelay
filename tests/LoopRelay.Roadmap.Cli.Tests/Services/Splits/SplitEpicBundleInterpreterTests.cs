@@ -1,8 +1,13 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Models.Splits;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Tests.Services.State;
+using BundleFileExtractor = LoopRelay.Roadmap.Cli.Services.ArtifactBundles.BundleFileExtractor;
+using SplitEpicBundleInterpreter = LoopRelay.Roadmap.Cli.Services.Splits.SplitEpicBundleInterpreter;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Splits;
 
 public sealed class SplitEpicBundleInterpreterTests
 {
@@ -121,7 +126,7 @@ public sealed class SplitEpicBundleInterpreterTests
 
     private static SplitEpicBundleInterpretation Interpret(string markdown)
     {
-        BundleExtractionResult bundle = new Cli.Services.BundleFileExtractor().Extract(markdown, BundleExtractionPolicy.RepositorySafe);
-        return new Cli.Services.SplitEpicBundleInterpreter().Interpret(bundle, markdown);
+        BundleExtractionResult bundle = new BundleFileExtractor().Extract(markdown, BundleExtractionPolicy.RepositorySafe);
+        return new SplitEpicBundleInterpreter().Interpret(bundle, markdown);
     }
 }

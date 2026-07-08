@@ -1,6 +1,6 @@
 using LoopRelay.Agents.Abstractions;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Process;
 
 public sealed class EnvironmentAgentExecutableResolver : IAgentExecutableResolver
 {

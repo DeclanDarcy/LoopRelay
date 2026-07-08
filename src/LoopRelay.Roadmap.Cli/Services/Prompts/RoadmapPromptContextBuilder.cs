@@ -1,9 +1,12 @@
 using System.Text;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Prompts;
 
 internal sealed class RoadmapPromptContextBuilder(
     RoadmapArtifacts artifacts,
@@ -166,8 +169,7 @@ internal sealed class RoadmapPromptContextBuilder(
         var builder = new StringBuilder();
         builder.AppendLine("Roadmap epic bodies are intentionally not embedded in this prompt context.");
         builder
-            .Append("Read roadmap epics directly from `")
-            .Append(RoadmapArtifactPaths.RoadmapDirectoryPattern)
+            .Append("Read roadmap epics directly from `").Append((string?)RoadmapArtifactPaths.RoadmapDirectoryPattern)
             .AppendLine("` before evaluating existing roadmap candidates.");
         builder.AppendLine();
         builder.AppendLine("| Source Path | Source Kind |");

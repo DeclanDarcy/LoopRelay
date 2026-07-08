@@ -1,9 +1,12 @@
-using LoopRelay.Completion.Models;
-using LoopRelay.Completion.Services;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Completion.Models.Parsing;
+using LoopRelay.Completion.Services.Certification;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Services.Decisions;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Projections;
 
 public sealed class MarkdownParserTests
 {

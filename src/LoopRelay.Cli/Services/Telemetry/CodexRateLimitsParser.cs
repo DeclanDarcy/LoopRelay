@@ -1,7 +1,7 @@
 using System.Text.Json;
 using LoopRelay.Cli.Models;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Telemetry;
 
 /// <summary>
 /// Parses the codex app-server <c>account/rateLimits/read</c> response (JSON) into a

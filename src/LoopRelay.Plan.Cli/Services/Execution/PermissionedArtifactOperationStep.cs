@@ -1,15 +1,17 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
-using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Plan.Cli.Abstractions;
 using LoopRelay.Plan.Cli.Models;
+using LoopRelay.Plan.Cli.Services.Cli;
+using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 
-namespace LoopRelay.Plan.Cli.Services;
+namespace LoopRelay.Plan.Cli.Services.Execution;
 
 internal sealed class PermissionedArtifactOperationStep(
     IAgentRuntime runtime,

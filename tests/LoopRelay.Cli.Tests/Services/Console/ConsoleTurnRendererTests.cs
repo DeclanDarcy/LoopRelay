@@ -1,9 +1,10 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
-using LoopRelay.Cli.Services;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Streams;
+using LoopRelay.Cli.Services.Console;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Console;
 
 public class ConsoleTurnRendererTests
 {

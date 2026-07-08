@@ -1,6 +1,9 @@
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.Provenance;
+using LoopRelay.Projections.Services.Prompts;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.Provenance;
 
 public sealed class ProjectionProvenanceFactory
 {

@@ -1,11 +1,13 @@
 using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Roadmap.Cli.Services;
-using LoopRelay.Roadmap.Cli.Services.Transitions;
+using LoopRelay.Orchestration.Services.Hitl;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.TransitionCoordination;
 
 public sealed class HitlArtifactCaptureTests
 {
@@ -17,7 +19,7 @@ public sealed class HitlArtifactCaptureTests
 
         await capture.CaptureAsync(RoadmapArtifactPaths.Selection, HitlSource());
 
-        Assert.False(await repo.Artifacts.ExistsAsync(NonImplementationReviewLedgerStore.LedgerPath));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(NonImplementationReviewLedgerStore.LedgerPath));
     }
 
     [Fact]
@@ -29,7 +31,7 @@ public sealed class HitlArtifactCaptureTests
 
         await capture.CaptureAsync(" ", " \r\n\t ");
 
-        Assert.False(await repo.Artifacts.ExistsAsync(NonImplementationReviewLedgerStore.LedgerPath));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(NonImplementationReviewLedgerStore.LedgerPath));
     }
 
     [Fact]
@@ -43,7 +45,7 @@ public sealed class HitlArtifactCaptureTests
 
         NonImplementationHitlRequestEntry request = Assert.Single((await ledger.LoadOrCreateAsync()).HitlRequests);
         Assert.Equal("docs/roadmap-note.md", request.DeliverablePathOrPattern);
-        Assert.Equal(RoadmapArtifactPaths.ActiveEpic, request.SourceArtifactPath);
+        Assert.Equal((string?)RoadmapArtifactPaths.ActiveEpic, request.SourceArtifactPath);
         Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
         Assert.Equal("Human explicitly requested the note.", request.Rationale);
     }

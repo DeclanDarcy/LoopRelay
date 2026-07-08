@@ -1,6 +1,6 @@
 using LoopRelay.Orchestration.Abstractions;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.Agents;
 
 
 /// <summary>

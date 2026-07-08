@@ -1,6 +1,6 @@
-using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Orchestration.Services.Hitl;
 
-namespace LoopRelay.Roadmap.Cli.Services.Transitions;
+namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class HitlArtifactCapture(
     ExplicitHitlNonImplementationRequestCaptureService? captureService)

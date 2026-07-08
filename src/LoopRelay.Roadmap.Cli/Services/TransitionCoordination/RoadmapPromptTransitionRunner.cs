@@ -1,9 +1,14 @@
 using System.Diagnostics;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 using LoopRelay.Roadmap.Cli.Models.Transitions;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
-namespace LoopRelay.Roadmap.Cli.Services.Transitions;
+namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class RoadmapPromptTransitionRunner(
     TransitionInputResolver inputResolver,

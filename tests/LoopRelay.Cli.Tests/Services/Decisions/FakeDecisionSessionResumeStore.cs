@@ -1,7 +1,7 @@
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Decisions;
 
 internal sealed class FakeDecisionSessionResumeStore : IDecisionSessionResumeStore
 {

@@ -1,6 +1,6 @@
-using System.Collections.Frozen;
+using LoopRelay.Permissions.Models.Shell;
 
-namespace LoopRelay.Permissions.Models;
+namespace LoopRelay.Permissions.Models.Policy;
 
 public sealed class PermissionHardDenyOptions
 {

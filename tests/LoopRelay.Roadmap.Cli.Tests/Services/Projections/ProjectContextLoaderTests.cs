@@ -1,7 +1,10 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using ProjectContextLoader = LoopRelay.Roadmap.Cli.Services.Projections.ProjectContextLoader;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Projections;
 
 public sealed class ProjectContextLoaderTests
 {
@@ -10,7 +13,7 @@ public sealed class ProjectContextLoaderTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        var loader = new Cli.Services.ProjectContextLoader(repo.Artifacts);
+        var loader = new ProjectContextLoader(repo.Artifacts);
 
         ProjectContext context = await loader.LoadAsync();
 
@@ -23,7 +26,7 @@ public sealed class ProjectContextLoaderTests
     public async Task LoadAsync_lists_all_missing_files()
     {
         using var repo = new TempRepo();
-        var loader = new Cli.Services.ProjectContextLoader(repo.Artifacts);
+        var loader = new ProjectContextLoader(repo.Artifacts);
 
         RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => loader.LoadAsync());
 
@@ -38,7 +41,7 @@ public sealed class ProjectContextLoaderTests
         repo.SeedProjectContext();
         repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "runtime state");
 
-        ProjectContext context = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext context = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
 
         Assert.DoesNotContain("runtime state", context.Content, StringComparison.Ordinal);
     }
@@ -50,7 +53,7 @@ public sealed class ProjectContextLoaderTests
         repo.SeedProjectContext();
         repo.Write(".agents/ctx/09-extra.md", "extra");
 
-        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync());
+        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new ProjectContextLoader(repo.Artifacts).LoadAsync());
 
         Assert.Contains("09-extra.md", ex.Message, StringComparison.Ordinal);
     }

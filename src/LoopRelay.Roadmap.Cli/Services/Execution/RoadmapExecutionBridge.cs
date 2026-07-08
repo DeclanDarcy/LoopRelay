@@ -1,13 +1,15 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Infrastructure.Models.Trust;
 using LoopRelay.Infrastructure.Primitives.Trust;
 using LoopRelay.Roadmap.Cli.Abstractions;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Cli;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Execution;
 
 internal sealed class RoadmapExecutionBridge(
     IAgentRuntime runtime,

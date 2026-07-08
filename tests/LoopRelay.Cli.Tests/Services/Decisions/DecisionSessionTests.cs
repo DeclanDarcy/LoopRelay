@@ -1,8 +1,14 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Models;
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Decisions;
+using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Cli.Tests.Models;
+using LoopRelay.Cli.Tests.Services.Agents;
+using LoopRelay.Cli.Tests.Services.Execution;
+using LoopRelay.Cli.Tests.Services.Support;
+using LoopRelay.Cli.Tests.Services.Usage;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
@@ -12,12 +18,14 @@ using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Projections.Models;
+using LoopRelay.Orchestration.Services.Hitl;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.ProjectionArtifacts;
 using LoopRelay.Projections.Primitives;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Decisions;
 
 public class DecisionSessionTests
 {

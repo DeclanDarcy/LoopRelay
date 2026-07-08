@@ -1,6 +1,6 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 
 internal sealed record TransitionInputSnapshot(
     string RuntimePromptName,

@@ -1,10 +1,13 @@
 using System.Text;
 using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Primitives.Streams;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Sessions;
 
 /// <summary>
 /// A single Codex-backed session that drives one underlying process across one or more turns.

@@ -1,10 +1,10 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Transitions;
 
 internal sealed record RoadmapTransitionSummary(
-    RoadmapState From,
-    RoadmapState To,
+    Primitives.State.RoadmapState From,
+    Primitives.State.RoadmapState To,
     string Prompt,
     string Projection,
     string Output,

@@ -1,9 +1,12 @@
 using System.Globalization;
 using LoopRelay.Completion.Abstractions;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Archive;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Completion.Models.Prompts;
+using LoopRelay.Completion.Services.Observers;
 using LoopRelay.Core.Abstractions.Artifacts;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.ArtifactStorage;
 
 public sealed class CompletedEpicArchiveService(
     IArtifactStore store,

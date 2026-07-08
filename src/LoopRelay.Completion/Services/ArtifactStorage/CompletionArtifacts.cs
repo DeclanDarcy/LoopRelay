@@ -1,10 +1,10 @@
 using System.Text.RegularExpressions;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.ArtifactStorage;
 
 public sealed partial class CompletionArtifacts(IArtifactStore store, Repository repository)
 {

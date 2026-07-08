@@ -1,7 +1,6 @@
-using LoopRelay.Permissions.Models;
-using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Primitives.Evaluation;
 
-namespace LoopRelay.Permissions.Abstractions;
+namespace LoopRelay.Permissions.Abstractions.Evaluation;
 
 public interface IPermissionCache
 {

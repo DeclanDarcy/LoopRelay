@@ -1,11 +1,18 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
-using LoopRelay.Agents.Services;
+using LoopRelay.Agents.Models.Process;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Primitives.Streams;
+using LoopRelay.Agents.Services.Codex;
+using LoopRelay.Agents.Services.Sessions;
+using LoopRelay.Agents.Services.Usage;
+using LoopRelay.Agents.Tests.Services.Codex;
 
-namespace LoopRelay.Agents.Tests.Services;
+namespace LoopRelay.Agents.Tests.Services.Sessions;
 
 public sealed class AgentSessionTests
 {

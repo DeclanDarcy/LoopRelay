@@ -5,12 +5,16 @@ using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Plan.Cli.Primitives;
-using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Plan.Cli.Services.Agents;
+using LoopRelay.Plan.Cli.Services.Execution;
+using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 using LoopRelay.Plan.Cli.Tests.Models;
-using LoopRelay.Projections.Models;
+using LoopRelay.Plan.Cli.Tests.Services.Agents;
+using LoopRelay.Plan.Cli.Tests.Services.Support;
+using LoopRelay.Projections.Models.ProjectionArtifacts;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.Execution;
 
 public class PlanPipelineTests
 {

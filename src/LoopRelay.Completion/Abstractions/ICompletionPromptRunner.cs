@@ -1,4 +1,5 @@
 using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Prompts;
 
 namespace LoopRelay.Completion.Abstractions;
 

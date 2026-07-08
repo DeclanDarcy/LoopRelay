@@ -1,10 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Process;
 using LoopRelay.Cli.Primitives;
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Agents;
+using LoopRelay.Cli.Services.Decisions;
+using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Cli.Tests.Models;
-using LoopRelay.Completion.Models;
+using LoopRelay.Cli.Tests.Services.Agents;
+using LoopRelay.Cli.Tests.Services.Decisions;
+using LoopRelay.Cli.Tests.Services.Support;
+using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Primitives;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
@@ -12,13 +17,20 @@ using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models;
+using LoopRelay.Orchestration.Models.NonImplementationCompletion;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.RepositorySlices;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Services.NonImplementationCompletion;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
+using LoopRelay.Orchestration.Services.RepositorySlices;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Execution;
 
 public class LoopRunnerTests
 {

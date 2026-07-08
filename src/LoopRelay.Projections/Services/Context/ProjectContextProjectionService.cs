@@ -1,11 +1,17 @@
 using LoopRelay.Projections.Abstractions;
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.Manifests;
+using LoopRelay.Projections.Models.Provenance;
 using LoopRelay.Projections.Primitives;
+using LoopRelay.Projections.Services.Definitions;
+using LoopRelay.Projections.Services.Manifests;
+using LoopRelay.Projections.Services.Provenance;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.Context;
 
 public sealed class ProjectContextProjectionService(
-    ProjectionArtifacts artifacts,
+    ProjectionArtifacts.ProjectionArtifacts artifacts,
     ProjectionDefinitionRegistry registry,
     ProjectionManifestStore manifestStore,
     ProjectionValidator validator,

@@ -1,8 +1,14 @@
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 using LoopRelay.Roadmap.Cli.Models.Transitions;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
-namespace LoopRelay.Roadmap.Cli.Services.Transitions;
+namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class ActiveEpicPromotionCoordinator(
     ArtifactPromotionService promotionService,
@@ -23,7 +29,7 @@ internal sealed class ActiveEpicPromotionCoordinator(
             RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "active-epic-promotion",
             "active epic",
-            new EpicAuthoringOutputClassifier(),
+            new ArtifactManagement.EpicAuthoringOutputClassifier(),
             new EpicArtifactValidator(),
             ArtifactLifecycleState.Ready,
             lifecycleNotes ?? $"Promoted by {prompt}."));

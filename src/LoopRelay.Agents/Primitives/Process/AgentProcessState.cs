@@ -1,4 +1,4 @@
-namespace LoopRelay.Agents.Primitives;
+namespace LoopRelay.Agents.Primitives.Process;
 
 public enum AgentProcessState
 {

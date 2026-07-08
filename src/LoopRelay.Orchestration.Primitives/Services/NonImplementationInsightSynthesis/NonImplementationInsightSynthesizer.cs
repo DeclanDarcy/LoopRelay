@@ -2,10 +2,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationInsightSynthesis;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 
-namespace LoopRelay.Orchestration.Services.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.NonImplementationInsightSynthesis;
 
 public sealed class NonImplementationInsightSynthesizer
 {

@@ -1,11 +1,11 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Permissions.Models;
-using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Permissions.Models.Policy;
+using LoopRelay.Plan.Cli.Services.Cli;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.Cli;
 
 public class AgentSpecsTests
 {

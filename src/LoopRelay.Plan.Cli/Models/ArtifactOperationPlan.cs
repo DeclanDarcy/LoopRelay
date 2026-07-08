@@ -1,5 +1,6 @@
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Policy;
 
 namespace LoopRelay.Plan.Cli.Models;
 

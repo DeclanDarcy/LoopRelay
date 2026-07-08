@@ -1,4 +1,6 @@
-namespace LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+
+namespace LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 
 internal sealed class BundleExtractionPolicy
 {

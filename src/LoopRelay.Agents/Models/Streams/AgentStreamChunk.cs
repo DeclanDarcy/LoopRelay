@@ -1,6 +1,7 @@
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Streams;
 
-namespace LoopRelay.Agents.Models;
+namespace LoopRelay.Agents.Models.Streams;
 
 public sealed record AgentStreamChunk(
     int TurnIndex,

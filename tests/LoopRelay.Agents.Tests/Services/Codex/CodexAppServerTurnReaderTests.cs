@@ -1,8 +1,9 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
-using LoopRelay.Agents.Services;
+using LoopRelay.Agents.Models.Codex;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Primitives.Streams;
+using LoopRelay.Agents.Services.Codex;
 
-namespace LoopRelay.Agents.Tests.Services;
+namespace LoopRelay.Agents.Tests.Services.Codex;
 
 public sealed class CodexAppServerTurnReaderTests
 {

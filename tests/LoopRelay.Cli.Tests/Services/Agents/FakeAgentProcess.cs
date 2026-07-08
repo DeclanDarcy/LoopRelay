@@ -1,7 +1,7 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Process;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Agents;
 
 
 /// <summary>

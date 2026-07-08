@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using LoopRelay.Plan.Cli.Abstractions;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.Support;
 
 internal sealed class RecordingLoopConsole : ILoopConsole
 {

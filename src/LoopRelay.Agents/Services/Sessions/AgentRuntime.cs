@@ -1,9 +1,11 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
-using LoopRelay.Permissions.Abstractions;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Services.Codex;
+using LoopRelay.Permissions.Abstractions.Evaluation;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Sessions;
 
 public sealed class AgentRuntime(
     IAgentProcessLauncher launcher,

@@ -1,7 +1,7 @@
-using LoopRelay.Agents.Primitives;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Roadmap.Cli.Primitives.Execution;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Execution;
 
 internal sealed record RoadmapExecutionTransportResult(
     ExecutionTransportStatus Status,

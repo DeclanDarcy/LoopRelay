@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Primitives;
+namespace LoopRelay.Roadmap.Cli.Primitives.Projections;
 
 internal enum ProjectionProvenanceStatus
 {

@@ -1,6 +1,7 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.Projections;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
 
 internal sealed record ProjectionManifestEntry(
     string RuntimePromptName,

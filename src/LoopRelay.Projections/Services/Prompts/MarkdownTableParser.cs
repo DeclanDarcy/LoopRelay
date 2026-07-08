@@ -1,7 +1,7 @@
 using System.Text;
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.Prompts;
 
 internal static class MarkdownTableParser
 {

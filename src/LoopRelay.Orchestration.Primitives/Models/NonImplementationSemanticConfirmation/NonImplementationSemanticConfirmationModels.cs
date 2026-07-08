@@ -1,6 +1,6 @@
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Models.NonImplementationSemanticConfirmation;
 
 public sealed record NonImplementationSemanticConfirmation(
     string LedgerEntryId,

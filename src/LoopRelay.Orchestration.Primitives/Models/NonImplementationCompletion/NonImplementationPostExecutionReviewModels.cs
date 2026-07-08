@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Models.NonImplementationCompletion;
 
 public sealed record NonImplementationPostExecutionReviewSummary(
     int ChangedFileCount,

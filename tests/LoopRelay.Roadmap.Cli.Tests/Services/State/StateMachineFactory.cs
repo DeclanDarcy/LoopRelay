@@ -1,12 +1,29 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Completion.Abstractions;
-using LoopRelay.Completion.Services;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Completion.Services.Certification;
+using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Roadmap.Cli.Abstractions;
-using LoopRelay.Roadmap.Cli.Services;
-using LoopRelay.Roadmap.Cli.Services.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Decisions;
+using LoopRelay.Roadmap.Cli.Services.EpicTransitions;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.Splits;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
+using LoopRelay.Roadmap.Cli.Tests.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Tests.Services.Cli;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using BundleFileExtractor = LoopRelay.Roadmap.Cli.Services.ArtifactBundles.BundleFileExtractor;
+using DecisionLedgerStore = LoopRelay.Roadmap.Cli.Services.Decisions.DecisionLedgerStore;
+using ProjectContextLoader = LoopRelay.Roadmap.Cli.Services.Projections.ProjectContextLoader;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
+using SplitEpicBundleInterpreter = LoopRelay.Roadmap.Cli.Services.Splits.SplitEpicBundleInterpreter;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.State;
 
 internal static class StateMachineFactory
 {
@@ -24,8 +41,8 @@ internal static class StateMachineFactory
         var executionPreparationManifest = new ExecutionPreparationManifestStore(repo.Artifacts);
         var executionPreparation = new ExecutionPreparationProvenanceService(repo.Artifacts, executionPreparationManifest);
         var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
-        var stateStore = new Cli.Services.RoadmapStateStore(repo.Artifacts);
-        var decisionLedger = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var stateStore = new RoadmapStateStore(repo.Artifacts);
+        var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
         var decisionRecorder = new DecisionRecorder(decisionLedger);
         var journal = new TransitionJournalStore(repo.Artifacts);
         var transitionPersistence = new RoadmapTransitionPersistence(
@@ -35,7 +52,7 @@ internal static class StateMachineFactory
             decisionLedger,
             journal);
         var split = new SplitFamilyStore(repo.Artifacts);
-        var loader = new Cli.Services.ProjectContextLoader(repo.Artifacts);
+        var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new RoadmapPromptRunner(runtime, repo.Repository, effectiveConsole);
         var projectionCache = new ProjectionCache(repo.Artifacts, projections, manifest, new ProjectionValidator(), runner);
         var contextBuilder = new RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation);
@@ -112,8 +129,8 @@ internal static class StateMachineFactory
             selectionSuperseder,
             activeEpicRewriteTransition,
             effectiveConsole);
-        var bundleExtractor = new Cli.Services.BundleFileExtractor();
-        var splitBundleInterpreter = new Cli.Services.SplitEpicBundleInterpreter();
+        var bundleExtractor = new BundleFileExtractor();
+        var splitBundleInterpreter = new SplitEpicBundleInterpreter();
         var bundleManifest = new BundleManifestWriter(repo.Artifacts);
         var splitEpicTransition = new SplitEpicTransition(
             repo.Artifacts,

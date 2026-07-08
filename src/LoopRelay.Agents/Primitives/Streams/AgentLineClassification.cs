@@ -1,6 +1,6 @@
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Streams;
 
-namespace LoopRelay.Agents.Primitives;
+namespace LoopRelay.Agents.Primitives.Streams;
 
 public enum AgentLineClassification
 {

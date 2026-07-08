@@ -1,7 +1,14 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
-using LoopRelay.Agents.Services;
-using LoopRelay.Completion.Services;
+using LoopRelay.Agents.Services.Sessions;
+using LoopRelay.Cli.Services.Agents;
+using LoopRelay.Cli.Services.Console;
+using LoopRelay.Cli.Services.Decisions;
+using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Services.Telemetry;
+using LoopRelay.Completion.Services.ArtifactStorage;
+using LoopRelay.Completion.Services.Certification;
+using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
@@ -10,12 +17,21 @@ using LoopRelay.Infrastructure.Services.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Services.Hitl;
+using LoopRelay.Orchestration.Services.NonImplementationCompletion;
+using LoopRelay.Orchestration.Services.NonImplementationInsightSynthesis;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
+using LoopRelay.Orchestration.Services.RepositorySlices;
 using LoopRelay.Permissions.Services.Configuration;
-using LoopRelay.Projections.Services;
+using LoopRelay.Projections.Services.Context;
+using LoopRelay.Projections.Services.Definitions;
+using LoopRelay.Projections.Services.Manifests;
+using LoopRelay.Projections.Services.ProjectionArtifacts;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Cli;
 
 internal sealed class LoopCliComposition : IAsyncDisposable
 {

@@ -1,11 +1,17 @@
 using System.Globalization;
 using LoopRelay.Core.Abstractions.Artifacts;
-using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationCompletion;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationSemanticConfirmation;
+using LoopRelay.Orchestration.Models.RepositorySlices;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
+using LoopRelay.Orchestration.Services.RepositorySlices;
 
-namespace LoopRelay.Orchestration.Services.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.NonImplementationCompletion;
 
 public sealed class NonImplementationPostExecutionReviewService(
     RepositorySliceBaselineStore baselineStore,

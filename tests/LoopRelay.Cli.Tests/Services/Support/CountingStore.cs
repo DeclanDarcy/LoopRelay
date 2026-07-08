@@ -1,6 +1,6 @@
 using LoopRelay.Core.Abstractions.Artifacts;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Support;
 
 
 /// <summary>

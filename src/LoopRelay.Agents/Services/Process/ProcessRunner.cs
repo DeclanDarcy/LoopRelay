@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Process;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Process;
 
 public sealed class ProcessRunner : IProcessRunner
 {
@@ -27,8 +27,8 @@ public sealed class ProcessRunner : IProcessRunner
         }
 
         var stopwatch = Stopwatch.StartNew();
-        using Process process = Process.Start(startInfo)
-                                ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
+        using System.Diagnostics.Process process = System.Diagnostics.Process.Start(startInfo)
+                                                   ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
         Task<string> standardOutputTask = process.StandardOutput.ReadToEndAsync();
         Task<string> standardErrorTask = process.StandardError.ReadToEndAsync();
 
@@ -79,8 +79,8 @@ public sealed class ProcessRunner : IProcessRunner
 
     private static AgentProcess StartAgentProcess(ProcessStartInfo startInfo, string fileName)
     {
-        Process process = Process.Start(startInfo)
-                          ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
+        System.Diagnostics.Process process = System.Diagnostics.Process.Start(startInfo)
+                                             ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
 
         return new AgentProcess(process);
     }

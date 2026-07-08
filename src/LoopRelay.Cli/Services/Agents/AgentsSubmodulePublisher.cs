@@ -4,7 +4,7 @@ using LoopRelay.Cli.Models;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Infrastructure.Models.Git;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Agents;
 
 internal sealed class AgentsSubmodulePublisher
 {

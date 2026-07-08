@@ -4,10 +4,11 @@ using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Plan.Cli.Models;
-using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Plan.Cli.Services.Execution;
+using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.Execution;
 
 public class OneShotStepsTests
 {

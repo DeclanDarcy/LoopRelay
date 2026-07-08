@@ -1,7 +1,7 @@
 using System.Text.Json;
 using LoopRelay.Cli.Abstractions;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Agents;
 
 /// <summary>
 /// Finds codex's own rollout log under <c>~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl</c>. Codex never tells

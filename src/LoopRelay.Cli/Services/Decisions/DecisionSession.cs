@@ -1,21 +1,28 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services.Agents;
+using LoopRelay.Cli.Services.Console;
+using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Primitives;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Projections.Abstractions;
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.ProjectionArtifacts;
 using LoopRelay.Projections.Primitives;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Decisions;
 
 /// <summary>
 /// The decision-making codex session, routed by the SessionRouter. Mirrors RepositoryOrchestrator's

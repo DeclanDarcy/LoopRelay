@@ -1,10 +1,12 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.RoadmapState;
 
 internal sealed record RoadmapStatePersistenceDocument(
     string SchemaVersion,
-    RoadmapState CurrentState,
+    Primitives.State.RoadmapState CurrentState,
     IReadOnlyList<RoadmapArtifactStateDto> ActiveArtifacts,
     RoadmapTransitionSummaryDto LastTransition,
     IReadOnlyList<RoadmapBlockerDto> Blockers,

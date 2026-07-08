@@ -1,8 +1,19 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using System.Collections;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.State;
 
 public sealed class RoadmapStateMachineResumeTests
 {
@@ -11,7 +22,7 @@ public sealed class RoadmapStateMachineResumeTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(State(
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(
             RoadmapState.EvidenceBlocked,
             blockers: [new BlockerRow("Missing evidence", "Add the evidence")]));
         var runtime = new ScriptedAgentRuntime();
@@ -30,7 +41,7 @@ public sealed class RoadmapStateMachineResumeTests
     public async Task Existing_blocked_state_survives_project_context_preflight_failure()
     {
         using var repo = new TempRepo();
-        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(State(
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(
             RoadmapState.EvidenceBlocked,
             blockers: [new BlockerRow("Missing evidence", "Add the evidence")]));
         var runtime = new ScriptedAgentRuntime();
@@ -61,7 +72,7 @@ public sealed class RoadmapStateMachineResumeTests
         RoadmapState persistedState = (RoadmapState)persistedStateValue;
         RoadmapOutcome expectedOutcome = (RoadmapOutcome)expectedOutcomeValue;
         using var repo = new TempRepo();
-        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(State(persistedState));
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(persistedState));
         var runtime = new ScriptedAgentRuntime();
 
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
@@ -84,9 +95,9 @@ public sealed class RoadmapStateMachineResumeTests
 
         Assert.Equal(RoadmapOutcome.PreflightBlocked, outcome);
         Assert.Equal(0, runtime.OneShotCalls);
-        RoadmapStateDocument? state = await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync();
+        RoadmapStateDocument? state = await new RoadmapStateStore(repo.Artifacts).LoadAsync();
         Assert.Null(state);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
     }
 
     [Fact]
@@ -97,7 +108,7 @@ public sealed class RoadmapStateMachineResumeTests
             "ResumeMilestoneGeneration",
             RoadmapState.ActiveEpicReady,
             [".agents/evidence/original.md"]);
-        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(State(
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(
             RoadmapState.ActiveEpicReady,
             from: RoadmapState.CreateNewEpic,
             prompt: "CreateNewEpic",
@@ -112,13 +123,13 @@ public sealed class RoadmapStateMachineResumeTests
 
         Assert.Equal(RoadmapOutcome.PreflightBlocked, outcome);
         Assert.Equal(0, runtime.OneShotCalls);
-        RoadmapStateDocument? state = await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync();
+        RoadmapStateDocument? state = await new RoadmapStateStore(repo.Artifacts).LoadAsync();
         Assert.NotNull(state);
         Assert.Equal(RoadmapState.ActiveEpicReady, state.CurrentState);
         Assert.Equal(RoadmapState.CreateNewEpic, state.LastTransition.From);
         Assert.Equal(RoadmapState.ActiveEpicReady, state.LastTransition.To);
         Assert.Equal("CreateNewEpic", state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ActiveEpic, state.LastTransition.Output);
+        Assert.Equal((string?)RoadmapArtifactPaths.ActiveEpic, state.LastTransition.Output);
         Assert.Equal("ResumeMilestoneGeneration", state.TransitionIntent.Intent);
         Assert.Equal(RoadmapState.ActiveEpicReady, state.TransitionIntent.DispatchState);
         Assert.Contains(".agents/evidence/original.md", state.TransitionIntent.EvidencePaths);
@@ -135,7 +146,7 @@ public sealed class RoadmapStateMachineResumeTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(State(
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(
             RoadmapState.ActiveEpicReady,
             from: RoadmapState.CreateNewEpic,
             prompt: "CreateNewEpic",
@@ -148,11 +159,11 @@ public sealed class RoadmapStateMachineResumeTests
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(0, runtime.OneShotCalls);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.ActiveEpicReady, state.CurrentState);
         Assert.Empty(state.Blockers);
         Assert.Equal(stateBefore, repo.Read(RoadmapArtifactPaths.StateJson));
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
     }
 
     [Fact]
@@ -160,7 +171,7 @@ public sealed class RoadmapStateMachineResumeTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(State(RoadmapState.StrategicInvestigationRequired));
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(RoadmapState.StrategicInvestigationRequired));
         var runtime = new ScriptedAgentRuntime();
 
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
@@ -177,7 +188,7 @@ public sealed class RoadmapStateMachineResumeTests
         repo.SeedProjectContext();
         repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
         await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready);
-        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(State(
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(State(
             RoadmapState.ActiveEpicReady,
             from: RoadmapState.CreateNewEpic,
             prompt: "CreateNewEpic",

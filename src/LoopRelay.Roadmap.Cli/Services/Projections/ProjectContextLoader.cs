@@ -1,8 +1,11 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.State;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
 {
@@ -28,7 +31,7 @@ internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
         IReadOnlyList<string> numberedFiles = await artifacts.ListAsync(RoadmapArtifactPaths.ProjectContextDirectory, "*.md");
         string[] extras = numberedFiles
             .Where(path => NumberedProjectContextFileRegex().IsMatch(Path.GetFileName(path)))
-            .Where(path => !RoadmapArtifactPaths.ProjectContextSourceFiles.Contains(path, StringComparer.Ordinal))
+            .Where(path => !Enumerable.Contains(RoadmapArtifactPaths.ProjectContextSourceFiles, path, StringComparer.Ordinal))
             .Order(StringComparer.Ordinal)
             .ToArray();
 

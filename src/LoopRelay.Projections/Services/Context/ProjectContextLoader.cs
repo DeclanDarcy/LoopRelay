@@ -1,10 +1,13 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.ProjectionArtifacts;
+using LoopRelay.Projections.Services.Definitions;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.Context;
 
-public sealed partial class ProjectContextLoader(ProjectionArtifacts artifacts)
+public sealed partial class ProjectContextLoader(ProjectionArtifacts.ProjectionArtifacts artifacts)
 {
     public async Task<ProjectContext> LoadAsync(CancellationToken cancellationToken = default)
     {

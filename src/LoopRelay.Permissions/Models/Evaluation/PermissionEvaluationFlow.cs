@@ -1,6 +1,6 @@
-using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Primitives.Evaluation;
 
-namespace LoopRelay.Permissions.Models;
+namespace LoopRelay.Permissions.Models.Evaluation;
 
 public sealed record PermissionEvaluationFlow
 {

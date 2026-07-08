@@ -1,14 +1,19 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Agents;
+using LoopRelay.Cli.Services.Telemetry;
+using LoopRelay.Cli.Tests.Services.Support;
+using LoopRelay.Cli.Tests.Services.Telemetry;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Infrastructure.Models.Diagnostics;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Agents;
 
 public class GatedAgentRuntimeTests
 {

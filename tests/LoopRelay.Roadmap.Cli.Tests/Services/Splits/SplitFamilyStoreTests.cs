@@ -1,7 +1,10 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.Splits;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Splits;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Splits;
 
 public sealed class SplitFamilyStoreTests
 {
@@ -15,7 +18,7 @@ public sealed class SplitFamilyStoreTests
         string jsonPath = await store.WriteAsync(family);
         repo.Write(RoadmapArtifactPaths.SplitFamily("family-1"), "# Split Family\n\n## Child Epics\n\n- .agents/other.md\n");
 
-        Assert.Equal(RoadmapArtifactPaths.SplitFamilyJson("family-1"), jsonPath);
+        Assert.Equal((string?)RoadmapArtifactPaths.SplitFamilyJson("family-1"), jsonPath);
         Assert.True(await store.ExistsForChildAsync(".agents/epic-2.md"));
         Assert.Contains("\"SchemaVersion\": \"split-family.v1\"", repo.Read(RoadmapArtifactPaths.SplitFamilyJson("family-1")), StringComparison.Ordinal);
     }

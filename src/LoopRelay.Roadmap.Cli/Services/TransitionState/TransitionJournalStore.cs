@@ -1,7 +1,8 @@
 using System.Text.Json;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.TransitionState;
 
 internal sealed class TransitionJournalStore(RoadmapArtifacts artifacts)
 {

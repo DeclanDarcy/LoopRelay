@@ -1,9 +1,19 @@
 using System.Text.Json;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.State;
 
 public sealed class RoadmapStateMachinePromotionTests
 {
@@ -21,9 +31,9 @@ public sealed class RoadmapStateMachinePromotionTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic));
         Assert.Equal(4, runtime.OneShotCalls);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(TransitionStatus.Paused, state.LastTransition.Status);
         Assert.Equal("Artifact Promotion Blocked", state.LastTransition.Decision);
@@ -45,10 +55,10 @@ public sealed class RoadmapStateMachinePromotionTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic));
-        Assert.False(await repo.Artifacts.ExistsAsync($"{RoadmapArtifactPaths.SpecsDirectory}/promotion-test.md"));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync($"{RoadmapArtifactPaths.SpecsDirectory}/promotion-test.md"));
         Assert.Equal(4, runtime.OneShotCalls);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("Artifact Promotion Ambiguous", state.LastTransition.Decision);
     }
@@ -67,8 +77,8 @@ public sealed class RoadmapStateMachinePromotionTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic));
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic));
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(TransitionStatus.Paused, state.LastTransition.Status);
@@ -123,7 +133,7 @@ public sealed class RoadmapStateMachinePromotionTests
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
         Assert.Equal(6, runtime.OneShotCalls);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Equal(blocked, repo.Read(evidencePath));
@@ -149,7 +159,7 @@ public sealed class RoadmapStateMachinePromotionTests
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
         Assert.Equal(6, runtime.OneShotCalls);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Equal(blocked, repo.Read(evidencePath));
@@ -214,7 +224,7 @@ public sealed class RoadmapStateMachinePromotionTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ActiveEpic));
         string prompt = RewriteRuntimePrompt(runtime);
         Assert.Contains("SELECTION-FALLBACK-SENTINEL", prompt, StringComparison.Ordinal);
 
@@ -249,11 +259,11 @@ public sealed class RoadmapStateMachinePromotionTests
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(epic, repo.Read(RoadmapArtifactPaths.ActiveEpic));
         Assert.Equal(6, runtime.OneShotCalls);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.MilestoneSpecsReady, state.CurrentState);
-        Assert.Equal(RoadmapArtifactPaths.SpecsDirectory, state.LastTransition.Output);
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext));
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt));
+        Assert.Equal((string?)RoadmapArtifactPaths.SpecsDirectory, state.LastTransition.Output);
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt));
 
         TransitionJournalRecord[] journal = ReadJournal(repo);
         Assert.Contains(journal, record => record.Event == "ArtifactPromoted");
@@ -339,7 +349,7 @@ public sealed class RoadmapStateMachinePromotionTests
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
         Assert.Equal(6, runtime.OneShotCalls);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("Artifact Promotion Invalid", state.LastTransition.Decision);
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);

@@ -23,4 +23,8 @@
     <InternalsVisibleTo Include="LoopRelay.Roadmap.CLI.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Services\RoadmapArtifacts\" />
+  </ItemGroup>
+
 </Project>

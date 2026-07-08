@@ -3,7 +3,7 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Execution;
 
 /// <summary>
 /// All .agents/* disk effects for the loop: rotation (read+archive numbered+delete live), restart-safe

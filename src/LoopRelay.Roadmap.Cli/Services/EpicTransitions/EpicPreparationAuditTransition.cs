@@ -1,9 +1,21 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Models.Invocation;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Primitives.State;
 using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
-namespace LoopRelay.Roadmap.Cli.Services.Transitions;
+namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class EpicPreparationAuditTransition(
     RoadmapArtifacts artifacts,
@@ -14,7 +26,7 @@ internal sealed class EpicPreparationAuditTransition(
     RoadmapPromptTransitionRunner promptTransitionRunner,
     HitlArtifactCapture hitlArtifactCapture,
     DecisionRecorder decisionRecorder,
-    RoadmapStateStore stateStore,
+    State.RoadmapStateStore stateStore,
     RoadmapTransitionPersistence transitionPersistence,
     SelectionSuperseder selectionSuperseder,
     ActiveEpicRewriteTransition activeEpicRewriteTransition,

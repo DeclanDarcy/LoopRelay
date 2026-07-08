@@ -1,16 +1,24 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Process;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationCompletion;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationSemanticConfirmation;
+using LoopRelay.Orchestration.Models.RepositorySlices;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Services.NonImplementationCompletion;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
+using LoopRelay.Orchestration.Services.RepositorySlices;
 
-namespace LoopRelay.Orchestration.Tests.Services;
+namespace LoopRelay.Orchestration.Tests.Services.NonImplementationReview;
 
 public sealed class NonImplementationPostExecutionReviewTests
 {

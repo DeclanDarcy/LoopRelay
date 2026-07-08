@@ -2,14 +2,28 @@ using System.Text.Json;
 using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Orchestration.Services.Hitl;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 using LoopRelay.Roadmap.Cli.Models.Transitions;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
-using LoopRelay.Roadmap.Cli.Services.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
+using LoopRelay.Roadmap.Cli.Tests.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using DecisionLedgerStore = LoopRelay.Roadmap.Cli.Services.Decisions.DecisionLedgerStore;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.TransitionCoordination;
 
 public sealed class ActiveEpicPromotionCoordinatorTests
 {
@@ -31,7 +45,7 @@ public sealed class ActiveEpicPromotionCoordinatorTests
             "Caller supplied note.");
 
         Assert.True(result.Promoted);
-        Assert.Equal(RoadmapArtifactPaths.ActiveEpic, result.TargetPath);
+        Assert.Equal((string?)RoadmapArtifactPaths.ActiveEpic, result.TargetPath);
         Assert.Equal(epic, repo.Read(RoadmapArtifactPaths.ActiveEpic));
 
         ArtifactLifecycleEntry lifecycle = Assert.Single(
@@ -42,7 +56,7 @@ public sealed class ActiveEpicPromotionCoordinatorTests
 
         NonImplementationHitlRequestEntry request = Assert.Single((await ledger.LoadOrCreateAsync()).HitlRequests);
         Assert.Equal("docs/active-epic-note.md", request.DeliverablePathOrPattern);
-        Assert.Equal(RoadmapArtifactPaths.ActiveEpic, request.SourceArtifactPath);
+        Assert.Equal((string?)RoadmapArtifactPaths.ActiveEpic, request.SourceArtifactPath);
         Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
 
         TransitionJournalRecord journal = Assert.Single(ReadJournal(repo));
@@ -51,7 +65,7 @@ public sealed class ActiveEpicPromotionCoordinatorTests
         Assert.Equal(RoadmapState.NewEpicProposed, journal.PreviousState);
         Assert.Equal(RoadmapState.ActiveEpicReady, journal.AttemptedState);
         Assert.Equal("CreateNewEpic", journal.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["CreateNewEpic"], journal.Projection);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths["CreateNewEpic"], journal.Projection);
         Assert.Equal("ArtifactPromotionService", journal.PromptContractKey);
         Assert.Equal([RoadmapArtifactPaths.ActiveEpic], journal.OutputPaths);
         Assert.Equal("Promoted", journal.Result);
@@ -67,7 +81,7 @@ public sealed class ActiveEpicPromotionCoordinatorTests
         Assert.Equal(RoadmapState.NewEpicProposed, state.LastTransition.From);
         Assert.Equal(RoadmapState.ActiveEpicReady, state.LastTransition.To);
         Assert.Equal("CreateNewEpic", state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ActiveEpic, state.LastTransition.Output);
+        Assert.Equal((string?)RoadmapArtifactPaths.ActiveEpic, state.LastTransition.Output);
         Assert.Equal("Artifact Promoted", state.LastTransition.Decision);
         Assert.Equal(["GenerateMilestoneDeepDives"], state.NextValidTransitions);
     }
@@ -104,7 +118,7 @@ public sealed class ActiveEpicPromotionCoordinatorTests
         Assert.Equal(RoadmapState.RealignEpic, state.LastTransition.From);
         Assert.Equal(RoadmapState.ActiveEpicReady, state.LastTransition.To);
         Assert.Equal("RealignEpic", state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["RealignEpic"], state.LastTransition.Projection);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths["RealignEpic"], state.LastTransition.Projection);
         Assert.Equal(evidencePath, state.LastTransition.Output);
         Assert.Equal(expectedDecision, state.LastTransition.Decision);
         Assert.Equal("ResolveArtifactPromotionBlocker", state.TransitionIntent.Intent);
@@ -174,8 +188,8 @@ public sealed class ActiveEpicPromotionCoordinatorTests
     private static CoordinatorHarness CreateHarness(TempRepo repo, HitlArtifactCapture capture)
     {
         var manifestStore = new ProjectionManifestStore(repo.Artifacts);
-        var stateStore = new Cli.Services.RoadmapStateStore(repo.Artifacts);
-        var decisionLedger = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var stateStore = new RoadmapStateStore(repo.Artifacts);
+        var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
         var journalStore = new TransitionJournalStore(repo.Artifacts);
         var lifecycleStore = new ArtifactLifecycleStore(repo.Artifacts);
         var transitionPersistence = new RoadmapTransitionPersistence(
@@ -251,6 +265,6 @@ public sealed class ActiveEpicPromotionCoordinatorTests
 
     private sealed record CoordinatorHarness(
         ActiveEpicPromotionCoordinator Coordinator,
-        Cli.Services.RoadmapStateStore StateStore,
+        RoadmapStateStore StateStore,
         ArtifactLifecycleStore LifecycleStore);
 }

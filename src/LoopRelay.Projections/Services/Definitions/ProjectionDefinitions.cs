@@ -1,6 +1,7 @@
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.ProjectionArtifacts;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.Definitions;
 
 public sealed class ProjectionDefinitionRegistry
 {

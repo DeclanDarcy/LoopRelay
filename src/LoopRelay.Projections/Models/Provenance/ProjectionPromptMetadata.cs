@@ -1,4 +1,4 @@
-namespace LoopRelay.Projections.Models;
+namespace LoopRelay.Projections.Models.Provenance;
 
 public sealed record ProjectionPromptMetadata(
     string PromptName,

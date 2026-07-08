@@ -1,6 +1,6 @@
 using LoopRelay.Agents.Abstractions;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Sessions;
 public static class AgentTurnProgress
 {
     private static readonly AsyncLocal<IAgentTurnProgressObserver?> CurrentObserver = new();

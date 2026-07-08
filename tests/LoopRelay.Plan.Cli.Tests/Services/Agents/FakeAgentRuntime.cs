@@ -1,9 +1,10 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Plan.Cli.Tests.Models;
 
-namespace LoopRelay.Plan.Cli.Tests.Services;
+namespace LoopRelay.Plan.Cli.Tests.Services.Agents;
 
 internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
 {

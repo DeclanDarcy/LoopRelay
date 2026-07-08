@@ -1,6 +1,6 @@
 using LoopRelay.Completion.Primitives;
 
-namespace LoopRelay.Completion.Models;
+namespace LoopRelay.Completion.Models.Certification;
 
 public sealed record CompletionCertificationResult(
     CompletionCertificationServiceOutcome Outcome,

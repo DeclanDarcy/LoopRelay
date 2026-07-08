@@ -1,5 +1,6 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Process;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Infrastructure.Abstractions.Console;
 using LoopRelay.Infrastructure.Models.Git;

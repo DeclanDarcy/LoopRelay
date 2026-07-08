@@ -1,4 +1,4 @@
-namespace LoopRelay.Projections.Models;
+namespace LoopRelay.Projections.Models.Definitions;
 
 public sealed record ProjectionValidationResult(bool IsValid, string? Error)
 {

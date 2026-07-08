@@ -1,9 +1,11 @@
 using LoopRelay.Cli.Models;
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Tests.Services.Agents;
+using LoopRelay.Cli.Tests.Services.Support;
 using LoopRelay.Core.Models.Repositories;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Execution;
 
 public class CommitGateTests
 {

@@ -1,6 +1,6 @@
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Prompts;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.Prompts;
 
 public static class CompletionPromptCatalog
 {

@@ -1,7 +1,11 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Invocation;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Projections;
 
 public sealed class PromptContractRegistryTests
 {
@@ -28,7 +32,7 @@ public sealed class PromptContractRegistryTests
         Assert.Contains("SelectNextEpic", repo.Read(RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
         Assert.Contains("Optional Inputs", repo.Read(RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
         Assert.Contains(".agents/archive/epics/*.md", repo.Read(RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
-        Assert.Contains(RoadmapArtifactPaths.RoadmapDirectoryPattern, repo.Read(RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
+        Assert.Contains((string)RoadmapArtifactPaths.RoadmapDirectoryPattern, repo.Read(RoadmapArtifactPaths.PromptContracts), StringComparison.Ordinal);
     }
 
     [Fact]

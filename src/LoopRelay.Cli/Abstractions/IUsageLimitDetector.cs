@@ -1,4 +1,5 @@
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Cli.Models;
 
 namespace LoopRelay.Cli.Abstractions;

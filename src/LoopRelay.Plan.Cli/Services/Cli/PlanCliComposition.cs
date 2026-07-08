@@ -1,17 +1,25 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
-using LoopRelay.Agents.Services;
+using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Infrastructure.Services.Diagnostics;
+using LoopRelay.Orchestration.Services.Hitl;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Permissions.Services.Configuration;
-using LoopRelay.Projections.Services;
+using LoopRelay.Plan.Cli.Services.Agents;
+using LoopRelay.Plan.Cli.Services.Execution;
+using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
+using LoopRelay.Projections.Services.Context;
+using LoopRelay.Projections.Services.Definitions;
+using LoopRelay.Projections.Services.Manifests;
+using LoopRelay.Projections.Services.ProjectionArtifacts;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace LoopRelay.Plan.Cli.Services;
+namespace LoopRelay.Plan.Cli.Services.Cli;
 
 internal sealed class PlanCliComposition : IAsyncDisposable
 {

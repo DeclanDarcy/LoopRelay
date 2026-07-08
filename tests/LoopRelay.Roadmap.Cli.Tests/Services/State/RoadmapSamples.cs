@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.State;
 
 internal static class RoadmapSamples
 {

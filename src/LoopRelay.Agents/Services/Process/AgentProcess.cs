@@ -1,13 +1,11 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Process;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Process;
 
-internal sealed class AgentProcess(Process process) : IAgentProcess
+internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentProcess
 {
     /// <summary>How much of the standard-error stream is retained for diagnostics (last-writer-wins tail).</summary>
     private const int ErrorTailCapacity = 8192;

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace LoopRelay.Projections.Models;
+namespace LoopRelay.Projections.Models.ProjectionArtifacts;
 
 internal static class ProjectionJson
 {

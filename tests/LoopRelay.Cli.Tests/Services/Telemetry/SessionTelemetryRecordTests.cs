@@ -2,7 +2,7 @@ using System.Text.Json;
 using LoopRelay.Cli.Models;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Telemetry;
 
 public class SessionTelemetryRecordTests
 {

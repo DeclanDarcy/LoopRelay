@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 
-namespace LoopRelay.Orchestration.Services.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.Hitl;
 
 public sealed class ExplicitHitlNonImplementationRequestCaptureService(
     NonImplementationReviewLedgerStore ledgerStore)

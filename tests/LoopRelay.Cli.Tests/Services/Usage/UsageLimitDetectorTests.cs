@@ -1,10 +1,13 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Models;
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Telemetry;
+using LoopRelay.Cli.Tests.Services.Support;
+using LoopRelay.Cli.Tests.Services.Telemetry;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Usage;
 
 public class UsageLimitDetectorTests
 {

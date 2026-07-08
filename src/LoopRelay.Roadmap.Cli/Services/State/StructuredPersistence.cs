@@ -1,7 +1,9 @@
 using System.Text.Json;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.State;
 
 internal sealed class StructuredDocumentStore<TDocument>(
     RoadmapArtifacts artifacts,

@@ -1,8 +1,16 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.State;
 
 public sealed class RoadmapStateStoreTests
 {
@@ -10,7 +18,7 @@ public sealed class RoadmapStateStoreTests
     public async Task Writes_json_and_round_trips_state()
     {
         using var repo = new TempRepo();
-        var store = new Cli.Services.RoadmapStateStore(repo.Artifacts);
+        var store = new RoadmapStateStore(repo.Artifacts);
 
         await store.SaveAsync(new RoadmapStateDocument(
             RoadmapState.ActiveEpicReady,
@@ -50,7 +58,7 @@ public sealed class RoadmapStateStoreTests
     public async Task Loads_json_as_authority_when_markdown_projection_drifted()
     {
         using var repo = new TempRepo();
-        var store = new Cli.Services.RoadmapStateStore(repo.Artifacts);
+        var store = new RoadmapStateStore(repo.Artifacts);
         RoadmapStateDocument saved = StateDocument(
             RoadmapState.ExecutionBlocked,
             new RoadmapTransitionIntent(
@@ -72,7 +80,7 @@ public sealed class RoadmapStateStoreTests
     public async Task Canonical_state_round_trips_losslessly_for_delimiter_bearing_values()
     {
         using var repo = new TempRepo();
-        var store = new Cli.Services.RoadmapStateStore(repo.Artifacts);
+        var store = new RoadmapStateStore(repo.Artifacts);
         DateTimeOffset timestamp = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
         RoadmapStateDocument saved = new(
             RoadmapState.EvidenceBlocked,
@@ -115,7 +123,7 @@ public sealed class RoadmapStateStoreTests
     public async Task Save_is_deterministic_for_same_state_document()
     {
         using var repo = new TempRepo();
-        var store = new Cli.Services.RoadmapStateStore(repo.Artifacts);
+        var store = new RoadmapStateStore(repo.Artifacts);
         RoadmapStateDocument state = StateDocument(RoadmapState.ActiveEpicReady, RoadmapTransitionIntent.Empty(RoadmapState.ActiveEpicReady));
 
         await store.SaveAsync(state);
@@ -146,7 +154,7 @@ public sealed class RoadmapStateStoreTests
                                                - Retire Epic
                                                """);
 
-        RoadmapStateDocument? loaded = await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync();
+        RoadmapStateDocument? loaded = await new RoadmapStateStore(repo.Artifacts).LoadAsync();
 
         RetiredEpic retired = Assert.Single(loaded!.RetiredEpics);
         Assert.Equal("Unknown", retired.EpicId);
@@ -172,7 +180,7 @@ public sealed class RoadmapStateStoreTests
                                                | Epic | .agents/epic|bad.md | Ready |
                                                """);
 
-        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync());
+        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new RoadmapStateStore(repo.Artifacts).LoadAsync());
 
         Assert.Contains("cannot be migrated", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.False(Exists(repo, RoadmapArtifactPaths.StateJson));

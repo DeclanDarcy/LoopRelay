@@ -1,7 +1,8 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Process;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Codex;
 
 /// <summary>
 /// Maps a role-aware <see cref="AgentSessionSpec"/> to Codex CLI arguments (codex-cli 0.139),

@@ -1,8 +1,17 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.Invocation;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.Projections;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Cli;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using ProjectContextLoader = LoopRelay.Roadmap.Cli.Services.Projections.ProjectContextLoader;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Projections;
 
 public sealed class ProjectionCacheTests
 {
@@ -12,7 +21,7 @@ public sealed class ProjectionCacheTests
         using var repo = new TempRepo();
         repo.SeedProjectContext();
         repo.Write(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
-        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         await SeedTrustedManifestAsync(repo, projectContext);
         ScriptedAgentRuntime runtime = new();
         ProjectionCache cache = CreateCache(repo, runtime);
@@ -29,7 +38,7 @@ public sealed class ProjectionCacheTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         ScriptedAgentRuntime runtime = new(ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")));
         ProjectionCache cache = CreateCache(repo, runtime);
 
@@ -50,7 +59,7 @@ public sealed class ProjectionCacheTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         ProjectionCache cache = CreateCache(repo, new ScriptedAgentRuntime(ScriptedAgentRuntime.Failed()));
 
         await Assert.ThrowsAsync<RoadmapStepException>(() => cache.EnsureAsync("SelectNextEpic", projectContext, new PromptContractRegistry(new ProjectionRegistry()).Get("SelectNextEpic"), CancellationToken.None));
@@ -65,7 +74,7 @@ public sealed class ProjectionCacheTests
         repo.SeedProjectContext();
         string path = RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
         repo.Write(path, ProjectionSamples.Valid("SelectNextEpic"));
-        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         await SeedTrustedManifestAsync(repo, WithProjectContextHash(projectContext, "old-context-hash"));
         ProjectionCache cache = CreateCache(repo, new ScriptedAgentRuntime());
 
@@ -79,7 +88,7 @@ public sealed class ProjectionCacheTests
         using var repo = new TempRepo();
         repo.SeedProjectContext();
         repo.Write(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
-        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         ProjectionCache cache = CreateCache(repo, new ScriptedAgentRuntime());
 
         RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => cache.EnsureAsync("SelectNextEpic", projectContext, new PromptContractRegistry(new ProjectionRegistry()).Get("SelectNextEpic"), CancellationToken.None));
@@ -104,7 +113,7 @@ public sealed class ProjectionCacheTests
                                                              |---|---|---|---|---|---|---|---|---|---|---|
                                                              | SelectNextEpic | ProjectionForSelectNextEpic | .agents/projections/select-next-epic.md | legacy-prompt-name-hash | .agents/project-context.md | context-hash | projection-hash | 2026-01-01T00:00:00.0000000+00:00 | Valid | Fresh | None |
                                                              """);
-        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         ProjectionCache cache = CreateCache(repo, new ScriptedAgentRuntime());
 
         RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => cache.EnsureAsync("SelectNextEpic", projectContext, new PromptContractRegistry(new ProjectionRegistry()).Get("SelectNextEpic"), CancellationToken.None));
@@ -123,7 +132,7 @@ public sealed class ProjectionCacheTests
         repo.SeedProjectContext();
         string path = RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
         repo.Write(path, ProjectionSamples.Valid("SelectNextEpic"));
-        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         ProjectionProvenance current = new ProjectionProvenanceFactory(new ProjectionRegistry()).Create("SelectNextEpic", projectContext);
         await SeedTrustedManifestAsync(repo, WithPromptSourceHash(current, "old-prompt-source-hash"));
 
@@ -144,7 +153,7 @@ public sealed class ProjectionCacheTests
         repo.SeedProjectContext();
         string path = RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
         repo.Write(path, ProjectionSamples.Valid("SelectNextEpic"));
-        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         await SeedTrustedManifestAsync(repo, WithProjectContextHash(projectContext, "old-context-hash"));
         ProjectionCache cache = CreateCache(repo, new ScriptedAgentRuntime());
         PromptContract contract = new PromptContractRegistry(new ProjectionRegistry()).Get("SelectNextEpic") with

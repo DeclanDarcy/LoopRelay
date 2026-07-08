@@ -1,8 +1,10 @@
 using LoopRelay.Projections.Abstractions;
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.ProjectionArtifacts;
 using LoopRelay.Projections.Primitives;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Execution;
 
 internal sealed class FakeProjectionService(string content = "DECISION PROJECTION") : IProjectContextProjectionService
 {

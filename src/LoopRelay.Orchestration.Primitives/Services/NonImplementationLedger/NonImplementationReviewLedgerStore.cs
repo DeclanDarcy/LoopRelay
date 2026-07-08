@@ -3,10 +3,12 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.RepositorySlices;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
-namespace LoopRelay.Orchestration.Services.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.NonImplementationLedger;
 
 public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
 {
@@ -193,7 +195,7 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
     }
 
     public async Task<NonImplementationReviewLedgerEntry> RecordSemanticConfirmationAsync(
-        NonImplementationSemanticConfirmation confirmation)
+        Models.NonImplementationSemanticConfirmation.NonImplementationSemanticConfirmation confirmation)
     {
         ArgumentNullException.ThrowIfNull(confirmation);
 
@@ -493,7 +495,7 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
 
     private static void ValidateSemanticConfirmation(
         NonImplementationReviewLedgerEntry entry,
-        NonImplementationSemanticConfirmation confirmation)
+        Models.NonImplementationSemanticConfirmation.NonImplementationSemanticConfirmation confirmation)
     {
         if (!string.Equals(entry.EntryId, confirmation.LedgerEntryId, StringComparison.Ordinal))
         {

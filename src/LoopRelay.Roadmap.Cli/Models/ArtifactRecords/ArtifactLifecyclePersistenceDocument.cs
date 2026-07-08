@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
 
 internal sealed record ArtifactLifecyclePersistenceDocument(
     string SchemaVersion,

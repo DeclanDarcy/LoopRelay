@@ -1,10 +1,10 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.State;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.RoadmapState;
 
 internal sealed record RoadmapStartupPlan(
     RoadmapStartupAction Action,
     RoadmapPreflightRequirement PreflightRequirement,
-    RoadmapState SourceState,
+    Primitives.State.RoadmapState SourceState,
     string Reason,
     RoadmapOutcome? ReportOutcome = null);

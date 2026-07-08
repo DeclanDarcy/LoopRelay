@@ -1,10 +1,8 @@
-using LoopRelay.Roadmap.Cli.Primitives;
-
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Transitions;
 
 internal sealed record RoadmapTransitionIntentDto(
     string Intent,
-    RoadmapState DispatchState,
+    Primitives.State.RoadmapState DispatchState,
     IReadOnlyList<string> EvidencePaths)
 {
     public static RoadmapTransitionIntentDto FromDomain(RoadmapTransitionIntent intent) =>

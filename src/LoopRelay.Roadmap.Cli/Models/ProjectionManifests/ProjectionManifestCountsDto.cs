@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
 
 internal sealed record ProjectionManifestCountsDto(int Valid, int Stale, int Invalid)
 {

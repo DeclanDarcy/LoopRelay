@@ -1,9 +1,17 @@
+using System.Collections;
 using System.Text.Json;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.State;
 
 public sealed class RoadmapStateMachineSplitTests
 {
@@ -24,11 +32,11 @@ public sealed class RoadmapStateMachineSplitTests
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(4, runtime.OneShotCalls);
         Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
-        Assert.False(await repo.Artifacts.ExistsAsync(".agents/specs/not-a-child.md"));
-        Assert.False(await repo.Artifacts.ExistsAsync(".agents/specs/split-test.md"));
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(".agents/specs/not-a-child.md"));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(".agents/specs/split-test.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(TransitionStatus.Paused, state.LastTransition.Status);
         Assert.Equal("Split Bundle Rejected", state.LastTransition.Decision);
@@ -57,15 +65,15 @@ public sealed class RoadmapStateMachineSplitTests
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(4, runtime.OneShotCalls);
         Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
-        Assert.False(await repo.Artifacts.ExistsAsync(".agents/epic-1.md"));
-        Assert.False(await repo.Artifacts.ExistsAsync(".agents/specs/not-a-child.md"));
-        Assert.False(await repo.Artifacts.ExistsAsync(".agents/bundle-manifest.md"));
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(".agents/epic-1.md"));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(".agents/specs/not-a-child.md"));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(".agents/bundle-manifest.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
         Assert.DoesNotContain(
             await new ArtifactLifecycleStore(repo.Artifacts).LoadAsync(),
             entry => entry.Path is ".agents/epic-1.md" or ".agents/specs/not-a-child.md");
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(TransitionStatus.Paused, state.LastTransition.Status);
         Assert.Equal("Split Bundle Rejected", state.LastTransition.Decision);
@@ -94,10 +102,10 @@ public sealed class RoadmapStateMachineSplitTests
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
         Assert.Contains(".agents/epic.md", repo.Read(evidencePath), StringComparison.Ordinal);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
     }
 
     [Fact]
@@ -125,8 +133,8 @@ public sealed class RoadmapStateMachineSplitTests
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
-        Assert.False(await repo.Artifacts.ExistsAsync(".agents/epic-1.md"));
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(".agents/epic-1.md"));
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         string evidence = repo.Read(Assert.Single(state.TransitionIntent.EvidencePaths));
         Assert.Contains(".agents/epic-1.md", evidence, StringComparison.Ordinal);
         Assert.Contains(".agents/epic.md", evidence, StringComparison.Ordinal);
@@ -152,7 +160,7 @@ public sealed class RoadmapStateMachineSplitTests
         Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(4, runtime.OneShotCalls);
         Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("Split Epic Blocked", state.LastTransition.Decision);
     }
@@ -219,10 +227,10 @@ public sealed class RoadmapStateMachineSplitTests
         Assert.Contains(".agents/epic-2.md", family, StringComparison.Ordinal);
         Assert.DoesNotContain(".agents/specs", family, StringComparison.Ordinal);
         Assert.Contains("\"SelectedChildPath\": \".agents/epic-1.md\"", family, StringComparison.Ordinal);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.MilestoneSpecsReady, state.CurrentState);
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext));
-        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext));
+        Assert.False((bool)await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt));
     }
 
     private static TempRepo SeedRepo()

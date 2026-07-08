@@ -1,9 +1,13 @@
 using LoopRelay.Core.Prompts.Projections;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.Projections;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using ProjectContextLoader = LoopRelay.Roadmap.Cli.Services.Projections.ProjectContextLoader;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Projections;
 
 public sealed class ProjectionProvenanceTests
 {
@@ -122,7 +126,7 @@ public sealed class ProjectionProvenanceTests
     private static async Task<ProjectContext> SeedProjectAsync(TempRepo repo)
     {
         repo.SeedProjectContext();
-        return await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
+        return await new ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
     }
 
     private static ProjectionManifestEntry TrustedEntry(ProjectionProvenance provenance) =>

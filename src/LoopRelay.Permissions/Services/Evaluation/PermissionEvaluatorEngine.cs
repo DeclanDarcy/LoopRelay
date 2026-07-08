@@ -1,8 +1,10 @@
-using LoopRelay.Permissions.Abstractions;
-using LoopRelay.Permissions.Models;
-using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Abstractions.Evaluation;
+using LoopRelay.Permissions.Models.Policy;
+using LoopRelay.Permissions.Primitives.Evaluation;
+using LoopRelay.Permissions.Primitives.Parsing;
+using LoopRelay.Permissions.Primitives.Requests;
 
-namespace LoopRelay.Permissions.Services;
+namespace LoopRelay.Permissions.Services.Evaluation;
 
 public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
 {

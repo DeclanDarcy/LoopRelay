@@ -2,7 +2,7 @@ using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Primitives;
 using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Orchestration.Tests.Services;
+namespace LoopRelay.Orchestration.Tests.Services.Decisioning;
 
 /// <summary>
 /// Router Reuse and Transfer (m7): the registry-free <see cref="DecisionSessionRouter"/> decides reuse-vs-transfer

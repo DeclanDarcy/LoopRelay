@@ -1,6 +1,8 @@
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.Provenance;
 using LoopRelay.Projections.Primitives;
 
-namespace LoopRelay.Projections.Models;
+namespace LoopRelay.Projections.Models.Manifests;
 
 public sealed record ProjectionManifestEntry(
     string RuntimePromptName,

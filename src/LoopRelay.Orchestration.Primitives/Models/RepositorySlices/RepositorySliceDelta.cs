@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Models.RepositorySlices;
 
 public sealed record RepositorySliceDelta(
     string ExecutionSliceId,

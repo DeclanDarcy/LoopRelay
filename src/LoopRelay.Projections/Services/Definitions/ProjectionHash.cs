@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.Definitions;
 
 public static class ProjectionHash
 {

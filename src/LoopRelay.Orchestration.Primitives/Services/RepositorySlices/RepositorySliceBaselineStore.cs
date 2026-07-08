@@ -1,9 +1,8 @@
 using System.Text.Json;
 using LoopRelay.Core.Abstractions.Artifacts;
-using LoopRelay.Orchestration;
-using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.RepositorySlices;
 
-namespace LoopRelay.Orchestration.Services.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.RepositorySlices;
 
 public sealed class RepositorySliceBaselineStore(
     RepositoryChangeSetDetector detector,

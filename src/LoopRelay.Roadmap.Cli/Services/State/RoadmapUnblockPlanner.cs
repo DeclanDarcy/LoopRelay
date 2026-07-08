@@ -1,13 +1,22 @@
-using LoopRelay.Completion.Models;
-using LoopRelay.Completion.Services;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Completion.Models.Parsing;
+using LoopRelay.Completion.Services.Certification;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Execution;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.State;
 
 internal sealed class RoadmapUnblockPlanner(
     RoadmapArtifacts artifacts,
-    ProjectContextLoader projectContextLoader,
+    Projections.ProjectContextLoader projectContextLoader,
     PromptContractRegistry contractRegistry,
     CompletionCertificationPolicy completionPolicy,
     CompletionCertificationRouter completionRouter,

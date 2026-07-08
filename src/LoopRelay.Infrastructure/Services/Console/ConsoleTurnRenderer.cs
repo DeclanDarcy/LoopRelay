@@ -1,6 +1,10 @@
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Streams;
 using LoopRelay.Agents.Services;
+using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Infrastructure.Abstractions.Console;
 
 namespace LoopRelay.Infrastructure.Services.Console;

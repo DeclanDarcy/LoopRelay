@@ -2,7 +2,7 @@ using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.ProjectionArtifacts;
 
 public sealed class ProjectionArtifacts(IArtifactStore store, Repository repository)
 {

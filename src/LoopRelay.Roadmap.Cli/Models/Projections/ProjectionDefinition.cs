@@ -1,6 +1,6 @@
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Projections;
 
 internal sealed record ProjectionDefinition(
     string RuntimePromptName,

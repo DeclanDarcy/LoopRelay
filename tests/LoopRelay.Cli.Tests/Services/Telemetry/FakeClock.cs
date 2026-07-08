@@ -1,6 +1,6 @@
 using LoopRelay.Cli.Abstractions;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Telemetry;
 
 
 /// <summary>A clock a test can set to any instant (drives day-rotation + record timestamps).</summary>

@@ -1,6 +1,6 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Cli;
 
 internal sealed class TestConsole : ILoopConsole
 {

@@ -1,6 +1,6 @@
 using LoopRelay.Core.Models.Repositories;
 
-namespace LoopRelay.Plan.Cli.Services;
+namespace LoopRelay.Plan.Cli.Services.Cli;
 
 /// <summary>Parses and validates the single REPO_DIR positional argument into a <see cref="Repository"/>.</summary>
 internal static class CliArguments

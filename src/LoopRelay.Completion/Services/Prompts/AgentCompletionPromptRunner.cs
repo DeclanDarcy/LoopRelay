@@ -1,12 +1,14 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Process;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Completion.Abstractions;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Completion.Models.Prompts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.Prompts;
 
 public sealed class AgentCompletionPromptRunner(
     IAgentRuntime runtime,

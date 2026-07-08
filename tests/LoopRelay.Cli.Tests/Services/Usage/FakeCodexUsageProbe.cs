@@ -1,7 +1,7 @@
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Usage;
 
 
 /// <summary>Returns scripted <see cref="CodexUsageStatus"/> snapshots for the telemetry post-probe (no real codex).</summary>

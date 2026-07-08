@@ -1,6 +1,6 @@
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.Certification;
 
 public sealed class CompletionCertificationPolicy
 {

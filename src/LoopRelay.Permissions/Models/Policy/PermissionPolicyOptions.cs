@@ -1,7 +1,6 @@
-using System.Collections.Frozen;
-using LoopRelay.Permissions.Services;
+using LoopRelay.Permissions.Services.Evaluation;
 
-namespace LoopRelay.Permissions.Models;
+namespace LoopRelay.Permissions.Models.Policy;
 
 public sealed class PermissionPolicyOptions
 {

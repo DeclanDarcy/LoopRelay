@@ -1,11 +1,12 @@
 using System.Text;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.Prompts;
 
-internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifacts)
+internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionArtifacts artifacts)
 {
     public async Task<string> BuildEvaluationContextAsync(
         CompletionCertificationRequest request,

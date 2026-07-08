@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Models.NonImplementationInsightSynthesis;
 
 public sealed record NonImplementationInsightSynthesizerOptions(
     string PromptName,

@@ -1,6 +1,6 @@
 using LoopRelay.Core.Abstractions.Artifacts;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Support;
 
 
 /// <summary>Forwards to an inner store but throws when a write targets the .agents/deltas archive — models a

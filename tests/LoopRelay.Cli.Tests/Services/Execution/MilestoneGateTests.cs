@@ -1,11 +1,12 @@
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Tests.Services.Support;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Execution;
 
 public class MilestoneGateTests
 {

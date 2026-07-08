@@ -1,7 +1,7 @@
-using LoopRelay.Completion.Models;
-using LoopRelay.Completion.Services;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Completion.Services.Certification;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Execution;
 
 public sealed class CompletionCertificationPolicyTests
 {

@@ -1,6 +1,8 @@
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Completion.Models.Parsing;
+using LoopRelay.Completion.Services.Parsing;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.Certification;
 
 public sealed class CompletionEvaluationParser
 {

@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using LoopRelay.Cli.Models;
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Telemetry;
+using LoopRelay.Cli.Tests.Services.Agents;
 using LoopRelay.Core.Models.Repositories;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Usage;
 
 public class CodexUsageProbeTests
 {

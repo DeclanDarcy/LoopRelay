@@ -1,4 +1,4 @@
-namespace LoopRelay.Projections.Models;
+namespace LoopRelay.Projections.Models.Provenance;
 
 public sealed record ProjectionCausalInputDto(string Kind, string Identity, string Version)
 {

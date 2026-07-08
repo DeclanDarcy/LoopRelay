@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Projections;
 
 internal sealed record ProjectionValidationResult(bool IsValid, string? Error)
 {

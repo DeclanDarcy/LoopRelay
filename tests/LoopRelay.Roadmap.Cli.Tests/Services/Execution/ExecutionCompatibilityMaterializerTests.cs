@@ -1,7 +1,10 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using ExecutionCompatibilityMaterializer = LoopRelay.Roadmap.Cli.Services.Execution.ExecutionCompatibilityMaterializer;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Execution;
 
 public sealed class ExecutionCompatibilityMaterializerTests
 {
@@ -23,7 +26,7 @@ public sealed class ExecutionCompatibilityMaterializerTests
         await ExecutionPreparationTestSupport.SeedOperationalContextAsync(provenance, repo, "ops");
         await ExecutionPreparationTestSupport.SeedExecutionPromptAsync(provenance, repo, "prompt");
 
-        await new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
+        await new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
 
         Assert.Contains(".agents/milestones/m001.md", repo.Read(RoadmapArtifactPaths.ExecutionPlan), StringComparison.Ordinal);
         Assert.Contains("Do the thing", repo.Read(".agents/milestones/m001.md"), StringComparison.Ordinal);
@@ -41,6 +44,6 @@ public sealed class ExecutionCompatibilityMaterializerTests
         await ExecutionPreparationTestSupport.SeedOperationalContextAsync(provenance, repo, "ops");
         await ExecutionPreparationTestSupport.SeedExecutionPromptAsync(provenance, repo, "prompt");
 
-        await Assert.ThrowsAsync<RoadmapStepException>(() => new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync());
+        await Assert.ThrowsAsync<RoadmapStepException>(() => new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync());
     }
 }

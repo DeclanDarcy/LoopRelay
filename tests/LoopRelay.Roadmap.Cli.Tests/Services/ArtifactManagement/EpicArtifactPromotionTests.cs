@@ -1,15 +1,17 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Tests.Services.State;
+using EpicAuthoringOutputClassifier = LoopRelay.Roadmap.Cli.Services.ArtifactManagement.EpicAuthoringOutputClassifier;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.ArtifactManagement;
 
 public sealed class EpicArtifactPromotionTests
 {
     [Fact]
     public void Classifier_identifies_valid_epic_candidate()
     {
-        ArtifactOutputClassification result = new Cli.Services.EpicAuthoringOutputClassifier()
+        ArtifactOutputClassification result = new EpicAuthoringOutputClassifier()
             .Classify(RoadmapSamples.ValidEpic());
 
         Assert.Equal(ArtifactOutputKind.Promotable, result.Kind);
@@ -18,7 +20,7 @@ public sealed class EpicArtifactPromotionTests
     [Fact]
     public void Classifier_identifies_blocked_output()
     {
-        ArtifactOutputClassification result = new Cli.Services.EpicAuthoringOutputClassifier()
+        ArtifactOutputClassification result = new EpicAuthoringOutputClassifier()
             .Classify("""
                 # Epic Realignment Blocked
 
@@ -33,7 +35,7 @@ public sealed class EpicArtifactPromotionTests
     [Fact]
     public void Classifier_identifies_ambiguous_output()
     {
-        ArtifactOutputClassification result = new Cli.Services.EpicAuthoringOutputClassifier()
+        ArtifactOutputClassification result = new EpicAuthoringOutputClassifier()
             .Classify("There is not enough information to continue.");
 
         Assert.Equal(ArtifactOutputKind.Ambiguous, result.Kind);
@@ -42,7 +44,7 @@ public sealed class EpicArtifactPromotionTests
     [Fact]
     public void Classifier_identifies_malformed_epic_output()
     {
-        ArtifactOutputClassification result = new Cli.Services.EpicAuthoringOutputClassifier()
+        ArtifactOutputClassification result = new EpicAuthoringOutputClassifier()
             .Classify("""
                 # Epic
 

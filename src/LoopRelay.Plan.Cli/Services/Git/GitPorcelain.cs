@@ -1,4 +1,4 @@
-namespace LoopRelay.Plan.Cli.Services;
+namespace LoopRelay.Plan.Cli.Services.Git;
 
 internal static class GitPorcelain
 {

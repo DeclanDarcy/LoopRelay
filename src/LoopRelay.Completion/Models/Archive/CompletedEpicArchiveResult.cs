@@ -1,4 +1,4 @@
-namespace LoopRelay.Completion.Models;
+namespace LoopRelay.Completion.Models.Archive;
 
 public sealed record CompletedEpicArchiveResult(
     int Index,

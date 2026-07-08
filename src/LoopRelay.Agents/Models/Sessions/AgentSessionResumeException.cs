@@ -1,4 +1,4 @@
-namespace LoopRelay.Agents.Models;
+namespace LoopRelay.Agents.Models.Sessions;
 
 /// <summary>
 /// A codex session resume attempt failed (rollout deleted, unknown thread id, protocol drift, or the

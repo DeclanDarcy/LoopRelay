@@ -1,4 +1,4 @@
-namespace LoopRelay.Agents.Models;
+namespace LoopRelay.Agents.Models.Streams;
 
 /// <summary>
 /// Token accounting for one turn. <paramref name="CachedInputTokens"/> is the cached SUBSET of

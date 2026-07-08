@@ -1,15 +1,18 @@
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Primitives;
+using LoopRelay.Cli.Services.Agents;
+using LoopRelay.Cli.Services.Decisions;
 using LoopRelay.Completion.Abstractions;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Primitives;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
-using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationCompletion;
+using LoopRelay.Orchestration.Models.RepositorySlices;
 using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Execution;
 
 /// <summary>
 /// The LoopStart state machine. Runs serially until the epic completes, a step fails, or cancellation

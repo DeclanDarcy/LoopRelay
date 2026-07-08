@@ -1,4 +1,5 @@
 using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
 
 namespace LoopRelay.Completion.Abstractions;
 

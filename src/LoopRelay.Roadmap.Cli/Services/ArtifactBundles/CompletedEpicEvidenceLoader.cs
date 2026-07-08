@@ -1,7 +1,9 @@
 using System.Text;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Projections;
 
-namespace LoopRelay.Roadmap.Cli.Services;
+namespace LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 
 internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts artifacts)
 {
@@ -54,7 +56,7 @@ internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts artifacts)
         var builder = new StringBuilder();
         builder.AppendLine("# Completed Epic Evidence");
         builder.AppendLine();
-        builder.AppendLine($"Completed epic source glob: `{RoadmapArtifactPaths.CompletedEpicsPattern}`");
+        builder.AppendLine((string?)$"Completed epic source glob: `{RoadmapArtifactPaths.CompletedEpicsPattern}`");
 
         foreach (CompletedEpicEvidence epic in completedEpics)
         {

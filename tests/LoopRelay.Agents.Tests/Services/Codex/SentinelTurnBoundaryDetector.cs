@@ -1,8 +1,8 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Streams;
 
-namespace LoopRelay.Agents.Tests.Services;
+namespace LoopRelay.Agents.Tests.Services.Codex;
 
 public sealed class SentinelTurnBoundaryDetector(
     string sentinel = SentinelTurnBoundaryDetector.DefaultSentinel) : IAgentTurnBoundaryDetector

@@ -1,7 +1,6 @@
-using LoopRelay.Permissions.Models;
-using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Primitives.Requests;
 
-namespace LoopRelay.Permissions.Abstractions;
+namespace LoopRelay.Permissions.Abstractions.Evaluation;
 
 public interface IPermissionAdapter
 {

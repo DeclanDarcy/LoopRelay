@@ -2,6 +2,7 @@ using System.Text;
 using LoopRelay.Cli;
 using LoopRelay.Cli.Primitives;
 using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Cli;
 using LoopRelay.Core.Models.Repositories;
 
 // Codex output and our own messages contain non-ASCII text (curly quotes, em dashes). Decode the codex

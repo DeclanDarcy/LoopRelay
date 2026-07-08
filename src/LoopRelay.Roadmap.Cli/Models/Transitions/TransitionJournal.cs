@@ -1,13 +1,13 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Transitions;
 
 internal sealed record TransitionJournalRecord(
     string Event,
     string CorrelationId,
     DateTimeOffset Timestamp,
-    RoadmapState PreviousState,
-    RoadmapState AttemptedState,
+    Primitives.State.RoadmapState PreviousState,
+    Primitives.State.RoadmapState AttemptedState,
     string Prompt,
     string Projection,
     string PromptContractKey,

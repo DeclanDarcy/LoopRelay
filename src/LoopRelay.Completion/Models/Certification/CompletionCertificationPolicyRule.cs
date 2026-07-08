@@ -1,4 +1,4 @@
-namespace LoopRelay.Completion.Models;
+namespace LoopRelay.Completion.Models.Certification;
 
 public sealed record CompletionCertificationPolicyRule(
     string ClosureRecommendation,

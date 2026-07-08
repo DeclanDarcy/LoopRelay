@@ -1,4 +1,5 @@
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Process;
 using LoopRelay.Infrastructure.Models.Trust;
 using LoopRelay.Infrastructure.Primitives.Trust;
 

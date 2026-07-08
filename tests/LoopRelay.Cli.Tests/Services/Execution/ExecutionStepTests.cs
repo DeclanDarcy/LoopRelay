@@ -1,6 +1,8 @@
 using LoopRelay.Cli.Models;
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Cli.Tests.Models;
+using LoopRelay.Cli.Tests.Services.Agents;
+using LoopRelay.Cli.Tests.Services.Support;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
@@ -8,7 +10,7 @@ using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Execution;
 
 public class ExecutionStepTests
 {

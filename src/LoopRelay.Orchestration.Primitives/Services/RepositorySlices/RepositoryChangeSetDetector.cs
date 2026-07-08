@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Process;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
-using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.RepositorySlices;
 
-namespace LoopRelay.Orchestration.Services.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.RepositorySlices;
 
 public sealed class RepositoryChangeSetDetector(IProcessRunner processRunner, Repository repository)
 {

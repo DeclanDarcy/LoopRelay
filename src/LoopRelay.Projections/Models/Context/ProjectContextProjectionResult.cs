@@ -1,6 +1,7 @@
+using LoopRelay.Projections.Models.Definitions;
 using LoopRelay.Projections.Primitives;
 
-namespace LoopRelay.Projections.Models;
+namespace LoopRelay.Projections.Models.Context;
 
 public sealed record ProjectContextProjectionResult(
     ProjectionDefinition Definition,

@@ -1,4 +1,4 @@
-using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
@@ -6,7 +6,7 @@ using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Execution;
 
 public class LoopArtifactsTests
 {

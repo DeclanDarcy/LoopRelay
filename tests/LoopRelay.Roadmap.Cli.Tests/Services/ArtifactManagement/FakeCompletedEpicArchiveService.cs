@@ -1,7 +1,7 @@
 using LoopRelay.Completion.Abstractions;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Archive;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.ArtifactManagement;
 
 internal sealed class FakeCompletedEpicArchiveService : ICompletedEpicArchiveService
 {

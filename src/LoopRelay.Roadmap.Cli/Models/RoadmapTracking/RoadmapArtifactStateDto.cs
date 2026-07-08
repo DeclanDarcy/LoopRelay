@@ -1,4 +1,6 @@
-namespace LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+
+namespace LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 
 internal sealed record RoadmapArtifactStateDto(string Artifact, string Path, string Status)
 {

@@ -4,7 +4,7 @@ using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
 using LoopRelay.Core.Models.Repositories;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Telemetry;
 
 /// <summary>
 /// Queries Codex quota over the app-server JSON-RPC protocol: it starts <c>codex app-server</c> on stdio,

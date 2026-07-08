@@ -1,9 +1,10 @@
 using LoopRelay.Core.Prompts;
 using LoopRelay.Orchestration.Services;
-using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Plan.Cli.Models;
+using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 
-namespace LoopRelay.Plan.Cli.Services;
+namespace LoopRelay.Plan.Cli.Services.Execution;
 
 /// <summary>
 /// Factories for permission-scoped artifact operations in pipeline steps 6-10.

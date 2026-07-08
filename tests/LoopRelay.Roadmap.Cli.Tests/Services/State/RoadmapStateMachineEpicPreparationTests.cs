@@ -1,9 +1,19 @@
+using System.Collections;
 using System.Text.Json;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Cli;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.State;
 
 public sealed class RoadmapStateMachineEpicPreparationTests
 {
@@ -20,7 +30,7 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.RetireEpic, state.CurrentState);
         Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
         Assert.Equal(RoadmapState.RetireEpic, state.LastTransition.To);
@@ -45,7 +55,7 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         Assert.Contains("## Retired Epics", prompt, StringComparison.Ordinal);
         Assert.Contains("EPIC-001", prompt, StringComparison.Ordinal);
         Assert.Contains("Epic A", prompt, StringComparison.Ordinal);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Single(state.RetiredEpics);
     }
 
@@ -61,7 +71,7 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Paused, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         RetiredEpic retired = Assert.Single(state.RetiredEpics);
         Assert.Equal("EPIC-001", retired.EpicId);
     }
@@ -76,7 +86,7 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         RetiredEpic retired = Assert.Single(state.RetiredEpics);
         Assert.Equal("EPIC-001", retired.EpicId);
@@ -93,7 +103,7 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
         Assert.Equal(RoadmapOutcome.Failed, outcome);
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(TransitionStatus.Failed, state.LastTransition.Status);
     }
@@ -125,23 +135,23 @@ public sealed class RoadmapStateMachineEpicPreparationTests
             ledger.ToDomain(),
             entry => entry.State == RoadmapState.EpicPreparationAudit);
         Assert.Equal("EpicPreparationAudit", auditDecision.Transition);
-        Assert.Equal(RoadmapArtifactPaths.ProjectionPaths["EpicPreparationAudit"], auditDecision.ProjectionPath);
+        Assert.Equal((string?)RoadmapArtifactPaths.ProjectionPaths["EpicPreparationAudit"], auditDecision.ProjectionPath);
         Assert.Equal([auditPath], auditDecision.OutputArtifactPaths);
         Assert.Equal("Insufficient Evidence", auditDecision.Decision);
         Assert.Equal("High", auditDecision.Confidence);
         Assert.Equal("Gather More Evidence", auditDecision.RationaleExcerpt);
 
-        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(RoadmapState.EpicPreparationAudit, state.CurrentState);
         Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
         Assert.Equal(RoadmapState.ExistingEpicSelected, state.LastTransition.From);
         Assert.Equal(RoadmapState.EpicPreparationAudit, state.LastTransition.To);
         Assert.Equal("EpicPreparationAudit", state.LastTransition.Prompt);
-        Assert.Equal(RoadmapArtifactPaths.AuditEvidenceDirectory, state.LastTransition.Output);
+        Assert.Equal((string?)RoadmapArtifactPaths.AuditEvidenceDirectory, state.LastTransition.Output);
         Assert.Equal("Completed", state.LastTransition.Decision);
         Assert.Empty(state.Blockers);
         Assert.Equal("None", state.TransitionIntent.Intent);
-        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
+        Assert.Empty((IEnumerable)await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
 
         Assert.Contains(console.Errors, error => error.Contains("Epic preparation audit requires more evidence.", StringComparison.Ordinal));
         Assert.Contains(console.Warnings, warning =>

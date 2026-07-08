@@ -1,7 +1,7 @@
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Completion.Abstractions;
 
-namespace LoopRelay.Cli.Services;
+namespace LoopRelay.Cli.Services.Console;
 
 internal sealed class ConsoleCompletionObserver(ILoopConsole console) : ICompletionObserver
 {

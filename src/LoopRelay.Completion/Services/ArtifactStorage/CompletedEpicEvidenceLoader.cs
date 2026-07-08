@@ -1,7 +1,8 @@
 using System.Text;
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Archive;
+using LoopRelay.Completion.Services.Parsing;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.ArtifactStorage;
 
 public sealed class CompletedEpicEvidenceLoader(CompletionArtifacts artifacts)
 {

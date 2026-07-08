@@ -1,3 +1,5 @@
+using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
+
 namespace LoopRelay.Roadmap.Cli.Models.Transitions;
 
 internal sealed record PromptTransitionCompletion(

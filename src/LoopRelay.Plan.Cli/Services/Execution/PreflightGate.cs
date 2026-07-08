@@ -1,6 +1,7 @@
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 
-namespace LoopRelay.Plan.Cli.Services;
+namespace LoopRelay.Plan.Cli.Services.Execution;
 
 /// <summary>
 /// Pipeline step 1: verifies the repository is in a clean state to start a fresh planning run — none of

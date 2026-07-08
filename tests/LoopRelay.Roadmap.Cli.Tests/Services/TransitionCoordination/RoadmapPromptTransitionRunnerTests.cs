@@ -1,12 +1,24 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
-using LoopRelay.Roadmap.Cli.Services.Transitions;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
+using LoopRelay.Roadmap.Cli.Tests.Services.Cli;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using DecisionLedgerStore = LoopRelay.Roadmap.Cli.Services.Decisions.DecisionLedgerStore;
+using RoadmapStateStore = LoopRelay.Roadmap.Cli.Services.State.RoadmapStateStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.TransitionCoordination;
 
 public sealed class RoadmapPromptTransitionRunnerTests
 {
@@ -17,7 +29,7 @@ public sealed class RoadmapPromptTransitionRunnerTests
     {
         using var repo = new TempRepo();
         var runtime = new CancellingAgentRuntime();
-        var stateStore = new Cli.Services.RoadmapStateStore(repo.Artifacts);
+        var stateStore = new RoadmapStateStore(repo.Artifacts);
         RoadmapPromptTransitionRunner runner = CreateRunner(repo, runtime, stateStore);
 
         string prompt = promotionCandidate ? "CreateNewEpic" : "CreateRoadmapCompletionContext";
@@ -65,7 +77,7 @@ public sealed class RoadmapPromptTransitionRunnerTests
     private static RoadmapPromptTransitionRunner CreateRunner(
         TempRepo repo,
         IAgentRuntime runtime,
-        Cli.Services.RoadmapStateStore stateStore)
+        RoadmapStateStore stateStore)
     {
         var executionPreparation = new ExecutionPreparationProvenanceService(
             repo.Artifacts,
@@ -73,7 +85,7 @@ public sealed class RoadmapPromptTransitionRunnerTests
         var inputResolver = new TransitionInputResolver(repo.Artifacts, executionPreparation);
         var promptRunner = new RoadmapPromptRunner(runtime, repo.Repository, new TestConsole());
         var manifest = new ProjectionManifestStore(repo.Artifacts);
-        var decisionLedger = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
         var journal = new TransitionJournalStore(repo.Artifacts);
         var persistence = new RoadmapTransitionPersistence(
             repo.Artifacts,

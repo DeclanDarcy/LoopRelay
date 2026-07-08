@@ -1,6 +1,6 @@
 using LoopRelay.Completion.Abstractions;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.Observers;
 
 public sealed class NullCompletionObserver : ICompletionObserver
 {

@@ -3,8 +3,16 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.Manifests;
+using LoopRelay.Projections.Models.ProjectionArtifacts;
 using LoopRelay.Projections.Primitives;
 using LoopRelay.Projections.Services;
+using LoopRelay.Projections.Services.Context;
+using LoopRelay.Projections.Services.Definitions;
+using LoopRelay.Projections.Services.Manifests;
+using LoopRelay.Projections.Services.ProjectionArtifacts;
 using Xunit;
 
 namespace LoopRelay.Projections.Tests.Services;

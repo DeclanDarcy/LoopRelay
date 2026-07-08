@@ -1,6 +1,6 @@
 using LoopRelay.Cli.Abstractions;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Usage;
 
 internal sealed class FakeCodexRolloutLocator : ICodexRolloutLocator
 {

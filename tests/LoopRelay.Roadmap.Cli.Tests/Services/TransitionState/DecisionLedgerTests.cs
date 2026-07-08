@@ -1,9 +1,13 @@
 using System.Text.Json;
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using DecisionLedgerStore = LoopRelay.Roadmap.Cli.Services.Decisions.DecisionLedgerStore;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.TransitionState;
 
 public sealed class DecisionLedgerTests
 {
@@ -11,7 +15,7 @@ public sealed class DecisionLedgerTests
     public async Task Appends_decision_entries()
     {
         using var repo = new TempRepo();
-        var store = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var store = new DecisionLedgerStore(repo.Artifacts);
         string id = await store.NextDecisionIdAsync();
 
         await store.AppendAsync(new DecisionLedgerEntry(id, DateTimeOffset.UtcNow, RoadmapState.SelectNextStrategicInitiative, "SelectNextEpic", "SelectNextEpic", "projection", ["input"], ["output"], "Select Existing Epic", "High", "reason"));
@@ -27,7 +31,7 @@ public sealed class DecisionLedgerTests
     public async Task Uses_json_for_decision_ids_when_markdown_projection_drifted()
     {
         using var repo = new TempRepo();
-        var store = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var store = new DecisionLedgerStore(repo.Artifacts);
         await store.AppendAsync(Entry("D0001"));
         repo.Write(RoadmapArtifactPaths.DecisionLedger, """
                                                         # Decision Ledger
@@ -47,7 +51,7 @@ public sealed class DecisionLedgerTests
     public async Task Preserves_delimiter_bearing_values_in_structured_ledger()
     {
         using var repo = new TempRepo();
-        var store = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var store = new DecisionLedgerStore(repo.Artifacts);
 
         await store.AppendAsync(Entry(
             "D0001",
@@ -87,7 +91,7 @@ public sealed class DecisionLedgerTests
                                                         | Rationale Excerpt | reason |
                                                         """);
 
-        var store = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var store = new DecisionLedgerStore(repo.Artifacts);
 
         Assert.Equal("D0007", await store.LastDecisionIdAsync());
         Assert.Equal("D0008", await store.NextDecisionIdAsync());
@@ -108,7 +112,7 @@ public sealed class DecisionLedgerTests
                                                         | Decision / Disposition | Select | Existing Epic |
                                                         """);
 
-        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new Cli.Services.DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
+        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
 
         Assert.Contains("cannot be migrated", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.False(Exists(repo, RoadmapArtifactPaths.DecisionLedgerJson));

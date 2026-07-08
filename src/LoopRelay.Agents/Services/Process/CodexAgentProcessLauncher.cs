@@ -1,8 +1,9 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Services.Codex;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Process;
 
 public sealed class CodexAgentProcessLauncher(
     IProcessRunner processRunner,

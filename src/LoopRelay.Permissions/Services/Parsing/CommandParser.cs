@@ -1,9 +1,10 @@
 using System.Text;
-using LoopRelay.Permissions.Abstractions;
-using LoopRelay.Permissions.Models;
-using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Abstractions.Parsing;
+using LoopRelay.Permissions.Models.Policy;
+using LoopRelay.Permissions.Primitives.Parsing;
+using LoopRelay.Permissions.Services.Evaluation;
 
-namespace LoopRelay.Permissions.Services;
+namespace LoopRelay.Permissions.Services.Parsing;
 
 public sealed class CommandParser : ICommandParser
 {
@@ -29,7 +30,7 @@ public sealed class CommandParser : ICommandParser
                 UnknownSyntaxReason: null);
         }
 
-        string[] segments = PermissionConstants.ChainSplitter.Split(rawCommand)
+        string[] segments = Policy.PermissionConstants.ChainSplitter.Split(rawCommand)
             .Where(segment => !string.IsNullOrWhiteSpace(segment))
             .ToArray();
 

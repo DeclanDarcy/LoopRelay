@@ -1,16 +1,26 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Completion.Abstractions;
 using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
+using LoopRelay.Completion.Models.Prompts;
 using LoopRelay.Completion.Primitives;
 using LoopRelay.Completion.Services;
+using LoopRelay.Completion.Services.ArtifactStorage;
+using LoopRelay.Completion.Services.Certification;
+using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Context;
+using LoopRelay.Projections.Models.Definitions;
 using LoopRelay.Projections.Primitives;
 using Xunit;
 

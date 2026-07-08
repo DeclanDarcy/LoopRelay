@@ -1,7 +1,7 @@
-using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Primitives;
 
-namespace LoopRelay.Completion.Services;
+namespace LoopRelay.Completion.Services.Certification;
 
 public sealed class CompletionCertificationRouter
 {

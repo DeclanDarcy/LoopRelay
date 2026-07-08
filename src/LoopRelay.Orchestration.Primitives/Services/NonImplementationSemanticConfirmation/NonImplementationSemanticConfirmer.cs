@@ -1,10 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationLedger;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationSemanticConfirmation;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationLedger;
 
-namespace LoopRelay.Orchestration.Services.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
 
 public sealed class NonImplementationSemanticConfirmer
 {
@@ -95,7 +98,7 @@ public sealed class NonImplementationSemanticConfirmer
 
             NonImplementationReviewRunnerResponse response =
                 await runner.RunAsync(request, cancellationToken);
-            NonImplementationSemanticConfirmation confirmation =
+            Models.NonImplementationSemanticConfirmation.NonImplementationSemanticConfirmation confirmation =
                 NonImplementationSemanticConfirmationParser.ParseAndValidate(
                     response.StructuredText,
                     pending);

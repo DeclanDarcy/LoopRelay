@@ -1,7 +1,12 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Tests.Services.Cli;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Projections;
 
 public sealed class RoadmapPromptContextBuilderTests
 {
@@ -20,7 +25,7 @@ public sealed class RoadmapPromptContextBuilderTests
         Assert.Contains("projection", context, StringComparison.Ordinal);
         Assert.Contains("current strategic state", context, StringComparison.Ordinal);
         Assert.Contains("## Roadmap Source References", context, StringComparison.Ordinal);
-        Assert.Contains(RoadmapArtifactPaths.RoadmapDirectoryPattern, context, StringComparison.Ordinal);
+        Assert.Contains((string)RoadmapArtifactPaths.RoadmapDirectoryPattern, context, StringComparison.Ordinal);
         Assert.Contains(".agents/roadmap/001-roadmap.md", context, StringComparison.Ordinal);
         Assert.Contains(".agents/roadmap/b.md", context, StringComparison.Ordinal);
         Assert.DoesNotContain("roadmap 001 body must not be injected", context, StringComparison.Ordinal);

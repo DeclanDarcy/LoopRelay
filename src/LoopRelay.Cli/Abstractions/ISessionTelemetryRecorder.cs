@@ -1,5 +1,7 @@
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Infrastructure.Models.Diagnostics;
 
 namespace LoopRelay.Cli.Abstractions;

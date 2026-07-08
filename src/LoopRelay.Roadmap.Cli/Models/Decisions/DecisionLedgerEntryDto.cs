@@ -1,11 +1,9 @@
-using LoopRelay.Roadmap.Cli.Primitives;
-
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.Decisions;
 
 internal sealed partial record DecisionLedgerEntryDto(
     string DecisionId,
     DateTimeOffset Timestamp,
-    RoadmapState State,
+    Primitives.State.RoadmapState State,
     string Transition,
     string Prompt,
     string ProjectionPath,

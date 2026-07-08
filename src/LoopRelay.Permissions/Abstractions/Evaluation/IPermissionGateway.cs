@@ -1,6 +1,6 @@
-namespace LoopRelay.Permissions.Abstractions;
+using LoopRelay.Permissions.Models.Evaluation;
 
-using LoopRelay.Permissions.Models;
+namespace LoopRelay.Permissions.Abstractions.Evaluation;
 
 public interface IPermissionGateway
 {

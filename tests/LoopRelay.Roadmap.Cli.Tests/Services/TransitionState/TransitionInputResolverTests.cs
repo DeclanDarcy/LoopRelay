@@ -1,7 +1,14 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
+using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
+using LoopRelay.Roadmap.Cli.Tests.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.State;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.TransitionState;
 
 public sealed class TransitionInputResolverTests
 {
@@ -77,7 +84,7 @@ public sealed class TransitionInputResolverTests
         RoadmapStepException exception = await Assert.ThrowsAsync<RoadmapStepException>(
             () => ResolveAsync(repo, "SelectNextEpic", projectionPath));
 
-        Assert.Contains(RoadmapArtifactPaths.RoadmapDirectoryPattern, exception.Message, StringComparison.Ordinal);
+        Assert.Contains((string)RoadmapArtifactPaths.RoadmapDirectoryPattern, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

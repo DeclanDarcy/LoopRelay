@@ -1,6 +1,6 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
 
 internal sealed record ArtifactPromotionResult(
     ArtifactPromotionStatus Status,

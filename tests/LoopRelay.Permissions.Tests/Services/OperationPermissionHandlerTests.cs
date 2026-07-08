@@ -1,6 +1,10 @@
 using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Evaluation;
+using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Primitives.Requests;
 using LoopRelay.Permissions.Services;
+using LoopRelay.Permissions.Services.Evaluation;
 
 namespace LoopRelay.Permissions.Tests.Services;
 

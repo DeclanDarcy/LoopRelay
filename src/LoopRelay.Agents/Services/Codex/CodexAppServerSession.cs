@@ -3,12 +3,18 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Agents.Primitives;
-using LoopRelay.Permissions.Abstractions;
-using LoopRelay.Permissions.Models;
+using LoopRelay.Agents.Models.Codex;
+using LoopRelay.Agents.Models.Process;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Codex;
+using LoopRelay.Agents.Primitives.Process;
+using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Services.Sessions;
+using LoopRelay.Permissions.Abstractions.Evaluation;
+using LoopRelay.Permissions.Models.Evaluation;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Codex;
 
 /// <summary>
 /// A held-open Codex session over the app-server JSON-RPC protocol (codex-cli 0.139). One process

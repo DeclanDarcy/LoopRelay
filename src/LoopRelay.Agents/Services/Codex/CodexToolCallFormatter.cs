@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Codex;
 
 internal static class CodexToolCallFormatter
 {

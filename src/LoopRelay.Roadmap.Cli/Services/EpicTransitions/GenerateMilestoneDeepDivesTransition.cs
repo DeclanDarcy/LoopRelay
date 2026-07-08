@@ -1,9 +1,23 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
-using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.Invocation;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 using LoopRelay.Roadmap.Cli.Models.Transitions;
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
+using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
-namespace LoopRelay.Roadmap.Cli.Services.Transitions;
+namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class GenerateMilestoneDeepDivesTransition(
     RoadmapArtifacts artifacts,
@@ -11,7 +25,7 @@ internal sealed class GenerateMilestoneDeepDivesTransition(
     ProjectionCache projectionCache,
     RoadmapPromptContextBuilder contextBuilder,
     RoadmapPromptTransitionRunner promptTransitionRunner,
-    BundleFileExtractor bundleExtractor,
+    ArtifactBundles.BundleFileExtractor bundleExtractor,
     BundleManifestWriter bundleManifestWriter,
     ExecutionPreparationProvenanceService executionPreparation,
     InvariantValidator invariantValidator,

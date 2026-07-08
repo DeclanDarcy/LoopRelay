@@ -1,4 +1,5 @@
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Primitives;
 

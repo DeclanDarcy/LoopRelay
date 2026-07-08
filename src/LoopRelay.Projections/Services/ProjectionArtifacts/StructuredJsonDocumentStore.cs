@@ -1,7 +1,8 @@
 using System.Text.Json;
-using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Projections.Models.ProjectionArtifacts;
 
-namespace LoopRelay.Projections.Services;
+namespace LoopRelay.Projections.Services.ProjectionArtifacts;
 
 internal sealed class StructuredJsonDocumentStore<TDocument>(
     ProjectionArtifacts artifacts,

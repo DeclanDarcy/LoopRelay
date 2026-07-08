@@ -3,7 +3,7 @@ using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Decisions;
 
 /// <summary>Real-filesystem tests (temp dir per test, like RotatingJsonlTelemetrySinkTests).</summary>
 public sealed class FileDecisionSessionResumeStoreTests : IDisposable

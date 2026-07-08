@@ -1,6 +1,6 @@
 using LoopRelay.Projections.Primitives;
 
-namespace LoopRelay.Projections.Models;
+namespace LoopRelay.Projections.Models.Definitions;
 
 public sealed record ProjectionFreshness(
     ProjectionStaleStatus Status,

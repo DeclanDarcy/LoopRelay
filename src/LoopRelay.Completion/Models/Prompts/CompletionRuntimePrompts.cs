@@ -1,4 +1,4 @@
-namespace LoopRelay.Completion.Models;
+namespace LoopRelay.Completion.Models.Prompts;
 
 public static class CompletionRuntimePromptNames
 {

@@ -1,8 +1,8 @@
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
 internal sealed class TempRepo : IDisposable
 {
@@ -17,13 +17,13 @@ internal sealed class TempRepo : IDisposable
             Path = Root,
         };
         Store = new FileSystemArtifactStore();
-        Artifacts = new Cli.Services.RoadmapArtifacts(Store, Repository);
+        Artifacts = new RoadmapArtifacts(Store, Repository);
     }
 
     public string Root { get; }
     public Repository Repository { get; }
     public FileSystemArtifactStore Store { get; }
-    public Cli.Services.RoadmapArtifacts Artifacts { get; }
+    public RoadmapArtifacts Artifacts { get; }
 
     public void Write(string relativePath, string content)
     {

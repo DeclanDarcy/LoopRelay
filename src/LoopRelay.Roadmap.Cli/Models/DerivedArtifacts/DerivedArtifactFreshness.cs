@@ -1,6 +1,6 @@
-using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 
-namespace LoopRelay.Roadmap.Cli.Models;
+namespace LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
 
 internal sealed record DerivedArtifactFreshness(
     DerivedArtifactFreshnessStatus Status,

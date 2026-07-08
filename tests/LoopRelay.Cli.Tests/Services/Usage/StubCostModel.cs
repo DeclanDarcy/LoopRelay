@@ -1,8 +1,8 @@
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Primitives;
 
-namespace LoopRelay.Cli.Tests.Services;
+namespace LoopRelay.Cli.Tests.Services.Usage;
 
 
 /// <summary>Cost model with directly-controlled scalars so a CLI test can drive the economic marginal rule.</summary>

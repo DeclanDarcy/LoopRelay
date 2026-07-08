@@ -1,8 +1,13 @@
-using LoopRelay.Roadmap.Cli.Models;
-using LoopRelay.Roadmap.Cli.Primitives;
-using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Models.Execution;
+using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
+using LoopRelay.Roadmap.Cli.Models.Projections;
+using LoopRelay.Roadmap.Cli.Primitives.Projections;
+using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Tests.Services.Support;
+using ProjectContextLoader = LoopRelay.Roadmap.Cli.Services.Projections.ProjectContextLoader;
 
-namespace LoopRelay.Roadmap.Cli.Tests.Services;
+namespace LoopRelay.Roadmap.Cli.Tests.Services.Projections;
 
 public sealed class ProjectionManifestTests
 {
@@ -11,7 +16,7 @@ public sealed class ProjectionManifestTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        ProjectContext context = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext context = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
         ProjectionProvenance provenance = new ProjectionProvenanceFactory(new ProjectionRegistry())
             .Create("SelectNextEpic", context);
         var store = new ProjectionManifestStore(repo.Artifacts);

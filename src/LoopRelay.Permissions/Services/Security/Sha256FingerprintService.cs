@@ -1,11 +1,12 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using LoopRelay.Permissions.Abstractions;
-using LoopRelay.Permissions.Models;
-using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Abstractions.Security;
+using LoopRelay.Permissions.Models.Policy;
+using LoopRelay.Permissions.Primitives.Parsing;
+using LoopRelay.Permissions.Services.Evaluation;
 
-namespace LoopRelay.Permissions.Services;
+namespace LoopRelay.Permissions.Services.Security;
 
 public sealed class Sha256FingerprintService : IFingerprintService
 {

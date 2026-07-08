@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Services.Codex;
 
 /// <summary>
 /// Builds outbound Codex app-server JSON-RPC 2.0 request frames (codex-cli 0.139, v2 protocol):

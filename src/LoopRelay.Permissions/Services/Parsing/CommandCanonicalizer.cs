@@ -1,8 +1,7 @@
-using LoopRelay.Permissions.Abstractions;
-using LoopRelay.Permissions.Models;
-using LoopRelay.Permissions.Primitives;
+using LoopRelay.Permissions.Abstractions.Parsing;
+using LoopRelay.Permissions.Primitives.Parsing;
 
-namespace LoopRelay.Permissions.Services;
+namespace LoopRelay.Permissions.Services.Parsing;
 
 public sealed class CommandCanonicalizer : ICommandCanonicalizer
 {
