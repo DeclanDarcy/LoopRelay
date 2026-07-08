@@ -194,6 +194,39 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
         return updated;
     }
 
+    public async Task<NonImplementationReviewLedgerEntry> RecordSemanticConfirmationAsync(
+        NonImplementationSemanticConfirmation confirmation)
+    {
+        ArgumentNullException.ThrowIfNull(confirmation);
+
+        NonImplementationReviewLedgerDocument document = await LoadOrCreateAsync();
+        var entries = document.Entries.ToList();
+        int index = entries.FindIndex(entry =>
+            string.Equals(entry.EntryId, confirmation.LedgerEntryId, StringComparison.Ordinal));
+        if (index < 0)
+        {
+            throw new NonImplementationReviewLedgerException(
+                $"Cannot record semantic confirmation for unknown non-implementation ledger entry {confirmation.LedgerEntryId}.");
+        }
+
+        ValidateSemanticConfirmation(entries[index], confirmation);
+        NonImplementationReviewLedgerEntry updated = entries[index] with
+        {
+            SemanticDisposition = confirmation.Disposition,
+            SemanticRationale = confirmation.Rationale.Trim(),
+            SemanticEvidence = confirmation.EvidenceExcerptsOrPathFacts
+                .Where(evidence => !string.IsNullOrWhiteSpace(evidence))
+                .Select(evidence => evidence.Trim())
+                .ToArray(),
+            SemanticUncertaintyNote = string.IsNullOrWhiteSpace(confirmation.UncertaintyNote)
+                ? null
+                : confirmation.UncertaintyNote.Trim(),
+        };
+        entries[index] = updated;
+        await SaveAsync(document with { Entries = entries });
+        return updated;
+    }
+
     public static NonImplementationReviewLedgerEntry? FindReusableSemanticDisposition(
         IReadOnlyList<NonImplementationReviewLedgerEntry> entries,
         NonImplementationArtifactClassification classification,
@@ -317,6 +350,9 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
             PreviousPath = NormalizeOptionalPath(entry.PreviousPath),
             ClassificationPathFacts = entry.ClassificationPathFacts ?? Array.Empty<string>(),
             SemanticEvidence = entry.SemanticEvidence ?? Array.Empty<string>(),
+            SemanticUncertaintyNote = string.IsNullOrWhiteSpace(entry.SemanticUncertaintyNote)
+                ? null
+                : entry.SemanticUncertaintyNote.Trim(),
             FirstSeenAtUtc = entry.FirstSeenAtUtc.ToUniversalTime(),
             LastSeenAtUtc = entry.LastSeenAtUtc.ToUniversalTime(),
         };
@@ -369,6 +405,12 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
         {
             throw new NonImplementationReviewLedgerException(
                 $"Non-implementation review ledger entry {entry.EntryId} semantic evidence section is required.");
+        }
+
+        if (entry.SemanticDisposition is not null && string.IsNullOrWhiteSpace(entry.SemanticRationale))
+        {
+            throw new NonImplementationReviewLedgerException(
+                $"Non-implementation review ledger entry {entry.EntryId} semantic rationale is required when a semantic disposition is recorded.");
         }
 
         if (!entry.ReviewedFileDeleted && string.IsNullOrWhiteSpace(entry.ReviewedContentSha256))
@@ -445,6 +487,63 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
             string.Equals(entry.ReviewedContentSha256, file.PostContentSha256, StringComparison.Ordinal);
     }
 
+    private static void ValidateSemanticConfirmation(
+        NonImplementationReviewLedgerEntry entry,
+        NonImplementationSemanticConfirmation confirmation)
+    {
+        if (!string.Equals(entry.EntryId, confirmation.LedgerEntryId, StringComparison.Ordinal))
+        {
+            throw new NonImplementationReviewLedgerException(
+                $"Semantic confirmation entry ID {confirmation.LedgerEntryId} does not match ledger entry {entry.EntryId}.");
+        }
+
+        if (!string.Equals(entry.Path, NormalizePath(confirmation.CandidatePath), StringComparison.Ordinal))
+        {
+            throw new NonImplementationReviewLedgerException(
+                $"Semantic confirmation path {confirmation.CandidatePath} does not match ledger entry {entry.Path}.");
+        }
+
+        if (entry.ReviewedFileDeleted != confirmation.ReviewedFileDeleted)
+        {
+            throw new NonImplementationReviewLedgerException(
+                $"Semantic confirmation reviewed-file status does not match ledger entry {entry.EntryId}.");
+        }
+
+        if (entry.ReviewedFileDeleted)
+        {
+            string expectedDeletedIdentity = DeletedReviewedIdentity(entry);
+            if (!string.Equals(
+                confirmation.DeletedReviewedIdentity,
+                expectedDeletedIdentity,
+                StringComparison.Ordinal))
+            {
+                throw new NonImplementationReviewLedgerException(
+                    $"Semantic confirmation deleted-reviewed identity does not match ledger entry {entry.EntryId}.");
+            }
+        }
+        else if (!string.Equals(
+            entry.ReviewedContentSha256,
+            confirmation.ReviewedContentSha256,
+            StringComparison.Ordinal))
+        {
+            throw new NonImplementationReviewLedgerException(
+                $"Semantic confirmation reviewed content hash does not match ledger entry {entry.EntryId}.");
+        }
+
+        if (string.IsNullOrWhiteSpace(confirmation.Rationale))
+        {
+            throw new NonImplementationReviewLedgerException(
+                $"Semantic confirmation rationale is required for ledger entry {entry.EntryId}.");
+        }
+
+        if (confirmation.Disposition == NonImplementationSemanticDisposition.Uncertain &&
+            string.IsNullOrWhiteSpace(confirmation.UncertaintyNote))
+        {
+            throw new NonImplementationReviewLedgerException(
+                $"Semantic confirmation uncertainty note is required for uncertain ledger entry {entry.EntryId}.");
+        }
+    }
+
     private static string CreateEntryId(
         NonImplementationArtifactClassification classification,
         string confirmationPromptSourceHash)
@@ -465,6 +564,9 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
 
     private static bool IsReviewedDeletion(RepositoryChangedFileFacts file) =>
         file.IsDeleted || !file.Exists;
+
+    public static string DeletedReviewedIdentity(NonImplementationReviewLedgerEntry entry) =>
+        $"deleted:{entry.BaselineContentSha256 ?? "<none>"}";
 
     private static string NormalizePath(string path) =>
         path.Replace('\\', '/').Trim();

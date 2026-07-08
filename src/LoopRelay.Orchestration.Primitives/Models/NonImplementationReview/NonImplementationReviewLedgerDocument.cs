@@ -54,6 +54,8 @@ public sealed record NonImplementationReviewLedgerEntry
 
     public IReadOnlyList<string> SemanticEvidence { get; init; } = Array.Empty<string>();
 
+    public string? SemanticUncertaintyNote { get; init; }
+
     public string ConfirmationPromptSourceHash { get; init; } = string.Empty;
 
     public DateTimeOffset FirstSeenAtUtc { get; init; }

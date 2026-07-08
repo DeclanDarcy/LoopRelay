@@ -5,38 +5,38 @@
 confirm routed candidates with a mutation-impossible read-only agent workflow.
 
 ## Work
-- [ ] Add `ConfirmNonImplementationCandidate.prompt` under `src/LoopRelay.Core/Prompts`.
-- [ ] Prompt requirements:
-  - [ ] input includes ledger entry ID, candidate path, deterministic evidence, slice ID, baseline status, post status, reviewed content hash or deleted-reviewed identity, and bounded content excerpt or instructions to inspect the file read-only
-  - [ ] output is strict JSON or an exact Markdown field table parsed into:
-    - [ ] ledger entry ID
-    - [ ] candidate path
-    - [ ] reviewed content hash or deleted-reviewed identity
-    - [ ] disposition: `ConfirmedNonImplementation`, `FalsePositive`, or `Uncertain`
-    - [ ] concise rationale
-    - [ ] evidence excerpts or path facts
-    - [ ] uncertainty note when applicable
-  - [ ] prompt explicitly forbids keep/delete decisions
-- [ ] Implement parser and validation for the structured output.
-- [ ] Implement `NonImplementationSemanticConfirmer`.
-  - [ ] Consume only `SemanticReviewCandidate` and `AmbiguousForSemanticReview` routes from deterministic classification.
-  - [ ] Ask `NonImplementationReviewLedgerStore` whether a valid semantic disposition already exists for the exact path/hash/classifier/prompt identity.
-  - [ ] Treat false positives as normal outcomes.
-  - [ ] Preserve semantic uncertainty instead of forcing a binary answer.
-  - [ ] Update ledger entries with semantic disposition and rationale.
-- [ ] Host composition:
-  - [ ] main CLI and roadmap/completion tests pass an `INonImplementationReviewRunner`
-  - [ ] shared primitives do not depend on `LoopRelay.Cli.AgentSpecs`
-  - [ ] tests assert review services receive read-only runner calls and never open operational or scoped mutation specs
-- [ ] Add tests:
-  - [ ] parser accepts each valid disposition
-  - [ ] parser rejects missing/unknown disposition
-  - [ ] parser rejects mismatched entry ID, path, content hash, or reviewed status
-  - [ ] service skips only valid exact ledger identities
-  - [ ] service confirms candidates and records rationale
-  - [ ] service does not process deterministic exclusions
-  - [ ] ambiguous deterministic routes are semantically confirmed instead of treated as final uncertainty
-  - [ ] service cannot be constructed with a mutation-capable runner adapter
+- [x] Add `ConfirmNonImplementationCandidate.prompt` under `src/LoopRelay.Core/Prompts`.
+- [x] Prompt requirements:
+  - [x] input includes ledger entry ID, candidate path, deterministic evidence, slice ID, baseline status, post status, reviewed content hash or deleted-reviewed identity, and bounded content excerpt or instructions to inspect the file read-only
+  - [x] output is strict JSON or an exact Markdown field table parsed into:
+    - [x] ledger entry ID
+    - [x] candidate path
+    - [x] reviewed content hash or deleted-reviewed identity
+    - [x] disposition: `ConfirmedNonImplementation`, `FalsePositive`, or `Uncertain`
+    - [x] concise rationale
+    - [x] evidence excerpts or path facts
+    - [x] uncertainty note when applicable
+  - [x] prompt explicitly forbids keep/delete decisions
+- [x] Implement parser and validation for the structured output.
+- [x] Implement `NonImplementationSemanticConfirmer`.
+  - [x] Consume only `SemanticReviewCandidate` and `AmbiguousForSemanticReview` routes from deterministic classification.
+  - [x] Ask `NonImplementationReviewLedgerStore` whether a valid semantic disposition already exists for the exact path/hash/classifier/prompt identity.
+  - [x] Treat false positives as normal outcomes.
+  - [x] Preserve semantic uncertainty instead of forcing a binary answer.
+  - [x] Update ledger entries with semantic disposition and rationale.
+- [x] Host composition:
+  - [x] main CLI and roadmap/completion tests pass an `INonImplementationReviewRunner`
+  - [x] shared primitives do not depend on `LoopRelay.Cli.AgentSpecs`
+  - [x] tests assert review services receive read-only runner calls and never open operational or scoped mutation specs
+- [x] Add tests:
+  - [x] parser accepts each valid disposition
+  - [x] parser rejects missing/unknown disposition
+  - [x] parser rejects mismatched entry ID, path, content hash, or reviewed status
+  - [x] service skips only valid exact ledger identities
+  - [x] service confirms candidates and records rationale
+  - [x] service does not process deterministic exclusions
+  - [x] ambiguous deterministic routes are semantically confirmed instead of treated as final uncertainty
+  - [x] service cannot be constructed with a mutation-capable runner adapter
 
 ## Detail Notes
 
@@ -71,7 +71,7 @@ Semantic confirmation must depend on `INonImplementationReviewRunner`, not on th
 Shared primitives should not depend on CLI-specific agent specs. CLI, roadmap, and completion hosts can provide adapters, but tests must prove review services use the read-only runner and cannot be constructed with a mutation-capable runner adapter.
 
 ## Acceptance
-- [ ] Every routed candidate receives a durable semantic disposition or is skipped by a valid exact ledger identity.
-- [ ] False positives and semantic uncertainty are first-class outcomes.
-- [ ] Semantic confirmation does not decide retention or deletion.
-- [ ] Semantic confirmation cannot mutate repository files.
+- [x] Every routed candidate receives a durable semantic disposition or is skipped by a valid exact ledger identity.
+- [x] False positives and semantic uncertainty are first-class outcomes.
+- [x] Semantic confirmation does not decide retention or deletion.
+- [x] Semantic confirmation cannot mutate repository files.

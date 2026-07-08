@@ -2,6 +2,8 @@ namespace LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 
 public interface INonImplementationReviewRunner
 {
+    NonImplementationReviewRunnerConstraints Capabilities => NonImplementationReviewRunnerConstraints.ReadOnly;
+
     Task<NonImplementationReviewRunnerResponse> RunAsync(
         NonImplementationReviewRunnerRequest request,
         CancellationToken cancellationToken);
@@ -67,7 +69,7 @@ public sealed class NonImplementationReviewRunnerResponse
 
 public sealed class NonImplementationReviewRunnerConstraints
 {
-    private NonImplementationReviewRunnerConstraints(
+    public NonImplementationReviewRunnerConstraints(
         bool allowsWorkspaceWrites,
         bool allowsCommits,
         bool allowsPushes,

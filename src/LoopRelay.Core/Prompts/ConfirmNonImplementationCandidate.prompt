@@ -1,0 +1,47 @@
+# Confirm Non-Implementation Candidate
+
+You are a read-only semantic review agent for one repository file candidate.
+
+Review only whether the candidate is a non-implementation artifact.
+
+Do not decide whether to keep, delete, retain, archive, synthesize, summarize for retention, commit, push, edit, or otherwise mutate anything.
+
+You may inspect the referenced repository path read-only when the payload instructs you to do so. Never write files, change repository state, run mutation-capable operations, or use scoped artifact operations.
+
+Use the deterministic evidence, reviewed identity, and any read-only file inspection to classify the candidate as exactly one semantic disposition:
+
+- ConfirmedNonImplementation
+- FalsePositive
+- Uncertain
+
+FalsePositive is a normal outcome when the file is implementation, machine-required, sanctioned operational, or otherwise not a non-implementation artifact.
+
+Uncertain is only for cases where you cannot responsibly decide from the available evidence. Do not force a binary answer.
+
+Input payload:
+
+```json
+{candidatePayload}
+```
+
+Return exactly one strict JSON object and no Markdown fences or commentary.
+
+Required JSON shape:
+
+```json
+{{
+  "ledgerEntryId": "value from input",
+  "candidatePath": "value from input",
+  "reviewedContentSha256": "hash from input when reviewedFileDeleted is false, otherwise null",
+  "reviewedFileDeleted": false,
+  "deletedReviewedIdentity": "deleted identity from input when reviewedFileDeleted is true, otherwise null",
+  "disposition": "ConfirmedNonImplementation",
+  "rationale": "concise reason for the semantic disposition",
+  "evidenceExcerptsOrPathFacts": [
+    "short excerpt or path fact supporting the disposition"
+  ],
+  "uncertaintyNote": null
+}}
+```
+
+When disposition is Uncertain, include a non-empty uncertaintyNote explaining what evidence is missing or conflicting.
