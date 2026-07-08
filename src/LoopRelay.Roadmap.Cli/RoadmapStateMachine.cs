@@ -17,6 +17,7 @@ internal sealed class RoadmapStateMachine(
     RoadmapStateStore stateStore,
     RoadmapTransitionPersistence transitionPersistence,
     RoadmapPromptTransitionRunner promptTransitionRunner,
+    ActiveSelectionReader activeSelectionReader,
     RoadmapStartupPlanner startupPlanner,
     RoadmapResumePlanner resumePlanner,
     RoadmapUnblockPlanner unblockPlanner,
@@ -187,7 +188,7 @@ internal sealed class RoadmapStateMachine(
 
             case RoadmapResumeAction.ContinueSelectionDecision:
             {
-                string selectionOutput = await ReadCurrentSelectionAsync(cancellationToken);
+                string selectionOutput = await activeSelectionReader.ReadAsync(cancellationToken);
                 SelectionDecision selection = new SelectionParser().Parse(selectionOutput);
                 return await ContinueAfterSelectionAsync(selection, projectContext, cancellationToken);
             }
@@ -600,7 +601,7 @@ internal sealed class RoadmapStateMachine(
     {
         const string runtimePrompt = "EpicPreparationAudit";
         console.Phase("Audit selected epic");
-        string selection = await ReadCurrentSelectionAsync(cancellationToken);
+        string selection = await activeSelectionReader.ReadAsync(cancellationToken);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildAuditContext(projection.Content, selection);
@@ -650,7 +651,7 @@ internal sealed class RoadmapStateMachine(
     private async Task<ArtifactPromotionResult> RewriteActiveEpicAsync(string runtimePrompt, RoadmapState state, ProjectContext projectContext, string auditPath, CancellationToken cancellationToken)
     {
         console.Phase(runtimePrompt);
-        string selectionOrEpic = await artifacts.ReadAsync(RoadmapArtifactPaths.ActiveEpic) ?? await ReadCurrentSelectionAsync(cancellationToken);
+        string selectionOrEpic = await artifacts.ReadAsync(RoadmapArtifactPaths.ActiveEpic) ?? await activeSelectionReader.ReadAsync(cancellationToken);
         string audit = await artifacts.ReadRequiredAsync(auditPath);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
@@ -672,7 +673,7 @@ internal sealed class RoadmapStateMachine(
     {
         const string runtimePrompt = "CreateNewEpic";
         console.Phase("Create new epic");
-        string selection = await ReadCurrentSelectionAsync(cancellationToken);
+        string selection = await activeSelectionReader.ReadAsync(cancellationToken);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
@@ -684,7 +685,7 @@ internal sealed class RoadmapStateMachine(
     {
         const string runtimePrompt = "SplitEpic";
         console.Phase("Split epic");
-        string selection = await ReadCurrentSelectionAsync(cancellationToken);
+        string selection = await activeSelectionReader.ReadAsync(cancellationToken);
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
         string context = contextBuilder.BuildCreateOrSplitContext(projection.Content, selection);
@@ -1571,35 +1572,6 @@ internal sealed class RoadmapStateMachine(
             rationale));
     }
 
-    private async Task<string> ReadCurrentSelectionAsync(CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        string selection = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.Selection);
-        string projectionPath = RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
-        string? selectionProjection = await artifacts.ReadAsync(projectionPath);
-        if (string.IsNullOrWhiteSpace(selectionProjection))
-        {
-            throw new RoadmapStepException("Active selection cannot be used because its SelectNextEpic projection is missing.");
-        }
-
-        RoadmapStateDocument? state = await stateStore.LoadAsync();
-        TransitionInputSnapshot currentCycle = await selectionProvenance.CaptureCurrentCycleAsync(
-            selectionProjection,
-            state?.RetiredEpics ?? [],
-            cancellationToken);
-        DerivedArtifactFreshness freshness = await selectionProvenance.EvaluateActiveSelectionFreshnessAsync(
-            currentCycle,
-            state?.RetiredEpics ?? [],
-            cancellationToken);
-        if (!freshness.IsFresh)
-        {
-            throw new RoadmapStepException(
-                $"Active selection cannot be used because it does not belong to the current selection cycle: {FormatReasons(freshness.Reasons)}.");
-        }
-
-        return selection;
-    }
-
     private async Task SupersedeActiveSelectionAsync(
         IReadOnlyList<DerivedArtifactStaleReason> reasons,
         string lifecycleNotes)
@@ -1805,9 +1777,6 @@ internal sealed class RoadmapStateMachine(
 
     private static string OneLine(string value) =>
         string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-
-    private static string FormatReasons(IReadOnlyList<DerivedArtifactStaleReason> reasons) =>
-        reasons.Count == 0 ? "UnknownProvenance" : string.Join(", ", reasons);
 
     private enum EpicPreparationResult
     {

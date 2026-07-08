@@ -125,10 +125,10 @@ This service must do more than read `.agents/selection.md`.
 
 ### Consumers
 
-- [ ] `CreateNewEpic`
-- [ ] `SplitEpic`
-- [ ] `EpicPreparationAudit`
-- [ ] `RealignEpic`/`ReimagineEpic` fallback path when `.agents/epic.md` is
+- [x] `CreateNewEpic`
+- [x] `SplitEpic`
+- [x] `EpicPreparationAudit`
+- [x] `RealignEpic`/`ReimagineEpic` fallback path when `.agents/epic.md` is
   absent
 
 ## DecisionRecorder

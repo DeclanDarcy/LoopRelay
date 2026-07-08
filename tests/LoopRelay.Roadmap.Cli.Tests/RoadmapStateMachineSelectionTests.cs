@@ -492,6 +492,10 @@ internal static class StateMachineFactory
             new Cli.SelectionProvenanceManifestStore(repo.Artifacts),
             contextBuilder,
             inputResolver);
+        var activeSelectionReader = new Cli.ActiveSelectionReader(
+            repo.Artifacts,
+            stateStore,
+            selectionProvenance);
         var invariants = new Cli.InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
         var resumePlanner = new Cli.RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new Cli.ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
         var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
@@ -508,6 +512,7 @@ internal static class StateMachineFactory
             stateStore,
             transitionPersistence,
             promptTransitionRunner,
+            activeSelectionReader,
             new Cli.RoadmapStartupPlanner(),
             resumePlanner,
             unblockPlanner,

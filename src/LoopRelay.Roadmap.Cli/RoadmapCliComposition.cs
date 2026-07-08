@@ -113,6 +113,10 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             promptRunner,
             journal,
             transitionPersistence);
+        var activeSelectionReader = new ActiveSelectionReader(
+            artifacts,
+            stateStore,
+            selectionProvenance);
         var lifecycle = new ArtifactLifecycleStore(artifacts);
         var startupPlanner = new RoadmapStartupPlanner();
         var projectContextLoader = new ProjectContextLoader(artifacts);
@@ -158,6 +162,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             stateStore,
             transitionPersistence,
             promptTransitionRunner,
+            activeSelectionReader,
             startupPlanner,
             resumePlanner,
             unblockPlanner,
