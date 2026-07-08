@@ -3,7 +3,10 @@
 ## Work Items
 
 - [ ] Remove extracted private methods from `RoadmapStateMachine` after handlers are wired.
-- [ ] Keep command dispatch, status, unblock recovery, startup preflight, resume-plan execution, terminal selection route persistence, cancellation persistence, and generic error reporting.
+- [ ] Keep command dispatch, status reporting, Project Context preflight,
+  prompt-contract snapshot emission, startup planning, resume planning, unblock
+  planning, terminal selection route persistence, cancellation persistence, and
+  generic error reporting.
 - [ ] Keep simple selection terminal routes in `ContinueAfterSelectionAsync` unless a later refactor extracts them; they are not required for this change.
 - [ ] Ensure `RoadmapStateMachine` constructor only receives handlers and high-level planners for paths it still owns.
 
