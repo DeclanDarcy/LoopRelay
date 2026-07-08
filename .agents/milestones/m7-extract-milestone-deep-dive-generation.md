@@ -8,20 +8,20 @@ Task ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationT
 
 ## Boundary
 
-- [ ] Handler returns after final `MilestoneSpecsReady` state is persisted.
-- [ ] Caller returns paused.
+- [x] Handler returns after final `MilestoneSpecsReady` state is persisted.
+- [x] Caller returns paused.
 
 ## Prompt And Projection
 
-- [ ] Phase `Generate milestone deep dives`.
-- [ ] Runtime prompt `GenerateMilestoneDeepDivesForEpic`.
-- [ ] Projection prompt `ProjectionForGenerateMilestoneDeepDivesForEpic`.
-- [ ] State `ActiveEpicReady -> MilestoneSpecsReady`.
-- [ ] Projection path `.agents/projections/milestone-deep-dive.md`.
-- [ ] Required input `.agents/epic.md`.
-- [ ] Secondary input is empty string.
-- [ ] Prompt output path before materialization `.agents/specs`.
-- [ ] Prompt envelope uses the promotion-candidate prompt envelope, followed by
+- [x] Phase `Generate milestone deep dives`.
+- [x] Runtime prompt `GenerateMilestoneDeepDivesForEpic`.
+- [x] Projection prompt `ProjectionForGenerateMilestoneDeepDivesForEpic`.
+- [x] State `ActiveEpicReady -> MilestoneSpecsReady`.
+- [x] Projection path `.agents/projections/milestone-deep-dive.md`.
+- [x] Required input `.agents/epic.md`.
+- [x] Secondary input is empty string.
+- [x] Prompt output path before materialization `.agents/specs`.
+- [x] Prompt envelope uses the promotion-candidate prompt envelope, followed by
   custom materialization finalization.
 
 ## Milestone Context Section Order
@@ -50,52 +50,52 @@ Task ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationT
 
 ## Important Success Details
 
-- [ ] Successful prompt path uses `TransitionStarted` and `PromptCompleted`, not
+- [x] Successful prompt path uses `TransitionStarted` and `PromptCompleted`, not
   `TransitionCompleted`.
-- [ ] Raw prompt output is not stored directly on success.
-- [ ] Extracted milestone files are under `.agents/specs/*.md`.
-- [ ] Execution-preparation generator id is
+- [x] Raw prompt output is not stored directly on success.
+- [x] Extracted milestone files are under `.agents/specs/*.md`.
+- [x] Execution-preparation generator id is
   `GenerateMilestoneDeepDivesForEpic:v1`.
-- [ ] Final state has no next valid transitions.
-- [ ] No decision-ledger entry is appended.
-- [ ] No operational context, execution prompt, or execution plan is generated
+- [x] Final state has no next valid transitions.
+- [x] No decision-ledger entry is appended.
+- [x] No operational context, execution prompt, or execution plan is generated
   here.
 
 ## Bundle Or Post-Processing Failure After Prompt Completion
 
-- [ ] Prompt-completed journal and state already exist.
-- [ ] Write `.agents/evidence/blockers/milestone-spec-generation-failed.NNNN.md`
+- [x] Prompt-completed journal and state already exist.
+- [x] Write `.agents/evidence/blockers/milestone-spec-generation-failed.NNNN.md`
   with raw prompt output embedded in the failure evidence.
-- [ ] Append `MilestoneSpecGenerationFailed`.
-- [ ] Save `EvidenceBlocked` / `Paused`.
-- [ ] Decision `Milestone Spec Generation Failed`.
-- [ ] Intent `ResolveMilestoneSpecGenerationFailure`.
-- [ ] Throw already-persisted failure.
-- [ ] Do not roll back files, manifest, lifecycle, or provenance already written
+- [x] Append `MilestoneSpecGenerationFailed`.
+- [x] Save `EvidenceBlocked` / `Paused`.
+- [x] Decision `Milestone Spec Generation Failed`.
+- [x] Intent `ResolveMilestoneSpecGenerationFailure`.
+- [x] Throw already-persisted failure.
+- [x] Do not roll back files, manifest, lifecycle, or provenance already written
   before the failure.
 
 ## Invariant Failure
 
-- [ ] Specs, bundle manifest, lifecycle, and execution-preparation manifest may
+- [x] Specs, bundle manifest, lifecycle, and execution-preparation manifest may
   already exist.
-- [ ] Use validator-owned evidence path when available, otherwise fallback
+- [x] Use validator-owned evidence path when available, otherwise fallback
   evidence.
-- [ ] Append `InvariantFailed`.
-- [ ] Save using prompt `PostMilestoneInvariantValidation`.
-- [ ] Intent `ResolveInvariantViolation`.
-- [ ] Throw already-persisted failure.
-- [ ] Do not append `MilestoneSpecsMaterialized`.
+- [x] Append `InvariantFailed`.
+- [x] Save using prompt `PostMilestoneInvariantValidation`.
+- [x] Intent `ResolveInvariantViolation`.
+- [x] Throw already-persisted failure.
+- [x] Do not append `MilestoneSpecsMaterialized`.
 
 ## Runtime Prompt Failure
 
-- [ ] Append `TransitionFailed`.
-- [ ] Save `EvidenceBlocked` / `Failed`.
-- [ ] Decision `Runtime Failure`.
-- [ ] Output `.agents/specs`.
-- [ ] Intent `ResolveTransitionFailure`.
+- [x] Append `TransitionFailed`.
+- [x] Save `EvidenceBlocked` / `Failed`.
+- [x] Decision `Runtime Failure`.
+- [x] Output `.agents/specs`.
+- [x] Intent `ResolveTransitionFailure`.
 
 ## Input Snapshot
 
-- [ ] Required projection.
-- [ ] Required active epic.
-- [ ] Secondary hash of empty string.
+- [x] Required projection.
+- [x] Required active epic.
+- [x] Secondary hash of empty string.

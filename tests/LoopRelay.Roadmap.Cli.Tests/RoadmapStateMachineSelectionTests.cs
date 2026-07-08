@@ -577,6 +577,21 @@ internal static class StateMachineFactory
             hitlArtifactCapture,
             effectiveConsole);
         var invariants = new Cli.InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
+        var generateMilestoneDeepDivesTransition = new Cli.GenerateMilestoneDeepDivesTransition(
+            repo.Artifacts,
+            contracts,
+            projectionCache,
+            contextBuilder,
+            promptTransitionRunner,
+            bundleExtractor,
+            bundleManifest,
+            executionPreparation,
+            invariants,
+            journal,
+            lifecycle,
+            transitionPersistence,
+            hitlArtifactCapture,
+            effectiveConsole);
         var resumePlanner = new Cli.RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new Cli.ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
         var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
         return new Cli.RoadmapStateMachine(
@@ -597,6 +612,7 @@ internal static class StateMachineFactory
             createNewEpicTransition,
             epicPreparationAuditTransition,
             splitEpicTransition,
+            generateMilestoneDeepDivesTransition,
             activeSelectionReader,
             new Cli.RoadmapStartupPlanner(),
             resumePlanner,
@@ -605,10 +621,6 @@ internal static class StateMachineFactory
             decisionRecorder,
             journal,
             lifecycle,
-            bundleExtractor,
-            bundleManifest,
-            executionPreparation,
-            invariants,
             effectiveConsole,
             hitlArtifactCapture);
     }

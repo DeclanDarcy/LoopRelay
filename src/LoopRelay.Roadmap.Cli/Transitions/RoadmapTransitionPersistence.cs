@@ -93,6 +93,37 @@ internal sealed class RoadmapTransitionPersistence(
             ["Review invariant failure evidence and rerun"]);
     }
 
+    public async Task PersistInvariantFailureAndThrowAsync(
+        InvariantValidationResult invariant,
+        RoadmapState originatingState,
+        RoadmapState attemptedState,
+        string transition,
+        string projection)
+    {
+        string reason = invariant.Error ?? "Invariant validation failed.";
+        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+        IReadOnlyList<string> evidencePaths = await EnsureInvariantEvidencePathsAsync(
+            invariant,
+            transition,
+            attemptedState,
+            reason,
+            failedAt);
+        RoadmapWorkflowFailure failure = RoadmapWorkflowFailure.InvariantFailure(
+            originatingState,
+            attemptedState,
+            invariant.FailureState,
+            transition,
+            projection,
+            invariant.FailureCategory,
+            evidencePaths,
+            reason,
+            invariant.RecoveryGuidance,
+            failedAt);
+
+        await PersistWorkflowFailureAsync(failure);
+        throw RoadmapStepException.AlreadyPersisted(new RoadmapStepException(reason));
+    }
+
     public static IReadOnlyList<string> ParseOutputEvidencePaths(string output)
     {
         if (string.IsNullOrWhiteSpace(output) ||
@@ -161,6 +192,44 @@ internal sealed class RoadmapTransitionPersistence(
 
     private static string FormatList(IReadOnlyList<string> values) =>
         values.Count == 0 ? "None" : string.Join(", ", values);
+
+    private async Task<IReadOnlyList<string>> EnsureInvariantEvidencePathsAsync(
+        InvariantValidationResult invariant,
+        string transition,
+        RoadmapState attemptedState,
+        string reason,
+        DateTimeOffset failedAt)
+    {
+        if (!string.IsNullOrWhiteSpace(invariant.EvidencePath))
+        {
+            return [invariant.EvidencePath];
+        }
+
+        string details = $"""
+            Invariant validation reported a failure without returning an evidence path.
+
+            | Field | Value |
+            |---|---|
+            | Attempted State | {attemptedState} |
+            | Failure State | {invariant.FailureState} |
+            | Invariant Category | {invariant.FailureCategory} |
+            | Original Reason | {reason} |
+
+            This fallback artifact exists only to keep workflow state recoverable when validator evidence is unavailable.
+            """;
+        string fallbackPath = await artifacts.WriteNumberedEvidenceAsync(
+            RoadmapArtifactPaths.BlockerEvidenceDirectory,
+            "invariant-failure-missing-evidence",
+            RoadmapBlockedArtifact.Render(
+                invariant.FailureState,
+                transition,
+                "Invariant validation failed without validator evidence.",
+                "Restore validator evidence or repair the invariant violation, then rerun the roadmap CLI.",
+                "None",
+                details,
+                failedAt));
+        return [fallbackPath];
+    }
 }
 
 internal sealed record RoadmapStateSummarySnapshot(

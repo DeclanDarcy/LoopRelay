@@ -22,6 +22,7 @@ internal sealed class RoadmapStateMachine(
     CreateNewEpicTransition createNewEpicTransition,
     EpicPreparationAuditTransition epicPreparationAuditTransition,
     SplitEpicTransition splitEpicTransition,
+    GenerateMilestoneDeepDivesTransition generateMilestoneDeepDivesTransition,
     ActiveSelectionReader activeSelectionReader,
     RoadmapStartupPlanner startupPlanner,
     RoadmapResumePlanner resumePlanner,
@@ -30,10 +31,6 @@ internal sealed class RoadmapStateMachine(
     DecisionRecorder decisionRecorder,
     TransitionJournalStore journalStore,
     ArtifactLifecycleStore lifecycleStore,
-    BundleFileExtractor bundleExtractor,
-    BundleManifestWriter bundleManifestWriter,
-    ExecutionPreparationProvenanceService executionPreparation,
-    InvariantValidator invariantValidator,
     ILoopConsole console,
     HitlArtifactCapture hitlArtifactCapture,
     INonImplementationCompletionReviewService? nonImplementationCompletionReview = null)
@@ -196,7 +193,7 @@ internal sealed class RoadmapStateMachine(
             }
 
             case RoadmapResumeAction.GenerateMilestoneSpecs:
-                await GenerateMilestoneSpecsAsync(projectContext, cancellationToken);
+                await generateMilestoneDeepDivesTransition.ExecuteAsync(projectContext, cancellationToken);
                 return RoadmapOutcome.Paused;
 
             case RoadmapResumeAction.EvaluateCompletionClaim:
@@ -541,169 +538,9 @@ internal sealed class RoadmapStateMachine(
                 return RoadmapOutcome.Paused;
         }
 
-        await GenerateMilestoneSpecsAsync(projectContext, cancellationToken);
+        await generateMilestoneDeepDivesTransition.ExecuteAsync(projectContext, cancellationToken);
         return RoadmapOutcome.Paused;
     }
-
-    private async Task GenerateMilestoneSpecsAsync(ProjectContext projectContext, CancellationToken cancellationToken)
-    {
-        const string runtimePrompt = "GenerateMilestoneDeepDivesForEpic";
-        console.Phase("Generate milestone deep dives");
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = await contextBuilder.BuildMilestoneContextAsync(projection.Content);
-        PromptTransitionCompletion completion = await promptTransitionRunner.RunPromotionCandidateAsync(
-            RoadmapState.ActiveEpicReady,
-            RoadmapState.MilestoneSpecsReady,
-            runtimePrompt,
-            projection.Definition.ProjectionPath,
-            context,
-            string.Empty,
-            [RoadmapArtifactPaths.SpecsDirectory],
-            cancellationToken);
-
-        try
-        {
-            BundleExtractionResult bundle = bundleExtractor.Extract(completion.Output);
-            if (bundle.IsBlocked || bundle.Files.Count == 0)
-            {
-                throw new RoadmapStepException(bundle.BlockedReason ?? "Milestone deep dive output did not contain specs.");
-            }
-
-            await bundleExtractor.WriteExtractedFilesAsync(artifacts, bundle);
-            await bundleManifestWriter.WriteAsync($"{RoadmapArtifactPaths.SpecsDirectory}/bundle-manifest.md", runtimePrompt, projection.Definition.ProjectionPath, bundle, "Valid");
-            foreach (ExtractedBundleFile file in bundle.Files)
-            {
-                await lifecycleStore.UpsertAsync(file.Path, ArtifactLifecycleState.Ready);
-                await hitlArtifactCapture.CaptureAsync(file.Path, file.Content);
-            }
-
-            await executionPreparation.RecordMilestoneSpecsAsync(
-                bundle.Files.Select(file => file.Path).ToArray(),
-                cancellationToken);
-
-            InvariantValidationResult invariant = await invariantValidator.ValidateAsync(RoadmapState.MilestoneSpecsReady, projectContext.Hash, cancellationToken);
-            if (!invariant.IsValid)
-            {
-                await PersistInvariantFailureAndThrowAsync(
-                    invariant,
-                    RoadmapState.ActiveEpicReady,
-                    RoadmapState.MilestoneSpecsReady,
-                    "PostMilestoneInvariantValidation",
-                    projection.Definition.ProjectionPath);
-            }
-
-            DateTimeOffset completed = DateTimeOffset.UtcNow;
-            await journalStore.AppendAsync(new TransitionJournalRecord(
-                "MilestoneSpecsMaterialized",
-                completion.CorrelationId,
-                completed,
-                RoadmapState.ActiveEpicReady,
-                RoadmapState.MilestoneSpecsReady,
-                runtimePrompt,
-                projection.Definition.ProjectionPath,
-                "MilestoneSpecPostProcessing",
-                completion.InputSnapshot.ToInputArtifactHashes(),
-                [RoadmapArtifactPaths.SpecsDirectory],
-                completion.ElapsedMilliseconds,
-                "Completed",
-                "Milestone Specs Ready",
-                null,
-                completion.InputSnapshot));
-            await SaveStateAsync(
-                RoadmapState.MilestoneSpecsReady,
-                TransitionStatus.Completed,
-                RoadmapState.ActiveEpicReady,
-                RoadmapState.MilestoneSpecsReady,
-                runtimePrompt,
-                projection.Definition.ProjectionPath,
-                RoadmapArtifactPaths.SpecsDirectory,
-                "Milestone Specs Ready",
-                completion.Started,
-                completed,
-                null,
-                [],
-                RoadmapTransitionIntent.Empty(RoadmapState.MilestoneSpecsReady));
-        }
-        catch (RoadmapStepException exception) when (exception.Persistence == RoadmapFailurePersistence.AlreadyPersisted)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            await PersistMilestoneSpecGenerationFailureAndThrowAsync(
-                completion,
-                projection.Definition.ProjectionPath,
-                exception.Message);
-        }
-    }
-
-    private async Task PersistMilestoneSpecGenerationFailureAndThrowAsync(
-        PromptTransitionCompletion completion,
-        string projectionPath,
-        string reason)
-    {
-        const string runtimePrompt = "GenerateMilestoneDeepDivesForEpic";
-        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
-        string evidencePath = await artifacts.WriteNumberedEvidenceAsync(
-            RoadmapArtifactPaths.BlockerEvidenceDirectory,
-            "milestone-spec-generation-failed",
-            RenderMilestoneSpecGenerationFailure(reason, completion.Output, failedAt));
-        await journalStore.AppendAsync(new TransitionJournalRecord(
-            "MilestoneSpecGenerationFailed",
-            completion.CorrelationId,
-            failedAt,
-            RoadmapState.ActiveEpicReady,
-            RoadmapState.MilestoneSpecsReady,
-            runtimePrompt,
-            projectionPath,
-            "MilestoneSpecPostProcessing",
-            completion.InputSnapshot.ToInputArtifactHashes(),
-            [evidencePath],
-            completion.ElapsedMilliseconds,
-            TransitionStatus.Paused.ToString(),
-            "Milestone Spec Generation Failed",
-            reason,
-            completion.InputSnapshot));
-        await SaveStateAsync(
-            RoadmapState.EvidenceBlocked,
-            TransitionStatus.Paused,
-            RoadmapState.ActiveEpicReady,
-            RoadmapState.MilestoneSpecsReady,
-            runtimePrompt,
-            projectionPath,
-            evidencePath,
-            "Milestone Spec Generation Failed",
-            completion.Started,
-            failedAt,
-            null,
-            [new BlockerRow(OneLine(reason), $"Review {evidencePath}, repair milestone spec generation output, and rerun the roadmap CLI.")],
-            new RoadmapTransitionIntent("ResolveMilestoneSpecGenerationFailure", RoadmapState.EvidenceBlocked, [evidencePath]),
-            ["Resolve milestone spec generation failure and rerun"]);
-        throw RoadmapStepException.AlreadyPersisted(new RoadmapStepException(reason));
-    }
-
-    private static string RenderMilestoneSpecGenerationFailure(
-        string reason,
-        string rawOutput,
-        DateTimeOffset createdAt) =>
-        $"""
-        # Milestone Spec Generation Failed
-
-        | Field | Value |
-        |---|---|
-        | Attempted State | {RoadmapState.MilestoneSpecsReady} |
-        | Transition | GenerateMilestoneDeepDivesForEpic |
-        | Reason | {reason} |
-        | Required Output | {RoadmapArtifactPaths.SpecsDirectory} |
-        | Created At | {createdAt:O} |
-
-        ## Raw Prompt Output
-
-        ```markdown
-        {rawOutput}
-        ```
-        """;
 
     private async Task<RoadmapOutcome> RunCompletionCertificationAsync(
         ProjectContext projectContext,
@@ -1074,75 +911,6 @@ internal sealed class RoadmapStateMachine(
             ["Resolve invalid completion certification and rerun"]);
 
         return RoadmapOutcome.Paused;
-    }
-
-    internal async Task PersistInvariantFailureAndThrowAsync(
-        InvariantValidationResult invariant,
-        RoadmapState originatingState,
-        RoadmapState attemptedState,
-        string transition,
-        string projection)
-    {
-        string reason = invariant.Error ?? "Invariant validation failed.";
-        DateTimeOffset failedAt = DateTimeOffset.UtcNow;
-        IReadOnlyList<string> evidencePaths = await EnsureInvariantEvidencePathsAsync(
-            invariant,
-            transition,
-            attemptedState,
-            reason,
-            failedAt);
-        RoadmapWorkflowFailure failure = RoadmapWorkflowFailure.InvariantFailure(
-            originatingState,
-            attemptedState,
-            invariant.FailureState,
-            transition,
-            projection,
-            invariant.FailureCategory,
-            evidencePaths,
-            reason,
-            invariant.RecoveryGuidance,
-            failedAt);
-
-        await transitionPersistence.PersistWorkflowFailureAsync(failure);
-        throw RoadmapStepException.AlreadyPersisted(new RoadmapStepException(reason));
-    }
-
-    private async Task<IReadOnlyList<string>> EnsureInvariantEvidencePathsAsync(
-        InvariantValidationResult invariant,
-        string transition,
-        RoadmapState attemptedState,
-        string reason,
-        DateTimeOffset failedAt)
-    {
-        if (!string.IsNullOrWhiteSpace(invariant.EvidencePath))
-        {
-            return [invariant.EvidencePath];
-        }
-
-        string details = $"""
-            Invariant validation reported a failure without returning an evidence path.
-
-            | Field | Value |
-            |---|---|
-            | Attempted State | {attemptedState} |
-            | Failure State | {invariant.FailureState} |
-            | Invariant Category | {invariant.FailureCategory} |
-            | Original Reason | {reason} |
-
-            This fallback artifact exists only to keep workflow state recoverable when validator evidence is unavailable.
-            """;
-        string fallbackPath = await artifacts.WriteNumberedEvidenceAsync(
-            RoadmapArtifactPaths.BlockerEvidenceDirectory,
-            "invariant-failure-missing-evidence",
-            RoadmapBlockedArtifact.Render(
-                invariant.FailureState,
-                transition,
-                "Invariant validation failed without validator evidence.",
-                "Restore validator evidence or repair the invariant violation, then rerun the roadmap CLI.",
-                "None",
-                details,
-                failedAt));
-        return [fallbackPath];
     }
 
     private async Task SaveStateAsync(

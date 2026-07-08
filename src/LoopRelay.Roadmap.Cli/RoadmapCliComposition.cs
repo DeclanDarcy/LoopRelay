@@ -225,6 +225,21 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             lifecycle,
             splitFamilies,
             executionPreparation);
+        var generateMilestoneDeepDivesTransition = new GenerateMilestoneDeepDivesTransition(
+            artifacts,
+            contractRegistry,
+            projectionCache,
+            contextBuilder,
+            promptTransitionRunner,
+            bundleExtractor,
+            bundleManifest,
+            executionPreparation,
+            invariants,
+            journal,
+            lifecycle,
+            transitionPersistence,
+            hitlArtifactCapture,
+            console);
         var machine = new RoadmapStateMachine(
             artifacts,
             projectContextLoader,
@@ -243,6 +258,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             createNewEpicTransition,
             epicPreparationAuditTransition,
             splitEpicTransition,
+            generateMilestoneDeepDivesTransition,
             activeSelectionReader,
             startupPlanner,
             resumePlanner,
@@ -251,10 +267,6 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             decisionRecorder,
             journal,
             lifecycle,
-            bundleExtractor,
-            bundleManifest,
-            executionPreparation,
-            invariants,
             console,
             hitlArtifactCapture,
             nonImplementationCompletionReview);

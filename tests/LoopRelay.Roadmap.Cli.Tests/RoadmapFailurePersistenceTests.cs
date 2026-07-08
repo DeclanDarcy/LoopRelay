@@ -607,7 +607,12 @@ public sealed class RoadmapFailurePersistenceTests
     public async Task Invariant_failure_without_validator_evidence_uses_specific_fallback_not_generic_blocker()
     {
         using var repo = SeedRepo(includeCompletionContext: true);
-        Cli.RoadmapStateMachine machine = StateMachineFactory.Create(repo, new ScriptedAgentRuntime());
+        var persistence = new Cli.RoadmapTransitionPersistence(
+            repo.Artifacts,
+            new Cli.ProjectionManifestStore(repo.Artifacts),
+            new RoadmapStateStore(repo.Artifacts),
+            new Cli.DecisionLedgerStore(repo.Artifacts),
+            new Cli.TransitionJournalStore(repo.Artifacts));
         Cli.InvariantValidationResult invariant = Cli.InvariantValidationResult.Invalid(
             Cli.RoadmapState.EvidenceBlocked,
             "Validator failed without evidence.",
@@ -616,7 +621,7 @@ public sealed class RoadmapFailurePersistenceTests
             "Restore validator diagnostics before continuing.");
 
         Cli.RoadmapStepException exception = await Assert.ThrowsAsync<Cli.RoadmapStepException>(() =>
-            machine.PersistInvariantFailureAndThrowAsync(
+            persistence.PersistInvariantFailureAndThrowAsync(
                 invariant,
                 Cli.RoadmapState.ExecutionPromptReady,
                 Cli.RoadmapState.ExecutionLoop,
