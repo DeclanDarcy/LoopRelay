@@ -53,6 +53,55 @@ public sealed class RoadmapStateMachinePromotionTests
     }
 
     [Fact]
+    public async Task CreateNewEpic_prompt_completion_is_not_artifact_completion()
+    {
+        using var repo = SeedRepo();
+        string blocked = CreateBlocked();
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(NewEpicSelection()),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("CreateNewEpic")),
+            ScriptedAgentRuntime.Completed(blocked));
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ActiveEpic));
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Paused, state.LastTransition.Status);
+        Assert.Equal("Artifact Promotion Blocked", state.LastTransition.Decision);
+        Assert.Equal(evidencePath, state.LastTransition.Output);
+
+        Cli.TransitionJournalRecord[] journal = ReadJournal(repo);
+        int promptCompletedIndex = Array.FindIndex(journal, record =>
+            record.Event == "PromptCompleted" &&
+            record.Prompt == "CreateNewEpic");
+        int promotionBlockedIndex = Array.FindIndex(journal, record =>
+            record.Event == "ArtifactPromotionBlocked" &&
+            record.Prompt == "CreateNewEpic");
+
+        Assert.NotEqual(-1, promptCompletedIndex);
+        Assert.True(promotionBlockedIndex > promptCompletedIndex);
+        Assert.DoesNotContain(journal, record =>
+            record.Event == "TransitionCompleted" &&
+            record.Prompt == "CreateNewEpic");
+
+        Cli.TransitionJournalRecord promptCompleted = journal[promptCompletedIndex];
+        Cli.TransitionJournalRecord promotionBlocked = journal[promotionBlockedIndex];
+        Assert.Equal(promptCompleted.CorrelationId, promotionBlocked.CorrelationId);
+        Assert.Equal(Cli.RoadmapState.NewEpicProposed, promptCompleted.PreviousState);
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, promptCompleted.AttemptedState);
+        Assert.Equal("PromptCompleted", promptCompleted.Result);
+        Assert.Equal("Output produced", promptCompleted.ParserDecision);
+        Assert.Equal([Cli.RoadmapArtifactPaths.ActiveEpic], promptCompleted.OutputPaths);
+        Assert.Equal("ArtifactPromotionService", promotionBlocked.PromptContractKey);
+        Assert.Equal([evidencePath], promotionBlocked.OutputPaths);
+        Assert.Equal(blocked, repo.Read(evidencePath));
+    }
+
+    [Fact]
     public async Task Realign_blocked_output_preserves_existing_active_epic()
     {
         using var repo = SeedRepo();
