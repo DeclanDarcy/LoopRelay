@@ -481,6 +481,7 @@ internal static class StateMachineFactory
         var split = new Cli.SplitFamilyStore(repo.Artifacts);
         var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new Cli.RoadmapPromptRunner(runtime, repo.Repository, effectiveConsole);
+        var projectionCache = new Cli.ProjectionCache(repo.Artifacts, projections, manifest, new Cli.ProjectionValidator(), runner);
         var contextBuilder = new Cli.RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation);
         var inputResolver = new Cli.TransitionInputResolver(repo.Artifacts, executionPreparation);
         var promptTransitionRunner = new Cli.RoadmapPromptTransitionRunner(
@@ -488,6 +489,15 @@ internal static class StateMachineFactory
             runner,
             journal,
             transitionPersistence);
+        var hitlArtifactCapture = new Cli.HitlArtifactCapture(hitlRequestCapture);
+        var bootstrapRoadmapCompletionContextTransition = new Cli.BootstrapRoadmapCompletionContextTransition(
+            repo.Artifacts,
+            contracts,
+            projectionCache,
+            promptTransitionRunner,
+            hitlArtifactCapture,
+            lifecycle,
+            effectiveConsole);
         var selectionProvenance = new Cli.SelectionProvenanceService(
             repo.Artifacts,
             new Cli.SelectionProvenanceManifestStore(repo.Artifacts),
@@ -498,7 +508,6 @@ internal static class StateMachineFactory
             stateStore,
             selectionProvenance);
         var selectionSuperseder = new Cli.SelectionSuperseder(selectionProvenance, lifecycle);
-        var hitlArtifactCapture = new Cli.HitlArtifactCapture(hitlRequestCapture);
         var activeEpicPromotionCoordinator = new Cli.ActiveEpicPromotionCoordinator(
             new Cli.ArtifactPromotionService(repo.Artifacts, lifecycle),
             hitlArtifactCapture,
@@ -511,7 +520,7 @@ internal static class StateMachineFactory
             repo.Artifacts,
             loader,
             contracts,
-            new Cli.ProjectionCache(repo.Artifacts, projections, manifest, new Cli.ProjectionValidator(), runner),
+            projectionCache,
             contextBuilder,
             inputResolver,
             new CompletionCertificationPolicy(),
@@ -520,6 +529,7 @@ internal static class StateMachineFactory
             stateStore,
             transitionPersistence,
             promptTransitionRunner,
+            bootstrapRoadmapCompletionContextTransition,
             activeSelectionReader,
             new Cli.RoadmapStartupPlanner(),
             resumePlanner,

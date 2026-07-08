@@ -110,16 +110,24 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             stateStore,
             decisionLedger,
             journal);
+        var lifecycle = new ArtifactLifecycleStore(artifacts);
         var promptTransitionRunner = new RoadmapPromptTransitionRunner(
             inputResolver,
             promptRunner,
             journal,
             transitionPersistence);
+        var bootstrapRoadmapCompletionContextTransition = new BootstrapRoadmapCompletionContextTransition(
+            artifacts,
+            contractRegistry,
+            projectionCache,
+            promptTransitionRunner,
+            hitlArtifactCapture,
+            lifecycle,
+            console);
         var activeSelectionReader = new ActiveSelectionReader(
             artifacts,
             stateStore,
             selectionProvenance);
-        var lifecycle = new ArtifactLifecycleStore(artifacts);
         var selectionSuperseder = new SelectionSuperseder(selectionProvenance, lifecycle);
         var startupPlanner = new RoadmapStartupPlanner();
         var projectContextLoader = new ProjectContextLoader(artifacts);
@@ -170,6 +178,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             stateStore,
             transitionPersistence,
             promptTransitionRunner,
+            bootstrapRoadmapCompletionContextTransition,
             activeSelectionReader,
             startupPlanner,
             resumePlanner,

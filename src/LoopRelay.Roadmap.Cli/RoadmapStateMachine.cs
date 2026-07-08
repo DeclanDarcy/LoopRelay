@@ -17,6 +17,7 @@ internal sealed class RoadmapStateMachine(
     RoadmapStateStore stateStore,
     RoadmapTransitionPersistence transitionPersistence,
     RoadmapPromptTransitionRunner promptTransitionRunner,
+    BootstrapRoadmapCompletionContextTransition bootstrapRoadmapCompletionContextTransition,
     ActiveSelectionReader activeSelectionReader,
     RoadmapStartupPlanner startupPlanner,
     RoadmapResumePlanner resumePlanner,
@@ -476,7 +477,7 @@ internal sealed class RoadmapStateMachine(
     {
         if (await artifacts.GetStatusAsync(RoadmapArtifactPaths.RoadmapCompletionContext) != ArtifactStatus.Present)
         {
-            await BootstrapRoadmapCompletionContextAsync(projectContext, cancellationToken);
+            await bootstrapRoadmapCompletionContextTransition.ExecuteAsync(projectContext, cancellationToken);
         }
 
         return await RunSelectionAndFollowingAsync(projectContext, cancellationToken);
@@ -542,28 +543,6 @@ internal sealed class RoadmapStateMachine(
 
         await GenerateMilestoneSpecsAsync(projectContext, cancellationToken);
         return RoadmapOutcome.Paused;
-    }
-
-    private async Task BootstrapRoadmapCompletionContextAsync(ProjectContext projectContext, CancellationToken cancellationToken)
-    {
-        const string runtimePrompt = "CreateRoadmapCompletionContext";
-        console.Phase("Bootstrap roadmap completion context");
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        string context = "# Roadmap Completion Bootstrap\n\n## Projection Content\n\n" + projection.Content;
-        string completedEpicEvidence = await new CompletedEpicEvidenceLoader(artifacts).RenderAsync();
-        string output = await promptTransitionRunner.RunNormalAsync(
-            RoadmapState.CoreReady,
-            RoadmapState.RoadmapCompletionContextReady,
-            runtimePrompt,
-            projection.Definition.ProjectionPath,
-            context,
-            completedEpicEvidence,
-            [RoadmapArtifactPaths.RoadmapCompletionContext],
-            cancellationToken);
-        await artifacts.WriteAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
-        await hitlArtifactCapture.CaptureAsync(RoadmapArtifactPaths.RoadmapCompletionContext, output);
-        await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.RoadmapCompletionContext, ArtifactLifecycleState.Ready);
     }
 
     private async Task<SelectionDecision> SelectNextInitiativeAsync(ProjectContext projectContext, CancellationToken cancellationToken)

@@ -2,7 +2,7 @@
 
 ## Work Items
 
-- [ ] Move the smallest single-purpose flows first.
+- [x] Move the smallest single-purpose flows first.
 
 ## Bootstrap Roadmap Completion Context
 
@@ -14,38 +14,38 @@ Task ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationT
 
 ### Boundary
 
-- [ ] Keep entry inside `RunFromCoreReadyAsync` after the caller verifies
+- [x] Keep entry inside `RunFromCoreReadyAsync` after the caller verifies
   `.agents/core/roadmap-completion-context.md` is not `Present`.
-- [ ] Handler starts after the caller observes missing or empty completion
+- [x] Handler starts after the caller observes missing or empty completion
   context.
-- [ ] Handler ends after context artifact write, HITL capture, and lifecycle
+- [x] Handler ends after context artifact write, HITL capture, and lifecycle
   `Ready`.
 
 ### Prompt And Projection
 
-- [ ] Phase `Bootstrap roadmap completion context`.
-- [ ] Runtime prompt `CreateRoadmapCompletionContext`.
-- [ ] Projection prompt `ProjectionForCreateRoadmapCompletionContext`.
-- [ ] State `CoreReady -> RoadmapCompletionContextReady`.
-- [ ] Projection path `.agents/projections/roadmap-completion.md`.
-- [ ] Output `.agents/core/roadmap-completion-context.md`.
-- [ ] Context starts with `# Roadmap Completion Bootstrap`, then projection
+- [x] Phase `Bootstrap roadmap completion context`.
+- [x] Runtime prompt `CreateRoadmapCompletionContext`.
+- [x] Projection prompt `ProjectionForCreateRoadmapCompletionContext`.
+- [x] State `CoreReady -> RoadmapCompletionContextReady`.
+- [x] Projection path `.agents/projections/roadmap-completion.md`.
+- [x] Output `.agents/core/roadmap-completion-context.md`.
+- [x] Context starts with `# Roadmap Completion Bootstrap`, then projection
   content.
-- [ ] Secondary input is rendered completed epic archive evidence.
-- [ ] Optional inputs are `.agents/archive/epics/*.md`.
-- [ ] Envelope is the normal prompt transition.
+- [x] Secondary input is rendered completed epic archive evidence.
+- [x] Optional inputs are `.agents/archive/epics/*.md`.
+- [x] Envelope is the normal prompt transition.
 
 ### Completed-Epic Archive Rendering
 
-- [ ] List `.agents/archive/epics/*.md` in ordinal path order.
-- [ ] Skip files that disappear before read.
-- [ ] Extract first `# ` title.
-- [ ] Extract `Epic ID` from field table.
-- [ ] Extract known evidence sections.
-- [ ] Fall back to normalized full content.
-- [ ] Assign evidence quality.
-- [ ] Apply per-epic and total truncation budgets.
-- [ ] Render the fixed no-archive message when no completed epic markdown files
+- [x] List `.agents/archive/epics/*.md` in ordinal path order.
+- [x] Skip files that disappear before read.
+- [x] Extract first `# ` title.
+- [x] Extract `Epic ID` from field table.
+- [x] Extract known evidence sections.
+- [x] Fall back to normalized full content.
+- [x] Assign evidence quality.
+- [x] Apply per-epic and total truncation budgets.
+- [x] Render the fixed no-archive message when no completed epic markdown files
   exist.
 
 ### Success Order
@@ -61,20 +61,20 @@ Task ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationT
 
 ### Preserve
 
-- [ ] `TransitionStarted`, `TransitionCompleted`, and `TransitionFailed`.
-- [ ] Started decision `Pending`.
-- [ ] Completed decision `Completed`.
-- [ ] Runtime failure persists `EvidenceBlocked` / `Failed` with output
+- [x] `TransitionStarted`, `TransitionCompleted`, and `TransitionFailed`.
+- [x] Started decision `Pending`.
+- [x] Completed decision `Completed`.
+- [x] Runtime failure persists `EvidenceBlocked` / `Failed` with output
   `.agents/core/roadmap-completion-context.md` and intent
   `ResolveTransitionFailure`.
-- [ ] Projection failures occur before transition-start state.
+- [x] Projection failures occur before transition-start state.
 
 ### Input Snapshot
 
-- [ ] Required projection.
-- [ ] Optional completed epic archives.
-- [ ] Prompt context hash.
-- [ ] Secondary hash of rendered archive evidence.
+- [x] Required projection.
+- [x] Optional completed epic archives.
+- [x] Prompt context hash.
+- [x] Secondary hash of rendered archive evidence.
 
 ## Select Next Epic
 
