@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LoopRelay.Roadmap.Cli;
 using RoadmapStateStore = LoopRelay.Roadmap.Cli.RoadmapStateStore;
 
@@ -181,10 +182,35 @@ public sealed class RoadmapStateMachineSplitTests
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
         Assert.Equal(6, runtime.OneShotCalls);
         Assert.Equal(childOne, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
+        Assert.NotEqual(splitOutput, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
         Assert.Equal(childOne, repo.Read(".agents/epic-1.md"));
         Assert.Equal(childTwo, repo.Read(".agents/epic-2.md"));
-        Assert.Contains("ArtifactPromotionService", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
-        Assert.Contains("ArtifactPromoted", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
+
+        Cli.TransitionJournalRecord[] journal = ReadJournal(repo);
+        Cli.TransitionJournalRecord splitCompleted = Assert.Single(journal, record =>
+            record.Event == "TransitionCompleted" &&
+            record.Prompt == "SplitEpic");
+        Cli.TransitionJournalRecord artifactPromoted = Assert.Single(journal, record =>
+            record.Event == "ArtifactPromoted" &&
+            record.Prompt == "SplitEpic");
+        Assert.Equal(splitCompleted.CorrelationId, artifactPromoted.CorrelationId);
+        Assert.Equal(splitCompleted.DurationMilliseconds, artifactPromoted.DurationMilliseconds);
+        Assert.Equal(splitCompleted.InputArtifactHashes.OrderBy(pair => pair.Key), artifactPromoted.InputArtifactHashes.OrderBy(pair => pair.Key));
+        Assert.NotNull(splitCompleted.InputSnapshot);
+        Assert.NotNull(artifactPromoted.InputSnapshot);
+        Assert.Equal(splitCompleted.InputSnapshot.SnapshotHash, artifactPromoted.InputSnapshot.SnapshotHash);
+        Assert.Equal(splitCompleted.InputSnapshot.RuntimePromptName, artifactPromoted.InputSnapshot.RuntimePromptName);
+        Assert.Equal(splitCompleted.InputSnapshot.Projection, artifactPromoted.InputSnapshot.Projection);
+        Assert.Equal(splitCompleted.InputSnapshot.PromptContextHash, artifactPromoted.InputSnapshot.PromptContextHash);
+        Assert.Equal(splitCompleted.InputSnapshot.SecondaryInputHash, artifactPromoted.InputSnapshot.SecondaryInputHash);
+        Assert.Equal(splitCompleted.InputSnapshot.ArtifactInputs, artifactPromoted.InputSnapshot.ArtifactInputs);
+        Assert.Equal(Cli.RoadmapState.SplitEpicProposed, splitCompleted.PreviousState);
+        Assert.Equal(Cli.RoadmapState.SplitChildSelection, splitCompleted.AttemptedState);
+        Assert.Equal(Cli.RoadmapState.SplitChildSelection, artifactPromoted.PreviousState);
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, artifactPromoted.AttemptedState);
+        Assert.Equal([Cli.RoadmapArtifactPaths.SplitFamiliesDirectory], splitCompleted.OutputPaths);
+        Assert.Equal([Cli.RoadmapArtifactPaths.ActiveEpic], artifactPromoted.OutputPaths);
+        Assert.Equal("ArtifactPromotionService", artifactPromoted.PromptContractKey);
 
         string familyPath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json"));
         string family = repo.Read(familyPath);
@@ -227,6 +253,12 @@ public sealed class RoadmapStateMachineSplitTests
         | Confidence | High |
         | Primary Reason | Exercise split-domain promotion boundaries. |
         """;
+
+    private static Cli.TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
+        repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
+            .ToArray();
 
     private static string MilestoneBundle() => """
         # FILE: .agents/specs/split-test.md
