@@ -16,7 +16,7 @@
   and before decision-ledger append.
 - [x] Add or confirm stale active selection is rejected before create, split,
   audit, or rewrite fallback prompts run.
-- [ ] Add or confirm `Insufficient Evidence` audit output persisting audit
+- [x] Add or confirm `Insufficient Evidence` audit output persisting audit
   evidence and audit decision before throwing, with no durable blocker branch
   state.
 - [ ] Add or confirm `CreateNewEpic` prompt failure using status `Failed`,

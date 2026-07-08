@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LoopRelay.Roadmap.Cli;
 using RoadmapStateStore = LoopRelay.Roadmap.Cli.RoadmapStateStore;
 
@@ -96,6 +97,63 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         Assert.Equal(Cli.TransitionStatus.Failed, state.LastTransition.Status);
     }
 
+    [Fact]
+    public async Task Insufficient_evidence_audit_persists_audit_evidence_and_decision_without_durable_blocker()
+    {
+        using var repo = SeedRepo();
+        string audit = InsufficientEvidenceAudit();
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(ExistingEpicSelection()),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EpicPreparationAudit")),
+            ScriptedAgentRuntime.Completed(audit));
+        var console = new TestConsole();
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime, console).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Assert.Equal(4, runtime.OneShotCalls);
+
+        string auditPath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.AuditEvidenceDirectory, "epic-preparation-audit.*.md"));
+        Assert.Equal(audit, repo.Read(auditPath));
+
+        Cli.DecisionLedgerPersistenceDocument ledger = JsonSerializer.Deserialize<Cli.DecisionLedgerPersistenceDocument>(
+            repo.Read(Cli.RoadmapArtifactPaths.DecisionLedgerJson),
+            Cli.RoadmapJson.Options)!;
+        Cli.DecisionLedgerEntry auditDecision = Assert.Single(
+            ledger.ToDomain(),
+            entry => entry.State == Cli.RoadmapState.EpicPreparationAudit);
+        Assert.Equal("EpicPreparationAudit", auditDecision.Transition);
+        Assert.Equal(Cli.RoadmapArtifactPaths.ProjectionPaths["EpicPreparationAudit"], auditDecision.ProjectionPath);
+        Assert.Equal([auditPath], auditDecision.OutputArtifactPaths);
+        Assert.Equal("Insufficient Evidence", auditDecision.Decision);
+        Assert.Equal("High", auditDecision.Confidence);
+        Assert.Equal("Gather More Evidence", auditDecision.RationaleExcerpt);
+
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.EpicPreparationAudit, state.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Completed, state.LastTransition.Status);
+        Assert.Equal(Cli.RoadmapState.ExistingEpicSelected, state.LastTransition.From);
+        Assert.Equal(Cli.RoadmapState.EpicPreparationAudit, state.LastTransition.To);
+        Assert.Equal("EpicPreparationAudit", state.LastTransition.Prompt);
+        Assert.Equal(Cli.RoadmapArtifactPaths.AuditEvidenceDirectory, state.LastTransition.Output);
+        Assert.Equal("Completed", state.LastTransition.Decision);
+        Assert.Empty(state.Blockers);
+        Assert.Equal("None", state.TransitionIntent.Intent);
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "*.md"));
+
+        Assert.Contains(console.Errors, error => error.Contains("Epic preparation audit requires more evidence.", StringComparison.Ordinal));
+        Assert.Contains(console.Warnings, warning =>
+            warning.Contains("Roadmap state machine blocked: Epic preparation audit requires more evidence.", StringComparison.Ordinal) &&
+            warning.Contains("Persisted roadmap state remains EpicPreparationAudit.", StringComparison.Ordinal));
+
+        Cli.TransitionJournalRecord[] auditRecords = ReadJournal(repo)
+            .Where(record => record.Prompt == "EpicPreparationAudit")
+            .ToArray();
+        Assert.Contains(auditRecords, record => record.Event == "TransitionCompleted");
+        Assert.DoesNotContain(auditRecords, record => record.Event == "TransitionFailed");
+    }
+
     private static TempRepo SeedRepo()
     {
         var repo = new TempRepo();
@@ -116,6 +174,12 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
     }
+
+    private static Cli.TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
+        repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
+            .ToArray();
 
     private static string ExistingEpicSelection() => """
         # Next Strategic Initiative Selection
@@ -162,6 +226,29 @@ public sealed class RoadmapStateMachineEpicPreparationTests
         | Primary Reason | Repository evidence shows the capability is already satisfied. |
         | Evidence Strength | Strong |
         | Recommended Next Step | Retire Epic |
+        """;
+
+    private static string InsufficientEvidenceAudit() => """
+        # Epic Preparation Audit
+
+        ## Selected Epic
+
+        | Field | Value |
+        |---|---|
+        | Epic ID | EPIC-001 |
+        | Epic Name | Epic A |
+        | Claimed Strategic Purpose | Old capability |
+        | Apparent Projection Link | Capability A |
+
+        ## Audit Disposition
+
+        | Field | Value |
+        |---|---|
+        | Disposition | Insufficient Evidence |
+        | Confidence | High |
+        | Primary Reason | Repository evidence is not enough to safely realign, reimagine, or retire the epic. |
+        | Evidence Strength | Weak |
+        | Recommended Next Step | Gather More Evidence |
         """;
 
     private static string StrategicInvestigationSelection() => """
