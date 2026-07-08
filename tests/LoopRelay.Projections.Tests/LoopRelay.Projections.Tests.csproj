@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\TestSupport\MemoryArtifactStore.cs" Link="TestSupport\MemoryArtifactStore.cs" />
+    <Compile Include="..\TestSupport\Services\MemoryArtifactStore.cs" Link="Services\TestSupport\MemoryArtifactStore.cs" />
   </ItemGroup>
 
 </Project>
