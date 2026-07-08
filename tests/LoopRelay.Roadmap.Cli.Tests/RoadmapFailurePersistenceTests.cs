@@ -145,6 +145,99 @@ public sealed class RoadmapFailurePersistenceTests
     }
 
     [Fact]
+    public async Task Milestone_post_prompt_bundle_write_failure_persists_blocker_without_rolling_back_written_specs()
+    {
+        using var repo = SeedRepo(includeCompletionContext: true);
+        const string retainedSpecPath = ".agents/specs/retained-before-failure.md";
+        const string collidingSpecPath = ".agents/specs/write-collision.md";
+        Directory.CreateDirectory(Path.Combine(
+            repo.Root,
+            collidingSpecPath.Replace('/', Path.DirectorySeparatorChar)));
+        string milestoneBundle = $$"""
+            # FILE: {{retainedSpecPath}}
+            # Retained Before Failure
+
+            | Field | Value |
+            |---|---|
+            | Epic Path | .agents/epic.md |
+
+            ## Acceptance Criteria
+
+            - [ ] This spec should remain materialized after the later write fails.
+
+            # FILE: {{collidingSpecPath}}
+            # Write Collision
+
+            | Field | Value |
+            |---|---|
+            | Epic Path | .agents/epic.md |
+
+            ## Acceptance Criteria
+
+            - [ ] This spec collides with an existing directory.
+            """;
+        var runtime = new ScriptedAgentRuntime(BuildMilestoneInvariantTurns(milestoneBundle).ToArray());
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        string evidencePath = Assert.Single(state.TransitionIntent.EvidencePaths);
+        Assert.Equal($"{Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory}/milestone-spec-generation-failed.0001.md", evidencePath);
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.NotEqual(Cli.RoadmapState.MilestoneSpecsReady, state.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Paused, state.LastTransition.Status);
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, state.LastTransition.From);
+        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, state.LastTransition.To);
+        Assert.Equal("GenerateMilestoneDeepDivesForEpic", state.LastTransition.Prompt);
+        Assert.Equal(Cli.RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], state.LastTransition.Projection);
+        Assert.Equal(evidencePath, state.LastTransition.Output);
+        Assert.Equal("Milestone Spec Generation Failed", state.LastTransition.Decision);
+        Assert.Equal("ResolveMilestoneSpecGenerationFailure", state.TransitionIntent.Intent);
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.TransitionIntent.DispatchState);
+
+        Assert.Equal(Cli.ArtifactStatus.Present, await repo.Artifacts.GetStatusAsync(retainedSpecPath));
+        Assert.Contains("# Retained Before Failure", repo.Read(retainedSpecPath), StringComparison.Ordinal);
+        Assert.True(Directory.Exists(Path.Combine(
+            repo.Root,
+            collidingSpecPath.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.Equal(Cli.ArtifactStatus.Missing, await repo.Artifacts.GetStatusAsync($"{Cli.RoadmapArtifactPaths.SpecsDirectory}/bundle-manifest.md"));
+        Assert.Equal(Cli.ArtifactStatus.Missing, await repo.Artifacts.GetStatusAsync(Cli.RoadmapArtifactPaths.ExecutionPreparationManifest));
+        Assert.DoesNotContain(
+            await new Cli.ArtifactLifecycleStore(repo.Artifacts).LoadAsync(),
+            entry => entry.Path == retainedSpecPath);
+
+        string evidence = repo.Read(evidencePath);
+        Assert.Contains("Milestone Spec Generation Failed", evidence, StringComparison.Ordinal);
+        Assert.Contains("Retained Before Failure", evidence, StringComparison.Ordinal);
+        Assert.Contains(collidingSpecPath, evidence, StringComparison.Ordinal);
+
+        Cli.TransitionJournalRecord[] journal = ReadJournal(repo);
+        int promptCompletedIndex = Array.FindIndex(journal, record =>
+            record.Event == "PromptCompleted" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+        int failedIndex = Array.FindIndex(journal, record =>
+            record.Event == "MilestoneSpecGenerationFailed" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+        Assert.NotEqual(-1, promptCompletedIndex);
+        Assert.True(failedIndex > promptCompletedIndex);
+
+        Cli.TransitionJournalRecord promptCompleted = journal[promptCompletedIndex];
+        Cli.TransitionJournalRecord failed = journal[failedIndex];
+        Assert.Equal(promptCompleted.CorrelationId, failed.CorrelationId);
+        Assert.Equal("MilestoneSpecPostProcessing", failed.PromptContractKey);
+        Assert.Equal([evidencePath], failed.OutputPaths);
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, failed.PreviousState);
+        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, failed.AttemptedState);
+        Assert.DoesNotContain(journal, record =>
+            record.Event == "MilestoneSpecsMaterialized" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+        Assert.DoesNotContain(journal, record =>
+            record.Event == "TransitionCompleted" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+    }
+
+    [Fact]
     public async Task Invariant_failure_preserves_validator_evidence_state_and_journal()
     {
         using var repo = SeedRepo(includeCompletionContext: true);

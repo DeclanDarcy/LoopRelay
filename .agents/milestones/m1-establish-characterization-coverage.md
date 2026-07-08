@@ -30,7 +30,7 @@
   original prompt correlation id, timing, and input snapshot.
 - [x] Add or confirm milestone success uses `PromptCompleted` plus
   `MilestoneSpecsMaterialized`, not `TransitionCompleted`.
-- [ ] Add or confirm milestone post-prompt bundle failure writing
+- [x] Add or confirm milestone post-prompt bundle failure writing
   `milestone-spec-generation-failed.NNNN.md` and not rolling back already
   written artifacts.
 - [ ] Add or confirm completion evaluation parse failure after evaluation
