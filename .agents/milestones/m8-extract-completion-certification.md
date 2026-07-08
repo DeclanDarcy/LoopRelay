@@ -14,67 +14,67 @@ Task<RoadmapOutcome> ExecuteAsync(
 
 ## Completion Handler Boundary
 
-- [ ] Handler returns `RoadmapOutcome`.
-- [ ] Startup/resume selection of the call remains outside.
+- [x] Handler returns `RoadmapOutcome`.
+- [x] Startup/resume selection of the call remains outside.
 
 ## Call Paths
 
-- [ ] Preserve normal execution completion, where the completion claim state is
+- [x] Preserve normal execution completion, where the completion claim state is
   persisted before evaluation.
-- [ ] Preserve resume from persisted `EpicCompletionDetected`, where
+- [x] Preserve resume from persisted `EpicCompletionDetected`, where
   `persistCompletionClaim` is false and the evidence path was recovered before
   entry.
-- [ ] Resume planner sees persisted `EpicCompletionDetected`.
-- [ ] Caller recovers execution evidence from transition intent evidence paths
+- [x] Resume planner sees persisted `EpicCompletionDetected`.
+- [x] Caller recovers execution evidence from transition intent evidence paths
   and output paths, filtering to `.agents/evidence/execution`.
-- [ ] First present candidate is used.
-- [ ] If no execution evidence exists, throw
+- [x] First present candidate is used.
+- [x] If no execution evidence exists, throw
   `RoadmapStepException("Cannot resume completion certification because execution evidence is missing.")`.
-- [ ] Live resume calls completion certification with
+- [x] Live resume calls completion certification with
   `persistCompletionClaim: false`.
 
 ## Evaluation Prompt And Projection
 
-- [ ] Runtime prompt `EvaluateEpicCompletionAndDrift`.
-- [ ] Phase `Evaluate epic completion and drift`.
-- [ ] Projection prompt `ProjectionForEvaluateEpicCompletionAndDrift`.
-- [ ] Projection path `.agents/projections/epic-completion-evaluation.md`.
-- [ ] State `EpicCompletionDetected -> CompletionEvaluationAndContextUpdate`.
-- [ ] Output during prompt envelope `.agents/evidence/evaluations`.
-- [ ] Numbered evidence stem `epic-completion-and-drift`.
-- [ ] Secondary input is empty string.
-- [ ] Envelope is the normal prompt transition.
+- [x] Runtime prompt `EvaluateEpicCompletionAndDrift`.
+- [x] Phase `Evaluate epic completion and drift`.
+- [x] Projection prompt `ProjectionForEvaluateEpicCompletionAndDrift`.
+- [x] Projection path `.agents/projections/epic-completion-evaluation.md`.
+- [x] State `EpicCompletionDetected -> CompletionEvaluationAndContextUpdate`.
+- [x] Output during prompt envelope `.agents/evidence/evaluations`.
+- [x] Numbered evidence stem `epic-completion-and-drift`.
+- [x] Secondary input is empty string.
+- [x] Envelope is the normal prompt transition.
 
 ## Optional Non-Implementation Review Gate
 
-- [ ] Runs before evaluation phase and projection ensure.
-- [ ] If blocked, write
+- [x] Runs before evaluation phase and projection ensure.
+- [x] If blocked, write
   `.agents/evidence/blockers/non-implementation-completion-review-blocked.NNNN.md`.
-- [ ] Output list is review evidence paths plus blocker path.
-- [ ] Save `EvidenceBlocked` / `Paused`.
-- [ ] From `EpicCompletionDetected` to `EvidenceBlocked`.
-- [ ] Prompt `NonImplementationCompletionReview`.
-- [ ] Projection `None`.
-- [ ] Decision `Pending non-implementation HITL review`.
-- [ ] Intent `ResolveNonImplementationCompletionReview`.
-- [ ] Next transition text points at the non-implementation decisions file.
-- [ ] Return `RoadmapOutcome.Paused`.
+- [x] Output list is review evidence paths plus blocker path.
+- [x] Save `EvidenceBlocked` / `Paused`.
+- [x] From `EpicCompletionDetected` to `EvidenceBlocked`.
+- [x] Prompt `NonImplementationCompletionReview`.
+- [x] Projection `None`.
+- [x] Decision `Pending non-implementation HITL review`.
+- [x] Intent `ResolveNonImplementationCompletionReview`.
+- [x] Next transition text points at the non-implementation decisions file.
+- [x] Return `RoadmapOutcome.Paused`.
 
 ## Completion Evaluation Context Inputs
 
-- [ ] Projection content.
-- [ ] `.agents/epic.md`.
-- [ ] Execution evidence path.
-- [ ] Fresh milestone spec paths from execution-preparation provenance.
-- [ ] Repository inspection instructions.
-- [ ] Optional non-implementation review evidence sections when present.
+- [x] Projection content.
+- [x] `.agents/epic.md`.
+- [x] Execution evidence path.
+- [x] Fresh milestone spec paths from execution-preparation provenance.
+- [x] Repository inspection instructions.
+- [x] Optional non-implementation review evidence sections when present.
 
 ## Required Transition Input Roles
 
-- [ ] Projection.
-- [ ] Active epic.
-- [ ] Execution evidence.
-- [ ] Fresh milestone specs.
+- [x] Projection.
+- [x] Active epic.
+- [x] Execution evidence.
+- [x] Fresh milestone specs.
 
 ## Evaluation Success Order
 
@@ -96,68 +96,68 @@ Task<RoadmapOutcome> ExecuteAsync(
 
 ## Parser And Policy Behavior
 
-- [ ] Parser reads `## Evaluation Summary`.
-- [ ] Parser requires `Overall Completion Status`,
+- [x] Parser reads `## Evaluation Summary`.
+- [x] Parser requires `Overall Completion Status`,
   `Overall Drift Classification`, and `Closure Recommendation`.
-- [ ] Parse failure happens after evaluation evidence and HITL capture and is
+- [x] Parse failure happens after evaluation evidence and HITL capture and is
   not converted into invalid-certification blocker state.
-- [ ] Policy failure after a successful parse is converted into durable invalid
+- [x] Policy failure after a successful parse is converted into durable invalid
   certification blocker state.
 
 ## Evaluation Decision Ledger Entry
 
-- [ ] State `CompletionEvaluationAndContextUpdate`.
-- [ ] Transition `EvaluateEpicCompletionAndDrift`.
-- [ ] Projection `.agents/projections/epic-completion-evaluation.md`.
-- [ ] Output: evaluation evidence path.
-- [ ] Decision: parsed closure recommendation.
-- [ ] Confidence `Unclear`.
-- [ ] Rationale: parsed overall completion status.
+- [x] State `CompletionEvaluationAndContextUpdate`.
+- [x] Transition `EvaluateEpicCompletionAndDrift`.
+- [x] Projection `.agents/projections/epic-completion-evaluation.md`.
+- [x] Output: evaluation evidence path.
+- [x] Decision: parsed closure recommendation.
+- [x] Confidence `Unclear`.
+- [x] Rationale: parsed overall completion status.
 
 ## Invalid Certification
 
-- [ ] Blocker evidence stem `invalid-completion-certification`.
-- [ ] Required next step:
+- [x] Blocker evidence stem `invalid-completion-certification`.
+- [x] Required next step:
   `Review {evaluationPath}, preserve the certification evidence, correct the certification decision, and rerun the roadmap CLI.`
-- [ ] Input snapshot prompt `CompletionCertificationRouting`.
-- [ ] Event `CompletionCertificationRejected`.
-- [ ] Prompt contract key `CompletionCertificationPolicy`.
-- [ ] Outputs: evaluation path and blocker path.
-- [ ] State `EvidenceBlocked` / `Paused`.
-- [ ] From/to `CompletionEvaluationAndContextUpdate -> EvidenceBlocked`.
-- [ ] Prompt `CompletionCertificationRouting`.
-- [ ] Decision `Invalid Completion Certification`.
-- [ ] Intent `ResolveInvalidCompletionCertification`.
-- [ ] Next transition `Resolve invalid completion certification and rerun`.
-- [ ] Return `RoadmapOutcome.Paused`.
+- [x] Input snapshot prompt `CompletionCertificationRouting`.
+- [x] Event `CompletionCertificationRejected`.
+- [x] Prompt contract key `CompletionCertificationPolicy`.
+- [x] Outputs: evaluation path and blocker path.
+- [x] State `EvidenceBlocked` / `Paused`.
+- [x] From/to `CompletionEvaluationAndContextUpdate -> EvidenceBlocked`.
+- [x] Prompt `CompletionCertificationRouting`.
+- [x] Decision `Invalid Completion Certification`.
+- [x] Intent `ResolveInvalidCompletionCertification`.
+- [x] Next transition `Resolve invalid completion certification and rerun`.
+- [x] Return `RoadmapOutcome.Paused`.
 
 ## Valid Route Mapping
 
-- [ ] `Close Epic` and `Close With Follow-Up`: target
+- [x] `Close Epic` and `Close With Follow-Up`: target
   `SelectNextStrategicInitiative`, status `Completed`, CLI outcome
   `Completed`, active epic lifecycle `Completed`, next transition
   `SelectNextEpic`, and requires roadmap completion context update.
-- [ ] `Continue Epic`: target `ExecutionLoop`, status `Paused`, CLI outcome
+- [x] `Continue Epic`: target `ExecutionLoop`, status `Paused`, CLI outcome
   `Paused`, active epic lifecycle `Executing`, next transition
   `ContinueExecution`.
-- [ ] `Reopen Epic`: target `EpicPreparationAudit`, status `Paused`, CLI
+- [x] `Reopen Epic`: target `EpicPreparationAudit`, status `Paused`, CLI
   outcome `Paused`, active epic lifecycle `Ready`, next transition
   `EpicPreparationAudit`.
-- [ ] `Gather More Evidence`: target `EvidenceGathering`, status `Paused`, CLI
+- [x] `Gather More Evidence`: target `EvidenceGathering`, status `Paused`, CLI
   outcome `Paused`, active epic lifecycle `Ready`, next transitions
   `GatherAdditionalEvidence` and `EvaluateEpicCompletionAndDrift`.
 
 ## Final Route Persistence
 
-- [ ] Routing input snapshot uses prompt `CompletionCertificationRouting` and
+- [x] Routing input snapshot uses prompt `CompletionCertificationRouting` and
   the evaluation evidence path as required completion-evaluation input.
-- [ ] Append `TransitionCompleted` from
+- [x] Append `TransitionCompleted` from
   `CompletionEvaluationAndContextUpdate` to route target state.
-- [ ] Prompt `CompletionCertificationRouting`.
-- [ ] Prompt contract key `CompletionCertificationRouter`.
-- [ ] Save route target state, route transition status, route outputs, route
+- [x] Prompt `CompletionCertificationRouting`.
+- [x] Prompt contract key `CompletionCertificationRouter`.
+- [x] Save route target state, route transition status, route outputs, route
   decision, route transition intent, and route next transitions.
-- [ ] Final route persistence occurs after lifecycle and close-route update
+- [x] Final route persistence occurs after lifecycle and close-route update
   effects.
 
 ## RoadmapCompletionContextUpdateTransition
@@ -167,38 +167,38 @@ route.
 
 ### Helper Boundary
 
-- [ ] Called only by completion close routes.
+- [x] Called only by completion close routes.
 
 ### Prerequisite Close-Route Effects
 
-- [ ] Archive completed execution workspace first.
-- [ ] Synthesize completed epic.
-- [ ] Archive directory is `.agents/archive/epics/{index}`.
-- [ ] Synthesis path is `.agents/archive/epics/{index}.md`.
-- [ ] Archive index is existing archive directory count plus one.
-- [ ] Archive service reports phases `Archive completed execution workspace`
+- [x] Archive completed execution workspace first.
+- [x] Synthesize completed epic.
+- [x] Archive directory is `.agents/archive/epics/{index}`.
+- [x] Synthesis path is `.agents/archive/epics/{index}.md`.
+- [x] Archive index is existing archive directory count plus one.
+- [x] Archive service reports phases `Archive completed execution workspace`
   and `Synthesize completed epic`.
 
 ### Update Prompt
 
-- [ ] Phase `Update roadmap completion context`.
-- [ ] Runtime prompt `UpdateRoadmapCompletionContext`.
-- [ ] Projection prompt `ProjectionForUpdateRoadmapCompletionContext`.
-- [ ] Projection path `.agents/projections/roadmap-completion-update.md`.
-- [ ] From/to `CompletionEvaluationAndContextUpdate -> SelectNextStrategicInitiative`.
-- [ ] Output `.agents/core/roadmap-completion-context.md`.
-- [ ] Secondary input is completed-epic synthesis content.
-- [ ] Input context is completion evaluation evidence path.
-- [ ] Envelope is the normal prompt transition.
+- [x] Phase `Update roadmap completion context`.
+- [x] Runtime prompt `UpdateRoadmapCompletionContext`.
+- [x] Projection prompt `ProjectionForUpdateRoadmapCompletionContext`.
+- [x] Projection path `.agents/projections/roadmap-completion-update.md`.
+- [x] From/to `CompletionEvaluationAndContextUpdate -> SelectNextStrategicInitiative`.
+- [x] Output `.agents/core/roadmap-completion-context.md`.
+- [x] Secondary input is completed-epic synthesis content.
+- [x] Input context is completion evaluation evidence path.
+- [x] Envelope is the normal prompt transition.
 
 ### Update Context Inputs
 
-- [ ] Projection content.
-- [ ] Current `.agents/core/roadmap-completion-context.md`.
-- [ ] Completed-epic synthesis content and path.
-- [ ] Latest completion evaluation evidence.
-- [ ] Repository inspection instructions.
-- [ ] Optional non-implementation review evidence sections when present.
+- [x] Projection content.
+- [x] Current `.agents/core/roadmap-completion-context.md`.
+- [x] Completed-epic synthesis content and path.
+- [x] Latest completion evaluation evidence.
+- [x] Repository inspection instructions.
+- [x] Optional non-implementation review evidence sections when present.
 
 ### Update Success Order
 
@@ -213,47 +213,47 @@ route.
 
 ### Update Decision Ledger Entry
 
-- [ ] State `CompletionEvaluationAndContextUpdate`.
-- [ ] Transition/prompt `UpdateRoadmapCompletionContext`.
-- [ ] Projection `.agents/projections/roadmap-completion-update.md`.
-- [ ] Output `.agents/core/roadmap-completion-context.md`.
-- [ ] Decision `Roadmap Completion Context Updated`.
-- [ ] Confidence `Unclear`.
-- [ ] Rationale `Completion context updated after certification.`.
+- [x] State `CompletionEvaluationAndContextUpdate`.
+- [x] Transition/prompt `UpdateRoadmapCompletionContext`.
+- [x] Projection `.agents/projections/roadmap-completion-update.md`.
+- [x] Output `.agents/core/roadmap-completion-context.md`.
+- [x] Decision `Roadmap Completion Context Updated`.
+- [x] Confidence `Unclear`.
+- [x] Rationale `Completion context updated after certification.`.
 
 ### Close-Route Output List
 
-- [ ] Final close-route output list includes evaluation path,
+- [x] Final close-route output list includes evaluation path,
   `.agents/core/roadmap-completion-context.md`, and completed-epic synthesis
   path.
-- [ ] Final close-route output list does not include numbered
+- [x] Final close-route output list does not include numbered
   `roadmap-completion-update.NNNN.md` evidence.
 
 ## Active Epic Lifecycle
 
-- [ ] Update active epic lifecycle according to route.
+- [x] Update active epic lifecycle according to route.
 
 ## Failure Handling
 
-- [ ] Prompt runtime failure remains already persisted.
-- [ ] Archive and synthesis failures are not converted into
+- [x] Prompt runtime failure remains already persisted.
+- [x] Archive and synthesis failures are not converted into
   invalid-certification blockers.
 
 ## Input Snapshot
 
-- [ ] `EvaluateEpicCompletionAndDrift`: required projection, active epic,
+- [x] `EvaluateEpicCompletionAndDrift`: required projection, active epic,
   execution evidence path, and fresh milestone specs; secondary hash of empty
   string.
-- [ ] `UpdateRoadmapCompletionContext`: required projection, roadmap completion
+- [x] `UpdateRoadmapCompletionContext`: required projection, roadmap completion
   context, active epic, and completion evaluation evidence; secondary hash of
   completed-epic synthesis content.
-- [ ] `CompletionCertificationRouting`: completion evaluation evidence path is
+- [x] `CompletionCertificationRouting`: completion evaluation evidence path is
   the required input used to anchor route and invalid-certification journal
   records.
 
 ## Integration
 
-- [ ] Move `UpdateRoadmapCompletionContextAsync` into
+- [x] Move `UpdateRoadmapCompletionContextAsync` into
   `RoadmapCompletionContextUpdateTransition`.
-- [ ] Call `RoadmapCompletionContextUpdateTransition` only from the completion
+- [x] Call `RoadmapCompletionContextUpdateTransition` only from the completion
   handler.

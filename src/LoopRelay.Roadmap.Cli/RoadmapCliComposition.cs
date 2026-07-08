@@ -240,7 +240,17 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             transitionPersistence,
             hitlArtifactCapture,
             console);
-        var machine = new RoadmapStateMachine(
+        var roadmapCompletionContextUpdateTransition = new RoadmapCompletionContextUpdateTransition(
+            artifacts,
+            contractRegistry,
+            projectionCache,
+            contextBuilder,
+            promptTransitionRunner,
+            selectionSuperseder,
+            decisionRecorder,
+            hitlArtifactCapture,
+            console);
+        var completionCertificationTransition = new CompletionCertificationTransition(
             artifacts,
             projectContextLoader,
             contractRegistry,
@@ -250,26 +260,36 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             completionPolicy,
             completionRouter,
             completionArchive,
-            stateStore,
             transitionPersistence,
             promptTransitionRunner,
+            roadmapCompletionContextUpdateTransition,
+            decisionRecorder,
+            journal,
+            lifecycle,
+            hitlArtifactCapture,
+            console,
+            nonImplementationCompletionReview);
+        var machine = new RoadmapStateMachine(
+            artifacts,
+            projectContextLoader,
+            contractRegistry,
+            stateStore,
+            transitionPersistence,
             bootstrapRoadmapCompletionContextTransition,
             selectNextEpicTransition,
             createNewEpicTransition,
             epicPreparationAuditTransition,
             splitEpicTransition,
             generateMilestoneDeepDivesTransition,
+            completionCertificationTransition,
             activeSelectionReader,
             startupPlanner,
             resumePlanner,
             unblockPlanner,
-            selectionSuperseder,
             decisionRecorder,
             journal,
             lifecycle,
-            console,
-            hitlArtifactCapture,
-            nonImplementationCompletionReview);
+            console);
 
         return new RoadmapCliComposition(provider, console, executableResolver, machine);
     }

@@ -592,9 +592,17 @@ internal static class StateMachineFactory
             transitionPersistence,
             hitlArtifactCapture,
             effectiveConsole);
-        var resumePlanner = new Cli.RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new Cli.ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
-        var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
-        return new Cli.RoadmapStateMachine(
+        var roadmapCompletionContextUpdateTransition = new Cli.RoadmapCompletionContextUpdateTransition(
+            repo.Artifacts,
+            contracts,
+            projectionCache,
+            contextBuilder,
+            promptTransitionRunner,
+            selectionSuperseder,
+            decisionRecorder,
+            hitlArtifactCapture,
+            effectiveConsole);
+        var completionCertificationTransition = new Cli.CompletionCertificationTransition(
             repo.Artifacts,
             loader,
             contracts,
@@ -604,24 +612,36 @@ internal static class StateMachineFactory
             new CompletionCertificationPolicy(),
             new CompletionCertificationRouter(),
             completionArchive ?? new FakeCompletedEpicArchiveService(),
-            stateStore,
             transitionPersistence,
             promptTransitionRunner,
+            roadmapCompletionContextUpdateTransition,
+            decisionRecorder,
+            journal,
+            lifecycle,
+            hitlArtifactCapture,
+            effectiveConsole);
+        var resumePlanner = new Cli.RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new Cli.ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
+        var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
+        return new Cli.RoadmapStateMachine(
+            repo.Artifacts,
+            loader,
+            contracts,
+            stateStore,
+            transitionPersistence,
             bootstrapRoadmapCompletionContextTransition,
             selectNextEpicTransition,
             createNewEpicTransition,
             epicPreparationAuditTransition,
             splitEpicTransition,
             generateMilestoneDeepDivesTransition,
+            completionCertificationTransition,
             activeSelectionReader,
             new Cli.RoadmapStartupPlanner(),
             resumePlanner,
             unblockPlanner,
-            selectionSuperseder,
             decisionRecorder,
             journal,
             lifecycle,
-            effectiveConsole,
-            hitlArtifactCapture);
+            effectiveConsole);
     }
 }
