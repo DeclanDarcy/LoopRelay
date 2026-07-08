@@ -88,6 +88,39 @@ public sealed class RoadmapStateMachineSelectionTests
     }
 
     [Fact]
+    public async Task Stale_selection_projection_writes_projection_blocker_before_transition_start()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
+        string projectionPath = Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
+        repo.Write(projectionPath, ProjectionSamples.Valid("SelectNextEpic"));
+        await SeedStaleSelectionProjectionManifestAsync(repo);
+        var runtime = new ScriptedAgentRuntime();
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Assert.Equal(0, runtime.OneShotCalls);
+        string blockerPath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "projection-blocked.*.md"));
+        Assert.Contains("Projection refresh recommended", repo.Read(blockerPath), StringComparison.Ordinal);
+        Assert.Contains("SelectNextEpic", repo.Read(blockerPath), StringComparison.Ordinal);
+
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.CoreReady, state.CurrentState);
+        Assert.Equal("Preflight", state.LastTransition.Prompt);
+        Assert.NotEqual(Cli.RoadmapState.SelectNextStrategicInitiative, state.LastTransition.To);
+
+        if (await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.TransitionJournal))
+        {
+            string journal = repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal);
+            Assert.DoesNotContain("\"event\":\"TransitionStarted\"", journal, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"prompt\":\"SelectNextEpic\"", journal, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task Selection_output_captures_structured_hitl_request_markers()
     {
         using var repo = new TempRepo();
@@ -118,6 +151,29 @@ public sealed class RoadmapStateMachineSelectionTests
         Assert.Equal("docs/roadmap-note.md", request.DeliverablePathOrPattern);
         Assert.Equal(Cli.RoadmapArtifactPaths.Selection, request.SourceArtifactPath);
         Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
+    }
+
+    private static async Task SeedStaleSelectionProjectionManifestAsync(TempRepo repo)
+    {
+        Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        Cli.ProjectionProvenance provenance = new Cli.ProjectionProvenanceFactory(new Cli.ProjectionRegistry())
+            .Create("SelectNextEpic", projectContext);
+        Cli.ProjectionProvenance staleProvenance = provenance with
+        {
+            ProjectContextHash = "old-context-hash",
+            CausalInputs = provenance.CausalInputs.Select(input =>
+                input.Kind == Cli.ProjectionProvenance.ProjectContextInputKind
+                    ? input with { Version = "old-context-hash" }
+                    : input).ToArray(),
+        };
+        await new Cli.ProjectionManifestStore(repo.Artifacts).UpsertAsync(
+            Cli.ProjectionManifestEntry.FromTrustedProvenance(
+                staleProvenance,
+                Cli.RoadmapHash.Sha256(repo.Read(Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"])),
+                DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+                Cli.ProjectionValidationStatus.Valid,
+                Cli.ProjectionFreshness.Fresh,
+                null));
     }
 
     private static string StrategicInvestigationSelection() => """

@@ -7,7 +7,7 @@
 
 ## Characterization Tests
 
-- [ ] Add or confirm projection validation or stale-projection failure writes
+- [x] Add or confirm projection validation or stale-projection failure writes
   projection blocker evidence before any prompt-start state for that prompt.
 - [ ] Add or confirm bootstrap runtime failure preserving output path
   `.agents/core/roadmap-completion-context.md`.
@@ -47,13 +47,13 @@
 
 ## Verification
 
-- [ ] Run Roadmap CLI tests.
+- [x] Run Roadmap CLI tests.
 
 ```powershell
 dotnet test tests/LoopRelay.Roadmap.Cli.Tests/LoopRelay.Roadmap.Cli.Tests.csproj --no-restore
 ```
 
-- [ ] Run full solution tests.
+- [x] Run full solution tests.
 
 ```powershell
 dotnet test LoopRelay.slnx --no-restore
