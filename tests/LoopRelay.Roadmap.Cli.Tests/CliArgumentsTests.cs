@@ -30,6 +30,7 @@ public sealed class CliArgumentsTests
     [InlineData("status", (int)Cli.RoadmapCliCommand.Status)]
     [InlineData("run", (int)Cli.RoadmapCliCommand.Run)]
     [InlineData("unblock", (int)Cli.RoadmapCliCommand.Unblock)]
+    [InlineData("semantic", (int)Cli.RoadmapCliCommand.Semantic)]
     public void TryParse_accepts_leading_command(string command, int expectedValue)
     {
         using var repo = new TempRepo();

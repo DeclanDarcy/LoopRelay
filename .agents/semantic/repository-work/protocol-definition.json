@@ -1,0 +1,41 @@
+{
+  "SchemaVersion": "repository-work.protocol.v1",
+  "ProtocolId": "repositorywork.semantic-execution.v1",
+  "ProtocolOwner": "RepositoryWork semantic execution",
+  "SubjectClass": "RepositoryWork",
+  "AcceptedIntentShape": "RepositoryWorkSemanticExecution or RepositoryWorkSemanticReport intent bound to one RepositoryWork subject.",
+  "RequiredInputs": [
+    "subject identity",
+    "intent",
+    "source snapshot for execution",
+    "authority scopes"
+  ],
+  "SourceFreshnessRequirements": [
+    "Captured source hash must match the observed source snapshot for execution."
+  ],
+  "AuthorityScopes": [
+    "repository.read",
+    "repositorywork.semantic-execution",
+    "repositorywork.artifact-promotion",
+    "repositorywork.decision-acceptance",
+    "repositorywork.state-entry",
+    "repositorywork.recovery-review",
+    "repositorywork.certification",
+    "repositorywork.distillation",
+    "repositorywork.capability-evaluation",
+    "repositorywork.report"
+  ],
+  "Invariants": [
+    "no-subjectless-interaction",
+    "no-intentless-interaction",
+    "no-authority-without-scope",
+    "report-fields-do-not-create-authority"
+  ],
+  "AllowedExits": [
+    "Admitted",
+    "Denied",
+    "Blocked",
+    "ReportOnly",
+    "Unsupported"
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "AdmissionId": "admission-177f2f2f2fb94a05a97576fd2139c7c1",
+  "ProtocolId": "repositorywork.semantic-execution.v1",
+  "SubjectId": "repository-work:9019bb423464ac27",
+  "IntentId": "intent-177f2f2f2fb94a05a97576fd2139c7c1",
+  "Operation": "RepositoryWorkSemanticExecution",
+  "Outcome": "Admitted",
+  "Reason": "Protocol admitted subject-bound intent under scoped authority.",
+  "AuthorityChecks": [
+    {
+      "Name": "authority:repository.read",
+      "Passed": true,
+      "Scope": "repository.read",
+      "Reason": "Requested authority includes the required scope."
+    },
+    {
+      "Name": "authority:repositorywork.semantic-execution",
+      "Passed": true,
+      "Scope": "repositorywork.semantic-execution",
+      "Reason": "Requested authority includes the required scope."
+    },
+    {
+      "Name": "authority:repositorywork.artifact-promotion",
+      "Passed": true,
+      "Scope": "repositorywork.artifact-promotion",
+      "Reason": "Requested authority includes the required scope."
+    },
+    {
+      "Name": "authority:repositorywork.decision-acceptance",
+      "Passed": true,
+      "Scope": "repositorywork.decision-acceptance",
+      "Reason": "Requested authority includes the required scope."
+    },
+    {
+      "Name": "authority:repositorywork.state-entry",
+      "Passed": true,
+      "Scope": "repositorywork.state-entry",
+      "Reason": "Requested authority includes the required scope."
+    },
+    {
+      "Name": "authority:repositorywork.recovery-review",
+      "Passed": true,
+      "Scope": "repositorywork.recovery-review",
+      "Reason": "Requested authority includes the required scope."
+    },
+    {
+      "Name": "authority:repositorywork.certification",
+      "Passed": true,
+      "Scope": "repositorywork.certification",
+      "Reason": "Requested authority includes the required scope."
+    },
+    {
+      "Name": "authority:repositorywork.distillation",
+      "Passed": true,
+      "Scope": "repositorywork.distillation",
+      "Reason": "Requested authority includes the required scope."
+    },
+    {
+      "Name": "authority:repositorywork.capability-evaluation",
+      "Passed": true,
+      "Scope": "repositorywork.capability-evaluation",
+      "Reason": "Requested authority includes the required scope."
+    },
+    {
+      "Name": "authority:repositorywork.report",
+      "Passed": true,
+      "Scope": "repositorywork.report",
+      "Reason": "Requested authority includes the required scope."
+    }
+  ],
+  "InvariantChecks": [
+    {
+      "Name": "no-subjectless-interaction",
+      "Passed": true,
+      "Scope": "repository-work:9019bb423464ac27",
+      "Reason": "Subject identity is present."
+    },
+    {
+      "Name": "no-intentless-interaction",
+      "Passed": true,
+      "Scope": "intent-177f2f2f2fb94a05a97576fd2139c7c1",
+      "Reason": "Subject-bound intent is present."
+    },
+    {
+      "Name": "no-authority-without-scope",
+      "Passed": true,
+      "Scope": "repository.read, repositorywork.semantic-execution, repositorywork.artifact-promotion, repositorywork.decision-acceptance, repositorywork.state-entry, repositorywork.recovery-review, repositorywork.certification, repositorywork.distillation, repositorywork.capability-evaluation, repositorywork.report",
+      "Reason": "Every requested authority value names a scope."
+    },
+    {
+      "Name": "report-fields-do-not-create-authority",
+      "Passed": true,
+      "Scope": "repositorywork.report",
+      "Reason": "Report authority is recorded separately and is not counted as mutation or acceptance authority."
+    }
+  ],
+  "SourceFreshness": {
+    "Name": "source-freshness",
+    "Passed": true,
+    "Scope": "plan.md",
+    "Reason": "Source snapshot was captured with a content hash freshness rule."
+  },
+  "AdmissionPath": ".agents/semantic/repository-work/admissions/admission.177f2f2f2fb94a05a97576fd2139c7c1.json",
+  "CreatedAt": "2026-07-08T02:01:54.1551508+00:00"
+}
