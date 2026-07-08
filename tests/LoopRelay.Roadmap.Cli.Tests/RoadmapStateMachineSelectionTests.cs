@@ -469,6 +469,12 @@ internal static class StateMachineFactory
         var executionPreparation = new Cli.ExecutionPreparationProvenanceService(repo.Artifacts, executionPreparationManifest);
         var lifecycle = new Cli.ArtifactLifecycleStore(repo.Artifacts);
         var stateStore = new RoadmapStateStore(repo.Artifacts);
+        var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
+        var transitionPersistence = new Cli.RoadmapTransitionPersistence(
+            repo.Artifacts,
+            manifest,
+            stateStore,
+            decisionLedger);
         var split = new Cli.SplitFamilyStore(repo.Artifacts);
         var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new Cli.RoadmapPromptRunner(runtime, repo.Repository, effectiveConsole);
@@ -486,7 +492,6 @@ internal static class StateMachineFactory
             repo.Artifacts,
             loader,
             contracts,
-            manifest,
             new Cli.ProjectionCache(repo.Artifacts, projections, manifest, new Cli.ProjectionValidator(), runner),
             contextBuilder,
             inputResolver,
@@ -495,11 +500,12 @@ internal static class StateMachineFactory
             completionArchive ?? new FakeCompletedEpicArchiveService(),
             runner,
             stateStore,
+            transitionPersistence,
             new Cli.RoadmapStartupPlanner(),
             resumePlanner,
             unblockPlanner,
             selectionProvenance,
-            new DecisionLedgerStore(repo.Artifacts),
+            decisionLedger,
             new Cli.TransitionJournalStore(repo.Artifacts),
             lifecycle,
             new Cli.ArtifactPromotionService(repo.Artifacts, lifecycle),

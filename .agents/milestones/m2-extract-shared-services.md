@@ -11,10 +11,10 @@
 ## Acceptance
 
 - [ ] `RoadmapStateMachine` behavior is unchanged.
-- [ ] Existing constructor wiring is updated in `RoadmapCliComposition` and
+- [x] Existing constructor wiring is updated in `RoadmapCliComposition` and
   `StateMachineFactory`.
-- [ ] No handler is introduced until shared helper tests pass.
-- [ ] Roadmap CLI tests pass after each helper extraction.
+- [x] No handler is introduced until shared helper tests pass.
+- [x] Roadmap CLI tests pass after each helper extraction.
 
 ## RoadmapTransitionPersistence
 
@@ -23,18 +23,18 @@ write.
 
 ### Required Behavior
 
-- [ ] Load existing roadmap state before each save.
-- [ ] Load projection manifest and compute valid, stale, and invalid counts.
-- [ ] Read active artifact status rows for roadmap completion context,
+- [x] Load existing roadmap state before each save.
+- [x] Load projection manifest and compute valid, stale, and invalid counts.
+- [x] Read active artifact status rows for roadmap completion context,
   selection, and active epic.
-- [ ] Read the current last decision id.
-- [ ] Preserve existing retired epics unless replacements are provided.
-- [ ] Preserve existing blockers unless replacements are provided.
-- [ ] Count `.agents/splits/split-family-*.json`.
-- [ ] Preserve existing transition intent unless a replacement intent is
+- [x] Read the current last decision id.
+- [x] Preserve existing retired epics unless replacements are provided.
+- [x] Preserve existing blockers unless replacements are provided.
+- [x] Count `.agents/splits/split-family-*.json`.
+- [x] Preserve existing transition intent unless a replacement intent is
   provided.
-- [ ] Compute default next transitions when an explicit list is not supplied.
-- [ ] Preserve output formatting exactly as callers provide it, including joined
+- [x] Compute default next transitions when an explicit list is not supplied.
+- [x] Preserve output formatting exactly as callers provide it, including joined
   comma-separated output lists.
 - [ ] Workflow-failure helpers persist the same current state, status, prompt,
   output path, blocker rows, recovery intent, evidence paths, and
@@ -42,8 +42,8 @@ write.
 
 ### Boundary
 
-- [ ] Do not move transition-specific decisions into this service.
-- [ ] Callers pass the exact state, status, from/to state, prompt, projection,
+- [x] Do not move transition-specific decisions into this service.
+- [x] Callers pass the exact state, status, from/to state, prompt, projection,
   output, decision, timestamps, blocker rows, transition intent, and next
   transitions.
 
@@ -239,10 +239,10 @@ This service must update both provenance and lifecycle.
 
 ## Equivalence Checks
 
-- [ ] `SaveStateAsync` still preserves existing retired epics, blockers,
+- [x] `SaveStateAsync` still preserves existing retired epics, blockers,
   transition intent, active artifacts, projection manifest counts, split-family
   count, and last decision id.
-- [ ] Default `NextTransitions` values remain identical.
+- [x] Default `NextTransitions` values remain identical.
 - [ ] Runtime prompt failures still bypass generic failure overwrite by throwing
   `RoadmapStepException.AlreadyPersisted`.
 - [ ] `OperationCanceledException` is not caught by prompt failure blocks.

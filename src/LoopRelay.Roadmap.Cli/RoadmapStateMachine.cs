@@ -9,7 +9,6 @@ internal sealed class RoadmapStateMachine(
     RoadmapArtifacts artifacts,
     ProjectContextLoader projectContextLoader,
     PromptContractRegistry contractRegistry,
-    ProjectionManifestStore manifestStore,
     ProjectionCache projectionCache,
     RoadmapPromptContextBuilder contextBuilder,
     TransitionInputResolver inputResolver,
@@ -18,6 +17,7 @@ internal sealed class RoadmapStateMachine(
     ICompletedEpicArchiveService completionArchive,
     RoadmapPromptRunner promptRunner,
     RoadmapStateStore stateStore,
+    RoadmapTransitionPersistence transitionPersistence,
     RoadmapStartupPlanner startupPlanner,
     RoadmapResumePlanner resumePlanner,
     RoadmapUnblockPlanner unblockPlanner,
@@ -400,22 +400,12 @@ internal sealed class RoadmapStateMachine(
             unblockPlan.Status.ToString(),
             unblockPlan.Reason);
 
-        ProjectionManifest manifest = await manifestStore.LoadAsync();
-        int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json")).Count;
-        await stateStore.SaveAsync(persistedState with
+        await transitionPersistence.RefreshAndSaveAsync(persistedState with
         {
-            ActiveArtifacts = await ActiveArtifactRowsAsync(),
             Blockers = AppendUnblockReviewBlocker(
                 persistedState.Blockers,
                 unblockPlan,
                 reviewPath),
-            LastDecisionId = await decisionLedger.LastDecisionIdAsync(),
-            RetiredEpicsCount = persistedState.RetiredEpics.Count,
-            SplitFamiliesCount = splitFamilyCount,
-            ProjectionManifestCounts = new ProjectionManifestCounts(
-                manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Valid),
-                manifest.Entries.Count(entry => entry.StaleStatus != ProjectionStaleStatus.Fresh),
-                manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Invalid)),
             NextValidTransitions = AppendNextTransition(persistedState.NextValidTransitions, "unblock"),
         });
     }
@@ -1184,7 +1174,7 @@ internal sealed class RoadmapStateMachine(
     {
         RoadmapStateDocument? state = await stateStore.LoadAsync();
         IReadOnlyList<string> candidates = (state?.TransitionIntent.EvidencePaths ?? [])
-            .Concat(OutputEvidencePaths(state?.LastTransition.Output ?? string.Empty))
+            .Concat(RoadmapTransitionPersistence.ParseOutputEvidencePaths(state?.LastTransition.Output ?? string.Empty))
             .Where(path => path.StartsWith(RoadmapArtifactPaths.ExecutionEvidenceDirectory, StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -1813,61 +1803,22 @@ internal sealed class RoadmapStateMachine(
         RoadmapTransitionIntent? transitionIntent = null,
         IReadOnlyList<string>? nextTransitions = null)
     {
-        RoadmapStateDocument? existing = await stateStore.LoadAsync();
-        ProjectionManifest manifest = await manifestStore.LoadAsync();
-        IReadOnlyList<ArtifactStateRow> activeArtifacts = await ActiveArtifactRowsAsync();
-        string lastDecision = await decisionLedger.LastDecisionIdAsync();
-        IReadOnlyList<RetiredEpic> effectiveRetiredEpics = retiredEpics ?? existing?.RetiredEpics ?? [];
-        IReadOnlyList<BlockerRow> effectiveBlockers = blockers ?? existing?.Blockers ?? [];
-        int splitFamilyCount = (await artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json")).Count;
-        await stateStore.SaveAsync(new RoadmapStateDocument(
+        await transitionPersistence.SaveAsync(
             current,
-            activeArtifacts,
-            new RoadmapTransitionSummary(from, to, prompt, projection, output, decision, status, started, completed),
-            effectiveBlockers,
-            lastDecision,
-            effectiveRetiredEpics.Count,
-            splitFamilyCount,
-            new ProjectionManifestCounts(
-                manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Valid),
-                manifest.Entries.Count(entry => entry.StaleStatus != ProjectionStaleStatus.Fresh),
-                manifest.Entries.Count(entry => entry.ValidationStatus == ProjectionValidationStatus.Invalid)),
-            transitionIntent ?? existing?.TransitionIntent ?? RoadmapTransitionIntent.Empty(current),
-            nextTransitions ?? NextTransitions(current),
-            effectiveRetiredEpics));
+            status,
+            from,
+            to,
+            prompt,
+            projection,
+            output,
+            decision,
+            started,
+            completed,
+            retiredEpics,
+            blockers,
+            transitionIntent,
+            nextTransitions);
     }
-
-    private async Task<IReadOnlyList<ArtifactStateRow>> ActiveArtifactRowsAsync()
-    {
-        string[] paths =
-        [
-            RoadmapArtifactPaths.RoadmapCompletionContext,
-            RoadmapArtifactPaths.Selection,
-            RoadmapArtifactPaths.ActiveEpic,
-        ];
-        var rows = new List<ArtifactStateRow>();
-        foreach (string path in paths)
-        {
-            rows.Add(new ArtifactStateRow(Path.GetFileName(path), path, (await artifacts.GetStatusAsync(path)).ToString()));
-        }
-
-        return rows;
-    }
-
-    private static IReadOnlyList<string> NextTransitions(RoadmapState state) =>
-        state switch
-        {
-            RoadmapState.CoreReady => ["BootstrapRoadmapCompletionContext", "SelectNextStrategicInitiative"],
-            RoadmapState.RoadmapCompletionContextReady => ["SelectNextStrategicInitiative"],
-            RoadmapState.SelectNextStrategicInitiative => ["SelectNextEpic"],
-            RoadmapState.ActiveEpicReady => ["GenerateMilestoneDeepDives"],
-            RoadmapState.MilestoneSpecsReady => [],
-            RoadmapState.EpicPreparationAudit => ["EpicPreparationAudit"],
-            RoadmapState.RetireEpic => ["SelectNextStrategicInitiative"],
-            RoadmapState.EvidenceGathering => ["GatherAdditionalEvidence", ExecutionCommandText(ExecutionDispositionCommand.EvaluateEpicCompletionAndDrift)],
-            RoadmapState.EvidenceBlocked => ["Resolve blocker and rerun"],
-            _ => [],
-        };
 
     private static string ExecutionCommandText(ExecutionDispositionCommand command) =>
         ExecutionDispositionProtocol.CommandText(command);
@@ -1912,22 +1863,8 @@ internal sealed class RoadmapStateMachine(
             cancelledAt,
             null,
             [new BlockerRow("Cancelled", "Rerun the roadmap CLI when ready.")],
-            new RoadmapTransitionIntent("ResumeCancelledTransition", recoveryState, OutputEvidencePaths(interrupted.Output)),
+            new RoadmapTransitionIntent("ResumeCancelledTransition", recoveryState, RoadmapTransitionPersistence.ParseOutputEvidencePaths(interrupted.Output)),
             ["Resume cancelled transition"]);
-    }
-
-    private static IReadOnlyList<string> OutputEvidencePaths(string output)
-    {
-        if (string.IsNullOrWhiteSpace(output) ||
-            string.Equals(output.Trim(), "None", StringComparison.OrdinalIgnoreCase))
-        {
-            return [];
-        }
-
-        return output
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(path => !string.Equals(path, "None", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
     }
 
     private static IReadOnlyList<string> AppendNextTransition(

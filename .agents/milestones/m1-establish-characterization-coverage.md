@@ -2,8 +2,8 @@
 
 ## Work Items
 
-- [ ] Keep existing state-machine integration tests.
-- [ ] Add focused tests only where the current behavior is not directly pinned.
+- [x] Keep existing state-machine integration tests.
+- [x] Add focused tests only where the current behavior is not directly pinned.
 
 ## Characterization Tests
 
