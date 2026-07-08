@@ -503,6 +503,18 @@ internal static class StateMachineFactory
             new Cli.SelectionProvenanceManifestStore(repo.Artifacts),
             contextBuilder,
             inputResolver);
+        var selectNextEpicTransition = new Cli.SelectNextEpicTransition(
+            repo.Artifacts,
+            contracts,
+            projectionCache,
+            contextBuilder,
+            stateStore,
+            promptTransitionRunner,
+            selectionProvenance,
+            decisionRecorder,
+            hitlArtifactCapture,
+            lifecycle,
+            effectiveConsole);
         var activeSelectionReader = new Cli.ActiveSelectionReader(
             repo.Artifacts,
             stateStore,
@@ -530,11 +542,11 @@ internal static class StateMachineFactory
             transitionPersistence,
             promptTransitionRunner,
             bootstrapRoadmapCompletionContextTransition,
+            selectNextEpicTransition,
             activeSelectionReader,
             new Cli.RoadmapStartupPlanner(),
             resumePlanner,
             unblockPlanner,
-            selectionProvenance,
             selectionSuperseder,
             decisionRecorder,
             journal,

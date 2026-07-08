@@ -124,6 +124,18 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             hitlArtifactCapture,
             lifecycle,
             console);
+        var selectNextEpicTransition = new SelectNextEpicTransition(
+            artifacts,
+            contractRegistry,
+            projectionCache,
+            contextBuilder,
+            stateStore,
+            promptTransitionRunner,
+            selectionProvenance,
+            decisionRecorder,
+            hitlArtifactCapture,
+            lifecycle,
+            console);
         var activeSelectionReader = new ActiveSelectionReader(
             artifacts,
             stateStore,
@@ -179,11 +191,11 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             transitionPersistence,
             promptTransitionRunner,
             bootstrapRoadmapCompletionContextTransition,
+            selectNextEpicTransition,
             activeSelectionReader,
             startupPlanner,
             resumePlanner,
             unblockPlanner,
-            selectionProvenance,
             selectionSuperseder,
             decisionRecorder,
             journal,

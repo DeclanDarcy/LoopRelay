@@ -86,19 +86,19 @@ Task<SelectionDecision> ExecuteAsync(ProjectContext projectContext, Cancellation
 
 ### Boundary
 
-- [ ] Handler returns `SelectionDecision`.
-- [ ] Downstream selection routing remains outside the handler.
+- [x] Handler returns `SelectionDecision`.
+- [x] Downstream selection routing remains outside the handler.
 
 ### Prompt And Projection
 
-- [ ] Phase `Select next strategic initiative`.
-- [ ] Runtime prompt `SelectNextEpic`.
-- [ ] Projection prompt `ProjectionForSelectNextEpic`.
-- [ ] State `RoadmapCompletionContextReady -> SelectNextStrategicInitiative`.
-- [ ] Projection path `.agents/projections/select-next-epic.md`.
-- [ ] Output `.agents/selection.md`.
-- [ ] Secondary input is empty string.
-- [ ] Envelope is the normal prompt transition.
+- [x] Phase `Select next strategic initiative`.
+- [x] Runtime prompt `SelectNextEpic`.
+- [x] Projection prompt `ProjectionForSelectNextEpic`.
+- [x] State `RoadmapCompletionContextReady -> SelectNextStrategicInitiative`.
+- [x] Projection path `.agents/projections/select-next-epic.md`.
+- [x] Output `.agents/selection.md`.
+- [x] Secondary input is empty string.
+- [x] Envelope is the normal prompt transition.
 
 ### Selection Context Section Order
 
@@ -109,9 +109,9 @@ Task<SelectionDecision> ExecuteAsync(ProjectContext projectContext, Cancellation
 
 ### Required Inputs
 
-- [ ] Projection path.
-- [ ] `.agents/core/roadmap-completion-context.md`.
-- [ ] Every non-empty `.agents/roadmap/*.md`.
+- [x] Projection path.
+- [x] `.agents/core/roadmap-completion-context.md`.
+- [x] Every non-empty `.agents/roadmap/*.md`.
 
 ### Success Order
 
@@ -130,39 +130,39 @@ Task<SelectionDecision> ExecuteAsync(ProjectContext projectContext, Cancellation
 
 ### Decision Ledger Entry
 
-- [ ] State `SelectNextStrategicInitiative`.
-- [ ] Transition `SelectNextEpic`.
-- [ ] Prompt `SelectNextEpic`.
-- [ ] Projection `.agents/projections/select-next-epic.md`.
-- [ ] Input artifacts: empty list.
-- [ ] Output artifacts: `.agents/selection.md`.
-- [ ] Decision: parsed recommended outcome.
-- [ ] Confidence: parsed confidence.
-- [ ] Rationale: parsed primary reason.
+- [x] State `SelectNextStrategicInitiative`.
+- [x] Transition `SelectNextEpic`.
+- [x] Prompt `SelectNextEpic`.
+- [x] Projection `.agents/projections/select-next-epic.md`.
+- [x] Input artifacts: empty list.
+- [x] Output artifacts: `.agents/selection.md`.
+- [x] Decision: parsed recommended outcome.
+- [x] Confidence: parsed confidence.
+- [x] Rationale: parsed primary reason.
 
 ### Preserve
 
-- [ ] Started state before `TransitionStarted`.
-- [ ] `TransitionCompleted` before completed state.
-- [ ] Completed state before `.agents/selection.md` write.
-- [ ] `.agents/selection.md` write before HITL capture.
-- [ ] HITL capture before numbered selection evidence.
-- [ ] Selection evidence before provenance recording.
-- [ ] Provenance before selection lifecycle `Ready`.
-- [ ] Parsing after lifecycle.
-- [ ] Decision-ledger append after parsing.
-- [ ] Parse failures are not converted into `TransitionFailed`.
-- [ ] Parse failure happens after selection artifact, numbered evidence,
+- [x] Started state before `TransitionStarted`.
+- [x] `TransitionCompleted` before completed state.
+- [x] Completed state before `.agents/selection.md` write.
+- [x] `.agents/selection.md` write before HITL capture.
+- [x] HITL capture before numbered selection evidence.
+- [x] Selection evidence before provenance recording.
+- [x] Provenance before selection lifecycle `Ready`.
+- [x] Parsing after lifecycle.
+- [x] Decision-ledger append after parsing.
+- [x] Parse failures are not converted into `TransitionFailed`.
+- [x] Parse failure happens after selection artifact, numbered evidence,
   provenance, and lifecycle are written, and before decision-ledger append.
 
 ### Input Snapshot
 
-- [ ] Required projection.
-- [ ] Roadmap completion context.
-- [ ] Roadmap source files.
-- [ ] Secondary hash of empty string.
+- [x] Required projection.
+- [x] Roadmap completion context.
+- [x] Roadmap source files.
+- [x] Secondary hash of empty string.
 
 ## Integration
 
-- [ ] Keep `RunSelectionAndFollowingAsync` calling this handler and then calling
+- [x] Keep `RunSelectionAndFollowingAsync` calling this handler and then calling
   `ContinueAfterSelectionAsync`.

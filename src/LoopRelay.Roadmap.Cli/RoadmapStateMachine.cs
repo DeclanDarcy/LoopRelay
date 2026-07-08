@@ -18,11 +18,11 @@ internal sealed class RoadmapStateMachine(
     RoadmapTransitionPersistence transitionPersistence,
     RoadmapPromptTransitionRunner promptTransitionRunner,
     BootstrapRoadmapCompletionContextTransition bootstrapRoadmapCompletionContextTransition,
+    SelectNextEpicTransition selectNextEpicTransition,
     ActiveSelectionReader activeSelectionReader,
     RoadmapStartupPlanner startupPlanner,
     RoadmapResumePlanner resumePlanner,
     RoadmapUnblockPlanner unblockPlanner,
-    SelectionProvenanceService selectionProvenance,
     SelectionSuperseder selectionSuperseder,
     DecisionRecorder decisionRecorder,
     TransitionJournalStore journalStore,
@@ -487,7 +487,7 @@ internal sealed class RoadmapStateMachine(
         ProjectContext projectContext,
         CancellationToken cancellationToken)
     {
-        SelectionDecision selection = await SelectNextInitiativeAsync(projectContext, cancellationToken);
+        SelectionDecision selection = await selectNextEpicTransition.ExecuteAsync(projectContext, cancellationToken);
         return await ContinueAfterSelectionAsync(selection, projectContext, cancellationToken);
     }
 
@@ -543,38 +543,6 @@ internal sealed class RoadmapStateMachine(
 
         await GenerateMilestoneSpecsAsync(projectContext, cancellationToken);
         return RoadmapOutcome.Paused;
-    }
-
-    private async Task<SelectionDecision> SelectNextInitiativeAsync(ProjectContext projectContext, CancellationToken cancellationToken)
-    {
-        const string runtimePrompt = "SelectNextEpic";
-        console.Phase("Select next strategic initiative");
-        PromptContract contract = contractRegistry.Get(runtimePrompt);
-        ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
-        RoadmapStateDocument? existing = await stateStore.LoadAsync();
-        string context = await contextBuilder.BuildSelectionContextAsync(projection.Content, existing?.RetiredEpics ?? []);
-        PromptTransitionCompletion completion = await promptTransitionRunner.RunNormalWithCompletionAsync(
-            RoadmapState.RoadmapCompletionContextReady,
-            RoadmapState.SelectNextStrategicInitiative,
-            runtimePrompt,
-            projection.Definition.ProjectionPath,
-            context,
-            string.Empty,
-            [RoadmapArtifactPaths.Selection],
-            cancellationToken);
-        await artifacts.WriteAsync(RoadmapArtifactPaths.Selection, completion.Output);
-        await hitlArtifactCapture.CaptureAsync(RoadmapArtifactPaths.Selection, completion.Output);
-        string evidencePath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.SelectionEvidenceDirectory, "selection", completion.Output);
-        await selectionProvenance.RecordActiveSelectionAsync(
-            completion.Output,
-            completion.InputSnapshot,
-            existing?.RetiredEpics ?? [],
-            cancellationToken);
-        await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.Selection, ArtifactLifecycleState.Ready, evidencePath);
-
-        SelectionDecision decision = new SelectionParser().Parse(completion.Output);
-        await decisionRecorder.AppendAsync(RoadmapState.SelectNextStrategicInitiative, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.Selection, decision.RecommendedOutcome, decision.Confidence, decision.PrimaryReason);
-        return decision;
     }
 
     private async Task<EpicPreparationResult> AuditAndPrepareExistingEpicAsync(SelectionDecision selectionDecision, ProjectContext projectContext, CancellationToken cancellationToken)
