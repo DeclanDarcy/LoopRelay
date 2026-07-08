@@ -3,13 +3,13 @@
 | Field | Value |
 |---|---|
 | Subject | repository-work:9019bb423464ac27 |
-| Intent | intent-4c38374a189f4efdb1045aa182bff9ec |
+| Intent | intent-177f2f2f2fb94a05a97576fd2139c7c1 |
 | Origin | plan.md |
 | Snapshot SHA-256 | 943c2f58afc13ea5c524680b447d56e5b664529deb2215f6168b021cf1661492 |
 | Freshness Rule | fresh when repository bytes match captured SHA-256 |
 | Trust Boundary | repository-authored-input |
 | Consumer Scope | repositorywork.semantic-evaluation |
-| Captured At | 2026-07-08T02:05:03.7289467+00:00 |
+| Captured At | 2026-07-08T02:01:54.1551508+00:00 |
 | Source Authority | The origin remains the source authority; this artifact is only a captured representation. |
 
 ## Source Content
