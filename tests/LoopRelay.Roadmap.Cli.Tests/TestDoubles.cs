@@ -160,6 +160,8 @@ internal sealed class FakeCompletedEpicArchiveService : ICompletedEpicArchiveSer
 {
     public List<CompletedEpicArchiveRequest> Requests { get; } = [];
 
+    public Exception? ExceptionToThrow { get; set; }
+
     public CompletedEpicArchiveResult Result { get; set; } = new(
         1,
         ".agents/archive/epics/1",
@@ -171,6 +173,11 @@ internal sealed class FakeCompletedEpicArchiveService : ICompletedEpicArchiveSer
         CancellationToken cancellationToken = default)
     {
         Requests.Add(request);
+        if (ExceptionToThrow is not null)
+        {
+            return Task.FromException<CompletedEpicArchiveResult>(ExceptionToThrow);
+        }
+
         return Task.FromResult(Result);
     }
 }

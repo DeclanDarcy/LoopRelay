@@ -458,7 +458,8 @@ internal static class StateMachineFactory
         TempRepo repo,
         IAgentRuntime runtime,
         Cli.ILoopConsole? console = null,
-        ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null)
+        ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null,
+        ICompletedEpicArchiveService? completionArchive = null)
     {
         Cli.ILoopConsole effectiveConsole = console ?? new TestConsole();
         var projections = new Cli.ProjectionRegistry();
@@ -491,7 +492,7 @@ internal static class StateMachineFactory
             inputResolver,
             new CompletionCertificationPolicy(),
             new CompletionCertificationRouter(),
-            new FakeCompletedEpicArchiveService(),
+            completionArchive ?? new FakeCompletedEpicArchiveService(),
             runner,
             stateStore,
             new Cli.RoadmapStartupPlanner(),

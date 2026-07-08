@@ -42,7 +42,7 @@
 - [x] Add or confirm close-route completion-context update superseding active
   selection after the context rewrite and excluding numbered update evidence
   from final route outputs.
-- [ ] Add or confirm archive and synthesis failures are not converted into
+- [x] Add or confirm archive and synthesis failures are not converted into
   invalid-certification blockers.
 
 ## Verification
