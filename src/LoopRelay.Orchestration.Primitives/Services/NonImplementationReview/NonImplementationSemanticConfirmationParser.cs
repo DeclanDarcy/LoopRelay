@@ -4,9 +4,6 @@ using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
-public sealed class NonImplementationSemanticConfirmationParseException(string message, Exception? innerException = null)
-    : InvalidOperationException(message, innerException);
-
 public static class NonImplementationSemanticConfirmationParser
 {
     private static readonly JsonSerializerOptions JsonOptions = new()

@@ -68,12 +68,3 @@ internal sealed class SelectionParser
         return match ?? throw new MarkdownParseException($"Selection field `{field}` has unsupported value `{value}`.");
     }
 }
-
-internal sealed record SelectionDecision(
-    string RecommendedOutcome,
-    string RecommendedInitiative,
-    string InitiativeType,
-    string Confidence,
-    string PrimaryReason,
-    string? ExistingEpicId,
-    string? ExistingEpicName);

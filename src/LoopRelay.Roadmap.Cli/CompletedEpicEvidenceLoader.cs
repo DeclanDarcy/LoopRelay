@@ -249,10 +249,3 @@ internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts artifacts)
             .Replace("\n", " ", StringComparison.Ordinal)
             .Trim();
 }
-
-internal sealed record CompletedEpicEvidence(
-    string Path,
-    string? Title,
-    string? EpicId,
-    string EvidenceQuality,
-    string RenderedContent);

@@ -58,12 +58,3 @@ internal sealed class StructuredDocumentStore<TDocument>(
         }
     }
 }
-
-internal static class RoadmapJson
-{
-    public static readonly JsonSerializerOptions Options = new()
-    {
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
-}

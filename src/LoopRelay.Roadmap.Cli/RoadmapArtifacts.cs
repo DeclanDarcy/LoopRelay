@@ -107,10 +107,3 @@ internal sealed partial class RoadmapArtifacts(IArtifactStore store, Repository 
     [GeneratedRegex(@"\.(?<number>\d{4})\.md$", RegexOptions.CultureInvariant)]
     private static partial Regex NumberedEvidenceRegex();
 }
-
-internal enum ArtifactStatus
-{
-    Missing,
-    Empty,
-    Present,
-}

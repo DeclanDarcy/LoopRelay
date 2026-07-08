@@ -10,8 +10,3 @@ public sealed record NonImplementationPostExecutionReviewSummary(
     int ConfirmedNonImplementationCount,
     int FalsePositiveCount,
     int SemanticUncertaintyCount);
-
-public sealed record NonImplementationPostExecutionReviewResult(
-    string ExecutionSliceId,
-    IReadOnlyList<string> EvidencePaths,
-    NonImplementationPostExecutionReviewSummary Summary);

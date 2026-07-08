@@ -4,12 +4,6 @@ using LoopRelay.Agents.Abstractions;
 
 namespace LoopRelay.Cli;
 
-/// <summary>Reads a Codex quota snapshot, or null when it cannot be determined.</summary>
-internal interface ICodexUsageProbe
-{
-    Task<CodexUsageStatus?> QueryAsync(CancellationToken cancellationToken);
-}
-
 /// <summary>
 /// Queries Codex quota over the app-server JSON-RPC protocol: it starts <c>codex app-server</c> on stdio,
 /// sends <c>initialize</c> then the on-demand <c>account/rateLimits/read</c> request, and parses the

@@ -33,8 +33,3 @@ public sealed class CompletionEvaluationParser
         return match ?? throw new CompletionMarkdownParseException($"Completion field `{field}` has unsupported value `{trimmed}`.");
     }
 }
-
-public sealed record CompletionEvaluationDecision(
-    string OverallCompletionStatus,
-    string OverallDriftClassification,
-    string ClosureRecommendation);

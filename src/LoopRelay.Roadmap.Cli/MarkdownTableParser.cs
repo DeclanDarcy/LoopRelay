@@ -167,5 +167,3 @@ internal static class MarkdownTableParser
         return cells.ToArray();
     }
 }
-
-internal sealed class MarkdownParseException(string message) : Exception(message);

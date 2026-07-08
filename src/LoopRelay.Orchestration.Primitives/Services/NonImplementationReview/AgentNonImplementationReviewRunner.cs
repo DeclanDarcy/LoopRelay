@@ -5,9 +5,6 @@ using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
-public sealed class NonImplementationReviewRunnerException(string message, Exception? innerException = null)
-    : InvalidOperationException(message, innerException);
-
 public sealed class AgentNonImplementationReviewRunner(
     IAgentRuntime runtime,
     Repository repository) : INonImplementationReviewRunner

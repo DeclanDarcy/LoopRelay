@@ -2,10 +2,6 @@ using LoopRelay.Orchestration;
 
 namespace LoopRelay.Orchestration.Models.NonImplementationReview;
 
-public sealed record NonImplementationReviewPromptEvidenceSection(
-    string Title,
-    string Path);
-
 public static class NonImplementationReviewPromptEvidence
 {
     public static IReadOnlyList<NonImplementationReviewPromptEvidenceSection> BuildSections(

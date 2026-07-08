@@ -84,22 +84,3 @@ internal sealed class PromptContractRegistry
 
     private static string Join(IReadOnlyList<string> values) => values.Count == 0 ? "None" : string.Join("<br>", values);
 }
-
-internal sealed record PromptContract(
-    string RuntimePromptName,
-    string RequiredProjectionRuntimePrompt,
-    IReadOnlyList<string> RequiredInputs,
-    IReadOnlyList<string> OptionalInputs,
-    IReadOnlyList<string> RequiredOutputs,
-    IReadOnlyList<string> AllowedDecisions,
-    IReadOnlyList<string> BlockingOutputs,
-    string ArtifactWriter,
-    StaleProjectionPolicy StaleProjectionPolicy,
-    string ParserName);
-
-internal enum StaleProjectionPolicy
-{
-    Block,
-    WarnOnly,
-    Allow,
-}

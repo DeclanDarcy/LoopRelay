@@ -31,12 +31,3 @@ internal sealed class ProjectionRegistry
     private static ProjectionDefinition Define(string runtimePromptName, string projectionPromptName, string path) =>
         new(runtimePromptName, projectionPromptName, path);
 }
-
-internal sealed record ProjectionDefinition(
-    string RuntimePromptName,
-    string ProjectionPromptName,
-    string ProjectionPath)
-{
-    public string RenderPrompt(string projectContext) =>
-        RoadmapPromptCatalog.RenderProjection(ProjectionPromptName, projectContext);
-}

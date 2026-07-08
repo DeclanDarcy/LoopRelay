@@ -6,12 +6,6 @@ using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
-public interface INonImplementationCompletionReviewService
-{
-    Task<NonImplementationCompletionReviewResult> ReviewAsync(
-        CancellationToken cancellationToken = default);
-}
-
 public sealed class NonImplementationCompletionReviewService(
     RepositoryChangeSetDetector detector,
     NonImplementationArtifactClassifier classifier,

@@ -1,0 +1,38 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace LoopRelay.Roadmap.Cli;
+
+internal sealed class SelectionProvenanceManifestStore(RoadmapArtifacts artifacts)
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    public async Task<SelectionProvenanceManifest> LoadAsync()
+    {
+        string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.SelectionProvenanceManifest);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return SelectionProvenanceManifest.Empty;
+        }
+
+        try
+        {
+            SelectionProvenanceManifest? manifest = JsonSerializer.Deserialize<SelectionProvenanceManifest>(content, JsonOptions);
+            return manifest ?? SelectionProvenanceManifest.Empty;
+        }
+        catch (JsonException)
+        {
+            return SelectionProvenanceManifest.Empty;
+        }
+    }
+
+    public async Task SaveAsync(SelectionProvenanceManifest manifest)
+    {
+        string content = JsonSerializer.Serialize(manifest, JsonOptions) + Environment.NewLine;
+        await artifacts.WriteAsync(RoadmapArtifactPaths.SelectionProvenanceManifest, content);
+    }
+}

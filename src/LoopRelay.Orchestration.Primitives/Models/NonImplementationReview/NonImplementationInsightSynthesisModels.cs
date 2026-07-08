@@ -7,13 +7,3 @@ public sealed record NonImplementationInsightSynthesisSource(
     bool ReviewedFileDeleted,
     string? DeletedReviewedIdentity,
     NonImplementationSemanticDisposition SemanticDisposition);
-
-public sealed record NonImplementationInsightSynthesisResult(
-    string SynthesisPath,
-    string SynthesisPromptSourceHash,
-    bool Generated,
-    bool ReusedExisting,
-    bool SkippedNoConfirmedEntries,
-    bool PreviousSynthesisWasStale,
-    IReadOnlyList<NonImplementationInsightSynthesisSource> SourceEntries,
-    string? Content);

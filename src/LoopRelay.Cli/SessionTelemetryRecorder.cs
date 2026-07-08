@@ -4,22 +4,6 @@ using LoopRelay.Orchestration.Abstractions;
 
 namespace LoopRelay.Cli;
 
-/// <summary>Records one telemetry row per codex turn. Returns the resolved codex rollout path (cached across a
-/// session's turns), or null. MUST NOT throw — telemetry never breaks a turn.</summary>
-internal interface ISessionTelemetryRecorder
-{
-    Task<string?> RecordTurnAsync(
-        string repoName,
-        string workingDirectory,
-        SessionIdentity sessionId,
-        SessionRole role,
-        DateTimeOffset openedAtUtc,
-        string? cachedLogPath,
-        AgentTurnResult result,
-        InputWaitObservation? inputWait,
-        CancellationToken cancellationToken);
-}
-
 /// <summary>
 /// Adds one post-turn capacity probe, resolves the codex rollout file once per session, computes effective
 /// tokens with the router's cost model, and appends a <see cref="SessionTelemetryRecord"/>. Every step is
@@ -115,15 +99,4 @@ internal sealed class SessionTelemetryRecorder(
             return null;
         }
     }
-}
-
-/// <summary>No-op recorder used when session telemetry is disabled (also skips the post-probe cost).</summary>
-internal sealed class NullSessionTelemetryRecorder : ISessionTelemetryRecorder
-{
-    public Task<string?> RecordTurnAsync(
-        string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role,
-        DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result,
-        InputWaitObservation? inputWait,
-        CancellationToken cancellationToken) =>
-        Task.FromResult(cachedLogPath);
 }

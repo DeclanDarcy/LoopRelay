@@ -1,31 +1,5 @@
 namespace LoopRelay.Projections;
 
-public interface IProjectContextProjectionService
-{
-    Task<ProjectContextProjectionResult> EnsureFreshAsync(
-        string runtimePromptName,
-        CancellationToken cancellationToken = default);
-
-    Task<ProjectionFreshness> EvaluateFreshnessAsync(
-        string runtimePromptName,
-        CancellationToken cancellationToken = default);
-}
-
-public interface IProjectionPromptRunner
-{
-    Task<string> RunProjectionPromptAsync(
-        ProjectionDefinition definition,
-        string prompt,
-        CancellationToken cancellationToken = default);
-}
-
-public enum ProjectionRefreshPolicy
-{
-    BlockWhenStale,
-    RegenerateWhenStale,
-    AllowStale,
-}
-
 public sealed class ProjectContextProjectionService(
     ProjectionArtifacts artifacts,
     ProjectionDefinitionRegistry registry,
@@ -145,10 +119,3 @@ public sealed class ProjectContextProjectionService(
     private static string FormatReasons(IReadOnlyList<ProjectionStaleReason> reasons) =>
         reasons.Count == 0 ? "UnknownProvenance" : string.Join(", ", reasons);
 }
-
-public sealed record ProjectContextProjectionResult(
-    ProjectionDefinition Definition,
-    string Content,
-    bool Generated,
-    ProjectionStaleStatus StaleStatus,
-    IReadOnlyList<ProjectionStaleReason> StaleReasons);

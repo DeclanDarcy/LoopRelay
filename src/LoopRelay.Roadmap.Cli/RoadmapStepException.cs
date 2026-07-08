@@ -18,9 +18,3 @@ internal sealed class RoadmapStepException : Exception
             ? persisted
             : new RoadmapStepException(exception.Message, RoadmapFailurePersistence.AlreadyPersisted, exception);
 }
-
-internal enum RoadmapFailurePersistence
-{
-    RequiresPersistence,
-    AlreadyPersisted,
-}

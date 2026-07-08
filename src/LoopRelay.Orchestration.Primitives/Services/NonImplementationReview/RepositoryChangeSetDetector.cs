@@ -7,9 +7,6 @@ using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
-public sealed class RepositoryChangeSetDetectionException(string message)
-    : InvalidOperationException(message);
-
 public sealed class RepositoryChangeSetDetector(IProcessRunner processRunner, Repository repository)
 {
     public async Task<RepositorySliceSnapshot> CaptureSnapshotAsync(

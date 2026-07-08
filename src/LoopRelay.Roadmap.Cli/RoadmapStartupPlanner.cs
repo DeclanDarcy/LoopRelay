@@ -59,27 +59,3 @@ internal sealed class RoadmapStartupPlanner
             RoadmapWorkflowStateClassifier.ReportReason(state),
             RoadmapWorkflowStateClassifier.ReportOutcome(state));
 }
-
-internal sealed record RoadmapStartupPlan(
-    RoadmapStartupAction Action,
-    RoadmapPreflightRequirement PreflightRequirement,
-    RoadmapState SourceState,
-    string Reason,
-    RoadmapOutcome? ReportOutcome = null);
-
-internal enum RoadmapStartupAction
-{
-    FreshInitialization,
-    ResumeActiveWorkflow,
-    ReportBlockedWorkflow,
-    ReportTerminalWorkflow,
-    ReportCompletedWorkflow,
-    ReportFailedWorkflow,
-}
-
-internal enum RoadmapPreflightRequirement
-{
-    None,
-    RequiredForInitialize,
-    RequiredForResume,
-}

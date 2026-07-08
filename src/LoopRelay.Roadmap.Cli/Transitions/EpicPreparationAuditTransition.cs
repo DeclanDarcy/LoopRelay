@@ -67,10 +67,3 @@ internal sealed class EpicPreparationAuditTransition(
         return reimaginePromotion.Promoted ? EpicPreparationResult.ActiveEpicReady : EpicPreparationResult.Blocked;
     }
 }
-
-internal enum EpicPreparationResult
-{
-    ActiveEpicReady,
-    Retired,
-    Blocked,
-}

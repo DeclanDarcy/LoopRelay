@@ -5,10 +5,6 @@ using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
-public sealed record ExplicitHitlNonImplementationRequestCaptureResult(
-    int CapturedCount,
-    IReadOnlyList<NonImplementationHitlRequestEntry> CapturedRequests);
-
 public sealed class ExplicitHitlNonImplementationRequestCaptureService(
     NonImplementationReviewLedgerStore ledgerStore)
 {

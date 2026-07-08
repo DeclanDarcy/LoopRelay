@@ -49,12 +49,3 @@ internal sealed class EpicPreparationAuditParser
         return match ?? throw new MarkdownParseException($"Audit field `{field}` has unsupported value `{trimmed}`.");
     }
 }
-
-internal sealed record EpicPreparationAuditDecision(
-    string EpicId,
-    string EpicName,
-    string Disposition,
-    string Confidence,
-    string PrimaryReason,
-    string EvidenceStrength,
-    string RecommendedNextStep);

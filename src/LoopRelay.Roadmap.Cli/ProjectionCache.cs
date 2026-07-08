@@ -127,10 +127,3 @@ internal sealed class ProjectionCache(
             content);
     }
 }
-
-internal sealed record ProjectionCacheResult(
-    ProjectionDefinition Definition,
-    string Content,
-    bool Generated,
-    ProjectionStaleStatus StaleStatus,
-    IReadOnlyList<ProjectionStaleReason> StaleReasons);

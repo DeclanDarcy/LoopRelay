@@ -4,16 +4,6 @@ using LoopRelay.Agents.Models;
 
 namespace LoopRelay.Agents.Services;
 
-/// <summary>The accumulated result of one Codex app-server turn.</summary>
-public sealed record CodexAppServerTurnOutcome(
-    string Output,
-    AgentTokenUsage? Usage,
-    AgentTurnState State,
-    string? FailureMessage);
-
-/// <summary>One live surfacing from a turn: either an agent-reply delta or a compact tool-call summary.</summary>
-public readonly record struct CodexStreamEmission(string Text, AgentStreamChunkKind Kind);
-
 /// <summary>
 /// Accumulates a single Codex app-server turn from its notification stream: the agent reply text
 /// from <c>item/agentMessage/delta</c> chunks (the reply streams as deltas — confirmed against the

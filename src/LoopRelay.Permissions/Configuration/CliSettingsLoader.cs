@@ -4,15 +4,6 @@ using LoopRelay.Permissions.Models;
 
 namespace LoopRelay.Permissions.Configuration;
 
-public sealed class CliSettingsException(string message, Exception? innerException = null)
-    : InvalidOperationException(message, innerException);
-
-public sealed record CliSettingsLoadResult(
-    PermissionPolicyOptions Permissions,
-    NonImplementationArtifactPolicyOptions ArtifactPolicy,
-    string Path,
-    bool IsDefaultTemplate);
-
 public static class CliSettingsLoader
 {
     public const string SettingsPathEnvironmentVariable = "LOOPRELAY_SETTINGS_PATH";

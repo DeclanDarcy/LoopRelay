@@ -78,5 +78,3 @@ internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
     [GeneratedRegex(@"^\d{2}-.+\.md$", RegexOptions.CultureInvariant)]
     private static partial Regex NumberedProjectContextFileRegex();
 }
-
-internal sealed record ProjectContext(IReadOnlyList<string> SourceFiles, string Content, string Hash);

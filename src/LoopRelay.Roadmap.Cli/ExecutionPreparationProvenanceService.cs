@@ -541,18 +541,3 @@ internal sealed class ExecutionPreparationProvenanceService(
     private static string FormatReasons(IReadOnlyList<DerivedArtifactStaleReason> reasons) =>
         reasons.Count == 0 ? "UnknownProvenance" : string.Join(", ", reasons);
 }
-
-internal sealed record ExecutionPreparationInputSet(
-    ExecutionPreparationManifestInput ActiveEpic,
-    IReadOnlyList<ExecutionPreparationManifestInput> MilestoneSpecs,
-    ExecutionPreparationManifestInput DecisionLedger);
-
-internal sealed record ExecutionPreparationReadiness(
-    bool IsFresh,
-    string Reason,
-    IReadOnlyList<ExecutionPreparationArtifactFreshness> Artifacts);
-
-internal sealed record ExecutionPreparationArtifactFreshness(
-    string ArtifactKind,
-    string ArtifactIdentity,
-    DerivedArtifactFreshness Freshness);

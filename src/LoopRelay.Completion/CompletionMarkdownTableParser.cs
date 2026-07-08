@@ -131,5 +131,3 @@ internal static class CompletionMarkdownTableParser
         return cells.ToArray();
     }
 }
-
-public sealed class CompletionMarkdownParseException(string message) : Exception(message);

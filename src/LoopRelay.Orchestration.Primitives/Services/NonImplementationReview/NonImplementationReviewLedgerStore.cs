@@ -7,9 +7,6 @@ using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
-public sealed class NonImplementationReviewLedgerException(string message, Exception? innerException = null)
-    : InvalidOperationException(message, innerException);
-
 public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
 {
     public const int SchemaVersion = NonImplementationReviewLedgerDocument.CurrentSchemaVersion;

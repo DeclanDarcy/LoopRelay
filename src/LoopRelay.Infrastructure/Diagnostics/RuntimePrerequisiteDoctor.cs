@@ -1,17 +1,5 @@
 namespace LoopRelay.Infrastructure.Diagnostics;
 
-public enum RuntimeDiagnosticSeverity
-{
-    Info,
-    Warning,
-    Error,
-}
-
-public sealed record RuntimeDiagnostic(
-    string Id,
-    RuntimeDiagnosticSeverity Severity,
-    string Message);
-
 public sealed class RuntimePrerequisiteDoctor(
     Func<string, string?>? getEnvironmentVariable = null,
     Func<string, bool>? fileExists = null)

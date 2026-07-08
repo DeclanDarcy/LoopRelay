@@ -78,5 +78,3 @@ public sealed partial class ProjectContextLoader(ProjectionArtifacts artifacts)
     [GeneratedRegex(@"^\d{2}-.+\.md$", RegexOptions.CultureInvariant)]
     private static partial Regex NumberedProjectContextFileRegex();
 }
-
-public sealed record ProjectContext(IReadOnlyList<string> SourceFiles, string Content, string Hash);

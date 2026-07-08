@@ -5,16 +5,6 @@ using LoopRelay.Infrastructure.Console;
 
 namespace LoopRelay.Infrastructure.Git;
 
-public sealed record AgentsSubmodulePublisherOptions(
-    string AgentsDirectory = ".agents",
-    string ActorName = "workflow");
-
-public sealed class AgentsSubmodulePublisherException : Exception
-{
-    public AgentsSubmodulePublisherException(string message) : base(message)
-    {
-    }
-}
 
 /// <summary>Commits, pushes, and records a repository's <c>.agents</c> submodule gitlink.</summary>
 public sealed class AgentsSubmodulePublisher(

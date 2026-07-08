@@ -6,20 +6,6 @@ using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
-public sealed record NonImplementationInsightSynthesizerOptions(
-    string PromptName,
-    string SynthesisPromptSourceHash,
-    int MaxPromptPayloadCharacters,
-    int MaxFileContentCharacters)
-{
-    public static NonImplementationInsightSynthesizerOptions Default { get; } =
-        new(
-            PromptName: "SynthesizeNonImplementationInsights",
-            SynthesisPromptSourceHash: LoopRelay.Core.Prompts.SynthesizeNonImplementationInsights.SourceHash,
-            MaxPromptPayloadCharacters: 65536,
-            MaxFileContentCharacters: 4096);
-}
-
 public sealed class NonImplementationInsightSynthesizer
 {
     public const int MetadataSchemaVersion = 1;

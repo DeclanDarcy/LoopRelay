@@ -4,24 +4,6 @@ using LoopRelay.Core.Repositories;
 
 namespace LoopRelay.Completion;
 
-public interface ICompletedEpicArchiveService
-{
-    Task<CompletedEpicArchiveResult> ArchiveAndSynthesizeAsync(
-        CompletedEpicArchiveRequest request,
-        CancellationToken cancellationToken = default);
-}
-
-public sealed record CompletedEpicArchiveRequest(
-    Repository Repository,
-    string ActiveEpicPath = CompletionArtifactPaths.ActiveEpic,
-    string ArchiveRoot = CompletionArtifactPaths.CompletedEpicsDirectory);
-
-public sealed record CompletedEpicArchiveResult(
-    int Index,
-    string ArchiveDirectory,
-    string SynthesisPath,
-    string SynthesisContent);
-
 public sealed class CompletedEpicArchiveService(
     IArtifactStore store,
     ICompletionPromptRunner promptRunner,

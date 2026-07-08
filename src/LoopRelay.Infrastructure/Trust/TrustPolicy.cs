@@ -2,31 +2,6 @@ using LoopRelay.Agents.Models;
 
 namespace LoopRelay.Infrastructure.Trust;
 
-public enum WorkspaceAuthority
-{
-    ReadOnly,
-    WorkspaceWrite,
-    FullAccess,
-}
-
-public enum NetworkAuthority
-{
-    Denied,
-    Allowed,
-}
-
-public enum ApprovalAuthority
-{
-    Never,
-    OnRequest,
-}
-
-public enum ExecutionAuthority
-{
-    OneShot,
-    PersistentSession,
-}
-
 public sealed record TrustPolicy(
     string SandboxIdentifier,
     WorkspaceAuthority Workspace,
@@ -60,10 +35,3 @@ public sealed record TrustPolicy(
             Approval.ToString(),
             Execution.ToString());
 }
-
-public sealed record TrustPolicyEvidence(
-    string Sandbox,
-    string Workspace,
-    string Network,
-    string Approval,
-    string Execution);

@@ -77,17 +77,3 @@ public sealed class CompletionCertificationRouter
         }
     }
 }
-
-public sealed record CompletionCertificationRoute(
-    string ClosureRecommendation,
-    CompletionTransitionIntent Intent,
-    bool RequiresRoadmapCompletionContextUpdate,
-    bool ShouldCloseEpic);
-
-public enum CompletionTransitionIntent
-{
-    UpdateRoadmapCompletionContext,
-    ContinueExecution,
-    ReturnToEpicPreparationAudit,
-    GatherAdditionalEvidence,
-}

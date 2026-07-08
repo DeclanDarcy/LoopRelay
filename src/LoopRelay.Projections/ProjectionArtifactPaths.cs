@@ -1,11 +1,5 @@
 namespace LoopRelay.Projections;
 
-public static class ProjectionRuntimePromptNames
-{
-    public const string AdversarialPlanReview = "AdversarialPlanReview";
-    public const string DecisionSession = "DecisionSession";
-}
-
 public static class ProjectionArtifactPaths
 {
     public const string ProjectionsManifest = ".agents/projections/manifest.md";

@@ -5,18 +5,6 @@ using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
-public sealed record NonImplementationSemanticConfirmerOptions(
-    string PromptName,
-    string ConfirmationPromptSourceHash,
-    int MaxPromptPayloadCharacters)
-{
-    public static NonImplementationSemanticConfirmerOptions Default { get; } =
-        new(
-            PromptName: "ConfirmNonImplementationCandidate",
-            ConfirmationPromptSourceHash: LoopRelay.Core.Prompts.ConfirmNonImplementationCandidate.SourceHash,
-            MaxPromptPayloadCharacters: 32768);
-}
-
 public sealed class NonImplementationSemanticConfirmer
 {
     private static readonly JsonSerializerOptions JsonOptions = new()

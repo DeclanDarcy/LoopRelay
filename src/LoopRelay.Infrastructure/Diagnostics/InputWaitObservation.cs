@@ -22,18 +22,3 @@ public sealed record InputWaitObservation(
     DateTimeOffset? CompletedAt,
     string Status,
     string EstimatorVersion);
-
-public interface IInputWaitObservationSink
-{
-    ValueTask RecordAsync(InputWaitObservation observation, CancellationToken cancellationToken);
-}
-
-public sealed class NullInputWaitObservationSink : IInputWaitObservationSink
-{
-    public static NullInputWaitObservationSink Instance { get; } = new();
-
-    private NullInputWaitObservationSink() { }
-
-    public ValueTask RecordAsync(InputWaitObservation observation, CancellationToken cancellationToken) =>
-        ValueTask.CompletedTask;
-}
