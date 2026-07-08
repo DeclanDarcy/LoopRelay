@@ -467,6 +467,449 @@
         "EvaluatedAt": "2026-07-08T02:01:54.2544687+00:00"
       },
       "ReportPath": ".agents/semantic/repository-work/reports/report.177f2f2f2fb94a05a97576fd2139c7c1.md"
+    },
+    {
+      "RunId": "4c38374a189f4efdb1045aa182bff9ec",
+      "StartedAt": "2026-07-08T02:05:03.7289467+00:00",
+      "CompletedAt": "2026-07-08T02:05:03.9142256+00:00",
+      "ExecutableOutcome": "RepositoryWork semantic path executed from subject identity through capability declaration.",
+      "DurableEvidence": ".agents/semantic/repository-work/semantic-ledger.json",
+      "EvaluationGate": "Inspect the ledger, current state, promoted summary, recovery review, certification, distillation, and capability conformance report.",
+      "IrreversibleCommitment": "RepositoryWork identity is semantic continuity governed by protocol admission, not command reachability or file placement.",
+      "Intent": {
+        "IntentId": "intent-4c38374a189f4efdb1045aa182bff9ec",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "Operation": "RepositoryWorkSemanticExecution",
+        "Summary": "Execute the canonical semantic architecture plan as one narrow RepositoryWork vertical slice.",
+        "SourcePath": "plan.md",
+        "CapturedAt": "2026-07-08T02:05:03.7289467+00:00"
+      },
+      "SourceCapture": {
+        "CaptureId": "source-4c38374a189f4efdb1045aa182bff9ec",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "IntentId": "intent-4c38374a189f4efdb1045aa182bff9ec",
+        "Origin": "plan.md",
+        "CaptureMethod": "repository artifact read",
+        "SnapshotHash": "943c2f58afc13ea5c524680b447d56e5b664529deb2215f6168b021cf1661492",
+        "SnapshotBytes": 31915,
+        "FreshnessRule": "fresh when repository bytes match captured SHA-256",
+        "TrustBoundary": "repository-authored-input",
+        "ConsumerScope": "repositorywork.semantic-evaluation",
+        "CapturedArtifactPath": ".agents/semantic/repository-work/captured-source-view.md",
+        "CapturedAt": "2026-07-08T02:05:03.7289467+00:00"
+      },
+      "Admission": {
+        "AdmissionId": "admission-4c38374a189f4efdb1045aa182bff9ec",
+        "ProtocolId": "repositorywork.semantic-execution.v1",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "IntentId": "intent-4c38374a189f4efdb1045aa182bff9ec",
+        "Operation": "RepositoryWorkSemanticExecution",
+        "Outcome": "Admitted",
+        "Reason": "Protocol admitted subject-bound intent under scoped authority.",
+        "AuthorityChecks": [
+          {
+            "Name": "authority:repository.read",
+            "Passed": true,
+            "Scope": "repository.read",
+            "Reason": "Requested authority includes the required scope."
+          },
+          {
+            "Name": "authority:repositorywork.semantic-execution",
+            "Passed": true,
+            "Scope": "repositorywork.semantic-execution",
+            "Reason": "Requested authority includes the required scope."
+          },
+          {
+            "Name": "authority:repositorywork.artifact-promotion",
+            "Passed": true,
+            "Scope": "repositorywork.artifact-promotion",
+            "Reason": "Requested authority includes the required scope."
+          },
+          {
+            "Name": "authority:repositorywork.decision-acceptance",
+            "Passed": true,
+            "Scope": "repositorywork.decision-acceptance",
+            "Reason": "Requested authority includes the required scope."
+          },
+          {
+            "Name": "authority:repositorywork.state-entry",
+            "Passed": true,
+            "Scope": "repositorywork.state-entry",
+            "Reason": "Requested authority includes the required scope."
+          },
+          {
+            "Name": "authority:repositorywork.recovery-review",
+            "Passed": true,
+            "Scope": "repositorywork.recovery-review",
+            "Reason": "Requested authority includes the required scope."
+          },
+          {
+            "Name": "authority:repositorywork.certification",
+            "Passed": true,
+            "Scope": "repositorywork.certification",
+            "Reason": "Requested authority includes the required scope."
+          },
+          {
+            "Name": "authority:repositorywork.distillation",
+            "Passed": true,
+            "Scope": "repositorywork.distillation",
+            "Reason": "Requested authority includes the required scope."
+          },
+          {
+            "Name": "authority:repositorywork.capability-evaluation",
+            "Passed": true,
+            "Scope": "repositorywork.capability-evaluation",
+            "Reason": "Requested authority includes the required scope."
+          },
+          {
+            "Name": "authority:repositorywork.report",
+            "Passed": true,
+            "Scope": "repositorywork.report",
+            "Reason": "Requested authority includes the required scope."
+          }
+        ],
+        "InvariantChecks": [
+          {
+            "Name": "no-subjectless-interaction",
+            "Passed": true,
+            "Scope": "repository-work:9019bb423464ac27",
+            "Reason": "Subject identity is present."
+          },
+          {
+            "Name": "no-intentless-interaction",
+            "Passed": true,
+            "Scope": "intent-4c38374a189f4efdb1045aa182bff9ec",
+            "Reason": "Subject-bound intent is present."
+          },
+          {
+            "Name": "no-authority-without-scope",
+            "Passed": true,
+            "Scope": "repository.read, repositorywork.semantic-execution, repositorywork.artifact-promotion, repositorywork.decision-acceptance, repositorywork.state-entry, repositorywork.recovery-review, repositorywork.certification, repositorywork.distillation, repositorywork.capability-evaluation, repositorywork.report",
+            "Reason": "Every requested authority value names a scope."
+          },
+          {
+            "Name": "report-fields-do-not-create-authority",
+            "Passed": true,
+            "Scope": "repositorywork.report",
+            "Reason": "Report authority is recorded separately and is not counted as mutation or acceptance authority."
+          }
+        ],
+        "SourceFreshness": {
+          "Name": "source-freshness",
+          "Passed": true,
+          "Scope": "plan.md",
+          "Reason": "Source snapshot was captured with a content hash freshness rule."
+        },
+        "AdmissionPath": ".agents/semantic/repository-work/admissions/admission.4c38374a189f4efdb1045aa182bff9ec.json",
+        "CreatedAt": "2026-07-08T02:05:03.7289467+00:00"
+      },
+      "Interaction": {
+        "InteractionId": "interaction-4c38374a189f4efdb1045aa182bff9ec",
+        "AdmissionId": "admission-4c38374a189f4efdb1045aa182bff9ec",
+        "ProtocolId": "repositorywork.semantic-execution.v1",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "InputSnapshot": [
+          {
+            "Kind": "subject",
+            "Path": ".agents/semantic/repository-work/subject-identity.json",
+            "Hash": "70a20975a7f09eb22879e6fc19029fd7539778b2c182faec93b90ecf7784a2ef",
+            "Role": "semantic identity"
+          },
+          {
+            "Kind": "intent",
+            "Path": "intent-4c38374a189f4efdb1045aa182bff9ec",
+            "Hash": "807d5d1b9efb19b054b54370376a80daccaf144c53e39a22dddc8603d76ee57f",
+            "Role": "subject-bound intent"
+          },
+          {
+            "Kind": "source",
+            "Path": "plan.md",
+            "Hash": "943c2f58afc13ea5c524680b447d56e5b664529deb2215f6168b021cf1661492",
+            "Role": "captured source snapshot"
+          },
+          {
+            "Kind": "admission",
+            "Path": ".agents/semantic/repository-work/admissions/admission.4c38374a189f4efdb1045aa182bff9ec.json",
+            "Hash": "f9b1e9101dad75c8a2adff64fe33e324db14df8d8c571487ae1f933f539f8843",
+            "Role": "protocol admission"
+          }
+        ],
+        "Observation": {
+          "ObservationId": "observation-4c38374a189f4efdb1045aa182bff9ec",
+          "SubjectId": "repository-work:9019bb423464ac27",
+          "Kind": "source-and-admission-observation",
+          "Summary": "Observed source capture, protocol admission, authority checks, and invariant checks before artifact generation.",
+          "RawObservationPath": ".agents/semantic/repository-work/observations/observation.4c38374a189f4efdb1045aa182bff9ec.md",
+          "CapturedAt": "2026-07-08T02:05:03.8326118+00:00"
+        },
+        "Validation": {
+          "Validator": "RepositoryWorkObservationValidator",
+          "Accepted": true,
+          "Reason": "Observation accepted as evidence input.",
+          "ValidatedAt": "2026-07-08T02:05:03.8449359+00:00"
+        },
+        "Outcome": "observation-accepted-for-evidence",
+        "StartedAt": "2026-07-08T02:05:03.7289467+00:00",
+        "CompletedAt": "2026-07-08T02:05:03.8460649+00:00"
+      },
+      "Evidence": {
+        "EvidenceId": "evidence-4c38374a189f4efdb1045aa182bff9ec",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "InteractionId": "interaction-4c38374a189f4efdb1045aa182bff9ec",
+        "ObservationId": "observation-4c38374a189f4efdb1045aa182bff9ec",
+        "ConsumerScope": "repositorywork.semantic-evaluation",
+        "EvidenceKind": "validated-interaction-observation",
+        "EvidencePath": ".agents/semantic/repository-work/evidence/evidence.4c38374a189f4efdb1045aa182bff9ec.md",
+        "EvidenceHash": "fac54b79d0270620ffa37026ce66da1920b8ff89b6c9459b6ffcfa3aaed98d32",
+        "SourcePaths": [
+          "plan.md",
+          ".agents/semantic/repository-work/captured-source-view.md",
+          ".agents/semantic/repository-work/observations/observation.4c38374a189f4efdb1045aa182bff9ec.md"
+        ],
+        "BoundAt": "2026-07-08T02:05:03.8477544+00:00"
+      },
+      "CandidateArtifact": {
+        "ArtifactId": "artifact-current-summary-v0002",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "Owner": "RepositoryWork semantic execution",
+        "Role": "current-semantic-summary",
+        "RepresentationKey": "markdown",
+        "Version": 2,
+        "Lifecycle": "candidate",
+        "Path": ".agents/semantic/repository-work/candidates/current-semantic-summary.v0002.md",
+        "Hash": "b59388ca7c1aac869a9c2e2821f2d4d5b77801bdedd15c4e4f19816e789aeefa",
+        "Provenance": [
+          ".agents/semantic/repository-work/captured-source-view.md",
+          ".agents/semantic/repository-work/evidence/evidence.4c38374a189f4efdb1045aa182bff9ec.md"
+        ],
+        "MutationAuthority": "repositorywork.artifact-promotion"
+      },
+      "ArtifactValidation": {
+        "ValidationId": "artifact-validation-0002",
+        "CandidateArtifactId": "artifact-current-summary-v0002",
+        "Accepted": true,
+        "Checks": [
+          {
+            "Name": "identity",
+            "Passed": true,
+            "Scope": "repository-work:9019bb423464ac27",
+            "Reason": "Candidate is bound to a subject identity."
+          },
+          {
+            "Name": "role",
+            "Passed": true,
+            "Scope": "current-semantic-summary",
+            "Reason": "Candidate role is current-semantic-summary."
+          },
+          {
+            "Name": "source-provenance",
+            "Passed": true,
+            "Scope": ".agents/semantic/repository-work/captured-source-view.md",
+            "Reason": "Candidate records captured source provenance."
+          },
+          {
+            "Name": "freshness",
+            "Passed": true,
+            "Scope": "943c2f58afc13ea5c524680b447d56e5b664529deb2215f6168b021cf1661492",
+            "Reason": "Candidate is tied to a hash-addressed source capture."
+          },
+          {
+            "Name": "mutation-authority",
+            "Passed": true,
+            "Scope": "repositorywork.artifact-promotion",
+            "Reason": "Candidate requires artifact promotion authority."
+          }
+        ],
+        "ValidatedAt": "2026-07-08T02:05:03.7289467+00:00"
+      },
+      "Decision": {
+        "DecisionId": "decision-b95fcb8b37130277",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "DecisionClass": "candidate-artifact-promotion",
+        "Alternatives": [
+          "promote-candidate",
+          "retain-candidate",
+          "report-only"
+        ],
+        "SuggestedChoice": "promote-candidate",
+        "AcceptedChoice": "promote-candidate",
+        "EvidenceId": "evidence-4c38374a189f4efdb1045aa182bff9ec",
+        "Validator": "RepositoryWorkArtifactPromotionValidator",
+        "DecisionAuthority": "repositorywork.decision-acceptance",
+        "AuthorizedEffect": "promote current semantic summary",
+        "DecidedAt": "2026-07-08T02:05:03.7289467+00:00"
+      },
+      "Promotion": {
+        "PromotionId": "promotion-0002",
+        "CandidateArtifactId": "artifact-current-summary-v0002",
+        "DecisionId": "decision-b95fcb8b37130277",
+        "Accepted": true,
+        "AuthorityTransferred": "repositorywork.artifact-promotion",
+        "CurrentArtifactPath": ".agents/semantic/repository-work/current-semantic-summary.md",
+        "AuthoritativeVersionPath": ".agents/semantic/repository-work/versions/current-semantic-summary.v0002.md",
+        "SupersededVersionPath": ".agents/semantic/repository-work/versions/current-semantic-summary.v0001.md",
+        "Version": 2,
+        "Reason": "Candidate validation and evidence-bound decision authorized promotion.",
+        "PromotedAt": "2026-07-08T02:05:03.8620596+00:00"
+      },
+      "StateEntry": {
+        "StateEntryId": "state-4c38374a189f4efdb1045aa182bff9ec",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "State": "StateCurrent",
+        "Owner": "RepositoryWork semantic execution",
+        "EntryInteractionId": "interaction-4c38374a189f4efdb1045aa182bff9ec",
+        "EntryEvidenceId": "evidence-4c38374a189f4efdb1045aa182bff9ec",
+        "LifecycleAgreement": "State entry agrees with accepted evidence, artifact validation, promotion decision, and RepositoryWork lifecycle.",
+        "SupportingArtifacts": [
+          ".agents/semantic/repository-work/candidates/current-semantic-summary.v0002.md",
+          ".agents/semantic/repository-work/versions/current-semantic-summary.v0002.md",
+          ".agents/semantic/repository-work/current-semantic-summary.md"
+        ],
+        "SupportingDecisions": [
+          "decision-b95fcb8b37130277"
+        ],
+        "AllowedNextInteractions": [
+          "RepositoryWorkSemanticExecution",
+          "RepositoryWorkSemanticReport"
+        ],
+        "Classification": "active",
+        "EnteredAt": "2026-07-08T02:05:03.8620832+00:00"
+      },
+      "Blocker": null,
+      "RecoveryReview": null,
+      "Certification": {
+        "CertificationId": "certification-0500daac86d4d44d",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "Claim": "RepositoryWork semantic execution reached current state through admitted protocol, evidence, decision, and promotion.",
+        "EvidenceIds": [
+          "evidence-4c38374a189f4efdb1045aa182bff9ec",
+          "decision-b95fcb8b37130277",
+          "promotion-0002",
+          "state-4c38374a189f4efdb1045aa182bff9ec"
+        ],
+        "Evaluator": "RepositoryWorkCompletionCertificationPolicy",
+        "Policy": "Completion requires accepted observation evidence, promoted artifact, accepted decision, and current state entry.",
+        "Accepted": true,
+        "Decision": "certified",
+        "LifecycleMovement": "CompletionCertified",
+        "CertifiedAt": "2026-07-08T02:05:03.8669821+00:00"
+      },
+      "Distillation": {
+        "DistillationId": "distillation-0002",
+        "SubjectId": "repository-work:9019bb423464ac27",
+        "SourceEvidenceId": "evidence-4c38374a189f4efdb1045aa182bff9ec",
+        "CurrentUnderstandingPath": ".agents/semantic/repository-work/current-understanding.md",
+        "VersionPath": ".agents/semantic/repository-work/versions/current-understanding.v0002.md",
+        "PlacementValidation": "Current understanding placement is valid because certified evidence and promoted summary are referenced by lineage.",
+        "Lineage": [
+          ".agents/semantic/repository-work/evidence/evidence.4c38374a189f4efdb1045aa182bff9ec.md",
+          ".agents/semantic/repository-work/versions/current-semantic-summary.v0002.md",
+          ".agents/semantic/repository-work/completion-certification.json"
+        ],
+        "DistilledAt": "2026-07-08T02:05:03.9084528+00:00"
+      },
+      "CapabilityDeclaration": {
+        "CapabilityId": "repositorywork-semantic-execution",
+        "CapabilityName": "RepositoryWork Semantic Execution",
+        "OwnedSubjects": [
+          "RepositoryWork"
+        ],
+        "AcceptedIntents": [
+          "RepositoryWorkSemanticExecution",
+          "RepositoryWorkSemanticReport"
+        ],
+        "Protocols": [
+          "repositorywork.semantic-execution.v1"
+        ],
+        "AuthorityScopes": [
+          "repository.read",
+          "repositorywork.semantic-execution",
+          "repositorywork.artifact-promotion",
+          "repositorywork.decision-acceptance",
+          "repositorywork.state-entry",
+          "repositorywork.recovery-review",
+          "repositorywork.certification",
+          "repositorywork.distillation",
+          "repositorywork.capability-evaluation",
+          "repositorywork.report"
+        ],
+        "SourcesAndObservations": [
+          "captured source view",
+          "raw interaction observation"
+        ],
+        "Evidence": [
+          "validated interaction evidence"
+        ],
+        "Artifacts": [
+          "candidate current semantic summary",
+          "promoted current semantic summary",
+          "current understanding"
+        ],
+        "Decisions": [
+          "candidate artifact promotion decision",
+          "completion certification decision",
+          "capability acceptance decision"
+        ],
+        "RelationTypes": [
+          "candidate-to-current promotion",
+          "supersession",
+          "source-to-artifact provenance",
+          "evidence-to-decision consumption"
+        ],
+        "States": [
+          "Initialized",
+          "IntentCaptured",
+          "SourceCaptured",
+          "ProtocolAdmitted",
+          "InteractionObserved",
+          "EvidenceBound",
+          "CandidateCreated",
+          "ArtifactPromoted",
+          "DecisionAccepted",
+          "StateCurrent",
+          "Blocked",
+          "Recovered",
+          "CompletionCertified",
+          "Distilled",
+          "CapabilityEvaluated"
+        ],
+        "LifecycleMovements": [
+          "StateCurrent",
+          "Recovered",
+          "CompletionCertified",
+          "Distilled",
+          "CapabilityEvaluated"
+        ],
+        "Invariants": [
+          "no-subjectless-interaction",
+          "no-intentless-interaction",
+          "no-authority-without-scope",
+          "report-fields-do-not-create-authority"
+        ],
+        "Reports": [
+          "latest semantic report",
+          "capability conformance report"
+        ],
+        "Recovery": [
+          "current semantic summary missing-or-stale blocker recovery"
+        ],
+        "Replay": [
+          "semantic ledger replay by run record"
+        ],
+        "Retirement": [
+          "future capability supersession must preserve ledger lineage"
+        ]
+      },
+      "CapabilityEvaluation": {
+        "EvaluationId": "capability-evaluation-c92cdabdfa307156",
+        "CapabilityId": "repositorywork-semantic-execution",
+        "Outcome": "Accepted",
+        "MissingSemantics": [],
+        "ReportPath": ".agents/semantic/repository-work/capability-conformance-report.md",
+        "Decision": "accepted",
+        "EvaluatedAt": "2026-07-08T02:05:03.9120996+00:00"
+      },
+      "ReportPath": ".agents/semantic/repository-work/reports/report.4c38374a189f4efdb1045aa182bff9ec.md"
     }
   ]
 }

@@ -1,23 +1,23 @@
 {
-  "StateEntryId": "state-177f2f2f2fb94a05a97576fd2139c7c1",
+  "StateEntryId": "state-4c38374a189f4efdb1045aa182bff9ec",
   "SubjectId": "repository-work:9019bb423464ac27",
   "State": "StateCurrent",
   "Owner": "RepositoryWork semantic execution",
-  "EntryInteractionId": "interaction-177f2f2f2fb94a05a97576fd2139c7c1",
-  "EntryEvidenceId": "evidence-177f2f2f2fb94a05a97576fd2139c7c1",
+  "EntryInteractionId": "interaction-4c38374a189f4efdb1045aa182bff9ec",
+  "EntryEvidenceId": "evidence-4c38374a189f4efdb1045aa182bff9ec",
   "LifecycleAgreement": "State entry agrees with accepted evidence, artifact validation, promotion decision, and RepositoryWork lifecycle.",
   "SupportingArtifacts": [
-    ".agents/semantic/repository-work/candidates/current-semantic-summary.v0001.md",
-    ".agents/semantic/repository-work/versions/current-semantic-summary.v0001.md",
+    ".agents/semantic/repository-work/candidates/current-semantic-summary.v0002.md",
+    ".agents/semantic/repository-work/versions/current-semantic-summary.v0002.md",
     ".agents/semantic/repository-work/current-semantic-summary.md"
   ],
   "SupportingDecisions": [
-    "decision-c13c7f8bdee3304d"
+    "decision-b95fcb8b37130277"
   ],
   "AllowedNextInteractions": [
     "RepositoryWorkSemanticExecution",
     "RepositoryWorkSemanticReport"
   ],
   "Classification": "active",
-  "EnteredAt": "2026-07-08T02:01:54.2391882+00:00"
+  "EnteredAt": "2026-07-08T02:05:03.8620832+00:00"
 }

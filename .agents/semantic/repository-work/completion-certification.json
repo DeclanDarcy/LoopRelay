@@ -1,17 +1,17 @@
 {
-  "CertificationId": "certification-36b6120a3d989fed",
+  "CertificationId": "certification-0500daac86d4d44d",
   "SubjectId": "repository-work:9019bb423464ac27",
   "Claim": "RepositoryWork semantic execution reached current state through admitted protocol, evidence, decision, and promotion.",
   "EvidenceIds": [
-    "evidence-177f2f2f2fb94a05a97576fd2139c7c1",
-    "decision-c13c7f8bdee3304d",
-    "promotion-0001",
-    "state-177f2f2f2fb94a05a97576fd2139c7c1"
+    "evidence-4c38374a189f4efdb1045aa182bff9ec",
+    "decision-b95fcb8b37130277",
+    "promotion-0002",
+    "state-4c38374a189f4efdb1045aa182bff9ec"
   ],
   "Evaluator": "RepositoryWorkCompletionCertificationPolicy",
   "Policy": "Completion requires accepted observation evidence, promoted artifact, accepted decision, and current state entry.",
   "Accepted": true,
   "Decision": "certified",
   "LifecycleMovement": "CompletionCertified",
-  "CertifiedAt": "2026-07-08T02:01:54.2470086+00:00"
+  "CertifiedAt": "2026-07-08T02:05:03.8669821+00:00"
 }
