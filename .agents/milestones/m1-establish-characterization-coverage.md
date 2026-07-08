@@ -36,7 +36,7 @@
 - [x] Add or confirm completion evaluation parse failure after evaluation
   evidence is written, without converting it to invalid-certification blocker
   state.
-- [ ] Add or confirm invalid parsed certification writes
+- [x] Add or confirm invalid parsed certification writes
   `CompletionCertificationRejected` and intent
   `ResolveInvalidCompletionCertification`.
 - [ ] Add or confirm close-route completion-context update superseding active

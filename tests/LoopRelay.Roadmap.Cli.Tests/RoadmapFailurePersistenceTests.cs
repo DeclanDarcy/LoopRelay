@@ -294,6 +294,88 @@ public sealed class RoadmapFailurePersistenceTests
     }
 
     [Fact]
+    public async Task Invalid_parsed_completion_certification_writes_rejection_journal_and_recovery_intent()
+    {
+        using var repo = SeedRepo(includeCompletionContext: true);
+        const string specPath = ".agents/specs/invalid-completion-certification.md";
+        const string executionEvidencePath = ".agents/evidence/execution/execution-result.0001.md";
+        string evaluation = CompletionEvaluation("Not Complete", "None", "Close Epic");
+        await SeedCompletionClaimAsync(repo, specPath, executionEvidencePath);
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EvaluateEpicCompletionAndDrift")),
+            ScriptedAgentRuntime.Completed(evaluation));
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        const string evaluationPath = ".agents/evidence/evaluations/epic-completion-and-drift.0001.md";
+        const string blockerPath = ".agents/evidence/blockers/invalid-completion-certification.0001.md";
+        string projectionPath = Cli.RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"];
+        Assert.Equal(evaluation, repo.Read(evaluationPath));
+        string blocker = repo.Read(blockerPath);
+        Assert.Contains("Completion certification was parsed successfully", blocker, StringComparison.Ordinal);
+        Assert.Contains("does not allow completion status `Not Complete`", blocker, StringComparison.Ordinal);
+        Assert.Contains(evaluationPath, blocker, StringComparison.Ordinal);
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+
+        var ledgerJsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        ledgerJsonOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        Cli.DecisionLedgerPersistenceDocument ledger = JsonSerializer.Deserialize<Cli.DecisionLedgerPersistenceDocument>(
+            repo.Read(Cli.RoadmapArtifactPaths.DecisionLedgerJson),
+            ledgerJsonOptions)!;
+        Cli.DecisionLedgerEntry ledgerDecision = Assert.Single(ledger.ToDomain());
+        Assert.Equal(Cli.RoadmapState.CompletionEvaluationAndContextUpdate, ledgerDecision.State);
+        Assert.Equal("EvaluateEpicCompletionAndDrift", ledgerDecision.Transition);
+        Assert.Equal(projectionPath, ledgerDecision.ProjectionPath);
+        Assert.Equal([evaluationPath], ledgerDecision.OutputArtifactPaths);
+        Assert.Equal("Close Epic", ledgerDecision.Decision);
+        Assert.Equal("Unclear", ledgerDecision.Confidence);
+        Assert.Equal("Not Complete", ledgerDecision.RationaleExcerpt);
+        Assert.Equal("D0001", await new Cli.DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
+
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal("D0001", state.LastDecisionId);
+        Assert.Equal(Cli.TransitionStatus.Paused, state.LastTransition.Status);
+        Assert.Equal(Cli.RoadmapState.CompletionEvaluationAndContextUpdate, state.LastTransition.From);
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.LastTransition.To);
+        Assert.Equal("CompletionCertificationRouting", state.LastTransition.Prompt);
+        Assert.Equal(projectionPath, state.LastTransition.Projection);
+        Assert.Equal($"{evaluationPath}, {blockerPath}", state.LastTransition.Output);
+        Assert.Equal("Invalid Completion Certification", state.LastTransition.Decision);
+        Cli.BlockerRow persistedBlocker = Assert.Single(state.Blockers);
+        Assert.Contains("does not allow completion status `Not Complete`", persistedBlocker.Blocker, StringComparison.Ordinal);
+        Assert.Equal("ResolveInvalidCompletionCertification", state.TransitionIntent.Intent);
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.TransitionIntent.DispatchState);
+        Assert.Equal([evaluationPath, blockerPath], state.TransitionIntent.EvidencePaths);
+        Assert.Equal(["Resolve invalid completion certification and rerun"], state.NextValidTransitions);
+
+        Cli.TransitionJournalRecord[] journal = ReadJournal(repo);
+        Cli.TransitionJournalRecord completed = journal.Single(record =>
+            record.Event == "TransitionCompleted" &&
+            record.Prompt == "EvaluateEpicCompletionAndDrift");
+        Assert.Equal([Cli.RoadmapArtifactPaths.EvaluationEvidenceDirectory], completed.OutputPaths);
+        Cli.TransitionJournalRecord rejected = journal.Single(record =>
+            record.Event == "CompletionCertificationRejected" &&
+            record.Prompt == "CompletionCertificationRouting");
+        Assert.Equal(Cli.RoadmapState.CompletionEvaluationAndContextUpdate, rejected.PreviousState);
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, rejected.AttemptedState);
+        Assert.Equal(projectionPath, rejected.Projection);
+        Assert.Equal("CompletionCertificationPolicy", rejected.PromptContractKey);
+        Assert.Equal([evaluationPath, blockerPath], rejected.OutputPaths);
+        Assert.Equal("Paused", rejected.Result);
+        Assert.Equal("Invalid Completion Certification", rejected.ParserDecision);
+        Assert.Contains("does not allow completion status `Not Complete`", rejected.ErrorMessage, StringComparison.Ordinal);
+        Assert.NotNull(rejected.InputSnapshot);
+        Assert.DoesNotContain(journal, record =>
+            record.Event == "TransitionFailed" &&
+            record.Prompt == "EvaluateEpicCompletionAndDrift");
+        Assert.DoesNotContain(journal, record =>
+            record.Prompt == "CompletionCertificationRouting" &&
+            record.Event == "TransitionCompleted");
+    }
+
+    [Fact]
     public async Task Invariant_failure_preserves_validator_evidence_state_and_journal()
     {
         using var repo = SeedRepo(includeCompletionContext: true);
@@ -733,15 +815,21 @@ public sealed class RoadmapFailurePersistenceTests
         - [ ] Validator evidence remains authoritative.
         """;
 
-    private static string CompletionEvaluation(string recommendation) => $$"""
+    private static string CompletionEvaluation(string recommendation) =>
+        CompletionEvaluation("Functionally Complete", "None", recommendation);
+
+    private static string CompletionEvaluation(
+        string completionStatus,
+        string driftClassification,
+        string recommendation) => $$"""
         # Epic Completion Evaluation
 
         ## Evaluation Summary
 
         | Field | Value |
         |---|---|
-        | Overall Completion Status | Functionally Complete |
-        | Overall Drift Classification | None |
+        | Overall Completion Status | {{completionStatus}} |
+        | Overall Drift Classification | {{driftClassification}} |
         | Closure Recommendation | {{recommendation}} |
         """;
 
