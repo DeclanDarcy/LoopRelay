@@ -46,30 +46,6 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
         return migrated;
     }
 
-    public async Task<RoadmapStateDocument?> LoadReadOnlyAsync()
-    {
-        RoadmapStatePersistenceDocument? structured = await structuredStore.LoadAsync();
-        if (structured is not null)
-        {
-            return structured.ToDomain();
-        }
-
-        string? content = await artifacts.ReadAsync(RoadmapArtifactPaths.State);
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            return null;
-        }
-
-        try
-        {
-            return ParseLegacyMarkdown(content);
-        }
-        catch (MarkdownParseException exception)
-        {
-            throw new RoadmapStepException($"Legacy roadmap state cannot be loaded for read-only status: {exception.Message}");
-        }
-    }
-
     private static RoadmapStateDocument ParseLegacyMarkdown(string content)
     {
         MarkdownTableParser.ValidateTables(content);

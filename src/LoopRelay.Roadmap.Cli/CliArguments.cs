@@ -18,22 +18,7 @@ internal static class CliArguments
         string? repoPath = null;
         int optionStart;
 
-        if (Is(args[0], "semantic") &&
-            args.Length >= 3 &&
-            Is(args[1], "roadmap-transition") &&
-            Is(args[2], "status"))
-        {
-            command = RoadmapCliCommand.SemanticRoadmapTransitionStatus;
-            if (args.Length < 4 || string.IsNullOrWhiteSpace(args[3]))
-            {
-                error = Usage();
-                return false;
-            }
-
-            repoPath = args[3];
-            optionStart = 4;
-        }
-        else if (TryParseCommand(args[0], out RoadmapCliCommand leadingCommand))
+        if (TryParseCommand(args[0], out RoadmapCliCommand leadingCommand))
         {
             command = leadingCommand;
             if (args.Length < 2 || string.IsNullOrWhiteSpace(args[1]))
@@ -112,9 +97,6 @@ internal static class CliArguments
         return false;
     }
 
-    private static bool Is(string actual, string expected) =>
-        string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
-
     private static bool TryParseExecutionOptions(
         string[] args,
         out RoadmapExecutionOptions options,
@@ -151,7 +133,7 @@ internal static class CliArguments
     }
 
     private static string Usage() =>
-        "Usage: LoopRelay.Roadmap.Cli [status|run|unblock|semantic] <REPO_DIR> [--elevated REASON]  or LoopRelay.Roadmap.Cli semantic roadmap-transition status <REPO_DIR>";
+        "Usage: LoopRelay.Roadmap.Cli [status|run|unblock|semantic] <REPO_DIR> [--elevated REASON]  (REPO_DIR is required)";
 }
 
 internal sealed record RoadmapCliInvocation(
@@ -165,5 +147,4 @@ internal enum RoadmapCliCommand
     Run,
     Unblock,
     Semantic,
-    SemanticRoadmapTransitionStatus,
 }
