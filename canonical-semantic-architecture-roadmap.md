@@ -25,6 +25,8 @@ System boundary
 
 The architectural philosophy is conservative: every phase introduces durable semantic structure that should survive into the finished system. The roadmap avoids bridge architectures whose only purpose is to fit the current implementation. Existing state machines, CLIs, projections, prompts, ledgers, and artifact stores become migration surfaces only after the semantic authority they need has been established.
 
+This does not remove the need for a migration roadmap. Migration artifacts may map, wrap, compare, and retire current implementation paths, but they do not become semantic foundations or change the dependency order in this roadmap.
+
 Expected implementation evolution:
 
 - Early phases produce a small semantic kernel that can name subjects, owners, identities, lifecycles, authority scopes, invariants, relations, sources, intents, protocols, interactions, evidence, artifacts, decisions, and state summaries.

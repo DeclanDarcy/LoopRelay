@@ -4,6 +4,8 @@
 
 This plan adapts `canonical-semantic-architecture-roadmap.md` into an actionable implementation sequence.
 
+This is Track A: semantic realization of the constitution. It is not the migration strategy for the current Roadmap CLI state-machine implementation. The companion migration strategy is `semantic-architecture-migration-roadmap.md`.
+
 The roadmap answers:
 
 ```text
@@ -22,8 +24,22 @@ The implementation strategy is deliberately vertical. Do not begin by building c
 
 - `semantic-constitution.md`
 - `canonical-semantic-architecture-roadmap.md`
+- `semantic-architecture-migration-roadmap.md`
 - Existing LoopRelay artifact and orchestration behavior
 - Existing governance, projection, completion, roadmap, permission, and CLI test surfaces
+
+## Planning Tracks
+
+The work now has two complementary tracks:
+
+| Track | Governing question | Primary artifact |
+| --- | --- | --- |
+| Track A: Semantic Realization | How do we implement the constitution? | `plan.md` |
+| Track B: Migration Strategy | How do we transform the current LoopRelay implementation into that architecture? | `semantic-architecture-migration-roadmap.md` |
+
+Track A must preserve the semantic constitution and should not be demoted to fit the current implementation. Track B must preserve current behavior long enough to migrate it and should not create new semantic foundations.
+
+The two tracks meet at `RepositoryWork`: Track A makes it executable as the first governed subject, while Track B identifies the current state-machine seams that can be wrapped into that subject without losing behavior.
 
 ## Implementation Posture
 
@@ -85,6 +101,14 @@ Each phase must produce:
 - Durable artifact: the record left behind by that behavior.
 - Evaluation gate: how HITL or automation can tell the behavior is real.
 - Irreversible commitment: the architectural choice that should not be undone without governance.
+
+For phases that touch the existing Roadmap CLI state machine, the evaluation gate must also preserve human navigability:
+
+- Can an engineer identify the next transition by reading one authoritative place?
+- Can an engineer understand the current state without reconstructing hidden context from unrelated helpers?
+- Can a transition be followed linearly from admission through evidence, decision, effects, persistence, and report?
+- Can prompt output, parser output, evidence, accepted decision, artifact effect, state effect, and report be distinguished?
+- Can a new state or transition be added without touching unrelated capabilities?
 
 ## Semantic Stability Commitments
 
@@ -908,6 +932,8 @@ What semantic/architectural commitment is now embodied in software?
 
 Milestones should not be accepted if they only add models, interfaces, or documentation without executable behavior.
 
+Migration milestones from `semantic-architecture-migration-roadmap.md` must additionally include a human navigability gate. A migration milestone is not accepted if it preserves behavior but leaves transition authority, ownership, or next-step routing hidden in mixed concerns.
+
 ## Implementation Acceptance Baseline
 
 The plan is considered implemented when the system can execute this end-to-end semantic path for `RepositoryWork`:
@@ -933,6 +959,16 @@ load RepositoryWork subject
 
 The first pass may use narrow implementations for each step. The important property is not breadth. The important property is that every semantic boundary is executable, evidenced, and resistant to accidental authority.
 
+Before any existing state-machine path is retired, the migration track must show:
+
+```text
+current transition recovered
+  -> ownership and effect boundaries mapped
+  -> semantic wrapper admitted through RepositoryWork
+  -> behavior equivalence evidenced
+  -> legacy path retired with compatibility seam removed
+```
+
 ## Explicit Non-Goals
 
 - Do not implement a complete semantic framework before the first vertical slice.
@@ -941,6 +977,7 @@ The first pass may use narrow implementations for each step. The important prope
 - Do not migrate every state machine before one state summary is evidence-grounded.
 - Do not create speculative plugin, registry, or schema infrastructure.
 - Do not treat generated text, parser output, report fields, file writes, command success, or UI display as acceptance authority.
+- Do not treat migration seams, compatibility layers, or recovered flow maps as new semantic primitives.
 
 ## Expected Evolution
 
