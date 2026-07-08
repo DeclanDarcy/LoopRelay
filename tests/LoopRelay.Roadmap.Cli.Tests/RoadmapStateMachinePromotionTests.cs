@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LoopRelay.Roadmap.Cli;
 using RoadmapStateStore = LoopRelay.Roadmap.Cli.RoadmapStateStore;
 
@@ -104,6 +105,82 @@ public sealed class RoadmapStateMachinePromotionTests
         Assert.Equal(blocked, repo.Read(evidencePath));
     }
 
+    [Theory]
+    [InlineData("RealignEpic", "Realign", "ACTIVE-EPIC-REALIGN-SENTINEL")]
+    [InlineData("ReimagineEpic", "Reimagine", "ACTIVE-EPIC-REIMAGINE-SENTINEL")]
+    public async Task Rewrite_prompts_prefer_active_epic_over_current_selection(
+        string runtimePrompt,
+        string disposition,
+        string activeEpicSentinel)
+    {
+        using var repo = SeedRepo();
+        string activeEpic = RoadmapSamples.ValidEpic($"Existing Epic {activeEpicSentinel}", "EPIC-OLD", "Ready");
+        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, activeEpic);
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(ExistingEpicSelection("SELECTION-ONLY-SENTINEL")),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EpicPreparationAudit")),
+            ScriptedAgentRuntime.Completed(AuditDisposition(disposition)),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid(runtimePrompt)),
+            ScriptedAgentRuntime.Completed(RewriteBlocked(runtimePrompt)));
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        string prompt = RewriteRuntimePrompt(runtime);
+        Assert.Contains(activeEpicSentinel, prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECTION-ONLY-SENTINEL", prompt, StringComparison.Ordinal);
+
+        Cli.TransitionJournalRecord started = ReadJournal(repo).Single(record =>
+            record.Event == "TransitionStarted" &&
+            record.Prompt == runtimePrompt);
+        Assert.NotNull(started.InputSnapshot);
+        Assert.Contains(started.InputSnapshot.ArtifactInputs, input =>
+            input.Path == Cli.RoadmapArtifactPaths.ActiveEpic &&
+            input.Roles == Cli.TransitionInputRole.ActiveEpic);
+        Assert.DoesNotContain(started.InputSnapshot.ArtifactInputs, input =>
+            input.Path == Cli.RoadmapArtifactPaths.Selection);
+        Assert.Equal(Cli.RoadmapHash.Sha256(activeEpic), started.InputArtifactHashes[Cli.RoadmapArtifactPaths.ActiveEpic]);
+        Assert.False(started.InputArtifactHashes.ContainsKey(Cli.RoadmapArtifactPaths.Selection));
+    }
+
+    [Theory]
+    [InlineData("RealignEpic", "Realign")]
+    [InlineData("ReimagineEpic", "Reimagine")]
+    public async Task Rewrite_prompts_fallback_to_current_selection_when_active_epic_is_missing(
+        string runtimePrompt,
+        string disposition)
+    {
+        using var repo = SeedRepo();
+        string selection = ExistingEpicSelection("SELECTION-FALLBACK-SENTINEL");
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(selection),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EpicPreparationAudit")),
+            ScriptedAgentRuntime.Completed(AuditDisposition(disposition)),
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid(runtimePrompt)),
+            ScriptedAgentRuntime.Completed(RewriteBlocked(runtimePrompt)));
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ActiveEpic));
+        string prompt = RewriteRuntimePrompt(runtime);
+        Assert.Contains("SELECTION-FALLBACK-SENTINEL", prompt, StringComparison.Ordinal);
+
+        Cli.TransitionJournalRecord started = ReadJournal(repo).Single(record =>
+            record.Event == "TransitionStarted" &&
+            record.Prompt == runtimePrompt);
+        Assert.NotNull(started.InputSnapshot);
+        Assert.Contains(started.InputSnapshot.ArtifactInputs, input =>
+            input.Path == Cli.RoadmapArtifactPaths.Selection &&
+            input.Roles == Cli.TransitionInputRole.Selection);
+        Assert.DoesNotContain(started.InputSnapshot.ArtifactInputs, input =>
+            input.Path == Cli.RoadmapArtifactPaths.ActiveEpic);
+        Assert.Equal(Cli.RoadmapHash.Sha256(selection), started.InputArtifactHashes[Cli.RoadmapArtifactPaths.Selection]);
+        Assert.False(started.InputArtifactHashes.ContainsKey(Cli.RoadmapArtifactPaths.ActiveEpic));
+    }
+
     [Fact]
     public async Task Successful_authoring_promotes_active_epic_generates_milestone_specs_and_pauses()
     {
@@ -204,7 +281,7 @@ public sealed class RoadmapStateMachinePromotionTests
         | Primary Reason | Exercise active epic promotion. |
         """;
 
-    private static string ExistingEpicSelection() => """
+    private static string ExistingEpicSelection(string primaryReason = "Existing epic needs audit.") => $$"""
         # Next Strategic Initiative Selection
 
         ## Recommendation Summary
@@ -215,7 +292,7 @@ public sealed class RoadmapStateMachinePromotionTests
         | Recommended Initiative | Existing Epic |
         | Initiative Type | Existing Roadmap Epic |
         | Confidence | High |
-        | Primary Reason | Existing epic needs audit. |
+        | Primary Reason | {{primaryReason}} |
 
         ## If Existing Roadmap Epic Selected
 
@@ -223,7 +300,7 @@ public sealed class RoadmapStateMachinePromotionTests
         |---|---|
         | Epic ID | EPIC-OLD |
         | Epic Name | Existing Epic |
-        | Why This Epic Now | It is the next candidate. |
+        | Why This Epic Now | {{primaryReason}} |
         | Dependencies Satisfied? | Yes |
         | Required Pre-Implementation Follow-Up | None |
         """;
@@ -284,6 +361,25 @@ public sealed class RoadmapStateMachinePromotionTests
 
         The audit does not support safe reimagination.
         """;
+
+    private static string RewriteBlocked(string runtimePrompt) =>
+        runtimePrompt switch
+        {
+            "RealignEpic" => RealignBlocked(),
+            "ReimagineEpic" => ReimagineBlocked(),
+            _ => throw new ArgumentOutOfRangeException(nameof(runtimePrompt)),
+        };
+
+    private static string RewriteRuntimePrompt(ScriptedAgentRuntime runtime) =>
+        Assert.Single(runtime.Prompts, prompt =>
+            prompt.Contains("# Roadmap Runtime Prompt Context", StringComparison.Ordinal) &&
+            prompt.Contains("## Current Epic", StringComparison.Ordinal));
+
+    private static Cli.TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
+        repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
+            .ToArray();
 
     private static string MilestoneBundle() => """
         # FILE: .agents/specs/promotion-test.md
