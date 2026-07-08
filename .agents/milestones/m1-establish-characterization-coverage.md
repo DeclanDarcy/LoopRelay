@@ -19,7 +19,7 @@
 - [x] Add or confirm `Insufficient Evidence` audit output persisting audit
   evidence and audit decision before throwing, with no durable blocker branch
   state.
-- [ ] Add or confirm `CreateNewEpic` prompt failure using status `Failed`,
+- [x] Add or confirm `CreateNewEpic` prompt failure using status `Failed`,
   decision `Runtime Failure`, and intent `ResolveTransitionFailure`.
 - [ ] Add or confirm `RealignEpic` and `ReimagineEpic` fallback to current
   selection only when `.agents/epic.md` is missing.

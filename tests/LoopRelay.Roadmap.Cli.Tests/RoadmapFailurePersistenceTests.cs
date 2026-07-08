@@ -9,19 +9,20 @@ namespace LoopRelay.Roadmap.Cli.Tests;
 public sealed class RoadmapFailurePersistenceTests
 {
     [Theory]
-    [InlineData("CreateRoadmapCompletionContext", "CoreReady", "RoadmapCompletionContextReady", Cli.RoadmapArtifactPaths.RoadmapCompletionContext)]
-    [InlineData("SelectNextEpic", "RoadmapCompletionContextReady", "SelectNextStrategicInitiative", Cli.RoadmapArtifactPaths.Selection)]
-    [InlineData("EpicPreparationAudit", "ExistingEpicSelected", "EpicPreparationAudit", Cli.RoadmapArtifactPaths.AuditEvidenceDirectory)]
-    [InlineData("CreateNewEpic", "NewEpicProposed", "ActiveEpicReady", Cli.RoadmapArtifactPaths.ActiveEpic)]
-    [InlineData("RealignEpic", "RealignEpic", "ActiveEpicReady", Cli.RoadmapArtifactPaths.ActiveEpic)]
-    [InlineData("ReimagineEpic", "ReimagineEpic", "ActiveEpicReady", Cli.RoadmapArtifactPaths.ActiveEpic)]
-    [InlineData("SplitEpic", "SplitEpicProposed", "SplitChildSelection", Cli.RoadmapArtifactPaths.SplitFamiliesDirectory)]
-    [InlineData("GenerateMilestoneDeepDivesForEpic", "ActiveEpicReady", "MilestoneSpecsReady", Cli.RoadmapArtifactPaths.SpecsDirectory)]
+    [InlineData("CreateRoadmapCompletionContext", "CoreReady", "RoadmapCompletionContextReady", Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "Failed")]
+    [InlineData("SelectNextEpic", "RoadmapCompletionContextReady", "SelectNextStrategicInitiative", Cli.RoadmapArtifactPaths.Selection, "Failed")]
+    [InlineData("EpicPreparationAudit", "ExistingEpicSelected", "EpicPreparationAudit", Cli.RoadmapArtifactPaths.AuditEvidenceDirectory, "Failed")]
+    [InlineData("CreateNewEpic", "NewEpicProposed", "ActiveEpicReady", Cli.RoadmapArtifactPaths.ActiveEpic, "Runtime Failure")]
+    [InlineData("RealignEpic", "RealignEpic", "ActiveEpicReady", Cli.RoadmapArtifactPaths.ActiveEpic, "Runtime Failure")]
+    [InlineData("ReimagineEpic", "ReimagineEpic", "ActiveEpicReady", Cli.RoadmapArtifactPaths.ActiveEpic, "Runtime Failure")]
+    [InlineData("SplitEpic", "SplitEpicProposed", "SplitChildSelection", Cli.RoadmapArtifactPaths.SplitFamiliesDirectory, "Failed")]
+    [InlineData("GenerateMilestoneDeepDivesForEpic", "ActiveEpicReady", "MilestoneSpecsReady", Cli.RoadmapArtifactPaths.SpecsDirectory, "Runtime Failure")]
     public async Task Prompt_transition_failures_are_owned_by_the_transition_layer(
         string prompt,
         string expectedFrom,
         string expectedTo,
-        string expectedOutput)
+        string expectedOutput,
+        string expectedDecision)
     {
         Cli.RoadmapState expectedFromState = Enum.Parse<Cli.RoadmapState>(expectedFrom);
         Cli.RoadmapState expectedToState = Enum.Parse<Cli.RoadmapState>(expectedTo);
@@ -34,6 +35,7 @@ public sealed class RoadmapFailurePersistenceTests
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(Cli.TransitionStatus.Failed, state.LastTransition.Status);
+        Assert.Equal(expectedDecision, state.LastTransition.Decision);
         Assert.Equal(expectedFromState, state.LastTransition.From);
         Assert.Equal(expectedToState, state.LastTransition.To);
         Assert.Equal(prompt, state.LastTransition.Prompt);
