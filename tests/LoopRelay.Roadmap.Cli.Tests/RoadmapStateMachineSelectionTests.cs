@@ -470,17 +470,18 @@ internal static class StateMachineFactory
         var lifecycle = new Cli.ArtifactLifecycleStore(repo.Artifacts);
         var stateStore = new RoadmapStateStore(repo.Artifacts);
         var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
+        var journal = new Cli.TransitionJournalStore(repo.Artifacts);
         var transitionPersistence = new Cli.RoadmapTransitionPersistence(
             repo.Artifacts,
             manifest,
             stateStore,
-            decisionLedger);
+            decisionLedger,
+            journal);
         var split = new Cli.SplitFamilyStore(repo.Artifacts);
         var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new Cli.RoadmapPromptRunner(runtime, repo.Repository, effectiveConsole);
         var contextBuilder = new Cli.RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation);
         var inputResolver = new Cli.TransitionInputResolver(repo.Artifacts, executionPreparation);
-        var journal = new Cli.TransitionJournalStore(repo.Artifacts);
         var promptTransitionRunner = new Cli.RoadmapPromptTransitionRunner(
             inputResolver,
             runner,

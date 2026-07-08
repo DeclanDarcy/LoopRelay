@@ -36,7 +36,7 @@ write.
 - [x] Compute default next transitions when an explicit list is not supplied.
 - [x] Preserve output formatting exactly as callers provide it, including joined
   comma-separated output lists.
-- [ ] Workflow-failure helpers persist the same current state, status, prompt,
+- [x] Workflow-failure helpers persist the same current state, status, prompt,
   output path, blocker rows, recovery intent, evidence paths, and
   next-transition text as the current state machine.
 

@@ -101,12 +101,13 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             new RoadmapCompletionObserver(console));
         var stateStore = new RoadmapStateStore(artifacts);
         var decisionLedger = new DecisionLedgerStore(artifacts);
+        var journal = new TransitionJournalStore(artifacts);
         var transitionPersistence = new RoadmapTransitionPersistence(
             artifacts,
             manifestStore,
             stateStore,
-            decisionLedger);
-        var journal = new TransitionJournalStore(artifacts);
+            decisionLedger,
+            journal);
         var promptTransitionRunner = new RoadmapPromptTransitionRunner(
             inputResolver,
             promptRunner,

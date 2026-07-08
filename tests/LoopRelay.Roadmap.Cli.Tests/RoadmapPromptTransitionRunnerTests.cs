@@ -70,12 +70,13 @@ public sealed class RoadmapPromptTransitionRunnerTests
         var promptRunner = new RoadmapPromptRunner(runtime, repo.Repository, new TestConsole());
         var manifest = new ProjectionManifestStore(repo.Artifacts);
         var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
+        var journal = new TransitionJournalStore(repo.Artifacts);
         var persistence = new RoadmapTransitionPersistence(
             repo.Artifacts,
             manifest,
             stateStore,
-            decisionLedger);
-        var journal = new TransitionJournalStore(repo.Artifacts);
+            decisionLedger,
+            journal);
         return new RoadmapPromptTransitionRunner(
             inputResolver,
             promptRunner,

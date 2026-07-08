@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LoopRelay.Roadmap.Cli;
 
 namespace LoopRelay.Roadmap.Cli.Tests;
@@ -72,7 +73,8 @@ public sealed class RoadmapTransitionPersistenceTests
             repo.Artifacts,
             manifestStore,
             stateStore,
-            decisionLedger);
+            decisionLedger,
+            new Cli.TransitionJournalStore(repo.Artifacts));
 
         await persistence.SaveAsync(
             Cli.RoadmapState.ActiveEpicReady,
@@ -106,6 +108,82 @@ public sealed class RoadmapTransitionPersistenceTests
         Assert.Contains(saved.ActiveArtifacts, row => row.Path == Cli.RoadmapArtifactPaths.RoadmapCompletionContext && row.Status == "Present");
         Assert.Contains(saved.ActiveArtifacts, row => row.Path == Cli.RoadmapArtifactPaths.Selection && row.Status == "Missing");
         Assert.Contains(saved.ActiveArtifacts, row => row.Path == Cli.RoadmapArtifactPaths.ActiveEpic && row.Status == "Present");
+    }
+
+    [Fact]
+    public async Task Persist_workflow_failure_writes_recovery_state_and_journal_record()
+    {
+        using var repo = new TempRepo();
+        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, "# Epic: Active\n");
+
+        var manifestStore = new Cli.ProjectionManifestStore(repo.Artifacts);
+        var stateStore = new RoadmapStateStore(repo.Artifacts);
+        var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
+        var journalStore = new Cli.TransitionJournalStore(repo.Artifacts);
+        var persistence = new Cli.RoadmapTransitionPersistence(
+            repo.Artifacts,
+            manifestStore,
+            stateStore,
+            decisionLedger,
+            journalStore);
+
+        DateTimeOffset failedAt = DateTimeOffset.Parse("2026-01-04T00:00:00Z");
+        string[] evidencePaths =
+        [
+            ".agents/evidence/orchestration/invariant.0001.md",
+            ".agents/evidence/blockers/fallback.0001.md",
+        ];
+        var failure = new Cli.RoadmapWorkflowFailure(
+            "InvariantFailed",
+            Cli.RoadmapState.ActiveEpicReady,
+            Cli.RoadmapState.MilestoneSpecsReady,
+            Cli.RoadmapState.EvidenceBlocked,
+            Cli.TransitionStatus.Paused,
+            "GenerateMilestoneDeepDivesForEpic",
+            Cli.RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"],
+            "InvariantValidator",
+            "SpecEpicMismatch",
+            evidencePaths,
+            "Spec epic path does not match the active epic.",
+            "Repair the milestone spec bundle.",
+            "ResolveInvariantViolation",
+            "Invariant Failed: SpecEpicMismatch",
+            failedAt);
+
+        await persistence.PersistWorkflowFailureAsync(failure);
+
+        Cli.RoadmapStateDocument saved = (await stateStore.LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, saved.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Paused, saved.LastTransition.Status);
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, saved.LastTransition.From);
+        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, saved.LastTransition.To);
+        Assert.Equal("GenerateMilestoneDeepDivesForEpic", saved.LastTransition.Prompt);
+        Assert.Equal(Cli.RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"], saved.LastTransition.Projection);
+        Assert.Equal(string.Join(", ", evidencePaths), saved.LastTransition.Output);
+        Assert.Equal("Invariant Failed: SpecEpicMismatch", saved.LastTransition.Decision);
+        Assert.Equal(failedAt, saved.LastTransition.StartedAt);
+        Assert.Equal(failedAt, saved.LastTransition.CompletedAt);
+        Cli.BlockerRow blocker = Assert.Single(saved.Blockers);
+        Assert.Equal("Spec epic path does not match the active epic.", blocker.Blocker);
+        Assert.Equal("Repair the milestone spec bundle.", blocker.RequiredNextStep);
+        Assert.Equal("ResolveInvariantViolation", saved.TransitionIntent.Intent);
+        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, saved.TransitionIntent.DispatchState);
+        Assert.Equal(evidencePaths, saved.TransitionIntent.EvidencePaths);
+        Assert.Equal(["Review invariant failure evidence and rerun"], saved.NextValidTransitions);
+        Assert.Contains(saved.ActiveArtifacts, row => row.Path == Cli.RoadmapArtifactPaths.ActiveEpic && row.Status == "Present");
+
+        Cli.TransitionJournalRecord journal = JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(
+            repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal("InvariantFailed", journal.Event);
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, journal.PreviousState);
+        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, journal.AttemptedState);
+        Assert.Equal("GenerateMilestoneDeepDivesForEpic", journal.Prompt);
+        Assert.Equal("InvariantValidator", journal.PromptContractKey);
+        Assert.Equal(evidencePaths, journal.OutputPaths);
+        Assert.Equal("EvidenceBlocked", journal.Result);
+        Assert.Equal("SpecEpicMismatch", journal.ParserDecision);
+        Assert.Equal("Spec epic path does not match the active epic.", journal.ErrorMessage);
     }
 
     [Fact]

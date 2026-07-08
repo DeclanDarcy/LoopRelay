@@ -1512,7 +1512,7 @@ internal sealed class RoadmapStateMachine(
             invariant.RecoveryGuidance,
             failedAt);
 
-        await PersistWorkflowFailureAsync(failure);
+        await transitionPersistence.PersistWorkflowFailureAsync(failure);
         throw RoadmapStepException.AlreadyPersisted(new RoadmapStepException(reason));
     }
 
@@ -1552,44 +1552,6 @@ internal sealed class RoadmapStateMachine(
                 details,
                 failedAt));
         return [fallbackPath];
-    }
-
-    private async Task PersistWorkflowFailureAsync(RoadmapWorkflowFailure failure)
-    {
-        IReadOnlyDictionary<string, string> inputHashes = failure.InputSnapshot?.ToInputArtifactHashes()
-            ?? new Dictionary<string, string>(StringComparer.Ordinal);
-        await journalStore.AppendAsync(new TransitionJournalRecord(
-            failure.JournalEvent,
-            Guid.NewGuid().ToString("N"),
-            failure.FailedAt,
-            failure.OriginatingState,
-            failure.AttemptedState,
-            failure.Transition,
-            failure.Projection,
-            failure.PromptContractKey,
-            inputHashes,
-            failure.EvidencePaths,
-            0,
-            failure.FailureState.ToString(),
-            failure.FailureCategory,
-            failure.Reason,
-            failure.InputSnapshot));
-
-        await SaveStateAsync(
-            failure.FailureState,
-            failure.StateTransitionStatus,
-            failure.OriginatingState,
-            failure.AttemptedState,
-            failure.Transition,
-            failure.Projection,
-            FormatList(failure.EvidencePaths),
-            failure.Decision,
-            failure.FailedAt,
-            failure.FailedAt,
-            null,
-            [new BlockerRow(failure.Reason, failure.RequiredNextStep)],
-            new RoadmapTransitionIntent(failure.RecoveryIntent, failure.FailureState, failure.EvidencePaths),
-            ["Review invariant failure evidence and rerun"]);
     }
 
     private async Task AppendDecisionAsync(RoadmapState state, string transition, string projectionPath, string outputPath, string decision, string confidence, string rationale)

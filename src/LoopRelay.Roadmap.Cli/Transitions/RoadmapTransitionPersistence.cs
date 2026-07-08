@@ -4,7 +4,8 @@ internal sealed class RoadmapTransitionPersistence(
     RoadmapArtifacts artifacts,
     ProjectionManifestStore manifestStore,
     RoadmapStateStore stateStore,
-    DecisionLedgerStore decisionLedger)
+    DecisionLedgerStore decisionLedger,
+    TransitionJournalStore journalStore)
 {
     public async Task SaveAsync(
         RoadmapState current,
@@ -52,6 +53,44 @@ internal sealed class RoadmapTransitionPersistence(
             SplitFamiliesCount = summary.SplitFamiliesCount,
             ProjectionManifestCounts = summary.ProjectionManifestCounts,
         });
+    }
+
+    public async Task PersistWorkflowFailureAsync(RoadmapWorkflowFailure failure)
+    {
+        IReadOnlyDictionary<string, string> inputHashes = failure.InputSnapshot?.ToInputArtifactHashes()
+            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        await journalStore.AppendAsync(new TransitionJournalRecord(
+            failure.JournalEvent,
+            Guid.NewGuid().ToString("N"),
+            failure.FailedAt,
+            failure.OriginatingState,
+            failure.AttemptedState,
+            failure.Transition,
+            failure.Projection,
+            failure.PromptContractKey,
+            inputHashes,
+            failure.EvidencePaths,
+            0,
+            failure.FailureState.ToString(),
+            failure.FailureCategory,
+            failure.Reason,
+            failure.InputSnapshot));
+
+        await SaveAsync(
+            failure.FailureState,
+            failure.StateTransitionStatus,
+            failure.OriginatingState,
+            failure.AttemptedState,
+            failure.Transition,
+            failure.Projection,
+            FormatList(failure.EvidencePaths),
+            failure.Decision,
+            failure.FailedAt,
+            failure.FailedAt,
+            null,
+            [new BlockerRow(failure.Reason, failure.RequiredNextStep)],
+            new RoadmapTransitionIntent(failure.RecoveryIntent, failure.FailureState, failure.EvidencePaths),
+            ["Review invariant failure evidence and rerun"]);
     }
 
     public static IReadOnlyList<string> ParseOutputEvidencePaths(string output)
@@ -119,6 +158,9 @@ internal sealed class RoadmapTransitionPersistence(
 
     private static string ExecutionCommandText(ExecutionDispositionCommand command) =>
         ExecutionDispositionProtocol.CommandText(command);
+
+    private static string FormatList(IReadOnlyList<string> values) =>
+        values.Count == 0 ? "None" : string.Join(", ", values);
 }
 
 internal sealed record RoadmapStateSummarySnapshot(
