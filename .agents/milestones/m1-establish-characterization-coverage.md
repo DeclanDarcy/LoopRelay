@@ -11,7 +11,7 @@
   projection blocker evidence before any prompt-start state for that prompt.
 - [x] Add or confirm bootstrap runtime failure preserving output path
   `.agents/core/roadmap-completion-context.md`.
-- [ ] Add or confirm selection parse failure after `.agents/selection.md`,
+- [x] Add or confirm selection parse failure after `.agents/selection.md`,
   numbered selection evidence, provenance, and lifecycle are already written,
   and before decision-ledger append.
 - [ ] Add or confirm stale active selection is rejected before create, split,

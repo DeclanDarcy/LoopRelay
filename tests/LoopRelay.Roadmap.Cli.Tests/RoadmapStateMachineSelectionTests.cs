@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Completion;
 using LoopRelay.Infrastructure.Artifacts;
@@ -121,6 +122,64 @@ public sealed class RoadmapStateMachineSelectionTests
     }
 
     [Fact]
+    public async Task Selection_parse_failure_happens_after_selection_artifacts_and_before_decision_ledger_append()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
+        const string invalidSelection = """
+            # Next Strategic Initiative Selection
+
+            ## Recommendation Summary
+
+            | Field | Value |
+            |---|---|
+            | Recommended Outcome | Unsupported Outcome |
+            | Recommended Initiative | Investigate A |
+            | Initiative Type | Strategic Investigation |
+            | Confidence | Medium |
+            | Primary Reason | Parser should fail after materialization. |
+            """;
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+            ScriptedAgentRuntime.Completed(invalidSelection));
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Assert.Equal(invalidSelection, repo.Read(Cli.RoadmapArtifactPaths.Selection));
+
+        string evidencePath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SelectionEvidenceDirectory, "selection.*.md"));
+        Assert.Equal(invalidSelection, repo.Read(evidencePath));
+
+        Cli.SelectionProvenanceManifest manifest = await new Cli.SelectionProvenanceManifestStore(repo.Artifacts).LoadAsync();
+        Cli.DerivedArtifactManifestEntry provenance = Assert.Single(manifest.ActiveSelections);
+        Assert.Equal(Cli.RoadmapArtifactPaths.Selection, provenance.ArtifactPath);
+        Assert.Equal(Cli.RoadmapHash.Sha256(invalidSelection), provenance.ArtifactHash);
+
+        Cli.ArtifactLifecycleEntry lifecycle = Assert.Single(
+            await new Cli.ArtifactLifecycleStore(repo.Artifacts).LoadAsync(),
+            entry => entry.Path == Cli.RoadmapArtifactPaths.Selection);
+        Assert.Equal(Cli.ArtifactLifecycleState.Ready, lifecycle.State);
+        Assert.Equal(evidencePath, lifecycle.Notes);
+
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.DecisionLedgerJson));
+        Assert.Equal("None", await new DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
+
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.SelectNextStrategicInitiative, state.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Completed, state.LastTransition.Status);
+        Assert.Equal("Completed", state.LastTransition.Decision);
+
+        Cli.TransitionJournalRecord[] selectionRecords = ReadJournal(repo)
+            .Where(record => record.Prompt == "SelectNextEpic")
+            .ToArray();
+        Assert.Contains(selectionRecords, record => record.Event == "TransitionCompleted");
+        Assert.DoesNotContain(selectionRecords, record => record.Event == "TransitionFailed");
+    }
+
+    [Fact]
     public async Task Selection_output_captures_structured_hitl_request_markers()
     {
         using var repo = new TempRepo();
@@ -175,6 +234,12 @@ public sealed class RoadmapStateMachineSelectionTests
                 Cli.ProjectionFreshness.Fresh,
                 null));
     }
+
+    private static Cli.TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
+        repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
+            .ToArray();
 
     private static string StrategicInvestigationSelection() => """
         # Next Strategic Initiative Selection
