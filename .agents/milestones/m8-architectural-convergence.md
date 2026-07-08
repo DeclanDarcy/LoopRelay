@@ -5,14 +5,14 @@
 simplify only where implementation evidence shows friction or duplication, without adding capability or changing the review-loop intent.
 
 ## Work
-- [ ] Review terminology across model names, prompt text, ledger fields, evidence artifacts, and tests.
-- [ ] Remove duplicated policy wording and duplicated path constants.
-- [ ] Confirm classification, semantic confirmation, ledger, post-execution integration, synthesis, and completion review have clear ownership.
-- [ ] Keep review state separate from roadmap decision ledgers and completion certification decisions.
-- [ ] Collapse helper classes only when boundaries are artificial after implementation.
-- [ ] Remove or revise any code that implies commit gating, publication gating, repository acceptance, structured knowledge extraction, or documentation debt analysis.
-- [ ] Preserve every behavior required by the HITL-described post-execution review loop; do not use convergence to add features, change policy semantics, or weaken implementation-first prompt guidance.
-- [ ] Add or adjust tests only for behavior that moved during convergence.
+- [x] Review terminology across model names, prompt text, ledger fields, evidence artifacts, and tests.
+- [x] Remove duplicated policy wording and duplicated path constants.
+- [x] Confirm classification, semantic confirmation, ledger, post-execution integration, synthesis, and completion review have clear ownership.
+- [x] Keep review state separate from roadmap decision ledgers and completion certification decisions.
+- [x] Collapse helper classes only when boundaries are artificial after implementation.
+- [x] Remove or revise any code that implies commit gating, publication gating, repository acceptance, structured knowledge extraction, or documentation debt analysis.
+- [x] Preserve every behavior required by the HITL-described post-execution review loop; do not use convergence to add features, change policy semantics, or weaken implementation-first prompt guidance.
+- [x] Add or adjust tests only for behavior that moved during convergence.
 
 ## Detail Notes
 
@@ -46,7 +46,7 @@ Remove or revise any code, prompt text, test name, or evidence wording that impl
 Do not remove tests solely because the architecture was simplified. Move or update tests when behavior moves; delete tests only when the covered behavior was intentionally removed from scope.
 
 ## Acceptance
-- [ ] The implemented capability has stable terminology and clear ownership.
-- [ ] Prompt policy flow remains centralized.
-- [ ] The architecture is simpler than immediately after the feature landed.
-- [ ] No new capability is added during convergence.
+- [x] The implemented capability has stable terminology and clear ownership.
+- [x] Prompt policy flow remains centralized.
+- [x] The architecture is simpler than immediately after the feature landed.
+- [x] No new capability is added during convergence.

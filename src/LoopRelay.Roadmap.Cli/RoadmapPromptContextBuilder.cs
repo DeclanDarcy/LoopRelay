@@ -1,5 +1,5 @@
 using System.Text;
-using LoopRelay.Orchestration;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Roadmap.Cli;
 
@@ -97,14 +97,14 @@ internal sealed class RoadmapPromptContextBuilder(
 
     private async Task AddNonImplementationReviewSectionsAsync(List<ContextSection> sections)
     {
-        await AddOptionalSectionAsync(
-            sections,
-            $"Non-Implementation Review Summary: {OrchestrationArtifactPaths.NonImplementationReview}",
-            OrchestrationArtifactPaths.NonImplementationReview);
-        await AddOptionalSectionAsync(
-            sections,
-            $"Non-Implementation Review Synthesis: {OrchestrationArtifactPaths.NonImplementationSynthesis}",
-            OrchestrationArtifactPaths.NonImplementationSynthesis);
+        foreach (NonImplementationReviewPromptEvidenceSection evidenceSection in
+            NonImplementationReviewPromptEvidence.BuildSections())
+        {
+            await AddOptionalSectionAsync(
+                sections,
+                evidenceSection.Title,
+                evidenceSection.Path);
+        }
     }
 
     private async Task AddOptionalSectionAsync(List<ContextSection> sections, string title, string relativePath)

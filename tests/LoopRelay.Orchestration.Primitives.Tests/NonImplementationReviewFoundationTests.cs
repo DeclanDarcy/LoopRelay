@@ -21,11 +21,44 @@ public sealed class NonImplementationReviewFoundationTests
     [Fact]
     public void Canonical_review_paths_are_owned_by_orchestration_paths()
     {
+        Assert.Equal(".agents/evidence", OrchestrationArtifactPaths.EvidenceDirectory);
+        Assert.True(OrchestrationArtifactPaths.IsAgentsPath(".agents/review/non-implementation-ledger.json"));
+        Assert.False(OrchestrationArtifactPaths.IsAgentsPath("docs/review.md"));
         Assert.Equal(".agents/review/non-implementation-ledger.json", OrchestrationArtifactPaths.NonImplementationLedger);
         Assert.Equal(".agents/review/non-implementation-review.md", OrchestrationArtifactPaths.NonImplementationReview);
         Assert.Equal(".agents/review/non-implementation-decisions.md", OrchestrationArtifactPaths.NonImplementationDecisions);
         Assert.Equal(".agents/review/non-implementation-synthesis.md", OrchestrationArtifactPaths.NonImplementationSynthesis);
         Assert.Equal(".agents/evidence/non-implementation", OrchestrationArtifactPaths.NonImplementationEvidenceDirectory);
+    }
+
+    [Fact]
+    public void Prompt_evidence_sections_are_selected_from_canonical_review_paths()
+    {
+        IReadOnlyList<NonImplementationReviewPromptEvidenceSection> sections =
+            NonImplementationReviewPromptEvidence.BuildSections(
+            [
+                " .agents/archive/epics/1/review/non-implementation-review.md ",
+                OrchestrationArtifactPaths.NonImplementationReview,
+                "",
+            ]);
+
+        Assert.Collection(
+            sections,
+            section =>
+            {
+                Assert.Equal("Non-Implementation Review Summary: .agents/archive/epics/1/review/non-implementation-review.md", section.Title);
+                Assert.Equal(".agents/archive/epics/1/review/non-implementation-review.md", section.Path);
+            },
+            section =>
+            {
+                Assert.Equal($"Non-Implementation Review Summary: {OrchestrationArtifactPaths.NonImplementationReview}", section.Title);
+                Assert.Equal(OrchestrationArtifactPaths.NonImplementationReview, section.Path);
+            },
+            section =>
+            {
+                Assert.Equal($"Non-Implementation Review Synthesis: {OrchestrationArtifactPaths.NonImplementationSynthesis}", section.Title);
+                Assert.Equal(OrchestrationArtifactPaths.NonImplementationSynthesis, section.Path);
+            });
     }
 
     [Fact]

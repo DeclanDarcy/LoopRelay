@@ -5,8 +5,10 @@ namespace LoopRelay.Completion;
 public static class CompletionArtifactPaths
 {
     public const string AgentsDirectory = OrchestrationArtifactPaths.AgentsDirectory;
-    public const string ActiveEpic = ".agents/epic.md";
-    public const string RoadmapCompletionContext = ".agents/core/roadmap-completion-context.md";
+    public const string EvidenceDirectory = OrchestrationArtifactPaths.EvidenceDirectory;
+    public const string ActiveEpic = AgentsDirectory + "/epic.md";
+    public const string CoreDirectory = AgentsDirectory + "/core";
+    public const string RoadmapCompletionContext = CoreDirectory + "/roadmap-completion-context.md";
     public const string ExecutionPlan = OrchestrationArtifactPaths.Plan;
     public const string Details = OrchestrationArtifactPaths.Details;
     public const string OperationalContext = OrchestrationArtifactPaths.OperationalContext;
@@ -16,11 +18,12 @@ public static class CompletionArtifactPaths
     public const string MilestonesDirectory = OrchestrationArtifactPaths.MilestonesDirectory;
     public const string MilestoneSearchPattern = OrchestrationArtifactPaths.MilestoneSearchPattern;
     public const string NonImplementationReviewDirectory = OrchestrationArtifactPaths.NonImplementationReviewDirectory;
-    public const string CompletedEpicsDirectory = ".agents/archive/epics";
-    public const string CompletedEpicsPattern = ".agents/archive/epics/*.md";
-    public const string ExecutionEvidenceDirectory = ".agents/evidence/execution";
-    public const string EvaluationEvidenceDirectory = ".agents/evidence/evaluations";
-    public const string BlockerEvidenceDirectory = ".agents/evidence/blockers";
+    public const string ArchiveDirectory = AgentsDirectory + "/archive";
+    public const string CompletedEpicsDirectory = ArchiveDirectory + "/epics";
+    public const string CompletedEpicsPattern = CompletedEpicsDirectory + "/*.md";
+    public const string ExecutionEvidenceDirectory = EvidenceDirectory + "/execution";
+    public const string EvaluationEvidenceDirectory = EvidenceDirectory + "/evaluations";
+    public const string BlockerEvidenceDirectory = EvidenceDirectory + "/blockers";
 
     public static string CompletedEpicArchiveDirectory(int index) => $"{CompletedEpicsDirectory}/{index}";
 

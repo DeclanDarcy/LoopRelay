@@ -65,7 +65,7 @@ public sealed class NonImplementationArtifactClassifier
         string path = NormalizePath(file.Path);
         string extension = file.Extension;
 
-        if (IsAgentsPath(path))
+        if (OrchestrationArtifactPaths.IsAgentsPath(path))
         {
             return Result(
                 file,
@@ -159,10 +159,6 @@ public sealed class NonImplementationArtifactClassifier
 
         return facts;
     }
-
-    private static bool IsAgentsPath(string path) =>
-        string.Equals(path, OrchestrationArtifactPaths.AgentsDirectory, StringComparison.Ordinal) ||
-        path.StartsWith(OrchestrationArtifactPaths.AgentsDirectory + "/", StringComparison.Ordinal);
 
     private static bool IsImplementationArtifact(string path, string extension)
     {

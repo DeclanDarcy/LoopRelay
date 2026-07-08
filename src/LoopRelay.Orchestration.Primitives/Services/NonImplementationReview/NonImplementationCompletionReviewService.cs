@@ -594,7 +594,7 @@ public sealed class NonImplementationCompletionReviewService(
             return "delete path must not contain path traversal segments.";
         }
 
-        if (IsAgentsPath(normalized))
+        if (OrchestrationArtifactPaths.IsAgentsPath(normalized))
         {
             return "delete path must not be under .agents.";
         }
@@ -850,10 +850,6 @@ public sealed class NonImplementationCompletionReviewService(
 
     private static bool IsUntracked(string status) =>
         status.StartsWith("??", StringComparison.Ordinal);
-
-    private static bool IsAgentsPath(string path) =>
-        string.Equals(path, OrchestrationArtifactPaths.AgentsDirectory, StringComparison.Ordinal) ||
-        path.StartsWith(OrchestrationArtifactPaths.AgentsDirectory + "/", StringComparison.Ordinal);
 
     private static string ReviewedHash(NonImplementationReviewLedgerEntry entry) =>
         entry.ReviewedFileDeleted

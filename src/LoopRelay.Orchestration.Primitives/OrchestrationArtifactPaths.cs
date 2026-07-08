@@ -14,7 +14,9 @@ public static class OrchestrationArtifactPaths
     /// </summary>
     public const string AgentsDirectory = ".agents";
 
-    public const string Plan = ".agents/plan.md";
+    public const string EvidenceDirectory = AgentsDirectory + "/evidence";
+
+    public const string Plan = AgentsDirectory + "/plan.md";
 
     /// <summary>
     /// Optional companion to <see cref="Plan"/>: extended detail a non-self-contained plan.md declares as a
@@ -22,27 +24,30 @@ public static class OrchestrationArtifactPaths
     /// treatment: read when present, rendered as the empty string when absent) so the execution agent never
     /// has to chase the file on disk.
     /// </summary>
-    public const string Details = ".agents/details.md";
+    public const string Details = AgentsDirectory + "/details.md";
+
+    /// <summary>Directory holding persisted spec textareas captured before the initial planning prompt runs (m3).</summary>
+    public const string SpecsDirectory = AgentsDirectory + "/specs";
 
     /// <summary>Epic textarea, persisted before the initial planning prompt runs (m3).</summary>
-    public const string SpecsEpic = ".agents/specs/epic.md";
+    public const string SpecsEpic = SpecsDirectory + "/epic.md";
 
     /// <summary>Repository-relative path of the <c>n</c>-th Spec textarea (1-based: <c>s1.md</c>, <c>s2.md</c>, ...).</summary>
-    public static string Spec(int index) => $".agents/specs/s{index}.md";
+    public static string Spec(int index) => $"{SpecsDirectory}/s{index}.md";
 
     /// <summary>Operational context the plan text is copied to as Execute Plan crosses into execution (m4).</summary>
-    public const string OperationalContext = ".agents/operational_context.md";
+    public const string OperationalContext = AgentsDirectory + "/operational_context.md";
 
     /// <summary>
     /// The operational delta a Transfer extracts from the warm Decision process (<c>ProduceOperationalDelta</c>)
     /// before recycling it — the input <c>UpdateOperationalContext</c> folds into the next
     /// <see cref="OperationalContext"/> revision (m7).
     /// </summary>
-    public const string OperationalDelta = ".agents/operational_delta.md";
+    public const string OperationalDelta = AgentsDirectory + "/operational_delta.md";
 
     /// <summary>Directory holding the archived operational deltas rotated out of the live <see cref="OperationalDelta"/>
     /// once a Transfer has folded each into the next <see cref="OperationalContext"/> revision (numbered history).</summary>
-    public const string DeltasDirectory = ".agents/deltas";
+    public const string DeltasDirectory = AgentsDirectory + "/deltas";
 
     /// <summary>Glob matching the archived operational deltas (<c>operational_delta.0001.md</c>, ...) under
     /// <see cref="DeltasDirectory"/> but NOT the live single-dot <see cref="OperationalDelta"/>.</summary>
@@ -50,16 +55,16 @@ public static class OrchestrationArtifactPaths
 
     /// <summary>Archived operational-delta path: <c>.agents/deltas/operational_delta.0001.md</c>, ... Each successful
     /// Transfer rotates the consumed live delta here (run-scoped 4-digit counter) after the context update succeeds.</summary>
-    public static string HistoricalDelta(int sequence) => $".agents/deltas/operational_delta.{sequence:0000}.md";
+    public static string HistoricalDelta(int sequence) => $"{DeltasDirectory}/operational_delta.{sequence:0000}.md";
+
+    /// <summary>Directory holding the live <c>decisions.md</c> and its rotated submission history (m6).</summary>
+    public const string DecisionsDirectory = AgentsDirectory + "/decisions";
 
     /// <summary>
     /// The current governance decisions the decision step persists. This is the canonical path
     /// the next execution turn reads.
     /// </summary>
-    public const string Decisions = ".agents/decisions/decisions.md";
-
-    /// <summary>Directory holding the live <c>decisions.md</c> and its rotated submission history (m6).</summary>
-    public const string DecisionsDirectory = ".agents/decisions";
+    public const string Decisions = DecisionsDirectory + "/decisions.md";
 
     /// <summary>
     /// Glob matching the rotated decision submissions (<c>decisions.0001.md</c>, ...) but NOT the live
@@ -72,27 +77,27 @@ public static class OrchestrationArtifactPaths
     /// Submit persists a numbered copy for history/recovery alongside rewriting the live <see cref="Decisions"/>
     /// the next continuation reads (run-scoped 4-digit counter, m6).
     /// </summary>
-    public static string HistoricalDecision(int sequence) => $".agents/decisions/decisions.{sequence:0000}.md";
+    public static string HistoricalDecision(int sequence) => $"{DecisionsDirectory}/decisions.{sequence:0000}.md";
 
     /// <summary>Directory the milestone-extraction turn writes <c>m*.md</c> files into (m4).</summary>
-    public const string MilestonesDirectory = ".agents/milestones";
+    public const string MilestonesDirectory = AgentsDirectory + "/milestones";
 
     /// <summary>Glob the CLIs use to verify Codex produced milestone files under <see cref="MilestonesDirectory"/>.</summary>
     public const string MilestoneSearchPattern = "m*.md";
 
     /// <summary>Directory holding non-implementation artifact review state and HITL review requests.</summary>
-    public const string NonImplementationReviewDirectory = ".agents/review";
+    public const string NonImplementationReviewDirectory = AgentsDirectory + "/review";
 
-    public const string NonImplementationLedger = ".agents/review/non-implementation-ledger.json";
+    public const string NonImplementationLedger = NonImplementationReviewDirectory + "/non-implementation-ledger.json";
 
-    public const string NonImplementationReview = ".agents/review/non-implementation-review.md";
+    public const string NonImplementationReview = NonImplementationReviewDirectory + "/non-implementation-review.md";
 
-    public const string NonImplementationDecisions = ".agents/review/non-implementation-decisions.md";
+    public const string NonImplementationDecisions = NonImplementationReviewDirectory + "/non-implementation-decisions.md";
 
-    public const string NonImplementationSynthesis = ".agents/review/non-implementation-synthesis.md";
+    public const string NonImplementationSynthesis = NonImplementationReviewDirectory + "/non-implementation-synthesis.md";
 
     /// <summary>Directory holding per-slice review evidence produced by the non-implementation loop.</summary>
-    public const string NonImplementationEvidenceDirectory = ".agents/evidence/non-implementation";
+    public const string NonImplementationEvidenceDirectory = EvidenceDirectory + "/non-implementation";
 
     public static string NonImplementationSliceEvidenceDirectory(string executionSliceId) =>
         $"{NonImplementationEvidenceDirectory}/{executionSliceId}";
@@ -113,16 +118,23 @@ public static class OrchestrationArtifactPaths
         $"{NonImplementationEvidenceDirectory}/{failureId}/review-failure.md";
 
     /// <summary>Directory holding the live handoff and its rotated history.</summary>
-    public const string HandoffsDirectory = ".agents/handoffs";
+    public const string HandoffsDirectory = AgentsDirectory + "/handoffs";
 
     /// <summary>
     /// The live handoff the execution turn writes. This plural path is the canonical handoff location.
     /// </summary>
-    public const string LiveHandoff = ".agents/handoffs/handoff.md";
+    public const string LiveHandoff = HandoffsDirectory + "/handoff.md";
 
     /// <summary>Glob matching the rotated historical handoffs (<c>handoff.0001.md</c>, ...) but NOT the live <c>handoff.md</c>.</summary>
     public const string HistoricalHandoffSearchPattern = "handoff.*.md";
 
     /// <summary>Rotated historical handoff path: <c>handoff.0001.md</c>, <c>handoff.0002.md</c>, ... (run-scoped 4-digit counter, m4).</summary>
-    public static string HistoricalHandoff(int sequence) => $".agents/handoffs/handoff.{sequence:0000}.md";
+    public static string HistoricalHandoff(int sequence) => $"{HandoffsDirectory}/handoff.{sequence:0000}.md";
+
+    public static bool IsAgentsPath(string path)
+    {
+        string normalized = path.Replace('\\', '/').Trim();
+        return string.Equals(normalized, AgentsDirectory, StringComparison.Ordinal) ||
+            normalized.StartsWith(AgentsDirectory + "/", StringComparison.Ordinal);
+    }
 }

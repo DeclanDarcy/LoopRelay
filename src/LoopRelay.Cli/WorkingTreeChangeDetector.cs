@@ -29,9 +29,7 @@ internal sealed class WorkingTreeChangeDetector(IProcessRunner processRunner, Re
         }
 
         return GitPorcelain.ChangedPaths(result.StandardOutput)
-            .Where(path =>
-                path != OrchestrationArtifactPaths.AgentsDirectory &&
-                !path.StartsWith(OrchestrationArtifactPaths.AgentsDirectory + "/", StringComparison.Ordinal))
+            .Where(path => !OrchestrationArtifactPaths.IsAgentsPath(path))
             .ToList();
     }
 }

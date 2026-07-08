@@ -1,40 +1,47 @@
+using LoopRelay.Orchestration;
+
 namespace LoopRelay.Roadmap.Cli;
 
 internal static class RoadmapArtifactPaths
 {
-    public const string AgentsDirectory = ".agents";
-    public const string State = ".agents/state.md";
-    public const string StateJson = ".agents/state.json";
-    public const string DecisionLedger = ".agents/decision-ledger.md";
-    public const string DecisionLedgerJson = ".agents/decision-ledger.json";
-    public const string Lifecycle = ".agents/artifacts/lifecycle.md";
-    public const string LifecycleJson = ".agents/artifacts/lifecycle.json";
-    public const string RoadmapDirectory = ".agents/roadmap";
-    public const string RoadmapDirectoryPattern = ".agents/roadmap/*.md";
-    public const string Selection = ".agents/selection.md";
-    public const string SelectionProvenanceManifest = ".agents/selection-provenance-manifest.json";
-    public const string ActiveEpic = ".agents/epic.md";
-    public const string SpecsDirectory = ".agents/specs";
-    public const string OperationalContext = ".agents/operational_context.md";
-    public const string ExecutionPrompt = ".agents/execution-prompt.md";
-    public const string ExecutionPreparationManifest = ".agents/execution-preparation-manifest.json";
-    public const string ExecutionPlan = ".agents/plan.md";
-    public const string ExecutionMilestonesDirectory = ".agents/milestones";
-    public const string RoadmapCompletionContext = ".agents/core/roadmap-completion-context.md";
-    public const string CompletedEpicsDirectory = ".agents/archive/epics";
-    public const string CompletedEpicsPattern = ".agents/archive/epics/*.md";
-    public const string ProjectionsManifest = ".agents/projections/manifest.md";
-    public const string ProjectionsManifestJson = ".agents/projections/manifest.json";
-    public const string PromptContracts = ".agents/contracts/prompt-contracts.md";
-    public const string TransitionJournal = ".agents/journal/transitions.jsonl";
-    public const string SplitFamiliesDirectory = ".agents/splits";
-    public const string SelectionEvidenceDirectory = ".agents/evidence/selection";
-    public const string AuditEvidenceDirectory = ".agents/evidence/audits";
-    public const string ExecutionEvidenceDirectory = ".agents/evidence/execution";
-    public const string EvaluationEvidenceDirectory = ".agents/evidence/evaluations";
-    public const string BlockerEvidenceDirectory = ".agents/evidence/blockers";
-    public const string OrchestrationEvidenceDirectory = ".agents/evidence/orchestration";
-    public const string ProjectContextDirectory = ".agents/ctx";
+    public const string AgentsDirectory = OrchestrationArtifactPaths.AgentsDirectory;
+    public const string EvidenceDirectory = OrchestrationArtifactPaths.EvidenceDirectory;
+    public const string State = AgentsDirectory + "/state.md";
+    public const string StateJson = AgentsDirectory + "/state.json";
+    public const string DecisionLedger = AgentsDirectory + "/decision-ledger.md";
+    public const string DecisionLedgerJson = AgentsDirectory + "/decision-ledger.json";
+    public const string ArtifactsDirectory = AgentsDirectory + "/artifacts";
+    public const string Lifecycle = ArtifactsDirectory + "/lifecycle.md";
+    public const string LifecycleJson = ArtifactsDirectory + "/lifecycle.json";
+    public const string RoadmapDirectory = AgentsDirectory + "/roadmap";
+    public const string RoadmapDirectoryPattern = RoadmapDirectory + "/*.md";
+    public const string Selection = AgentsDirectory + "/selection.md";
+    public const string SelectionProvenanceManifest = AgentsDirectory + "/selection-provenance-manifest.json";
+    public const string ActiveEpic = AgentsDirectory + "/epic.md";
+    public const string SpecsDirectory = OrchestrationArtifactPaths.SpecsDirectory;
+    public const string OperationalContext = OrchestrationArtifactPaths.OperationalContext;
+    public const string ExecutionPrompt = AgentsDirectory + "/execution-prompt.md";
+    public const string ExecutionPreparationManifest = AgentsDirectory + "/execution-preparation-manifest.json";
+    public const string ExecutionPlan = OrchestrationArtifactPaths.Plan;
+    public const string ExecutionMilestonesDirectory = OrchestrationArtifactPaths.MilestonesDirectory;
+    public const string CoreDirectory = AgentsDirectory + "/core";
+    public const string RoadmapCompletionContext = CoreDirectory + "/roadmap-completion-context.md";
+    public const string ArchiveDirectory = AgentsDirectory + "/archive";
+    public const string CompletedEpicsDirectory = ArchiveDirectory + "/epics";
+    public const string CompletedEpicsPattern = CompletedEpicsDirectory + "/*.md";
+    public const string ProjectionsDirectory = AgentsDirectory + "/projections";
+    public const string ProjectionsManifest = ProjectionsDirectory + "/manifest.md";
+    public const string ProjectionsManifestJson = ProjectionsDirectory + "/manifest.json";
+    public const string PromptContracts = AgentsDirectory + "/contracts/prompt-contracts.md";
+    public const string TransitionJournal = AgentsDirectory + "/journal/transitions.jsonl";
+    public const string SplitFamiliesDirectory = AgentsDirectory + "/splits";
+    public const string SelectionEvidenceDirectory = EvidenceDirectory + "/selection";
+    public const string AuditEvidenceDirectory = EvidenceDirectory + "/audits";
+    public const string ExecutionEvidenceDirectory = EvidenceDirectory + "/execution";
+    public const string EvaluationEvidenceDirectory = EvidenceDirectory + "/evaluations";
+    public const string BlockerEvidenceDirectory = EvidenceDirectory + "/blockers";
+    public const string OrchestrationEvidenceDirectory = EvidenceDirectory + "/orchestration";
+    public const string ProjectContextDirectory = AgentsDirectory + "/ctx";
 
     public static readonly IReadOnlyList<string> ProjectContextSourceFiles =
     [
@@ -51,16 +58,16 @@ internal static class RoadmapArtifactPaths
     public static readonly IReadOnlyDictionary<string, string> ProjectionPaths =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["CreateRoadmapCompletionContext"] = ".agents/projections/roadmap-completion.md",
-            ["UpdateRoadmapCompletionContext"] = ".agents/projections/roadmap-completion-update.md",
-            ["SelectNextEpic"] = ".agents/projections/select-next-epic.md",
-            ["EpicPreparationAudit"] = ".agents/projections/epic-preparation-audit.md",
-            ["RealignEpic"] = ".agents/projections/realign-epic.md",
-            ["ReimagineEpic"] = ".agents/projections/reimagine-epic.md",
-            ["CreateNewEpic"] = ".agents/projections/create-new-epic.md",
-            ["SplitEpic"] = ".agents/projections/split-epic.md",
-            ["GenerateMilestoneDeepDivesForEpic"] = ".agents/projections/milestone-deep-dive.md",
-            ["EvaluateEpicCompletionAndDrift"] = ".agents/projections/epic-completion-evaluation.md",
+            ["CreateRoadmapCompletionContext"] = $"{ProjectionsDirectory}/roadmap-completion.md",
+            ["UpdateRoadmapCompletionContext"] = $"{ProjectionsDirectory}/roadmap-completion-update.md",
+            ["SelectNextEpic"] = $"{ProjectionsDirectory}/select-next-epic.md",
+            ["EpicPreparationAudit"] = $"{ProjectionsDirectory}/epic-preparation-audit.md",
+            ["RealignEpic"] = $"{ProjectionsDirectory}/realign-epic.md",
+            ["ReimagineEpic"] = $"{ProjectionsDirectory}/reimagine-epic.md",
+            ["CreateNewEpic"] = $"{ProjectionsDirectory}/create-new-epic.md",
+            ["SplitEpic"] = $"{ProjectionsDirectory}/split-epic.md",
+            ["GenerateMilestoneDeepDivesForEpic"] = $"{ProjectionsDirectory}/milestone-deep-dive.md",
+            ["EvaluateEpicCompletionAndDrift"] = $"{ProjectionsDirectory}/epic-completion-evaluation.md",
         };
 
     public static bool IsMilestoneSpecPath(string path) =>
@@ -68,7 +75,7 @@ internal static class RoadmapArtifactPaths
         path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) &&
         !string.Equals(Path.GetFileName(path), "bundle-manifest.md", StringComparison.OrdinalIgnoreCase);
 
-    public static string SplitFamily(string familyId) => $".agents/splits/split-family-{familyId}.md";
+    public static string SplitFamily(string familyId) => $"{SplitFamiliesDirectory}/split-family-{familyId}.md";
 
-    public static string SplitFamilyJson(string familyId) => $".agents/splits/split-family-{familyId}.json";
+    public static string SplitFamilyJson(string familyId) => $"{SplitFamiliesDirectory}/split-family-{familyId}.json";
 }

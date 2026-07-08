@@ -1,5 +1,5 @@
 using System.Text;
-using LoopRelay.Orchestration;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Completion;
 
@@ -100,35 +100,13 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
         List<ContextSection> sections,
         IReadOnlyList<string>? explicitEvidencePaths)
     {
-        var included = new HashSet<string>(StringComparer.Ordinal);
-        if (explicitEvidencePaths is not null)
-        {
-            foreach (string path in explicitEvidencePaths.Where(path => !string.IsNullOrWhiteSpace(path)))
-            {
-                if (included.Add(path))
-                {
-                    await AddOptionalSectionAsync(
-                        sections,
-                        NonImplementationReviewSectionTitle(path),
-                        path);
-                }
-            }
-        }
-
-        if (included.Add(OrchestrationArtifactPaths.NonImplementationReview))
+        foreach (NonImplementationReviewPromptEvidenceSection evidenceSection in
+            NonImplementationReviewPromptEvidence.BuildSections(explicitEvidencePaths))
         {
             await AddOptionalSectionAsync(
                 sections,
-                $"Non-Implementation Review Summary: {OrchestrationArtifactPaths.NonImplementationReview}",
-                OrchestrationArtifactPaths.NonImplementationReview);
-        }
-
-        if (included.Add(OrchestrationArtifactPaths.NonImplementationSynthesis))
-        {
-            await AddOptionalSectionAsync(
-                sections,
-                $"Non-Implementation Review Synthesis: {OrchestrationArtifactPaths.NonImplementationSynthesis}",
-                OrchestrationArtifactPaths.NonImplementationSynthesis);
+                evidenceSection.Title,
+                evidenceSection.Path);
         }
     }
 
@@ -139,22 +117,6 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
         {
             sections.Add(Section(title, content));
         }
-    }
-
-    private static string NonImplementationReviewSectionTitle(string path)
-    {
-        string fileName = Path.GetFileName(path);
-        if (string.Equals(fileName, Path.GetFileName(OrchestrationArtifactPaths.NonImplementationReview), StringComparison.Ordinal))
-        {
-            return $"Non-Implementation Review Summary: {path}";
-        }
-
-        if (string.Equals(fileName, Path.GetFileName(OrchestrationArtifactPaths.NonImplementationSynthesis), StringComparison.Ordinal))
-        {
-            return $"Non-Implementation Review Synthesis: {path}";
-        }
-
-        return $"Non-Implementation Review Evidence: {path}";
     }
 
     private static string Build(IReadOnlyList<ContextSection> sections)
