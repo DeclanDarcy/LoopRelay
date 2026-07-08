@@ -9,7 +9,7 @@
 
 - [x] Add or confirm projection validation or stale-projection failure writes
   projection blocker evidence before any prompt-start state for that prompt.
-- [ ] Add or confirm bootstrap runtime failure preserving output path
+- [x] Add or confirm bootstrap runtime failure preserving output path
   `.agents/core/roadmap-completion-context.md`.
 - [ ] Add or confirm selection parse failure after `.agents/selection.md`,
   numbered selection evidence, provenance, and lifecycle are already written,
