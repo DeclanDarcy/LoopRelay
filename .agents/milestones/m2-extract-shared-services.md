@@ -160,58 +160,58 @@ This coordinator preserves `PromoteActiveEpicAsync` and
 
 ### Input Rules
 
-- [ ] Target is always `.agents/epic.md`.
-- [ ] Evidence directory is `.agents/evidence/blockers`.
-- [ ] Evidence stem is `active-epic-promotion`.
-- [ ] Artifact name is `active epic`.
-- [ ] Classifier is `EpicAuthoringOutputClassifier`.
-- [ ] Validator is `EpicArtifactValidator`.
-- [ ] Promoted lifecycle state is `Ready`.
+- [x] Target is always `.agents/epic.md`.
+- [x] Evidence directory is `.agents/evidence/blockers`.
+- [x] Evidence stem is `active-epic-promotion`.
+- [x] Artifact name is `active epic`.
+- [x] Classifier is `EpicAuthoringOutputClassifier`.
+- [x] Validator is `EpicArtifactValidator`.
+- [x] Promoted lifecycle state is `Ready`.
 
 ### Classification Rules
 
-- [ ] No top-level markdown heading: `Ambiguous`.
-- [ ] First top-level heading contains `Blocked`: `Blocked`.
-- [ ] First top-level heading matches `# Epic: ...`: `Promotable`.
-- [ ] Heading resembles `# Epic` without the required colon form, or content
+- [x] No top-level markdown heading: `Ambiguous`.
+- [x] First top-level heading contains `Blocked`: `Blocked`.
+- [x] First top-level heading matches `# Epic: ...`: `Promotable`.
+- [x] Heading resembles `# Epic` without the required colon form, or content
   contains `## Epic Metadata` while the first heading is wrong: `Malformed`.
-- [ ] Otherwise: `Ambiguous`.
+- [x] Otherwise: `Ambiguous`.
 
 ### Validation Rules For Promotable Output
 
-- [ ] Reject blank content.
-- [ ] Reject anything that reclassifies as non-promotable.
-- [ ] Require headings `## Epic Metadata`, `## Desired Capability`,
+- [x] Reject blank content.
+- [x] Reject anything that reclassifies as non-promotable.
+- [x] Require headings `## Epic Metadata`, `## Desired Capability`,
   `## Acceptance Criteria`, and `## Milestone Roadmap`.
-- [ ] Require either `## Strategic Purpose` or `## Strategic Continuity`.
-- [ ] Require non-empty `Epic ID` and `Status` in the metadata field table.
-- [ ] Require at least one milestone row with columns `Milestone ID`,
+- [x] Require either `## Strategic Purpose` or `## Strategic Continuity`.
+- [x] Require non-empty `Epic ID` and `Status` in the metadata field table.
+- [x] Require at least one milestone row with columns `Milestone ID`,
   `Milestone Name`, `Purpose`, `Outcome`, `Depends On`, and
   `Completion Signal`.
-- [ ] Require non-empty values for `Milestone ID`, `Milestone Name`, `Purpose`,
+- [x] Require non-empty values for `Milestone ID`, `Milestone Name`, `Purpose`,
   `Outcome`, and `Completion Signal`.
 
 ### Promotion Success
 
-- [ ] Write `.agents/epic.md`.
-- [ ] Mark `.agents/epic.md` lifecycle `Ready` with the caller-supplied note.
-- [ ] Capture HITL requests from `.agents/epic.md`.
-- [ ] Append `ArtifactPromoted` with prompt contract key
+- [x] Write `.agents/epic.md`.
+- [x] Mark `.agents/epic.md` lifecycle `Ready` with the caller-supplied note.
+- [x] Capture HITL requests from `.agents/epic.md`.
+- [x] Append `ArtifactPromoted` with prompt contract key
   `ArtifactPromotionService`, result `Promoted`, parser decision
   `Active epic promoted`, and the original prompt input snapshot.
-- [ ] Save state `ActiveEpicReady` / `Completed`, decision
+- [x] Save state `ActiveEpicReady` / `Completed`, decision
   `Artifact Promoted`, output `.agents/epic.md`.
 
 ### Promotion Rejection
 
-- [ ] Write exact rejected output to
+- [x] Write exact rejected output to
   `.agents/evidence/blockers/active-epic-promotion.NNNN.md`.
-- [ ] Mark evidence lifecycle `Blocked` with the rejection reason.
-- [ ] Append `ArtifactPromotionBlocked`.
-- [ ] Save `EvidenceBlocked` / `Paused`.
-- [ ] Use transition intent `ResolveArtifactPromotionBlocker`.
-- [ ] Use next transition `Resolve blocker and rerun`.
-- [ ] Map promotion status to decision text:
+- [x] Mark evidence lifecycle `Blocked` with the rejection reason.
+- [x] Append `ArtifactPromotionBlocked`.
+- [x] Save `EvidenceBlocked` / `Paused`.
+- [x] Use transition intent `ResolveArtifactPromotionBlocker`.
+- [x] Use next transition `Resolve blocker and rerun`.
+- [x] Map promotion status to decision text:
   - blocked: `Artifact Promotion Blocked`
   - ambiguous: `Artifact Promotion Ambiguous`
   - structurally invalid: `Artifact Promotion Invalid`

@@ -142,6 +142,11 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var splitBundleInterpreter = new SplitEpicBundleInterpreter();
         var bundleManifest = new BundleManifestWriter(artifacts);
         var splitFamilies = new SplitFamilyStore(artifacts);
+        var activeEpicPromotionCoordinator = new ActiveEpicPromotionCoordinator(
+            promotion,
+            hitlArtifactCapture,
+            journal,
+            transitionPersistence);
         var invariants = new InvariantValidator(
             artifacts,
             projectContextLoader,
@@ -172,7 +177,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             decisionRecorder,
             journal,
             lifecycle,
-            promotion,
+            activeEpicPromotionCoordinator,
             bundleExtractor,
             splitBundleInterpreter,
             bundleManifest,
