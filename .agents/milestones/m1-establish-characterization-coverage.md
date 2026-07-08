@@ -28,7 +28,7 @@
   family.
 - [x] Add or confirm split promotion uses selected child content and reuses the
   original prompt correlation id, timing, and input snapshot.
-- [ ] Add or confirm milestone success uses `PromptCompleted` plus
+- [x] Add or confirm milestone success uses `PromptCompleted` plus
   `MilestoneSpecsMaterialized`, not `TransitionCompleted`.
 - [ ] Add or confirm milestone post-prompt bundle failure writing
   `milestone-spec-generation-failed.NNNN.md` and not rolling back already

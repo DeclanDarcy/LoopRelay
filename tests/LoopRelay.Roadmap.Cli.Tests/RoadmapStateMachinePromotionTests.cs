@@ -248,12 +248,50 @@ public sealed class RoadmapStateMachinePromotionTests
         Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
         Assert.Equal(epic, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
         Assert.Equal(6, runtime.OneShotCalls);
-        Assert.Contains("ArtifactPromoted", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
         Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
         Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, state.CurrentState);
         Assert.Equal(Cli.RoadmapArtifactPaths.SpecsDirectory, state.LastTransition.Output);
         Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.OperationalContext));
         Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ExecutionPrompt));
+
+        Cli.TransitionJournalRecord[] journal = ReadJournal(repo);
+        Assert.Contains(journal, record => record.Event == "ArtifactPromoted");
+        int promptCompletedIndex = Array.FindIndex(journal, record =>
+            record.Event == "PromptCompleted" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+        int materializedIndex = Array.FindIndex(journal, record =>
+            record.Event == "MilestoneSpecsMaterialized" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+        Assert.NotEqual(-1, promptCompletedIndex);
+        Assert.True(materializedIndex > promptCompletedIndex);
+        Assert.DoesNotContain(journal, record =>
+            record.Event == "TransitionCompleted" &&
+            record.Prompt == "GenerateMilestoneDeepDivesForEpic");
+
+        Cli.TransitionJournalRecord promptCompleted = journal[promptCompletedIndex];
+        Cli.TransitionJournalRecord materialized = journal[materializedIndex];
+        Assert.Equal(promptCompleted.CorrelationId, materialized.CorrelationId);
+        Assert.Equal(promptCompleted.DurationMilliseconds, materialized.DurationMilliseconds);
+        Assert.Equal(promptCompleted.InputArtifactHashes, materialized.InputArtifactHashes);
+        Assert.NotNull(promptCompleted.InputSnapshot);
+        Assert.NotNull(materialized.InputSnapshot);
+        Assert.Equal(promptCompleted.InputSnapshot.SnapshotHash, materialized.InputSnapshot.SnapshotHash);
+        Assert.Equal(promptCompleted.InputSnapshot.RuntimePromptName, materialized.InputSnapshot.RuntimePromptName);
+        Assert.Equal(promptCompleted.InputSnapshot.Projection, materialized.InputSnapshot.Projection);
+        Assert.Equal(promptCompleted.InputSnapshot.PromptContextHash, materialized.InputSnapshot.PromptContextHash);
+        Assert.Equal(promptCompleted.InputSnapshot.SecondaryInputHash, materialized.InputSnapshot.SecondaryInputHash);
+        Assert.Equal(promptCompleted.InputSnapshot.ArtifactInputs, materialized.InputSnapshot.ArtifactInputs);
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, promptCompleted.PreviousState);
+        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, promptCompleted.AttemptedState);
+        Assert.Equal(Cli.RoadmapState.ActiveEpicReady, materialized.PreviousState);
+        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, materialized.AttemptedState);
+        Assert.Equal([Cli.RoadmapArtifactPaths.SpecsDirectory], promptCompleted.OutputPaths);
+        Assert.Equal([Cli.RoadmapArtifactPaths.SpecsDirectory], materialized.OutputPaths);
+        Assert.Equal("PromptCompleted", promptCompleted.Result);
+        Assert.Equal("Output produced", promptCompleted.ParserDecision);
+        Assert.Equal("MilestoneSpecPostProcessing", materialized.PromptContractKey);
+        Assert.Equal("Completed", materialized.Result);
+        Assert.Equal("Milestone Specs Ready", materialized.ParserDecision);
     }
 
     [Fact]
