@@ -55,6 +55,21 @@ public sealed class CliArgumentsTests
     }
 
     [Fact]
+    public void TryParse_accepts_semantic_roadmap_transition_status_command()
+    {
+        using var repo = new TempRepo();
+
+        Assert.True(Cli.CliArguments.TryParse(
+            ["semantic", "roadmap-transition", "status", repo.Root],
+            out Cli.RoadmapCliInvocation parsed,
+            out string error));
+
+        Assert.Equal(string.Empty, error);
+        Assert.Equal(Cli.RoadmapCliCommand.SemanticRoadmapTransitionStatus, parsed.Command);
+        Assert.Equal(Path.GetFullPath(repo.Root), parsed.Repository.Path);
+    }
+
+    [Fact]
     public void TryParse_rejects_unsupported_trailing_command()
     {
         using var repo = new TempRepo();

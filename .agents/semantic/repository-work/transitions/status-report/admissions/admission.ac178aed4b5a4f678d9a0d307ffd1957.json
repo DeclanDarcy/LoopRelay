@@ -1,0 +1,75 @@
+{
+  "AdmissionId": "admission-ac178aed4b5a4f678d9a0d307ffd1957",
+  "ProtocolId": "roadmap-transition.status-report.v1",
+  "SubjectId": "repository-work:ef674f7086dc47b0:roadmap-transition-status-report:f828d84a67a4edeb",
+  "IntentId": "intent-ac178aed4b5a4f678d9a0d307ffd1957",
+  "TransitionKey": "StatusReport",
+  "Outcome": "ReportOnly",
+  "Reason": "Report-only status transition admitted; no mutation, acceptance, recovery, or certification authority granted.",
+  "AuthorityChecks": [
+    {
+      "Name": "authority:repositorywork.child-transition",
+      "Passed": true,
+      "Scope": "repositorywork.child-transition",
+      "Reason": "Requested authority includes the required report-only scope."
+    },
+    {
+      "Name": "authority:roadmap.state.read",
+      "Passed": true,
+      "Scope": "roadmap.state.read",
+      "Reason": "Requested authority includes the required report-only scope."
+    },
+    {
+      "Name": "authority:roadmap.status.legacy-observation",
+      "Passed": true,
+      "Scope": "roadmap.status.legacy-observation",
+      "Reason": "Requested authority includes the required report-only scope."
+    },
+    {
+      "Name": "authority:roadmap-transition.report",
+      "Passed": true,
+      "Scope": "roadmap-transition.report",
+      "Reason": "Requested authority includes the required report-only scope."
+    }
+  ],
+  "InvariantChecks": [
+    {
+      "Name": "child-subject-requires-parent",
+      "Passed": true,
+      "Scope": "repository-work:9019bb423464ac27",
+      "Reason": "Child subject is bound to a RepositoryWork parent."
+    },
+    {
+      "Name": "protocol-admission-before-status-execution",
+      "Passed": true,
+      "Scope": "roadmap-transition.status-report.v1",
+      "Reason": "Admission is evaluated before legacy status execution."
+    },
+    {
+      "Name": "report-output-is-observation-before-evidence",
+      "Passed": true,
+      "Scope": "roadmap-transition.report",
+      "Reason": "Report output will be captured as observation before evidence binding."
+    },
+    {
+      "Name": "report-only-does-not-mutate-roadmap-state",
+      "Passed": true,
+      "Scope": "none",
+      "Reason": "No mutation or execution authority was requested."
+    },
+    {
+      "Name": "behavior-equivalence-before-legacy-retirement",
+      "Passed": true,
+      "Scope": "legacy-status",
+      "Reason": "Legacy status remains available and equivalence will be recorded."
+    }
+  ],
+  "SourceFreshness": {
+    "Name": "source-freshness",
+    "Passed": true,
+    "Scope": ".agents/state.json",
+    "Reason": "Current roadmap state source condition \u0060missing\u0060 is acceptable for report-only status."
+  },
+  "AdmissionPath": ".agents/semantic/repository-work/transitions/status-report/admissions/admission.ac178aed4b5a4f678d9a0d307ffd1957.json",
+  "CreatedAt": "2026-07-08T02:17:48.0180373+00:00"
+}

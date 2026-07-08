@@ -1,0 +1,54 @@
+{
+  "EquivalenceId": "equivalence-7f89b6b482c947f2a1f465fe9e82ef5b",
+  "SubjectId": "repository-work:ef674f7086dc47b0:roadmap-transition-status-report:f828d84a67a4edeb",
+  "LegacyObservationPath": ".agents/semantic/repository-work/transitions/status-report/observations/legacy-status-output.7f89b6b482c947f2a1f465fe9e82ef5b.md",
+  "SemanticObservationPath": ".agents/semantic/repository-work/transitions/status-report/observations/status-output.7f89b6b482c947f2a1f465fe9e82ef5b.md",
+  "Accepted": true,
+  "ComparedFields": [
+    {
+      "Field": "persisted-roadmap-state",
+      "LegacyValue": "missing:None",
+      "SemanticValue": "missing:None",
+      "Matched": true
+    },
+    {
+      "Field": "startup-plan-reason",
+      "LegacyValue": "No persisted roadmap state exists; startup must initialize the workflow.",
+      "SemanticValue": "No persisted roadmap state exists; startup must initialize the workflow.",
+      "Matched": true
+    },
+    {
+      "Field": "transition-intent",
+      "LegacyValue": "None -\u003E None",
+      "SemanticValue": "None -\u003E None",
+      "Matched": true
+    },
+    {
+      "Field": "blockers",
+      "LegacyValue": "None",
+      "SemanticValue": "None",
+      "Matched": true
+    },
+    {
+      "Field": "terminal-outcome-classification",
+      "LegacyValue": "Paused",
+      "SemanticValue": "Paused",
+      "Matched": true
+    },
+    {
+      "Field": "raw-status-output",
+      "LegacyValue": "[Info] No persisted roadmap state exists.",
+      "SemanticValue": "[Info] No persisted roadmap state exists.",
+      "Matched": true
+    },
+    {
+      "Field": "roadmap-state-non-mutation",
+      "LegacyValue": "unchanged",
+      "SemanticValue": "unchanged",
+      "Matched": true
+    }
+  ],
+  "Divergences": [],
+  "EquivalencePath": ".agents/semantic/repository-work/transitions/status-report/equivalence/equivalence.7f89b6b482c947f2a1f465fe9e82ef5b.json",
+  "ComparedAt": "2026-07-08T02:19:15.7277236+00:00"
+}

@@ -1,0 +1,69 @@
+{
+  "SchemaVersion": "repository-work.roadmap-transition.status-report.subject.v1",
+  "SubjectId": "repository-work:ef674f7086dc47b0:roadmap-transition-status-report:f828d84a67a4edeb",
+  "ParentSubjectId": "repository-work:9019bb423464ac27",
+  "ParentSubjectType": "RepositoryWork",
+  "SubjectType": "RoadmapTransition",
+  "TransitionKey": "StatusReport",
+  "Relationship": "RepositoryWork owns semantic authority for RoadmapTransition:StatusReport.",
+  "AuthorityScopes": [
+    {
+      "Scope": "repositorywork.child-transition",
+      "Kind": "protocol-admission",
+      "Owner": "RepositoryWork",
+      "Purpose": "Admit child RoadmapTransition status reports under RepositoryWork authority."
+    },
+    {
+      "Scope": "roadmap.state.read",
+      "Kind": "permission",
+      "Owner": "RoadmapTransition:StatusReport",
+      "Purpose": "Read current roadmap state source for report-only status."
+    },
+    {
+      "Scope": "roadmap.status.legacy-observation",
+      "Kind": "observation",
+      "Owner": "RoadmapTransition:StatusReport",
+      "Purpose": "Execute legacy status behavior as non-authoritative observation."
+    },
+    {
+      "Scope": "roadmap-transition.report",
+      "Kind": "report",
+      "Owner": "RoadmapTransition:StatusReport",
+      "Purpose": "Emit semantic transition reports without mutation authority."
+    }
+  ],
+  "LifecycleVocabulary": [
+    "IntentCaptured",
+    "SourceCaptured",
+    "ProtocolAdmitted",
+    "ObservationCaptured",
+    "EvidenceBound",
+    "ReportOnlyDecisionAccepted",
+    "EquivalenceAccepted",
+    "Reported"
+  ],
+  "Invariants": [
+    {
+      "InvariantId": "child-subject-requires-parent",
+      "Statement": "RoadmapTransition:StatusReport is governed only as a child of RepositoryWork."
+    },
+    {
+      "InvariantId": "protocol-admission-before-status-execution",
+      "Statement": "Status behavior cannot execute through the semantic wrapper before protocol admission."
+    },
+    {
+      "InvariantId": "report-output-is-observation-before-evidence",
+      "Statement": "Rendered status output is observation until validation binds it as evidence."
+    },
+    {
+      "InvariantId": "report-only-does-not-mutate-roadmap-state",
+      "Statement": "Report-only status decisions authorize report artifacts only."
+    },
+    {
+      "InvariantId": "behavior-equivalence-before-legacy-retirement",
+      "Statement": "Legacy status behavior remains available and cannot be retired by this wrapper."
+    }
+  ],
+  "CreatedAt": "2026-07-08T02:17:48.0180373+00:00",
+  "UpdatedAt": "2026-07-08T02:17:48.0180373+00:00"
+}

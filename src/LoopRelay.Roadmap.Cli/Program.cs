@@ -41,6 +41,36 @@ if (invocation.Command == RoadmapCliCommand.Semantic)
     };
 }
 
+if (invocation.Command == RoadmapCliCommand.SemanticRoadmapTransitionStatus)
+{
+    var semanticConsole = new ConsoleLoopConsole();
+    semanticConsole.Info($"LoopRelay.Roadmap.Cli semantic roadmap-transition status starting for {repository.Path}");
+    var artifacts = new RoadmapArtifacts(new FileSystemArtifactStore(), repository);
+    var stateStore = new RoadmapStateStore(artifacts);
+    var executor = new RoadmapTransitionStatusSemanticExecutor(
+        artifacts,
+        stateStore,
+        new RoadmapStartupPlanner(),
+        semanticConsole);
+    RoadmapTransitionStatusSemanticExecutionResult result = await executor.ExecuteAsync(
+        RoadmapTransitionStatusSemanticRequest.Default,
+        CancellationToken.None);
+
+    if (result.Completed)
+    {
+        return 0;
+    }
+
+    return result.AdmissionOutcome switch
+    {
+        RepositoryWorkAdmissionOutcome.ReportOnly => 4,
+        RepositoryWorkAdmissionOutcome.Blocked => 4,
+        RepositoryWorkAdmissionOutcome.Denied => 1,
+        RepositoryWorkAdmissionOutcome.Unsupported => 1,
+        _ => 1,
+    };
+}
+
 await using var composition = RoadmapCliComposition.Create(invocation);
 var console = composition.Console;
 var machine = composition.Machine;

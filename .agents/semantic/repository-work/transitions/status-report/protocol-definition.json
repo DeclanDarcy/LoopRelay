@@ -1,0 +1,38 @@
+{
+  "SchemaVersion": "roadmap-transition.status-report.protocol.v1",
+  "ProtocolId": "roadmap-transition.status-report.v1",
+  "ParentSubjectId": "repository-work:9019bb423464ac27",
+  "SubjectClass": "RoadmapTransition",
+  "TransitionKey": "StatusReport",
+  "AcceptedIntentShape": "Subject-bound intent to produce a report-only semantic view of the current roadmap state.",
+  "RequiredInputs": [
+    "RepositoryWork parent subject",
+    "RoadmapTransition:StatusReport child subject",
+    "current roadmap state source snapshot",
+    "report-only authority scopes"
+  ],
+  "SourceFreshnessRequirements": [
+    "Missing state is a valid source condition.",
+    "Present state must parse before execution.",
+    "Pre/post state source markers must match."
+  ],
+  "AuthorityScopes": [
+    "repositorywork.child-transition",
+    "roadmap.state.read",
+    "roadmap.status.legacy-observation",
+    "roadmap-transition.report"
+  ],
+  "Invariants": [
+    "child-subject-requires-parent",
+    "protocol-admission-before-status-execution",
+    "report-output-is-observation-before-evidence",
+    "report-only-does-not-mutate-roadmap-state",
+    "behavior-equivalence-before-legacy-retirement"
+  ],
+  "AllowedExits": [
+    "ReportOnly",
+    "Blocked",
+    "Denied",
+    "Unsupported"
+  ]
+}

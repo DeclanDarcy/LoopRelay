@@ -45,6 +45,7 @@ internal sealed class RoadmapStateMachine(
             RoadmapCliCommand.Run => RunAsync(cancellationToken),
             RoadmapCliCommand.Unblock => UnblockAsync(cancellationToken),
             RoadmapCliCommand.Semantic => SemanticAsync(cancellationToken),
+            RoadmapCliCommand.SemanticRoadmapTransitionStatus => SemanticRoadmapTransitionStatusAsync(cancellationToken),
             _ => throw new RoadmapStepException($"Unsupported roadmap command: {command}."),
         };
 
@@ -66,26 +67,37 @@ internal sealed class RoadmapStateMachine(
         };
     }
 
-    public async Task<RoadmapOutcome> StatusAsync(CancellationToken cancellationToken)
+    public async Task<RoadmapOutcome> SemanticRoadmapTransitionStatusAsync(CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        var executor = new RoadmapTransitionStatusSemanticExecutor(
+            artifacts,
+            stateStore,
+            startupPlanner,
+            console);
+        RoadmapTransitionStatusSemanticExecutionResult result = await executor.ExecuteAsync(
+            RoadmapTransitionStatusSemanticRequest.Default,
+            cancellationToken);
 
-        RoadmapStateDocument? persistedState = await stateStore.LoadAsync();
-        if (persistedState is null)
+        if (result.Completed)
         {
-            console.Info("No persisted roadmap state exists.");
             return RoadmapOutcome.Paused;
         }
 
-        RoadmapStartupPlan startupPlan = startupPlanner.Plan(persistedState);
-        console.Info($"Status: {persistedState.CurrentState}. {startupPlan.Reason}");
-        console.Info($"Transition intent: {persistedState.TransitionIntent.Intent} -> {persistedState.TransitionIntent.DispatchState}");
-        foreach (BlockerRow blocker in persistedState.Blockers)
+        return result.AdmissionOutcome switch
         {
-            console.Warn($"{blocker.Blocker} Required next step: {blocker.RequiredNextStep}");
-        }
+            RepositoryWorkAdmissionOutcome.ReportOnly => RoadmapOutcome.PreflightBlocked,
+            RepositoryWorkAdmissionOutcome.Blocked => RoadmapOutcome.PreflightBlocked,
+            RepositoryWorkAdmissionOutcome.Denied => RoadmapOutcome.Failed,
+            RepositoryWorkAdmissionOutcome.Unsupported => RoadmapOutcome.Failed,
+            _ => RoadmapOutcome.Failed,
+        };
+    }
 
-        return startupPlan.ReportOutcome ?? RoadmapOutcome.Paused;
+    public async Task<RoadmapOutcome> StatusAsync(CancellationToken cancellationToken)
+    {
+        RoadmapStatusExecution execution = await new RoadmapStatusTransition(stateStore, startupPlanner)
+            .ExecuteAsync(console, cancellationToken);
+        return execution.Outcome;
     }
 
     public async Task<RoadmapOutcome> UnblockAsync(CancellationToken cancellationToken)

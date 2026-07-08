@@ -1,0 +1,13 @@
+{
+  "DecisionId": "decision-ac178aed4b5a4f678d9a0d307ffd1957",
+  "SubjectId": "repository-work:ef674f7086dc47b0:roadmap-transition-status-report:f828d84a67a4edeb",
+  "EvidenceId": "evidence-ac178aed4b5a4f678d9a0d307ffd1957",
+  "DecisionClass": "report-only-transition",
+  "AcceptedChoice": "emit-report-only",
+  "AuthorizedEffect": "report artifact only",
+  "PreStateMarker": ".agents/state.json:missing",
+  "PostStateMarker": ".agents/state.json:missing",
+  "StateMutationDetected": false,
+  "DecisionPath": ".agents/semantic/repository-work/transitions/status-report/decisions/report-only-decision.ac178aed4b5a4f678d9a0d307ffd1957.json",
+  "DecidedAt": "2026-07-08T02:17:48.1041647+00:00"
+}
