@@ -101,6 +101,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             new RoadmapCompletionObserver(console));
         var stateStore = new RoadmapStateStore(artifacts);
         var decisionLedger = new DecisionLedgerStore(artifacts);
+        var decisionRecorder = new DecisionRecorder(decisionLedger);
         var journal = new TransitionJournalStore(artifacts);
         var transitionPersistence = new RoadmapTransitionPersistence(
             artifacts,
@@ -167,7 +168,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             resumePlanner,
             unblockPlanner,
             selectionProvenance,
-            decisionLedger,
+            decisionRecorder,
             journal,
             lifecycle,
             promotion,

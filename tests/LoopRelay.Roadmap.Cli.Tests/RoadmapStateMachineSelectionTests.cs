@@ -470,6 +470,7 @@ internal static class StateMachineFactory
         var lifecycle = new Cli.ArtifactLifecycleStore(repo.Artifacts);
         var stateStore = new RoadmapStateStore(repo.Artifacts);
         var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
+        var decisionRecorder = new Cli.DecisionRecorder(decisionLedger);
         var journal = new Cli.TransitionJournalStore(repo.Artifacts);
         var transitionPersistence = new Cli.RoadmapTransitionPersistence(
             repo.Artifacts,
@@ -517,7 +518,7 @@ internal static class StateMachineFactory
             resumePlanner,
             unblockPlanner,
             selectionProvenance,
-            decisionLedger,
+            decisionRecorder,
             journal,
             lifecycle,
             new Cli.ArtifactPromotionService(repo.Artifacts, lifecycle),

@@ -136,12 +136,12 @@ This service must do more than read `.agents/selection.md`.
 This service preserves the current `AppendDecisionAsync` fields and id
 allocation.
 
-- [ ] Allocate ids through `DecisionLedgerStore.NextDecisionIdAsync`.
-- [ ] Append through the existing decision ledger store.
-- [ ] Do not add decision entries to `CreateNewEpic`, `RealignEpic`,
+- [x] Allocate ids through `DecisionLedgerStore.NextDecisionIdAsync`.
+- [x] Append through the existing decision ledger store.
+- [x] Do not add decision entries to `CreateNewEpic`, `RealignEpic`,
   `ReimagineEpic`, `SplitEpic`, or successful milestone generation, because
   they currently do not append their own decision-ledger entries.
-- [ ] Keep output path lists exactly as the current call site supplies them.
+- [x] Keep output path lists exactly as the current call site supplies them.
 
 ## HitlArtifactCapture
 

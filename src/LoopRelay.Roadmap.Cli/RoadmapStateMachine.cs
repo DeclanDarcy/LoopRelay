@@ -22,7 +22,7 @@ internal sealed class RoadmapStateMachine(
     RoadmapResumePlanner resumePlanner,
     RoadmapUnblockPlanner unblockPlanner,
     SelectionProvenanceService selectionProvenance,
-    DecisionLedgerStore decisionLedger,
+    DecisionRecorder decisionRecorder,
     TransitionJournalStore journalStore,
     ArtifactLifecycleStore lifecycleStore,
     ArtifactPromotionService promotionService,
@@ -312,7 +312,7 @@ internal sealed class RoadmapStateMachine(
             ?? throw new RoadmapStepException("Completion certification unblock did not include an evaluation evidence path.");
         string reviewPath = await WriteUnblockReviewEvidenceAsync(persistedState, unblockPlan, success: true);
         await RecordUnblockJournalAsync(persistedState, unblockPlan, reviewPath, "Recovered", null);
-        await AppendDecisionAsync(
+        await decisionRecorder.AppendAsync(
             RoadmapState.CompletionEvaluationAndContextUpdate,
             "UnblockReview",
             persistedState.LastTransition.Projection,
@@ -526,15 +526,15 @@ internal sealed class RoadmapStateMachine(
 
                 break;
             case "Strategic Investigation Required":
-                await AppendDecisionAsync(RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
+                await decisionRecorder.AppendAsync(RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
                 await SaveStateAsync(RoadmapState.StrategicInvestigationRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
                 return RoadmapOutcome.Paused;
             case "Roadmap Revision Required":
-                await AppendDecisionAsync(RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
+                await decisionRecorder.AppendAsync(RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
                 await SaveStateAsync(RoadmapState.RoadmapRevisionRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
                 return RoadmapOutcome.Paused;
             default:
-                await AppendDecisionAsync(RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
+                await decisionRecorder.AppendAsync(RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
                 await SaveStateAsync(RoadmapState.NoSuitableInitiative, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
                 return RoadmapOutcome.Paused;
         }
@@ -593,7 +593,7 @@ internal sealed class RoadmapStateMachine(
         await lifecycleStore.UpsertAsync(RoadmapArtifactPaths.Selection, ArtifactLifecycleState.Ready, evidencePath);
 
         SelectionDecision decision = new SelectionParser().Parse(completion.Output);
-        await AppendDecisionAsync(RoadmapState.SelectNextStrategicInitiative, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.Selection, decision.RecommendedOutcome, decision.Confidence, decision.PrimaryReason);
+        await decisionRecorder.AppendAsync(RoadmapState.SelectNextStrategicInitiative, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.Selection, decision.RecommendedOutcome, decision.Confidence, decision.PrimaryReason);
         return decision;
     }
 
@@ -617,7 +617,7 @@ internal sealed class RoadmapStateMachine(
         string auditPath = await artifacts.WriteNumberedEvidenceAsync(RoadmapArtifactPaths.AuditEvidenceDirectory, "epic-preparation-audit", output);
         await CaptureHitlRequestsAsync(auditPath, output);
         EpicPreparationAuditDecision decision = new EpicPreparationAuditParser().Parse(output);
-        await AppendDecisionAsync(RoadmapState.EpicPreparationAudit, runtimePrompt, projection.Definition.ProjectionPath, auditPath, decision.Disposition, decision.Confidence, decision.RecommendedNextStep);
+        await decisionRecorder.AppendAsync(RoadmapState.EpicPreparationAudit, runtimePrompt, projection.Definition.ProjectionPath, auditPath, decision.Disposition, decision.Confidence, decision.RecommendedNextStep);
 
         if (decision.Disposition == "Retire")
         {
@@ -625,7 +625,7 @@ internal sealed class RoadmapStateMachine(
             DateTimeOffset retiredAt = DateTimeOffset.UtcNow;
             RetiredEpic retired = RetiredEpic.FromSelectionAndAudit(selectionDecision, decision, auditPath, retiredAt);
             IReadOnlyList<RetiredEpic> retiredEpics = RetiredEpic.Upsert(existing?.RetiredEpics ?? [], retired);
-            await AppendDecisionAsync(RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", decision.Confidence, $"{retired.IdentityKind} {retired.StableIdentity}: {decision.PrimaryReason}");
+            await decisionRecorder.AppendAsync(RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", decision.Confidence, $"{retired.IdentityKind} {retired.StableIdentity}: {decision.PrimaryReason}");
             await SaveStateAsync(RoadmapState.RetireEpic, TransitionStatus.Completed, RoadmapState.EpicPreparationAudit, RoadmapState.RetireEpic, runtimePrompt, projection.Definition.ProjectionPath, auditPath, "Retired Epic", retiredAt, retiredAt, retiredEpics, null);
             await SupersedeActiveSelectionAsync(
                 [DerivedArtifactStaleReason.RetiredEpicStateDrift],
@@ -1077,7 +1077,7 @@ internal sealed class RoadmapStateMachine(
         await CaptureHitlRequestsAsync(evaluationPath, output);
         CompletionEvaluationDecision decision = new CompletionEvaluationParser().Parse(output);
         CompletionCertificationPolicyResult certification = completionPolicy.Validate(decision);
-        await AppendDecisionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, evaluationPath, decision.ClosureRecommendation, "Unclear", decision.OverallCompletionStatus);
+        await decisionRecorder.AppendAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, evaluationPath, decision.ClosureRecommendation, "Unclear", decision.OverallCompletionStatus);
 
         if (!certification.IsValid)
         {
@@ -1222,7 +1222,7 @@ internal sealed class RoadmapStateMachine(
         await SupersedeActiveSelectionAsync(
             [DerivedArtifactStaleReason.RoadmapCompletionContextDrift],
             "Roadmap completion context changed after completion certification.");
-        await AppendDecisionAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.RoadmapCompletionContext, "Roadmap Completion Context Updated", "Unclear", "Completion context updated after certification.");
+        await decisionRecorder.AppendAsync(RoadmapState.CompletionEvaluationAndContextUpdate, runtimePrompt, projection.Definition.ProjectionPath, RoadmapArtifactPaths.RoadmapCompletionContext, "Roadmap Completion Context Updated", "Unclear", "Completion context updated after certification.");
     }
 
     private async Task<ArtifactPromotionResult> PromoteActiveEpicAsync(
@@ -1553,23 +1553,6 @@ internal sealed class RoadmapStateMachine(
                 details,
                 failedAt));
         return [fallbackPath];
-    }
-
-    private async Task AppendDecisionAsync(RoadmapState state, string transition, string projectionPath, string outputPath, string decision, string confidence, string rationale)
-    {
-        string id = await decisionLedger.NextDecisionIdAsync();
-        await decisionLedger.AppendAsync(new DecisionLedgerEntry(
-            id,
-            DateTimeOffset.UtcNow,
-            state,
-            transition,
-            transition,
-            projectionPath,
-            [],
-            [outputPath],
-            decision,
-            confidence,
-            rationale));
     }
 
     private async Task SupersedeActiveSelectionAsync(
