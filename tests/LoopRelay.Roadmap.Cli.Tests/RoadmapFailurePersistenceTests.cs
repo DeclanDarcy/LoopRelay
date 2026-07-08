@@ -238,6 +238,62 @@ public sealed class RoadmapFailurePersistenceTests
     }
 
     [Fact]
+    public async Task Completion_evaluation_parse_failure_preserves_written_evidence_without_invalid_certification_blocker()
+    {
+        using var repo = SeedRepo(includeCompletionContext: true);
+        const string specPath = ".agents/specs/completion-parse-failure.md";
+        const string executionEvidencePath = ".agents/evidence/execution/execution-result.0001.md";
+        const string invalidEvaluation = """
+            # Epic Completion Evaluation
+
+            ## Evaluation Summary
+
+            This evaluation is malformed because it has no field/value table.
+            """;
+        await SeedCompletionClaimAsync(repo, specPath, executionEvidencePath);
+        var runtime = new ScriptedAgentRuntime(
+            ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EvaluateEpicCompletionAndDrift")),
+            ScriptedAgentRuntime.Completed(invalidEvaluation));
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        const string evaluationPath = ".agents/evidence/evaluations/epic-completion-and-drift.0001.md";
+        Assert.Equal(invalidEvaluation, repo.Read(evaluationPath));
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.DecisionLedgerJson));
+        Assert.Equal("None", await new Cli.DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "invalid-completion-certification.*.md"));
+        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "roadmap-transition-blocked-*.md"));
+
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.CompletionEvaluationAndContextUpdate, state.CurrentState);
+        Assert.NotEqual(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(Cli.TransitionStatus.Completed, state.LastTransition.Status);
+        Assert.Equal(Cli.RoadmapState.EpicCompletionDetected, state.LastTransition.From);
+        Assert.Equal(Cli.RoadmapState.CompletionEvaluationAndContextUpdate, state.LastTransition.To);
+        Assert.Equal("EvaluateEpicCompletionAndDrift", state.LastTransition.Prompt);
+        Assert.Equal(Cli.RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"], state.LastTransition.Projection);
+        Assert.Equal(Cli.RoadmapArtifactPaths.EvaluationEvidenceDirectory, state.LastTransition.Output);
+        Assert.Equal("Completed", state.LastTransition.Decision);
+        Assert.Empty(state.Blockers);
+        Assert.NotEqual("ResolveInvalidCompletionCertification", state.TransitionIntent.Intent);
+        Assert.Equal([executionEvidencePath], state.TransitionIntent.EvidencePaths);
+
+        Cli.TransitionJournalRecord[] journal = ReadJournal(repo);
+        Cli.TransitionJournalRecord completed = journal.Single(record =>
+            record.Event == "TransitionCompleted" &&
+            record.Prompt == "EvaluateEpicCompletionAndDrift");
+        Assert.Equal([Cli.RoadmapArtifactPaths.EvaluationEvidenceDirectory], completed.OutputPaths);
+        Assert.DoesNotContain(journal, record =>
+            record.Event == "TransitionFailed" &&
+            record.Prompt == "EvaluateEpicCompletionAndDrift");
+        Assert.DoesNotContain(journal, record => record.Event == "CompletionCertificationRejected");
+        Assert.DoesNotContain(journal, record =>
+            record.Prompt == "CompletionCertificationRouting" &&
+            record.Event == "TransitionCompleted");
+    }
+
+    [Fact]
     public async Task Invariant_failure_preserves_validator_evidence_state_and_journal()
     {
         using var repo = SeedRepo(includeCompletionContext: true);
@@ -394,6 +450,66 @@ public sealed class RoadmapFailurePersistenceTests
         }
 
         return repo;
+    }
+
+    private static async Task SeedCompletionClaimAsync(
+        TempRepo repo,
+        string specPath,
+        string executionEvidencePath)
+    {
+        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic("Completion Parse Failure Epic", "EPIC-COMPLETE"));
+        repo.Write(specPath, """
+            # Completion Parse Failure Milestone
+
+            | Field | Value |
+            |---|---|
+            | Epic Path | .agents/epic.md |
+
+            ## Acceptance Criteria
+
+            - [x] Execution evidence is ready for completion evaluation.
+            """);
+        repo.Write(executionEvidencePath, """
+            # Execution Report
+
+            ## Execution Disposition
+
+            | Field | Value |
+            |---|---|
+            | Status | Epic Complete |
+            | Confidence | High |
+            | Evidence Summary | Tests passed and implementation is complete. |
+            | Next Step | EvaluateEpicCompletionAndDrift |
+            """);
+        await new Cli.ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(
+            Cli.RoadmapArtifactPaths.ActiveEpic,
+            Cli.ArtifactLifecycleState.Ready);
+        await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, specPath);
+        DateTimeOffset detectedAt = DateTimeOffset.UtcNow;
+        await new RoadmapStateStore(repo.Artifacts).SaveAsync(new Cli.RoadmapStateDocument(
+            Cli.RoadmapState.EpicCompletionDetected,
+            [],
+            new Cli.RoadmapTransitionSummary(
+                Cli.RoadmapState.ExecutionLoop,
+                Cli.RoadmapState.EpicCompletionDetected,
+                "ExecutionOutcomeInterpretation",
+                "None",
+                executionEvidencePath,
+                "Epic Complete",
+                Cli.TransitionStatus.Completed,
+                detectedAt,
+                detectedAt),
+            [],
+            "None",
+            0,
+            0,
+            new Cli.ProjectionManifestCounts(0, 0, 0),
+            new Cli.RoadmapTransitionIntent(
+                "EvaluateEpicCompletionAndDrift",
+                Cli.RoadmapState.EpicCompletionDetected,
+                [executionEvidencePath]),
+            ["EvaluateEpicCompletionAndDrift"],
+            []));
     }
 
     private static IEnumerable<AgentTurnResult> BuildPromptFailureTurns(string prompt)

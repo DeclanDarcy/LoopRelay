@@ -33,7 +33,7 @@
 - [x] Add or confirm milestone post-prompt bundle failure writing
   `milestone-spec-generation-failed.NNNN.md` and not rolling back already
   written artifacts.
-- [ ] Add or confirm completion evaluation parse failure after evaluation
+- [x] Add or confirm completion evaluation parse failure after evaluation
   evidence is written, without converting it to invalid-certification blocker
   state.
 - [ ] Add or confirm invalid parsed certification writes
