@@ -8,45 +8,45 @@ Task<ArtifactPromotionResult> ExecuteAsync(ProjectContext projectContext, Cancel
 
 ## Boundary
 
-- [ ] Handler returns `ArtifactPromotionResult`.
-- [ ] Caller controls milestone continuation.
+- [x] Handler returns `ArtifactPromotionResult`.
+- [x] Caller controls milestone continuation.
 
 ## Prompt And Projection
 
-- [ ] Phase `Split epic`.
-- [ ] Runtime prompt `SplitEpic`.
-- [ ] Projection prompt `ProjectionForSplitEpic`.
-- [ ] From/to for prompt `SplitEpicProposed -> SplitChildSelection`.
-- [ ] Projection path `.agents/projections/split-epic.md`.
-- [ ] Prompt output path in state/journal `.agents/splits`.
-- [ ] Secondary input is active selection content.
-- [ ] Envelope is the normal prompt transition.
+- [x] Phase `Split epic`.
+- [x] Runtime prompt `SplitEpic`.
+- [x] Projection prompt `ProjectionForSplitEpic`.
+- [x] From/to for prompt `SplitEpicProposed -> SplitChildSelection`.
+- [x] Projection path `.agents/projections/split-epic.md`.
+- [x] Prompt output path in state/journal `.agents/splits`.
+- [x] Secondary input is active selection content.
+- [x] Envelope is the normal prompt transition.
 
 ## Required Precondition
 
-- [ ] Read and validate fresh active selection through `ActiveSelectionReader`.
+- [x] Read and validate fresh active selection through `ActiveSelectionReader`.
 
 ## Runtime Context
 
-- [ ] Runtime context is `BuildCreateOrSplitContext` with projection content,
+- [x] Runtime context is `BuildCreateOrSplitContext` with projection content,
   selection proposal, and repository inspection instructions.
 
 ## Bundle Extraction And Interpretation
 
-- [ ] Use `BundleExtractionPolicy.RepositorySafe`.
-- [ ] Parse `# FILE:` markers.
-- [ ] Normalize separators.
-- [ ] Reject rooted paths and parent traversal.
-- [ ] Reject duplicate targets by throwing `RoadmapStepException`, then convert
+- [x] Use `BundleExtractionPolicy.RepositorySafe`.
+- [x] Parse `# FILE:` markers.
+- [x] Normalize separators.
+- [x] Reject rooted paths and parent traversal.
+- [x] Reject duplicate targets by throwing `RoadmapStepException`, then convert
   that exception to invalid split interpretation.
-- [ ] Trim only leading and trailing separator noise around file bodies.
-- [ ] Hash each extracted file body.
-- [ ] Interpreter requires paths matching `.agents/epic-N.md`.
-- [ ] Child content classification and validation use the same epic classifier
+- [x] Trim only leading and trailing separator noise around file bodies.
+- [x] Hash each extracted file body.
+- [x] Interpreter requires paths matching `.agents/epic-N.md`.
+- [x] Child content classification and validation use the same epic classifier
   and validator as active epic promotion.
-- [ ] Any rejected file rejects the whole bundle.
-- [ ] No child files are written unless the whole interpreted bundle is valid.
-- [ ] Selected child remains the first valid child by numeric order, then path.
+- [x] Any rejected file rejects the whole bundle.
+- [x] No child files are written unless the whole interpreted bundle is valid.
+- [x] Selected child remains the first valid child by numeric order, then path.
 
 ## Valid Split Success Order
 
@@ -66,44 +66,44 @@ Task<ArtifactPromotionResult> ExecuteAsync(ProjectContext projectContext, Cancel
 
 ## Split-Output Blocker
 
-- [ ] Invalid or blocked split output writes no child files and no split family.
-- [ ] Previous `.agents/epic.md` remains unchanged.
-- [ ] Evidence stem `split-epic-output`.
-- [ ] Evidence content includes reason, rejected files, and raw prompt output.
-- [ ] Lifecycle for evidence path `Blocked`.
-- [ ] Journal event `SplitBundleRejected`.
-- [ ] Decision `Split Epic Blocked` for blocked interpretation.
-- [ ] Decision `Split Bundle Rejected` otherwise.
-- [ ] State `EvidenceBlocked` / `Paused`.
-- [ ] Intent `ResolveSplitEpicBlocker`.
-- [ ] Next transition `Resolve blocker and rerun`.
-- [ ] Returned result is `ArtifactPromotionResult.NotPromoted(...)`.
+- [x] Invalid or blocked split output writes no child files and no split family.
+- [x] Previous `.agents/epic.md` remains unchanged.
+- [x] Evidence stem `split-epic-output`.
+- [x] Evidence content includes reason, rejected files, and raw prompt output.
+- [x] Lifecycle for evidence path `Blocked`.
+- [x] Journal event `SplitBundleRejected`.
+- [x] Decision `Split Epic Blocked` for blocked interpretation.
+- [x] Decision `Split Bundle Rejected` otherwise.
+- [x] State `EvidenceBlocked` / `Paused`.
+- [x] Intent `ResolveSplitEpicBlocker`.
+- [x] Next transition `Resolve blocker and rerun`.
+- [x] Returned result is `ArtifactPromotionResult.NotPromoted(...)`.
 
 ## Active-Epic Promotion Rejection
 
-- [ ] Child files and split family may already exist.
-- [ ] Promotion rejection uses active epic promotion blocker behavior.
-- [ ] Event `ArtifactPromotionBlocked`.
-- [ ] State `EvidenceBlocked` / `Paused`.
-- [ ] Intent `ResolveArtifactPromotionBlocker`.
-- [ ] Caller pauses.
+- [x] Child files and split family may already exist.
+- [x] Promotion rejection uses active epic promotion blocker behavior.
+- [x] Event `ArtifactPromotionBlocked`.
+- [x] State `EvidenceBlocked` / `Paused`.
+- [x] Intent `ResolveArtifactPromotionBlocker`.
+- [x] Caller pauses.
 
 ## Runtime Prompt Failure
 
-- [ ] State `EvidenceBlocked` / `Failed`.
-- [ ] Output `.agents/splits`.
-- [ ] Decision `Failed`.
-- [ ] Intent `ResolveTransitionFailure`.
-- [ ] Throw already-persisted failure.
+- [x] State `EvidenceBlocked` / `Failed`.
+- [x] Output `.agents/splits`.
+- [x] Decision `Failed`.
+- [x] Intent `ResolveTransitionFailure`.
+- [x] Throw already-persisted failure.
 
 ## Input Snapshot
 
-- [ ] Required projection.
-- [ ] Required selection.
-- [ ] Secondary hash of selection content.
+- [x] Required projection.
+- [x] Required selection.
+- [x] Secondary hash of selection content.
 
 ## Integration
 
-- [ ] Caller behavior remains unchanged: promoted split proceeds to milestone
+- [x] Caller behavior remains unchanged: promoted split proceeds to milestone
   generation.
-- [ ] Caller behavior remains unchanged: not promoted pauses.
+- [x] Caller behavior remains unchanged: not promoted pauses.

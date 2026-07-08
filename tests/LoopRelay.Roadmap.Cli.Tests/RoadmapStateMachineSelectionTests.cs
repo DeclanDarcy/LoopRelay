@@ -556,6 +556,26 @@ internal static class StateMachineFactory
             selectionSuperseder,
             activeEpicRewriteTransition,
             effectiveConsole);
+        var bundleExtractor = new BundleFileExtractor();
+        var splitBundleInterpreter = new SplitEpicBundleInterpreter();
+        var bundleManifest = new Cli.BundleManifestWriter(repo.Artifacts);
+        var splitEpicTransition = new Cli.SplitEpicTransition(
+            repo.Artifacts,
+            contracts,
+            projectionCache,
+            contextBuilder,
+            activeSelectionReader,
+            promptTransitionRunner,
+            activeEpicPromotionCoordinator,
+            bundleExtractor,
+            splitBundleInterpreter,
+            bundleManifest,
+            split,
+            lifecycle,
+            journal,
+            transitionPersistence,
+            hitlArtifactCapture,
+            effectiveConsole);
         var invariants = new Cli.InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
         var resumePlanner = new Cli.RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new Cli.ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
         var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
@@ -576,6 +596,7 @@ internal static class StateMachineFactory
             selectNextEpicTransition,
             createNewEpicTransition,
             epicPreparationAuditTransition,
+            splitEpicTransition,
             activeSelectionReader,
             new Cli.RoadmapStartupPlanner(),
             resumePlanner,
@@ -584,11 +605,8 @@ internal static class StateMachineFactory
             decisionRecorder,
             journal,
             lifecycle,
-            activeEpicPromotionCoordinator,
-            new BundleFileExtractor(),
-            new SplitEpicBundleInterpreter(),
-            new Cli.BundleManifestWriter(repo.Artifacts),
-            split,
+            bundleExtractor,
+            bundleManifest,
             executionPreparation,
             invariants,
             effectiveConsole,
