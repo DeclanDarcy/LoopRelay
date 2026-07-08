@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using LoopRelay.Completion;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 
 namespace LoopRelay.Roadmap.Cli;
@@ -32,7 +33,8 @@ internal sealed class RoadmapStateMachine(
     ExecutionPreparationProvenanceService executionPreparation,
     InvariantValidator invariantValidator,
     ILoopConsole console,
-    ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null)
+    ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null,
+    INonImplementationCompletionReviewService? nonImplementationCompletionReview = null)
 {
     public Task<RoadmapOutcome> ExecuteAsync(
         RoadmapCliCommand command,
@@ -1057,6 +1059,16 @@ internal sealed class RoadmapStateMachine(
         }
 
         string runtimePrompt = ExecutionDispositionProtocol.CommandText(ExecutionDispositionCommand.EvaluateEpicCompletionAndDrift);
+        if (nonImplementationCompletionReview is not null)
+        {
+            NonImplementationCompletionReviewResult review =
+                await nonImplementationCompletionReview.ReviewAsync(cancellationToken);
+            if (review.IsBlocked)
+            {
+                return await PersistNonImplementationCompletionReviewBlockedAsync(review);
+            }
+        }
+
         console.Phase("Evaluate epic completion and drift");
         PromptContract contract = contractRegistry.Get(runtimePrompt);
         ProjectionCacheResult projection = await projectionCache.EnsureAsync(runtimePrompt, projectContext, contract, cancellationToken);
@@ -1116,6 +1128,56 @@ internal sealed class RoadmapStateMachine(
             evaluationPath,
             archive is null ? null : [archive.SynthesisPath]);
         return roadmapRoute.CliOutcome;
+    }
+
+    private async Task<RoadmapOutcome> PersistNonImplementationCompletionReviewBlockedAsync(
+        NonImplementationCompletionReviewResult review)
+    {
+        DateTimeOffset blockedAt = DateTimeOffset.UtcNow;
+        string nextStep =
+            $"Fill `{LoopRelay.Orchestration.OrchestrationArtifactPaths.NonImplementationDecisions}` and rerun the roadmap CLI.";
+        var detailsLines = new List<string>
+        {
+            "Non-implementation HITL review blocked completion evaluation.",
+            string.Empty,
+            "Review evidence paths:",
+        };
+        detailsLines.AddRange(review.EvidencePaths.Select(path => $"- {path}"));
+        detailsLines.Add(string.Empty);
+        detailsLines.Add("Blockers:");
+        detailsLines.AddRange(review.BlockerMessages.Count == 0
+            ? ["- Human review decisions are pending."]
+            : review.BlockerMessages.Select(message => $"- {message}"));
+        string details = string.Join(Environment.NewLine, detailsLines);
+        string blockerPath = await artifacts.WriteNumberedEvidenceAsync(
+            RoadmapArtifactPaths.BlockerEvidenceDirectory,
+            "non-implementation-completion-review-blocked",
+            RoadmapBlockedArtifact.Render(
+                RoadmapState.EvidenceBlocked,
+                "NonImplementationCompletionReview",
+                "Pending non-implementation HITL review decisions.",
+                nextStep,
+                review.ReviewPath,
+                details,
+                blockedAt));
+        IReadOnlyList<string> outputs = [..review.EvidencePaths, blockerPath];
+
+        await SaveStateAsync(
+            RoadmapState.EvidenceBlocked,
+            TransitionStatus.Paused,
+            RoadmapState.EpicCompletionDetected,
+            RoadmapState.EvidenceBlocked,
+            "NonImplementationCompletionReview",
+            "None",
+            FormatList(outputs),
+            "Pending non-implementation HITL review",
+            blockedAt,
+            blockedAt,
+            null,
+            [new BlockerRow("Pending non-implementation HITL review decisions.", nextStep)],
+            new RoadmapTransitionIntent("ResolveNonImplementationCompletionReview", RoadmapState.EvidenceBlocked, outputs),
+            [nextStep]);
+        return RoadmapOutcome.Paused;
     }
 
     private async Task<string> ReadPersistedExecutionEvidencePathAsync()

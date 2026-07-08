@@ -12,6 +12,8 @@ public sealed record NonImplementationReviewLedgerDocument(
             CurrentSchemaVersion,
             Array.Empty<NonImplementationReviewLedgerEntry>(),
             Array.Empty<NonImplementationHitlRequestEntry>());
+
+    public NonImplementationSynthesisDecisionMetadata? SynthesisDecision { get; init; }
 }
 
 public sealed record NonImplementationReviewLedgerEntry
@@ -95,3 +97,19 @@ public sealed record NonImplementationHitlRequestEntry(
     string Rationale,
     DateTimeOffset FirstCapturedAtUtc,
     string? EvidenceExcerpt = null);
+
+public enum NonImplementationSynthesisDecision
+{
+    KeepSynthesis,
+    DiscardSynthesis,
+    DeferSynthesis,
+}
+
+public sealed record NonImplementationSynthesisDecisionMetadata(
+    NonImplementationSynthesisDecision Decision,
+    string SynthesisPath,
+    string DecisionArtifactPath,
+    string DecisionSourceHash,
+    DateTimeOffset DecidedAtUtc,
+    string? Rationale = null,
+    string? DecidedBy = null);

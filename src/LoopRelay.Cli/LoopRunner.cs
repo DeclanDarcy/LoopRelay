@@ -20,6 +20,7 @@ internal sealed class LoopRunner(
     IDecisionSessionResumeStore resumeStore,
     ICompletionCertificationService completionCertification,
     INonImplementationPostExecutionReviewService postExecutionReview,
+    INonImplementationCompletionReviewService completionReview,
     ILoopConsole console) : IAsyncDisposable
 {
     public async Task<LoopOutcome> RunAsync(CancellationToken cancellationToken)
@@ -36,8 +37,28 @@ internal sealed class LoopRunner(
                 // waits on a (potentially multi-day) quota reset.
                 if (await gate.IsEpicCompleteAsync())
                 {
+                    NonImplementationCompletionReviewResult review =
+                        await completionReview.ReviewAsync(cancellationToken);
+                    if (review.IsBlocked)
+                    {
+                        await submodulePublisher.PublishAsync(
+                            AgentsSubmodulePublisher.CompletionCertificationMessage,
+                            cancellationToken);
+                        console.Warn(
+                            "Non-implementation completion review blocked final evaluation. " +
+                            $"Evidence: {FormatEvidence(review.EvidencePaths)}");
+                        return LoopOutcome.CompletionBlocked;
+                    }
+
+                    if (review.AppliedDeletePaths.Count > 0)
+                    {
+                        await commitGate.CommitPushIfChangedAsync(cancellationToken);
+                    }
+
                     CompletionCertificationResult completion = await completionCertification.CertifyPlanCompletionAsync(
-                        new CompletionCertificationRequest(artifacts.Repository),
+                        new CompletionCertificationRequest(
+                            artifacts.Repository,
+                            NonImplementationReviewEvidencePaths: review.EvidencePaths),
                         cancellationToken);
                     await submodulePublisher.PublishAsync(
                         AgentsSubmodulePublisher.CompletionCertificationMessage,

@@ -1,4 +1,5 @@
 using System.Text;
+using LoopRelay.Orchestration;
 
 namespace LoopRelay.Roadmap.Cli;
 
@@ -69,6 +70,8 @@ internal sealed class RoadmapPromptContextBuilder(
             sections.Add(Section($"Milestone Spec: {spec}", await artifacts.ReadRequiredAsync(spec)));
         }
 
+        await AddNonImplementationReviewSectionsAsync(sections);
+
         return ValidateNoRawProjectContext(Build(sections));
     }
 
@@ -80,13 +83,37 @@ internal sealed class RoadmapPromptContextBuilder(
     {
         string completion = await artifacts.ReadRequiredAsync(RoadmapArtifactPaths.RoadmapCompletionContext);
         string evaluation = await artifacts.ReadRequiredAsync(latestEvaluationPath);
-        return ValidateNoRawProjectContext(Build([
+        var sections = new List<ContextSection>
+        {
             Section("Projection Content", projectionContent),
             Section("Current Roadmap Completion Context", completion),
             Section($"Completed Epic Synthesis: {completedEpicSynthesisPath}", completedEpicSynthesis),
             Section("Latest Completion Evaluation", evaluation),
             Section("Repository Inspection Instructions", "Inspect repository reality in read-only mode before updating strategic state."),
-        ]));
+        };
+        await AddNonImplementationReviewSectionsAsync(sections);
+        return ValidateNoRawProjectContext(Build(sections));
+    }
+
+    private async Task AddNonImplementationReviewSectionsAsync(List<ContextSection> sections)
+    {
+        await AddOptionalSectionAsync(
+            sections,
+            $"Non-Implementation Review Summary: {OrchestrationArtifactPaths.NonImplementationReview}",
+            OrchestrationArtifactPaths.NonImplementationReview);
+        await AddOptionalSectionAsync(
+            sections,
+            $"Non-Implementation Review Synthesis: {OrchestrationArtifactPaths.NonImplementationSynthesis}",
+            OrchestrationArtifactPaths.NonImplementationSynthesis);
+    }
+
+    private async Task AddOptionalSectionAsync(List<ContextSection> sections, string title, string relativePath)
+    {
+        string? content = await artifacts.ReadAsync(relativePath);
+        if (!string.IsNullOrWhiteSpace(content))
+        {
+            sections.Add(Section(title, content));
+        }
     }
 
     private static string Build(IReadOnlyList<ContextSection> sections)

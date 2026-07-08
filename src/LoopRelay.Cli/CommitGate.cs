@@ -34,6 +34,8 @@ internal sealed class CommitGate(
     internal const int MaxNoChangesCount = 2;
 
     private const string CommitMessage = "Orchestration loop: automated execution and decision iteration";
+    private const string NonImplementationReviewDecisionMessage =
+        "Orchestration loop: apply non-implementation review decisions";
 
     // Stage everything EXCEPT the `.agents` submodule, so the loop never commits or advances the gitlink from
     // here (the submodule is published independently to its own remote by AgentsSubmodulePublisher).
@@ -90,6 +92,27 @@ internal sealed class CommitGate(
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Commits and pushes parent-repository changes produced by approved completion-review actions without
+    /// changing the iteration stall counter.
+    /// </summary>
+    public async Task<bool> CommitPushIfChangedAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        IReadOnlyList<string> changed = await changeDetector.GetRealChangedPathsAsync();
+        if (changed.Count == 0)
+        {
+            return false;
+        }
+
+        await RunGitAsync("add", AddExcludingAgents);
+        await RunGitAsync("commit", ["commit", "-m", NonImplementationReviewDecisionMessage]);
+        await RunGitAsync("push", ["push"]);
+        console.Info("Committed and pushed approved non-implementation review repository changes.");
+        return true;
     }
 
     private async Task RunGitAsync(string label, IReadOnlyList<string> arguments)

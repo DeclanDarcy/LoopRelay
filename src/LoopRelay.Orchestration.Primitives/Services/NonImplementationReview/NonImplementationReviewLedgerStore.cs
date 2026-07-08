@@ -301,6 +301,12 @@ public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
             Entries = document.Entries?.Select(NormalizeEntry).ToArray()
                 ?? Array.Empty<NonImplementationReviewLedgerEntry>(),
             HitlRequests = document.HitlRequests ?? Array.Empty<NonImplementationHitlRequestEntry>(),
+            SynthesisDecision = document.SynthesisDecision is null
+                ? null
+                : document.SynthesisDecision with
+                {
+                    DecidedAtUtc = document.SynthesisDecision.DecidedAtUtc.ToUniversalTime(),
+                },
         };
 
     private static NonImplementationReviewLedgerEntry CreatePendingEntry(

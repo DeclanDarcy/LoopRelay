@@ -38,7 +38,7 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
             sections.Add(handoff);
         }
 
-        await AddNonImplementationReviewSummarySectionsAsync(sections);
+        await AddNonImplementationReviewSummarySectionsAsync(sections, request.NonImplementationReviewEvidencePaths);
 
         sections.Add(Section(
             "Repository Inspection Instructions",
@@ -52,7 +52,8 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
         string roadmapCompletionContextPath,
         string completedEpicSynthesisPath,
         string completedEpic,
-        string evaluationEvidencePath)
+        string evaluationEvidencePath,
+        IReadOnlyList<string>? nonImplementationReviewEvidencePaths = null)
     {
         var sections = new List<ContextSection>
         {
@@ -62,7 +63,7 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
             Section($"Latest Completion Evaluation: {evaluationEvidencePath}", await artifacts.ReadRequiredAsync(evaluationEvidencePath)),
         };
 
-        await AddNonImplementationReviewSummarySectionsAsync(sections);
+        await AddNonImplementationReviewSummarySectionsAsync(sections, nonImplementationReviewEvidencePaths);
 
         sections.Add(Section(
             "Repository Inspection Instructions",
@@ -95,16 +96,40 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
         return sections;
     }
 
-    private async Task AddNonImplementationReviewSummarySectionsAsync(List<ContextSection> sections)
+    private async Task AddNonImplementationReviewSummarySectionsAsync(
+        List<ContextSection> sections,
+        IReadOnlyList<string>? explicitEvidencePaths)
     {
-        await AddOptionalSectionAsync(
-            sections,
-            $"Non-Implementation Review Summary: {OrchestrationArtifactPaths.NonImplementationReview}",
-            OrchestrationArtifactPaths.NonImplementationReview);
-        await AddOptionalSectionAsync(
-            sections,
-            $"Non-Implementation Review Synthesis: {OrchestrationArtifactPaths.NonImplementationSynthesis}",
-            OrchestrationArtifactPaths.NonImplementationSynthesis);
+        var included = new HashSet<string>(StringComparer.Ordinal);
+        if (explicitEvidencePaths is not null)
+        {
+            foreach (string path in explicitEvidencePaths.Where(path => !string.IsNullOrWhiteSpace(path)))
+            {
+                if (included.Add(path))
+                {
+                    await AddOptionalSectionAsync(
+                        sections,
+                        NonImplementationReviewSectionTitle(path),
+                        path);
+                }
+            }
+        }
+
+        if (included.Add(OrchestrationArtifactPaths.NonImplementationReview))
+        {
+            await AddOptionalSectionAsync(
+                sections,
+                $"Non-Implementation Review Summary: {OrchestrationArtifactPaths.NonImplementationReview}",
+                OrchestrationArtifactPaths.NonImplementationReview);
+        }
+
+        if (included.Add(OrchestrationArtifactPaths.NonImplementationSynthesis))
+        {
+            await AddOptionalSectionAsync(
+                sections,
+                $"Non-Implementation Review Synthesis: {OrchestrationArtifactPaths.NonImplementationSynthesis}",
+                OrchestrationArtifactPaths.NonImplementationSynthesis);
+        }
     }
 
     private async Task AddOptionalSectionAsync(List<ContextSection> sections, string title, string relativePath)
@@ -114,6 +139,22 @@ internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifac
         {
             sections.Add(Section(title, content));
         }
+    }
+
+    private static string NonImplementationReviewSectionTitle(string path)
+    {
+        string fileName = Path.GetFileName(path);
+        if (string.Equals(fileName, Path.GetFileName(OrchestrationArtifactPaths.NonImplementationReview), StringComparison.Ordinal))
+        {
+            return $"Non-Implementation Review Summary: {path}";
+        }
+
+        if (string.Equals(fileName, Path.GetFileName(OrchestrationArtifactPaths.NonImplementationSynthesis), StringComparison.Ordinal))
+        {
+            return $"Non-Implementation Review Synthesis: {path}";
+        }
+
+        return $"Non-Implementation Review Evidence: {path}";
     }
 
     private static string Build(IReadOnlyList<ContextSection> sections)

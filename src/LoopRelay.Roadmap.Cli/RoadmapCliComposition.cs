@@ -49,14 +49,33 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var runtime = provider.GetRequiredService<IAgentRuntime>();
         var tokenEstimator = provider.GetRequiredService<IAgentTokenEstimator>();
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
+        var processRunner = provider.GetRequiredService<IProcessRunner>();
         var progressRuntime = new InputWaitProgressAgentRuntime(
             runtime,
             tokenEstimator,
             new ConsoleInputWaitProgressRenderer(console));
 
         var artifacts = new RoadmapArtifacts(store, repository);
+        var repositoryArtifacts = new RepositoryArtifactStore(store, repository);
+        var nonImplementationLedger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
         var hitlRequestCapture = new ExplicitHitlNonImplementationRequestCaptureService(
-            new NonImplementationReviewLedgerStore(new RepositoryArtifactStore(store, repository)));
+            nonImplementationLedger);
+        var nonImplementationReviewRunner = new AgentNonImplementationReviewRunner(progressRuntime, repository);
+        var nonImplementationSemanticConfirmer = new NonImplementationSemanticConfirmer(
+            nonImplementationLedger,
+            nonImplementationReviewRunner);
+        var nonImplementationInsightSynthesizer = new NonImplementationInsightSynthesizer(
+            nonImplementationLedger,
+            nonImplementationReviewRunner,
+            repositoryArtifacts);
+        var nonImplementationCompletionReview = new NonImplementationCompletionReviewService(
+            new RepositoryChangeSetDetector(processRunner, repository),
+            new NonImplementationArtifactClassifier(),
+            nonImplementationSemanticConfirmer,
+            nonImplementationLedger,
+            repositoryArtifacts,
+            repository.Path,
+            nonImplementationInsightSynthesizer);
         var projectionRegistry = new ProjectionRegistry();
         var provenanceFactory = new ProjectionProvenanceFactory(projectionRegistry);
         var contractRegistry = new PromptContractRegistry(projectionRegistry);
@@ -143,7 +162,8 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             executionPreparation,
             invariants,
             console,
-            hitlRequestCapture);
+            hitlRequestCapture,
+            nonImplementationCompletionReview);
 
         return new RoadmapCliComposition(provider, console, executableResolver, machine);
     }

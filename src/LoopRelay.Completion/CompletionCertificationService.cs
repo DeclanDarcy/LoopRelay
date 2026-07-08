@@ -1,5 +1,6 @@
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
+using LoopRelay.Orchestration;
 using LoopRelay.Projections;
 
 namespace LoopRelay.Completion;
@@ -19,7 +20,8 @@ public sealed record CompletionCertificationRequest(
     string? DetailsPath = CompletionArtifactPaths.Details,
     string MilestoneDirectory = CompletionArtifactPaths.MilestonesDirectory,
     string CompletionTrigger = "MainCliMilestoneGate",
-    string CompletedEpicArchiveRoot = CompletionArtifactPaths.CompletedEpicsDirectory);
+    string CompletedEpicArchiveRoot = CompletionArtifactPaths.CompletedEpicsDirectory,
+    IReadOnlyList<string>? NonImplementationReviewEvidencePaths = null);
 
 public sealed record CompletionCertificationResult(
     CompletionCertificationServiceOutcome Outcome,
@@ -236,7 +238,10 @@ public sealed class CompletionCertificationService(
                 request.RoadmapCompletionContextPath,
                 archive.SynthesisPath,
                 archive.SynthesisContent,
-                evaluationPath);
+                evaluationPath,
+                ArchivedNonImplementationReviewEvidencePaths(
+                    archive.ArchiveDirectory,
+                    request.NonImplementationReviewEvidencePaths));
             string updatedRoadmapCompletionContext = await promptRunner.RunAsync(
                 new CompletionRuntimePromptInvocation(
                     CompletionRuntimePromptNames.UpdateRoadmapCompletionContext,
@@ -329,6 +334,37 @@ public sealed class CompletionCertificationService(
             CompletionArtifactPaths.ExecutionEvidenceDirectory,
             "main-cli-completion-claim",
             content);
+    }
+
+    private static IReadOnlyList<string> ArchivedNonImplementationReviewEvidencePaths(
+        string archiveDirectory,
+        IReadOnlyList<string>? requestedEvidencePaths)
+    {
+        IReadOnlyList<string> paths = requestedEvidencePaths is { Count: > 0 }
+            ? requestedEvidencePaths
+            :
+            [
+                OrchestrationArtifactPaths.NonImplementationReview,
+                OrchestrationArtifactPaths.NonImplementationSynthesis,
+            ];
+
+        return paths
+            .Select(path => ArchivedNonImplementationReviewEvidencePath(archiveDirectory, path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string ArchivedNonImplementationReviewEvidencePath(
+        string archiveDirectory,
+        string path)
+    {
+        string reviewDirectory = OrchestrationArtifactPaths.NonImplementationReviewDirectory + "/";
+        if (!path.StartsWith(reviewDirectory, StringComparison.Ordinal))
+        {
+            return path;
+        }
+
+        return $"{archiveDirectory}/review/{path[reviewDirectory.Length..]}";
     }
 
     private static async Task<CompletionCertificationResult> BlockAsync(

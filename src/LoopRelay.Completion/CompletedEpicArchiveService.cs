@@ -57,6 +57,7 @@ public sealed class CompletedEpicArchiveService(
         await artifacts.MoveDirectoryContentsAsync(CompletionArtifactPaths.DeltasDirectory, $"{archiveDirectory}/deltas");
         await artifacts.MoveDirectoryContentsAsync(CompletionArtifactPaths.HandoffsDirectory, $"{archiveDirectory}/handoffs");
         await artifacts.MoveDirectoryContentsAsync(CompletionArtifactPaths.MilestonesDirectory, $"{archiveDirectory}/milestones");
+        await artifacts.MoveDirectoryContentsAsync(CompletionArtifactPaths.NonImplementationReviewDirectory, $"{archiveDirectory}/review");
         await artifacts.MoveFileIfPresentAsync(CompletionArtifactPaths.Details, $"{archiveDirectory}/details.md");
         await artifacts.MoveFileIfPresentAsync(CompletionArtifactPaths.OperationalContext, $"{archiveDirectory}/operational_context.md");
         await artifacts.MoveFileIfPresentAsync(CompletionArtifactPaths.ExecutionPlan, $"{archiveDirectory}/plan.md");

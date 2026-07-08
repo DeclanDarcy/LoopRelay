@@ -31,9 +31,12 @@ public class LoopRunnerTests
     private sealed record Harness(
         Cli.LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con,
         FakeProcessRunner Git, FakeDecisionSessionResumeStore Resume, FakeCompletionCertificationService Completion,
-        FakeNonImplementationPostExecutionReviewService Review);
+        FakeNonImplementationPostExecutionReviewService Review,
+        FakeNonImplementationCompletionReviewService CompletionReview);
 
-    private static Harness New(FakeNonImplementationPostExecutionReviewService? review = null)
+    private static Harness New(
+        FakeNonImplementationPostExecutionReviewService? review = null,
+        FakeNonImplementationCompletionReviewService? completionReview = null)
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
@@ -59,9 +62,21 @@ public class LoopRunnerTests
         var resume = new FakeDecisionSessionResumeStore();
         var completion = new FakeCompletionCertificationService();
         review ??= new FakeNonImplementationPostExecutionReviewService();
+        completionReview ??= new FakeNonImplementationCompletionReviewService();
         return new Harness(
-            new Cli.LoopRunner(gate, art, exec, dec, submodulePublisher, commitGate, resume, completion, review, con),
-            rt, store, repo, con, git, resume, completion, review);
+            new Cli.LoopRunner(
+                gate,
+                art,
+                exec,
+                dec,
+                submodulePublisher,
+                commitGate,
+                resume,
+                completion,
+                review,
+                completionReview,
+                con),
+            rt, store, repo, con, git, resume, completion, review, completionReview);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
@@ -80,6 +95,9 @@ public class LoopRunnerTests
         Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
         Assert.Empty(h.Rt.OneShotCalls);   // no codex run at all
         Assert.Single(h.Completion.Requests);
+        Assert.Contains(
+            OrchestrationArtifactPaths.NonImplementationReview,
+            Assert.Single(h.Completion.Requests).NonImplementationReviewEvidencePaths ?? []);
     }
 
     [Fact]
@@ -762,6 +780,7 @@ public class LoopRunnerTests
             resume,
             completion,
             review,
+            new FakeNonImplementationCompletionReviewService(),
             console);
 
         Cli.LoopOutcome outcome = await runner.RunAsync(CancellationToken.None);
@@ -870,6 +889,41 @@ public class LoopRunnerTests
                     ConfirmedNonImplementationCount: 0,
                     FalsePositiveCount: 0,
                     SemanticUncertaintyCount: 0)));
+        }
+    }
+
+    private sealed class FakeNonImplementationCompletionReviewService : INonImplementationCompletionReviewService
+    {
+        public NonImplementationCompletionReviewResult Result { get; set; } =
+            new(
+                NonImplementationCompletionReviewStatus.Ready,
+                OrchestrationArtifactPaths.NonImplementationReview,
+                DecisionTemplatePath: null,
+                EvidencePaths: [OrchestrationArtifactPaths.NonImplementationReview],
+                AppliedDeletePaths: [],
+                new NonImplementationCompletionReviewSummary(
+                    "completion-review-test",
+                    CurrentChangedFileCount: 0,
+                    ClassifiedFileCount: 0,
+                    SemanticCandidateCount: 0,
+                    ConfirmedThisRefreshCount: 0,
+                    ReusedSemanticDispositionCount: 0,
+                    UnresolvedConfirmedNonImplementationCount: 0,
+                    UnresolvedSemanticUncertaintyCount: 0,
+                    ResolvedFileDecisionCount: 0,
+                    AppliedDeleteCount: 0,
+                    SynthesisDecisionRequired: false,
+                    SynthesisDecision: null),
+                BlockerMessages: []);
+
+        public List<NonImplementationCompletionReviewResult> ResultsReturned { get; } = [];
+
+        public Task<NonImplementationCompletionReviewResult> ReviewAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ResultsReturned.Add(Result);
+            return Task.FromResult(Result);
         }
     }
 
@@ -1060,6 +1114,48 @@ public class LoopRunnerTests
         Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(Cli.LoopOutcome.CompletionBlocked, outcome);
+        Assert.Equal(0, h.Resume.ClearCalls);
+        Assert.NotNull(h.Resume.State);
+    }
+
+    [Fact]
+    public async Task Run_WhenNonImplementationCompletionReviewBlocks_DoesNotClearResumeOrRunCertification()
+    {
+        var completionReview = new FakeNonImplementationCompletionReviewService
+        {
+            Result = new NonImplementationCompletionReviewResult(
+                NonImplementationCompletionReviewStatus.Blocked,
+                OrchestrationArtifactPaths.NonImplementationReview,
+                OrchestrationArtifactPaths.NonImplementationDecisions,
+                EvidencePaths:
+                [
+                    OrchestrationArtifactPaths.NonImplementationReview,
+                    OrchestrationArtifactPaths.NonImplementationDecisions,
+                ],
+                AppliedDeletePaths: [],
+                new NonImplementationCompletionReviewSummary(
+                    "completion-review-test",
+                    CurrentChangedFileCount: 1,
+                    ClassifiedFileCount: 1,
+                    SemanticCandidateCount: 1,
+                    ConfirmedThisRefreshCount: 1,
+                    ReusedSemanticDispositionCount: 0,
+                    UnresolvedConfirmedNonImplementationCount: 1,
+                    UnresolvedSemanticUncertaintyCount: 0,
+                    ResolvedFileDecisionCount: 0,
+                    AppliedDeleteCount: 0,
+                    SynthesisDecisionRequired: false,
+                    SynthesisDecision: null),
+                BlockerMessages: ["Human decisions are required."]),
+        };
+        var h = New(completionReview: completionReview);
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");
+        h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
+
+        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.LoopOutcome.CompletionBlocked, outcome);
+        Assert.Empty(h.Completion.Requests);
         Assert.Equal(0, h.Resume.ClearCalls);
         Assert.NotNull(h.Resume.State);
     }

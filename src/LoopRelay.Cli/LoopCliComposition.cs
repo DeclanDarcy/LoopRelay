@@ -89,6 +89,11 @@ internal sealed class LoopCliComposition : IAsyncDisposable
         var changeDetector = new WorkingTreeChangeDetector(processRunner, repository);
         var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);
         resumeStore.EnsureDirectoryProtection();
+        var repositoryChangeSetDetector = new RepositoryChangeSetDetector(processRunner, repository);
+        var nonImplementationReviewRunner = new AgentNonImplementationReviewRunner(gatedRuntime, repository);
+        var nonImplementationSemanticConfirmer = new NonImplementationSemanticConfirmer(
+            nonImplementationLedger,
+            nonImplementationReviewRunner);
         var projectionArtifacts = new ProjectionArtifacts(store, repository);
         var projectionRegistry = ProjectionDefinitionRegistry.CreateDefault();
         var projectionService = new ProjectContextProjectionService(
@@ -109,15 +114,25 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             completionPromptRunner,
             completionArchive,
             observer: completionObserver);
+        var nonImplementationInsightSynthesizer = new NonImplementationInsightSynthesizer(
+            nonImplementationLedger,
+            nonImplementationReviewRunner,
+            repositoryArtifacts);
         var postExecutionReview = new NonImplementationPostExecutionReviewService(
             new RepositorySliceBaselineStore(
-                new RepositoryChangeSetDetector(processRunner, repository),
+                repositoryChangeSetDetector,
                 repositoryArtifacts),
             new NonImplementationArtifactClassifier(),
-            new NonImplementationSemanticConfirmer(
-                nonImplementationLedger,
-                new AgentNonImplementationReviewRunner(gatedRuntime, repository)),
+            nonImplementationSemanticConfirmer,
             repositoryArtifacts);
+        var completionReview = new NonImplementationCompletionReviewService(
+            repositoryChangeSetDetector,
+            new NonImplementationArtifactClassifier(),
+            nonImplementationSemanticConfirmer,
+            nonImplementationLedger,
+            repositoryArtifacts,
+            repository.Path,
+            nonImplementationInsightSynthesizer);
         var execution = new ExecutionStep(
             gatedRuntime,
             artifacts,
@@ -149,6 +164,7 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             resumeStore,
             completionCertification,
             postExecutionReview,
+            completionReview,
             console);
 
         return new LoopCliComposition(provider, console, executableResolver, loop);
