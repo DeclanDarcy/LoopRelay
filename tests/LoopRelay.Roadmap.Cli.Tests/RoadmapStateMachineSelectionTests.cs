@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
+using LoopRelay.Agents.Models;
 using LoopRelay.Completion;
 using LoopRelay.Infrastructure.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
@@ -179,6 +180,68 @@ public sealed class RoadmapStateMachineSelectionTests
         Assert.DoesNotContain(selectionRecords, record => record.Event == "TransitionFailed");
     }
 
+    [Theory]
+    [InlineData("Select New Intermediary Epic", "CreateNewEpic")]
+    [InlineData("Select Split Epic", "SplitEpic")]
+    [InlineData("Select Existing Epic", "EpicPreparationAudit")]
+    public async Task Stale_active_selection_is_rejected_before_downstream_prompt_runs(
+        string recommendedOutcome,
+        string downstreamPrompt)
+    {
+        using var repo = SeedRepo();
+        var runtime = new MutatingOneShotRuntime(
+            new ScriptedAgentRuntime(
+                ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+                ScriptedAgentRuntime.Completed(SelectionForOutcome(recommendedOutcome))),
+            mutateAfterOneShotCall: 2,
+            () => repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "changed completion context"));
+        var console = new TestConsole();
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime, console).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Assert.Equal(2, runtime.OneShotCalls);
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ProjectionPaths[downstreamPrompt]));
+        AssertDownstreamPromptNotStarted(repo, downstreamPrompt);
+        Assert.Contains(console.Errors, error => error.Contains("Active selection cannot be used because it does not belong to the current selection cycle", StringComparison.Ordinal));
+
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.SelectNextStrategicInitiative, state.CurrentState);
+        Assert.Equal("SelectNextEpic", state.LastTransition.Prompt);
+        Assert.Equal(Cli.TransitionStatus.Completed, state.LastTransition.Status);
+    }
+
+    [Fact]
+    public async Task Stale_active_selection_is_rejected_before_rewrite_fallback_prompt_runs()
+    {
+        using var repo = SeedRepo();
+        var runtime = new MutatingOneShotRuntime(
+            new ScriptedAgentRuntime(
+                ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
+                ScriptedAgentRuntime.Completed(ExistingEpicSelection()),
+                ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EpicPreparationAudit")),
+                ScriptedAgentRuntime.Completed(AuditDisposition("Realign"))),
+            mutateAfterOneShotCall: 4,
+            () => repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "changed completion context"));
+        var console = new TestConsole();
+
+        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime, console).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Assert.Equal(4, runtime.OneShotCalls);
+        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ProjectionPaths["RealignEpic"]));
+        AssertDownstreamPromptNotStarted(repo, "RealignEpic");
+        Assert.Contains(console.Errors, error => error.Contains("Active selection cannot be used because it does not belong to the current selection cycle", StringComparison.Ordinal));
+
+        string auditPath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.AuditEvidenceDirectory, "epic-preparation-audit.*.md"));
+        Assert.Contains("Disposition | Realign", repo.Read(auditPath), StringComparison.Ordinal);
+
+        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(Cli.RoadmapState.EpicPreparationAudit, state.CurrentState);
+        Assert.Equal("EpicPreparationAudit", state.LastTransition.Prompt);
+        Assert.Equal(Cli.TransitionStatus.Completed, state.LastTransition.Status);
+    }
+
     [Fact]
     public async Task Selection_output_captures_structured_hitl_request_markers()
     {
@@ -212,6 +275,15 @@ public sealed class RoadmapStateMachineSelectionTests
         Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
     }
 
+    private static TempRepo SeedRepo()
+    {
+        var repo = new TempRepo();
+        repo.SeedProjectContext();
+        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
+        return repo;
+    }
+
     private static async Task SeedStaleSelectionProjectionManifestAsync(TempRepo repo)
     {
         Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
@@ -241,6 +313,21 @@ public sealed class RoadmapStateMachineSelectionTests
             .Select(line => JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
             .ToArray();
 
+    private static void AssertDownstreamPromptNotStarted(TempRepo repo, string prompt)
+    {
+        string journal = repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal);
+        Assert.DoesNotContain($"\"prompt\":\"{prompt}\"", journal, StringComparison.Ordinal);
+    }
+
+    private static string SelectionForOutcome(string recommendedOutcome) =>
+        recommendedOutcome switch
+        {
+            "Select New Intermediary Epic" => NewEpicSelection(),
+            "Select Split Epic" => SplitSelection(),
+            "Select Existing Epic" => ExistingEpicSelection(),
+            _ => throw new ArgumentOutOfRangeException(nameof(recommendedOutcome), recommendedOutcome, null),
+        };
+
     private static string StrategicInvestigationSelection() => """
         # Next Strategic Initiative Selection
 
@@ -254,6 +341,115 @@ public sealed class RoadmapStateMachineSelectionTests
         | Confidence | Medium |
         | Primary Reason | Evidence is insufficient |
         """;
+
+    private static string NewEpicSelection() => """
+        # Next Strategic Initiative Selection
+
+        ## Recommendation Summary
+
+        | Field | Value |
+        |---|---|
+        | Recommended Outcome | Select New Intermediary Epic |
+        | Recommended Initiative | Build stale selection test epic |
+        | Initiative Type | New Intermediary Epic |
+        | Confidence | High |
+        | Primary Reason | Exercise stale selection rejection before creation. |
+        """;
+
+    private static string SplitSelection() => """
+        # Next Strategic Initiative Selection
+
+        ## Recommendation Summary
+
+        | Field | Value |
+        |---|---|
+        | Recommended Outcome | Select Split Epic |
+        | Recommended Initiative | Split stale selection test epic |
+        | Initiative Type | Split Epic |
+        | Confidence | High |
+        | Primary Reason | Exercise stale selection rejection before splitting. |
+        """;
+
+    private static string ExistingEpicSelection() => """
+        # Next Strategic Initiative Selection
+
+        ## Recommendation Summary
+
+        | Field | Value |
+        |---|---|
+        | Recommended Outcome | Select Existing Epic |
+        | Recommended Initiative | Existing Epic |
+        | Initiative Type | Existing Roadmap Epic |
+        | Confidence | High |
+        | Primary Reason | Existing epic needs audit. |
+
+        ## If Existing Roadmap Epic Selected
+
+        | Field | Value |
+        |---|---|
+        | Epic ID | EPIC-OLD |
+        | Epic Name | Existing Epic |
+        | Why This Epic Now | It is the next candidate. |
+        | Dependencies Satisfied? | Yes |
+        | Required Pre-Implementation Follow-Up | None |
+        """;
+
+    private static string AuditDisposition(string disposition) => $$"""
+        # Epic Preparation Audit
+
+        ## Selected Epic
+
+        | Field | Value |
+        |---|---|
+        | Epic ID | EPIC-OLD |
+        | Epic Name | Existing Epic |
+        | Claimed Strategic Purpose | Preserve roadmap selection freshness |
+        | Apparent Projection Link | Selection Freshness |
+
+        ## Audit Disposition
+
+        | Field | Value |
+        |---|---|
+        | Disposition | {{disposition}} |
+        | Confidence | High |
+        | Primary Reason | Audit supports {{disposition}}. |
+        | Evidence Strength | Strong |
+        | Recommended Next Step | {{disposition}} Epic |
+        """;
+
+    private sealed class MutatingOneShotRuntime(
+        ScriptedAgentRuntime inner,
+        int mutateAfterOneShotCall,
+        Action mutate) : IAgentRuntime
+    {
+        private bool mutated;
+
+        public int OneShotCalls => inner.OneShotCalls;
+
+        public Task<IAgentSession> OpenSessionAsync(
+            AgentSessionSpec spec,
+            CancellationToken cancellationToken = default) =>
+            inner.OpenSessionAsync(spec, cancellationToken);
+
+        public async Task<AgentTurnResult> RunOneShotAsync(
+            AgentSessionSpec spec,
+            string prompt,
+            Func<AgentStreamChunk, Task>? onChunk = null,
+            CancellationToken cancellationToken = default)
+        {
+            AgentTurnResult result = await inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
+            if (!mutated && inner.OneShotCalls == mutateAfterOneShotCall)
+            {
+                mutated = true;
+                mutate();
+            }
+
+            return result;
+        }
+
+        public ValueTask CloseSessionAsync(IAgentSession session) =>
+            inner.CloseSessionAsync(session);
+    }
 }
 
 internal static class StateMachineFactory

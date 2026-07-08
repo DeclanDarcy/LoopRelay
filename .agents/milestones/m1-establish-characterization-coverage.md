@@ -14,7 +14,7 @@
 - [x] Add or confirm selection parse failure after `.agents/selection.md`,
   numbered selection evidence, provenance, and lifecycle are already written,
   and before decision-ledger append.
-- [ ] Add or confirm stale active selection is rejected before create, split,
+- [x] Add or confirm stale active selection is rejected before create, split,
   audit, or rewrite fallback prompts run.
 - [ ] Add or confirm `Insufficient Evidence` audit output persisting audit
   evidence and audit decision before throwing, with no durable blocker branch
