@@ -56,14 +56,16 @@ internal sealed class ExecutionStep(
         {
             (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
             executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-                ContinueExecution.Render(plan, details, decisions),
+                // TODO:
+                ContinueExecution.Render(plan, details, decisions, "TODO"),
                 promptPolicy);
             workPhase = "Execution: ContinueExecution";
         }
         else
         {
             executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-                StartExecution.Render(plan, details),
+                // TODO:
+                StartExecution.Render(plan, details, "TODO"),
                 promptPolicy);
             workPhase = "Execution: StartExecution";
         }
