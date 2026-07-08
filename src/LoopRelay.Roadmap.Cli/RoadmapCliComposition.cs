@@ -60,6 +60,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var nonImplementationLedger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
         var hitlRequestCapture = new ExplicitHitlNonImplementationRequestCaptureService(
             nonImplementationLedger);
+        var hitlArtifactCapture = new HitlArtifactCapture(hitlRequestCapture);
         var nonImplementationReviewRunner = new AgentNonImplementationReviewRunner(progressRuntime, repository);
         var nonImplementationSemanticConfirmer = new NonImplementationSemanticConfirmer(
             nonImplementationLedger,
@@ -179,7 +180,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             executionPreparation,
             invariants,
             console,
-            hitlRequestCapture,
+            hitlArtifactCapture,
             nonImplementationCompletionReview);
 
         return new RoadmapCliComposition(provider, console, executableResolver, machine);

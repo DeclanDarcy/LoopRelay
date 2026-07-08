@@ -147,9 +147,9 @@ allocation.
 
 This wrapper must:
 
-- [ ] Return immediately if the optional capture service is absent.
-- [ ] Return immediately if content is blank.
-- [ ] Otherwise scan the named artifact content for explicit
+- [x] Return immediately if the optional capture service is absent.
+- [x] Return immediately if content is blank.
+- [x] Otherwise scan the named artifact content for explicit
   non-implementation HITL request markers and let the existing capture service
   update its ledger.
 
