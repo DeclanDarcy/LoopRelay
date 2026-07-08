@@ -10,10 +10,8 @@ namespace LoopRelay.Cli.Services.Execution;
 /// latest reads (live or highest numbered), decision persistence (numbered + canonical), and the
 /// operational_context safety copy. Rotation is move-semantics (matches RepositoryOrchestrator's loop path).
 /// </summary>
-internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
+internal sealed class LoopArtifacts(IArtifactStore _store, Repository _repository)
 {
-    private readonly IArtifactStore _store = store;
-    private readonly Repository _repository = repository;
     public Repository Repository => _repository;
 
     public IArtifactStore Store => _store;

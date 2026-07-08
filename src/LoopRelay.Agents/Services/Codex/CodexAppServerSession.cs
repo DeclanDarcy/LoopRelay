@@ -486,13 +486,13 @@ public sealed class CodexAppServerSession : IAgentSession
             ? id.GetString()
             : null;
 
-    private sealed class ActiveTurn(int turnIndex, IAgentTurnProgressObserver? progress)
+    private sealed class ActiveTurn(int _turnIndex, IAgentTurnProgressObserver? _progress)
     {
         public CodexAppServerTurnReader Reader { get; } = new();
 
-        public int TurnIndex { get; } = turnIndex;
+        public int TurnIndex { get; } = _turnIndex;
 
-        public IAgentTurnProgressObserver? Progress { get; } = progress;
+        public IAgentTurnProgressObserver? Progress { get; } = _progress;
 
         public TaskCompletionSource<bool> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 

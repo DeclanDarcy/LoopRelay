@@ -36,8 +36,8 @@ public static class AgentTurnProgress
         }
     }
 
-    private sealed class Scope(IAgentTurnProgressObserver? previous) : IDisposable
+    private sealed class Scope(IAgentTurnProgressObserver? _previous) : IDisposable
     {
-        public void Dispose() => CurrentObserver.Value = previous;
+        public void Dispose() => CurrentObserver.Value = _previous;
     }
 }

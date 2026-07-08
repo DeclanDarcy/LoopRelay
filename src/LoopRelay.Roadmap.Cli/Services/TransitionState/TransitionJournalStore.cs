@@ -4,10 +4,9 @@ using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 namespace LoopRelay.Roadmap.Cli.Services.TransitionState;
 
-internal sealed class TransitionJournalStore(RoadmapArtifacts artifacts)
+internal sealed class TransitionJournalStore(RoadmapArtifacts _artifacts)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private readonly RoadmapArtifacts _artifacts = artifacts;
 
     public async Task AppendAsync(TransitionJournalRecord record)
     {

@@ -17,15 +17,15 @@ public sealed class TempSandboxWorkspaceFactory : ISandboxWorkspaceFactory
         return Task.FromResult<ISandboxWorkspace>(new TempSandboxWorkspace(root));
     }
 
-    private sealed class TempSandboxWorkspace(string rootPath) : ISandboxWorkspace
+    private sealed class TempSandboxWorkspace(string _rootPath) : ISandboxWorkspace
     {
-        public string RootPath => rootPath;
+        public string RootPath => _rootPath;
 
         public ValueTask DisposeAsync()
         {
             try
             {
-                Directory.Delete(rootPath, recursive: true);
+                Directory.Delete(_rootPath, recursive: true);
             }
             catch (IOException)
             {

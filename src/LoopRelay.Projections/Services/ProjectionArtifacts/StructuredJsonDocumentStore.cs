@@ -5,16 +5,13 @@ using LoopRelay.Projections.Models.ProjectionArtifacts;
 namespace LoopRelay.Projections.Services.ProjectionArtifacts;
 
 internal sealed class StructuredJsonDocumentStore<TDocument>(
-    ProjectionArtifacts artifacts,
+    ProjectionArtifacts _artifacts,
     string path,
     string expectedSchemaVersion,
-    Func<TDocument, string?> getSchemaVersion,
-    Func<TDocument, IReadOnlyList<string>> validate)
+    Func<TDocument, string?> _getSchemaVersion,
+    Func<TDocument, IReadOnlyList<string>> _validate)
     where TDocument : class
 {
-    private readonly ProjectionArtifacts _artifacts = artifacts;
-    private readonly Func<TDocument, string?> _getSchemaVersion = getSchemaVersion;
-    private readonly Func<TDocument, IReadOnlyList<string>> _validate = validate;
     public async Task<TDocument?> LoadAsync()
     {
         string? content = await _artifacts.ReadAsync(path);

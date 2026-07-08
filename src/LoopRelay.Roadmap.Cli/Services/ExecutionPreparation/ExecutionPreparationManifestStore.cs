@@ -5,14 +5,13 @@ using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 namespace LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 
-internal sealed class ExecutionPreparationManifestStore(RoadmapArtifacts artifacts)
+internal sealed class ExecutionPreparationManifestStore(RoadmapArtifacts _artifacts)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() },
     };
-    private readonly RoadmapArtifacts _artifacts = artifacts;
 
     public async Task<ExecutionPreparationManifest> LoadAsync()
     {

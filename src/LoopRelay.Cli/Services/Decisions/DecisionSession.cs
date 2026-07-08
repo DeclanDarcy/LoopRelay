@@ -39,28 +39,18 @@ namespace LoopRelay.Cli.Services.Decisions;
 /// successful proposal (see OpenOrResumeSessionAsync).
 /// </summary>
 internal sealed class DecisionSession(
-    IAgentRuntime runtime,
-    IDecisionSessionRouter router,
-    LoopArtifacts artifacts,
-    ILoopConsole console,
-    Repository repository,
-    IDecisionCostModel? costModel = null,
-    IDecisionSessionResumeStore? resumeStore = null,
-    IProjectContextProjectionService? projectionService = null,
-    bool resumeEnabled = true,
-    string? promptPolicy = null,
-    ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null) : IAsyncDisposable
+    IAgentRuntime _runtime,
+    IDecisionSessionRouter _router,
+    LoopArtifacts _artifacts,
+    ILoopConsole _console,
+    Repository _repository,
+    IDecisionCostModel? _costModel = null,
+    IDecisionSessionResumeStore? _resumeStore = null,
+    IProjectContextProjectionService? _projectionService = null,
+    bool _resumeEnabled = true,
+    string? _promptPolicy = null,
+    ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = null) : IAsyncDisposable
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly IDecisionSessionRouter _router = router;
-    private readonly LoopArtifacts _artifacts = artifacts;
-    private readonly ILoopConsole _console = console;
-    private readonly Repository _repository = repository;
-    private readonly IProjectContextProjectionService? _projectionService = projectionService;
-    private readonly ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = hitlRequestCapture;
-    private readonly IDecisionCostModel _costModel = costModel ?? new EffectiveTokenCostModel();
-    private readonly IDecisionSessionResumeStore _resumeStore = resumeStore ?? new NullDecisionSessionResumeStore();
-    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
     private IAgentSession? session;
     private bool seeded;
     private bool resumeAttempted;
@@ -150,7 +140,7 @@ internal sealed class DecisionSession(
         string baseline = handoff is null
             ? GenerateSystemPromptForFirstExecutionAgent.Render(decisionSessionProjection)
             : GenerateSystemPromptForNextExecutionAgent.Render(decisionSessionProjection, handoff);
-        baseline = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(baseline, _promptPolicy);
+        baseline = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(baseline, (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
 
         if (seeded)
         {
@@ -180,8 +170,8 @@ internal sealed class DecisionSession(
         bool firstOpen = !resumeAttempted;
         resumeAttempted = true;
 
-        DecisionSessionResumeState? state = firstOpen && resumeEnabled
-            ? await _resumeStore.ReadAsync(cancellationToken)
+        DecisionSessionResumeState? state = firstOpen && _resumeEnabled
+            ? await (_resumeStore ?? new NullDecisionSessionResumeStore()).ReadAsync(cancellationToken)
             : null;
         if (state is not null && _projectionService is not null)
         {
@@ -190,7 +180,7 @@ internal sealed class DecisionSession(
             {
                 _console.Warn(
                     "Decision session projection is stale or missing; clearing persisted decision session and starting fresh.");
-                await _resumeStore.ClearAsync(cancellationToken);
+                await (_resumeStore ?? new NullDecisionSessionResumeStore()).ClearAsync(cancellationToken);
                 state = null;
             }
         }
@@ -224,7 +214,7 @@ internal sealed class DecisionSession(
         catch (AgentSessionResumeException ex)
         {
             _console.Warn($"Could not resume decision session (thread {state.ThreadId}): {ex.Message} Starting fresh.");
-            await _resumeStore.ClearAsync(cancellationToken);
+            await (_resumeStore ?? new NullDecisionSessionResumeStore()).ClearAsync(cancellationToken);
             return await _runtime.OpenSessionAsync(AgentSpecs.Decision(_repository), cancellationToken);
         }
     }
@@ -240,7 +230,7 @@ internal sealed class DecisionSession(
             return; // no codex thread id (legacy/one-shot shapes) — nothing a later run could resume
         }
 
-        await _resumeStore.WriteAsync(new DecisionSessionResumeState(
+        await (_resumeStore ?? new NullDecisionSessionResumeStore()).WriteAsync(new DecisionSessionResumeState(
             threadId, occupancyTokens, reuseCost, reuseCycles, lastCycleCost, prevCycleCost,
             transferCost, transferCount, previousOperationalContextSize, operationalContextGrowthStreak),
             cancellationToken);
@@ -308,7 +298,7 @@ internal sealed class DecisionSession(
         // reuse accounting; the fresh process's context-priming cost is captured by the next proposal's
         // RecordProposalCost. transferCost persists across recycles.
         RecordTransferCost(
-            _costModel.Measure(delta.Usage) + _costModel.Measure(update.Usage) + _costModel.Measure(optimize.Usage));
+            (_costModel ?? new EffectiveTokenCostModel()).Measure(delta.Usage) + (_costModel ?? new EffectiveTokenCostModel()).Measure(update.Usage) + (_costModel ?? new EffectiveTokenCostModel()).Measure(optimize.Usage));
     }
 
     // Evolves the operational context through a fresh app-server session scoped to the context and delta artifacts.
@@ -556,14 +546,14 @@ internal sealed class DecisionSession(
             return new RouterInputs(0, 0d, 0, 0d, transferCost);
         }
 
-        double predictedNext = _costModel.EstimateNextCycle(
+        double predictedNext = (_costModel ?? new EffectiveTokenCostModel()).EstimateNextCycle(
             new DecisionCostForecast(lastCycleCost, prevCycleCost, occupancyTokens, 0));
         return new RouterInputs(occupancyTokens, reuseCost, reuseCycles, predictedNext, transferCost);
     }
 
     private void RecordProposalCost(AgentTokenUsage usage)
     {
-        double cost = _costModel.Measure(usage);
+        double cost = (_costModel ?? new EffectiveTokenCostModel()).Measure(usage);
         occupancyTokens = usage.PromptTokens + usage.OutputTokens;
         reuseCost += cost;
         reuseCycles += 1;
@@ -606,7 +596,7 @@ internal sealed class DecisionSession(
 
             if (clearResumeState)
             {
-                await _resumeStore.ClearAsync(CancellationToken.None);
+                await (_resumeStore ?? new NullDecisionSessionResumeStore()).ClearAsync(CancellationToken.None);
             }
         }
     }

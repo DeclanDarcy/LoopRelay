@@ -9,20 +9,14 @@ using LoopRelay.Permissions.Primitives.Requests;
 namespace LoopRelay.Permissions.Services.Evaluation;
 
 public sealed class PermissionHandler(
-    ICommandParser parser,
-    ICommandCanonicalizer canonicalizer,
-    IFingerprintService fingerprint,
-    IPermissionCache cache,
-    IPermissionEvaluatorEngine engine,
-    IInvariantGuard guard) : IPermissionHandler
+    ICommandParser _parser,
+    ICommandCanonicalizer _canonicalizer,
+    IFingerprintService _fingerprint,
+    IPermissionCache _cache,
+    IPermissionEvaluatorEngine _engine,
+    IInvariantGuard _guard) : IPermissionHandler
 {
     private static readonly PermissionEvaluationFlow EvaluationFlow = PermissionEvaluationFlow.Default;
-    private readonly ICommandParser _parser = parser;
-    private readonly ICommandCanonicalizer _canonicalizer = canonicalizer;
-    private readonly IFingerprintService _fingerprint = fingerprint;
-    private readonly IPermissionCache _cache = cache;
-    private readonly IPermissionEvaluatorEngine _engine = engine;
-    private readonly IInvariantGuard _guard = guard;
 
     public PermissionResult Evaluate(PermissionRequest request)
     {

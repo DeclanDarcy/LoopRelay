@@ -12,21 +12,14 @@ using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class CreateNewEpicTransition(
-    PromptContractRegistry contractRegistry,
-    ProjectionCache projectionCache,
-    RoadmapPromptContextBuilder contextBuilder,
-    ActiveSelectionReader activeSelectionReader,
-    RoadmapPromptTransitionRunner promptTransitionRunner,
-    ActiveEpicPromotionCoordinator activeEpicPromotionCoordinator,
-    ILoopConsole console)
+    PromptContractRegistry _contractRegistry,
+    ProjectionCache _projectionCache,
+    RoadmapPromptContextBuilder _contextBuilder,
+    ActiveSelectionReader _activeSelectionReader,
+    RoadmapPromptTransitionRunner _promptTransitionRunner,
+    ActiveEpicPromotionCoordinator _activeEpicPromotionCoordinator,
+    ILoopConsole _console)
 {
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionCache _projectionCache = projectionCache;
-    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
-    private readonly ActiveSelectionReader _activeSelectionReader = activeSelectionReader;
-    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
-    private readonly ActiveEpicPromotionCoordinator _activeEpicPromotionCoordinator = activeEpicPromotionCoordinator;
-    private readonly ILoopConsole _console = console;
     public async Task<ArtifactPromotionResult> ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "CreateNewEpic";

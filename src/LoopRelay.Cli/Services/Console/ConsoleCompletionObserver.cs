@@ -3,9 +3,8 @@ using LoopRelay.Completion.Abstractions;
 
 namespace LoopRelay.Cli.Services.Console;
 
-internal sealed class ConsoleCompletionObserver(ILoopConsole console) : ICompletionObserver
+internal sealed class ConsoleCompletionObserver(ILoopConsole _console) : ICompletionObserver
 {
-    private readonly ILoopConsole _console = console;
     public void Phase(string phase) => _console.Phase(phase);
 
     public void Info(string text) => _console.Info(text);

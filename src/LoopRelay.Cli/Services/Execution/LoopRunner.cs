@@ -19,29 +19,18 @@ namespace LoopRelay.Cli.Services.Execution;
 /// is requested. Owns the warm DecisionSession and disposes it on exit.
 /// </summary>
 internal sealed class LoopRunner(
-    MilestoneGate gate,
-    LoopArtifacts artifacts,
-    ExecutionStep execution,
-    DecisionSession decision,
-    AgentsSubmodulePublisher submodulePublisher,
-    CommitGate commitGate,
-    IDecisionSessionResumeStore resumeStore,
-    ICompletionCertificationService completionCertification,
-    INonImplementationPostExecutionReviewService postExecutionReview,
-    INonImplementationCompletionReviewService completionReview,
-    ILoopConsole console) : IAsyncDisposable
+    MilestoneGate _gate,
+    LoopArtifacts _artifacts,
+    ExecutionStep _execution,
+    DecisionSession _decision,
+    AgentsSubmodulePublisher _submodulePublisher,
+    CommitGate _commitGate,
+    IDecisionSessionResumeStore _resumeStore,
+    ICompletionCertificationService _completionCertification,
+    INonImplementationPostExecutionReviewService _postExecutionReview,
+    INonImplementationCompletionReviewService _completionReview,
+    ILoopConsole _console) : IAsyncDisposable
 {
-    private readonly MilestoneGate _gate = gate;
-    private readonly LoopArtifacts _artifacts = artifacts;
-    private readonly ExecutionStep _execution = execution;
-    private readonly DecisionSession _decision = decision;
-    private readonly AgentsSubmodulePublisher _submodulePublisher = submodulePublisher;
-    private readonly CommitGate _commitGate = commitGate;
-    private readonly IDecisionSessionResumeStore _resumeStore = resumeStore;
-    private readonly ICompletionCertificationService _completionCertification = completionCertification;
-    private readonly INonImplementationPostExecutionReviewService _postExecutionReview = postExecutionReview;
-    private readonly INonImplementationCompletionReviewService _completionReview = completionReview;
-    private readonly ILoopConsole _console = console;
     public async Task<LoopOutcome> RunAsync(CancellationToken cancellationToken)
     {
         try

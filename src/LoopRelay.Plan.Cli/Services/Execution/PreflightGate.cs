@@ -9,9 +9,8 @@ namespace LoopRelay.Plan.Cli.Services.Execution;
 /// input (specs/epic.md) is present. Returns one human-actionable violation string per failed check;
 /// an empty result means the pipeline is clear to run.
 /// </summary>
-internal sealed class PreflightGate(PlanArtifacts artifacts)
+internal sealed class PreflightGate(PlanArtifacts _artifacts)
 {
-    private readonly PlanArtifacts _artifacts = artifacts;
     public async Task<IReadOnlyList<string>> CheckAsync()
     {
         var violations = new List<string>();

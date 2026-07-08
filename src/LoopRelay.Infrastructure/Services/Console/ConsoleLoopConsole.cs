@@ -5,11 +5,11 @@ namespace LoopRelay.Infrastructure.Services.Console;
 /// <summary>
 /// Writes loop progress to the console while preserving streamed turn layout.
 /// </summary>
-public class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = null) : ILoopConsole
+public class ConsoleLoopConsole(TextWriter? _output = null, TextWriter? _error = null) : ILoopConsole
 {
-    private readonly TextWriter _outWriter = output ?? System.Console.Out;
-    private readonly TextWriter _errWriter = error ?? System.Console.Error;
-    private readonly bool _progressInteractive = output is null && error is null && !System.Console.IsErrorRedirected;
+    private readonly TextWriter _outWriter = _output ?? System.Console.Out;
+    private readonly TextWriter _errWriter = _error ?? System.Console.Error;
+    private readonly bool _progressInteractive = _output is null && _error is null && !System.Console.IsErrorRedirected;
     private bool midLine;
     private bool progressLineActive;
     private int progressLineLength;

@@ -7,10 +7,8 @@ using LoopRelay.Orchestration.Models.RepositorySlices;
 
 namespace LoopRelay.Orchestration.Services.RepositorySlices;
 
-public sealed class RepositoryChangeSetDetector(IProcessRunner processRunner, Repository repository)
+public sealed class RepositoryChangeSetDetector(IProcessRunner _processRunner, Repository _repository)
 {
-    private readonly IProcessRunner _processRunner = processRunner;
-    private readonly Repository _repository = repository;
     public async Task<RepositorySliceSnapshot> CaptureSnapshotAsync(
         string executionSliceId,
         DateTimeOffset? capturedAtUtc = null)

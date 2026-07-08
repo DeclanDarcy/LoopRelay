@@ -15,25 +15,17 @@ using LoopRelay.Roadmap.Cli.Services.Splits;
 namespace LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
 internal sealed class InvariantValidator(
-    RoadmapArtifacts artifacts,
-    Projections.ProjectContextLoader projectContextLoader,
-    ProjectionRegistry projectionRegistry,
-    PromptContractRegistry contractRegistry,
-    ProjectionManifestStore manifestStore,
-    ArtifactLifecycleStore lifecycleStore,
-    SplitFamilyStore splitFamilyStore,
-    ExecutionPreparationProvenanceService executionPreparation)
+    RoadmapArtifacts _artifacts,
+    Projections.ProjectContextLoader _projectContextLoader,
+    ProjectionRegistry _projectionRegistry,
+    PromptContractRegistry _contractRegistry,
+    ProjectionManifestStore _manifestStore,
+    ArtifactLifecycleStore _lifecycleStore,
+    SplitFamilyStore _splitFamilyStore,
+    ExecutionPreparationProvenanceService _executionPreparation)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly Projections.ProjectContextLoader _projectContextLoader = projectContextLoader;
-    private readonly ProjectionRegistry _projectionRegistry = projectionRegistry;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionManifestStore _manifestStore = manifestStore;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
-    private readonly SplitFamilyStore _splitFamilyStore = splitFamilyStore;
-    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     private readonly EpicArtifactValidator epicValidator = new();
-    private readonly ProjectionProvenanceFactory _provenanceFactory = new(projectionRegistry);
+    private readonly ProjectionProvenanceFactory _provenanceFactory = new(_projectionRegistry);
 
     public async Task<InvariantValidationResult> ValidateAsync(
         RoadmapState state,

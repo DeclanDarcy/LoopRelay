@@ -14,11 +14,10 @@ using LoopRelay.Roadmap.Cli.Services.Projections;
 
 namespace LoopRelay.Roadmap.Cli.Services.State;
 
-internal sealed partial class RoadmapStateStore(RoadmapArtifacts artifacts)
+internal sealed partial class RoadmapStateStore(RoadmapArtifacts _artifacts)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
     private readonly StructuredDocumentStore<RoadmapStatePersistenceDocument> _structuredStore = new(
-        artifacts,
+        _artifacts,
         RoadmapArtifactPaths.StateJson,
         RoadmapStatePersistenceDocument.CurrentSchemaVersion,
         document => document.SchemaVersion,

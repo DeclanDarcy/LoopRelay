@@ -11,11 +11,9 @@ using LoopRelay.Orchestration.Models.NonImplementationReview;
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
 public sealed class AgentNonImplementationReviewRunner(
-    IAgentRuntime runtime,
-    Repository repository) : INonImplementationReviewRunner
+    IAgentRuntime _runtime,
+    Repository _repository) : INonImplementationReviewRunner
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly Repository _repository = repository;
     public NonImplementationReviewRunnerConstraints Capabilities =>
         NonImplementationReviewRunnerConstraints.ReadOnly;
 

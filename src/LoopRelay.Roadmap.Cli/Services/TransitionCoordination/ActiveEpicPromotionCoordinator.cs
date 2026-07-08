@@ -11,15 +11,11 @@ using LoopRelay.Roadmap.Cli.Services.TransitionState;
 namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class ActiveEpicPromotionCoordinator(
-    ArtifactPromotionService promotionService,
-    HitlArtifactCapture hitlArtifactCapture,
-    TransitionJournalStore journalStore,
-    RoadmapTransitionPersistence transitionPersistence)
+    ArtifactPromotionService _promotionService,
+    HitlArtifactCapture _hitlArtifactCapture,
+    TransitionJournalStore _journalStore,
+    RoadmapTransitionPersistence _transitionPersistence)
 {
-    private readonly ArtifactPromotionService _promotionService = promotionService;
-    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
-    private readonly TransitionJournalStore _journalStore = journalStore;
-    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
     public async Task<ArtifactPromotionResult> PromoteAsync(
         RoadmapState from,
         string prompt,

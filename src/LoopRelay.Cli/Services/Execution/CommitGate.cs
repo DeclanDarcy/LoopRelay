@@ -32,12 +32,8 @@ namespace LoopRelay.Cli.Services.Execution;
 /// <see cref="LoopStepException"/>, which the loop surfaces as a failed run.
 /// </summary>
 internal sealed class CommitGate(
-    WorkingTreeChangeDetector changeDetector, IProcessRunner processRunner, Repository repository, ILoopConsole console)
+    WorkingTreeChangeDetector _changeDetector, IProcessRunner _processRunner, Repository _repository, ILoopConsole _console)
 {
-    private readonly WorkingTreeChangeDetector _changeDetector = changeDetector;
-    private readonly IProcessRunner _processRunner = processRunner;
-    private readonly Repository _repository = repository;
-    private readonly ILoopConsole _console = console;
     internal const int MaxNoChangesCount = 2;
 
     private const string CommitMessage = "Orchestration loop: automated execution and decision iteration";

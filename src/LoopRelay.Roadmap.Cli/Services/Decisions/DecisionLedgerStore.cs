@@ -10,11 +10,10 @@ using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.Decisions;
 
-internal sealed partial class DecisionLedgerStore(RoadmapArtifacts artifacts)
+internal sealed partial class DecisionLedgerStore(RoadmapArtifacts _artifacts)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
     private readonly StructuredDocumentStore<DecisionLedgerPersistenceDocument> _structuredStore = new(
-        artifacts,
+        _artifacts,
         RoadmapArtifactPaths.DecisionLedgerJson,
         DecisionLedgerPersistenceDocument.CurrentSchemaVersion,
         document => document.SchemaVersion,

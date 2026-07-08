@@ -12,17 +12,12 @@ using LoopRelay.Roadmap.Cli.Services.Cli;
 namespace LoopRelay.Roadmap.Cli.Services.Execution;
 
 internal sealed class RoadmapExecutionBridge(
-    IAgentRuntime runtime,
-    RoadmapArtifacts artifacts,
-    Repository repository,
-    ILoopConsole console,
-    RoadmapExecutionOptions? options = null) : IRoadmapExecutionBridge
+    IAgentRuntime _runtime,
+    RoadmapArtifacts _artifacts,
+    Repository _repository,
+    ILoopConsole _console,
+    RoadmapExecutionOptions? _options = null) : IRoadmapExecutionBridge
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly Repository _repository = repository;
-    private readonly ILoopConsole _console = console;
-    private readonly RoadmapExecutionOptions? _options = options;
     public async Task<RoadmapExecutionTransportResult> RunAsync(CancellationToken cancellationToken)
     {
         RoadmapExecutionOptions effectiveOptions = _options ?? RoadmapExecutionOptions.Default;

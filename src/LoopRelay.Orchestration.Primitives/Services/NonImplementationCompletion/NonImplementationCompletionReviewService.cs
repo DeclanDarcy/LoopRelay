@@ -19,20 +19,14 @@ using LoopRelay.Orchestration.Services.RepositorySlices;
 namespace LoopRelay.Orchestration.Services.NonImplementationCompletion;
 
 public sealed class NonImplementationCompletionReviewService(
-    RepositoryChangeSetDetector detector,
-    NonImplementationArtifactClassifier classifier,
-    NonImplementationSemanticConfirmer semanticConfirmer,
-    NonImplementationReviewLedgerStore ledgerStore,
-    IArtifactStore artifacts,
+    RepositoryChangeSetDetector _detector,
+    NonImplementationArtifactClassifier _classifier,
+    NonImplementationSemanticConfirmer _semanticConfirmer,
+    NonImplementationReviewLedgerStore _ledgerStore,
+    IArtifactStore _artifacts,
     string repositoryRootPath,
-    NonImplementationInsightSynthesizer? synthesizer = null) : INonImplementationCompletionReviewService
+    NonImplementationInsightSynthesizer? _synthesizer = null) : INonImplementationCompletionReviewService
 {
-    private readonly RepositoryChangeSetDetector _detector = detector;
-    private readonly NonImplementationArtifactClassifier _classifier = classifier;
-    private readonly NonImplementationSemanticConfirmer _semanticConfirmer = semanticConfirmer;
-    private readonly NonImplementationReviewLedgerStore _ledgerStore = ledgerStore;
-    private readonly IArtifactStore _artifacts = artifacts;
-    private readonly NonImplementationInsightSynthesizer? _synthesizer = synthesizer;
     private const string DecisionArtifactPath = OrchestrationArtifactPaths.NonImplementationDecisions;
     private const string ReviewArtifactPath = OrchestrationArtifactPaths.NonImplementationReview;
     private const string SynthesisArtifactPath = OrchestrationArtifactPaths.NonImplementationSynthesis;

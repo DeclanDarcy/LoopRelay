@@ -6,11 +6,9 @@ using LoopRelay.Roadmap.Cli.Services.Decisions;
 namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class SelectionSuperseder(
-    SelectionProvenanceService selectionProvenance,
-    ArtifactLifecycleStore lifecycleStore)
+    SelectionProvenanceService _selectionProvenance,
+    ArtifactLifecycleStore _lifecycleStore)
 {
-    private readonly SelectionProvenanceService _selectionProvenance = selectionProvenance;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
     public Task SupersedeForRetiredEpicAsync() =>
         SupersedeAsync(
             [DerivedArtifactStaleReason.RetiredEpicStateDrift],

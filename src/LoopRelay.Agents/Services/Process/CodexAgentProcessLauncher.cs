@@ -6,11 +6,9 @@ using LoopRelay.Agents.Services.Codex;
 namespace LoopRelay.Agents.Services.Process;
 
 public sealed class CodexAgentProcessLauncher(
-    IProcessRunner processRunner,
-    IAgentExecutableResolver executableResolver) : IAgentProcessLauncher
+    IProcessRunner _processRunner,
+    IAgentExecutableResolver _executableResolver) : IAgentProcessLauncher
 {
-    private readonly IProcessRunner _processRunner = processRunner;
-    private readonly IAgentExecutableResolver _executableResolver = executableResolver;
     public Task<IAgentProcess> LaunchAsync(
         AgentSessionSpec spec,
         AgentSessionMode mode,

@@ -22,19 +22,13 @@ namespace LoopRelay.Plan.Cli.Services.Execution;
 /// copied from DecisionSession). The session is closed exactly once regardless of how many turns run or fail.
 /// </summary>
 internal sealed class PlanSession(
-    IAgentRuntime runtime,
-    PlanArtifacts artifacts,
-    ILoopConsole console,
-    Repository repository,
-    string? promptPolicy = null,
-    ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null) : IAsyncDisposable
+    IAgentRuntime _runtime,
+    PlanArtifacts _artifacts,
+    ILoopConsole _console,
+    Repository _repository,
+    string? _promptPolicy = null,
+    ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = null) : IAsyncDisposable
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly PlanArtifacts _artifacts = artifacts;
-    private readonly ILoopConsole _console = console;
-    private readonly Repository _repository = repository;
-    private readonly ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = hitlRequestCapture;
-    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
     private IAgentSession? session;
     private bool closed;
 
@@ -45,7 +39,7 @@ internal sealed class PlanSession(
 
         var renderer = new ConsoleTurnRenderer(_console);
         AgentTurnResult result = await session.RunTurnAsync(
-            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(WritePlan.Text, _promptPolicy),
+            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(WritePlan.Text, (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault())),
             renderer.Stream,
             cancellationToken);
         if (result.State != AgentTurnState.Completed)
@@ -72,7 +66,7 @@ internal sealed class PlanSession(
         // sends only the review-feedback delta rather than re-sending the whole transcript.
         var renderer = new ConsoleTurnRenderer(_console);
         AgentTurnResult result = await session.RunTurnAsync(
-            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(RevisePlan.Render(feedback), _promptPolicy),
+            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(RevisePlan.Render(feedback), (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault())),
             renderer.Stream,
             cancellationToken);
         if (result.State != AgentTurnState.Completed)

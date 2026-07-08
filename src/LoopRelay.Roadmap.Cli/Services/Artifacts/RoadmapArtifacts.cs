@@ -7,10 +7,8 @@ using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 
 namespace LoopRelay.Roadmap.Cli.Services.Artifacts;
 
-internal sealed partial class RoadmapArtifacts(IArtifactStore store, Repository repository)
+internal sealed partial class RoadmapArtifacts(IArtifactStore _store, Repository _repository)
 {
-    private readonly IArtifactStore _store = store;
-    private readonly Repository _repository = repository;
     public Repository Repository => _repository;
 
     public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));

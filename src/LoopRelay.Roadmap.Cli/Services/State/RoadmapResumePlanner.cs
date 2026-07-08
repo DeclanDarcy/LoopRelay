@@ -22,21 +22,14 @@ using LoopRelay.Roadmap.Cli.Services.Prompts;
 namespace LoopRelay.Roadmap.Cli.Services.State;
 
 internal sealed class RoadmapResumePlanner(
-    RoadmapArtifacts artifacts,
-    PromptContractRegistry contractRegistry,
-    ProjectionManifestStore manifestStore,
-    ArtifactLifecycleStore lifecycleStore,
-    ProjectionProvenanceFactory provenanceFactory,
-    SelectionProvenanceService selectionProvenance,
-    ExecutionPreparationProvenanceService executionPreparation)
+    RoadmapArtifacts _artifacts,
+    PromptContractRegistry _contractRegistry,
+    ProjectionManifestStore _manifestStore,
+    ArtifactLifecycleStore _lifecycleStore,
+    ProjectionProvenanceFactory _provenanceFactory,
+    SelectionProvenanceService _selectionProvenance,
+    ExecutionPreparationProvenanceService _executionPreparation)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionManifestStore _manifestStore = manifestStore;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
-    private readonly ProjectionProvenanceFactory _provenanceFactory = provenanceFactory;
-    private readonly SelectionProvenanceService _selectionProvenance = selectionProvenance;
-    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     private readonly EpicArtifactValidator epicValidator = new();
 
     public async Task<RoadmapResumePlan> PlanAsync(

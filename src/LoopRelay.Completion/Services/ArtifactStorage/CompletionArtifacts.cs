@@ -6,10 +6,8 @@ using LoopRelay.Core.Services.Artifacts;
 
 namespace LoopRelay.Completion.Services.ArtifactStorage;
 
-public sealed partial class CompletionArtifacts(IArtifactStore store, Repository repository)
+public sealed partial class CompletionArtifacts(IArtifactStore _store, Repository _repository)
 {
-    private readonly IArtifactStore _store = store;
-    private readonly Repository _repository = repository;
     public Repository Repository => _repository;
 
     public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));

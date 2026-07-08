@@ -20,35 +20,21 @@ using LoopRelay.Roadmap.Cli.Services.TransitionState;
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class GenerateMilestoneDeepDivesTransition(
-    RoadmapArtifacts artifacts,
-    PromptContractRegistry contractRegistry,
-    ProjectionCache projectionCache,
-    RoadmapPromptContextBuilder contextBuilder,
-    RoadmapPromptTransitionRunner promptTransitionRunner,
-    ArtifactBundles.BundleFileExtractor bundleExtractor,
-    BundleManifestWriter bundleManifestWriter,
-    ExecutionPreparationProvenanceService executionPreparation,
-    InvariantValidator invariantValidator,
-    TransitionJournalStore journalStore,
-    ArtifactLifecycleStore lifecycleStore,
-    RoadmapTransitionPersistence transitionPersistence,
-    HitlArtifactCapture hitlArtifactCapture,
-    ILoopConsole console)
+    RoadmapArtifacts _artifacts,
+    PromptContractRegistry _contractRegistry,
+    ProjectionCache _projectionCache,
+    RoadmapPromptContextBuilder _contextBuilder,
+    RoadmapPromptTransitionRunner _promptTransitionRunner,
+    ArtifactBundles.BundleFileExtractor _bundleExtractor,
+    BundleManifestWriter _bundleManifestWriter,
+    ExecutionPreparationProvenanceService _executionPreparation,
+    InvariantValidator _invariantValidator,
+    TransitionJournalStore _journalStore,
+    ArtifactLifecycleStore _lifecycleStore,
+    RoadmapTransitionPersistence _transitionPersistence,
+    HitlArtifactCapture _hitlArtifactCapture,
+    ILoopConsole _console)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionCache _projectionCache = projectionCache;
-    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
-    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
-    private readonly BundleFileExtractor _bundleExtractor = bundleExtractor;
-    private readonly BundleManifestWriter _bundleManifestWriter = bundleManifestWriter;
-    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
-    private readonly InvariantValidator _invariantValidator = invariantValidator;
-    private readonly TransitionJournalStore _journalStore = journalStore;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
-    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
-    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
-    private readonly ILoopConsole _console = console;
     public async Task ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "GenerateMilestoneDeepDivesForEpic";

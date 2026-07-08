@@ -5,9 +5,8 @@ using LoopRelay.Roadmap.Cli.Services.Projections;
 
 namespace LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 
-internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts artifacts)
+internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts _artifacts)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
     internal const int MaxRenderedContentPerEpic = 4_000;
     internal const int MaxTotalRenderedCharacters = 16_000;
 

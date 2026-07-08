@@ -11,15 +11,11 @@ using LoopRelay.Roadmap.Cli.Services.TransitionState;
 namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class RoadmapPromptTransitionRunner(
-    TransitionInputResolver inputResolver,
-    RoadmapPromptRunner promptRunner,
-    TransitionJournalStore journalStore,
-    RoadmapTransitionPersistence transitionPersistence)
+    TransitionInputResolver _inputResolver,
+    RoadmapPromptRunner _promptRunner,
+    TransitionJournalStore _journalStore,
+    RoadmapTransitionPersistence _transitionPersistence)
 {
-    private readonly TransitionInputResolver _inputResolver = inputResolver;
-    private readonly RoadmapPromptRunner _promptRunner = promptRunner;
-    private readonly TransitionJournalStore _journalStore = journalStore;
-    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
     public async Task<string> RunNormalAsync(
         RoadmapState from,
         RoadmapState to,

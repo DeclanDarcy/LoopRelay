@@ -9,13 +9,11 @@ namespace LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 /// Repository-relative .agents/* disk access for the planning pipeline, plus dedicated absolute-path
 /// helpers for operation gates that already hold resolved paths.
 /// </summary>
-internal sealed class PlanArtifacts(IArtifactStore store, Repository repository)
+internal sealed class PlanArtifacts(IArtifactStore _store, Repository _repository)
 {
     // Derived from SpecsEpic rather than restated, per the plan's "never restate .agents/... literals" rule.
     private static readonly string SpecsDirectory =
         Path.GetDirectoryName(OrchestrationArtifactPaths.SpecsEpic)!.Replace('\\', '/');
-    private readonly IArtifactStore _store = store;
-    private readonly Repository _repository = repository;
 
     public Task<bool> ExistsAsync(string relativePath) =>
         _store.ExistsAsync(Resolve(relativePath));

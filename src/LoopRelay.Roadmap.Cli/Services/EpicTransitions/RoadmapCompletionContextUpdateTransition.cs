@@ -11,25 +11,16 @@ using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class RoadmapCompletionContextUpdateTransition(
-    RoadmapArtifacts artifacts,
-    PromptContractRegistry contractRegistry,
-    ProjectionCache projectionCache,
-    RoadmapPromptContextBuilder contextBuilder,
-    RoadmapPromptTransitionRunner promptTransitionRunner,
-    SelectionSuperseder selectionSuperseder,
-    DecisionRecorder decisionRecorder,
-    HitlArtifactCapture hitlArtifactCapture,
-    ILoopConsole console)
+    RoadmapArtifacts _artifacts,
+    PromptContractRegistry _contractRegistry,
+    ProjectionCache _projectionCache,
+    RoadmapPromptContextBuilder _contextBuilder,
+    RoadmapPromptTransitionRunner _promptTransitionRunner,
+    SelectionSuperseder _selectionSuperseder,
+    DecisionRecorder _decisionRecorder,
+    HitlArtifactCapture _hitlArtifactCapture,
+    ILoopConsole _console)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionCache _projectionCache = projectionCache;
-    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
-    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
-    private readonly SelectionSuperseder _selectionSuperseder = selectionSuperseder;
-    private readonly DecisionRecorder _decisionRecorder = decisionRecorder;
-    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
-    private readonly ILoopConsole _console = console;
     public async Task ExecuteAsync(
         ProjectContext projectContext,
         string evaluationPath,

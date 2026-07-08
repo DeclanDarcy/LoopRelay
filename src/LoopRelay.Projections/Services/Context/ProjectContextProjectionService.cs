@@ -11,18 +11,13 @@ using LoopRelay.Projections.Services.Provenance;
 namespace LoopRelay.Projections.Services.Context;
 
 public sealed class ProjectContextProjectionService(
-    ProjectionArtifacts.ProjectionArtifacts artifacts,
-    ProjectionDefinitionRegistry registry,
-    ProjectionManifestStore manifestStore,
-    ProjectionValidator validator,
-    IProjectionPromptRunner promptRunner) : IProjectContextProjectionService
+    ProjectionArtifacts.ProjectionArtifacts _artifacts,
+    ProjectionDefinitionRegistry _registry,
+    ProjectionManifestStore _manifestStore,
+    ProjectionValidator _validator,
+    IProjectionPromptRunner _promptRunner) : IProjectContextProjectionService
 {
-    private readonly ProjectionArtifacts.ProjectionArtifacts _artifacts = artifacts;
-    private readonly ProjectionDefinitionRegistry _registry = registry;
-    private readonly ProjectionManifestStore _manifestStore = manifestStore;
-    private readonly ProjectionValidator _validator = validator;
-    private readonly IProjectionPromptRunner _promptRunner = promptRunner;
-    private readonly ProjectContextLoader _projectContextLoader = new(artifacts);
+    private readonly ProjectContextLoader _projectContextLoader = new(_artifacts);
     private readonly ProjectionProvenanceFactory provenanceFactory = new();
 
     public Task<ProjectContextProjectionResult> EnsureFreshAsync(

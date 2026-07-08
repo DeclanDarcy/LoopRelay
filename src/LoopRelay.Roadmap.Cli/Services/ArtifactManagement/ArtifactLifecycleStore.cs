@@ -8,11 +8,10 @@ using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
-internal sealed class ArtifactLifecycleStore(RoadmapArtifacts artifacts)
+internal sealed class ArtifactLifecycleStore(RoadmapArtifacts _artifacts)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
     private readonly StructuredDocumentStore<ArtifactLifecyclePersistenceDocument> _structuredStore = new(
-        artifacts,
+        _artifacts,
         RoadmapArtifactPaths.LifecycleJson,
         ArtifactLifecyclePersistenceDocument.CurrentSchemaVersion,
         document => document.SchemaVersion,

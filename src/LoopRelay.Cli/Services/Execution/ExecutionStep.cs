@@ -27,21 +27,14 @@ namespace LoopRelay.Cli.Services.Execution;
 /// The session is opened per slice and closed in a finally; the new handoff is verified after turn 2.
 /// </summary>
 internal sealed class ExecutionStep(
-    IAgentRuntime runtime,
-    LoopArtifacts artifacts,
-    ILoopConsole console,
-    Repository repository,
-    WorkingTreeChangeDetector changeDetector,
-    MilestoneGate milestones,
-    string? promptPolicy = null)
+    IAgentRuntime _runtime,
+    LoopArtifacts _artifacts,
+    ILoopConsole _console,
+    Repository _repository,
+    WorkingTreeChangeDetector _changeDetector,
+    MilestoneGate _milestones,
+    string? _promptPolicy = null)
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly LoopArtifacts _artifacts = artifacts;
-    private readonly ILoopConsole _console = console;
-    private readonly Repository _repository = repository;
-    private readonly WorkingTreeChangeDetector _changeDetector = changeDetector;
-    private readonly MilestoneGate _milestones = milestones;
-    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
@@ -64,7 +57,7 @@ internal sealed class ExecutionStep(
             executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
                 // TODO:
                 ContinueExecution.Render(plan, details, decisions, "TODO"),
-                _promptPolicy);
+                (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
             workPhase = "Execution: ContinueExecution";
         }
         else
@@ -72,7 +65,7 @@ internal sealed class ExecutionStep(
             executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
                 // TODO:
                 StartExecution.Render(plan, details, "TODO"),
-                _promptPolicy);
+                (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
             workPhase = "Execution: StartExecution";
         }
 

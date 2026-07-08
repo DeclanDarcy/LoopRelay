@@ -4,13 +4,10 @@ using LoopRelay.Permissions.Models.Evaluation;
 namespace LoopRelay.Permissions.Services.Evaluation;
 
 public sealed class PermissionGateway(
-    IPermissionAdapter adapter,
-    IPermissionHandler handler,
-    OperationPermissionHandler? operationHandler = null) : IPermissionGateway
+    IPermissionAdapter _adapter,
+    IPermissionHandler _handler,
+    OperationPermissionHandler? _operationHandler = null) : IPermissionGateway
 {
-    private readonly IPermissionAdapter _adapter = adapter;
-    private readonly IPermissionHandler _handler = handler;
-    private readonly OperationPermissionHandler? _operationHandler = operationHandler;
     public byte[] Evaluate(ReadOnlySpan<byte> payload, string repoIdentity, string workingDirectory)
     {
         return Evaluate(payload, new PermissionGatewayContext(repoIdentity, workingDirectory));

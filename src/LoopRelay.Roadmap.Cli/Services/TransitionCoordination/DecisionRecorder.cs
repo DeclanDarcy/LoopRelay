@@ -3,9 +3,8 @@ using LoopRelay.Roadmap.Cli.Primitives.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
-internal sealed class DecisionRecorder(Decisions.DecisionLedgerStore decisionLedger)
+internal sealed class DecisionRecorder(Decisions.DecisionLedgerStore _decisionLedger)
 {
-    private readonly Decisions.DecisionLedgerStore _decisionLedger = decisionLedger;
     public async Task AppendAsync(
         RoadmapState state,
         string transition,

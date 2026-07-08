@@ -14,11 +14,9 @@ namespace LoopRelay.Orchestration.Services;
 /// exclude only <c>.agents</c>, so an un-ignored state file would read as a real working-tree change
 /// (corrupting the no-changes/stall gates) and be committed into the target repo.
 /// </summary>
-public sealed class FileDecisionSessionResumeStore(Repository repository, Action<string>? onWarning = null)
+public sealed class FileDecisionSessionResumeStore(Repository _repository, Action<string>? _onWarning = null)
     : IDecisionSessionResumeStore
 {
-    private readonly Repository _repository = repository;
-    private readonly Action<string>? _onWarning = onWarning;
     public const string DirectoryName = ".LoopRelay";
     public const string FileName = "decision-session.json";
 

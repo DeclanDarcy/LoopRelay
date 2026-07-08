@@ -21,10 +21,8 @@ namespace LoopRelay.Cli.Services.Execution;
 /// <c>-C</c>), mirroring <c>GitService</c>; a nonzero exit throws <see cref="LoopStepException"/>, which the
 /// loop surfaces as a failed run.
 /// </summary>
-internal sealed class WorkingTreeChangeDetector(IProcessRunner processRunner, Repository repository)
+internal sealed class WorkingTreeChangeDetector(IProcessRunner _processRunner, Repository _repository)
 {
-    private readonly IProcessRunner _processRunner = processRunner;
-    private readonly Repository _repository = repository;
     public async Task<IReadOnlyList<string>> GetRealChangedPathsAsync()
     {
         ProcessRunResult result = await _processRunner.RunAsync("git", ["status", "--porcelain"], _repository.Path);

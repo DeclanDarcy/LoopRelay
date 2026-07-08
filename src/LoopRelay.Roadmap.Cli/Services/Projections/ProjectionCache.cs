@@ -11,17 +11,12 @@ using LoopRelay.Roadmap.Cli.Services.State;
 namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal sealed class ProjectionCache(
-    RoadmapArtifacts artifacts,
-    ProjectionRegistry registry,
-    ProjectionManifestStore manifestStore,
-    ProjectionValidator validator,
-    RoadmapPromptRunner promptRunner)
+    RoadmapArtifacts _artifacts,
+    ProjectionRegistry _registry,
+    ProjectionManifestStore _manifestStore,
+    ProjectionValidator _validator,
+    RoadmapPromptRunner _promptRunner)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly ProjectionRegistry _registry = registry;
-    private readonly ProjectionManifestStore _manifestStore = manifestStore;
-    private readonly ProjectionValidator _validator = validator;
-    private readonly RoadmapPromptRunner _promptRunner = promptRunner;
     public async Task<ProjectionCacheResult> EnsureAsync(
         string runtimePromptName,
         ProjectContext projectContext,

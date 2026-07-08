@@ -8,13 +8,10 @@ using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
 internal sealed class OperationalContextGenerator(
-    RoadmapArtifacts artifacts,
-    ArtifactLifecycleStore lifecycleStore,
-    ExecutionPreparationProvenanceService provenanceService)
+    RoadmapArtifacts _artifacts,
+    ArtifactLifecycleStore _lifecycleStore,
+    ExecutionPreparationProvenanceService _provenanceService)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
-    private readonly ExecutionPreparationProvenanceService _provenanceService = provenanceService;
     public async Task<string> GenerateAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

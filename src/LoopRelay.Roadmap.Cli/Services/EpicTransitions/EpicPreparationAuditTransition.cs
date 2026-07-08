@@ -18,33 +18,20 @@ using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class EpicPreparationAuditTransition(
-    RoadmapArtifacts artifacts,
-    PromptContractRegistry contractRegistry,
-    ProjectionCache projectionCache,
-    RoadmapPromptContextBuilder contextBuilder,
-    ActiveSelectionReader activeSelectionReader,
-    RoadmapPromptTransitionRunner promptTransitionRunner,
-    HitlArtifactCapture hitlArtifactCapture,
-    DecisionRecorder decisionRecorder,
-    State.RoadmapStateStore stateStore,
-    RoadmapTransitionPersistence transitionPersistence,
-    SelectionSuperseder selectionSuperseder,
-    ActiveEpicRewriteTransition activeEpicRewriteTransition,
-    ILoopConsole console)
+    RoadmapArtifacts _artifacts,
+    PromptContractRegistry _contractRegistry,
+    ProjectionCache _projectionCache,
+    RoadmapPromptContextBuilder _contextBuilder,
+    ActiveSelectionReader _activeSelectionReader,
+    RoadmapPromptTransitionRunner _promptTransitionRunner,
+    HitlArtifactCapture _hitlArtifactCapture,
+    DecisionRecorder _decisionRecorder,
+    State.RoadmapStateStore _stateStore,
+    RoadmapTransitionPersistence _transitionPersistence,
+    SelectionSuperseder _selectionSuperseder,
+    ActiveEpicRewriteTransition _activeEpicRewriteTransition,
+    ILoopConsole _console)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionCache _projectionCache = projectionCache;
-    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
-    private readonly ActiveSelectionReader _activeSelectionReader = activeSelectionReader;
-    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
-    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
-    private readonly DecisionRecorder _decisionRecorder = decisionRecorder;
-    private readonly State.RoadmapStateStore _stateStore = stateStore;
-    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
-    private readonly SelectionSuperseder _selectionSuperseder = selectionSuperseder;
-    private readonly ActiveEpicRewriteTransition _activeEpicRewriteTransition = activeEpicRewriteTransition;
-    private readonly ILoopConsole _console = console;
     public async Task<EpicPreparationResult> ExecuteAsync(
         SelectionDecision selectionDecision,
         ProjectContext projectContext,

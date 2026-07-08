@@ -9,11 +9,9 @@ using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 namespace LoopRelay.Roadmap.Cli.Services.Prompts;
 
 internal sealed class RoadmapPromptContextBuilder(
-    RoadmapArtifacts artifacts,
-    ExecutionPreparationProvenanceService executionPreparation)
+    RoadmapArtifacts _artifacts,
+    ExecutionPreparationProvenanceService _executionPreparation)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     private const string ProjectContextMarker = "<!-- BEGIN PROJECT-CONTEXT FILE:";
 
     public async Task<string> BuildSelectionContextAsync(string projectionContent, IReadOnlyList<RetiredEpic> retiredEpics)

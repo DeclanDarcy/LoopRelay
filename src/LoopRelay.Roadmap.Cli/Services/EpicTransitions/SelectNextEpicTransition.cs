@@ -16,29 +16,18 @@ using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class SelectNextEpicTransition(
-    RoadmapArtifacts artifacts,
-    PromptContractRegistry contractRegistry,
-    ProjectionCache projectionCache,
-    RoadmapPromptContextBuilder contextBuilder,
-    State.RoadmapStateStore stateStore,
-    RoadmapPromptTransitionRunner promptTransitionRunner,
-    SelectionProvenanceService selectionProvenance,
-    DecisionRecorder decisionRecorder,
-    HitlArtifactCapture hitlArtifactCapture,
-    ArtifactLifecycleStore lifecycleStore,
-    ILoopConsole console)
+    RoadmapArtifacts _artifacts,
+    PromptContractRegistry _contractRegistry,
+    ProjectionCache _projectionCache,
+    RoadmapPromptContextBuilder _contextBuilder,
+    State.RoadmapStateStore _stateStore,
+    RoadmapPromptTransitionRunner _promptTransitionRunner,
+    SelectionProvenanceService _selectionProvenance,
+    DecisionRecorder _decisionRecorder,
+    HitlArtifactCapture _hitlArtifactCapture,
+    ArtifactLifecycleStore _lifecycleStore,
+    ILoopConsole _console)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionCache _projectionCache = projectionCache;
-    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
-    private readonly State.RoadmapStateStore _stateStore = stateStore;
-    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
-    private readonly SelectionProvenanceService _selectionProvenance = selectionProvenance;
-    private readonly DecisionRecorder _decisionRecorder = decisionRecorder;
-    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
-    private readonly ILoopConsole _console = console;
     public async Task<SelectionDecision> ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "SelectNextEpic";

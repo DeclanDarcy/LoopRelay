@@ -7,9 +7,8 @@ using LoopRelay.Projections.Services.Definitions;
 
 namespace LoopRelay.Projections.Services.Context;
 
-public sealed partial class ProjectContextLoader(ProjectionArtifacts.ProjectionArtifacts artifacts)
+public sealed partial class ProjectContextLoader(ProjectionArtifacts.ProjectionArtifacts _artifacts)
 {
-    private readonly ProjectionArtifacts.ProjectionArtifacts _artifacts = artifacts;
     public async Task<ProjectContext> LoadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

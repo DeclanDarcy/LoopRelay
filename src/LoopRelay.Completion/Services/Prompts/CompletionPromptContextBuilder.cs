@@ -6,9 +6,8 @@ using LoopRelay.Orchestration.Services.NonImplementationReview;
 
 namespace LoopRelay.Completion.Services.Prompts;
 
-internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionArtifacts artifacts)
+internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionArtifacts _artifacts)
 {
-    private readonly CompletionArtifacts _artifacts = artifacts;
     public async Task<string> BuildEvaluationContextAsync(
         CompletionCertificationRequest request,
         string projectionContent,

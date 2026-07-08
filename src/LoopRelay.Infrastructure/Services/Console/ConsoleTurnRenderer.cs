@@ -10,9 +10,8 @@ using LoopRelay.Infrastructure.Abstractions.Console;
 namespace LoopRelay.Infrastructure.Services.Console;
 
 /// <summary>Renders a single agent turn stream and suppresses duplicate final echoes.</summary>
-public class ConsoleTurnRenderer(ILoopConsole console)
+public class ConsoleTurnRenderer(ILoopConsole _console)
 {
-    private readonly ILoopConsole _console = console;
     private bool replyStreamed;
 
     public Task Stream(AgentStreamChunk chunk)

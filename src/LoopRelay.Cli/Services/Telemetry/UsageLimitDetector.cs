@@ -18,7 +18,7 @@ namespace LoopRelay.Cli.Services.Telemetry;
 /// out short outages, and the seam's retry cap surfaces the failure when the limit persists beyond that.
 /// </summary>
 internal sealed class UsageLimitDetector(
-    IClock clock, IUsageDelay delay, ILoopConsole console, TimeZoneInfo? timeZone = null) : IUsageLimitDetector
+    IClock _clock, IUsageDelay _delay, ILoopConsole _console, TimeZoneInfo? _timeZone = null) : IUsageLimitDetector
 {
     internal static readonly TimeSpan FallbackWait = TimeSpan.FromMinutes(30);
     internal static readonly TimeSpan MinimumWait = TimeSpan.FromMinutes(1);
@@ -52,10 +52,6 @@ internal sealed class UsageLimitDetector(
 
     private static readonly string[] FullFormats = ["MMM d, yyyy h:mm tt", "MMMM d, yyyy h:mm tt"];
     private static readonly string[] TimeOnlyFormats = ["h:mm tt", "h tt"];
-    private readonly IClock _clock = clock;
-    private readonly IUsageDelay _delay = delay;
-    private readonly ILoopConsole _console = console;
-    private readonly TimeZoneInfo? _timeZone = timeZone;
 
     public UsageLimitHit? Detect(AgentTurnResult result)
     {

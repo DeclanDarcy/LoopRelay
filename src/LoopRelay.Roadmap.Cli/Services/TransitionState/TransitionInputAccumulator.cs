@@ -64,9 +64,9 @@ internal sealed class TransitionInputAccumulator
         input.Roles.Add(role);
     }
 
-    private sealed class PendingTransitionInput(string path)
+    private sealed class PendingTransitionInput(string _path)
     {
-        public string Path { get; } = path;
+        public string Path { get; } = _path;
         public bool Required { get; set; }
         public SortedSet<string> Roles { get; } = new(StringComparer.Ordinal);
         public string JoinedRoles() => string.Join("+", Roles);

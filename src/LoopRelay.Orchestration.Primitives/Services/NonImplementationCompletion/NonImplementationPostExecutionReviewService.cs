@@ -14,15 +14,11 @@ using LoopRelay.Orchestration.Services.RepositorySlices;
 namespace LoopRelay.Orchestration.Services.NonImplementationCompletion;
 
 public sealed class NonImplementationPostExecutionReviewService(
-    RepositorySliceBaselineStore baselineStore,
-    NonImplementationArtifactClassifier classifier,
-    NonImplementationSemanticConfirmer semanticConfirmer,
-    IArtifactStore artifacts) : INonImplementationPostExecutionReviewService
+    RepositorySliceBaselineStore _baselineStore,
+    NonImplementationArtifactClassifier _classifier,
+    NonImplementationSemanticConfirmer _semanticConfirmer,
+    IArtifactStore _artifacts) : INonImplementationPostExecutionReviewService
 {
-    private readonly RepositorySliceBaselineStore _baselineStore = baselineStore;
-    private readonly NonImplementationArtifactClassifier _classifier = classifier;
-    private readonly NonImplementationSemanticConfirmer _semanticConfirmer = semanticConfirmer;
-    private readonly IArtifactStore _artifacts = artifacts;
     public async Task<RepositorySliceBaseline> CapturePreSliceBaselineAsync(
         CancellationToken cancellationToken = default)
     {

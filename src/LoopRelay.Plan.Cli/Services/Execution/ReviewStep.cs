@@ -20,12 +20,8 @@ namespace LoopRelay.Plan.Cli.Services.Execution;
 /// captured review text becomes `{output1}`, fed into <c>PlanSession.ReviseAsync</c> by the pipeline.
 /// </summary>
 internal sealed class ReviewStep(
-    IAgentRuntime runtime, PlanArtifacts artifacts, ILoopConsole console, Repository repository)
+    IAgentRuntime _runtime, PlanArtifacts _artifacts, ILoopConsole _console, Repository _repository)
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly PlanArtifacts _artifacts = artifacts;
-    private readonly ILoopConsole _console = console;
-    private readonly Repository _repository = repository;
     public async Task<string> RunAsync(string projectContextProjection, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(projectContextProjection))

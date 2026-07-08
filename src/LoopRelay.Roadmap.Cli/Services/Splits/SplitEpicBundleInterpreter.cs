@@ -9,11 +9,9 @@ using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 namespace LoopRelay.Roadmap.Cli.Services.Splits;
 
 internal sealed partial class SplitEpicBundleInterpreter(
-    IArtifactOutputClassifier? classifier = null,
-    IArtifactValidator? validator = null)
+    IArtifactOutputClassifier? _classifier = null,
+    IArtifactValidator? _validator = null)
 {
-    private readonly IArtifactOutputClassifier _classifier = classifier ?? new ArtifactManagement.EpicAuthoringOutputClassifier();
-    private readonly IArtifactValidator _validator = validator ?? new EpicArtifactValidator();
 
     public SplitEpicBundleInterpretation Interpret(BundleExtractionResult bundle, string rawOutput)
     {
@@ -48,14 +46,14 @@ internal sealed partial class SplitEpicBundleInterpreter(
                 continue;
             }
 
-            ArtifactOutputClassification classification = _classifier.Classify(file.Content);
+            ArtifactOutputClassification classification = (_classifier ?? new ArtifactManagement.EpicAuthoringOutputClassifier()).Classify(file.Content);
             if (classification.Kind != ArtifactOutputKind.Promotable)
             {
                 rejectedFiles.Add(new SplitEpicBundleRejection(file.Path, classification.Reason));
                 continue;
             }
 
-            ArtifactValidationResult validation = _validator.Validate(file.Content);
+            ArtifactValidationResult validation = (_validator ?? new EpicArtifactValidator()).Validate(file.Content);
             if (!validation.IsValid)
             {
                 rejectedFiles.Add(new SplitEpicBundleRejection(

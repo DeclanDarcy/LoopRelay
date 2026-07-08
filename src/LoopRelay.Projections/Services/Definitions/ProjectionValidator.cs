@@ -2,7 +2,7 @@ using LoopRelay.Projections.Models.Definitions;
 
 namespace LoopRelay.Projections.Services.Definitions;
 
-public sealed class ProjectionValidator(ProjectionDefinitionRegistry registry)
+public sealed class ProjectionValidator(ProjectionDefinitionRegistry _registry)
 {
     private static readonly string[] RequiredSections =
     [
@@ -23,7 +23,6 @@ public sealed class ProjectionValidator(ProjectionDefinitionRegistry registry)
         "## Codebase Facts",
         "## Runtime State",
     ];
-    private readonly ProjectionDefinitionRegistry _registry = registry;
 
     public ProjectionValidationResult Validate(string runtimePromptName, string content)
     {

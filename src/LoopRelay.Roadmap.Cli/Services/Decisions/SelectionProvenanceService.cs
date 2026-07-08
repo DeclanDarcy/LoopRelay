@@ -12,15 +12,11 @@ using LoopRelay.Roadmap.Cli.Services.TransitionState;
 namespace LoopRelay.Roadmap.Cli.Services.Decisions;
 
 internal sealed class SelectionProvenanceService(
-    RoadmapArtifacts artifacts,
-    SelectionProvenanceManifestStore manifestStore,
-    RoadmapPromptContextBuilder contextBuilder,
-    TransitionInputResolver inputResolver)
+    RoadmapArtifacts _artifacts,
+    SelectionProvenanceManifestStore _manifestStore,
+    RoadmapPromptContextBuilder _contextBuilder,
+    TransitionInputResolver _inputResolver)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly SelectionProvenanceManifestStore _manifestStore = manifestStore;
-    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
-    private readonly TransitionInputResolver _inputResolver = inputResolver;
     public const string SelectionArtifactKind = "SelectionDecision";
     public const string SelectionGenerator = "SelectNextEpic:v1";
     public const string SelectionCycleInputKind = "SelectionCycle";

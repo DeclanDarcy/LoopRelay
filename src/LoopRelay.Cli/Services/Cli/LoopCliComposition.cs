@@ -131,7 +131,7 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             projectionService,
             completionPromptRunner,
             completionArchive,
-            observer: completionObserver);
+            _observer: completionObserver);
         var nonImplementationInsightSynthesizer = new NonImplementationInsightSynthesizer(
             nonImplementationLedger,
             nonImplementationReviewRunner,
@@ -165,11 +165,11 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             artifacts,
             console,
             repository,
-            resumeStore: resumeStore,
-            projectionService: projectionService,
-            resumeEnabled: DecisionResumeComposition.IsEnabled(),
-            promptPolicy: promptPolicy,
-            hitlRequestCapture: hitlRequestCapture);
+            _resumeStore: resumeStore,
+            _projectionService: projectionService,
+            _resumeEnabled: DecisionResumeComposition.IsEnabled(),
+            _promptPolicy: promptPolicy,
+            _hitlRequestCapture: hitlRequestCapture);
         var submodulePublisher = new AgentsSubmodulePublisher(processRunner, repository, console);
         var commitGate = new CommitGate(changeDetector, processRunner, repository, console);
         var loop = new LoopRunner(

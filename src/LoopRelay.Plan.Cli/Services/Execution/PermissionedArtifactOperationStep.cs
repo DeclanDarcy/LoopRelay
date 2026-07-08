@@ -14,17 +14,12 @@ using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 namespace LoopRelay.Plan.Cli.Services.Execution;
 
 internal sealed class PermissionedArtifactOperationStep(
-    IAgentRuntime runtime,
-    IArtifactStore store,
-    PlanArtifacts artifacts,
-    ILoopConsole console,
-    Repository repository)
+    IAgentRuntime _runtime,
+    IArtifactStore _store,
+    PlanArtifacts _artifacts,
+    ILoopConsole _console,
+    Repository _repository)
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly IArtifactStore _store = store;
-    private readonly PlanArtifacts _artifacts = artifacts;
-    private readonly ILoopConsole _console = console;
-    private readonly Repository _repository = repository;
     public async Task RunAsync(ArtifactOperationPlan operation, CancellationToken cancellationToken)
     {
         string? changedGuardSnapshot = null;

@@ -10,9 +10,8 @@ using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationLedger;
 
-public sealed class NonImplementationReviewLedgerStore(IArtifactStore artifacts)
+public sealed class NonImplementationReviewLedgerStore(IArtifactStore _artifacts)
 {
-    private readonly IArtifactStore _artifacts = artifacts;
     public const int SchemaVersion = NonImplementationReviewLedgerDocument.CurrentSchemaVersion;
 
     public const string LedgerPath = OrchestrationArtifactPaths.NonImplementationLedger;

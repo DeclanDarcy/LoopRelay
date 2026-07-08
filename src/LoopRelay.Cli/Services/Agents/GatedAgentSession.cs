@@ -16,19 +16,14 @@ namespace LoopRelay.Cli.Services.Agents;
 /// (lazily, after the first turn) and cached for the session's remaining turns.
 /// </summary>
 internal sealed class GatedAgentSession(
-    IAgentSession inner,
-    IUsageLimitDetector usageLimit,
-    ISessionTelemetryRecorder recorder,
+    IAgentSession _inner,
+    IUsageLimitDetector _usageLimit,
+    ISessionTelemetryRecorder _recorder,
     string repoName,
     string workingDirectory,
-    DateTimeOffset openedAtUtc,
-    InputWaitObservationStore? inputWaitObservations = null) : IAgentSession
+    DateTimeOffset _openedAtUtc,
+    InputWaitObservationStore? _inputWaitObservations = null) : IAgentSession
 {
-    private readonly IAgentSession _inner = inner;
-    private readonly IUsageLimitDetector _usageLimit = usageLimit;
-    private readonly ISessionTelemetryRecorder _recorder = recorder;
-    private readonly DateTimeOffset _openedAtUtc = openedAtUtc;
-    private readonly InputWaitObservationStore? _inputWaitObservations = inputWaitObservations;
     /// <summary>Wait-and-retry attempts per logical turn before the failure propagates. Covers cascading
     /// windows (a 5h reset followed by a weekly limit) without masking a persistently broken codex. Lives
     /// here — not on the detector — because the seam that runs the retry loop owns the retry policy.</summary>

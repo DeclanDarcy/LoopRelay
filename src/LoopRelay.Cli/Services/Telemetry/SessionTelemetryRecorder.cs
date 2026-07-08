@@ -15,19 +15,13 @@ namespace LoopRelay.Cli.Services.Telemetry;
 /// is a genuine caller cancellation, which is intent (not a telemetry fault) and is propagated.
 /// </summary>
 internal sealed class SessionTelemetryRecorder(
-    ICodexUsageProbe probe,
-    ICodexRolloutLocator locator,
-    ISessionTelemetrySink sink,
-    IDecisionCostModel costModel,
-    IClock clock,
-    ILoopConsole console) : ISessionTelemetryRecorder
+    ICodexUsageProbe _probe,
+    ICodexRolloutLocator _locator,
+    ISessionTelemetrySink _sink,
+    IDecisionCostModel _costModel,
+    IClock _clock,
+    ILoopConsole _console) : ISessionTelemetryRecorder
 {
-    private readonly ICodexUsageProbe _probe = probe;
-    private readonly ICodexRolloutLocator _locator = locator;
-    private readonly ISessionTelemetrySink _sink = sink;
-    private readonly IDecisionCostModel _costModel = costModel;
-    private readonly IClock _clock = clock;
-    private readonly ILoopConsole _console = console;
     public async Task<string?> RecordTurnAsync(
         string repoName,
         string workingDirectory,

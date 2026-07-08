@@ -26,43 +26,25 @@ using LoopRelay.Roadmap.Cli.Services.TransitionState;
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class CompletionCertificationTransition(
-    RoadmapArtifacts artifacts,
-    Projections.ProjectContextLoader projectContextLoader,
-    PromptContractRegistry contractRegistry,
-    ProjectionCache projectionCache,
-    RoadmapPromptContextBuilder contextBuilder,
-    TransitionInputResolver inputResolver,
-    CompletionCertificationPolicy completionPolicy,
-    CompletionCertificationRouter completionRouter,
-    ICompletedEpicArchiveService completionArchive,
-    RoadmapTransitionPersistence transitionPersistence,
-    RoadmapPromptTransitionRunner promptTransitionRunner,
-    RoadmapCompletionContextUpdateTransition completionContextUpdateTransition,
-    DecisionRecorder decisionRecorder,
-    TransitionJournalStore journalStore,
-    ArtifactLifecycleStore lifecycleStore,
-    HitlArtifactCapture hitlArtifactCapture,
-    ILoopConsole console,
-    INonImplementationCompletionReviewService? nonImplementationCompletionReview = null)
+    RoadmapArtifacts _artifacts,
+    Projections.ProjectContextLoader _projectContextLoader,
+    PromptContractRegistry _contractRegistry,
+    ProjectionCache _projectionCache,
+    RoadmapPromptContextBuilder _contextBuilder,
+    TransitionInputResolver _inputResolver,
+    CompletionCertificationPolicy _completionPolicy,
+    CompletionCertificationRouter _completionRouter,
+    ICompletedEpicArchiveService _completionArchive,
+    RoadmapTransitionPersistence _transitionPersistence,
+    RoadmapPromptTransitionRunner _promptTransitionRunner,
+    RoadmapCompletionContextUpdateTransition _completionContextUpdateTransition,
+    DecisionRecorder _decisionRecorder,
+    TransitionJournalStore _journalStore,
+    ArtifactLifecycleStore _lifecycleStore,
+    HitlArtifactCapture _hitlArtifactCapture,
+    ILoopConsole _console,
+    INonImplementationCompletionReviewService? _nonImplementationCompletionReview = null)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly Projections.ProjectContextLoader _projectContextLoader = projectContextLoader;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionCache _projectionCache = projectionCache;
-    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
-    private readonly TransitionInputResolver _inputResolver = inputResolver;
-    private readonly CompletionCertificationPolicy _completionPolicy = completionPolicy;
-    private readonly CompletionCertificationRouter _completionRouter = completionRouter;
-    private readonly ICompletedEpicArchiveService _completionArchive = completionArchive;
-    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
-    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
-    private readonly RoadmapCompletionContextUpdateTransition _completionContextUpdateTransition = completionContextUpdateTransition;
-    private readonly DecisionRecorder _decisionRecorder = decisionRecorder;
-    private readonly TransitionJournalStore _journalStore = journalStore;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
-    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
-    private readonly ILoopConsole _console = console;
-    private readonly INonImplementationCompletionReviewService? _nonImplementationCompletionReview = nonImplementationCompletionReview;
     public async Task<RoadmapOutcome> ExecuteAsync(
         ProjectContext projectContext,
         DateTimeOffset executionStarted,

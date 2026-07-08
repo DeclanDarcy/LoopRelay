@@ -4,10 +4,8 @@ using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 namespace LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
-internal sealed class ArtifactPromotionService(RoadmapArtifacts artifacts, ArtifactLifecycleStore lifecycleStore)
+internal sealed class ArtifactPromotionService(RoadmapArtifacts _artifacts, ArtifactLifecycleStore _lifecycleStore)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
     public async Task<ArtifactPromotionResult> PromoteAsync(ArtifactPromotionRequest request)
     {
         ArtifactOutputClassification classification = request.Classifier.Classify(request.CandidateContent);

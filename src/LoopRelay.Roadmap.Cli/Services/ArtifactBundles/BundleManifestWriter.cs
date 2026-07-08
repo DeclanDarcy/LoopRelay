@@ -3,9 +3,8 @@ using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 namespace LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 
-internal sealed class BundleManifestWriter(RoadmapArtifacts artifacts)
+internal sealed class BundleManifestWriter(RoadmapArtifacts _artifacts)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
     public async Task<string> WriteAsync(
         string manifestPath,
         string sourcePrompt,

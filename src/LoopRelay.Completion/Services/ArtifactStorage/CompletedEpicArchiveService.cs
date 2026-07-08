@@ -9,13 +9,10 @@ using LoopRelay.Core.Abstractions.Artifacts;
 namespace LoopRelay.Completion.Services.ArtifactStorage;
 
 public sealed class CompletedEpicArchiveService(
-    IArtifactStore store,
-    ICompletionPromptRunner promptRunner,
-    ICompletionObserver? observer = null) : ICompletedEpicArchiveService
+    IArtifactStore _store,
+    ICompletionPromptRunner _promptRunner,
+    ICompletionObserver? _observer = null) : ICompletedEpicArchiveService
 {
-    private readonly IArtifactStore _store = store;
-    private readonly ICompletionPromptRunner _promptRunner = promptRunner;
-    private readonly ICompletionObserver _observer = observer ?? NullCompletionObserver.Instance;
 
     public async Task<CompletedEpicArchiveResult> ArchiveAndSynthesizeAsync(
         CompletedEpicArchiveRequest request,
@@ -39,7 +36,7 @@ public sealed class CompletedEpicArchiveService(
             throw new CompletionCertificationException($"Completed epic synthesis collision: {synthesisPath}");
         }
 
-        _observer.Phase("Archive completed execution workspace");
+        (_observer ?? NullCompletionObserver.Instance).Phase("Archive completed execution workspace");
         await artifacts.CopyFileIfPresentAsync(request.ActiveEpicPath, $"{archiveDirectory}/epic.md");
         await artifacts.MoveDirectoryContentsAsync(CompletionArtifactPaths.DecisionsDirectory, $"{archiveDirectory}/decisions");
         await artifacts.MoveDirectoryContentsAsync(CompletionArtifactPaths.DeltasDirectory, $"{archiveDirectory}/deltas");
@@ -50,7 +47,7 @@ public sealed class CompletedEpicArchiveService(
         await artifacts.MoveFileIfPresentAsync(CompletionArtifactPaths.OperationalContext, $"{archiveDirectory}/operational_context.md");
         await artifacts.MoveFileIfPresentAsync(CompletionArtifactPaths.ExecutionPlan, $"{archiveDirectory}/plan.md");
 
-        _observer.Phase("Synthesize completed epic");
+        (_observer ?? NullCompletionObserver.Instance).Phase("Synthesize completed epic");
         string label = index.ToString(CultureInfo.InvariantCulture);
         _ = await _promptRunner.RunAsync(
             new CompletionRuntimePromptInvocation(

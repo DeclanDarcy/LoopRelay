@@ -14,21 +14,14 @@ using LoopRelay.Projections.Models.Context;
 namespace LoopRelay.Completion.Services.Certification;
 
 public sealed class CompletionCertificationService(
-    IArtifactStore store,
-    IProjectContextProjectionService projectionService,
-    ICompletionPromptRunner promptRunner,
-    ICompletedEpicArchiveService archiveService,
-    CompletionCertificationPolicy? policy = null,
-    CompletionCertificationRouter? router = null,
-    ICompletionObserver? observer = null) : ICompletionCertificationService
+    IArtifactStore _store,
+    IProjectContextProjectionService _projectionService,
+    ICompletionPromptRunner _promptRunner,
+    ICompletedEpicArchiveService _archiveService,
+    CompletionCertificationPolicy? _policy = null,
+    CompletionCertificationRouter? _router = null,
+    ICompletionObserver? _observer = null) : ICompletionCertificationService
 {
-    private readonly IArtifactStore _store = store;
-    private readonly IProjectContextProjectionService _projectionService = projectionService;
-    private readonly ICompletionPromptRunner _promptRunner = promptRunner;
-    private readonly ICompletedEpicArchiveService _archiveService = archiveService;
-    private readonly CompletionCertificationPolicy _policy = policy ?? new CompletionCertificationPolicy();
-    private readonly CompletionCertificationRouter _router = router ?? new CompletionCertificationRouter();
-    private readonly ICompletionObserver _observer = observer ?? NullCompletionObserver.Instance;
 
     public async Task<CompletionCertificationResult> CertifyPlanCompletionAsync(
         CompletionCertificationRequest request,
@@ -41,7 +34,7 @@ public sealed class CompletionCertificationService(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            _observer.Phase("Completion Certification");
+            (_observer ?? NullCompletionObserver.Instance).Phase("Completion Certification");
             if (string.IsNullOrWhiteSpace(await artifacts.ReadAsync(request.ActiveEpicPath)))
             {
                 return await BlockAsync(
@@ -74,7 +67,7 @@ public sealed class CompletionCertificationService(
 
             string claimPath = await WriteExecutionCompletionClaimAsync(artifacts, request, milestonePaths);
 
-            _observer.Phase("Evaluate epic completion and drift");
+            (_observer ?? NullCompletionObserver.Instance).Phase("Evaluate epic completion and drift");
             ProjectContextProjectionResult evaluationProjection = await _projectionService.EnsureFreshAsync(
                 CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift,
                 cancellationToken);
@@ -109,7 +102,7 @@ public sealed class CompletionCertificationService(
                     [claimPath, evaluationPath]);
             }
 
-            CompletionCertificationPolicyResult certification = _policy.Validate(decision);
+            CompletionCertificationPolicyResult certification = (_policy ?? new CompletionCertificationPolicy()).Validate(decision);
             if (!certification.IsValid)
             {
                 return await BlockAsync(
@@ -122,7 +115,7 @@ public sealed class CompletionCertificationService(
                     [claimPath, evaluationPath]);
             }
 
-            CompletionCertificationRoute route = _router.Route(decision);
+            CompletionCertificationRoute route = (_router ?? new CompletionCertificationRouter()).Route(decision);
             if (!route.ShouldCloseEpic)
             {
                 return await BlockAsync(
@@ -142,7 +135,7 @@ public sealed class CompletionCertificationService(
                     request.CompletedEpicArchiveRoot),
                 cancellationToken);
 
-            _observer.Phase("Update roadmap completion context");
+            (_observer ?? NullCompletionObserver.Instance).Phase("Update roadmap completion context");
             ProjectContextProjectionResult updateProjection = await _projectionService.EnsureFreshAsync(
                 CompletionRuntimePromptNames.UpdateRoadmapCompletionContext,
                 cancellationToken);
@@ -204,7 +197,7 @@ public sealed class CompletionCertificationService(
         CompletionCertificationRequest request,
         CancellationToken cancellationToken)
     {
-        _observer.Phase("Bootstrap roadmap completion context");
+        (_observer ?? NullCompletionObserver.Instance).Phase("Bootstrap roadmap completion context");
         ProjectContextProjectionResult projection = await _projectionService.EnsureFreshAsync(
             CompletionRuntimePromptNames.CreateRoadmapCompletionContext,
             cancellationToken);

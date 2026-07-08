@@ -14,16 +14,13 @@ using LoopRelay.Infrastructure.Models.Diagnostics;
 namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
 public sealed class InputWaitProgressAgentRuntime(
-    IAgentRuntime inner,
-    IAgentTokenEstimator tokenEstimator,
-    IInputWaitProgressRenderer renderer,
-    IInputWaitObservationSink? observationSink = null) : IAgentRuntime
+    IAgentRuntime _inner,
+    IAgentTokenEstimator _tokenEstimator,
+    IInputWaitProgressRenderer _renderer,
+    IInputWaitObservationSink? _observationSink = null) : IAgentRuntime
 {
-    private readonly IAgentRuntime _inner = inner;
-    private readonly IAgentTokenEstimator _tokenEstimator = tokenEstimator;
-    private readonly IInputWaitProgressRenderer _renderer = renderer;
     private readonly IInputWaitObservationSink _observationSinkField =
-        observationSink ?? NullInputWaitObservationSink.Instance;
+        _observationSink ?? NullInputWaitObservationSink.Instance;
 
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec,
@@ -151,38 +148,38 @@ public sealed class InputWaitProgressAgentRuntime(
     private readonly record struct Estimate(int Tokens, string Source, string Version);
 
     private sealed class InputWaitProgressAgentSession(
-        InputWaitProgressAgentRuntime owner,
-        IAgentSession inner) : IAgentSession
+        InputWaitProgressAgentRuntime _owner,
+        IAgentSession _inner) : IAgentSession
     {
-        public IAgentSession Inner => inner;
+        public IAgentSession Inner => _inner;
 
-        public SessionIdentity SessionId => inner.SessionId;
-        public string RepositoryId => inner.RepositoryId;
-        public SessionRole Role => inner.Role;
-        public AgentSessionMode Mode => inner.Mode;
-        public AgentProcessState State => inner.State;
-        public int CompletedTurns => inner.CompletedTurns;
-        public AgentTokenUsage TotalUsage => inner.TotalUsage;
-        public string? ThreadId => inner.ThreadId;
+        public SessionIdentity SessionId => _inner.SessionId;
+        public string RepositoryId => _inner.RepositoryId;
+        public SessionRole Role => _inner.Role;
+        public AgentSessionMode Mode => _inner.Mode;
+        public AgentProcessState State => _inner.State;
+        public int CompletedTurns => _inner.CompletedTurns;
+        public AgentTokenUsage TotalUsage => _inner.TotalUsage;
+        public string? ThreadId => _inner.ThreadId;
 
         public Task<AgentTurnResult> RunTurnAsync(
             string prompt,
             Func<AgentStreamChunk, Task>? onChunk = null,
             CancellationToken cancellationToken = default) =>
-            owner.RunWithProgressAsync(
-                inner.RepositoryId,
-                inner.SessionId,
-                inner.Role,
-                TransportName(inner.Mode),
+            _owner.RunWithProgressAsync(
+                _inner.RepositoryId,
+                _inner.SessionId,
+                _inner.Role,
+                TransportName(_inner.Mode),
                 model: null,
                 prompt,
                 onChunk,
-                (wrapped, token) => inner.RunTurnAsync(prompt, wrapped, token),
+                (wrapped, token) => _inner.RunTurnAsync(prompt, wrapped, token),
                 cancellationToken);
 
-        public Task CancelAsync(CancellationToken cancellationToken = default) => inner.CancelAsync(cancellationToken);
+        public Task CancelAsync(CancellationToken cancellationToken = default) => _inner.CancelAsync(cancellationToken);
 
-        public ValueTask DisposeAsync() => inner.DisposeAsync();
+        public ValueTask DisposeAsync() => _inner.DisposeAsync();
 
         private static string TransportName(AgentSessionMode mode) =>
             mode == AgentSessionMode.Persistent ? "app-server" : "one-shot";

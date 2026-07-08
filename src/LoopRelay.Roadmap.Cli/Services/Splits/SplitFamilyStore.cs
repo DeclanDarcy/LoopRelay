@@ -8,9 +8,8 @@ using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.Splits;
 
-internal sealed class SplitFamilyStore(RoadmapArtifacts artifacts)
+internal sealed class SplitFamilyStore(RoadmapArtifacts _artifacts)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
     public async Task<string> WriteAsync(SplitFamily family)
     {
         string jsonPath = RoadmapArtifactPaths.SplitFamilyJson(family.FamilyId);

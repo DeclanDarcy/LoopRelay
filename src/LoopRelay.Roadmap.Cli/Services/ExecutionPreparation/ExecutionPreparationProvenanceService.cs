@@ -9,11 +9,9 @@ using LoopRelay.Roadmap.Cli.Services.State;
 namespace LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 
 internal sealed class ExecutionPreparationProvenanceService(
-    RoadmapArtifacts artifacts,
-    ExecutionPreparationManifestStore manifestStore)
+    RoadmapArtifacts _artifacts,
+    ExecutionPreparationManifestStore _manifestStore)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly ExecutionPreparationManifestStore _manifestStore = manifestStore;
     public const string ActiveEpicInputKind = "ActiveEpic";
     public const string MilestoneSpecInputKind = "MilestoneSpec";
     public const string DecisionLedgerInputKind = "DecisionLedger";

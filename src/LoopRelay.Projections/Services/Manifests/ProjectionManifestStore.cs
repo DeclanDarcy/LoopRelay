@@ -10,11 +10,10 @@ using LoopRelay.Projections.Services.Prompts;
 
 namespace LoopRelay.Projections.Services.Manifests;
 
-public sealed class ProjectionManifestStore(ProjectionArtifacts.ProjectionArtifacts artifacts)
+public sealed class ProjectionManifestStore(ProjectionArtifacts.ProjectionArtifacts _artifacts)
 {
-    private readonly ProjectionArtifacts.ProjectionArtifacts _artifacts = artifacts;
     private readonly StructuredJsonDocumentStore<ProjectionManifestPersistenceDocument> _structuredStore = new(
-        artifacts,
+        _artifacts,
         ProjectionArtifactPaths.ProjectionsManifestJson,
         ProjectionManifestPersistenceDocument.CurrentSchemaVersion,
         document => document.SchemaVersion,

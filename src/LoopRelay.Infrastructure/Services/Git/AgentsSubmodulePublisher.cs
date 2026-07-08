@@ -10,17 +10,13 @@ namespace LoopRelay.Infrastructure.Services.Git;
 
 /// <summary>Commits, pushes, and records a repository's <c>.agents</c> submodule gitlink.</summary>
 public sealed class AgentsSubmodulePublisher(
-    IProcessRunner processRunner,
-    Repository repository,
-    ILoopConsole console,
-    AgentsSubmodulePublisherOptions? options = null)
+    IProcessRunner _processRunner,
+    Repository _repository,
+    ILoopConsole _console,
+    AgentsSubmodulePublisherOptions? _options = null)
 {
-    private readonly IProcessRunner _processRunner = processRunner;
-    private readonly Repository _repository = repository;
-    private readonly ILoopConsole _console = console;
-    private readonly AgentsSubmodulePublisherOptions _options = options ?? new AgentsSubmodulePublisherOptions();
 
-    private string SubmodulePath => Path.Combine(_repository.Path, _options.AgentsDirectory);
+    private string SubmodulePath => Path.Combine(_repository.Path, (_options ?? new AgentsSubmodulePublisherOptions()).AgentsDirectory);
 
     public async Task<bool> PublishAgentsAsync(string commitMessage, CancellationToken cancellationToken)
     {
@@ -50,7 +46,7 @@ public sealed class AgentsSubmodulePublisher(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        await RunParentGitAsync("add", ["add", "--", _options.AgentsDirectory]);
+        await RunParentGitAsync("add", ["add", "--", (_options ?? new AgentsSubmodulePublisherOptions()).AgentsDirectory]);
         await RunParentGitAsync("commit", ["commit", "-m", commitMessage]);
         await PushParentGitlinkAsync();
         _console.Info("Recorded and pushed the .agents submodule pointer in the parent repo.");
@@ -117,7 +113,7 @@ public sealed class AgentsSubmodulePublisher(
         {
             throw new AgentsSubmodulePublisherException(
                 $"The .agents submodule at '{SubmodulePath}' is in detached HEAD; check out its tracking " +
-                $"branch so the {_options.ActorName} can commit and push it.");
+                $"branch so the {(_options ?? new AgentsSubmodulePublisherOptions()).ActorName} can commit and push it.");
         }
 
         return branch;

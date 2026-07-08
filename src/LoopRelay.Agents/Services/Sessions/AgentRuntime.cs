@@ -8,17 +8,12 @@ using LoopRelay.Permissions.Abstractions.Evaluation;
 namespace LoopRelay.Agents.Services.Sessions;
 
 public sealed class AgentRuntime(
-    IAgentProcessLauncher launcher,
-    IAgentTurnBoundaryDetector boundaryDetector,
-    IAgentTokenEstimator tokenEstimator,
-    AgentSessionRegistry registry,
-    IPermissionGateway? permissionGateway = null) : IAgentRuntime
+    IAgentProcessLauncher _launcher,
+    IAgentTurnBoundaryDetector _boundaryDetector,
+    IAgentTokenEstimator _tokenEstimator,
+    AgentSessionRegistry _registry,
+    IPermissionGateway? _permissionGateway = null) : IAgentRuntime
 {
-    private readonly IAgentProcessLauncher _launcher = launcher;
-    private readonly IAgentTurnBoundaryDetector _boundaryDetector = boundaryDetector;
-    private readonly IAgentTokenEstimator _tokenEstimator = tokenEstimator;
-    private readonly AgentSessionRegistry _registry = registry;
-    private readonly IPermissionGateway? _permissionGateway = permissionGateway;
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec,
         CancellationToken cancellationToken = default)

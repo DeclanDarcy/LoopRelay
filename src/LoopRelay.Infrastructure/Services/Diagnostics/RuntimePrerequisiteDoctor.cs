@@ -4,15 +4,11 @@ using LoopRelay.Infrastructure.Primitives.Diagnostics;
 namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
 public sealed class RuntimePrerequisiteDoctor(
-    Func<string, string?>? getEnvironmentVariable = null,
-    Func<string, bool>? fileExists = null)
+    Func<string, string?>? _getEnvironmentVariable = null,
+    Func<string, bool>? _fileExists = null)
 {
     public const string CodexExecutableVariable = "CODEX_EXECUTABLE";
     public const string DecisionResumeVariable = "LoopRelay_DECISION_RESUME";
-
-    private readonly Func<string, string?> _getEnvironmentVariable =
-        getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
-    private readonly Func<string, bool> _fileExists = fileExists ?? File.Exists;
 
     public IReadOnlyList<RuntimeDiagnostic> Inspect()
     {

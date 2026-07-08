@@ -17,18 +17,13 @@ namespace LoopRelay.Cli.Services.Agents;
 /// nor recorded.
 /// </summary>
 internal sealed class GatedAgentRuntime(
-    IAgentRuntime inner,
-    IUsageLimitDetector usageLimit,
-    ISessionTelemetryRecorder recorder,
-    IClock clock,
+    IAgentRuntime _inner,
+    IUsageLimitDetector _usageLimit,
+    ISessionTelemetryRecorder _recorder,
+    IClock _clock,
     string repoName,
-    InputWaitObservationStore? inputWaitObservations = null) : IAgentRuntime
+    InputWaitObservationStore? _inputWaitObservations = null) : IAgentRuntime
 {
-    private readonly IAgentRuntime _inner = inner;
-    private readonly IUsageLimitDetector _usageLimit = usageLimit;
-    private readonly ISessionTelemetryRecorder _recorder = recorder;
-    private readonly IClock _clock = clock;
-    private readonly InputWaitObservationStore? _inputWaitObservations = inputWaitObservations;
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec, CancellationToken cancellationToken = default)
     {

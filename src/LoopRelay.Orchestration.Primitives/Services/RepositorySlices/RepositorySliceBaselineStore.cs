@@ -5,16 +5,14 @@ using LoopRelay.Orchestration.Models.RepositorySlices;
 namespace LoopRelay.Orchestration.Services.RepositorySlices;
 
 public sealed class RepositorySliceBaselineStore(
-    RepositoryChangeSetDetector detector,
-    IArtifactStore? artifacts = null)
+    RepositoryChangeSetDetector _detector,
+    IArtifactStore? _artifacts = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
     };
-    private readonly RepositoryChangeSetDetector _detector = detector;
-    private readonly IArtifactStore? _artifacts = artifacts;
 
     public async Task<RepositorySliceBaseline> CapturePreSliceAsync(
         string? executionSliceId = null,

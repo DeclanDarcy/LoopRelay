@@ -8,11 +8,9 @@ using LoopRelay.Roadmap.Cli.Services.State;
 namespace LoopRelay.Roadmap.Cli.Services.TransitionState;
 
 internal sealed class TransitionInputResolver(
-    RoadmapArtifacts artifacts,
-    ExecutionPreparationProvenanceService executionPreparation)
+    RoadmapArtifacts _artifacts,
+    ExecutionPreparationProvenanceService _executionPreparation)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     public async Task<TransitionInputSnapshot> ResolveAsync(TransitionInputRequest request)
     {
         var inputs = new TransitionInputAccumulator();

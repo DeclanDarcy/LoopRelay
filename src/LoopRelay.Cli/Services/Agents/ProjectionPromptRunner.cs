@@ -11,13 +11,10 @@ using LoopRelay.Projections.Models.Definitions;
 namespace LoopRelay.Cli.Services.Agents;
 
 internal sealed class ProjectionPromptRunner(
-    IAgentRuntime runtime,
-    Repository repository,
-    ILoopConsole console) : IProjectionPromptRunner
+    IAgentRuntime _runtime,
+    Repository _repository,
+    ILoopConsole _console) : IProjectionPromptRunner
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly Repository _repository = repository;
-    private readonly ILoopConsole _console = console;
     public async Task<string> RunProjectionPromptAsync(
         ProjectionDefinition definition,
         string prompt,

@@ -10,13 +10,10 @@ using LoopRelay.Roadmap.Cli.Services.Decisions;
 namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class ActiveSelectionReader(
-    RoadmapArtifacts artifacts,
-    State.RoadmapStateStore stateStore,
-    SelectionProvenanceService selectionProvenance)
+    RoadmapArtifacts _artifacts,
+    State.RoadmapStateStore _stateStore,
+    SelectionProvenanceService _selectionProvenance)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly State.RoadmapStateStore _stateStore = stateStore;
-    private readonly SelectionProvenanceService _selectionProvenance = selectionProvenance;
     public async Task<string> ReadAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

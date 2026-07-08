@@ -8,11 +8,10 @@ using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
-internal sealed class ProjectionManifestStore(RoadmapArtifacts artifacts)
+internal sealed class ProjectionManifestStore(RoadmapArtifacts _artifacts)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
     private readonly StructuredDocumentStore<ProjectionManifestPersistenceDocument> _structuredStore = new(
-        artifacts,
+        _artifacts,
         RoadmapArtifactPaths.ProjectionsManifestJson,
         ProjectionManifestPersistenceDocument.CurrentSchemaVersion,
         document => document.SchemaVersion,

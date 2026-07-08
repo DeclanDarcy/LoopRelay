@@ -5,9 +5,8 @@ using LoopRelay.Agents.Primitives.Process;
 
 namespace LoopRelay.Agents.Services.Process;
 
-internal sealed class AgentProcess(System.Diagnostics.Process process) : IAgentProcess
+internal sealed class AgentProcess(System.Diagnostics.Process _process) : IAgentProcess
 {
-    private readonly System.Diagnostics.Process _process = process;
     /// <summary>How much of the standard-error stream is retained for diagnostics (last-writer-wins tail).</summary>
     private const int ErrorTailCapacity = 8192;
 

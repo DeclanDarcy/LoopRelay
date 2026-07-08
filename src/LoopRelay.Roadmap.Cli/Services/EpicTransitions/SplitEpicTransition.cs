@@ -22,39 +22,23 @@ using LoopRelay.Roadmap.Cli.Services.TransitionState;
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class SplitEpicTransition(
-    RoadmapArtifacts artifacts,
-    PromptContractRegistry contractRegistry,
-    ProjectionCache projectionCache,
-    RoadmapPromptContextBuilder contextBuilder,
-    ActiveSelectionReader activeSelectionReader,
-    RoadmapPromptTransitionRunner promptTransitionRunner,
-    ActiveEpicPromotionCoordinator activeEpicPromotionCoordinator,
-    ArtifactBundles.BundleFileExtractor bundleExtractor,
-    Splits.SplitEpicBundleInterpreter splitBundleInterpreter,
-    BundleManifestWriter bundleManifestWriter,
-    SplitFamilyStore splitFamilyStore,
-    ArtifactLifecycleStore lifecycleStore,
-    TransitionJournalStore journalStore,
-    RoadmapTransitionPersistence transitionPersistence,
-    HitlArtifactCapture hitlArtifactCapture,
-    ILoopConsole console)
+    RoadmapArtifacts _artifacts,
+    PromptContractRegistry _contractRegistry,
+    ProjectionCache _projectionCache,
+    RoadmapPromptContextBuilder _contextBuilder,
+    ActiveSelectionReader _activeSelectionReader,
+    RoadmapPromptTransitionRunner _promptTransitionRunner,
+    ActiveEpicPromotionCoordinator _activeEpicPromotionCoordinator,
+    ArtifactBundles.BundleFileExtractor _bundleExtractor,
+    Splits.SplitEpicBundleInterpreter _splitBundleInterpreter,
+    BundleManifestWriter _bundleManifestWriter,
+    SplitFamilyStore _splitFamilyStore,
+    ArtifactLifecycleStore _lifecycleStore,
+    TransitionJournalStore _journalStore,
+    RoadmapTransitionPersistence _transitionPersistence,
+    HitlArtifactCapture _hitlArtifactCapture,
+    ILoopConsole _console)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionCache _projectionCache = projectionCache;
-    private readonly RoadmapPromptContextBuilder _contextBuilder = contextBuilder;
-    private readonly ActiveSelectionReader _activeSelectionReader = activeSelectionReader;
-    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
-    private readonly ActiveEpicPromotionCoordinator _activeEpicPromotionCoordinator = activeEpicPromotionCoordinator;
-    private readonly BundleFileExtractor _bundleExtractor = bundleExtractor;
-    private readonly SplitEpicBundleInterpreter _splitBundleInterpreter = splitBundleInterpreter;
-    private readonly BundleManifestWriter _bundleManifestWriter = bundleManifestWriter;
-    private readonly SplitFamilyStore _splitFamilyStore = splitFamilyStore;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
-    private readonly TransitionJournalStore _journalStore = journalStore;
-    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
-    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
-    private readonly ILoopConsole _console = console;
     public async Task<ArtifactPromotionResult> ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "SplitEpic";

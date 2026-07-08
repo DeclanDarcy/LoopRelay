@@ -17,17 +17,12 @@ using LoopRelay.Roadmap.Cli.Services.TransitionState;
 namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class RoadmapTransitionPersistence(
-    RoadmapArtifacts artifacts,
-    ProjectionManifestStore manifestStore,
-    State.RoadmapStateStore stateStore,
-    Decisions.DecisionLedgerStore decisionLedger,
-    TransitionJournalStore journalStore)
+    RoadmapArtifacts _artifacts,
+    ProjectionManifestStore _manifestStore,
+    State.RoadmapStateStore _stateStore,
+    Decisions.DecisionLedgerStore _decisionLedger,
+    TransitionJournalStore _journalStore)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly ProjectionManifestStore _manifestStore = manifestStore;
-    private readonly State.RoadmapStateStore _stateStore = stateStore;
-    private readonly Decisions.DecisionLedgerStore _decisionLedger = decisionLedger;
-    private readonly TransitionJournalStore _journalStore = journalStore;
     public async Task SaveAsync(
         RoadmapState current,
         TransitionStatus status,

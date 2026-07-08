@@ -21,23 +21,15 @@ namespace LoopRelay.Plan.Cli.Services.Execution;
 /// failures into a terminal <see cref="PlanOutcome"/>.
 /// </summary>
 internal sealed class PlanPipeline(
-    PreflightGate preflight,
-    PlanSession planSession,
-    ReviewStep review,
-    IProjectContextProjectionService projectionService,
-    PermissionedArtifactOperationStep artifactOperation,
-    AgentsSubmodulePublisher publisher,
-    PlanArtifacts artifacts,
-    ILoopConsole console) : IAsyncDisposable
+    PreflightGate _preflight,
+    PlanSession _planSession,
+    ReviewStep _review,
+    IProjectContextProjectionService _projectionService,
+    PermissionedArtifactOperationStep _artifactOperation,
+    AgentsSubmodulePublisher _publisher,
+    PlanArtifacts _artifacts,
+    ILoopConsole _console) : IAsyncDisposable
 {
-    private readonly PreflightGate _preflight = preflight;
-    private readonly PlanSession _planSession = planSession;
-    private readonly ReviewStep _review = review;
-    private readonly IProjectContextProjectionService _projectionService = projectionService;
-    private readonly PermissionedArtifactOperationStep _artifactOperation = artifactOperation;
-    private readonly AgentsSubmodulePublisher _publisher = publisher;
-    private readonly PlanArtifacts _artifacts = artifacts;
-    private readonly ILoopConsole _console = console;
     public async Task<PlanOutcome> RunAsync(CancellationToken cancellationToken)
     {
         try

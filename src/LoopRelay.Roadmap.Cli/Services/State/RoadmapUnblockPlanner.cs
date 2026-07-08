@@ -15,19 +15,13 @@ using LoopRelay.Roadmap.Cli.Services.Prompts;
 namespace LoopRelay.Roadmap.Cli.Services.State;
 
 internal sealed class RoadmapUnblockPlanner(
-    RoadmapArtifacts artifacts,
-    Projections.ProjectContextLoader projectContextLoader,
-    PromptContractRegistry contractRegistry,
-    CompletionCertificationPolicy completionPolicy,
-    CompletionCertificationRouter completionRouter,
-    ExecutionPreparationProvenanceService executionPreparation)
+    RoadmapArtifacts _artifacts,
+    Projections.ProjectContextLoader _projectContextLoader,
+    PromptContractRegistry _contractRegistry,
+    CompletionCertificationPolicy _completionPolicy,
+    CompletionCertificationRouter _completionRouter,
+    ExecutionPreparationProvenanceService _executionPreparation)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly Projections.ProjectContextLoader _projectContextLoader = projectContextLoader;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly CompletionCertificationPolicy _completionPolicy = completionPolicy;
-    private readonly CompletionCertificationRouter _completionRouter = completionRouter;
-    private readonly ExecutionPreparationProvenanceService _executionPreparation = executionPreparation;
     private readonly ExecutionDispositionParser executionDispositionParser = new();
     private readonly ExecutionDispositionPolicy executionDispositionPolicy = new();
 

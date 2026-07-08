@@ -9,9 +9,8 @@ using LoopRelay.Orchestration.Services.NonImplementationLedger;
 namespace LoopRelay.Orchestration.Services.Hitl;
 
 public sealed class ExplicitHitlNonImplementationRequestCaptureService(
-    NonImplementationReviewLedgerStore ledgerStore)
+    NonImplementationReviewLedgerStore _ledgerStore)
 {
-    private readonly NonImplementationReviewLedgerStore _ledgerStore = ledgerStore;
     public const string SectionHeading = "## HITL-Requested Non-Implementation Deliverables";
 
     public async Task<ExplicitHitlNonImplementationRequestCaptureResult> CaptureFromSourceAsync(

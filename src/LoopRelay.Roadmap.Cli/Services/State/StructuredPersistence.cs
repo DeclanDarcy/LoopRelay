@@ -6,16 +6,13 @@ using LoopRelay.Roadmap.Cli.Services.Artifacts;
 namespace LoopRelay.Roadmap.Cli.Services.State;
 
 internal sealed class StructuredDocumentStore<TDocument>(
-    RoadmapArtifacts artifacts,
+    RoadmapArtifacts _artifacts,
     string path,
     string expectedSchemaVersion,
-    Func<TDocument, string?> getSchemaVersion,
-    Func<TDocument, IReadOnlyList<string>> validate)
+    Func<TDocument, string?> _getSchemaVersion,
+    Func<TDocument, IReadOnlyList<string>> _validate)
     where TDocument : class
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly Func<TDocument, string?> _getSchemaVersion = getSchemaVersion;
-    private readonly Func<TDocument, IReadOnlyList<string>> _validate = validate;
     public async Task<TDocument?> LoadAsync()
     {
         string? content = await _artifacts.ReadAsync(path);

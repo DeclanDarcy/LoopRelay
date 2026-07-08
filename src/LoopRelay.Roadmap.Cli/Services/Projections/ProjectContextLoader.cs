@@ -7,9 +7,8 @@ using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
-internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
+internal sealed partial class ProjectContextLoader(RoadmapArtifacts _artifacts)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
     public async Task<ProjectContext> LoadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

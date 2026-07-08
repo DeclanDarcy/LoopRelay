@@ -11,13 +11,10 @@ using LoopRelay.Orchestration.Services.NonImplementationReview;
 namespace LoopRelay.Completion.Services.Prompts;
 
 public sealed class AgentCompletionPromptRunner(
-    IAgentRuntime runtime,
-    Repository repository,
-    string? promptPolicy = null) : ICompletionPromptRunner
+    IAgentRuntime _runtime,
+    Repository _repository,
+    string? _promptPolicy = null) : ICompletionPromptRunner
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly Repository _repository = repository;
-    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
 
     public async Task<string> RunAsync(
         CompletionRuntimePromptInvocation invocation,
@@ -25,7 +22,7 @@ public sealed class AgentCompletionPromptRunner(
     {
         string prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
             CompletionPromptCatalog.RenderRuntime(invocation),
-            _promptPolicy);
+            (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
         AgentSessionSpec spec = string.Equals(
             invocation.RuntimePromptName,
             CompletionRuntimePromptNames.SynthesizeCompletedEpic,

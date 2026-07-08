@@ -3,9 +3,8 @@ using LoopRelay.Roadmap.Cli.Services.Prompts;
 
 namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
-internal sealed class ProjectionProvenanceFactory(ProjectionRegistry registry)
+internal sealed class ProjectionProvenanceFactory(ProjectionRegistry _registry)
 {
-    private readonly ProjectionRegistry _registry = registry;
     public ProjectionProvenance Create(string runtimePromptName, ProjectContext projectContext) =>
         Create(_registry.Get(runtimePromptName), projectContext);
 

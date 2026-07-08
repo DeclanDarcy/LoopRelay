@@ -22,47 +22,27 @@ using LoopRelay.Roadmap.Cli.Services.TransitionState;
 namespace LoopRelay.Roadmap.Cli.Services.State;
 
 internal sealed class RoadmapStateMachine(
-    RoadmapArtifacts artifacts,
-    Projections.ProjectContextLoader projectContextLoader,
-    PromptContractRegistry contractRegistry,
-    RoadmapStateStore stateStore,
-    RoadmapTransitionPersistence transitionPersistence,
-    BootstrapRoadmapCompletionContextTransition bootstrapRoadmapCompletionContextTransition,
-    SelectNextEpicTransition selectNextEpicTransition,
-    CreateNewEpicTransition createNewEpicTransition,
-    EpicPreparationAuditTransition epicPreparationAuditTransition,
-    SplitEpicTransition splitEpicTransition,
-    GenerateMilestoneDeepDivesTransition generateMilestoneDeepDivesTransition,
-    CompletionCertificationTransition completionCertificationTransition,
-    ActiveSelectionReader activeSelectionReader,
-    RoadmapStartupPlanner startupPlanner,
-    RoadmapResumePlanner resumePlanner,
-    RoadmapUnblockPlanner unblockPlanner,
-    DecisionRecorder decisionRecorder,
-    TransitionJournalStore journalStore,
-    ArtifactLifecycleStore lifecycleStore,
-    ILoopConsole console)
+    RoadmapArtifacts _artifacts,
+    Projections.ProjectContextLoader _projectContextLoader,
+    PromptContractRegistry _contractRegistry,
+    RoadmapStateStore _stateStore,
+    RoadmapTransitionPersistence _transitionPersistence,
+    BootstrapRoadmapCompletionContextTransition _bootstrapRoadmapCompletionContextTransition,
+    SelectNextEpicTransition _selectNextEpicTransition,
+    CreateNewEpicTransition _createNewEpicTransition,
+    EpicPreparationAuditTransition _epicPreparationAuditTransition,
+    SplitEpicTransition _splitEpicTransition,
+    GenerateMilestoneDeepDivesTransition _generateMilestoneDeepDivesTransition,
+    CompletionCertificationTransition _completionCertificationTransition,
+    ActiveSelectionReader _activeSelectionReader,
+    RoadmapStartupPlanner _startupPlanner,
+    RoadmapResumePlanner _resumePlanner,
+    RoadmapUnblockPlanner _unblockPlanner,
+    DecisionRecorder _decisionRecorder,
+    TransitionJournalStore _journalStore,
+    ArtifactLifecycleStore _lifecycleStore,
+    ILoopConsole _console)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly Projections.ProjectContextLoader _projectContextLoader = projectContextLoader;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly RoadmapStateStore _stateStore = stateStore;
-    private readonly RoadmapTransitionPersistence _transitionPersistence = transitionPersistence;
-    private readonly BootstrapRoadmapCompletionContextTransition _bootstrapRoadmapCompletionContextTransition = bootstrapRoadmapCompletionContextTransition;
-    private readonly SelectNextEpicTransition _selectNextEpicTransition = selectNextEpicTransition;
-    private readonly CreateNewEpicTransition _createNewEpicTransition = createNewEpicTransition;
-    private readonly EpicPreparationAuditTransition _epicPreparationAuditTransition = epicPreparationAuditTransition;
-    private readonly SplitEpicTransition _splitEpicTransition = splitEpicTransition;
-    private readonly GenerateMilestoneDeepDivesTransition _generateMilestoneDeepDivesTransition = generateMilestoneDeepDivesTransition;
-    private readonly CompletionCertificationTransition _completionCertificationTransition = completionCertificationTransition;
-    private readonly ActiveSelectionReader _activeSelectionReader = activeSelectionReader;
-    private readonly RoadmapStartupPlanner _startupPlanner = startupPlanner;
-    private readonly RoadmapResumePlanner _resumePlanner = resumePlanner;
-    private readonly RoadmapUnblockPlanner _unblockPlanner = unblockPlanner;
-    private readonly DecisionRecorder _decisionRecorder = decisionRecorder;
-    private readonly TransitionJournalStore _journalStore = journalStore;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
-    private readonly ILoopConsole _console = console;
     public Task<RoadmapOutcome> ExecuteAsync(
         RoadmapCliCommand command,
         CancellationToken cancellationToken) =>

@@ -11,15 +11,11 @@ using LoopRelay.Roadmap.Cli.Services.Cli;
 namespace LoopRelay.Roadmap.Cli.Services.Prompts;
 
 internal sealed class RoadmapPromptRunner(
-    IAgentRuntime runtime,
-    Repository repository,
-    ILoopConsole console,
-    string? promptPolicy = null)
+    IAgentRuntime _runtime,
+    Repository _repository,
+    ILoopConsole _console,
+    string? _promptPolicy = null)
 {
-    private readonly IAgentRuntime _runtime = runtime;
-    private readonly Repository _repository = repository;
-    private readonly ILoopConsole _console = console;
-    private readonly string _promptPolicy = promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault();
 
     public async Task<string> RunProjectionPromptAsync(
         ProjectionDefinition projection,
@@ -38,7 +34,7 @@ internal sealed class RoadmapPromptRunner(
     {
         string prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
             RoadmapPromptCatalog.RenderRuntime(runtimePromptName, projectContext, secondaryInput),
-            _promptPolicy);
+            (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
         return await RunOneShotAsync(runtimePromptName, prompt, cancellationToken);
     }
 

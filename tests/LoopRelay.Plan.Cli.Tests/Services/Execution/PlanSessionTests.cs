@@ -139,7 +139,7 @@ public class PlanSessionTests
             artifacts,
             new RecordingLoopConsole(),
             repo,
-            hitlRequestCapture: capture);
+            _hitlRequestCapture: capture);
         const string plan = """
             # Plan
 

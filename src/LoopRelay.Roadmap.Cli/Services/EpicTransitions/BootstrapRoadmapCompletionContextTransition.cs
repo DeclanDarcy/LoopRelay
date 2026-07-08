@@ -13,21 +13,14 @@ using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
 internal sealed class BootstrapRoadmapCompletionContextTransition(
-    RoadmapArtifacts artifacts,
-    PromptContractRegistry contractRegistry,
-    ProjectionCache projectionCache,
-    RoadmapPromptTransitionRunner promptTransitionRunner,
-    HitlArtifactCapture hitlArtifactCapture,
-    ArtifactLifecycleStore lifecycleStore,
-    ILoopConsole console)
+    RoadmapArtifacts _artifacts,
+    PromptContractRegistry _contractRegistry,
+    ProjectionCache _projectionCache,
+    RoadmapPromptTransitionRunner _promptTransitionRunner,
+    HitlArtifactCapture _hitlArtifactCapture,
+    ArtifactLifecycleStore _lifecycleStore,
+    ILoopConsole _console)
 {
-    private readonly RoadmapArtifacts _artifacts = artifacts;
-    private readonly PromptContractRegistry _contractRegistry = contractRegistry;
-    private readonly ProjectionCache _projectionCache = projectionCache;
-    private readonly RoadmapPromptTransitionRunner _promptTransitionRunner = promptTransitionRunner;
-    private readonly HitlArtifactCapture _hitlArtifactCapture = hitlArtifactCapture;
-    private readonly ArtifactLifecycleStore _lifecycleStore = lifecycleStore;
-    private readonly ILoopConsole _console = console;
     public async Task ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "CreateRoadmapCompletionContext";

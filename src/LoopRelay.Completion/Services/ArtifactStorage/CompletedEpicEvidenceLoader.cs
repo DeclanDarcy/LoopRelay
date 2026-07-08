@@ -4,9 +4,8 @@ using LoopRelay.Completion.Services.Parsing;
 
 namespace LoopRelay.Completion.Services.ArtifactStorage;
 
-public sealed class CompletedEpicEvidenceLoader(CompletionArtifacts artifacts)
+public sealed class CompletedEpicEvidenceLoader(CompletionArtifacts _artifacts)
 {
-    private readonly CompletionArtifacts _artifacts = artifacts;
     public const int MaxRenderedContentPerEpic = 4_000;
     public const int MaxTotalRenderedCharacters = 16_000;
 

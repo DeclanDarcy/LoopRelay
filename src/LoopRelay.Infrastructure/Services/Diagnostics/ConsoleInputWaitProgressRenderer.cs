@@ -4,9 +4,8 @@ using LoopRelay.Infrastructure.Models.Diagnostics;
 
 namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
-public sealed class ConsoleInputWaitProgressRenderer(ILoopConsole console) : IInputWaitProgressRenderer
+public sealed class ConsoleInputWaitProgressRenderer(ILoopConsole _console) : IInputWaitProgressRenderer
 {
-    private readonly ILoopConsole _console = console;
     public TimeSpan RefreshInterval =>
         _console.IsProgressInteractive ? TimeSpan.FromSeconds(1) : TimeSpan.FromSeconds(30);
 
