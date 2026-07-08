@@ -133,7 +133,7 @@ internal static class CliArguments
     }
 
     private static string Usage() =>
-        "Usage: LoopRelay.Roadmap.Cli [status|run|unblock|semantic] <REPO_DIR> [--elevated REASON]  (REPO_DIR is required)";
+        "Usage: LoopRelay.Roadmap.Cli [status|run|unblock] <REPO_DIR> [--elevated REASON]  (REPO_DIR is required)";
 }
 
 internal sealed record RoadmapCliInvocation(
@@ -146,5 +146,4 @@ internal enum RoadmapCliCommand
     Status,
     Run,
     Unblock,
-    Semantic,
 }

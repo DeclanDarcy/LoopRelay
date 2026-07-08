@@ -44,27 +44,8 @@ internal sealed class RoadmapStateMachine(
             RoadmapCliCommand.Status => StatusAsync(cancellationToken),
             RoadmapCliCommand.Run => RunAsync(cancellationToken),
             RoadmapCliCommand.Unblock => UnblockAsync(cancellationToken),
-            RoadmapCliCommand.Semantic => SemanticAsync(cancellationToken),
             _ => throw new RoadmapStepException($"Unsupported roadmap command: {command}."),
         };
-
-    public async Task<RoadmapOutcome> SemanticAsync(CancellationToken cancellationToken)
-    {
-        var executor = new RepositoryWorkSemanticExecutor(artifacts, console);
-        RepositoryWorkSemanticExecutionResult result = await executor.ExecuteAsync(
-            RepositoryWorkSemanticRequest.Default,
-            cancellationToken);
-
-        return result.AdmissionOutcome switch
-        {
-            RepositoryWorkAdmissionOutcome.Admitted => RoadmapOutcome.Completed,
-            RepositoryWorkAdmissionOutcome.ReportOnly => RoadmapOutcome.Paused,
-            RepositoryWorkAdmissionOutcome.Blocked => RoadmapOutcome.PreflightBlocked,
-            RepositoryWorkAdmissionOutcome.Denied => RoadmapOutcome.Failed,
-            RepositoryWorkAdmissionOutcome.Unsupported => RoadmapOutcome.Failed,
-            _ => RoadmapOutcome.Failed,
-        };
-    }
 
     public async Task<RoadmapOutcome> StatusAsync(CancellationToken cancellationToken)
     {

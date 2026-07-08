@@ -1,5 +1,4 @@
 using System.Text;
-using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Repositories;
 using LoopRelay.Roadmap.Cli;
 
@@ -19,27 +18,6 @@ if (!CliArguments.TryParse(args, out RoadmapCliInvocation invocation, out string
 }
 
 Repository repository = invocation.Repository;
-
-if (invocation.Command == RoadmapCliCommand.Semantic)
-{
-    var semanticConsole = new ConsoleLoopConsole();
-    semanticConsole.Info($"LoopRelay.Roadmap.Cli semantic starting for {repository.Path}");
-    var artifacts = new RoadmapArtifacts(new FileSystemArtifactStore(), repository);
-    var executor = new RepositoryWorkSemanticExecutor(artifacts, semanticConsole);
-    RepositoryWorkSemanticExecutionResult result = await executor.ExecuteAsync(
-        RepositoryWorkSemanticRequest.Default,
-        CancellationToken.None);
-
-    return result.AdmissionOutcome switch
-    {
-        RepositoryWorkAdmissionOutcome.Admitted => 0,
-        RepositoryWorkAdmissionOutcome.ReportOnly => 0,
-        RepositoryWorkAdmissionOutcome.Blocked => 4,
-        RepositoryWorkAdmissionOutcome.Denied => 1,
-        RepositoryWorkAdmissionOutcome.Unsupported => 1,
-        _ => 1,
-    };
-}
 
 await using var composition = RoadmapCliComposition.Create(invocation);
 var console = composition.Console;
