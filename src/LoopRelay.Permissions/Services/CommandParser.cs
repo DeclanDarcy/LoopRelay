@@ -1,6 +1,7 @@
 using System.Text;
 using LoopRelay.Permissions.Abstractions;
 using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Primitives;
 
 namespace LoopRelay.Permissions.Services;
 

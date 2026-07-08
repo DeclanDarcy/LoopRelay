@@ -1,17 +1,19 @@
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Cli;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class MilestoneGateTests
 {
-    private static (Cli.MilestoneGate Gate, IArtifactStore Store, Repository Repo) NewGate()
+    private static (MilestoneGate Gate, IArtifactStore Store, Repository Repo) NewGate()
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        return (new Cli.MilestoneGate(store, repo), store, repo);
+        return (new MilestoneGate(store, repo), store, repo);
     }
 
     private static string Resolve(Repository repo, string rel) =>
@@ -26,7 +28,7 @@ public class MilestoneGateTests
     [InlineData("- [-] partial\n- [/] partial", 0, 0)]  // unknown marks ignored
     public void CountCheckboxes_MatchesBackendRule(string content, int total, int completed)
     {
-        (int t, int c, _) = Cli.MilestoneGate.CountCheckboxes(content);
+        (int t, int c, _) = MilestoneGate.CountCheckboxes(content);
         Assert.Equal(total, t);
         Assert.Equal(completed, c);
     }
@@ -83,14 +85,14 @@ public class MilestoneGateTests
     private static readonly DateTime T0 = new(2026, 6, 30, 12, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime T1 = new(2026, 6, 30, 13, 0, 0, DateTimeKind.Utc);
 
-    private static (Cli.MilestoneGate Gate, CountingStore Store, Repository Repo, Dictionary<string, DateTime> Mtimes)
+    private static (MilestoneGate Gate, CountingStore Store, Repository Repo, Dictionary<string, DateTime> Mtimes)
         NewTrackedGate()
     {
         var store = new CountingStore(new MemoryArtifactStore());
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
         var mtimes = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
         DateTime? Mtime(string path) => mtimes.TryGetValue(path, out var v) ? v : (DateTime?)null;
-        return (new Cli.MilestoneGate(store, repo, Mtime), store, repo, mtimes);
+        return (new MilestoneGate(store, repo, Mtime), store, repo, mtimes);
     }
 
     [Fact]
@@ -144,7 +146,7 @@ public class MilestoneGateTests
     {
         var store = new CountingStore(new MemoryArtifactStore());
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var gate = new Cli.MilestoneGate(store, repo, _ => null);   // timestamps always unavailable
+        var gate = new MilestoneGate(store, repo, _ => null);   // timestamps always unavailable
         string m1 = Resolve(repo, ".agents/milestones/m1.md");
         await store.WriteAsync(m1, "- [ ] a");
 
@@ -280,7 +282,7 @@ public class MilestoneGateTests
     {
         var store = new CountingStore(new MemoryArtifactStore());
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var gate = new Cli.MilestoneGate(store, repo, _ => null);   // timestamps always unavailable
+        var gate = new MilestoneGate(store, repo, _ => null);   // timestamps always unavailable
         string m1 = Resolve(repo, ".agents/milestones/m1.md");
         await store.WriteAsync(m1, "- [ ] a");
 

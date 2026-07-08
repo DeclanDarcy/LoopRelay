@@ -1,4 +1,4 @@
-namespace LoopRelay.Permissions.Models;
+namespace LoopRelay.Permissions.Primitives;
 
 public enum PermissionRequestKind
 {

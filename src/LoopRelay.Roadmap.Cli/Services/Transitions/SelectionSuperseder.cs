@@ -1,4 +1,6 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Primitives;
+
+namespace LoopRelay.Roadmap.Cli.Services.Transitions;
 
 internal sealed class SelectionSuperseder(
     SelectionProvenanceService selectionProvenance,

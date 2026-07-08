@@ -1,9 +1,13 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Projections;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Plan.Cli.Abstractions;
+using LoopRelay.Plan.Cli.Models;
+using LoopRelay.Projections.Abstractions;
+using LoopRelay.Projections.Models;
 
-namespace LoopRelay.Plan.Cli;
+namespace LoopRelay.Plan.Cli.Services;
 
 internal sealed class ProjectionPromptRunner(
     IAgentRuntime runtime,

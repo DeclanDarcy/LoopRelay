@@ -1,7 +1,7 @@
-using LoopRelay.Roadmap.Cli;
-using ProjectContextLoader = LoopRelay.Roadmap.Cli.ProjectContextLoader;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class ProjectContextLoaderTests
 {
@@ -10,9 +10,9 @@ public sealed class ProjectContextLoaderTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        var loader = new ProjectContextLoader(repo.Artifacts);
+        var loader = new Cli.Services.ProjectContextLoader(repo.Artifacts);
 
-        Cli.ProjectContext context = await loader.LoadAsync();
+        ProjectContext context = await loader.LoadAsync();
 
         Assert.Contains("<!-- BEGIN PROJECT-CONTEXT FILE: 01-purpose.md -->", context.Content, StringComparison.Ordinal);
         Assert.True(context.Content.IndexOf("project context 01", StringComparison.Ordinal) <
@@ -23,9 +23,9 @@ public sealed class ProjectContextLoaderTests
     public async Task LoadAsync_lists_all_missing_files()
     {
         using var repo = new TempRepo();
-        var loader = new ProjectContextLoader(repo.Artifacts);
+        var loader = new Cli.Services.ProjectContextLoader(repo.Artifacts);
 
-        Cli.RoadmapStepException ex = await Assert.ThrowsAsync<Cli.RoadmapStepException>(() => loader.LoadAsync());
+        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => loader.LoadAsync());
 
         Assert.Contains(".agents/ctx/01-purpose.md", ex.Message, StringComparison.Ordinal);
         Assert.Contains(".agents/ctx/08-vocabulary.md", ex.Message, StringComparison.Ordinal);
@@ -36,9 +36,9 @@ public sealed class ProjectContextLoaderTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "runtime state");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "runtime state");
 
-        Cli.ProjectContext context = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext context = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
 
         Assert.DoesNotContain("runtime state", context.Content, StringComparison.Ordinal);
     }
@@ -50,7 +50,7 @@ public sealed class ProjectContextLoaderTests
         repo.SeedProjectContext();
         repo.Write(".agents/ctx/09-extra.md", "extra");
 
-        Cli.RoadmapStepException ex = await Assert.ThrowsAsync<Cli.RoadmapStepException>(() => new ProjectContextLoader(repo.Artifacts).LoadAsync());
+        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync());
 
         Assert.Contains("09-extra.md", ex.Message, StringComparison.Ordinal);
     }

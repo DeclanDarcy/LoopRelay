@@ -1,8 +1,8 @@
-using System.Text.Json;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 using LoopRelay.Agents.Services;
 
-namespace LoopRelay.Agents.Tests;
+namespace LoopRelay.Agents.Tests.Services;
 
 public sealed class CodexAppServerTurnReaderTests
 {

@@ -1,8 +1,8 @@
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Primitives;
 
-namespace LoopRelay.Projections;
+namespace LoopRelay.Projections.Services;
 
 public sealed class ProjectionManifestStore(ProjectionArtifacts artifacts)
 {

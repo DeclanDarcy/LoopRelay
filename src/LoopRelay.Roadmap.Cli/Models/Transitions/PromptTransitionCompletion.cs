@@ -1,6 +1,4 @@
-using System.Diagnostics;
-
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models.Transitions;
 
 internal sealed record PromptTransitionCompletion(
     string CorrelationId,

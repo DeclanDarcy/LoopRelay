@@ -1,11 +1,14 @@
-using LoopRelay.Core.Prompts;
-using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Orchestration;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Prompts;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 /// <summary>
 /// One execution slice over a HELD-OPEN operational codex session (app-server JSON-RPC over stdio, so the

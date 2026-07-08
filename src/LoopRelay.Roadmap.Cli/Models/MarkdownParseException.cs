@@ -1,5 +1,3 @@
-using System.Text;
-
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed class MarkdownParseException(string message) : Exception(message);

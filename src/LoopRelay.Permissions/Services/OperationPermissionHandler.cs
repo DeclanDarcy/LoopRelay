@@ -1,4 +1,5 @@
 using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Primitives;
 
 namespace LoopRelay.Permissions.Services;
 

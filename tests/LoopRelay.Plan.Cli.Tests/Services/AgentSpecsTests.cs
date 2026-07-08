@@ -1,10 +1,11 @@
-using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Permissions.Models;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Plan.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 public class AgentSpecsTests
 {
@@ -13,7 +14,7 @@ public class AgentSpecsTests
     [Fact]
     public void PlanAuthoring_IsDangerFullAccessAtRepoRootWithXhighEffort()
     {
-        AgentSessionSpec spec = Cli.AgentSpecs.PlanAuthoring(Repo);
+        AgentSessionSpec spec = AgentSpecs.PlanAuthoring(Repo);
 
         Assert.Equal(SessionRole.Planning, spec.Role);
         Assert.Equal(Repo.Id.ToString("N"), spec.RepositoryId);
@@ -29,7 +30,7 @@ public class AgentSpecsTests
     [Fact]
     public void Review_IsReadOnlyZeroPermissionAtRepoRootWithXhighEffort()
     {
-        AgentSessionSpec spec = Cli.AgentSpecs.Review(Repo);
+        AgentSessionSpec spec = AgentSpecs.Review(Repo);
 
         Assert.Equal(SessionRole.Planning, spec.Role);
         Assert.Equal("read-only", spec.Sandbox.Identifier);
@@ -52,7 +53,7 @@ public class AgentSpecsTests
             [".agents/details.md"],
             []);
 
-        AgentSessionSpec spec = Cli.AgentSpecs.ScopedArtifactOperation(Repo, profile);
+        AgentSessionSpec spec = AgentSpecs.ScopedArtifactOperation(Repo, profile);
 
         Assert.Equal(SessionRole.Planning, spec.Role);
         Assert.Equal("read-only", spec.Sandbox.Identifier);
@@ -68,8 +69,8 @@ public class AgentSpecsTests
     [Fact]
     public void AllFactories_MintFreshSessionIdentityPerCall()
     {
-        AgentSessionSpec first = Cli.AgentSpecs.PlanAuthoring(Repo);
-        AgentSessionSpec second = Cli.AgentSpecs.PlanAuthoring(Repo);
+        AgentSessionSpec first = AgentSpecs.PlanAuthoring(Repo);
+        AgentSessionSpec second = AgentSpecs.PlanAuthoring(Repo);
 
         Assert.NotEqual(first.SessionId, second.SessionId);
     }

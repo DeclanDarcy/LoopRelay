@@ -1,6 +1,3 @@
-using System.Text;
-using System.Text.RegularExpressions;
-
-namespace LoopRelay.Projections;
+namespace LoopRelay.Projections.Models;
 
 public sealed record ProjectContext(IReadOnlyList<string> SourceFiles, string Content, string Hash);

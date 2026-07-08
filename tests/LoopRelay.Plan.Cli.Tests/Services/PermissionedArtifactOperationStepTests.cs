@@ -1,29 +1,32 @@
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Permissions.Models;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Plan.Cli.Models;
+using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Plan.Cli.Tests.Models;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 public class PermissionedArtifactOperationStepTests
 {
-    private static (Cli.PermissionedArtifactOperationStep Step, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo)
+    private static (PermissionedArtifactOperationStep Step, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo)
         New()
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var artifacts = new Cli.PlanArtifacts(store, repo);
+        var artifacts = new PlanArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        return (new Cli.PermissionedArtifactOperationStep(rt, store, artifacts, con, repo), rt, store, repo);
+        return (new PermissionedArtifactOperationStep(rt, store, artifacts, con, repo), rt, store, repo);
     }
 
     private static string Resolve(Repository repo, string rel) => ArtifactPath.ResolveRepositoryPath(repo, rel);
 
-    private static Cli.ArtifactOperationPlan Plan(
+    private static ArtifactOperationPlan Plan(
         IReadOnlyList<string>? allowedReads = null,
         IReadOnlyList<OperationPathGlob>? allowedReadGlobs = null,
         IReadOnlyList<string>? allowedWrites = null,
@@ -85,7 +88,7 @@ public class PermissionedArtifactOperationStepTests
     {
         var (step, rt, _, _) = New();
 
-        Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
             () => step.RunAsync(Plan(allowedReads: [OrchestrationArtifactPaths.Plan]), CancellationToken.None));
 
         Assert.Contains(OrchestrationArtifactPaths.Plan, ex.Message);
@@ -105,7 +108,7 @@ public class PermissionedArtifactOperationStepTests
             return Turns.Failed("boom", "stderr tail");
         }));
 
-        Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
             () => step.RunAsync(Plan(
                 allowedReads: [OrchestrationArtifactPaths.Plan],
                 allowedWrites: [OrchestrationArtifactPaths.Plan],
@@ -129,7 +132,7 @@ public class PermissionedArtifactOperationStepTests
             return Turns.Completed("done");
         }));
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(
+        await Assert.ThrowsAsync<PlanStepException>(
             () => step.RunAsync(Plan(
                 allowedReads: [OrchestrationArtifactPaths.Plan],
                 allowedWrites: [OrchestrationArtifactPaths.Plan],
@@ -146,7 +149,7 @@ public class PermissionedArtifactOperationStepTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN ORIGINAL");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("did nothing")));
 
-        Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
             () => step.RunAsync(Plan(
                 allowedReads: [OrchestrationArtifactPaths.Plan],
                 allowedWrites: [OrchestrationArtifactPaths.Plan],
@@ -168,7 +171,7 @@ public class PermissionedArtifactOperationStepTests
             return Turns.Completed("done");
         }));
 
-        Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
             () => step.RunAsync(Plan(
                 allowedReads: [OrchestrationArtifactPaths.Plan],
                 allowedWriteGlobs: [new OperationPathGlob(OrchestrationArtifactPaths.MilestonesDirectory, OrchestrationArtifactPaths.MilestoneSearchPattern)],

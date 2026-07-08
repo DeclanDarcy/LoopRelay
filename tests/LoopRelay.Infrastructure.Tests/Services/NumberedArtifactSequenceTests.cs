@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
-using LoopRelay.Infrastructure.Artifacts;
+using LoopRelay.Infrastructure.Services.Artifacts;
 
-namespace LoopRelay.Infrastructure.Tests;
+namespace LoopRelay.Infrastructure.Tests.Services;
 
 public sealed class NumberedArtifactSequenceTests
 {

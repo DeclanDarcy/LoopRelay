@@ -1,5 +1,3 @@
-using System.Text;
-
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Models;
 
 public sealed class CompletionMarkdownParseException(string message) : Exception(message);

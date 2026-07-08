@@ -1,3 +1,3 @@
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Abstractions;
 
-internal interface ILoopConsole : Infrastructure.Console.ILoopConsole;
+internal interface ILoopConsole : Infrastructure.Abstractions.Console.ILoopConsole;

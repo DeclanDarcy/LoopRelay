@@ -1,4 +1,4 @@
-namespace LoopRelay.Permissions.Codex;
+namespace LoopRelay.Permissions.Models.Codex;
 
 internal static class CodexProtocolMethods
 {

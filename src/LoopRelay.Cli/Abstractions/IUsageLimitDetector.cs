@@ -1,8 +1,7 @@
-using System.Globalization;
-using System.Text.RegularExpressions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Cli.Models;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Abstractions;
 
 /// <summary>Detects codex "You've hit your usage limit" turn failures and waits out the advertised retry
 /// time so the caller can retry the turn instead of failing the run.</summary>

@@ -1,8 +1,8 @@
 using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Infrastructure.Artifacts;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Infrastructure.Services.Artifacts;
 
-namespace LoopRelay.Infrastructure.Tests;
+namespace LoopRelay.Infrastructure.Tests.Services;
 
 public sealed class RepositoryArtifactStoreTests
 {

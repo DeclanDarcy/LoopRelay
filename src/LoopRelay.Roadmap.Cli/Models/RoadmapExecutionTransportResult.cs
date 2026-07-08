@@ -1,9 +1,7 @@
-using LoopRelay.Core.Repositories;
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Infrastructure.Trust;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record RoadmapExecutionTransportResult(
     ExecutionTransportStatus Status,

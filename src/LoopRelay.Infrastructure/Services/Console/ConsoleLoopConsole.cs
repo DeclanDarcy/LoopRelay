@@ -1,4 +1,6 @@
-namespace LoopRelay.Infrastructure.Console;
+using LoopRelay.Infrastructure.Abstractions.Console;
+
+namespace LoopRelay.Infrastructure.Services.Console;
 
 /// <summary>
 /// Writes loop progress to the console while preserving streamed turn layout.

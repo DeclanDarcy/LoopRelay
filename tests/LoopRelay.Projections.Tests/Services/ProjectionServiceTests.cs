@@ -1,9 +1,13 @@
 using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Projections;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Projections.Abstractions;
+using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Primitives;
+using LoopRelay.Projections.Services;
 using Xunit;
 
-namespace LoopRelay.Projections.Tests;
+namespace LoopRelay.Projections.Tests.Services;
 
 public sealed class ProjectionServiceTests
 {

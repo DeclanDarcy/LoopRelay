@@ -1,7 +1,9 @@
 using System.Globalization;
-using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Orchestration;
+using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 

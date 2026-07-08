@@ -1,6 +1,4 @@
-using LoopRelay.Agents.Models;
-
-namespace LoopRelay.Infrastructure.Trust;
+namespace LoopRelay.Infrastructure.Primitives.Trust;
 
 public enum ExecutionAuthority
 {

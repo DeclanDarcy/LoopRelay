@@ -1,4 +1,7 @@
-namespace LoopRelay.Infrastructure.Diagnostics;
+using LoopRelay.Infrastructure.Models.Diagnostics;
+using LoopRelay.Infrastructure.Primitives.Diagnostics;
+
+namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
 public sealed class RuntimePrerequisiteDoctor(
     Func<string, string?>? getEnvironmentVariable = null,

@@ -1,6 +1,6 @@
-using LoopRelay.Orchestration;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
 
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
 public static class NonImplementationReviewPromptEvidence
 {

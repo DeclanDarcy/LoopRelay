@@ -1,7 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LoopRelay.Roadmap.Cli.Models;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class ExecutionPreparationManifestStore(RoadmapArtifacts artifacts)
 {

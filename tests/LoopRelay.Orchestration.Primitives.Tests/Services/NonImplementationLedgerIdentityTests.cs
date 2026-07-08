@@ -1,9 +1,10 @@
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 
-namespace LoopRelay.Orchestration.Primitives.Tests;
+namespace LoopRelay.Orchestration.Tests.Services;
 
 public sealed class NonImplementationLedgerIdentityTests
 {

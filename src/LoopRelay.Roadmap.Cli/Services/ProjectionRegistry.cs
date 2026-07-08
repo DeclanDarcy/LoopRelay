@@ -1,4 +1,6 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class ProjectionRegistry
 {

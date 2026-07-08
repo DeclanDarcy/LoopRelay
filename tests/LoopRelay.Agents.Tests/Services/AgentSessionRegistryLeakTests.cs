@@ -1,9 +1,10 @@
 using System.Runtime.CompilerServices;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 using LoopRelay.Agents.Services;
 
-namespace LoopRelay.Agents.Tests;
+namespace LoopRelay.Agents.Tests.Services;
 
 /// <summary>
 /// m10 process-leak fix: AgentRuntime.OpenSessionAsync ADDS every held-open session to AgentSessionRegistry, but

@@ -1,6 +1,8 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class RoadmapConsoleOutputTests
 {
@@ -17,26 +19,26 @@ public sealed class RoadmapConsoleOutputTests
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("GenerateMilestoneDeepDivesForEpic")),
             ScriptedAgentRuntime.Completed(MilestoneBundle()));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(
+        RoadmapOutcome outcome = await StateMachineFactory.Create(
             repo,
             runtime,
             console).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Contains("Generate milestone deep dives", console.Phases);
         Assert.DoesNotContain("Generate operational context", console.Phases);
         Assert.DoesNotContain("Generate execution prompt", console.Phases);
-        Cli.RoadmapStateDocument state = (await new Cli.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.MilestoneSpecsReady, state.CurrentState);
-        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.OperationalContext));
-        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ExecutionPrompt));
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.MilestoneSpecsReady, state.CurrentState);
+        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.OperationalContext));
+        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ExecutionPrompt));
     }
 
     private static TempRepo SeedRepo()
     {
         var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         return repo;
     }

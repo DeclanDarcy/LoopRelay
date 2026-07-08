@@ -1,6 +1,4 @@
-using LoopRelay.Completion;
-
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record RoadmapUnblockEvidence(
     string Path,

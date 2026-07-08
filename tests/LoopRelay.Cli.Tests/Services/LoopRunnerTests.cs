@@ -1,20 +1,24 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Agents.Models;
+using LoopRelay.Cli.Primitives;
+using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Tests.Models;
+using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Primitives;
 using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Completion;
-using LoopRelay.Cli;
-using LoopRelay.Infrastructure.Artifacts;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class LoopRunnerTests
 {
@@ -29,7 +33,7 @@ public class LoopRunnerTests
     }
 
     private sealed record Harness(
-        Cli.LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con,
+        LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con,
         FakeProcessRunner Git, FakeDecisionSessionResumeStore Resume, FakeCompletionCertificationService Completion,
         FakeNonImplementationPostExecutionReviewService Review,
         FakeNonImplementationCompletionReviewService CompletionReview);
@@ -40,31 +44,31 @@ public class LoopRunnerTests
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions());
-        var gate = new Cli.MilestoneGate(store, repo);
+        var gate = new MilestoneGate(store, repo);
         // By default `git status` reports an EMPTY working tree, so the submodule publisher is a no-op, the
         // gate skips commit/push — the existing single-iteration tests reach their asserted outcome before it
         // could ever trip — and every execution slice takes the no-changes handoff (these tests only assert
         // the "Execution" phase prefix and the handoff file, both identical across the two handoff prompts).
         var git = new FakeProcessRunner { Handler = (_, _) => FakeProcessRunner.Ok() };
-        var detector = new Cli.WorkingTreeChangeDetector(git, repo);
+        var detector = new WorkingTreeChangeDetector(git, repo);
         // These tests exercise loop orchestration only; usage-limit detection is unit-tested separately
         // (UsageLimitDetectorTests) and its per-turn retry seam in GatedAgentRuntimeTests, so the loop
         // runs unwatched.
-        var exec = new Cli.ExecutionStep(rt, art, con, repo, detector, gate);
-        var dec = new Cli.DecisionSession(rt, router, art, con, repo);
+        var exec = new ExecutionStep(rt, art, con, repo, detector, gate);
+        var dec = new DecisionSession(rt, router, art, con, repo);
         // CommitGate IGNORES `.agents`; the submodule is committed+pushed only by the publisher (pre-codex).
-        var submodulePublisher = new Cli.AgentsSubmodulePublisher(git, repo, con);
-        var commitGate = new Cli.CommitGate(detector, git, repo, con);
+        var submodulePublisher = new AgentsSubmodulePublisher(git, repo, con);
+        var commitGate = new CommitGate(detector, git, repo, con);
         var resume = new FakeDecisionSessionResumeStore();
         var completion = new FakeCompletionCertificationService();
         review ??= new FakeNonImplementationPostExecutionReviewService();
         completionReview ??= new FakeNonImplementationCompletionReviewService();
         return new Harness(
-            new Cli.LoopRunner(
+            new LoopRunner(
                 gate,
                 art,
                 exec,
@@ -90,9 +94,9 @@ public class LoopRunnerTests
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         Assert.Empty(h.Rt.OneShotCalls);   // no codex run at all
         Assert.Single(h.Completion.Requests);
         Assert.Contains(
@@ -124,9 +128,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         // No decision ran, so no decisions.md was produced (neither live nor a numbered snapshot).
         Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
         Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
@@ -166,9 +170,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         // Decision proposal persisted then retired after execution consumed it — assert on the numbered snapshot.
         Assert.Equal("DEC-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
         Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
@@ -199,9 +203,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         // The decision session never ran (no "Decision" phase) — the loop skipped straight to execution.
         Assert.DoesNotContain(Phases(h.Con), p => p.StartsWith("Decision"));
         Assert.Contains(Phases(h.Con), p => p.StartsWith("Execution"));
@@ -257,9 +261,9 @@ public class LoopRunnerTests
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.Failed, outcome);
+        Assert.Equal(LoopOutcome.Failed, outcome);
         // Retire (after execution) never ran because execution threw — decisions.md stays pending for the restart-skip.
         Assert.True(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
     }
@@ -299,9 +303,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff-2");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         // Both slices ran their OWN decision (skip never fired): two numbered snapshots, two decision runs.
         Assert.Equal("DECISIONS-1", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
         Assert.Equal("DECISIONS-2", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(2))));
@@ -336,9 +340,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         // The skip path never ran the decision session, so it never rotated the lingering handoff to numbered history...
         Assert.DoesNotContain(Phases(h.Con), p => p.StartsWith("Decision"));
         Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));
@@ -357,9 +361,9 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-0");
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.Failed, outcome);
+        Assert.Equal(LoopOutcome.Failed, outcome);
     }
 
     [Fact]
@@ -371,9 +375,9 @@ public class LoopRunnerTests
         // First pass (no handoff): execution runs first from the plan; its work turn fails -> ExecutionStep throws -> Failed.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.Failed, outcome);
+        Assert.Equal(LoopOutcome.Failed, outcome);
     }
 
     [Fact]
@@ -411,9 +415,9 @@ public class LoopRunnerTests
             }));
         }
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.Stalled, outcome);
+        Assert.Equal(LoopOutcome.Stalled, outcome);
     }
 
     // A reduction in unchecked milestone items IS substantive progress: an iteration that only ticks
@@ -460,9 +464,9 @@ public class LoopRunnerTests
             }));
         }
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
     }
 
     [Fact]
@@ -479,9 +483,9 @@ public class LoopRunnerTests
             throw new OperationCanceledException(cts.Token);
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(cts.Token);
+        LoopOutcome outcome = await h.Runner.RunAsync(cts.Token);
 
-        Assert.Equal(Cli.LoopOutcome.Cancelled, outcome);
+        Assert.Equal(LoopOutcome.Cancelled, outcome);
     }
 
     [Fact]
@@ -527,9 +531,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         int firstSubmodulePush = timeline.IndexOf("submodule-push");
         int codexExec = timeline.IndexOf("codex-exec");
         int lastSubmodulePush = timeline.LastIndexOf("submodule-push");
@@ -568,7 +572,7 @@ public class LoopRunnerTests
 
             // The parent-repo commit carrying the gitlink message marks when the pointer was versioned.
             if (!submodule && args[0] == "commit" && args.Count >= 3 &&
-                args[2] == Cli.AgentsSubmodulePublisher.GitlinkPointerMessage)
+                args[2] == AgentsSubmodulePublisher.GitlinkPointerMessage)
             {
                 timeline.Add("parent-gitlink-commit");
             }
@@ -588,9 +592,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         int parentGitlinkCommit = timeline.IndexOf("parent-gitlink-commit");
         int codexExec = timeline.IndexOf("codex-exec");
         Assert.True(parentGitlinkCommit >= 0, "the parent .agents gitlink must be committed");
@@ -623,9 +627,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         Assert.True(timeline.IndexOf("capture-pre") >= 0);
         Assert.True(timeline.IndexOf("execution-work") >= 0);
         Assert.True(timeline.IndexOf("capture-pre") < timeline.IndexOf("execution-work"));
@@ -659,7 +663,7 @@ public class LoopRunnerTests
             if (submodule &&
                 args[0] == "commit" &&
                 args.Count >= 3 &&
-                args[2] == Cli.AgentsSubmodulePublisher.ExecutionHandoffMessage)
+                args[2] == AgentsSubmodulePublisher.ExecutionHandoffMessage)
             {
                 timeline.Add("post-execution-agents-publish");
             }
@@ -680,9 +684,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         Assert.True(timeline.IndexOf("execution-handoff") < timeline.IndexOf("post-execution-review"));
         Assert.True(timeline.IndexOf("post-execution-review") < timeline.IndexOf("post-execution-agents-publish"));
     }
@@ -711,9 +715,9 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.Failed, outcome);
+        Assert.Equal(LoopOutcome.Failed, outcome);
         Assert.Empty(h.Completion.Requests);
         Assert.Contains(
             h.Con.Events,
@@ -727,21 +731,21 @@ public class LoopRunnerTests
         using var temp = TempLoopRepository.Create();
         var store = new FileSystemArtifactStore();
         var repo = temp.Repository;
-        var artifacts = new Cli.LoopArtifacts(store, repo);
+        var artifacts = new LoopArtifacts(store, repo);
         var console = new RecordingLoopConsole();
         var runtime = new FakeAgentRuntime(store);
         var git = new FakeProcessRunner();
-        var detector = new Cli.WorkingTreeChangeDetector(git, repo);
-        var gate = new Cli.MilestoneGate(store, repo);
-        var execution = new Cli.ExecutionStep(runtime, artifacts, console, repo, detector, gate);
-        var decision = new Cli.DecisionSession(
+        var detector = new WorkingTreeChangeDetector(git, repo);
+        var gate = new MilestoneGate(store, repo);
+        var execution = new ExecutionStep(runtime, artifacts, console, repo, detector, gate);
+        var decision = new DecisionSession(
             runtime,
             new DecisionSessionRouter(new DecisionSessionRouterOptions()),
             artifacts,
             console,
             repo);
-        var submodulePublisher = new Cli.AgentsSubmodulePublisher(git, repo, console);
-        var commitGate = new Cli.CommitGate(detector, git, repo, console);
+        var submodulePublisher = new AgentsSubmodulePublisher(git, repo, console);
+        var commitGate = new CommitGate(detector, git, repo, console);
         var resume = new FakeDecisionSessionResumeStore();
         var completion = new FakeCompletionCertificationService();
         var repositoryArtifacts = new RepositoryArtifactStore(store, repo);
@@ -770,7 +774,7 @@ public class LoopRunnerTests
             return Turns.Completed("handoff");
         }));
 
-        var runner = new Cli.LoopRunner(
+        var runner = new LoopRunner(
             gate,
             artifacts,
             execution,
@@ -783,9 +787,9 @@ public class LoopRunnerTests
             new FakeNonImplementationCompletionReviewService(),
             console);
 
-        Cli.LoopOutcome outcome = await runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         NonImplementationReviewLedgerEntry entry = Assert.Single((await ledger.LoadOrCreateAsync()).Entries);
         Assert.Equal("ROOT_NOTE.md", entry.Path);
         Assert.Equal(NonImplementationSemanticDisposition.ConfirmedNonImplementation, entry.SemanticDisposition);
@@ -1007,7 +1011,7 @@ public class LoopRunnerTests
 
     private static bool IsPartialExitCommit((string FileName, IReadOnlyList<string> Args, string WorkingDirectory) call) =>
         call.Args.Count >= 3 && call.Args[0] == "commit" &&
-        call.Args[2] == Cli.AgentsSubmodulePublisher.PartialExitMessage;
+        call.Args[2] == AgentsSubmodulePublisher.PartialExitMessage;
 
     [Fact]
     public async Task Run_WhenExecutionFails_SalvagesPartialAgentsStateOnExit()
@@ -1020,9 +1024,9 @@ public class LoopRunnerTests
         // First pass (no handoff): execution runs first; its work turn fails -> ExecutionStep throws -> Failed.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.Failed, outcome);
+        Assert.Equal(LoopOutcome.Failed, outcome);
         Assert.Contains(h.Git.Calls, IsPartialExitCommit);
     }
 
@@ -1042,9 +1046,9 @@ public class LoopRunnerTests
             throw new OperationCanceledException(cts.Token);
         }));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(cts.Token);
+        LoopOutcome outcome = await h.Runner.RunAsync(cts.Token);
 
-        Assert.Equal(Cli.LoopOutcome.Cancelled, outcome);
+        Assert.Equal(LoopOutcome.Cancelled, outcome);
         // The salvage runs under CancellationToken.None, so it still commits despite the cancelled run.
         Assert.Contains(h.Git.Calls, IsPartialExitCommit);
     }
@@ -1074,9 +1078,9 @@ public class LoopRunnerTests
 
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.Failed, outcome);
+        Assert.Equal(LoopOutcome.Failed, outcome);
     }
 
     [Fact]
@@ -1086,9 +1090,9 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");
         h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.EpicCompleted, outcome);
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         Assert.Equal(1, h.Resume.ClearCalls);   // idempotent: re-runs against a completed epic re-delete a no-op
         Assert.Null(h.Resume.State);
     }
@@ -1111,9 +1115,9 @@ public class LoopRunnerTests
             [".agents/evidence/evaluations/epic-completion-and-drift.0001.md"],
             "Continue Epic");
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.CompletionBlocked, outcome);
+        Assert.Equal(LoopOutcome.CompletionBlocked, outcome);
         Assert.Equal(0, h.Resume.ClearCalls);
         Assert.NotNull(h.Resume.State);
     }
@@ -1152,9 +1156,9 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");
         h.Resume.State = new DecisionSessionResumeState("thread-old", 0, 0d, 0, 0d, 0d, 250_000d, 0, null, 0);
 
-        Cli.LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.LoopOutcome.CompletionBlocked, outcome);
+        Assert.Equal(LoopOutcome.CompletionBlocked, outcome);
         Assert.Empty(h.Completion.Requests);
         Assert.Equal(0, h.Resume.ClearCalls);
         Assert.NotNull(h.Resume.State);

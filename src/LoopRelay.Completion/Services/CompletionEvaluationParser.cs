@@ -1,4 +1,6 @@
-namespace LoopRelay.Completion;
+using LoopRelay.Completion.Models;
+
+namespace LoopRelay.Completion.Services;
 
 public sealed class CompletionEvaluationParser
 {

@@ -1,4 +1,4 @@
-namespace LoopRelay.Plan.Cli;
+namespace LoopRelay.Plan.Cli.Models;
 
 /// <summary>
 /// Thrown by a deterministic verification gate when a pipeline step's expected filesystem effect did not happen.

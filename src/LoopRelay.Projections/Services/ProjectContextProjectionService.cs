@@ -1,4 +1,8 @@
-namespace LoopRelay.Projections;
+using LoopRelay.Projections.Abstractions;
+using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Primitives;
+
+namespace LoopRelay.Projections.Services;
 
 public sealed class ProjectContextProjectionService(
     ProjectionArtifacts artifacts,

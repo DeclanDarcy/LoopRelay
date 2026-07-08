@@ -1,15 +1,18 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Services;
-using LoopRelay.Completion;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Infrastructure.Diagnostics;
-using LoopRelay.Infrastructure.Artifacts;
+using LoopRelay.Completion.Services;
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Infrastructure.Services.Artifacts;
+using LoopRelay.Infrastructure.Services.Diagnostics;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Permissions.Configuration;
+using LoopRelay.Permissions.Services.Configuration;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Services.Transitions;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class RoadmapCliComposition : IAsyncDisposable
 {

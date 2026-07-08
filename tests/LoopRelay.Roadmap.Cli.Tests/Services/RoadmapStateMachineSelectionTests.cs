@@ -1,19 +1,15 @@
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Completion;
-using LoopRelay.Infrastructure.Artifacts;
+using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Roadmap.Cli;
-using BundleFileExtractor = LoopRelay.Roadmap.Cli.BundleFileExtractor;
-using DecisionLedgerStore = LoopRelay.Roadmap.Cli.DecisionLedgerStore;
-using ExecutionCompatibilityMaterializer = LoopRelay.Roadmap.Cli.ExecutionCompatibilityMaterializer;
-using ProjectContextLoader = LoopRelay.Roadmap.Cli.ProjectContextLoader;
-using RoadmapStateStore = LoopRelay.Roadmap.Cli.RoadmapStateStore;
-using SplitEpicBundleInterpreter = LoopRelay.Roadmap.Cli.SplitEpicBundleInterpreter;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class RoadmapStateMachineSelectionTests
 {
@@ -29,10 +25,10 @@ public sealed class RoadmapStateMachineSelectionTests
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Assert.Contains("# Roadmap Completion Context", repo.Read(Cli.RoadmapArtifactPaths.RoadmapCompletionContext), StringComparison.Ordinal);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        Assert.Contains("# Roadmap Completion Context", repo.Read(RoadmapArtifactPaths.RoadmapCompletionContext), StringComparison.Ordinal);
         Assert.Equal(4, runtime.OneShotCalls);
         Assert.Contains(runtime.Prompts, prompt => prompt.Contains("No completed epic markdown files were found under `.agents/archive/epics/*.md`.", StringComparison.Ordinal));
     }
@@ -62,9 +58,9 @@ public sealed class RoadmapStateMachineSelectionTests
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
         string bootstrapPrompt = runtime.Prompts.Single(prompt => prompt.Contains(".agents/archive/epics/001-done.md", StringComparison.Ordinal));
         Assert.Contains("Archived Capability", bootstrapPrompt, StringComparison.Ordinal);
         Assert.Contains("| Epic ID | EPIC-DONE |", bootstrapPrompt, StringComparison.Ordinal);
@@ -76,17 +72,17 @@ public sealed class RoadmapStateMachineSelectionTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         var runtime = new ScriptedAgentRuntime(
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
         Assert.Equal(2, runtime.OneShotCalls);
-        Assert.Equal("existing context", repo.Read(Cli.RoadmapArtifactPaths.RoadmapCompletionContext));
+        Assert.Equal("existing context", repo.Read(RoadmapArtifactPaths.RoadmapCompletionContext));
     }
 
     [Fact]
@@ -94,29 +90,29 @@ public sealed class RoadmapStateMachineSelectionTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
-        string projectionPath = Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
+        string projectionPath = RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
         repo.Write(projectionPath, ProjectionSamples.Valid("SelectNextEpic"));
         await SeedStaleSelectionProjectionManifestAsync(repo);
         var runtime = new ScriptedAgentRuntime();
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
         Assert.Equal(0, runtime.OneShotCalls);
-        string blockerPath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "projection-blocked.*.md"));
+        string blockerPath = Assert.Single(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "projection-blocked.*.md"));
         Assert.Contains("Projection refresh recommended", repo.Read(blockerPath), StringComparison.Ordinal);
         Assert.Contains("SelectNextEpic", repo.Read(blockerPath), StringComparison.Ordinal);
 
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.CoreReady, state.CurrentState);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.CoreReady, state.CurrentState);
         Assert.Equal("Preflight", state.LastTransition.Prompt);
-        Assert.NotEqual(Cli.RoadmapState.SelectNextStrategicInitiative, state.LastTransition.To);
+        Assert.NotEqual(RoadmapState.SelectNextStrategicInitiative, state.LastTransition.To);
 
-        if (await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.TransitionJournal))
+        if (await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.TransitionJournal))
         {
-            string journal = repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal);
+            string journal = repo.Read(RoadmapArtifactPaths.TransitionJournal);
             Assert.DoesNotContain("\"event\":\"TransitionStarted\"", journal, StringComparison.Ordinal);
             Assert.DoesNotContain("\"prompt\":\"SelectNextEpic\"", journal, StringComparison.Ordinal);
         }
@@ -127,7 +123,7 @@ public sealed class RoadmapStateMachineSelectionTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         const string invalidSelection = """
             # Next Strategic Initiative Selection
@@ -146,34 +142,34 @@ public sealed class RoadmapStateMachineSelectionTests
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Completed(invalidSelection));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
-        Assert.Equal(invalidSelection, repo.Read(Cli.RoadmapArtifactPaths.Selection));
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
+        Assert.Equal(invalidSelection, repo.Read(RoadmapArtifactPaths.Selection));
 
-        string evidencePath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.SelectionEvidenceDirectory, "selection.*.md"));
+        string evidencePath = Assert.Single(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.SelectionEvidenceDirectory, "selection.*.md"));
         Assert.Equal(invalidSelection, repo.Read(evidencePath));
 
-        Cli.SelectionProvenanceManifest manifest = await new Cli.SelectionProvenanceManifestStore(repo.Artifacts).LoadAsync();
-        Cli.DerivedArtifactManifestEntry provenance = Assert.Single(manifest.ActiveSelections);
-        Assert.Equal(Cli.RoadmapArtifactPaths.Selection, provenance.ArtifactPath);
-        Assert.Equal(Cli.RoadmapHash.Sha256(invalidSelection), provenance.ArtifactHash);
+        SelectionProvenanceManifest manifest = await new SelectionProvenanceManifestStore(repo.Artifacts).LoadAsync();
+        DerivedArtifactManifestEntry provenance = Assert.Single(manifest.ActiveSelections);
+        Assert.Equal(RoadmapArtifactPaths.Selection, provenance.ArtifactPath);
+        Assert.Equal(RoadmapHash.Sha256(invalidSelection), provenance.ArtifactHash);
 
-        Cli.ArtifactLifecycleEntry lifecycle = Assert.Single(
-            await new Cli.ArtifactLifecycleStore(repo.Artifacts).LoadAsync(),
-            entry => entry.Path == Cli.RoadmapArtifactPaths.Selection);
-        Assert.Equal(Cli.ArtifactLifecycleState.Ready, lifecycle.State);
+        ArtifactLifecycleEntry lifecycle = Assert.Single(
+            await new ArtifactLifecycleStore(repo.Artifacts).LoadAsync(),
+            entry => entry.Path == RoadmapArtifactPaths.Selection);
+        Assert.Equal(ArtifactLifecycleState.Ready, lifecycle.State);
         Assert.Equal(evidencePath, lifecycle.Notes);
 
-        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.DecisionLedgerJson));
-        Assert.Equal("None", await new DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
+        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.DecisionLedgerJson));
+        Assert.Equal("None", await new Cli.Services.DecisionLedgerStore(repo.Artifacts).LastDecisionIdAsync());
 
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.SelectNextStrategicInitiative, state.CurrentState);
-        Assert.Equal(Cli.TransitionStatus.Completed, state.LastTransition.Status);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.SelectNextStrategicInitiative, state.CurrentState);
+        Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
         Assert.Equal("Completed", state.LastTransition.Decision);
 
-        Cli.TransitionJournalRecord[] selectionRecords = ReadJournal(repo)
+        TransitionJournalRecord[] selectionRecords = ReadJournal(repo)
             .Where(record => record.Prompt == "SelectNextEpic")
             .ToArray();
         Assert.Contains(selectionRecords, record => record.Event == "TransitionCompleted");
@@ -194,21 +190,21 @@ public sealed class RoadmapStateMachineSelectionTests
                 ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
                 ScriptedAgentRuntime.Completed(SelectionForOutcome(recommendedOutcome))),
             mutateAfterOneShotCall: 2,
-            () => repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "changed completion context"));
+            () => repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "changed completion context"));
         var console = new TestConsole();
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime, console).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime, console).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
         Assert.Equal(2, runtime.OneShotCalls);
-        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ProjectionPaths[downstreamPrompt]));
+        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ProjectionPaths[downstreamPrompt]));
         AssertDownstreamPromptNotStarted(repo, downstreamPrompt);
         Assert.Contains(console.Errors, error => error.Contains("Active selection cannot be used because it does not belong to the current selection cycle", StringComparison.Ordinal));
 
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.SelectNextStrategicInitiative, state.CurrentState);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.SelectNextStrategicInitiative, state.CurrentState);
         Assert.Equal("SelectNextEpic", state.LastTransition.Prompt);
-        Assert.Equal(Cli.TransitionStatus.Completed, state.LastTransition.Status);
+        Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
     }
 
     [Fact]
@@ -222,24 +218,24 @@ public sealed class RoadmapStateMachineSelectionTests
                 ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("EpicPreparationAudit")),
                 ScriptedAgentRuntime.Completed(AuditDisposition("Realign"))),
             mutateAfterOneShotCall: 4,
-            () => repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "changed completion context"));
+            () => repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "changed completion context"));
         var console = new TestConsole();
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime, console).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime, console).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
         Assert.Equal(4, runtime.OneShotCalls);
-        Assert.False(await repo.Artifacts.ExistsAsync(Cli.RoadmapArtifactPaths.ProjectionPaths["RealignEpic"]));
+        Assert.False(await repo.Artifacts.ExistsAsync(RoadmapArtifactPaths.ProjectionPaths["RealignEpic"]));
         AssertDownstreamPromptNotStarted(repo, "RealignEpic");
         Assert.Contains(console.Errors, error => error.Contains("Active selection cannot be used because it does not belong to the current selection cycle", StringComparison.Ordinal));
 
-        string auditPath = Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.AuditEvidenceDirectory, "epic-preparation-audit.*.md"));
+        string auditPath = Assert.Single(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.AuditEvidenceDirectory, "epic-preparation-audit.*.md"));
         Assert.Contains("Disposition | Realign", repo.Read(auditPath), StringComparison.Ordinal);
 
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.EpicPreparationAudit, state.CurrentState);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.EpicPreparationAudit, state.CurrentState);
         Assert.Equal("EpicPreparationAudit", state.LastTransition.Prompt);
-        Assert.Equal(Cli.TransitionStatus.Completed, state.LastTransition.Status);
+        Assert.Equal(TransitionStatus.Completed, state.LastTransition.Status);
     }
 
     [Fact]
@@ -247,7 +243,7 @@ public sealed class RoadmapStateMachineSelectionTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "existing context");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         var runtime = new ScriptedAgentRuntime(
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
@@ -263,15 +259,15 @@ public sealed class RoadmapStateMachineSelectionTests
         var ledger = new NonImplementationReviewLedgerStore(new RepositoryArtifactStore(repo.Store, repo.Repository));
         var capture = new ExplicitHitlNonImplementationRequestCaptureService(ledger);
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(
+        RoadmapOutcome outcome = await StateMachineFactory.Create(
             repo,
             runtime,
             hitlRequestCapture: capture).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
         NonImplementationHitlRequestEntry request = Assert.Single((await ledger.LoadOrCreateAsync()).HitlRequests);
         Assert.Equal("docs/roadmap-note.md", request.DeliverablePathOrPattern);
-        Assert.Equal(Cli.RoadmapArtifactPaths.Selection, request.SourceArtifactPath);
+        Assert.Equal(RoadmapArtifactPaths.Selection, request.SourceArtifactPath);
         Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
     }
 
@@ -279,43 +275,43 @@ public sealed class RoadmapStateMachineSelectionTests
     {
         var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "existing completion context");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         return repo;
     }
 
     private static async Task SeedStaleSelectionProjectionManifestAsync(TempRepo repo)
     {
-        Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
-        Cli.ProjectionProvenance provenance = new Cli.ProjectionProvenanceFactory(new Cli.ProjectionRegistry())
+        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectionProvenance provenance = new ProjectionProvenanceFactory(new ProjectionRegistry())
             .Create("SelectNextEpic", projectContext);
-        Cli.ProjectionProvenance staleProvenance = provenance with
+        ProjectionProvenance staleProvenance = provenance with
         {
             ProjectContextHash = "old-context-hash",
             CausalInputs = provenance.CausalInputs.Select(input =>
-                input.Kind == Cli.ProjectionProvenance.ProjectContextInputKind
+                input.Kind == ProjectionProvenance.ProjectContextInputKind
                     ? input with { Version = "old-context-hash" }
                     : input).ToArray(),
         };
-        await new Cli.ProjectionManifestStore(repo.Artifacts).UpsertAsync(
-            Cli.ProjectionManifestEntry.FromTrustedProvenance(
+        await new ProjectionManifestStore(repo.Artifacts).UpsertAsync(
+            ProjectionManifestEntry.FromTrustedProvenance(
                 staleProvenance,
-                Cli.RoadmapHash.Sha256(repo.Read(Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"])),
+                RoadmapHash.Sha256(repo.Read(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"])),
                 DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
-                Cli.ProjectionValidationStatus.Valid,
-                Cli.ProjectionFreshness.Fresh,
+                ProjectionValidationStatus.Valid,
+                ProjectionFreshness.Fresh,
                 null));
     }
 
-    private static Cli.TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
-        repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal)
+    private static TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
+        repo.Read(RoadmapArtifactPaths.TransitionJournal)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(line => JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
+            .Select(line => JsonSerializer.Deserialize<TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
             .ToArray();
 
     private static void AssertDownstreamPromptNotStarted(TempRepo repo, string prompt)
     {
-        string journal = repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal);
+        string journal = repo.Read(RoadmapArtifactPaths.TransitionJournal);
         Assert.DoesNotContain($"\"prompt\":\"{prompt}\"", journal, StringComparison.Ordinal);
     }
 

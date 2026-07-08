@@ -1,3 +1,5 @@
+using LoopRelay.Permissions.Primitives;
+
 namespace LoopRelay.Permissions.Models;
 
 public sealed record PermissionRequestDetails(

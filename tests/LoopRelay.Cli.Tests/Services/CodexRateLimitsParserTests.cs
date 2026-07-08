@@ -1,7 +1,8 @@
-using LoopRelay.Cli;
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 /// <summary>
 /// Parsing the codex app-server <c>account/rateLimits/read</c> response into a <see cref="CodexUsageStatus"/>.
@@ -29,7 +30,7 @@ public class CodexRateLimitsParserTests
             secondaryReset: Now.ToUnixTimeSeconds() + 7200,  // +2h
             secondaryUsed: 20);                              // -> 80% remaining
 
-        Cli.CodexUsageStatus? status = Cli.CodexRateLimitsParser.Parse(json, Now);
+        CodexUsageStatus? status = CodexRateLimitsParser.Parse(json, Now);
 
         Assert.NotNull(status);
         Assert.Equal(70, status!.FiveHourRemainingPercent);
@@ -43,7 +44,7 @@ public class CodexRateLimitsParserTests
     {
         string json = Envelope(Now.ToUnixTimeSeconds() + 60, 100, Now.ToUnixTimeSeconds() + 60, 100);
 
-        Cli.CodexUsageStatus? status = Cli.CodexRateLimitsParser.Parse(json, Now);
+        CodexUsageStatus? status = CodexRateLimitsParser.Parse(json, Now);
 
         Assert.Equal(0, status!.FiveHourRemainingPercent);
         Assert.Equal(0, status.WeeklyRemainingPercent);
@@ -55,7 +56,7 @@ public class CodexRateLimitsParserTests
         string json =
             """{"primary":{"usedPercent":10,"resetsAt":0},"secondary":{"usedPercent":25,"resetsAt":0}}""";
 
-        Cli.CodexUsageStatus? status = Cli.CodexRateLimitsParser.Parse(json, Now);
+        CodexUsageStatus? status = CodexRateLimitsParser.Parse(json, Now);
 
         Assert.Equal(90, status!.FiveHourRemainingPercent);
         Assert.Equal(75, status.WeeklyRemainingPercent);
@@ -70,7 +71,7 @@ public class CodexRateLimitsParserTests
             ("""{"id":2,"result":{"rateLimits":{"primary":{"usedPercent":40,"resetsAt":P_RESET}}}}""")
                 .Replace("P_RESET", (Now.ToUnixTimeSeconds() + 300).ToString());
 
-        Cli.CodexUsageStatus? status = Cli.CodexRateLimitsParser.Parse(json, Now);
+        CodexUsageStatus? status = CodexRateLimitsParser.Parse(json, Now);
 
         Assert.Equal(60, status!.FiveHourRemainingPercent);
         Assert.Equal(100, status.WeeklyRemainingPercent);
@@ -83,7 +84,7 @@ public class CodexRateLimitsParserTests
         string json =
             """{"rateLimits":{"primary":{"usedPercent":0,"resetsAt":null},"secondary":{"usedPercent":0,"resetsAt":null}}}""";
 
-        Cli.CodexUsageStatus? status = Cli.CodexRateLimitsParser.Parse(json, Now);
+        CodexUsageStatus? status = CodexRateLimitsParser.Parse(json, Now);
 
         Assert.Equal(TimeSpan.Zero, status!.FiveHourTimeUntilReset);
         Assert.Equal(TimeSpan.Zero, status.WeeklyTimeUntilReset);
@@ -97,7 +98,7 @@ public class CodexRateLimitsParserTests
     [InlineData("")]                                                // empty
     public void Parse_ReturnsNullWhenNoUsableRateLimitsArePresent(string json)
     {
-        Assert.Null(Cli.CodexRateLimitsParser.Parse(json, Now));
+        Assert.Null(CodexRateLimitsParser.Parse(json, Now));
     }
 
     [Fact]
@@ -108,7 +109,7 @@ public class CodexRateLimitsParserTests
             """{"id":2,"result":{"rateLimits":{"limitId":"codex","limitName":null,"primary":{"usedPercent":4,"windowDurationMins":300,"resetsAt":1782890631},"secondary":{"usedPercent":5,"windowDurationMins":10080,"resetsAt":1783440798},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"individualLimit":null,"planType":"pro","rateLimitReachedType":null},"rateLimitResetCredits":{"availableCount":2}}}""";
         var now = DateTimeOffset.FromUnixTimeSeconds(1782890631 - 3600); // one hour before the 5h reset
 
-        Cli.CodexUsageStatus? status = Cli.CodexRateLimitsParser.Parse(json, now);
+        CodexUsageStatus? status = CodexRateLimitsParser.Parse(json, now);
 
         Assert.NotNull(status);
         Assert.Equal(96, status!.FiveHourRemainingPercent);

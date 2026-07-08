@@ -1,8 +1,9 @@
 using LoopRelay.Agents.Models;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class RoadmapExecutionBridgeTests
 {
@@ -11,7 +12,7 @@ public sealed class RoadmapExecutionBridgeTests
     {
         using var repo = new TempRepo();
 
-        AgentSessionSpec spec = Cli.AgentSpecs.ExecutionBridge(repo.Repository);
+        AgentSessionSpec spec = AgentSpecs.ExecutionBridge(repo.Repository);
 
         Assert.Equal("workspace-write", spec.Sandbox.Identifier);
         Assert.True(spec.Sandbox.CanWriteWorkspace);
@@ -24,32 +25,32 @@ public sealed class RoadmapExecutionBridgeTests
     {
         using var repo = new TempRepo();
 
-        AgentSessionSpec spec = Cli.AgentSpecs.ExecutionBridge(
+        AgentSessionSpec spec = AgentSpecs.ExecutionBridge(
             repo.Repository,
-            Cli.RoadmapExecutionOptions.Elevated("Needs integration environment"));
+            RoadmapExecutionOptions.Elevated("Needs integration environment"));
 
         Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
         Assert.True(spec.Sandbox.CanWriteWorkspace);
         Assert.True(spec.Sandbox.CanAccessNetwork);
         Assert.True(spec.Sandbox.RequiresApproval);
-        Assert.Throws<Cli.RoadmapStepException>(() =>
-            Cli.AgentSpecs.ExecutionBridge(repo.Repository, new Cli.RoadmapExecutionOptions("danger-full-access", AllowNetwork: true)));
+        Assert.Throws<RoadmapStepException>(() =>
+            AgentSpecs.ExecutionBridge(repo.Repository, new RoadmapExecutionOptions("danger-full-access", AllowNetwork: true)));
     }
 
     [Fact]
     public async Task Approval_managed_execution_uses_held_open_session_and_records_default_trust_evidence()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.ExecutionPrompt, "execute");
+        repo.Write(RoadmapArtifactPaths.ExecutionPrompt, "execute");
         var runtime = new ScriptedAgentRuntime(ScriptedAgentRuntime.Completed("done"));
 
-        Cli.RoadmapExecutionTransportResult result = await new Cli.RoadmapExecutionBridge(
+        RoadmapExecutionTransportResult result = await new RoadmapExecutionBridge(
             runtime,
             repo.Artifacts,
             repo.Repository,
             new TestConsole()).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.ExecutionTransportStatus.Completed, result.Status);
+        Assert.Equal(ExecutionTransportStatus.Completed, result.Status);
         Assert.Equal(1, runtime.OpenSessionCalls);
         Assert.Equal(1, runtime.PersistentTurnCalls);
         Assert.Equal(1, runtime.CloseSessionCalls);
@@ -69,11 +70,11 @@ public sealed class RoadmapExecutionBridgeTests
     public async Task Explicitly_unattended_execution_preserves_one_shot_semantics()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.ExecutionPrompt, "execute");
+        repo.Write(RoadmapArtifactPaths.ExecutionPrompt, "execute");
         var runtime = new ScriptedAgentRuntime(ScriptedAgentRuntime.Completed("done"));
-        var options = new Cli.RoadmapExecutionOptions(RequiresApproval: false);
+        var options = new RoadmapExecutionOptions(RequiresApproval: false);
 
-        await new Cli.RoadmapExecutionBridge(
+        await new RoadmapExecutionBridge(
             runtime,
             repo.Artifacts,
             repo.Repository,
@@ -89,15 +90,15 @@ public sealed class RoadmapExecutionBridgeTests
     public async Task Elevated_execution_evidence_records_reason()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.ExecutionPrompt, "execute");
+        repo.Write(RoadmapArtifactPaths.ExecutionPrompt, "execute");
         var runtime = new ScriptedAgentRuntime(ScriptedAgentRuntime.Completed("done"));
 
-        Cli.RoadmapExecutionTransportResult result = await new Cli.RoadmapExecutionBridge(
+        RoadmapExecutionTransportResult result = await new RoadmapExecutionBridge(
             runtime,
             repo.Artifacts,
             repo.Repository,
             new TestConsole(),
-            Cli.RoadmapExecutionOptions.Elevated("Needs package registry access")).RunAsync(CancellationToken.None);
+            RoadmapExecutionOptions.Elevated("Needs package registry access")).RunAsync(CancellationToken.None);
 
         Assert.NotNull(result.EvidencePath);
         string evidence = repo.Read(result.EvidencePath!);

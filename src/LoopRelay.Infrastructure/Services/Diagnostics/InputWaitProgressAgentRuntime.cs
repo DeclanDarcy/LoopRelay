@@ -1,8 +1,12 @@
 using System.Text;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Services;
+using LoopRelay.Infrastructure.Abstractions.Diagnostics;
+using LoopRelay.Infrastructure.Models.Diagnostics;
 
-namespace LoopRelay.Infrastructure.Diagnostics;
+namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
 public sealed class InputWaitProgressAgentRuntime(
     IAgentRuntime inner,

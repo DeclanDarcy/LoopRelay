@@ -1,6 +1,6 @@
-using System.Text.RegularExpressions;
+using LoopRelay.Roadmap.Cli.Primitives;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record SplitEpicBundleInterpretation(
     SplitEpicBundleInterpretationStatus Status,

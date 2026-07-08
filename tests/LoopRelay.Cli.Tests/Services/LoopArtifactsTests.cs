@@ -1,18 +1,20 @@
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Cli;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Orchestration.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class LoopArtifactsTests
 {
-    private static (Cli.LoopArtifacts Art, IArtifactStore Store, Repository Repo) New()
+    private static (LoopArtifacts Art, IArtifactStore Store, Repository Repo) New()
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        return (new Cli.LoopArtifacts(store, repo), store, repo);
+        return (new LoopArtifacts(store, repo), store, repo);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);

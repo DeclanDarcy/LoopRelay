@@ -1,6 +1,4 @@
-using System.Text.Json;
-
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Abstractions;
 
 /// <summary>Resolves the on-disk codex rollout JSONL for a session's process, or null when it cannot.</summary>
 internal interface ICodexRolloutLocator

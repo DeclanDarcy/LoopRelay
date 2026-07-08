@@ -1,18 +1,21 @@
 using System.Collections.Concurrent;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 using LoopRelay.Agents.Services;
-using LoopRelay.Cli;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Infrastructure.Diagnostics;
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Infrastructure.Abstractions.Diagnostics;
+using LoopRelay.Infrastructure.Models.Diagnostics;
+using LoopRelay.Infrastructure.Services.Diagnostics;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class InputWaitProgressAgentRuntimeTests
 {
     private static AgentSessionSpec Spec() =>
-        Cli.AgentSpecs.Decision(new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" });
+        AgentSpecs.Decision(new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" });
 
     [Fact]
     public async Task OneShot_ShowsEstimatedPromptTokensWithoutEtaPercentOrCacheClaims()

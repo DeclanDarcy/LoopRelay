@@ -1,4 +1,6 @@
-namespace LoopRelay.Projections;
+using LoopRelay.Projections.Services;
+
+namespace LoopRelay.Projections.Models;
 
 public sealed record ProjectionDefinition(
     string RuntimePromptName,

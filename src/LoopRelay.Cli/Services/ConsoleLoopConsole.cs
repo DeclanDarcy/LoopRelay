@@ -1,4 +1,6 @@
-namespace LoopRelay.Cli;
+using LoopRelay.Cli.Abstractions;
+
+namespace LoopRelay.Cli.Services;
 
 internal sealed class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = null)
-    : Infrastructure.Console.ConsoleLoopConsole(output, error), ILoopConsole;
+    : Infrastructure.Services.Console.ConsoleLoopConsole(output, error), ILoopConsole;

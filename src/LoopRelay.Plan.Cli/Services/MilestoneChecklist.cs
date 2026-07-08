@@ -1,4 +1,4 @@
-namespace LoopRelay.Plan.Cli;
+namespace LoopRelay.Plan.Cli.Services;
 
 /// <summary>
 /// The strict checkbox-counting rule shared by the main loop's epic-complete gate

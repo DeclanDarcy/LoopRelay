@@ -1,7 +1,9 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Core.Repositories;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
+using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 

@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record ExecutionDispositionValidationResult(
     bool IsValid,

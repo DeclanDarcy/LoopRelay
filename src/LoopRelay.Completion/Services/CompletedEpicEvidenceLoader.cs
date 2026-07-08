@@ -1,6 +1,7 @@
 using System.Text;
+using LoopRelay.Completion.Models;
 
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Services;
 
 public sealed class CompletedEpicEvidenceLoader(CompletionArtifacts artifacts)
 {

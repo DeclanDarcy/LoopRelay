@@ -1,4 +1,6 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Primitives;
+
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed partial record DecisionLedgerEntryDto(
     string DecisionId,

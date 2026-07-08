@@ -1,7 +1,8 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using LoopRelay.Roadmap.Cli.Models;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed partial class ProjectContextLoader(RoadmapArtifacts artifacts)
 {

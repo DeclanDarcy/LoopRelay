@@ -1,12 +1,12 @@
-using LoopRelay.Core.Repositories;
-using LoopRelay.Cli;
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Models.Repositories;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class WorkingTreeChangeDetectorTests
 {
-    private static Cli.WorkingTreeChangeDetector New(FakeProcessRunner fake) =>
+    private static WorkingTreeChangeDetector New(FakeProcessRunner fake) =>
         new(fake, new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" });
 
     /// <summary>Scripts a runner whose `git status` always returns the given porcelain; everything else succeeds.</summary>

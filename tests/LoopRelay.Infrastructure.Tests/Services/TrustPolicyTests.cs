@@ -1,7 +1,8 @@
 using LoopRelay.Agents.Models;
-using LoopRelay.Infrastructure.Trust;
+using LoopRelay.Infrastructure.Models.Trust;
+using LoopRelay.Infrastructure.Primitives.Trust;
 
-namespace LoopRelay.Infrastructure.Tests;
+namespace LoopRelay.Infrastructure.Tests.Services;
 
 public sealed class TrustPolicyTests
 {

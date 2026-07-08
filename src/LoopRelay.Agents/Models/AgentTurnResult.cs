@@ -1,3 +1,5 @@
+using LoopRelay.Agents.Primitives;
+
 namespace LoopRelay.Agents.Models;
 
 /// <summary>

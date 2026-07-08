@@ -1,4 +1,4 @@
-namespace LoopRelay.Infrastructure.Console;
+namespace LoopRelay.Infrastructure.Abstractions.Console;
 
 /// <summary>Sink for structured host output and streamed agent deltas.</summary>
 public interface ILoopConsole

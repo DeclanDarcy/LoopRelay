@@ -1,9 +1,8 @@
-using LoopRelay.Agents.Models;
-using LoopRelay.Roadmap.Cli;
-using ExecutionCompatibilityMaterializer = LoopRelay.Roadmap.Cli.ExecutionCompatibilityMaterializer;
-using RoadmapStateStore = LoopRelay.Roadmap.Cli.RoadmapStateStore;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class RoadmapStateMachineUnblockTests
 {
@@ -11,31 +10,31 @@ public sealed class RoadmapStateMachineUnblockTests
     public async Task Status_reports_blocked_state_without_mutation()
     {
         using var repo = new TempRepo();
-        await SaveStateAsync(repo, BlockedState("ResolveBlocker", Cli.RoadmapState.EvidenceBlocked, ".agents/evidence/blockers/preflight.0001.md"));
-        string before = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
+        await SaveStateAsync(repo, BlockedState("ResolveBlocker", RoadmapState.EvidenceBlocked, ".agents/evidence/blockers/preflight.0001.md"));
+        string before = repo.Read(RoadmapArtifactPaths.StateJson);
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).ExecuteAsync(
-            Cli.RoadmapCliCommand.Status,
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).ExecuteAsync(
+            RoadmapCliCommand.Status,
             CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Assert.Equal(before, repo.Read(Cli.RoadmapArtifactPaths.StateJson));
-        Assert.Empty(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md"));
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        Assert.Equal(before, repo.Read(RoadmapArtifactPaths.StateJson));
+        Assert.Empty(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md"));
     }
 
     [Fact]
     public async Task Run_reports_blocked_state_without_mutation()
     {
         using var repo = new TempRepo();
-        await SaveStateAsync(repo, BlockedState("ResolveBlocker", Cli.RoadmapState.EvidenceBlocked, ".agents/evidence/blockers/preflight.0001.md"));
-        string before = repo.Read(Cli.RoadmapArtifactPaths.StateJson);
+        await SaveStateAsync(repo, BlockedState("ResolveBlocker", RoadmapState.EvidenceBlocked, ".agents/evidence/blockers/preflight.0001.md"));
+        string before = repo.Read(RoadmapArtifactPaths.StateJson);
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).ExecuteAsync(
-            Cli.RoadmapCliCommand.Run,
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).ExecuteAsync(
+            RoadmapCliCommand.Run,
             CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Assert.Equal(before, repo.Read(Cli.RoadmapArtifactPaths.StateJson));
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        Assert.Equal(before, repo.Read(RoadmapArtifactPaths.StateJson));
     }
 
     [Fact]
@@ -46,24 +45,24 @@ public sealed class RoadmapStateMachineUnblockTests
         repo.Write(blockerPath, "original preflight blocker");
         await SaveStateAsync(repo, BlockedState(
             "ResolveBlocker",
-            Cli.RoadmapState.EvidenceBlocked,
+            RoadmapState.EvidenceBlocked,
             blockerPath,
             prompt: "Preflight",
-            blockers: [new Cli.BlockerRow("Original Project Context blocker", "Repair Project Context")]));
+            blockers: [new BlockerRow("Original Project Context blocker", "Repair Project Context")]));
 
-        Cli.RoadmapStateMachine machine = StateMachineFactory.Create(repo, new ScriptedAgentRuntime());
-        Cli.RoadmapOutcome first = await machine.UnblockAsync(CancellationToken.None);
-        Cli.RoadmapOutcome second = await machine.UnblockAsync(CancellationToken.None);
+        RoadmapStateMachine machine = StateMachineFactory.Create(repo, new ScriptedAgentRuntime());
+        RoadmapOutcome first = await machine.UnblockAsync(CancellationToken.None);
+        RoadmapOutcome second = await machine.UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, first);
-        Assert.Equal(Cli.RoadmapOutcome.Paused, second);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Paused, first);
+        Assert.Equal(RoadmapOutcome.Paused, second);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("Preflight", state.LastTransition.Prompt);
         Assert.Equal("ResolveBlocker", state.TransitionIntent.Intent);
         Assert.Contains(state.Blockers, blocker => blocker.Blocker == "Original Project Context blocker");
         Assert.Single(state.Blockers, blocker => blocker.Blocker.StartsWith("Unblock Review Failed:", StringComparison.Ordinal));
-        IReadOnlyList<string> reviews = await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md");
+        IReadOnlyList<string> reviews = await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md");
         Assert.Equal(2, reviews.Count);
         Assert.Contains("Original Project Context blocker", repo.Read(reviews.Order(StringComparer.Ordinal).First()), StringComparison.Ordinal);
         Assert.Equal("original preflight blocker", repo.Read(blockerPath));
@@ -79,20 +78,20 @@ public sealed class RoadmapStateMachineUnblockTests
         repo.Write(blockerPath, "original preflight blocker");
         await SaveStateAsync(repo, BlockedState(
             "ResolveBlocker",
-            Cli.RoadmapState.EvidenceBlocked,
+            RoadmapState.EvidenceBlocked,
             blockerPath,
             prompt: "Preflight",
-            blockers: [new Cli.BlockerRow("Original Project Context blocker", "Repair Project Context")]));
+            blockers: [new BlockerRow("Original Project Context blocker", "Repair Project Context")]));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.CoreReady, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.CoreReady, state.CurrentState);
         Assert.Equal("UnblockReview", state.LastTransition.Prompt);
         Assert.Equal("Project Context blocker resolved.", state.LastTransition.Decision);
         Assert.Empty(state.Blockers);
-        string review = repo.Read(Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md")));
+        string review = repo.Read(Assert.Single(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md")));
         Assert.Contains("| Result | Recovered |", review, StringComparison.Ordinal);
         Assert.Contains("ProjectContext", review, StringComparison.Ordinal);
         Assert.Contains("SHA-256", review, StringComparison.Ordinal);
@@ -107,24 +106,24 @@ public sealed class RoadmapStateMachineUnblockTests
         repo.Write(evidencePath, evidence);
         await SaveStateAsync(repo, BlockedState(
             "ResolveMalformedExecutionOutput",
-            Cli.RoadmapState.EvidenceBlocked,
+            RoadmapState.EvidenceBlocked,
             evidencePath,
-            from: Cli.RoadmapState.ExecutionLoop,
+            from: RoadmapState.ExecutionLoop,
             prompt: "ExecutionOutcomeInterpretation",
             decision: "Malformed Execution Output"));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.ExecutionLoop, state.CurrentState);
-        Assert.Equal(Cli.TransitionStatus.Paused, state.LastTransition.Status);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.ExecutionLoop, state.CurrentState);
+        Assert.Equal(TransitionStatus.Paused, state.LastTransition.Status);
         Assert.Equal("Continue Required", state.LastTransition.Decision);
         Assert.Equal("ContinueExecution", state.TransitionIntent.Intent);
         Assert.Contains(evidencePath, state.TransitionIntent.EvidencePaths);
         Assert.Empty(state.Blockers);
         Assert.Equal(evidence, repo.Read(evidencePath));
-        Assert.Contains("UnblockReviewCompleted", repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
+        Assert.Contains("UnblockReviewCompleted", repo.Read(RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -148,24 +147,24 @@ public sealed class RoadmapStateMachineUnblockTests
         repo.Write(evidencePath, evidence);
         await SaveStateAsync(repo, BlockedState(
             "ResolveMalformedExecutionOutput",
-            Cli.RoadmapState.EvidenceBlocked,
+            RoadmapState.EvidenceBlocked,
             evidencePath,
-            from: Cli.RoadmapState.ExecutionLoop,
+            from: RoadmapState.ExecutionLoop,
             prompt: "ExecutionOutcomeInterpretation",
             decision: "Malformed Execution Output",
-            blockers: [new Cli.BlockerRow("Original malformed output", "Repair execution evidence")]));
+            blockers: [new BlockerRow("Original malformed output", "Repair execution evidence")]));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("ExecutionOutcomeInterpretation", state.LastTransition.Prompt);
         Assert.Equal("ResolveMalformedExecutionOutput", state.TransitionIntent.Intent);
         Assert.Contains(state.Blockers, blocker => blocker.Blocker == "Original malformed output");
         Assert.Contains(state.Blockers, blocker => blocker.Blocker.StartsWith("Unblock Review Failed:", StringComparison.Ordinal));
         Assert.Equal(evidence, repo.Read(evidencePath));
-        string review = repo.Read(Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md")));
+        string review = repo.Read(Assert.Single(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md")));
         Assert.Contains("Original malformed output", review, StringComparison.Ordinal);
     }
 
@@ -177,17 +176,17 @@ public sealed class RoadmapStateMachineUnblockTests
         repo.Write(evidencePath, ExecutionDisposition("Continue Required", "ContinueExecution"));
         await SaveStateAsync(repo, BlockedState(
             "ResolveMalformedExecutionOutput",
-            Cli.RoadmapState.EvidenceBlocked,
+            RoadmapState.EvidenceBlocked,
             evidencePath,
             output: ".agents/evidence/execution/other.md",
-            from: Cli.RoadmapState.ExecutionLoop,
+            from: RoadmapState.ExecutionLoop,
             prompt: "ExecutionOutcomeInterpretation"));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("ResolveMalformedExecutionOutput", state.TransitionIntent.Intent);
         Assert.Contains("does not match", Assert.Single(state.Blockers, blocker => blocker.Blocker.StartsWith("Unblock Review Failed:", StringComparison.Ordinal)).Blocker, StringComparison.Ordinal);
     }
@@ -198,29 +197,29 @@ public sealed class RoadmapStateMachineUnblockTests
         using var repo = SeedProject();
         const string evaluationPath = ".agents/evidence/evaluations/epic-completion-and-drift.0001.md";
         const string blockerPath = ".agents/evidence/blockers/invalid-completion-certification.0001.md";
-        repo.Write(Cli.RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"], ProjectionSamples.Valid("EvaluateEpicCompletionAndDrift"));
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"], ProjectionSamples.Valid("EvaluateEpicCompletionAndDrift"));
         repo.Write(evaluationPath, CompletionEvaluation("Partially Complete", "None", "Continue Epic"));
         repo.Write(blockerPath, "original invalid certification blocker");
         await SaveStateAsync(repo, BlockedState(
             "ResolveInvalidCompletionCertification",
-            Cli.RoadmapState.EvidenceBlocked,
+            RoadmapState.EvidenceBlocked,
             evaluationPath,
             output: $"{evaluationPath}, {blockerPath}",
-            from: Cli.RoadmapState.CompletionEvaluationAndContextUpdate,
+            from: RoadmapState.CompletionEvaluationAndContextUpdate,
             prompt: "CompletionCertificationRouting",
-            projection: Cli.RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"],
+            projection: RoadmapArtifactPaths.ProjectionPaths["EvaluateEpicCompletionAndDrift"],
             decision: "Invalid Completion Certification",
             extraEvidencePaths: [blockerPath]));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.ExecutionLoop, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.ExecutionLoop, state.CurrentState);
         Assert.Equal("Continue Epic", state.LastTransition.Decision);
         Assert.Equal("ContinueExecution", state.TransitionIntent.Intent);
         Assert.Contains(evaluationPath, state.TransitionIntent.EvidencePaths);
-        Assert.Contains(state.TransitionIntent.EvidencePaths, path => path.StartsWith(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, StringComparison.Ordinal));
+        Assert.Contains(state.TransitionIntent.EvidencePaths, path => path.StartsWith(RoadmapArtifactPaths.BlockerEvidenceDirectory, StringComparison.Ordinal));
         Assert.Empty(state.Blockers);
     }
 
@@ -234,20 +233,20 @@ public sealed class RoadmapStateMachineUnblockTests
         repo.Write(blockerPath, "original invalid certification blocker");
         await SaveStateAsync(repo, BlockedState(
             "ResolveInvalidCompletionCertification",
-            Cli.RoadmapState.EvidenceBlocked,
+            RoadmapState.EvidenceBlocked,
             evaluationPath,
             output: $"{evaluationPath}, {blockerPath}",
-            from: Cli.RoadmapState.CompletionEvaluationAndContextUpdate,
+            from: RoadmapState.CompletionEvaluationAndContextUpdate,
             prompt: "CompletionCertificationRouting",
             decision: "Invalid Completion Certification",
-            blockers: [new Cli.BlockerRow("Original certification contradiction", "Repair certification")],
+            blockers: [new BlockerRow("Original certification contradiction", "Repair certification")],
             extraEvidencePaths: [blockerPath]));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal("ResolveInvalidCompletionCertification", state.TransitionIntent.Intent);
         Assert.Contains(state.Blockers, blocker => blocker.Blocker == "Original certification contradiction");
         Assert.Contains(state.Blockers, blocker => blocker.Blocker.Contains("does not allow completion status `Not Complete`", StringComparison.Ordinal));
@@ -263,11 +262,11 @@ public sealed class RoadmapStateMachineUnblockTests
         repo.Write(evidencePath, "runtime failure evidence");
         await SaveStateAsync(repo, FailedRuntimeState(evidencePath));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.Failed, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.Failed, state.CurrentState);
         Assert.Equal("ExecutionLoop", state.LastTransition.Prompt);
         Assert.Equal("RepairExecutionRuntimeFailure", state.TransitionIntent.Intent);
         Assert.Contains(state.Blockers, blocker => blocker.Blocker.StartsWith("Unblock Review Failed:", StringComparison.Ordinal));
@@ -281,11 +280,11 @@ public sealed class RoadmapStateMachineUnblockTests
         repo.Write(evidencePath, "runtime failure evidence");
         await SaveStateAsync(repo, FailedRuntimeState(evidencePath));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.Failed, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.Failed, state.CurrentState);
         Assert.Equal("ExecutionLoop", state.LastTransition.Prompt);
         Assert.Equal("RepairExecutionRuntimeFailure", state.TransitionIntent.Intent);
         Assert.Contains(state.Blockers, blocker => blocker.Blocker.StartsWith("Unblock Review Failed:", StringComparison.Ordinal));
@@ -296,16 +295,16 @@ public sealed class RoadmapStateMachineUnblockTests
     {
         using var repo = SeedProject();
         await SeedExecutionReadyAsync(repo);
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic("Changed Epic", "EPIC-CHANGED"));
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic("Changed Epic", "EPIC-CHANGED"));
         const string evidencePath = ".agents/evidence/execution/execution-turn.0001.md";
         repo.Write(evidencePath, "runtime failure evidence");
         await SaveStateAsync(repo, FailedRuntimeState(evidencePath));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.Failed, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.Failed, state.CurrentState);
         Assert.Contains(state.Blockers, blocker => blocker.Blocker.Contains("no longer advanced by Roadmap CLI", StringComparison.Ordinal));
     }
 
@@ -321,19 +320,19 @@ public sealed class RoadmapStateMachineUnblockTests
         repo.Write(evidencePath, "unsupported blocker evidence");
         await SaveStateAsync(repo, BlockedState(
             intent,
-            Cli.RoadmapState.EvidenceBlocked,
+            RoadmapState.EvidenceBlocked,
             evidencePath,
-            blockers: [new Cli.BlockerRow("Original unsupported blocker", "Manual repair")]));
+            blockers: [new BlockerRow("Original unsupported blocker", "Manual repair")]));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Cli.RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new Cli.Services.RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
         Assert.Equal(intent, state.TransitionIntent.Intent);
         Assert.Contains(state.Blockers, blocker => blocker.Blocker == "Original unsupported blocker");
         Assert.Contains(state.Blockers, blocker => blocker.Blocker.StartsWith("Unblock Unsupported:", StringComparison.Ordinal));
-        string review = repo.Read(Assert.Single(await repo.Artifacts.ListAsync(Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md")));
+        string review = repo.Read(Assert.Single(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md")));
         Assert.Contains("Unblock Unsupported", review, StringComparison.Ordinal);
         Assert.Contains("support", review, StringComparison.OrdinalIgnoreCase);
     }
@@ -348,8 +347,8 @@ public sealed class RoadmapStateMachineUnblockTests
 
     private static async Task SeedExecutionReadyAsync(TempRepo repo)
     {
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic("Runtime Recovery Epic", "EPIC-RUNTIME"));
-        await new Cli.ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(Cli.RoadmapArtifactPaths.ActiveEpic, Cli.ArtifactLifecycleState.Ready);
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic("Runtime Recovery Epic", "EPIC-RUNTIME"));
+        await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready);
 
         const string specPath = ".agents/specs/runtime-recovery.md";
         repo.Write(specPath, """
@@ -363,64 +362,64 @@ public sealed class RoadmapStateMachineUnblockTests
 
             - [ ] Runtime recovery is ready.
             """);
-        await new Cli.ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(specPath, Cli.ArtifactLifecycleState.Ready);
+        await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(specPath, ArtifactLifecycleState.Ready);
 
-        Cli.ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, specPath);
+        ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, specPath);
         await ExecutionPreparationTestSupport.SeedOperationalContextAsync(provenance, repo, "# Operational Context");
         await ExecutionPreparationTestSupport.SeedExecutionPromptAsync(provenance, repo, "# Execution Prompt");
-        await new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
+        await new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
     }
 
-    private static Cli.RoadmapStateDocument BlockedState(
+    private static RoadmapStateDocument BlockedState(
         string intent,
-        Cli.RoadmapState state,
+        RoadmapState state,
         string evidencePath,
         string? output = null,
-        Cli.RoadmapState? from = null,
+        RoadmapState? from = null,
         string prompt = "BlockedTransition",
         string projection = "None",
         string decision = "Blocked",
-        IReadOnlyList<Cli.BlockerRow>? blockers = null,
+        IReadOnlyList<BlockerRow>? blockers = null,
         IReadOnlyList<string>? extraEvidencePaths = null)
     {
         IReadOnlyList<string> evidencePaths = extraEvidencePaths is null
             ? [evidencePath]
             : [evidencePath, ..extraEvidencePaths];
-        return new Cli.RoadmapStateDocument(
+        return new RoadmapStateDocument(
             state,
             [],
-            new Cli.RoadmapTransitionSummary(
-                from ?? Cli.RoadmapState.CoreReady,
+            new RoadmapTransitionSummary(
+                from ?? RoadmapState.CoreReady,
                 state,
                 prompt,
                 projection,
                 output ?? evidencePath,
                 decision,
-                state == Cli.RoadmapState.Failed ? Cli.TransitionStatus.Failed : Cli.TransitionStatus.Paused,
+                state == RoadmapState.Failed ? TransitionStatus.Failed : TransitionStatus.Paused,
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow),
-            blockers ?? [new Cli.BlockerRow("Original blocker", "Repair original blocker")],
+            blockers ?? [new BlockerRow("Original blocker", "Repair original blocker")],
             "None",
             0,
             0,
-            new Cli.ProjectionManifestCounts(0, 0, 0),
-            new Cli.RoadmapTransitionIntent(intent, state, evidencePaths),
+            new ProjectionManifestCounts(0, 0, 0),
+            new RoadmapTransitionIntent(intent, state, evidencePaths),
             ["unblock"],
             []);
     }
 
-    private static Cli.RoadmapStateDocument FailedRuntimeState(string evidencePath) =>
+    private static RoadmapStateDocument FailedRuntimeState(string evidencePath) =>
         BlockedState(
             "RepairExecutionRuntimeFailure",
-            Cli.RoadmapState.Failed,
+            RoadmapState.Failed,
             evidencePath,
-            from: Cli.RoadmapState.ExecutionLoop,
+            from: RoadmapState.ExecutionLoop,
             prompt: "ExecutionLoop",
             decision: "Runtime Failure",
-            blockers: [new Cli.BlockerRow("Original runtime failure", "Repair runtime failure")]);
+            blockers: [new BlockerRow("Original runtime failure", "Repair runtime failure")]);
 
-    private static Task SaveStateAsync(TempRepo repo, Cli.RoadmapStateDocument state) =>
-        new RoadmapStateStore(repo.Artifacts).SaveAsync(state);
+    private static Task SaveStateAsync(TempRepo repo, RoadmapStateDocument state) =>
+        new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(state);
 
     private static string ExecutionDisposition(string status, string nextStep) => $$"""
         # Execution Report

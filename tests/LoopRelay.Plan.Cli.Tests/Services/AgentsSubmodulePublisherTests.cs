@@ -1,19 +1,20 @@
-using LoopRelay.Core.Repositories;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Plan.Cli.Models;
+using LoopRelay.Plan.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 public class AgentsSubmodulePublisherTests
 {
-    private const string Message = Cli.AgentsSubmodulePublisher.WritePlanMessage;
+    private const string Message = AgentsSubmodulePublisher.WritePlanMessage;
 
     private static readonly Repository Repo = new() { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
 
     private static bool IsSubmodule(string workingDirectory) =>
         workingDirectory.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);
 
-    private static Cli.AgentsSubmodulePublisher New(FakeProcessRunner fake) =>
+    private static AgentsSubmodulePublisher New(FakeProcessRunner fake) =>
         new(fake, Repo, new RecordingLoopConsole());
 
     /// <summary>Scripts the submodule git: a status porcelain and a branch name; everything else succeeds.</summary>
@@ -100,10 +101,10 @@ public class AgentsSubmodulePublisherTests
     {
         var fake = Runner(status: " M details.md");
 
-        await New(fake).PublishAgentsAsync(Cli.AgentsSubmodulePublisher.ExtractDetailsMessage, CancellationToken.None);
+        await New(fake).PublishAgentsAsync(AgentsSubmodulePublisher.ExtractDetailsMessage, CancellationToken.None);
 
         var commit = fake.Calls.Single(c => c.Args[0] == "commit");
-        Assert.Equal(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.ExtractDetailsMessage }, commit.Args);
+        Assert.Equal(new[] { "commit", "-m", AgentsSubmodulePublisher.ExtractDetailsMessage }, commit.Args);
     }
 
     [Fact]
@@ -112,7 +113,7 @@ public class AgentsSubmodulePublisherTests
         // Dirty tree but detached HEAD (blank `branch --show-current`) cannot be pushed.
         var fake = Runner(status: " M plan.md", branch: string.Empty);
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(
+        await Assert.ThrowsAsync<PlanStepException>(
             () => New(fake).PublishAgentsAsync(Message, CancellationToken.None));
 
         Assert.DoesNotContain(fake.Calls, c => c.Args[0] is "commit" or "push");
@@ -132,7 +133,7 @@ public class AgentsSubmodulePublisherTests
             }
         };
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(
+        await Assert.ThrowsAsync<PlanStepException>(
             () => New(fake).PublishAgentsAsync(Message, CancellationToken.None));
     }
 
@@ -208,7 +209,7 @@ public class AgentsSubmodulePublisherTests
             }
         };
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(
+        await Assert.ThrowsAsync<PlanStepException>(
             () => New(fake).PublishAgentsAsync(Message, CancellationToken.None));
 
         Assert.Equal(2, fake.Calls.Count(c => c.Args.SequenceEqual(new[] { "push" })));
@@ -228,7 +229,7 @@ public class AgentsSubmodulePublisherTests
             }
         };
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(
+        await Assert.ThrowsAsync<PlanStepException>(
             () => New(fake).PublishAgentsAsync(Message, CancellationToken.None));
     }
 
@@ -242,7 +243,7 @@ public class AgentsSubmodulePublisherTests
                 : FakeProcessRunner.Ok()
         };
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(
+        await Assert.ThrowsAsync<PlanStepException>(
             () => New(fake).PublishAgentsAsync(Message, CancellationToken.None));
     }
 
@@ -259,7 +260,7 @@ public class AgentsSubmodulePublisherTests
         Assert.All(fake.Calls, c => Assert.Equal("/repo", c.WorkingDirectory.Replace('\\', '/')));
         Assert.All(fake.Calls, c => Assert.Equal("git", c.FileName));
         Assert.Equal(new[] { "add", "--", ".agents" }, fake.Calls[0].Args);
-        Assert.Equal(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.GitlinkPointerMessage }, fake.Calls[1].Args);
+        Assert.Equal(new[] { "commit", "-m", AgentsSubmodulePublisher.GitlinkPointerMessage }, fake.Calls[1].Args);
         Assert.Equal(new[] { "push" }, fake.Calls[2].Args);
     }
 
@@ -273,7 +274,7 @@ public class AgentsSubmodulePublisherTests
                 : FakeProcessRunner.Ok()
         };
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(
+        await Assert.ThrowsAsync<PlanStepException>(
             () => New(fake).RecordParentGitlinkAsync(CancellationToken.None));
     }
 
@@ -320,7 +321,7 @@ public class AgentsSubmodulePublisherTests
             }
         };
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(
+        await Assert.ThrowsAsync<PlanStepException>(
             () => New(fake).RecordParentGitlinkAsync(CancellationToken.None));
     }
 }

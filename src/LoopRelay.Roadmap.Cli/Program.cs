@@ -1,6 +1,9 @@
 using System.Text;
-using LoopRelay.Core.Repositories;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
 try
 {

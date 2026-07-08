@@ -1,18 +1,6 @@
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Prompts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
-using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Orchestration.Models;
-using LoopRelay.Orchestration.Models.NonImplementationReview;
-using LoopRelay.Orchestration.Services;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Projections;
-using LoopRelay.Agents.Models;
-using LoopRelay.Cli;
-using Xunit;
+using LoopRelay.Core.Abstractions.Artifacts;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 
 /// <summary>Forwards to an inner store but throws when a write targets the .agents/deltas archive — models a

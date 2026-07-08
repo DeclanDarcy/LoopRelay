@@ -1,8 +1,9 @@
 using System.Collections.Frozen;
 using System.Text.Json;
 using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Configuration;
 
-namespace LoopRelay.Permissions.Configuration;
+namespace LoopRelay.Permissions.Services.Configuration;
 
 public static class CliSettingsLoader
 {

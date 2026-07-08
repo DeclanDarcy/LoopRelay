@@ -1,13 +1,7 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Completion;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Roadmap.Cli;
-using ProjectContextLoader = LoopRelay.Roadmap.Cli.ProjectContextLoader;
-using RoadmapArtifacts = LoopRelay.Roadmap.Cli.RoadmapArtifacts;
+using LoopRelay.Completion.Abstractions;
+using LoopRelay.Completion.Models;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 internal sealed class FakeCompletedEpicArchiveService : ICompletedEpicArchiveService
 {

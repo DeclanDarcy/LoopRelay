@@ -1,8 +1,10 @@
 using LoopRelay.Agents.Models;
-using LoopRelay.Cli;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class UsageLimitDetectorTests
 {
@@ -11,13 +13,13 @@ public class UsageLimitDetectorTests
         "ERROR: You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase " +
         "more credits or try again at Jul 7th, 2026 9:13 AM.";
 
-    private static (Cli.UsageLimitDetector Detector, FakeClock Clock, FakeUsageDelay Delay, RecordingLoopConsole Con) New(
+    private static (UsageLimitDetector Detector, FakeClock Clock, FakeUsageDelay Delay, RecordingLoopConsole Con) New(
         TimeZoneInfo? timeZone = null)
     {
         var clock = new FakeClock(); // 2026-07-01T00:00:00Z
         var delay = new FakeUsageDelay();
         var con = new RecordingLoopConsole();
-        return (new Cli.UsageLimitDetector(clock, delay, con, timeZone ?? TimeZoneInfo.Utc), clock, delay, con);
+        return (new UsageLimitDetector(clock, delay, con, timeZone ?? TimeZoneInfo.Utc), clock, delay, con);
     }
 
     private static AgentTurnResult Failed(string? diagnostics) =>
@@ -52,7 +54,7 @@ public class UsageLimitDetectorTests
     {
         var t = New();
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(RealCodexError));
+        UsageLimitHit? hit = t.Detector.Detect(Failed(RealCodexError));
 
         // Clock is 2026-07-01T00:00Z and the injected zone is UTC, so "Jul 7th, 2026 9:13 AM" is 6d 9h 13m out.
         Assert.NotNull(hit);
@@ -68,7 +70,7 @@ public class UsageLimitDetectorTests
         var plusTwo = TimeZoneInfo.CreateCustomTimeZone("+02", TimeSpan.FromHours(2), "+02", "+02");
         var t = New(plusTwo);
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(RealCodexError));
+        UsageLimitHit? hit = t.Detector.Detect(Failed(RealCodexError));
 
         Assert.Equal(new DateTimeOffset(2026, 7, 7, 9, 13, 0, TimeSpan.FromHours(2)), hit!.RetryAt);
         Assert.Equal(new TimeSpan(6, 7, 13, 0), hit.Wait);
@@ -81,7 +83,7 @@ public class UsageLimitDetectorTests
         // sentence, no "ERROR:" prefix.
         var t = New();
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(
+        UsageLimitHit? hit = t.Detector.Detect(Failed(
             "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase " +
             "more credits or try again at Jul 7th, 2026 9:13 AM."));
 
@@ -96,7 +98,7 @@ public class UsageLimitDetectorTests
         // detector must match within surrounding noise, not require an exact-line fixture.
         var t = New();
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(
+        UsageLimitHit? hit = t.Detector.Detect(Failed(
             $"Reading additional input from stdin...\n{RealCodexError}\n{RealCodexError}\n"));
 
         Assert.NotNull(hit);
@@ -113,7 +115,7 @@ public class UsageLimitDetectorTests
     {
         var t = New();
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed($"You've hit your usage limit. Try again at {when}."));
+        UsageLimitHit? hit = t.Detector.Detect(Failed($"You've hit your usage limit. Try again at {when}."));
 
         Assert.Equal(new DateTimeOffset(2026, 7, expectedDay, 9, 13, 0, TimeSpan.Zero), hit!.RetryAt);
     }
@@ -124,11 +126,11 @@ public class UsageLimitDetectorTests
         var t = New();
         t.Clock.UtcNow = new DateTimeOffset(2026, 7, 7, 9, 14, 0, TimeSpan.Zero); // 1 minute past 9:13 AM
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(RealCodexError));
+        UsageLimitHit? hit = t.Detector.Detect(Failed(RealCodexError));
 
         // A just-elapsed retry time (reset-boundary race, small clock skew) must not produce a zero or
         // negative wait — that would tight-loop the retries straight through the cap.
-        Assert.Equal(Cli.UsageLimitDetector.MinimumWait, hit!.Wait);
+        Assert.Equal(UsageLimitDetector.MinimumWait, hit!.Wait);
     }
 
     [Fact]
@@ -137,13 +139,13 @@ public class UsageLimitDetectorTests
         var t = New();
         t.Clock.UtcNow = new DateTimeOffset(2026, 7, 7, 10, 0, 0, TimeSpan.Zero); // 47 minutes past 9:13 AM
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(RealCodexError));
+        UsageLimitHit? hit = t.Detector.Detect(Failed(RealCodexError));
 
         // A long-past parse means the advertised time is stale or mis-anchored (wrong zone is whole hours
         // off) — trust it and the minimum floor would burn every retry in minutes; the fallback wait at
         // least keeps riding out a short outage.
         Assert.Null(hit!.RetryAt);
-        Assert.Equal(Cli.UsageLimitDetector.FallbackWait, hit.Wait);
+        Assert.Equal(UsageLimitDetector.FallbackWait, hit.Wait);
     }
 
     [Fact]
@@ -155,7 +157,7 @@ public class UsageLimitDetectorTests
         var t = New();
         t.Clock.UtcNow = new DateTimeOffset(2026, 7, 1, 23, 0, 0, TimeSpan.Zero);
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed("You've hit your usage limit. Try again at 3:47 AM."));
+        UsageLimitHit? hit = t.Detector.Detect(Failed("You've hit your usage limit. Try again at 3:47 AM."));
 
         Assert.Equal(new DateTimeOffset(2026, 7, 2, 3, 47, 0, TimeSpan.Zero), hit!.RetryAt);
         Assert.Equal(new TimeSpan(4, 47, 0), hit.Wait);
@@ -167,7 +169,7 @@ public class UsageLimitDetectorTests
         var t = New();
         t.Clock.UtcNow = new DateTimeOffset(2026, 7, 1, 1, 0, 0, TimeSpan.Zero);
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed("You've hit your usage limit. Try again at 3:47 AM."));
+        UsageLimitHit? hit = t.Detector.Detect(Failed("You've hit your usage limit. Try again at 3:47 AM."));
 
         Assert.Equal(new DateTimeOffset(2026, 7, 1, 3, 47, 0, TimeSpan.Zero), hit!.RetryAt);
     }
@@ -178,7 +180,7 @@ public class UsageLimitDetectorTests
         // "9:13 a.m." would otherwise be cut at its first period by the sentence-terminated capture.
         var t = New();
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(
+        UsageLimitHit? hit = t.Detector.Detect(Failed(
             "You've hit your usage limit. Try again at Jul 7th, 2026 9:13 a.m."));
 
         Assert.Equal(new DateTimeOffset(2026, 7, 7, 9, 13, 0, TimeSpan.Zero), hit!.RetryAt);
@@ -193,7 +195,7 @@ public class UsageLimitDetectorTests
         // remaining retries in minutes.
         var t = New();
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(
+        UsageLimitHit? hit = t.Detector.Detect(Failed(
             "You've hit your usage limit. Try again at Jul 5th, 2026 9:00 AM.\n" +
             "You've hit your usage limit. Try again at Jul 7th, 2026 9:13 AM.\n"));
 
@@ -205,12 +207,12 @@ public class UsageLimitDetectorTests
     {
         var t = New();
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(
+        UsageLimitHit? hit = t.Detector.Detect(Failed(
             "You've hit your usage limit. Try again at half past never."));
 
         Assert.NotNull(hit);
         Assert.Null(hit!.RetryAt);
-        Assert.Equal(Cli.UsageLimitDetector.FallbackWait, hit.Wait);
+        Assert.Equal(UsageLimitDetector.FallbackWait, hit.Wait);
     }
 
     [Fact]
@@ -218,12 +220,12 @@ public class UsageLimitDetectorTests
     {
         var t = New();
 
-        Cli.UsageLimitHit? hit = t.Detector.Detect(Failed(
+        UsageLimitHit? hit = t.Detector.Detect(Failed(
             "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits."));
 
         Assert.NotNull(hit);
         Assert.Null(hit!.RetryAt);
-        Assert.Equal(Cli.UsageLimitDetector.FallbackWait, hit.Wait);
+        Assert.Equal(UsageLimitDetector.FallbackWait, hit.Wait);
     }
 
     [Fact]
@@ -242,7 +244,7 @@ public class UsageLimitDetectorTests
     public async Task WaitOut_WarnsHowLongAndDelaysExactlyTheHitsWait()
     {
         var t = New();
-        var hit = new Cli.UsageLimitHit(TimeSpan.FromMinutes(90), new DateTimeOffset(2026, 7, 1, 1, 30, 0, TimeSpan.Zero));
+        var hit = new UsageLimitHit(TimeSpan.FromMinutes(90), new DateTimeOffset(2026, 7, 1, 1, 30, 0, TimeSpan.Zero));
 
         await t.Detector.WaitOutAsync(hit, CancellationToken.None);
 
@@ -254,7 +256,7 @@ public class UsageLimitDetectorTests
     public async Task WaitOut_RendersMultiDayWaitsWithADaysComponent()
     {
         var t = New();
-        var hit = new Cli.UsageLimitHit(new TimeSpan(2, 3, 4, 0), null);
+        var hit = new UsageLimitHit(new TimeSpan(2, 3, 4, 0), null);
 
         await t.Detector.WaitOutAsync(hit, CancellationToken.None);
 
@@ -265,7 +267,7 @@ public class UsageLimitDetectorTests
     public async Task WaitOut_WhenTheRetryTimeWasUnparseable_SaysSoInTheWarning()
     {
         var t = New();
-        var hit = new Cli.UsageLimitHit(Cli.UsageLimitDetector.FallbackWait, RetryAt: null);
+        var hit = new UsageLimitHit(UsageLimitDetector.FallbackWait, RetryAt: null);
 
         await t.Detector.WaitOutAsync(hit, CancellationToken.None);
 
@@ -295,6 +297,6 @@ public class UsageLimitDetectorTests
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            t.Detector.WaitOutAsync(new Cli.UsageLimitHit(TimeSpan.FromMinutes(5), null), cts.Token));
+            t.Detector.WaitOutAsync(new UsageLimitHit(TimeSpan.FromMinutes(5), null), cts.Token));
     }
 }

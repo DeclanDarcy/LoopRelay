@@ -1,23 +1,24 @@
-using LoopRelay.Roadmap.Cli;
-using EpicAuthoringOutputClassifier = LoopRelay.Roadmap.Cli.EpicAuthoringOutputClassifier;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class EpicArtifactPromotionTests
 {
     [Fact]
     public void Classifier_identifies_valid_epic_candidate()
     {
-        Cli.ArtifactOutputClassification result = new EpicAuthoringOutputClassifier()
+        ArtifactOutputClassification result = new Cli.Services.EpicAuthoringOutputClassifier()
             .Classify(RoadmapSamples.ValidEpic());
 
-        Assert.Equal(Cli.ArtifactOutputKind.Promotable, result.Kind);
+        Assert.Equal(ArtifactOutputKind.Promotable, result.Kind);
     }
 
     [Fact]
     public void Classifier_identifies_blocked_output()
     {
-        Cli.ArtifactOutputClassification result = new EpicAuthoringOutputClassifier()
+        ArtifactOutputClassification result = new Cli.Services.EpicAuthoringOutputClassifier()
             .Classify("""
                 # Epic Realignment Blocked
 
@@ -26,22 +27,22 @@ public sealed class EpicArtifactPromotionTests
                 Audit disposition was not Realign.
                 """);
 
-        Assert.Equal(Cli.ArtifactOutputKind.Blocked, result.Kind);
+        Assert.Equal(ArtifactOutputKind.Blocked, result.Kind);
     }
 
     [Fact]
     public void Classifier_identifies_ambiguous_output()
     {
-        Cli.ArtifactOutputClassification result = new EpicAuthoringOutputClassifier()
+        ArtifactOutputClassification result = new Cli.Services.EpicAuthoringOutputClassifier()
             .Classify("There is not enough information to continue.");
 
-        Assert.Equal(Cli.ArtifactOutputKind.Ambiguous, result.Kind);
+        Assert.Equal(ArtifactOutputKind.Ambiguous, result.Kind);
     }
 
     [Fact]
     public void Classifier_identifies_malformed_epic_output()
     {
-        Cli.ArtifactOutputClassification result = new EpicAuthoringOutputClassifier()
+        ArtifactOutputClassification result = new Cli.Services.EpicAuthoringOutputClassifier()
             .Classify("""
                 # Epic
 
@@ -52,13 +53,13 @@ public sealed class EpicArtifactPromotionTests
                 | Epic ID | EPIC-1 |
                 """);
 
-        Assert.Equal(Cli.ArtifactOutputKind.Malformed, result.Kind);
+        Assert.Equal(ArtifactOutputKind.Malformed, result.Kind);
     }
 
     [Fact]
     public void Validator_accepts_required_epic_structure()
     {
-        Cli.ArtifactValidationResult result = new Cli.EpicArtifactValidator()
+        ArtifactValidationResult result = new EpicArtifactValidator()
             .Validate(RoadmapSamples.ValidEpic());
 
         Assert.True(result.IsValid);
@@ -71,7 +72,7 @@ public sealed class EpicArtifactPromotionTests
         int milestoneStart = content.IndexOf("## Milestone Roadmap", StringComparison.Ordinal);
         string withoutMilestones = content[..milestoneStart].TrimEnd() + Environment.NewLine;
 
-        Cli.ArtifactValidationResult result = new Cli.EpicArtifactValidator()
+        ArtifactValidationResult result = new EpicArtifactValidator()
             .Validate(withoutMilestones);
 
         Assert.False(result.IsValid);
@@ -109,7 +110,7 @@ public sealed class EpicArtifactPromotionTests
             |---|---|---|---|---|---|
             """;
 
-        Cli.ArtifactValidationResult result = new Cli.EpicArtifactValidator()
+        ArtifactValidationResult result = new EpicArtifactValidator()
             .Validate(content);
 
         Assert.False(result.IsValid);
@@ -119,7 +120,7 @@ public sealed class EpicArtifactPromotionTests
     [Fact]
     public void Validator_rejects_missing_metadata()
     {
-        Cli.ArtifactValidationResult result = new Cli.EpicArtifactValidator()
+        ArtifactValidationResult result = new EpicArtifactValidator()
             .Validate("""
                 # Epic: Missing Metadata
 
@@ -143,7 +144,7 @@ public sealed class EpicArtifactPromotionTests
     [Fact]
     public void Validator_rejects_blocked_output()
     {
-        Cli.ArtifactValidationResult result = new Cli.EpicArtifactValidator()
+        ArtifactValidationResult result = new EpicArtifactValidator()
             .Validate("""
                 # Create New Epic Blocked
 

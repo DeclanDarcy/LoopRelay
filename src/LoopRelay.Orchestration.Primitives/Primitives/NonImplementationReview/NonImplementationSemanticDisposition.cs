@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
 /// <summary>
 /// Semantic confirmation outcomes for files routed to read-only review.

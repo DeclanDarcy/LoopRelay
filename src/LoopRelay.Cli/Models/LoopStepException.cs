@@ -1,4 +1,4 @@
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Models;
 
 
 /// <summary>A verify/agent gate failed; aborts the loop (never retried).</summary>

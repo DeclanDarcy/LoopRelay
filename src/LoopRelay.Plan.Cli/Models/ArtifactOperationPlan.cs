@@ -1,11 +1,7 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration.Services;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Permissions.Models;
 
-namespace LoopRelay.Plan.Cli;
+namespace LoopRelay.Plan.Cli.Models;
 
 internal sealed record ArtifactOperationPlan(
     string Label,

@@ -1,6 +1,7 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class SplitFamilyStoreTests
 {
@@ -8,73 +9,73 @@ public sealed class SplitFamilyStoreTests
     public async Task Writes_structured_family_and_uses_json_for_child_lookup()
     {
         using var repo = new TempRepo();
-        var store = new Cli.SplitFamilyStore(repo.Artifacts);
-        Cli.SplitFamily family = Family("family-1", [".agents/epic-1.md", ".agents/epic-2.md"]);
+        var store = new SplitFamilyStore(repo.Artifacts);
+        SplitFamily family = Family("family-1", [".agents/epic-1.md", ".agents/epic-2.md"]);
 
         string jsonPath = await store.WriteAsync(family);
-        repo.Write(Cli.RoadmapArtifactPaths.SplitFamily("family-1"), "# Split Family\n\n## Child Epics\n\n- .agents/other.md\n");
+        repo.Write(RoadmapArtifactPaths.SplitFamily("family-1"), "# Split Family\n\n## Child Epics\n\n- .agents/other.md\n");
 
-        Assert.Equal(Cli.RoadmapArtifactPaths.SplitFamilyJson("family-1"), jsonPath);
+        Assert.Equal(RoadmapArtifactPaths.SplitFamilyJson("family-1"), jsonPath);
         Assert.True(await store.ExistsForChildAsync(".agents/epic-2.md"));
-        Assert.Contains("\"SchemaVersion\": \"split-family.v1\"", repo.Read(Cli.RoadmapArtifactPaths.SplitFamilyJson("family-1")), StringComparison.Ordinal);
+        Assert.Contains("\"SchemaVersion\": \"split-family.v1\"", repo.Read(RoadmapArtifactPaths.SplitFamilyJson("family-1")), StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Migrates_valid_legacy_split_family()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.SplitFamily("legacy"), """
-                                                                   # Split Family
+        repo.Write(RoadmapArtifactPaths.SplitFamily("legacy"), """
+                                                               # Split Family
 
-                                                                   | Field | Value |
-                                                                   |---|---|
-                                                                   | Family ID | legacy |
-                                                                   | Created At | 2026-01-01T00:00:00.0000000+00:00 |
-                                                                   | Selected Child | .agents/epic-2.md |
-                                                                   | Selected Child Rationale | unblock \| high leverage |
+                                                               | Field | Value |
+                                                               |---|---|
+                                                               | Family ID | legacy |
+                                                               | Created At | 2026-01-01T00:00:00.0000000+00:00 |
+                                                               | Selected Child | .agents/epic-2.md |
+                                                               | Selected Child Rationale | unblock \| high leverage |
 
-                                                                   ## Proposal
+                                                               ## Proposal
 
-                                                                   Split this epic.
+                                                               Split this epic.
 
-                                                                   ## Child Epics
+                                                               ## Child Epics
 
-                                                                   - .agents/epic-1.md
-                                                                   - .agents/epic-2.md
+                                                               - .agents/epic-1.md
+                                                               - .agents/epic-2.md
 
-                                                                   ## Dependency Order
+                                                               ## Dependency Order
 
-                                                                   - .agents/epic-1.md
-                                                                   - .agents/epic-2.md
-                                                                   """);
+                                                               - .agents/epic-1.md
+                                                               - .agents/epic-2.md
+                                                               """);
 
-        Assert.True(await new Cli.SplitFamilyStore(repo.Artifacts).ExistsForChildAsync(".agents/epic-2.md"));
-        Assert.True(Exists(repo, Cli.RoadmapArtifactPaths.SplitFamilyJson("legacy")));
+        Assert.True(await new SplitFamilyStore(repo.Artifacts).ExistsForChildAsync(".agents/epic-2.md"));
+        Assert.True(Exists(repo, RoadmapArtifactPaths.SplitFamilyJson("legacy")));
     }
 
     [Fact]
     public async Task Rejects_malformed_legacy_split_family_without_migration()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.SplitFamily("legacy"), """
-                                                                   # Split Family
+        repo.Write(RoadmapArtifactPaths.SplitFamily("legacy"), """
+                                                               # Split Family
 
-                                                                   | Field | Value |
-                                                                   |---|---|
-                                                                   | Selected Child Rationale | malformed | rationale |
+                                                               | Field | Value |
+                                                               |---|---|
+                                                               | Selected Child Rationale | malformed | rationale |
 
-                                                                   ## Child Epics
+                                                               ## Child Epics
 
-                                                                   - .agents/epic-1.md
-                                                                   """);
+                                                               - .agents/epic-1.md
+                                                               """);
 
-        Cli.RoadmapStepException ex = await Assert.ThrowsAsync<Cli.RoadmapStepException>(() => new Cli.SplitFamilyStore(repo.Artifacts).ExistsForChildAsync(".agents/epic-1.md"));
+        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => new SplitFamilyStore(repo.Artifacts).ExistsForChildAsync(".agents/epic-1.md"));
 
         Assert.Contains("cannot be migrated", ex.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.False(Exists(repo, Cli.RoadmapArtifactPaths.SplitFamilyJson("legacy")));
+        Assert.False(Exists(repo, RoadmapArtifactPaths.SplitFamilyJson("legacy")));
     }
 
-    private static Cli.SplitFamily Family(string familyId, IReadOnlyList<string> childPaths) =>
+    private static SplitFamily Family(string familyId, IReadOnlyList<string> childPaths) =>
         new(
             familyId,
             "Proposal | with pipe",

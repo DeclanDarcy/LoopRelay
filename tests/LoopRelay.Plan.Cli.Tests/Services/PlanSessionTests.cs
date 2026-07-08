@@ -1,25 +1,29 @@
+using LoopRelay.Agents.Primitives;
 using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Agents.Models;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Plan.Cli.Models;
+using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Plan.Cli.Tests.Models;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 public class PlanSessionTests
 {
-    private static (Cli.PlanSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con) New()
+    private static (PlanSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con) New()
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var artifacts = new Cli.PlanArtifacts(store, repo);
+        var artifacts = new PlanArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        return (new Cli.PlanSession(rt, artifacts, con, repo), rt, store, repo, con);
+        return (new PlanSession(rt, artifacts, con, repo), rt, store, repo, con);
     }
 
     private static string Resolve(Repository repo, string rel) => ArtifactPath.ResolveRepositoryPath(repo, rel);
@@ -121,11 +125,11 @@ public class PlanSessionTests
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var artifacts = new Cli.PlanArtifacts(store, repo);
+        var artifacts = new PlanArtifacts(store, repo);
         var rt = new FakeAgentRuntime(store);
         var ledger = new NonImplementationReviewLedgerStore(store);
         var capture = new ExplicitHitlNonImplementationRequestCaptureService(ledger);
-        var session = new Cli.PlanSession(
+        var session = new PlanSession(
             rt,
             artifacts,
             new RecordingLoopConsole(),
@@ -160,7 +164,7 @@ public class PlanSessionTests
         var (session, rt, _, _, _) = New();
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed("boom", "write-plan stderr tail")));
 
-        Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
             () => session.WritePlanAsync(CancellationToken.None));
 
         Assert.Contains("write-plan stderr tail", ex.Message);
@@ -174,7 +178,7 @@ public class PlanSessionTests
         var (session, rt, _, _, _) = New();
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed("boom")));
 
-        Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
             () => session.WritePlanAsync(CancellationToken.None));
 
         Assert.DoesNotContain("Agent stderr (tail):", ex.Message);
@@ -187,7 +191,7 @@ public class PlanSessionTests
         var (session, rt, _, _, _) = New();
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("did nothing")));
 
-        Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
             () => session.WritePlanAsync(CancellationToken.None));
 
         Assert.Contains(OrchestrationArtifactPaths.Plan, ex.Message);
@@ -204,7 +208,7 @@ public class PlanSessionTests
             return Turns.Completed("wrote nothing meaningful");
         }));
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(() => session.WritePlanAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<PlanStepException>(() => session.WritePlanAsync(CancellationToken.None));
 
         Assert.Equal(1, rt.ClosedSessions);
     }
@@ -222,7 +226,7 @@ public class PlanSessionTests
 
         await session.WritePlanAsync(CancellationToken.None);
 
-        Cli.PlanStepException ex = await Assert.ThrowsAsync<Cli.PlanStepException>(
+        PlanStepException ex = await Assert.ThrowsAsync<PlanStepException>(
             () => session.ReviseAsync("FEEDBACK", CancellationToken.None));
 
         Assert.Contains("revise stderr tail", ex.Message);
@@ -245,7 +249,7 @@ public class PlanSessionTests
         // Simulate the revise turn deleting the plan file outright.
         await store.DeleteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan));
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(() => session.ReviseAsync("FEEDBACK", CancellationToken.None));
+        await Assert.ThrowsAsync<PlanStepException>(() => session.ReviseAsync("FEEDBACK", CancellationToken.None));
 
         Assert.Equal(1, rt.ClosedSessions);
     }
@@ -267,7 +271,7 @@ public class PlanSessionTests
 
         await session.WritePlanAsync(CancellationToken.None);
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(() => session.ReviseAsync("FEEDBACK", CancellationToken.None));
+        await Assert.ThrowsAsync<PlanStepException>(() => session.ReviseAsync("FEEDBACK", CancellationToken.None));
 
         Assert.Equal(1, rt.ClosedSessions);
     }
@@ -277,7 +281,7 @@ public class PlanSessionTests
     {
         var (session, rt, _, _, _) = New();
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(() => session.ReviseAsync("FEEDBACK", CancellationToken.None));
+        await Assert.ThrowsAsync<PlanStepException>(() => session.ReviseAsync("FEEDBACK", CancellationToken.None));
 
         Assert.Equal(0, rt.OpenSessions);
         Assert.Equal(0, rt.ClosedSessions);
@@ -323,7 +327,7 @@ public class PlanSessionTests
         var (session, rt, _, _, _) = New();
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        await Assert.ThrowsAsync<Cli.PlanStepException>(() => session.WritePlanAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<PlanStepException>(() => session.WritePlanAsync(CancellationToken.None));
         Assert.Equal(1, rt.ClosedSessions);
 
         await session.CloseAsync();

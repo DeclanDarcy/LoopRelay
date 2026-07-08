@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Infrastructure.Abstractions.Diagnostics;
+using LoopRelay.Infrastructure.Models.Diagnostics;
 
-namespace LoopRelay.Infrastructure.Diagnostics;
+namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
 internal sealed class InputWaitTurnTracker : IAgentTurnProgressObserver, IAsyncDisposable
 {

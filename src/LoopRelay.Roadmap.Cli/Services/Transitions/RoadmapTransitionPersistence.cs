@@ -1,4 +1,8 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Primitives;
+
+namespace LoopRelay.Roadmap.Cli.Services.Transitions;
 
 internal sealed class RoadmapTransitionPersistence(
     RoadmapArtifacts artifacts,

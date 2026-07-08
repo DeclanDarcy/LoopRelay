@@ -1,7 +1,9 @@
-using LoopRelay.Roadmap.Cli;
-using RoadmapStateStore = LoopRelay.Roadmap.Cli.RoadmapStateStore;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Services.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class ActiveSelectionReaderTests
 {
@@ -21,9 +23,9 @@ public sealed class ActiveSelectionReaderTests
     public async Task Read_rejects_missing_select_next_epic_projection()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.Selection, Selection());
+        repo.Write(RoadmapArtifactPaths.Selection, Selection());
 
-        Cli.RoadmapStepException exception = await Assert.ThrowsAsync<Cli.RoadmapStepException>(
+        RoadmapStepException exception = await Assert.ThrowsAsync<RoadmapStepException>(
             () => CreateReader(repo).ReadAsync(CancellationToken.None));
 
         Assert.Equal(
@@ -36,9 +38,9 @@ public sealed class ActiveSelectionReaderTests
     {
         using var repo = SeedRepo();
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, Selection());
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "# Changed Completion Context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "# Changed Completion Context");
 
-        Cli.RoadmapStepException exception = await Assert.ThrowsAsync<Cli.RoadmapStepException>(
+        RoadmapStepException exception = await Assert.ThrowsAsync<RoadmapStepException>(
             () => CreateReader(repo).ReadAsync(CancellationToken.None));
 
         Assert.Contains(
@@ -52,7 +54,7 @@ public sealed class ActiveSelectionReaderTests
     public async Task Read_uses_persisted_retired_epics_when_evaluating_freshness()
     {
         using var repo = SeedRepo();
-        Cli.RetiredEpic retired = new(
+        RetiredEpic retired = new(
             "EPIC-001",
             "Retired Epic",
             "Already complete.",
@@ -67,36 +69,36 @@ public sealed class ActiveSelectionReaderTests
         Assert.Equal(selection, result);
     }
 
-    private static Cli.ActiveSelectionReader CreateReader(TempRepo repo)
+    private static ActiveSelectionReader CreateReader(TempRepo repo)
     {
-        var stateStore = new RoadmapStateStore(repo.Artifacts);
-        return new Cli.ActiveSelectionReader(
+        var stateStore = new Cli.Services.RoadmapStateStore(repo.Artifacts);
+        return new ActiveSelectionReader(
             repo.Artifacts,
             stateStore,
             SelectionProvenanceTestSupport.CreateProvenance(repo));
     }
 
-    private static async Task SaveStateAsync(TempRepo repo, IReadOnlyList<Cli.RetiredEpic> retiredEpics)
+    private static async Task SaveStateAsync(TempRepo repo, IReadOnlyList<RetiredEpic> retiredEpics)
     {
-        await new RoadmapStateStore(repo.Artifacts).SaveAsync(new Cli.RoadmapStateDocument(
-            Cli.RoadmapState.SelectNextStrategicInitiative,
+        await new Cli.Services.RoadmapStateStore(repo.Artifacts).SaveAsync(new RoadmapStateDocument(
+            RoadmapState.SelectNextStrategicInitiative,
             [],
-            new Cli.RoadmapTransitionSummary(
-                Cli.RoadmapState.CoreReady,
-                Cli.RoadmapState.SelectNextStrategicInitiative,
+            new RoadmapTransitionSummary(
+                RoadmapState.CoreReady,
+                RoadmapState.SelectNextStrategicInitiative,
                 "SelectNextEpic",
-                Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"],
-                Cli.RoadmapArtifactPaths.Selection,
+                RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"],
+                RoadmapArtifactPaths.Selection,
                 "Completed",
-                Cli.TransitionStatus.Completed,
+                TransitionStatus.Completed,
                 DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
                 DateTimeOffset.Parse("2026-01-01T00:00:01Z")),
             [],
             "None",
             retiredEpics.Count,
             0,
-            new Cli.ProjectionManifestCounts(0, 0, 0),
-            Cli.RoadmapTransitionIntent.Empty(Cli.RoadmapState.SelectNextStrategicInitiative),
+            new ProjectionManifestCounts(0, 0, 0),
+            RoadmapTransitionIntent.Empty(RoadmapState.SelectNextStrategicInitiative),
             ["CreateNewEpic"],
             retiredEpics));
     }
@@ -105,7 +107,7 @@ public sealed class ActiveSelectionReaderTests
     {
         var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "# Roadmap Completion Context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "# Roadmap Completion Context");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         return repo;
     }

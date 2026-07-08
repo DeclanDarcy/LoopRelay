@@ -1,9 +1,10 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Infrastructure.Console;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Infrastructure.Abstractions.Console;
+using LoopRelay.Infrastructure.Models.Git;
 
-namespace LoopRelay.Infrastructure.Git;
+namespace LoopRelay.Infrastructure.Services.Git;
 
 
 /// <summary>Commits, pushes, and records a repository's <c>.agents</c> submodule gitlink.</summary>

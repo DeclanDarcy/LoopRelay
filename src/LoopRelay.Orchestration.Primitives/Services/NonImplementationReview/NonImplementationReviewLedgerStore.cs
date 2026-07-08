@@ -2,8 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 

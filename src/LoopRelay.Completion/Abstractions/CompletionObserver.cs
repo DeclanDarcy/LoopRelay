@@ -1,4 +1,4 @@
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Abstractions;
 
 public interface ICompletionObserver
 {

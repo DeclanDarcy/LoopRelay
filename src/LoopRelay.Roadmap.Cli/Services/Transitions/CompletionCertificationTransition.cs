@@ -1,8 +1,14 @@
-using LoopRelay.Completion;
+using LoopRelay.Completion.Abstractions;
+using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Services;
+using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Orchestration.Services;
+using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services.Transitions;
 
 internal sealed class CompletionCertificationTransition(
     RoadmapArtifacts artifacts,
@@ -201,7 +207,7 @@ internal sealed class CompletionCertificationTransition(
     {
         DateTimeOffset blockedAt = DateTimeOffset.UtcNow;
         string nextStep =
-            $"Fill `{LoopRelay.Orchestration.OrchestrationArtifactPaths.NonImplementationDecisions}` and rerun the roadmap CLI.";
+            $"Fill `{OrchestrationArtifactPaths.NonImplementationDecisions}` and rerun the roadmap CLI.";
         var detailsLines = new List<string>
         {
             "Non-implementation HITL review blocked completion evaluation.",

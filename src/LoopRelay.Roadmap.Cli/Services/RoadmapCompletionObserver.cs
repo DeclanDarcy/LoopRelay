@@ -1,15 +1,7 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Extensions;
-using LoopRelay.Agents.Services;
-using LoopRelay.Completion;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Infrastructure.Diagnostics;
-using LoopRelay.Infrastructure.Artifacts;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Permissions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+using LoopRelay.Completion.Abstractions;
+using LoopRelay.Roadmap.Cli.Abstractions;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class RoadmapCompletionObserver(ILoopConsole console) : ICompletionObserver
 {

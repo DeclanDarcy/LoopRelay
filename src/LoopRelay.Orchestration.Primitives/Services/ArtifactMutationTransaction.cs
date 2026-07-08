@@ -1,5 +1,6 @@
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Permissions.Models;
 
 namespace LoopRelay.Orchestration.Services;

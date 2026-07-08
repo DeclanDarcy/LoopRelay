@@ -1,15 +1,8 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Completion;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Roadmap.Cli;
-using ProjectContextLoader = LoopRelay.Roadmap.Cli.ProjectContextLoader;
-using RoadmapArtifacts = LoopRelay.Roadmap.Cli.RoadmapArtifacts;
+using LoopRelay.Roadmap.Cli.Abstractions;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
-internal sealed class TestConsole : Cli.ILoopConsole
+internal sealed class TestConsole : ILoopConsole
 {
     public List<string> Phases { get; } = [];
     public List<string> Messages { get; } = [];

@@ -1,16 +1,21 @@
-using LoopRelay.Core.Prompts;
-using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Orchestration;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Prompts;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
+using LoopRelay.Orchestration.Primitives;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Permissions.Models;
-using LoopRelay.Projections;
+using LoopRelay.Projections.Abstractions;
+using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Primitives;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 /// <summary>
 /// The decision-making codex session, routed by the SessionRouter. Mirrors RepositoryOrchestrator's

@@ -1,3 +1,5 @@
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+
 namespace LoopRelay.Orchestration.Models.NonImplementationReview;
 
 public sealed record NonImplementationSynthesisDecisionMetadata(

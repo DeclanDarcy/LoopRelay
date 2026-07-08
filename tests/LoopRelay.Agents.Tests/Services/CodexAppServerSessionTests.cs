@@ -1,12 +1,13 @@
 using System.Text.Json;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 using LoopRelay.Agents.Services;
 using LoopRelay.Permissions.Abstractions;
-using LoopRelay.Permissions.Codex;
 using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Services;
+using LoopRelay.Permissions.Services.Codex;
 
-namespace LoopRelay.Agents.Tests;
+namespace LoopRelay.Agents.Tests.Services;
 
 public sealed class CodexAppServerSessionTests
 {

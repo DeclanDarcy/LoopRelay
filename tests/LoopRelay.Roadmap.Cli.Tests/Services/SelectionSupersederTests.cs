@@ -1,6 +1,9 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Services.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class SelectionSupersederTests
 {
@@ -15,7 +18,7 @@ public sealed class SelectionSupersederTests
 
         await AssertSupersededAsync(
             repo,
-            Cli.DerivedArtifactStaleReason.RetiredEpicStateDrift,
+            DerivedArtifactStaleReason.RetiredEpicStateDrift,
             "Retired epic state changed after EpicPreparationAudit.");
     }
 
@@ -30,43 +33,43 @@ public sealed class SelectionSupersederTests
 
         await AssertSupersededAsync(
             repo,
-            Cli.DerivedArtifactStaleReason.RoadmapCompletionContextDrift,
+            DerivedArtifactStaleReason.RoadmapCompletionContextDrift,
             "Roadmap completion context changed after completion certification.");
     }
 
-    private static Cli.SelectionSuperseder CreateSuperseder(TempRepo repo) =>
+    private static SelectionSuperseder CreateSuperseder(TempRepo repo) =>
         new(
             SelectionProvenanceTestSupport.CreateProvenance(repo),
-            new Cli.ArtifactLifecycleStore(repo.Artifacts));
+            new ArtifactLifecycleStore(repo.Artifacts));
 
     private static async Task AssertSupersededAsync(
         TempRepo repo,
-        Cli.DerivedArtifactStaleReason expectedReason,
+        DerivedArtifactStaleReason expectedReason,
         string expectedLifecycleNote)
     {
-        Cli.SelectionProvenanceManifest manifest =
-            await new Cli.SelectionProvenanceManifestStore(repo.Artifacts).LoadAsync();
-        Cli.DerivedArtifactManifestEntry selection = Assert.Single(manifest.Selections);
-        Assert.Equal(Cli.DerivedArtifactProvenanceStatus.Superseded, selection.ProvenanceStatus);
-        Assert.Equal(Cli.DerivedArtifactFreshnessStatus.Stale, selection.FreshnessStatus);
+        SelectionProvenanceManifest manifest =
+            await new SelectionProvenanceManifestStore(repo.Artifacts).LoadAsync();
+        DerivedArtifactManifestEntry selection = Assert.Single(manifest.Selections);
+        Assert.Equal(DerivedArtifactProvenanceStatus.Superseded, selection.ProvenanceStatus);
+        Assert.Equal(DerivedArtifactFreshnessStatus.Stale, selection.FreshnessStatus);
         Assert.Contains(expectedReason, selection.FreshnessReasons);
         Assert.Empty(manifest.ActiveSelections);
 
-        Cli.ArtifactLifecycleEntry lifecycle = Assert.Single(
-            await new Cli.ArtifactLifecycleStore(repo.Artifacts).LoadAsync(),
-            entry => entry.Path == Cli.RoadmapArtifactPaths.Selection);
-        Assert.Equal(Cli.ArtifactLifecycleState.Superseded, lifecycle.State);
+        ArtifactLifecycleEntry lifecycle = Assert.Single(
+            await new ArtifactLifecycleStore(repo.Artifacts).LoadAsync(),
+            entry => entry.Path == RoadmapArtifactPaths.Selection);
+        Assert.Equal(ArtifactLifecycleState.Superseded, lifecycle.State);
         Assert.Equal(expectedLifecycleNote, lifecycle.Notes);
-        Assert.Equal(Selection(), repo.Read(Cli.RoadmapArtifactPaths.Selection));
+        Assert.Equal(Selection(), repo.Read(RoadmapArtifactPaths.Selection));
     }
 
     private static TempRepo SeedRepo()
     {
         var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "# Roadmap Completion Context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "# Roadmap Completion Context");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
-        repo.Write(Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
         return repo;
     }
 

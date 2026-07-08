@@ -1,7 +1,9 @@
 using System.Text;
+using LoopRelay.Completion.Models;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Services;
 
 internal sealed class CompletionPromptContextBuilder(CompletionArtifacts artifacts)
 {

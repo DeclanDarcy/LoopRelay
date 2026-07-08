@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LoopRelay.Agents.Primitives;
 
 namespace LoopRelay.Agents.Models;
 

@@ -1,4 +1,10 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Services.Transitions;
+
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class RoadmapStateMachine(
     RoadmapArtifacts artifacts,

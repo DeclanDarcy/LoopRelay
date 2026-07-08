@@ -1,4 +1,7 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Primitives;
+
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record ArtifactPromotionRequest(
     string TargetPath,

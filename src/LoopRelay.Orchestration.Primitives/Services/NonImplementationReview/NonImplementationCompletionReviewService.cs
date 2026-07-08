@@ -1,8 +1,10 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 

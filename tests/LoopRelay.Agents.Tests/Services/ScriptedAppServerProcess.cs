@@ -2,9 +2,9 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 
-namespace LoopRelay.Agents.Tests;
+namespace LoopRelay.Agents.Tests.Services;
 
 /// <summary>
 /// An in-memory IAgentProcess that speaks the app-server protocol: it reacts to written JSON-RPC

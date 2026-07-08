@@ -3,7 +3,7 @@
 // Declaring it internally lets the compiler bind init-only setters. No runtime
 // dependency; it is a compile-time marker only.
 
-namespace System.Runtime.CompilerServices
+namespace LoopRelay.Prompts.Generator.Models
 {
     internal static class IsExternalInit { }
 }

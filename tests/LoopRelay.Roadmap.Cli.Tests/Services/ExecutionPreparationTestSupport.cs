@@ -1,45 +1,39 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Completion;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Roadmap.Cli;
-using ProjectContextLoader = LoopRelay.Roadmap.Cli.ProjectContextLoader;
-using RoadmapArtifacts = LoopRelay.Roadmap.Cli.RoadmapArtifacts;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 internal static class ExecutionPreparationTestSupport
 {
-    public static Cli.ExecutionPreparationProvenanceService CreateProvenance(TempRepo repo) =>
-        new(repo.Artifacts, new Cli.ExecutionPreparationManifestStore(repo.Artifacts));
+    public static ExecutionPreparationProvenanceService CreateProvenance(TempRepo repo) =>
+        new(repo.Artifacts, new ExecutionPreparationManifestStore(repo.Artifacts));
 
-    public static async Task<Cli.ExecutionPreparationProvenanceService> SeedMilestoneSpecsAsync(
+    public static async Task<ExecutionPreparationProvenanceService> SeedMilestoneSpecsAsync(
         TempRepo repo,
         params string[] specPaths)
     {
-        Cli.ExecutionPreparationProvenanceService provenance = CreateProvenance(repo);
+        ExecutionPreparationProvenanceService provenance = CreateProvenance(repo);
         await provenance.RecordMilestoneSpecsAsync(specPaths);
         return provenance;
     }
 
     public static async Task SeedOperationalContextAsync(
-        Cli.ExecutionPreparationProvenanceService provenance,
+        ExecutionPreparationProvenanceService provenance,
         TempRepo repo,
         string content)
     {
-        repo.Write(Cli.RoadmapArtifactPaths.OperationalContext, content);
+        repo.Write(RoadmapArtifactPaths.OperationalContext, content);
         await provenance.RecordOperationalContextAsync(content);
-        await new Cli.ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(Cli.RoadmapArtifactPaths.OperationalContext, Cli.ArtifactLifecycleState.Ready);
+        await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(RoadmapArtifactPaths.OperationalContext, ArtifactLifecycleState.Ready);
     }
 
     public static async Task SeedExecutionPromptAsync(
-        Cli.ExecutionPreparationProvenanceService provenance,
+        ExecutionPreparationProvenanceService provenance,
         TempRepo repo,
         string content)
     {
-        repo.Write(Cli.RoadmapArtifactPaths.ExecutionPrompt, content);
+        repo.Write(RoadmapArtifactPaths.ExecutionPrompt, content);
         await provenance.RecordExecutionPromptAsync(content);
-        await new Cli.ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(Cli.RoadmapArtifactPaths.ExecutionPrompt, Cli.ArtifactLifecycleState.Ready);
+        await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(RoadmapArtifactPaths.ExecutionPrompt, ArtifactLifecycleState.Ready);
     }
 }

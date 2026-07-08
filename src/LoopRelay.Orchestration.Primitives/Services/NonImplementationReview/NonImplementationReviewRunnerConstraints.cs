@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Abstractions.NonImplementationReview;
+namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
 public sealed class NonImplementationReviewRunnerConstraints
 {

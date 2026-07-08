@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record SplitEpicBundleRejection(string Path, string Reason);

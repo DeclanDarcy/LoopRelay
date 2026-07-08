@@ -1,6 +1,4 @@
-using LoopRelay.Completion;
-
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Primitives;
 
 internal enum RoadmapUnblockAction
 {

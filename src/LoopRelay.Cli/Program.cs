@@ -1,6 +1,8 @@
 using System.Text;
-using LoopRelay.Core.Repositories;
 using LoopRelay.Cli;
+using LoopRelay.Cli.Primitives;
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Models.Repositories;
 
 // Codex output and our own messages contain non-ASCII text (curly quotes, em dashes). Decode the codex
 // child process' stdout and render our console output as UTF-8 instead of the host's legacy OEM code

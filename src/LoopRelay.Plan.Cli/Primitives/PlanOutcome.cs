@@ -1,4 +1,4 @@
-namespace LoopRelay.Plan.Cli;
+namespace LoopRelay.Plan.Cli.Primitives;
 
 /// <summary>Terminal result of a <c>PlanPipeline.RunAsync</c> run; maps to the process exit code in Program.cs.</summary>
 internal enum PlanOutcome

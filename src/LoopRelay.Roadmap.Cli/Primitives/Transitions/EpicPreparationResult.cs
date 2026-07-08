@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Primitives.Transitions;
 
 internal enum EpicPreparationResult
 {

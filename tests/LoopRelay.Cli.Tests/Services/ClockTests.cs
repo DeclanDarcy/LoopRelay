@@ -1,7 +1,7 @@
-using LoopRelay.Cli;
+using LoopRelay.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class ClockTests
 {
@@ -9,7 +9,7 @@ public class ClockTests
     public void SystemClock_ReturnsAUtcInstantNearNow()
     {
         DateTimeOffset before = DateTimeOffset.UtcNow;
-        DateTimeOffset value = new Cli.SystemClock().UtcNow;
+        DateTimeOffset value = new SystemClock().UtcNow;
         Assert.True(value >= before.AddSeconds(-5) && value <= DateTimeOffset.UtcNow.AddSeconds(5));
     }
 }

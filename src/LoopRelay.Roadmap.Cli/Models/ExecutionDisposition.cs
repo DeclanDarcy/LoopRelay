@@ -1,4 +1,7 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
+
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record ExecutionDisposition(
     ExecutionDispositionStatus Status,

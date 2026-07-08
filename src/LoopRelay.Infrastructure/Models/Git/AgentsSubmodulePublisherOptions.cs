@@ -1,9 +1,4 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Infrastructure.Console;
-
-namespace LoopRelay.Infrastructure.Git;
+namespace LoopRelay.Infrastructure.Models.Git;
 
 public sealed record AgentsSubmodulePublisherOptions(
     string AgentsDirectory = ".agents",

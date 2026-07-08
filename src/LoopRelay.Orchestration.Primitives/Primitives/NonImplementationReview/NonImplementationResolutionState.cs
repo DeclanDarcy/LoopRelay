@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
 /// <summary>
 /// Durable HITL resolution state for ledger entries.

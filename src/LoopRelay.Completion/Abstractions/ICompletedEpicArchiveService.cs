@@ -1,8 +1,6 @@
-using System.Globalization;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
+using LoopRelay.Completion.Models;
 
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Abstractions;
 
 public interface ICompletedEpicArchiveService
 {

@@ -1,8 +1,4 @@
-using System.Collections.Frozen;
-using System.Text.Json;
-using LoopRelay.Permissions.Models;
-
-namespace LoopRelay.Permissions.Configuration;
+namespace LoopRelay.Permissions.Models.Configuration;
 
 public sealed record CliSettingsLoadResult(
     PermissionPolicyOptions Permissions,

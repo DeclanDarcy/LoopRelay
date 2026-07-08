@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using LoopRelay.Agents.Primitives;
 using LoopRelay.Permissions.Models;
 
 namespace LoopRelay.Agents.Models;

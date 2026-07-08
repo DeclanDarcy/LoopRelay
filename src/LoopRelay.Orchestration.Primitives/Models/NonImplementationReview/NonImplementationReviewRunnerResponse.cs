@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Abstractions.NonImplementationReview;
+namespace LoopRelay.Orchestration.Models.NonImplementationReview;
 
 public sealed class NonImplementationReviewRunnerResponse
 {

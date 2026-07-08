@@ -1,7 +1,9 @@
-using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Roadmap.Cli.Models;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal static class AgentSpecs
 {

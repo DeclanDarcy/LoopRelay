@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
 /// <summary>
 /// Deterministic classifier routes for changed files before any semantic review runs.

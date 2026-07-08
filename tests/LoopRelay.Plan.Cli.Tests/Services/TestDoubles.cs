@@ -1,14 +1,9 @@
 using System.Collections.Concurrent;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Projections;
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Plan.Cli.Abstractions;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
-internal sealed class RecordingLoopConsole : Cli.ILoopConsole
+internal sealed class RecordingLoopConsole : ILoopConsole
 {
     public ConcurrentQueue<(string Kind, string Text)> Events { get; } = new();
     public void Phase(string phase) => Events.Enqueue(("phase", phase));

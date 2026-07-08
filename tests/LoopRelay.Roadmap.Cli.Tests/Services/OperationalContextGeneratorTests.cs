@@ -1,6 +1,7 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class OperationalContextGeneratorTests
 {
@@ -8,15 +9,15 @@ public sealed class OperationalContextGeneratorTests
     public async Task Operational_context_references_active_epic_and_ordered_specs()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, "active epic");
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "active epic");
         repo.Write(".agents/specs/b.md", "spec b");
         repo.Write(".agents/specs/a.md", "spec a");
-        Cli.ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(
+        ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(
             repo,
             ".agents/specs/b.md",
             ".agents/specs/a.md");
 
-        string content = await new Cli.OperationalContextGenerator(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
+        string content = await new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
 
         Assert.Contains("active epic", content, StringComparison.Ordinal);
         Assert.True(content.IndexOf(".agents/specs/a.md", StringComparison.Ordinal) < content.IndexOf(".agents/specs/b.md", StringComparison.Ordinal));
@@ -26,10 +27,10 @@ public sealed class OperationalContextGeneratorTests
     public async Task Operational_context_rejects_raw_project_context_markers()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, "<!-- BEGIN PROJECT-CONTEXT FILE: 01-purpose.md -->");
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "<!-- BEGIN PROJECT-CONTEXT FILE: 01-purpose.md -->");
         repo.Write(".agents/specs/a.md", "spec");
-        Cli.ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/a.md");
+        ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/a.md");
 
-        await Assert.ThrowsAsync<Cli.RoadmapStepException>(() => new Cli.OperationalContextGenerator(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync());
+        await Assert.ThrowsAsync<RoadmapStepException>(() => new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync());
     }
 }

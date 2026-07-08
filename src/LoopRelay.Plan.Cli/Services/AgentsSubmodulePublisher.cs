@@ -1,8 +1,10 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Infrastructure.Git;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Infrastructure.Models.Git;
+using LoopRelay.Plan.Cli.Abstractions;
+using LoopRelay.Plan.Cli.Models;
 
-namespace LoopRelay.Plan.Cli;
+namespace LoopRelay.Plan.Cli.Services;
 
 internal sealed class AgentsSubmodulePublisher
 {
@@ -14,11 +16,11 @@ internal sealed class AgentsSubmodulePublisher
     public const string ExtractDetailsMessage = "Plan pipeline: extract details";
     public const string GitlinkPointerMessage = "Plan pipeline: record .agents submodule pointer";
 
-    private readonly Infrastructure.Git.AgentsSubmodulePublisher publisher;
+    private readonly Infrastructure.Services.Git.AgentsSubmodulePublisher publisher;
 
     public AgentsSubmodulePublisher(IProcessRunner processRunner, Repository repository, ILoopConsole console)
     {
-        publisher = new Infrastructure.Git.AgentsSubmodulePublisher(
+        publisher = new Infrastructure.Services.Git.AgentsSubmodulePublisher(
             processRunner,
             repository,
             console,

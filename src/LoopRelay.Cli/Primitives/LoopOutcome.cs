@@ -1,4 +1,4 @@
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Primitives;
 
 internal enum LoopOutcome
 {

@@ -1,7 +1,7 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class SelectionProvenanceService(
     RoadmapArtifacts artifacts,

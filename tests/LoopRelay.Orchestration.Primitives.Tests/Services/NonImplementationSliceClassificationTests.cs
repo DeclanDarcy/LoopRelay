@@ -1,12 +1,14 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 
-namespace LoopRelay.Orchestration.Primitives.Tests;
+namespace LoopRelay.Orchestration.Tests.Services;
 
 public sealed class NonImplementationSliceClassificationTests
 {

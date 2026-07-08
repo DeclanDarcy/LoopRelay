@@ -1,6 +1,4 @@
-using LoopRelay.Orchestration.Models;
-
-namespace LoopRelay.Orchestration.Abstractions;
+namespace LoopRelay.Orchestration.Primitives;
 
 /// <summary>
 /// The route for the next decision turn after an operational continuation (m7). This is the token-pressure

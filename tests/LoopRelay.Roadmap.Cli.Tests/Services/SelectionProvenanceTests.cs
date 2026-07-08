@@ -1,6 +1,8 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class SelectionProvenanceTests
 {
@@ -10,7 +12,7 @@ public sealed class SelectionProvenanceTests
         using var repo = SeedRepo();
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, Selection());
 
-        Cli.DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
+        DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
 
         Assert.True(freshness.IsFresh);
     }
@@ -20,12 +22,12 @@ public sealed class SelectionProvenanceTests
     {
         using var repo = SeedRepo();
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, Selection());
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "# Changed Completion Context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "# Changed Completion Context");
 
-        Cli.DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
+        DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
 
         Assert.False(freshness.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.RoadmapCompletionContextDrift, freshness.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.RoadmapCompletionContextDrift, freshness.Reasons);
     }
 
     [Fact]
@@ -35,10 +37,10 @@ public sealed class SelectionProvenanceTests
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, Selection());
         repo.Write(".agents/roadmap/001-roadmap.md", "changed roadmap");
 
-        Cli.DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
+        DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
 
         Assert.False(freshness.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.RoadmapSourceDrift, freshness.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.RoadmapSourceDrift, freshness.Reasons);
     }
 
     [Fact]
@@ -47,10 +49,10 @@ public sealed class SelectionProvenanceTests
         using var repo = SeedRepo();
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, Selection());
 
-        Cli.DerivedArtifactFreshness freshness = await EvaluateAsync(repo, [RetiredEpic()]);
+        DerivedArtifactFreshness freshness = await EvaluateAsync(repo, [RetiredEpic()]);
 
         Assert.False(freshness.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.RetiredEpicStateDrift, freshness.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.RetiredEpicStateDrift, freshness.Reasons);
     }
 
     [Fact]
@@ -58,26 +60,26 @@ public sealed class SelectionProvenanceTests
     {
         using var repo = SeedRepo();
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, Selection());
-        Cli.SelectionProvenanceService provenance = SelectionProvenanceTestSupport.CreateProvenance(repo);
+        SelectionProvenanceService provenance = SelectionProvenanceTestSupport.CreateProvenance(repo);
 
-        await provenance.SupersedeActiveSelectionAsync([Cli.DerivedArtifactStaleReason.RoadmapCompletionContextDrift]);
-        Cli.DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
+        await provenance.SupersedeActiveSelectionAsync([DerivedArtifactStaleReason.RoadmapCompletionContextDrift]);
+        DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
 
         Assert.False(freshness.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.Superseded, freshness.Reasons);
-        Assert.Equal(Selection(), repo.Read(Cli.RoadmapArtifactPaths.Selection));
+        Assert.Contains(DerivedArtifactStaleReason.Superseded, freshness.Reasons);
+        Assert.Equal(Selection(), repo.Read(RoadmapArtifactPaths.Selection));
     }
 
     [Fact]
     public async Task Missing_selection_provenance_is_unknown_and_not_fresh()
     {
         using var repo = SeedRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.Selection, Selection());
+        repo.Write(RoadmapArtifactPaths.Selection, Selection());
 
-        Cli.DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
+        DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
 
         Assert.False(freshness.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.MissingManifest, freshness.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.MissingManifest, freshness.Reasons);
     }
 
     [Fact]
@@ -85,12 +87,12 @@ public sealed class SelectionProvenanceTests
     {
         using var repo = SeedRepo();
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, Selection());
-        repo.Write(Cli.RoadmapArtifactPaths.SelectionProvenanceManifest, "{not-json");
+        repo.Write(RoadmapArtifactPaths.SelectionProvenanceManifest, "{not-json");
 
-        Cli.DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
+        DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
 
         Assert.False(freshness.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.MissingManifest, freshness.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.MissingManifest, freshness.Reasons);
     }
 
     [Fact]
@@ -98,22 +100,22 @@ public sealed class SelectionProvenanceTests
     {
         using var repo = SeedRepo();
         await SelectionProvenanceTestSupport.SeedCurrentSelectionAsync(repo, Selection());
-        repo.Write(Cli.RoadmapArtifactPaths.Selection, Selection("Changed Initiative"));
+        repo.Write(RoadmapArtifactPaths.Selection, Selection("Changed Initiative"));
 
-        Cli.DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
+        DerivedArtifactFreshness freshness = await EvaluateAsync(repo);
 
         Assert.False(freshness.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.ArtifactHashDrift, freshness.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.ArtifactHashDrift, freshness.Reasons);
     }
 
-    private static async Task<Cli.DerivedArtifactFreshness> EvaluateAsync(
+    private static async Task<DerivedArtifactFreshness> EvaluateAsync(
         TempRepo repo,
-        IReadOnlyList<Cli.RetiredEpic>? retiredEpics = null)
+        IReadOnlyList<RetiredEpic>? retiredEpics = null)
     {
-        IReadOnlyList<Cli.RetiredEpic> effectiveRetiredEpics = retiredEpics ?? [];
-        Cli.SelectionProvenanceService provenance = SelectionProvenanceTestSupport.CreateProvenance(repo);
-        Cli.TransitionInputSnapshot cycle = await provenance.CaptureCurrentCycleAsync(
-            repo.Read(Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"]),
+        IReadOnlyList<RetiredEpic> effectiveRetiredEpics = retiredEpics ?? [];
+        SelectionProvenanceService provenance = SelectionProvenanceTestSupport.CreateProvenance(repo);
+        TransitionInputSnapshot cycle = await provenance.CaptureCurrentCycleAsync(
+            repo.Read(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"]),
             effectiveRetiredEpics);
         return await provenance.EvaluateActiveSelectionFreshnessAsync(cycle, effectiveRetiredEpics);
     }
@@ -122,13 +124,13 @@ public sealed class SelectionProvenanceTests
     {
         var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "# Roadmap Completion Context");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "# Roadmap Completion Context");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
-        repo.Write(Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
         return repo;
     }
 
-    private static Cli.RetiredEpic RetiredEpic() =>
+    private static RetiredEpic RetiredEpic() =>
         new("EPIC-001", "Retired Epic", "Already complete.", ".agents/evidence/audits/epic-preparation-audit.0001.md", DateTimeOffset.UtcNow);
 
     private static string Selection(string initiative = "Investigate A") => $$"""

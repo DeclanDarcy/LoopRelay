@@ -1,7 +1,7 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Services;
 
-namespace LoopRelay.Agents.Tests;
+namespace LoopRelay.Agents.Tests.Services;
 
 [Collection("ProcessEnvironment")]
 public sealed class ProcessRunnerStderrDrainTests

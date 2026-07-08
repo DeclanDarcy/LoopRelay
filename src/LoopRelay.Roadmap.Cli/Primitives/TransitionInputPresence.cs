@@ -1,6 +1,4 @@
-using System.Text;
-
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Primitives;
 
 internal enum TransitionInputPresence
 {

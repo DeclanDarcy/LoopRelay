@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace LoopRelay.Projections.Tests;
+namespace LoopRelay.Projections.Tests.Services;
 
 public sealed class ProjectionLayeringTests
 {

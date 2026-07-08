@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using LoopRelay.Permissions.Services;
 
 namespace LoopRelay.Permissions.Models;
 

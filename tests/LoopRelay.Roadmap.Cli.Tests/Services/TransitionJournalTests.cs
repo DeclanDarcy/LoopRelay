@@ -1,10 +1,13 @@
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class TransitionJournalTests
 {
@@ -12,15 +15,15 @@ public sealed class TransitionJournalTests
     public async Task Journal_records_started_and_completed_correlation_ids()
     {
         using var repo = new TempRepo();
-        var store = new Cli.TransitionJournalStore(repo.Artifacts);
+        var store = new TransitionJournalStore(repo.Artifacts);
 
-        await store.AppendAsync(new Cli.TransitionJournalRecord("TransitionStarted", "abc", DateTimeOffset.UtcNow, Cli.RoadmapState.CoreReady, Cli.RoadmapState.SelectNextStrategicInitiative, "SelectNextEpic", "projection", "contract", new Dictionary<string, string>(), ["output"], 0, "Started", "None", null));
-        await store.AppendAsync(new Cli.TransitionJournalRecord("TransitionCompleted", "abc", DateTimeOffset.UtcNow, Cli.RoadmapState.CoreReady, Cli.RoadmapState.SelectNextStrategicInitiative, "SelectNextEpic", "projection", "contract", new Dictionary<string, string>(), ["output"], 10, "Completed", "Select Existing Epic", null));
+        await store.AppendAsync(new TransitionJournalRecord("TransitionStarted", "abc", DateTimeOffset.UtcNow, RoadmapState.CoreReady, RoadmapState.SelectNextStrategicInitiative, "SelectNextEpic", "projection", "contract", new Dictionary<string, string>(), ["output"], 0, "Started", "None", null));
+        await store.AppendAsync(new TransitionJournalRecord("TransitionCompleted", "abc", DateTimeOffset.UtcNow, RoadmapState.CoreReady, RoadmapState.SelectNextStrategicInitiative, "SelectNextEpic", "projection", "contract", new Dictionary<string, string>(), ["output"], 10, "Completed", "Select Existing Epic", null));
 
-        string[] lines = repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal).Trim().Split('\n');
+        string[] lines = repo.Read(RoadmapArtifactPaths.TransitionJournal).Trim().Split('\n');
         Assert.Equal(2, lines.Length);
         Assert.Contains("abc", lines[0], StringComparison.Ordinal);
-        Assert.NotNull(JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(lines[1], new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        Assert.NotNull(JsonSerializer.Deserialize<TransitionJournalRecord>(lines[1], new JsonSerializerOptions(JsonSerializerDefaults.Web)));
     }
 
     [Fact]
@@ -49,7 +52,7 @@ public sealed class TransitionJournalTests
             }
             """;
 
-        Cli.TransitionJournalRecord? record = JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(
+        TransitionJournalRecord? record = JsonSerializer.Deserialize<TransitionJournalRecord>(
             legacy,
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
@@ -63,27 +66,27 @@ public sealed class TransitionJournalTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap v1");
         var runtime = new MutatingRuntime(
             onRuntimePrompt: () => repo.Write(".agents/roadmap/001-roadmap.md", "roadmap v2"),
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Cli.TransitionJournalRecord[] records = ReadJournal(repo)
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        TransitionJournalRecord[] records = ReadJournal(repo)
             .Where(record => record.Prompt == "SelectNextEpic")
             .ToArray();
-        Cli.TransitionJournalRecord started = records.Single(record => record.Event == "TransitionStarted");
-        Cli.TransitionJournalRecord completed = records.Single(record => record.Event == "TransitionCompleted");
+        TransitionJournalRecord started = records.Single(record => record.Event == "TransitionStarted");
+        TransitionJournalRecord completed = records.Single(record => record.Event == "TransitionCompleted");
 
         Assert.NotNull(started.InputSnapshot);
         Assert.NotNull(completed.InputSnapshot);
         Assert.Equal(started.InputSnapshot.SnapshotHash, completed.InputSnapshot.SnapshotHash);
         Assert.Equal(started.InputArtifactHashes, completed.InputArtifactHashes);
-        Assert.Equal(Cli.RoadmapHash.Sha256("roadmap v1"), started.InputArtifactHashes[".agents/roadmap/001-roadmap.md"]);
+        Assert.Equal(RoadmapHash.Sha256("roadmap v1"), started.InputArtifactHashes[".agents/roadmap/001-roadmap.md"]);
         Assert.Equal("roadmap v2", repo.Read(".agents/roadmap/001-roadmap.md"));
     }
 
@@ -92,21 +95,21 @@ public sealed class TransitionJournalTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
         var runtime = new ScriptedAgentRuntime(
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Failed("selection failed"));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Failed, outcome);
+        Assert.Equal(RoadmapOutcome.Failed, outcome);
 
-        Cli.TransitionJournalRecord[] records = ReadJournal(repo)
+        TransitionJournalRecord[] records = ReadJournal(repo)
             .Where(record => record.Prompt == "SelectNextEpic")
             .ToArray();
-        Cli.TransitionJournalRecord started = records.Single(record => record.Event == "TransitionStarted");
-        Cli.TransitionJournalRecord failed = records.Single(record => record.Event == "TransitionFailed");
+        TransitionJournalRecord started = records.Single(record => record.Event == "TransitionStarted");
+        TransitionJournalRecord failed = records.Single(record => record.Event == "TransitionFailed");
 
         Assert.NotNull(started.InputSnapshot);
         Assert.NotNull(failed.InputSnapshot);
@@ -135,23 +138,23 @@ public sealed class TransitionJournalTests
             ScriptedAgentRuntime.Completed(ProjectionSamples.Valid("SelectNextEpic")),
             ScriptedAgentRuntime.Completed(StrategicInvestigationSelection()));
 
-        Cli.RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, runtime).RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapOutcome.Paused, outcome);
-        Cli.TransitionJournalRecord started = ReadJournal(repo).Single(record =>
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        TransitionJournalRecord started = ReadJournal(repo).Single(record =>
             record.Event == "TransitionStarted" &&
             record.Prompt == "CreateRoadmapCompletionContext");
-        Assert.Equal(Cli.RoadmapHash.Sha256(archivedEpic), started.InputArtifactHashes[archivedEpicPath]);
+        Assert.Equal(RoadmapHash.Sha256(archivedEpic), started.InputArtifactHashes[archivedEpicPath]);
         Assert.NotNull(started.InputSnapshot);
         Assert.Contains(started.InputSnapshot.ArtifactInputs, input =>
             input.Path == archivedEpicPath &&
-            input.Roles == Cli.TransitionInputRole.CompletedEpic);
+            input.Roles == TransitionInputRole.CompletedEpic);
     }
 
-    private static Cli.TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
-        repo.Read(Cli.RoadmapArtifactPaths.TransitionJournal)
+    private static TransitionJournalRecord[] ReadJournal(TempRepo repo) =>
+        repo.Read(RoadmapArtifactPaths.TransitionJournal)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(line => JsonSerializer.Deserialize<Cli.TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
+            .Select(line => JsonSerializer.Deserialize<TransitionJournalRecord>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
             .ToArray();
 
     private static string StrategicInvestigationSelection() => """
@@ -204,7 +207,7 @@ public sealed class TransitionJournalTests
             public string? ThreadId => null;
 
             public Task<AgentTurnResult> RunTurnAsync(string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken cancellationToken = default) =>
-                runtime.RunOneShotAsync(Cli.AgentSpecs.ReadOnlyPlanning(new Repository { Id = Guid.NewGuid(), Path = Directory.GetCurrentDirectory() }), prompt, onChunk, cancellationToken);
+                runtime.RunOneShotAsync(AgentSpecs.ReadOnlyPlanning(new Repository { Id = Guid.NewGuid(), Path = Directory.GetCurrentDirectory() }), prompt, onChunk, cancellationToken);
 
             public Task CancelAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 

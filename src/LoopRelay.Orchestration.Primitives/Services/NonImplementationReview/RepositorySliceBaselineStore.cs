@@ -1,5 +1,5 @@
 using System.Text.Json;
-using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Orchestration;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 

@@ -1,4 +1,6 @@
-namespace LoopRelay.Orchestration.Abstractions.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
+
+namespace LoopRelay.Orchestration.Models.NonImplementationReview;
 
 public sealed class NonImplementationReviewRunnerRequest
 {

@@ -1,6 +1,8 @@
-using LoopRelay.Completion;
+using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Primitives;
+using LoopRelay.Roadmap.Cli.Primitives;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record RoadmapCompletionRoute(
     CompletionCertificationRoute Shared,

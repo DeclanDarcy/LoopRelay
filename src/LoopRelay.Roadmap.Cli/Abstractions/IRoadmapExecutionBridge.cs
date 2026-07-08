@@ -1,9 +1,6 @@
-using LoopRelay.Core.Repositories;
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Infrastructure.Trust;
+using LoopRelay.Roadmap.Cli.Models;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Abstractions;
 
 internal interface IRoadmapExecutionBridge
 {

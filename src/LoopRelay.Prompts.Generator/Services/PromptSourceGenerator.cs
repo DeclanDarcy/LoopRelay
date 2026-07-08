@@ -16,11 +16,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using LoopRelay.Prompts.Generator.Primitives;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
-namespace Lib.Prompts
+namespace LoopRelay.Prompts.Generator.Services
 {
     [Generator(LanguageNames.CSharp)]
     public sealed class PromptSourceGenerator : IIncrementalGenerator

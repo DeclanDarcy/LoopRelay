@@ -1,36 +1,41 @@
+using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Tests.Models;
 using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Projections;
-using LoopRelay.Agents.Models;
-using LoopRelay.Cli;
+using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Primitives;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class DecisionSessionTests
 {
-    private static (Cli.DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con)
+    private static (DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con)
         New(DecisionSessionRouterOptions? routerOptions = null, IDecisionCostModel? costModel = null)
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
-        return (new Cli.DecisionSession(rt, router, art, con, repo, costModel), rt, store, repo, con);
+        return (new DecisionSession(rt, router, art, con, repo, costModel), rt, store, repo, con);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
 
-    private static (Cli.DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
+    private static (DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
         RecordingLoopConsole Con, FakeDecisionSessionResumeStore Resume)
         NewWithResume(
             DecisionSessionRouterOptions? routerOptions = null,
@@ -39,12 +44,12 @@ public class DecisionSessionTests
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
         var resume = new FakeDecisionSessionResumeStore { State = state };
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null,
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null,
             resumeStore: resume, resumeEnabled: resumeEnabled);
         return (session, rt, store, repo, con, resume);
     }
@@ -52,7 +57,7 @@ public class DecisionSessionTests
     private static DecisionSessionResumeState ResumeState(string threadId = "thread-old") =>
         new(threadId, 100, 5d, 2, 3d, 2d, 300_000d, 1, 500, 1);
 
-    private static (Cli.DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
+    private static (DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
         RecordingLoopConsole Con, FakeDecisionSessionResumeStore Resume, FakeProjectionService Projection)
         NewWithProjection(
             DecisionSessionRouterOptions? routerOptions = null,
@@ -61,7 +66,7 @@ public class DecisionSessionTests
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
@@ -72,7 +77,7 @@ public class DecisionSessionTests
             projection.Freshness = freshness;
         }
 
-        var session = new Cli.DecisionSession(
+        var session = new DecisionSession(
             rt,
             router,
             art,
@@ -120,12 +125,12 @@ public class DecisionSessionTests
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var artifacts = new Cli.LoopArtifacts(store, repo);
+        var artifacts = new LoopArtifacts(store, repo);
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions());
         var ledger = new NonImplementationReviewLedgerStore(store);
         var capture = new ExplicitHitlNonImplementationRequestCaptureService(ledger);
-        var session = new Cli.DecisionSession(
+        var session = new DecisionSession(
             rt,
             router,
             artifacts,
@@ -265,7 +270,7 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
         Assert.Equal(1, rt.ClosedSessions);
     }
 
@@ -402,11 +407,11 @@ public class DecisionSessionTests
         // the repo), and the evolved context is copied back into the repo. Small window (guard 20) so round 2 transfers.
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -469,12 +474,12 @@ public class DecisionSessionTests
         // context ratchet the growth streak to the threshold and emit exactly ONE console warning (on the third).
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -511,12 +516,12 @@ public class DecisionSessionTests
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -549,12 +554,12 @@ public class DecisionSessionTests
         var inner = new MemoryArtifactStore();
         var store = new ThrowOnDeltaArchiveStore(inner);
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -572,7 +577,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));   // OptimizeOperationalDocuments
         // The propose turn is never reached because the archive throws first.
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
 
         // The context update succeeded before the archive failed.
         Assert.Equal("OPCTX-1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
@@ -586,12 +591,12 @@ public class DecisionSessionTests
         // optimized document is copied back into the repo.
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory(); // distinct root (genuinely separate from the repo)
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Details), "DETAILS-0");
@@ -656,12 +661,12 @@ public class DecisionSessionTests
         // into the sandbox and are not conjured into the repo on copy-back — only operational_context.md is required.
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -701,12 +706,12 @@ public class DecisionSessionTests
         // never archived and the repo keeps the EVOLVED context the update already copied back.
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -724,7 +729,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));                    // OptimizeOperationalDocuments
         // Neither the archive nor the propose turn is reached.
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
 
         Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.True(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
@@ -775,12 +780,12 @@ public class DecisionSessionTests
         // delta archive, so the un-applied delta stays live for a retry instead of being consumed.
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new Cli.DecisionSession(rt, router, art, con, repo, costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -793,7 +798,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("did nothing")));  // UpdateOperationalContext: no write
         // Neither the optimize one-shot, nor the archive, nor the propose turn is reached.
 
-        Cli.LoopStepException ex = await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        LoopStepException ex = await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
         Assert.Contains("unchanged", ex.Message);
 
         // The delta was NOT consumed: still live, nothing rotated into .agents/deltas/.
@@ -822,7 +827,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>                                     // UpdateOperationalContext fails
             Turns.Failed("", "Not inside a trusted directory and --skip-git-repo-check was not specified.")));
 
-        Cli.LoopStepException ex = await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        LoopStepException ex = await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
         Assert.Contains("Not inside a trusted directory", ex.Message);
     }
 
@@ -834,7 +839,7 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed("boom", "codex stderr tail")));
 
-        Cli.LoopStepException ex = await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        LoopStepException ex = await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
         Assert.Contains("codex stderr tail", ex.Message);
     }
 
@@ -1017,7 +1022,7 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(() => session.RunAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
 
         Assert.Equal(1, resume.ClearCalls);
         Assert.Empty(resume.Written);

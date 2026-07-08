@@ -1,8 +1,9 @@
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Plan.Cli;
+namespace LoopRelay.Plan.Cli.Services;
 
 /// <summary>
 /// Repository-relative .agents/* disk access for the planning pipeline, plus dedicated absolute-path

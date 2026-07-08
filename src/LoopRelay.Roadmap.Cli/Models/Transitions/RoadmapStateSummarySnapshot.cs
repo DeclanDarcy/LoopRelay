@@ -1,4 +1,4 @@
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models.Transitions;
 
 internal sealed record RoadmapStateSummarySnapshot(
     IReadOnlyList<ArtifactStateRow> ActiveArtifacts,

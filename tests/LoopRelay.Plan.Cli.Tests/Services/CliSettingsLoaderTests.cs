@@ -1,7 +1,8 @@
-using LoopRelay.Permissions.Configuration;
+using LoopRelay.Permissions.Models.Configuration;
+using LoopRelay.Permissions.Services.Configuration;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 public sealed class CliSettingsLoaderTests
 {

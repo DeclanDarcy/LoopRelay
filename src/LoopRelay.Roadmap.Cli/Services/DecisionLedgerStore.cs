@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed partial class DecisionLedgerStore(RoadmapArtifacts artifacts)
 {

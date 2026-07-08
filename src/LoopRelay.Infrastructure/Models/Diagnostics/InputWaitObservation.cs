@@ -1,6 +1,6 @@
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 
-namespace LoopRelay.Infrastructure.Diagnostics;
+namespace LoopRelay.Infrastructure.Models.Diagnostics;
 
 public sealed record InputWaitObservation(
     string RepositoryId,

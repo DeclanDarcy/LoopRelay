@@ -1,7 +1,10 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 /// <summary>
 /// A session wrapper that delegates each turn to <see cref="Inner"/>, records one telemetry row per

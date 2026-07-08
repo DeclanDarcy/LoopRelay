@@ -1,4 +1,4 @@
-namespace LoopRelay.Agents.Tests;
+namespace LoopRelay.Agents.Tests.Models;
 
 /// <summary>
 /// Serializes every test class that mutates process-global state — environment variables,

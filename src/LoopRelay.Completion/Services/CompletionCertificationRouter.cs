@@ -1,4 +1,7 @@
-namespace LoopRelay.Completion;
+using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Primitives;
+
+namespace LoopRelay.Completion.Services;
 
 public sealed class CompletionCertificationRouter
 {

@@ -1,4 +1,4 @@
-namespace LoopRelay.Agents.Models;
+namespace LoopRelay.Agents.Primitives;
 
 public enum AgentSessionMode
 {

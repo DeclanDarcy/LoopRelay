@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using LoopRelay.Core.Abstractions.Artifacts;
 
 namespace LoopRelay.Core.Artifacts;
 

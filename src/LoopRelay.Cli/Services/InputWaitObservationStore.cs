@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
-using LoopRelay.Agents.Models;
-using LoopRelay.Infrastructure.Diagnostics;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Infrastructure.Abstractions.Diagnostics;
+using LoopRelay.Infrastructure.Models.Diagnostics;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 internal sealed class InputWaitObservationStore : IInputWaitObservationSink
 {

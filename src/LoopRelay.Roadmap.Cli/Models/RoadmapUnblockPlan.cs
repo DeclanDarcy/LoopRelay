@@ -1,6 +1,8 @@
-using LoopRelay.Completion;
+using LoopRelay.Completion.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record RoadmapUnblockPlan(
     RoadmapUnblockAction Action,

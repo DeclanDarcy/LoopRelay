@@ -1,9 +1,11 @@
-using LoopRelay.Infrastructure.Artifacts;
+using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Services.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class HitlArtifactCaptureTests
 {
@@ -11,9 +13,9 @@ public sealed class HitlArtifactCaptureTests
     public async Task Capture_returns_without_ledger_write_when_service_is_absent()
     {
         using var repo = new TempRepo();
-        var capture = new Cli.HitlArtifactCapture(null);
+        var capture = new HitlArtifactCapture(null);
 
-        await capture.CaptureAsync(Cli.RoadmapArtifactPaths.Selection, HitlSource());
+        await capture.CaptureAsync(RoadmapArtifactPaths.Selection, HitlSource());
 
         Assert.False(await repo.Artifacts.ExistsAsync(NonImplementationReviewLedgerStore.LedgerPath));
     }
@@ -23,7 +25,7 @@ public sealed class HitlArtifactCaptureTests
     {
         using var repo = new TempRepo();
         var ledger = new NonImplementationReviewLedgerStore(new RepositoryArtifactStore(repo.Store, repo.Repository));
-        var capture = new Cli.HitlArtifactCapture(new ExplicitHitlNonImplementationRequestCaptureService(ledger));
+        var capture = new HitlArtifactCapture(new ExplicitHitlNonImplementationRequestCaptureService(ledger));
 
         await capture.CaptureAsync(" ", " \r\n\t ");
 
@@ -35,13 +37,13 @@ public sealed class HitlArtifactCaptureTests
     {
         using var repo = new TempRepo();
         var ledger = new NonImplementationReviewLedgerStore(new RepositoryArtifactStore(repo.Store, repo.Repository));
-        var capture = new Cli.HitlArtifactCapture(new ExplicitHitlNonImplementationRequestCaptureService(ledger));
+        var capture = new HitlArtifactCapture(new ExplicitHitlNonImplementationRequestCaptureService(ledger));
 
-        await capture.CaptureAsync(Cli.RoadmapArtifactPaths.ActiveEpic, HitlSource());
+        await capture.CaptureAsync(RoadmapArtifactPaths.ActiveEpic, HitlSource());
 
         NonImplementationHitlRequestEntry request = Assert.Single((await ledger.LoadOrCreateAsync()).HitlRequests);
         Assert.Equal("docs/roadmap-note.md", request.DeliverablePathOrPattern);
-        Assert.Equal(Cli.RoadmapArtifactPaths.ActiveEpic, request.SourceArtifactPath);
+        Assert.Equal(RoadmapArtifactPaths.ActiveEpic, request.SourceArtifactPath);
         Assert.Equal(NonImplementationHitlProvenanceKind.HitlRequested, request.HitlProvenanceKind);
         Assert.Equal("Human explicitly requested the note.", request.Rationale);
     }

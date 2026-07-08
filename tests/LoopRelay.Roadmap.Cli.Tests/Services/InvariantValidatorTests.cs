@@ -1,7 +1,8 @@
-using LoopRelay.Roadmap.Cli;
-using ProjectContextLoader = LoopRelay.Roadmap.Cli.ProjectContextLoader;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class InvariantValidatorTests
 {
@@ -10,17 +11,17 @@ public sealed class InvariantValidatorTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        var lifecycle = new Cli.ArtifactLifecycleStore(repo.Artifacts);
-        await lifecycle.UpsertAsync(".agents/epic.md", Cli.ArtifactLifecycleState.Ready);
-        await lifecycle.UpsertAsync(".agents/epic-1.md", Cli.ArtifactLifecycleState.Executing);
-        Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
+        await lifecycle.UpsertAsync(".agents/epic.md", ArtifactLifecycleState.Ready);
+        await lifecycle.UpsertAsync(".agents/epic-1.md", ArtifactLifecycleState.Executing);
+        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo, lifecycle).ValidateAsync(Cli.RoadmapState.ActiveEpicReady, projectContext.Hash);
+        InvariantValidationResult result = await CreateValidator(repo, lifecycle).ValidateAsync(RoadmapState.ActiveEpicReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.RoadmapState.Failed, result.FailureState);
+        Assert.Equal(RoadmapState.Failed, result.FailureState);
         Assert.Equal("DuplicateActiveEpic", result.FailureCategory);
-        Assert.StartsWith(Cli.RoadmapArtifactPaths.OrchestrationEvidenceDirectory, result.EvidencePath, StringComparison.Ordinal);
+        Assert.StartsWith(RoadmapArtifactPaths.OrchestrationEvidenceDirectory, result.EvidencePath, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -28,13 +29,13 @@ public sealed class InvariantValidatorTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        Cli.ProjectContext original = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
-        repo.Write(Cli.RoadmapArtifactPaths.ProjectContextSourceFiles[0], "changed project context");
+        ProjectContext original = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        repo.Write(RoadmapArtifactPaths.ProjectContextSourceFiles[0], "changed project context");
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(Cli.RoadmapState.CoreReady, original.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.CoreReady, original.Hash);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.RoadmapState.Failed, result.FailureState);
+        Assert.Equal(RoadmapState.Failed, result.FailureState);
         Assert.Equal("ProjectContextDrift", result.FailureCategory);
     }
 
@@ -43,15 +44,15 @@ public sealed class InvariantValidatorTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
         repo.Write(".agents/specs/a.md", "Epic Path: .agents/other-epic.md");
         await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/a.md");
-        Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(Cli.RoadmapState.MilestoneSpecsReady, projectContext.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.MilestoneSpecsReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
         Assert.Equal("SpecEpicMismatch", result.FailureCategory);
     }
 
@@ -60,19 +61,19 @@ public sealed class InvariantValidatorTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, """
-                                                        # Create New Epic Blocked
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, """
+                                                    # Create New Epic Blocked
 
-                                                        ## Reason
+                                                    ## Reason
 
-                                                        The proposal requires strategic investigation.
-                                                        """);
-        Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+                                                    The proposal requires strategic investigation.
+                                                    """);
+        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(Cli.RoadmapState.ActiveEpicReady, projectContext.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.ActiveEpicReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
         Assert.Equal("ActiveEpicInvalid", result.FailureCategory);
         Assert.Contains("blocked", result.Error, StringComparison.OrdinalIgnoreCase);
     }
@@ -82,13 +83,13 @@ public sealed class InvariantValidatorTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
-        Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
+        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(Cli.RoadmapState.ExecutionPromptReady, projectContext.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.ExecutionPromptReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
         Assert.Equal("ExecutionPreparationStale", result.FailureCategory);
     }
 
@@ -97,13 +98,13 @@ public sealed class InvariantValidatorTests
     {
         using var repo = new TempRepo();
         repo.SeedProjectContext();
-        repo.Write(Cli.RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
-        Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"], ProjectionSamples.Valid("SelectNextEpic"));
+        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(Cli.RoadmapState.CoreReady, projectContext.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.CoreReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.RoadmapState.Failed, result.FailureState);
+        Assert.Equal(RoadmapState.Failed, result.FailureState);
         Assert.Equal("ProjectionManifestMissing", result.FailureCategory);
         Assert.Contains("manifest entry", result.Error, StringComparison.OrdinalIgnoreCase);
     }
@@ -114,14 +115,14 @@ public sealed class InvariantValidatorTests
         using var repo = new TempRepo();
         repo.SeedProjectContext();
         const string runtimePrompt = "SelectNextEpic";
-        repo.Write(Cli.RoadmapArtifactPaths.ProjectionPaths[runtimePrompt], ProjectionSamples.Valid(runtimePrompt));
-        await SeedProjectionManifestAsync(repo, runtimePrompt, Cli.ProjectionValidationStatus.Invalid);
-        Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths[runtimePrompt], ProjectionSamples.Valid(runtimePrompt));
+        await SeedProjectionManifestAsync(repo, runtimePrompt, ProjectionValidationStatus.Invalid);
+        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(Cli.RoadmapState.CoreReady, projectContext.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.CoreReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
         Assert.Equal("ProjectionInvalid", result.FailureCategory);
     }
 
@@ -131,15 +132,15 @@ public sealed class InvariantValidatorTests
         using var repo = new TempRepo();
         repo.SeedProjectContext();
         const string runtimePrompt = "SelectNextEpic";
-        repo.Write(Cli.RoadmapArtifactPaths.ProjectionPaths[runtimePrompt], ProjectionSamples.Valid(runtimePrompt));
-        await SeedProjectionManifestAsync(repo, runtimePrompt, Cli.ProjectionValidationStatus.Valid);
-        repo.Write(Cli.RoadmapArtifactPaths.ProjectContextSourceFiles[0], "changed project context");
-        Cli.ProjectContext projectContext = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
+        repo.Write(RoadmapArtifactPaths.ProjectionPaths[runtimePrompt], ProjectionSamples.Valid(runtimePrompt));
+        await SeedProjectionManifestAsync(repo, runtimePrompt, ProjectionValidationStatus.Valid);
+        repo.Write(RoadmapArtifactPaths.ProjectContextSourceFiles[0], "changed project context");
+        ProjectContext projectContext = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(Cli.RoadmapState.CoreReady, projectContext.Hash);
+        InvariantValidationResult result = await CreateValidator(repo).ValidateAsync(RoadmapState.CoreReady, projectContext.Hash);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
         Assert.Equal("ProjectionProvenanceStale", result.FailureCategory);
     }
 
@@ -148,7 +149,7 @@ public sealed class InvariantValidatorTests
     {
         using var repo = new TempRepo();
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo).ValidateSplitChildPromotionAsync(".agents/epic-1.md");
+        InvariantValidationResult result = await CreateValidator(repo).ValidateSplitChildPromotionAsync(".agents/epic-1.md");
 
         Assert.False(result.IsValid);
     }
@@ -158,40 +159,40 @@ public sealed class InvariantValidatorTests
     {
         using var repo = new TempRepo();
 
-        Cli.InvariantValidationResult result = await CreateValidator(repo).ValidateSplitChildPromotionAsync(".agents/specs/not-a-child.md");
+        InvariantValidationResult result = await CreateValidator(repo).ValidateSplitChildPromotionAsync(".agents/specs/not-a-child.md");
 
         Assert.False(result.IsValid);
         Assert.Contains("not a valid split child", result.Error, StringComparison.Ordinal);
     }
 
-    private static Cli.InvariantValidator CreateValidator(TempRepo repo, Cli.ArtifactLifecycleStore? lifecycle = null)
+    private static InvariantValidator CreateValidator(TempRepo repo, ArtifactLifecycleStore? lifecycle = null)
     {
-        var projections = new Cli.ProjectionRegistry();
-        return new Cli.InvariantValidator(
+        var projections = new ProjectionRegistry();
+        return new InvariantValidator(
             repo.Artifacts,
-            new ProjectContextLoader(repo.Artifacts),
+            new Cli.Services.ProjectContextLoader(repo.Artifacts),
             projections,
-            new Cli.PromptContractRegistry(projections),
-            new Cli.ProjectionManifestStore(repo.Artifacts),
-            lifecycle ?? new Cli.ArtifactLifecycleStore(repo.Artifacts),
-            new Cli.SplitFamilyStore(repo.Artifacts),
+            new PromptContractRegistry(projections),
+            new ProjectionManifestStore(repo.Artifacts),
+            lifecycle ?? new ArtifactLifecycleStore(repo.Artifacts),
+            new SplitFamilyStore(repo.Artifacts),
             ExecutionPreparationTestSupport.CreateProvenance(repo));
     }
 
     private static async Task SeedProjectionManifestAsync(
         TempRepo repo,
         string runtimePrompt,
-        Cli.ProjectionValidationStatus validationStatus)
+        ProjectionValidationStatus validationStatus)
     {
-        Cli.ProjectContext context = await new ProjectContextLoader(repo.Artifacts).LoadAsync();
-        Cli.ProjectionProvenance provenance = new Cli.ProjectionProvenanceFactory(new Cli.ProjectionRegistry())
+        ProjectContext context = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync();
+        ProjectionProvenance provenance = new ProjectionProvenanceFactory(new ProjectionRegistry())
             .Create(runtimePrompt, context);
-        await new Cli.ProjectionManifestStore(repo.Artifacts).UpsertAsync(Cli.ProjectionManifestEntry.FromTrustedProvenance(
+        await new ProjectionManifestStore(repo.Artifacts).UpsertAsync(ProjectionManifestEntry.FromTrustedProvenance(
             provenance,
-            Cli.RoadmapHash.Sha256(repo.Read(Cli.RoadmapArtifactPaths.ProjectionPaths[runtimePrompt])),
+            RoadmapHash.Sha256(repo.Read(RoadmapArtifactPaths.ProjectionPaths[runtimePrompt])),
             DateTimeOffset.UtcNow,
             validationStatus,
-            Cli.ProjectionFreshness.Fresh,
-            validationStatus == Cli.ProjectionValidationStatus.Invalid ? "Invalid projection fixture." : null));
+            ProjectionFreshness.Fresh,
+            validationStatus == ProjectionValidationStatus.Invalid ? "Invalid projection fixture." : null));
     }
 }

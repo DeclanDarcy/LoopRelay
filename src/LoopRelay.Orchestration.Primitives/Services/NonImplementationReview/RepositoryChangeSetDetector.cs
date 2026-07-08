@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;

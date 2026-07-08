@@ -1,10 +1,11 @@
-using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Permissions.Models;
-using LoopRelay.Cli;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class AgentSpecsTests
 {
@@ -13,7 +14,7 @@ public class AgentSpecsTests
     [Fact]
     public void Operational_IsWorkspaceWriteNoApprovalAtGivenEffort()
     {
-        AgentSessionSpec spec = Cli.AgentSpecs.Operational(Repo, AgentEffortLevel.Medium, identifier: null);
+        AgentSessionSpec spec = AgentSpecs.Operational(Repo, AgentEffortLevel.Medium, identifier: null);
 
         Assert.Equal(SessionRole.OperationalExecution, spec.Role);
         Assert.Equal("workspace-write", spec.Sandbox.Identifier);
@@ -31,7 +32,7 @@ public class AgentSpecsTests
     [Fact]
     public void Operational_WithDangerFullAccessSandbox_GrantsFullAccessAndNetwork()
     {
-        AgentSessionSpec spec = Cli.AgentSpecs.Operational(
+        AgentSessionSpec spec = AgentSpecs.Operational(
             Repo, AgentEffortLevel.Medium, identifier: null, sandboxIdentifier: "danger-full-access");
 
         Assert.Equal(SessionRole.OperationalExecution, spec.Role);
@@ -44,7 +45,7 @@ public class AgentSpecsTests
     [Fact]
     public void Decision_IsReadOnlyHighXhigh()
     {
-        AgentSessionSpec spec = Cli.AgentSpecs.Decision(Repo);
+        AgentSessionSpec spec = AgentSpecs.Decision(Repo);
 
         Assert.Equal(SessionRole.Decision, spec.Role);
         Assert.Equal("read-only", spec.Sandbox.Identifier);
@@ -60,7 +61,7 @@ public class AgentSpecsTests
     {
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
 
-        AgentSessionSpec spec = Cli.AgentSpecs.Decision(repo, "thread-old");
+        AgentSessionSpec spec = AgentSpecs.Decision(repo, "thread-old");
 
         Assert.Equal("thread-old", spec.ResumeThreadId);
         // The resume overload must not perturb the decision posture.
@@ -74,7 +75,7 @@ public class AgentSpecsTests
     {
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
 
-        Assert.Null(Cli.AgentSpecs.Decision(repo).ResumeThreadId);
+        Assert.Null(AgentSpecs.Decision(repo).ResumeThreadId);
     }
 
     [Fact]
@@ -88,7 +89,7 @@ public class AgentSpecsTests
             [".agents/operational_context.md"],
             []);
 
-        AgentSessionSpec spec = Cli.AgentSpecs.ScopedArtifactOperation(
+        AgentSessionSpec spec = AgentSpecs.ScopedArtifactOperation(
             Repo,
             AgentEffortLevel.High,
             "xhigh",

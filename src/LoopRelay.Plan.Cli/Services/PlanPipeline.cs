@@ -1,7 +1,11 @@
-using LoopRelay.Orchestration;
-using LoopRelay.Projections;
+using LoopRelay.Orchestration.Services;
+using LoopRelay.Plan.Cli.Abstractions;
+using LoopRelay.Plan.Cli.Models;
+using LoopRelay.Plan.Cli.Primitives;
+using LoopRelay.Projections.Abstractions;
+using LoopRelay.Projections.Models;
 
-namespace LoopRelay.Plan.Cli;
+namespace LoopRelay.Plan.Cli.Services;
 
 /// <summary>
 /// The sequencer for the pipeline steps: preflight, write plan, adversarial review, revise plan (eager session

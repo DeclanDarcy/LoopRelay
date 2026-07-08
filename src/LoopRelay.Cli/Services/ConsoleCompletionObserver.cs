@@ -1,19 +1,7 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Extensions;
-using LoopRelay.Agents.Services;
-using LoopRelay.Completion;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Infrastructure.Artifacts;
-using LoopRelay.Infrastructure.Diagnostics;
-using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Orchestration.Services;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Permissions.Configuration;
-using LoopRelay.Projections;
-using Microsoft.Extensions.DependencyInjection;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Completion.Abstractions;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 internal sealed class ConsoleCompletionObserver(ILoopConsole console) : ICompletionObserver
 {

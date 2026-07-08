@@ -1,7 +1,9 @@
-using LoopRelay.Roadmap.Cli;
-using LoopRelay.Completion;
+using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Services;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class MarkdownParserTests
 {
@@ -27,7 +29,7 @@ public sealed class MarkdownParserTests
         | Epic Name | Epic A |
         """;
 
-        Cli.SelectionDecision decision = new Cli.SelectionParser().Parse(markdown);
+        SelectionDecision decision = new SelectionParser().Parse(markdown);
 
         Assert.Equal("Select Existing Epic", decision.RecommendedOutcome);
         Assert.Equal("Epic A", decision.RecommendedInitiative);
@@ -59,7 +61,7 @@ public sealed class MarkdownParserTests
             | Recommended Next Step | Gather More Evidence |
             """;
 
-            Assert.Equal(disposition, new Cli.EpicPreparationAuditParser().Parse(markdown).Disposition);
+            Assert.Equal(disposition, new EpicPreparationAuditParser().Parse(markdown).Disposition);
         }
     }
 
@@ -77,7 +79,7 @@ public sealed class MarkdownParserTests
         | Confidence | High |
         """;
 
-        Assert.Throws<Cli.MarkdownParseException>(() => new Cli.SelectionParser().Parse(markdown));
+        Assert.Throws<MarkdownParseException>(() => new SelectionParser().Parse(markdown));
     }
 
     [Fact]
@@ -152,6 +154,6 @@ public sealed class MarkdownParserTests
         | Confidence | High |
         """;
 
-        Assert.Throws<Cli.MarkdownParseException>(() => new Cli.SelectionParser().Parse(markdown));
+        Assert.Throws<MarkdownParseException>(() => new SelectionParser().Parse(markdown));
     }
 }

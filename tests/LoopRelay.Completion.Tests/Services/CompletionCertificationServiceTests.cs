@@ -1,13 +1,20 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Completion;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Completion.Abstractions;
+using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Primitives;
+using LoopRelay.Completion.Services;
 using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
-using LoopRelay.Projections;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Orchestration.Services;
+using LoopRelay.Projections.Abstractions;
+using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Primitives;
 using Xunit;
 
-namespace LoopRelay.Completion.Tests;
+namespace LoopRelay.Completion.Tests.Services;
 
 public sealed class CompletionCertificationServiceTests
 {

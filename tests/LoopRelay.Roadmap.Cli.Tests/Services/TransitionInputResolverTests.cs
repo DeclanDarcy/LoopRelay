@@ -1,6 +1,7 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class TransitionInputResolverTests
 {
@@ -10,12 +11,12 @@ public sealed class TransitionInputResolverTests
         using var repo = new TempRepo();
         string projectionPath = SeedProjection(repo, "CreateRoadmapCompletionContext");
 
-        Cli.TransitionInputSnapshot snapshot = await ResolveAsync(repo, "CreateRoadmapCompletionContext", projectionPath);
+        TransitionInputSnapshot snapshot = await ResolveAsync(repo, "CreateRoadmapCompletionContext", projectionPath);
 
-        Cli.TransitionArtifactInput input = Assert.Single(snapshot.ArtifactInputs);
+        TransitionArtifactInput input = Assert.Single(snapshot.ArtifactInputs);
         Assert.Equal(projectionPath, input.Path);
-        Assert.Equal(Cli.TransitionInputRole.Projection, input.Roles);
-        Assert.Equal(Cli.RoadmapHash.Sha256(repo.Read(projectionPath)), input.Hash);
+        Assert.Equal(TransitionInputRole.Projection, input.Roles);
+        Assert.Equal(RoadmapHash.Sha256(repo.Read(projectionPath)), input.Hash);
         Assert.Equal(input.Hash, snapshot.Projection.ProjectionHash);
         Assert.Equal(input.Hash, snapshot.ToInputArtifactHashes()[projectionPath]);
     }
@@ -28,21 +29,21 @@ public sealed class TransitionInputResolverTests
         repo.Write(".agents/archive/epics/002-beta.md", "beta");
         repo.Write(".agents/archive/epics/001-alpha.md", "alpha");
 
-        Cli.TransitionInputSnapshot snapshot = await ResolveAsync(repo, "CreateRoadmapCompletionContext", projectionPath);
+        TransitionInputSnapshot snapshot = await ResolveAsync(repo, "CreateRoadmapCompletionContext", projectionPath);
 
         Assert.Equal(
             [".agents/archive/epics/001-alpha.md", ".agents/archive/epics/002-beta.md", projectionPath],
             snapshot.ArtifactInputs.Select(input => input.Path).ToArray());
         Assert.Contains(snapshot.ArtifactInputs, input =>
             input.Path == ".agents/archive/epics/001-alpha.md" &&
-            input.Roles == Cli.TransitionInputRole.CompletedEpic &&
-            input.Hash == Cli.RoadmapHash.Sha256("alpha"));
+            input.Roles == TransitionInputRole.CompletedEpic &&
+            input.Hash == RoadmapHash.Sha256("alpha"));
         Assert.Contains(snapshot.ArtifactInputs, input =>
             input.Path == ".agents/archive/epics/002-beta.md" &&
-            input.Roles == Cli.TransitionInputRole.CompletedEpic &&
-            input.Hash == Cli.RoadmapHash.Sha256("beta"));
-        Assert.Equal(Cli.RoadmapHash.Sha256("alpha"), snapshot.ToInputArtifactHashes()[".agents/archive/epics/001-alpha.md"]);
-        Assert.Equal(Cli.RoadmapHash.Sha256("beta"), snapshot.ToInputArtifactHashes()[".agents/archive/epics/002-beta.md"]);
+            input.Roles == TransitionInputRole.CompletedEpic &&
+            input.Hash == RoadmapHash.Sha256("beta"));
+        Assert.Equal(RoadmapHash.Sha256("alpha"), snapshot.ToInputArtifactHashes()[".agents/archive/epics/001-alpha.md"]);
+        Assert.Equal(RoadmapHash.Sha256("beta"), snapshot.ToInputArtifactHashes()[".agents/archive/epics/002-beta.md"]);
     }
 
     [Fact]
@@ -50,15 +51,15 @@ public sealed class TransitionInputResolverTests
     {
         using var repo = new TempRepo();
         string projectionPath = SeedProjection(repo, "SelectNextEpic");
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap 001");
         repo.Write(".agents/roadmap/b.md", "b");
         repo.Write(".agents/roadmap/a.md", "a");
 
-        Cli.TransitionInputSnapshot snapshot = await ResolveAsync(repo, "SelectNextEpic", projectionPath);
+        TransitionInputSnapshot snapshot = await ResolveAsync(repo, "SelectNextEpic", projectionPath);
 
         string[] roadmapInputs = snapshot.ArtifactInputs
-            .Where(input => input.Roles == Cli.TransitionInputRole.RoadmapSource)
+            .Where(input => input.Roles == TransitionInputRole.RoadmapSource)
             .Select(input => input.Path)
             .ToArray();
         Assert.Equal(
@@ -71,12 +72,12 @@ public sealed class TransitionInputResolverTests
     {
         using var repo = new TempRepo();
         string projectionPath = SeedProjection(repo, "SelectNextEpic");
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
 
-        Cli.RoadmapStepException exception = await Assert.ThrowsAsync<Cli.RoadmapStepException>(
+        RoadmapStepException exception = await Assert.ThrowsAsync<RoadmapStepException>(
             () => ResolveAsync(repo, "SelectNextEpic", projectionPath));
 
-        Assert.Contains(Cli.RoadmapArtifactPaths.RoadmapDirectoryPattern, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(RoadmapArtifactPaths.RoadmapDirectoryPattern, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -84,15 +85,15 @@ public sealed class TransitionInputResolverTests
     {
         using var repo = new TempRepo();
         string projectionPath = SeedProjection(repo, "RealignEpic");
-        repo.Write(Cli.RoadmapArtifactPaths.Selection, "selection and audit");
+        repo.Write(RoadmapArtifactPaths.Selection, "selection and audit");
 
-        Cli.TransitionInputSnapshot snapshot = await ResolveAsync(
+        TransitionInputSnapshot snapshot = await ResolveAsync(
             repo,
             "RealignEpic",
             projectionPath,
-            context: Cli.TransitionInputContext.AuditEvidence(Cli.RoadmapArtifactPaths.Selection));
+            context: TransitionInputContext.AuditEvidence(RoadmapArtifactPaths.Selection));
 
-        Cli.TransitionArtifactInput selection = Assert.Single(snapshot.ArtifactInputs, input => input.Path == Cli.RoadmapArtifactPaths.Selection);
+        TransitionArtifactInput selection = Assert.Single(snapshot.ArtifactInputs, input => input.Path == RoadmapArtifactPaths.Selection);
         Assert.True(selection.Required);
         Assert.Equal("AuditEvidence+Selection", selection.Roles);
     }
@@ -102,17 +103,17 @@ public sealed class TransitionInputResolverTests
     {
         using var repo = new TempRepo();
         string projectionPath = SeedProjection(repo, "CreateNewEpic");
-        repo.Write(Cli.RoadmapArtifactPaths.Selection, "selection v1");
+        repo.Write(RoadmapArtifactPaths.Selection, "selection v1");
 
-        Cli.TransitionInputSnapshot first = await ResolveAsync(repo, "CreateNewEpic", projectionPath, renderedContext: "rendered v1");
-        Cli.TransitionInputSnapshot second = await ResolveAsync(repo, "CreateNewEpic", projectionPath, renderedContext: "rendered v1");
+        TransitionInputSnapshot first = await ResolveAsync(repo, "CreateNewEpic", projectionPath, renderedContext: "rendered v1");
+        TransitionInputSnapshot second = await ResolveAsync(repo, "CreateNewEpic", projectionPath, renderedContext: "rendered v1");
 
         Assert.Equal(first.SnapshotHash, second.SnapshotHash);
         Assert.Equal(first.ToInputArtifactHashes(), second.ToInputArtifactHashes());
 
-        repo.Write(Cli.RoadmapArtifactPaths.Selection, "selection v2");
-        Cli.TransitionInputSnapshot changedArtifact = await ResolveAsync(repo, "CreateNewEpic", projectionPath, renderedContext: "rendered v1");
-        Cli.TransitionInputSnapshot changedContext = await ResolveAsync(repo, "CreateNewEpic", projectionPath, renderedContext: "rendered v2");
+        repo.Write(RoadmapArtifactPaths.Selection, "selection v2");
+        TransitionInputSnapshot changedArtifact = await ResolveAsync(repo, "CreateNewEpic", projectionPath, renderedContext: "rendered v1");
+        TransitionInputSnapshot changedContext = await ResolveAsync(repo, "CreateNewEpic", projectionPath, renderedContext: "rendered v2");
 
         Assert.NotEqual(first.SnapshotHash, changedArtifact.SnapshotHash);
         Assert.NotEqual(changedArtifact.SnapshotHash, changedContext.SnapshotHash);
@@ -126,17 +127,17 @@ public sealed class TransitionInputResolverTests
         using var repo = new TempRepo();
         string projectionPath = SeedProjection(repo, "UpdateRoadmapCompletionContext");
         string evaluationPath = ".agents/evidence/evaluations/epic-completion-and-drift.0001.md";
-        repo.Write(Cli.RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
+        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
         repo.Write(evaluationPath, "evaluation");
 
-        Cli.TransitionInputSnapshot snapshot = await ResolveAsync(
+        TransitionInputSnapshot snapshot = await ResolveAsync(
             repo,
             "UpdateRoadmapCompletionContext",
             projectionPath,
-            context: Cli.TransitionInputContext.CompletionEvaluation(evaluationPath));
+            context: TransitionInputContext.CompletionEvaluation(evaluationPath));
 
-        Assert.Contains(snapshot.ArtifactInputs, input => input.Path == evaluationPath && input.Roles == Cli.TransitionInputRole.CompletionEvaluation);
+        Assert.Contains(snapshot.ArtifactInputs, input => input.Path == evaluationPath && input.Roles == TransitionInputRole.CompletionEvaluation);
         Assert.Contains(evaluationPath, snapshot.ToInputArtifactHashes().Keys);
     }
 
@@ -146,41 +147,41 @@ public sealed class TransitionInputResolverTests
         using var repo = new TempRepo();
         string projectionPath = SeedProjection(repo, "EvaluateEpicCompletionAndDrift");
         string evidencePath = ".agents/evidence/execution/execution.0001.md";
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
         repo.Write(evidencePath, "execution evidence");
         repo.Write(".agents/specs/active.md", "Epic Path: .agents/epic.md");
         repo.Write(".agents/specs/stale.md", "Epic Path: .agents/epic.md");
         await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/active.md");
 
-        Cli.TransitionInputSnapshot snapshot = await ResolveAsync(
+        TransitionInputSnapshot snapshot = await ResolveAsync(
             repo,
             "EvaluateEpicCompletionAndDrift",
             projectionPath,
-            context: Cli.TransitionInputContext.ExecutionEvidence(evidencePath));
+            context: TransitionInputContext.ExecutionEvidence(evidencePath));
 
-        Assert.Contains(snapshot.ArtifactInputs, input => input.Path == ".agents/specs/active.md" && input.Roles == Cli.TransitionInputRole.MilestoneSpec);
+        Assert.Contains(snapshot.ArtifactInputs, input => input.Path == ".agents/specs/active.md" && input.Roles == TransitionInputRole.MilestoneSpec);
         Assert.DoesNotContain(snapshot.ArtifactInputs, input => input.Path == ".agents/specs/stale.md");
     }
 
-    private static async Task<Cli.TransitionInputSnapshot> ResolveAsync(
+    private static async Task<TransitionInputSnapshot> ResolveAsync(
         TempRepo repo,
         string runtimePromptName,
         string projectionPath,
         string renderedContext = "rendered context",
         string secondaryInput = "",
-        Cli.TransitionInputContext? context = null)
+        TransitionInputContext? context = null)
     {
-        return await new Cli.TransitionInputResolver(repo.Artifacts, ExecutionPreparationTestSupport.CreateProvenance(repo)).ResolveAsync(new Cli.TransitionInputRequest(
+        return await new TransitionInputResolver(repo.Artifacts, ExecutionPreparationTestSupport.CreateProvenance(repo)).ResolveAsync(new TransitionInputRequest(
             runtimePromptName,
             projectionPath,
             renderedContext,
             secondaryInput,
-            context ?? Cli.TransitionInputContext.Empty));
+            context ?? TransitionInputContext.Empty));
     }
 
     private static string SeedProjection(TempRepo repo, string runtimePromptName)
     {
-        string path = Cli.RoadmapArtifactPaths.ProjectionPaths[runtimePromptName];
+        string path = RoadmapArtifactPaths.ProjectionPaths[runtimePromptName];
         repo.Write(path, ProjectionSamples.Valid(runtimePromptName));
         return path;
     }

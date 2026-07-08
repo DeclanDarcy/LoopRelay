@@ -1,6 +1,4 @@
-using System.Text.Json;
-
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Models;
 
 /// <summary>
 /// One row of the per-turn session telemetry log. Capacity fields are a remaining PERCENT (0–100) measured

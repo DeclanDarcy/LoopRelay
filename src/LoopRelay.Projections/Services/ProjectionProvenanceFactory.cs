@@ -1,4 +1,6 @@
-namespace LoopRelay.Projections;
+using LoopRelay.Projections.Models;
+
+namespace LoopRelay.Projections.Services;
 
 public sealed class ProjectionProvenanceFactory
 {

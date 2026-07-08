@@ -1,6 +1,6 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class CompletedEpicEvidenceLoaderTests
 {
@@ -9,7 +9,7 @@ public sealed class CompletedEpicEvidenceLoaderTests
     {
         using var repo = new TempRepo();
 
-        string rendered = await new Cli.CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
+        string rendered = await new CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
 
         Assert.Contains("# Completed Epic Evidence", rendered, StringComparison.Ordinal);
         Assert.Contains("No completed epic markdown files were found under `.agents/archive/epics/*.md`.", rendered, StringComparison.Ordinal);
@@ -23,7 +23,7 @@ public sealed class CompletedEpicEvidenceLoaderTests
         repo.Write(".agents/archive/epics/001-alpha.md", RoadmapSamples.ValidEpic("Archived Alpha", "EPIC-ALPHA"));
         repo.Write(".agents/archive/epics/old/plan.md", RoadmapSamples.ValidEpic("Nested Archive", "EPIC-NESTED"));
 
-        string rendered = await new Cli.CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
+        string rendered = await new CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
 
         Assert.Contains("Completed epic source glob: `.agents/archive/epics/*.md`", rendered, StringComparison.Ordinal);
         Assert.Contains("| Source Path | .agents/archive/epics/001-alpha.md |", rendered, StringComparison.Ordinal);
@@ -40,7 +40,7 @@ public sealed class CompletedEpicEvidenceLoaderTests
         using var repo = new TempRepo();
         repo.Write(".agents/archive/epics/broken.md", "loose notes without epic metadata");
 
-        string rendered = await new Cli.CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
+        string rendered = await new CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
 
         Assert.Contains("| Source Path | .agents/archive/epics/broken.md |", rendered, StringComparison.Ordinal);
         Assert.Contains("| Evidence Quality | Unclear |", rendered, StringComparison.Ordinal);
@@ -51,7 +51,7 @@ public sealed class CompletedEpicEvidenceLoaderTests
     public async Task Per_file_budget_adds_visible_truncation_marker()
     {
         using var repo = new TempRepo();
-        string longSection = new('a', Cli.CompletedEpicEvidenceLoader.MaxRenderedContentPerEpic + 100);
+        string longSection = new('a', CompletedEpicEvidenceLoader.MaxRenderedContentPerEpic + 100);
         repo.Write(".agents/archive/epics/huge.md", $"""
             # Epic: Huge
 
@@ -60,7 +60,7 @@ public sealed class CompletedEpicEvidenceLoaderTests
             {longSection}
             """);
 
-        string rendered = await new Cli.CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
+        string rendered = await new CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
 
         Assert.Contains("Per-epic evidence truncated", rendered, StringComparison.Ordinal);
     }
@@ -69,7 +69,7 @@ public sealed class CompletedEpicEvidenceLoaderTests
     public async Task Total_budget_adds_visible_truncation_marker()
     {
         using var repo = new TempRepo();
-        string longSection = new('b', Cli.CompletedEpicEvidenceLoader.MaxRenderedContentPerEpic);
+        string longSection = new('b', CompletedEpicEvidenceLoader.MaxRenderedContentPerEpic);
         for (int index = 0; index < 8; index++)
         {
             repo.Write($".agents/archive/epics/{index:000}.md", $"""
@@ -81,7 +81,7 @@ public sealed class CompletedEpicEvidenceLoaderTests
                 """);
         }
 
-        string rendered = await new Cli.CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
+        string rendered = await new CompletedEpicEvidenceLoader(repo.Artifacts).RenderAsync();
 
         Assert.Contains("archive exceeded the total evidence budget", rendered, StringComparison.Ordinal);
     }

@@ -1,10 +1,13 @@
-using LoopRelay.Core.Prompts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Prompts;
+using LoopRelay.Orchestration.Services;
+using LoopRelay.Plan.Cli.Abstractions;
+using LoopRelay.Plan.Cli.Models;
 
-namespace LoopRelay.Plan.Cli;
+namespace LoopRelay.Plan.Cli.Services;
 
 /// <summary>
 /// Pipeline step 4: the zero-permission adversarial review. A single turn on a fresh, read-only, persistent

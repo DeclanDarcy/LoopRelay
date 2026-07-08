@@ -1,6 +1,6 @@
-using LoopRelay.Agents.Models;
+using LoopRelay.Infrastructure.Models.Diagnostics;
 
-namespace LoopRelay.Infrastructure.Diagnostics;
+namespace LoopRelay.Infrastructure.Abstractions.Diagnostics;
 
 public interface IInputWaitObservationSink
 {

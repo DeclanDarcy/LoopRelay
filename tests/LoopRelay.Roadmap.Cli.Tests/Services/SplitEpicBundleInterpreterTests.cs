@@ -1,42 +1,42 @@
-using LoopRelay.Roadmap.Cli;
-using BundleFileExtractor = LoopRelay.Roadmap.Cli.BundleFileExtractor;
-using SplitEpicBundleInterpreter = LoopRelay.Roadmap.Cli.SplitEpicBundleInterpreter;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class SplitEpicBundleInterpreterTests
 {
     [Fact]
     public void Rejects_bundle_with_no_files()
     {
-        Cli.SplitEpicBundleInterpretation result = Interpret("# Split Epic Output");
+        SplitEpicBundleInterpretation result = Interpret("# Split Epic Output");
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.SplitEpicBundleInterpretationStatus.Invalid, result.Status);
+        Assert.Equal(SplitEpicBundleInterpretationStatus.Invalid, result.Status);
     }
 
     [Fact]
     public void Recognizes_blocked_split_output()
     {
-        Cli.SplitEpicBundleInterpretation result = Interpret("""
-                                                             # Split Epic Blocked
+        SplitEpicBundleInterpretation result = Interpret("""
+                                                         # Split Epic Blocked
 
-                                                             ## Reason
+                                                         ## Reason
 
-                                                             The selection cannot be split safely.
-                                                             """);
+                                                         The selection cannot be split safely.
+                                                         """);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.SplitEpicBundleInterpretationStatus.Blocked, result.Status);
+        Assert.Equal(SplitEpicBundleInterpretationStatus.Blocked, result.Status);
     }
 
     [Fact]
     public void Rejects_spec_only_bundle()
     {
-        Cli.SplitEpicBundleInterpretation result = Interpret("""
-                                                             # FILE: .agents/specs/split-child.md
-                                                             # Spec
-                                                             """);
+        SplitEpicBundleInterpretation result = Interpret("""
+                                                         # FILE: .agents/specs/split-child.md
+                                                         # Spec
+                                                         """);
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Rejections, rejection => rejection.Path == ".agents/specs/split-child.md");
@@ -46,29 +46,29 @@ public sealed class SplitEpicBundleInterpreterTests
     [Fact]
     public void Rejects_direct_active_epic_target()
     {
-        Cli.SplitEpicBundleInterpretation result = Interpret($"""
-                                                              # FILE: .agents/epic.md
-                                                              {RoadmapSamples.ValidEpic("Direct Active Target", "EPIC-DIRECT")}
-                                                              """);
+        SplitEpicBundleInterpretation result = Interpret($"""
+                                                          # FILE: .agents/epic.md
+                                                          {RoadmapSamples.ValidEpic("Direct Active Target", "EPIC-DIRECT")}
+                                                          """);
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Rejections, rejection => rejection.Path == Cli.RoadmapArtifactPaths.ActiveEpic);
+        Assert.Contains(result.Rejections, rejection => rejection.Path == RoadmapArtifactPaths.ActiveEpic);
     }
 
     [Fact]
     public void Rejects_malformed_child_epic()
     {
-        Cli.SplitEpicBundleInterpretation result = Interpret("""
-                                                             # FILE: .agents/epic-1.md
-                                                             # Epic
+        SplitEpicBundleInterpretation result = Interpret("""
+                                                         # FILE: .agents/epic-1.md
+                                                         # Epic
 
-                                                             ## Epic Metadata
+                                                         ## Epic Metadata
 
-                                                             | Field | Value |
-                                                             |---|---|
-                                                             | Epic ID | EPIC-BAD |
-                                                             | Status | Authored |
-                                                             """);
+                                                         | Field | Value |
+                                                         |---|---|
+                                                         | Epic ID | EPIC-BAD |
+                                                         | Status | Authored |
+                                                         """);
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Rejections, rejection => rejection.Path == ".agents/epic-1.md");
@@ -77,10 +77,10 @@ public sealed class SplitEpicBundleInterpreterTests
     [Fact]
     public void Accepts_valid_single_child_epic()
     {
-        Cli.SplitEpicBundleInterpretation result = Interpret($"""
-                                                              # FILE: .agents/epic-1.md
-                                                              {RoadmapSamples.ValidEpic("First Child", "EPIC-1")}
-                                                              """);
+        SplitEpicBundleInterpretation result = Interpret($"""
+                                                          # FILE: .agents/epic-1.md
+                                                          {RoadmapSamples.ValidEpic("First Child", "EPIC-1")}
+                                                          """);
 
         Assert.True(result.IsValid);
         Assert.Equal(".agents/epic-1.md", result.SelectedChild?.Path);
@@ -90,13 +90,13 @@ public sealed class SplitEpicBundleInterpreterTests
     [Fact]
     public void Selects_first_valid_child_by_numeric_order()
     {
-        Cli.SplitEpicBundleInterpretation result = Interpret($"""
-                                                              # FILE: .agents/epic-2.md
-                                                              {RoadmapSamples.ValidEpic("Second Child", "EPIC-2")}
+        SplitEpicBundleInterpretation result = Interpret($"""
+                                                          # FILE: .agents/epic-2.md
+                                                          {RoadmapSamples.ValidEpic("Second Child", "EPIC-2")}
 
-                                                              # FILE: .agents/epic-1.md
-                                                              {RoadmapSamples.ValidEpic("First Child", "EPIC-1")}
-                                                              """);
+                                                          # FILE: .agents/epic-1.md
+                                                          {RoadmapSamples.ValidEpic("First Child", "EPIC-1")}
+                                                          """);
 
         Assert.True(result.IsValid);
         Assert.Equal(".agents/epic-1.md", result.SelectedChild?.Path);
@@ -106,22 +106,22 @@ public sealed class SplitEpicBundleInterpreterTests
     [Fact]
     public void Rejects_mixed_valid_child_and_illegal_target()
     {
-        Cli.SplitEpicBundleInterpretation result = Interpret($"""
-                                                              # FILE: .agents/epic-1.md
-                                                              {RoadmapSamples.ValidEpic("First Child", "EPIC-1")}
+        SplitEpicBundleInterpretation result = Interpret($"""
+                                                          # FILE: .agents/epic-1.md
+                                                          {RoadmapSamples.ValidEpic("First Child", "EPIC-1")}
 
-                                                              # FILE: .agents/specs/not-a-child.md
-                                                              # Not A Child
-                                                              """);
+                                                          # FILE: .agents/specs/not-a-child.md
+                                                          # Not A Child
+                                                          """);
 
         Assert.False(result.IsValid);
         Assert.Single(result.ValidatedChildEpics);
         Assert.Contains(result.Rejections, rejection => rejection.Path == ".agents/specs/not-a-child.md");
     }
 
-    private static Cli.SplitEpicBundleInterpretation Interpret(string markdown)
+    private static SplitEpicBundleInterpretation Interpret(string markdown)
     {
-        Cli.BundleExtractionResult bundle = new BundleFileExtractor().Extract(markdown, Cli.BundleExtractionPolicy.RepositorySafe);
-        return new SplitEpicBundleInterpreter().Interpret(bundle, markdown);
+        BundleExtractionResult bundle = new Cli.Services.BundleFileExtractor().Extract(markdown, BundleExtractionPolicy.RepositorySafe);
+        return new Cli.Services.SplitEpicBundleInterpreter().Interpret(bundle, markdown);
     }
 }

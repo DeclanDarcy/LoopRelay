@@ -1,16 +1,17 @@
 using LoopRelay.Agents.Models;
-using LoopRelay.Cli;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class ConsoleTurnRendererTests
 {
-    private static (Cli.ConsoleTurnRenderer Renderer, StringWriter Out) New()
+    private static (ConsoleTurnRenderer Renderer, StringWriter Out) New()
     {
         var outw = new StringWriter { NewLine = "\n" };
-        var console = new Cli.ConsoleLoopConsole(outw, new StringWriter { NewLine = "\n" });
-        return (new Cli.ConsoleTurnRenderer(console), outw);
+        var console = new ConsoleLoopConsole(outw, new StringWriter { NewLine = "\n" });
+        return (new ConsoleTurnRenderer(console), outw);
     }
 
     private static AgentStreamChunk Reply(string text) =>

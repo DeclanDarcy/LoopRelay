@@ -1,8 +1,10 @@
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Infrastructure.Git;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Infrastructure.Models.Git;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 internal sealed class AgentsSubmodulePublisher
 {
@@ -12,11 +14,11 @@ internal sealed class AgentsSubmodulePublisher
     public const string PartialExitMessage = "Orchestration loop: partial state on interrupted exit";
     public const string GitlinkPointerMessage = "Orchestration loop: record .agents submodule pointer";
 
-    private readonly Infrastructure.Git.AgentsSubmodulePublisher publisher;
+    private readonly Infrastructure.Services.Git.AgentsSubmodulePublisher publisher;
 
     public AgentsSubmodulePublisher(IProcessRunner processRunner, Repository repository, ILoopConsole console)
     {
-        publisher = new Infrastructure.Git.AgentsSubmodulePublisher(
+        publisher = new Infrastructure.Services.Git.AgentsSubmodulePublisher(
             processRunner,
             repository,
             console,

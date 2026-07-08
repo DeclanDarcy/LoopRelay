@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Models.NonImplementationReview;
+namespace LoopRelay.Orchestration.Primitives.NonImplementationReview;
 
 public enum NonImplementationCompletionReviewStatus
 {

@@ -1,8 +1,11 @@
 using System.Text.RegularExpressions;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed partial class RoadmapArtifacts(IArtifactStore store, Repository repository)
 {

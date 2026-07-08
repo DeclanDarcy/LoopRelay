@@ -1,12 +1,7 @@
-using System.Collections.Concurrent;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Projections;
-using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Core.Abstractions.Artifacts;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Models;
 
 
 /// <summary>A scripted codex turn: inspect (spec, prompt), optionally mutate the store, return a result.</summary>

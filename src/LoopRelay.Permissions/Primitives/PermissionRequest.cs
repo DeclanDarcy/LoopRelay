@@ -1,4 +1,6 @@
-namespace LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models;
+
+namespace LoopRelay.Permissions.Primitives;
 
 public readonly record struct PermissionRequest(
     string RequestId,

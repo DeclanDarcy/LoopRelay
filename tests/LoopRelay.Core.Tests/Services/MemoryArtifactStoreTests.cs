@@ -1,6 +1,6 @@
 using LoopRelay.Core.Artifacts;
 
-namespace LoopRelay.Core.Tests;
+namespace LoopRelay.Core.Tests.Services;
 
 public sealed class MemoryArtifactStoreTests
 {

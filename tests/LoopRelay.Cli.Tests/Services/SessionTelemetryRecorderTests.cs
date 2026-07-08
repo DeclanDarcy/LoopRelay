@@ -1,14 +1,17 @@
 using LoopRelay.Agents.Models;
-using LoopRelay.Cli;
-using LoopRelay.Infrastructure.Diagnostics;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
+using LoopRelay.Infrastructure.Models.Diagnostics;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class SessionTelemetryRecorderTests
 {
     private sealed record Kit(
-        Cli.SessionTelemetryRecorder Recorder, FakeCodexUsageProbe Probe, FakeCodexRolloutLocator Locator,
+        SessionTelemetryRecorder Recorder, FakeCodexUsageProbe Probe, FakeCodexRolloutLocator Locator,
         FakeSessionTelemetrySink Sink, StubCostModel Cost, RecordingLoopConsole Con);
 
     private static Kit New()
@@ -19,7 +22,7 @@ public class SessionTelemetryRecorderTests
         var cost = new StubCostModel { MeasureValue = 42.0 };
         var con = new RecordingLoopConsole();
         var clock = new FakeClock();
-        var recorder = new Cli.SessionTelemetryRecorder(probe, locator, sink, cost, clock, con);
+        var recorder = new SessionTelemetryRecorder(probe, locator, sink, cost, clock, con);
         return new Kit(recorder, probe, locator, sink, cost, con);
     }
 
@@ -52,7 +55,7 @@ public class SessionTelemetryRecorderTests
     public async Task RecordTurn_BuildsAFullRecordFromProbePostAndTurn()
     {
         var k = New();
-        k.Probe.Default = new Cli.CodexUsageStatus(58, TimeSpan.FromHours(1), 79, TimeSpan.FromHours(5)); // post
+        k.Probe.Default = new CodexUsageStatus(58, TimeSpan.FromHours(1), 79, TimeSpan.FromHours(5)); // post
         k.Locator.Path = "/logs/rollout.jsonl";
 
         string? path = await k.Recorder.RecordTurnAsync(
@@ -61,7 +64,7 @@ public class SessionTelemetryRecorderTests
             inputWait: null, CancellationToken.None);
 
         Assert.Equal("/logs/rollout.jsonl", path);
-        Cli.SessionTelemetryRecord r = Assert.Single(k.Sink.Records);
+        SessionTelemetryRecord r = Assert.Single(k.Sink.Records);
         Assert.Equal("myrepo", r.RepoName);
         Assert.Equal("/logs/rollout.jsonl", r.CodexLogPath);
         Assert.Equal("Decision", r.SessionType);
@@ -78,7 +81,7 @@ public class SessionTelemetryRecorderTests
     public async Task RecordTurn_WhenPathAlreadyCached_ReusesItWithoutCallingTheLocator()
     {
         var k = New();
-        k.Probe.Default = new Cli.CodexUsageStatus(50, TimeSpan.Zero, 50, TimeSpan.Zero);
+        k.Probe.Default = new CodexUsageStatus(50, TimeSpan.Zero, 50, TimeSpan.Zero);
 
         string? path = await k.Recorder.RecordTurnAsync(
             "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.OperationalExecution,
@@ -100,7 +103,7 @@ public class SessionTelemetryRecorderTests
             "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
             DateTimeOffset.UnixEpoch, null, Turn(), inputWait: null, CancellationToken.None);
 
-        Cli.SessionTelemetryRecord r = Assert.Single(k.Sink.Records);
+        SessionTelemetryRecord r = Assert.Single(k.Sink.Records);
         Assert.Null(r.PostFiveHourPercent);
         Assert.Null(r.PostWeeklyPercent);
     }
@@ -115,7 +118,7 @@ public class SessionTelemetryRecorderTests
             "r", "/work", sessionId, SessionRole.Decision,
             DateTimeOffset.UnixEpoch, null, Turn(index: 3), Observation(sessionId), CancellationToken.None);
 
-        Cli.SessionTelemetryRecord r = Assert.Single(k.Sink.Records);
+        SessionTelemetryRecord r = Assert.Single(k.Sink.Records);
         Assert.Equal("app-server", r.Transport);
         Assert.Null(r.Model);
         Assert.Equal(12, r.PromptChars);
@@ -136,7 +139,7 @@ public class SessionTelemetryRecorderTests
     {
         var k = New();
         k.Sink.Throw = true;
-        k.Probe.Default = new Cli.CodexUsageStatus(50, TimeSpan.Zero, 50, TimeSpan.Zero);
+        k.Probe.Default = new CodexUsageStatus(50, TimeSpan.Zero, 50, TimeSpan.Zero);
 
         string? path = await k.Recorder.RecordTurnAsync(
             "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
@@ -150,7 +153,7 @@ public class SessionTelemetryRecorderTests
     public async Task NullRecorder_ReturnsCachedPathAndRecordsNothing()
     {
         var sink = new FakeSessionTelemetrySink();
-        string? path = await new Cli.NullSessionTelemetryRecorder().RecordTurnAsync(
+        string? path = await new NullSessionTelemetryRecorder().RecordTurnAsync(
             "r", "/w", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
             DateTimeOffset.UnixEpoch, "/cached", Turn(), inputWait: null, CancellationToken.None);
 
@@ -162,7 +165,7 @@ public class SessionTelemetryRecorderTests
     public async Task RecordTurn_WhenCallerCancelsDuringPostProbe_PropagatesCancellationAndWritesNothing()
     {
         var sink = new FakeSessionTelemetrySink();
-        var recorder = new Cli.SessionTelemetryRecorder(
+        var recorder = new SessionTelemetryRecorder(
             new CancelingProbe(), new FakeCodexRolloutLocator(), sink,
             new StubCostModel(), new FakeClock(), new RecordingLoopConsole());
         using var cts = new CancellationTokenSource();
@@ -177,12 +180,12 @@ public class SessionTelemetryRecorderTests
     }
 
     /// <summary>A post-probe that honours the cancellation token (like the real CodexUsageProbe).</summary>
-    private sealed class CancelingProbe : Cli.ICodexUsageProbe
+    private sealed class CancelingProbe : ICodexUsageProbe
     {
-        public Task<Cli.CodexUsageStatus?> QueryAsync(CancellationToken cancellationToken)
+        public Task<CodexUsageStatus?> QueryAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult<Cli.CodexUsageStatus?>(null);
+            return Task.FromResult<CodexUsageStatus?>(null);
         }
     }
 }

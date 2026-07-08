@@ -1,31 +1,33 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class RoadmapStartupPlannerTests
 {
     [Fact]
     public void No_persisted_state_requires_fresh_initialization_preflight()
     {
-        Cli.RoadmapStartupPlan plan = new Cli.RoadmapStartupPlanner().Plan(null);
+        RoadmapStartupPlan plan = new RoadmapStartupPlanner().Plan(null);
 
-        Assert.Equal(Cli.RoadmapStartupAction.FreshInitialization, plan.Action);
-        Assert.Equal(Cli.RoadmapPreflightRequirement.RequiredForInitialize, plan.PreflightRequirement);
-        Assert.Equal(Cli.RoadmapState.CoreReady, plan.SourceState);
+        Assert.Equal(RoadmapStartupAction.FreshInitialization, plan.Action);
+        Assert.Equal(RoadmapPreflightRequirement.RequiredForInitialize, plan.PreflightRequirement);
+        Assert.Equal(RoadmapState.CoreReady, plan.SourceState);
         Assert.Null(plan.ReportOutcome);
     }
 
     [Theory]
-    [InlineData((int)Cli.RoadmapState.CoreReady)]
-    [InlineData((int)Cli.RoadmapState.ActiveEpicReady)]
-    [InlineData((int)Cli.RoadmapState.MilestoneSpecsReady)]
+    [InlineData((int)RoadmapState.CoreReady)]
+    [InlineData((int)RoadmapState.ActiveEpicReady)]
+    [InlineData((int)RoadmapState.MilestoneSpecsReady)]
     public void Active_workflow_requires_resume_preflight(int stateValue)
     {
-        Cli.RoadmapState state = (Cli.RoadmapState)stateValue;
-        Cli.RoadmapStartupPlan plan = new Cli.RoadmapStartupPlanner().Plan(State(state));
+        RoadmapState state = (RoadmapState)stateValue;
+        RoadmapStartupPlan plan = new RoadmapStartupPlanner().Plan(State(state));
 
-        Assert.Equal(Cli.RoadmapStartupAction.ResumeActiveWorkflow, plan.Action);
-        Assert.Equal(Cli.RoadmapPreflightRequirement.RequiredForResume, plan.PreflightRequirement);
+        Assert.Equal(RoadmapStartupAction.ResumeActiveWorkflow, plan.Action);
+        Assert.Equal(RoadmapPreflightRequirement.RequiredForResume, plan.PreflightRequirement);
         Assert.Equal(state, plan.SourceState);
         Assert.Null(plan.ReportOutcome);
     }
@@ -33,75 +35,75 @@ public sealed class RoadmapStartupPlannerTests
     [Fact]
     public void Blocked_workflow_is_reported_without_preflight()
     {
-        Cli.RoadmapStartupPlan plan = new Cli.RoadmapStartupPlanner().Plan(State(Cli.RoadmapState.EvidenceBlocked));
+        RoadmapStartupPlan plan = new RoadmapStartupPlanner().Plan(State(RoadmapState.EvidenceBlocked));
 
-        Assert.Equal(Cli.RoadmapStartupAction.ReportBlockedWorkflow, plan.Action);
-        Assert.Equal(Cli.RoadmapPreflightRequirement.None, plan.PreflightRequirement);
-        Assert.Equal(Cli.RoadmapOutcome.Paused, plan.ReportOutcome);
+        Assert.Equal(RoadmapStartupAction.ReportBlockedWorkflow, plan.Action);
+        Assert.Equal(RoadmapPreflightRequirement.None, plan.PreflightRequirement);
+        Assert.Equal(RoadmapOutcome.Paused, plan.ReportOutcome);
     }
 
     [Theory]
-    [InlineData((int)Cli.RoadmapState.StrategicInvestigationRequired)]
-    [InlineData((int)Cli.RoadmapState.RoadmapRevisionRequired)]
-    [InlineData((int)Cli.RoadmapState.NoSuitableInitiative)]
-    [InlineData((int)Cli.RoadmapState.EvidenceGathering)]
-    [InlineData((int)Cli.RoadmapState.GenerateOperationalContext)]
-    [InlineData((int)Cli.RoadmapState.OperationalContextReady)]
-    [InlineData((int)Cli.RoadmapState.GenerateExecutionPrompt)]
-    [InlineData((int)Cli.RoadmapState.ExecutionPromptReady)]
-    [InlineData((int)Cli.RoadmapState.ExecutionLoop)]
-    [InlineData((int)Cli.RoadmapState.ExecutionBlocked)]
+    [InlineData((int)RoadmapState.StrategicInvestigationRequired)]
+    [InlineData((int)RoadmapState.RoadmapRevisionRequired)]
+    [InlineData((int)RoadmapState.NoSuitableInitiative)]
+    [InlineData((int)RoadmapState.EvidenceGathering)]
+    [InlineData((int)RoadmapState.GenerateOperationalContext)]
+    [InlineData((int)RoadmapState.OperationalContextReady)]
+    [InlineData((int)RoadmapState.GenerateExecutionPrompt)]
+    [InlineData((int)RoadmapState.ExecutionPromptReady)]
+    [InlineData((int)RoadmapState.ExecutionLoop)]
+    [InlineData((int)RoadmapState.ExecutionBlocked)]
     public void Paused_terminal_workflow_is_reported_without_preflight(int stateValue)
     {
-        Cli.RoadmapState state = (Cli.RoadmapState)stateValue;
-        Cli.RoadmapStartupPlan plan = new Cli.RoadmapStartupPlanner().Plan(State(state));
+        RoadmapState state = (RoadmapState)stateValue;
+        RoadmapStartupPlan plan = new RoadmapStartupPlanner().Plan(State(state));
 
-        Assert.Equal(Cli.RoadmapStartupAction.ReportTerminalWorkflow, plan.Action);
-        Assert.Equal(Cli.RoadmapPreflightRequirement.None, plan.PreflightRequirement);
-        Assert.Equal(Cli.RoadmapOutcome.Paused, plan.ReportOutcome);
+        Assert.Equal(RoadmapStartupAction.ReportTerminalWorkflow, plan.Action);
+        Assert.Equal(RoadmapPreflightRequirement.None, plan.PreflightRequirement);
+        Assert.Equal(RoadmapOutcome.Paused, plan.ReportOutcome);
     }
 
     [Fact]
     public void Completed_workflow_is_reported_without_preflight()
     {
-        Cli.RoadmapStartupPlan plan = new Cli.RoadmapStartupPlanner().Plan(State(Cli.RoadmapState.Completed));
+        RoadmapStartupPlan plan = new RoadmapStartupPlanner().Plan(State(RoadmapState.Completed));
 
-        Assert.Equal(Cli.RoadmapStartupAction.ReportCompletedWorkflow, plan.Action);
-        Assert.Equal(Cli.RoadmapPreflightRequirement.None, plan.PreflightRequirement);
-        Assert.Equal(Cli.RoadmapOutcome.Completed, plan.ReportOutcome);
+        Assert.Equal(RoadmapStartupAction.ReportCompletedWorkflow, plan.Action);
+        Assert.Equal(RoadmapPreflightRequirement.None, plan.PreflightRequirement);
+        Assert.Equal(RoadmapOutcome.Completed, plan.ReportOutcome);
     }
 
     [Fact]
     public void Failed_workflow_is_reported_without_preflight()
     {
-        Cli.RoadmapStartupPlan plan = new Cli.RoadmapStartupPlanner().Plan(State(Cli.RoadmapState.Failed));
+        RoadmapStartupPlan plan = new RoadmapStartupPlanner().Plan(State(RoadmapState.Failed));
 
-        Assert.Equal(Cli.RoadmapStartupAction.ReportFailedWorkflow, plan.Action);
-        Assert.Equal(Cli.RoadmapPreflightRequirement.None, plan.PreflightRequirement);
-        Assert.Equal(Cli.RoadmapOutcome.Failed, plan.ReportOutcome);
+        Assert.Equal(RoadmapStartupAction.ReportFailedWorkflow, plan.Action);
+        Assert.Equal(RoadmapPreflightRequirement.None, plan.PreflightRequirement);
+        Assert.Equal(RoadmapOutcome.Failed, plan.ReportOutcome);
     }
 
     [Fact]
     public void Cancelled_workflow_requires_resume_preflight()
     {
-        Cli.RoadmapStartupPlan plan = new Cli.RoadmapStartupPlanner().Plan(State(Cli.RoadmapState.Cancelled));
+        RoadmapStartupPlan plan = new RoadmapStartupPlanner().Plan(State(RoadmapState.Cancelled));
 
-        Assert.Equal(Cli.RoadmapStartupAction.ResumeActiveWorkflow, plan.Action);
-        Assert.Equal(Cli.RoadmapPreflightRequirement.RequiredForResume, plan.PreflightRequirement);
-        Assert.Equal(Cli.RoadmapState.Cancelled, plan.SourceState);
+        Assert.Equal(RoadmapStartupAction.ResumeActiveWorkflow, plan.Action);
+        Assert.Equal(RoadmapPreflightRequirement.RequiredForResume, plan.PreflightRequirement);
+        Assert.Equal(RoadmapState.Cancelled, plan.SourceState);
     }
 
-    private static Cli.RoadmapStateDocument State(Cli.RoadmapState state) =>
+    private static RoadmapStateDocument State(RoadmapState state) =>
         new(
             state,
             [],
-            new Cli.RoadmapTransitionSummary(state, state, "None", "None", "None", "Completed", Cli.TransitionStatus.Completed, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            new RoadmapTransitionSummary(state, state, "None", "None", "None", "Completed", TransitionStatus.Completed, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
             [],
             "None",
             0,
             0,
-            new Cli.ProjectionManifestCounts(0, 0, 0),
-            Cli.RoadmapTransitionIntent.Empty(state),
+            new ProjectionManifestCounts(0, 0, 0),
+            RoadmapTransitionIntent.Empty(state),
             [],
             []);
 }

@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration.Models;
+namespace LoopRelay.Orchestration.Primitives;
 
 /// <summary>
 /// Inputs a cost model uses to predict the NEXT decision cycle's cost. The MVP (effective-token) model uses

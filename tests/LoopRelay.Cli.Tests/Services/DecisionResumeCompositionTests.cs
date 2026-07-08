@@ -1,7 +1,7 @@
-using LoopRelay.Cli;
+using LoopRelay.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public sealed class DecisionResumeCompositionTests
 {
@@ -19,7 +19,7 @@ public sealed class DecisionResumeCompositionTests
         try
         {
             Environment.SetEnvironmentVariable("LoopRelay_DECISION_RESUME", value);
-            Assert.Equal(expected, Cli.DecisionResumeComposition.IsEnabled());
+            Assert.Equal(expected, DecisionResumeComposition.IsEnabled());
         }
         finally
         {

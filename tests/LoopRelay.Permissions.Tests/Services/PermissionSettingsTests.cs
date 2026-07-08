@@ -1,9 +1,11 @@
 using System.Text.Json.Nodes;
-using LoopRelay.Permissions.Configuration;
 using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Configuration;
+using LoopRelay.Permissions.Primitives;
 using LoopRelay.Permissions.Services;
+using LoopRelay.Permissions.Services.Configuration;
 
-namespace LoopRelay.Permissions.Tests;
+namespace LoopRelay.Permissions.Tests.Services;
 
 public sealed class PermissionSettingsTests
 {

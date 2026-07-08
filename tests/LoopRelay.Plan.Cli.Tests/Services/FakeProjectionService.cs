@@ -1,12 +1,8 @@
-using System.Collections.Concurrent;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Projections;
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Projections.Abstractions;
+using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Primitives;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 internal sealed class FakeProjectionService(string content = "PROJECT CONTEXT PROJECTION") : IProjectContextProjectionService
 {

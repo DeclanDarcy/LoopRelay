@@ -1,10 +1,10 @@
 using System.Text;
 using System.Text.Json;
-using LoopRelay.Permissions.Codex;
 using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Services;
+using LoopRelay.Permissions.Services.Codex;
 
-namespace LoopRelay.Permissions.Tests;
+namespace LoopRelay.Permissions.Tests.Services;
 
 public sealed class PermissionGatewayTests
 {

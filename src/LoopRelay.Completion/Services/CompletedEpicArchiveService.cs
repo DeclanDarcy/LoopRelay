@@ -1,8 +1,9 @@
 using System.Globalization;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
+using LoopRelay.Completion.Abstractions;
+using LoopRelay.Completion.Models;
+using LoopRelay.Core.Abstractions.Artifacts;
 
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Services;
 
 public sealed class CompletedEpicArchiveService(
     IArtifactStore store,

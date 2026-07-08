@@ -1,9 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.RegularExpressions;
-using LoopRelay.Orchestration.Models.NonImplementationReview;
-
-namespace LoopRelay.Orchestration.Services.NonImplementationReview;
+namespace LoopRelay.Orchestration.Models.NonImplementationReview;
 
 public sealed record ExplicitHitlNonImplementationRequestCaptureResult(
     int CapturedCount,

@@ -1,4 +1,7 @@
-namespace LoopRelay.Projections;
+using LoopRelay.Projections.Models;
+using LoopRelay.Projections.Primitives;
+
+namespace LoopRelay.Projections.Services;
 
 public static class ProjectionFreshnessEvaluator
 {

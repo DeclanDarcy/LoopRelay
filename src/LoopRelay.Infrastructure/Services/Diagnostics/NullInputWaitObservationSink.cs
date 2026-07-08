@@ -1,6 +1,7 @@
-using LoopRelay.Agents.Models;
+using LoopRelay.Infrastructure.Abstractions.Diagnostics;
+using LoopRelay.Infrastructure.Models.Diagnostics;
 
-namespace LoopRelay.Infrastructure.Diagnostics;
+namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
 public sealed class NullInputWaitObservationSink : IInputWaitObservationSink
 {

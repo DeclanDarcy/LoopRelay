@@ -1,9 +1,4 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
-
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Models;
 
 public sealed record CompletionRuntimePromptInvocation(
     string RuntimePromptName,

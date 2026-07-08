@@ -1,4 +1,6 @@
-namespace LoopRelay.Orchestration.Abstractions;
+using LoopRelay.Orchestration.Abstractions;
+
+namespace LoopRelay.Orchestration.Primitives;
 
 /// <summary>
 /// The economic policy the <see cref="IDecisionSessionRouter"/> applies to decide reuse-vs-transfer (the hard

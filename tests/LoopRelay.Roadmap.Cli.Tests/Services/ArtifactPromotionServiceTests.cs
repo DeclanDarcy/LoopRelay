@@ -1,7 +1,8 @@
-using LoopRelay.Roadmap.Cli;
-using EpicAuthoringOutputClassifier = LoopRelay.Roadmap.Cli.EpicAuthoringOutputClassifier;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class ArtifactPromotionServiceTests
 {
@@ -9,16 +10,16 @@ public sealed class ArtifactPromotionServiceTests
     public async Task Successful_promotion_writes_authoritative_artifact_and_ready_lifecycle()
     {
         using var repo = new TempRepo();
-        var lifecycle = new Cli.ArtifactLifecycleStore(repo.Artifacts);
-        var service = new Cli.ArtifactPromotionService(repo.Artifacts, lifecycle);
+        var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
+        var service = new ArtifactPromotionService(repo.Artifacts, lifecycle);
         string candidate = RoadmapSamples.ValidEpic("Promoted Epic");
 
-        Cli.ArtifactPromotionResult result = await service.PromoteAsync(Request(candidate));
+        ArtifactPromotionResult result = await service.PromoteAsync(Request(candidate));
 
         Assert.True(result.Promoted);
-        Assert.Equal(candidate, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
-        Cli.ArtifactLifecycleEntry entry = Assert.Single(await lifecycle.LoadAsync(), item => item.Path == Cli.RoadmapArtifactPaths.ActiveEpic);
-        Assert.Equal(Cli.ArtifactLifecycleState.Ready, entry.State);
+        Assert.Equal(candidate, repo.Read(RoadmapArtifactPaths.ActiveEpic));
+        ArtifactLifecycleEntry entry = Assert.Single(await lifecycle.LoadAsync(), item => item.Path == RoadmapArtifactPaths.ActiveEpic);
+        Assert.Equal(ArtifactLifecycleState.Ready, entry.State);
     }
 
     [Fact]
@@ -26,9 +27,9 @@ public sealed class ArtifactPromotionServiceTests
     {
         using var repo = new TempRepo();
         string existing = RoadmapSamples.ValidEpic("Existing Epic", "EPIC-OLD");
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, existing);
-        var lifecycle = new Cli.ArtifactLifecycleStore(repo.Artifacts);
-        var service = new Cli.ArtifactPromotionService(repo.Artifacts, lifecycle);
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, existing);
+        var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
+        var service = new ArtifactPromotionService(repo.Artifacts, lifecycle);
         string blocked = """
             # Create New Epic Blocked
 
@@ -37,15 +38,15 @@ public sealed class ArtifactPromotionServiceTests
             The proposal requires roadmap revision first.
             """;
 
-        Cli.ArtifactPromotionResult result = await service.PromoteAsync(Request(blocked));
+        ArtifactPromotionResult result = await service.PromoteAsync(Request(blocked));
 
         Assert.False(result.Promoted);
-        Assert.Equal(Cli.ArtifactPromotionStatus.Blocked, result.Status);
-        Assert.Equal(existing, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
+        Assert.Equal(ArtifactPromotionStatus.Blocked, result.Status);
+        Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
         Assert.NotNull(result.EvidencePath);
         Assert.Equal(blocked, repo.Read(result.EvidencePath!));
-        Cli.ArtifactLifecycleEntry evidence = Assert.Single(await lifecycle.LoadAsync(), item => item.Path == result.EvidencePath);
-        Assert.Equal(Cli.ArtifactLifecycleState.Blocked, evidence.State);
+        ArtifactLifecycleEntry evidence = Assert.Single(await lifecycle.LoadAsync(), item => item.Path == result.EvidencePath);
+        Assert.Equal(ArtifactLifecycleState.Blocked, evidence.State);
     }
 
     [Fact]
@@ -53,14 +54,14 @@ public sealed class ArtifactPromotionServiceTests
     {
         using var repo = new TempRepo();
         string existing = RoadmapSamples.ValidEpic("Existing Epic", "EPIC-OLD");
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, existing);
-        var service = new Cli.ArtifactPromotionService(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts));
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, existing);
+        var service = new ArtifactPromotionService(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts));
 
-        Cli.ArtifactPromotionResult result = await service.PromoteAsync(Request("I cannot safely decide what to write."));
+        ArtifactPromotionResult result = await service.PromoteAsync(Request("I cannot safely decide what to write."));
 
         Assert.False(result.Promoted);
-        Assert.Equal(Cli.ArtifactPromotionStatus.Ambiguous, result.Status);
-        Assert.Equal(existing, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
+        Assert.Equal(ArtifactPromotionStatus.Ambiguous, result.Status);
+        Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
     }
 
     [Fact]
@@ -68,8 +69,8 @@ public sealed class ArtifactPromotionServiceTests
     {
         using var repo = new TempRepo();
         string existing = RoadmapSamples.ValidEpic("Existing Epic", "EPIC-OLD");
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, existing);
-        var service = new Cli.ArtifactPromotionService(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts));
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, existing);
+        var service = new ArtifactPromotionService(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts));
         string invalid = """
             # Epic: Missing Structure
 
@@ -81,11 +82,11 @@ public sealed class ArtifactPromotionServiceTests
             | Status | Authored |
             """;
 
-        Cli.ArtifactPromotionResult result = await service.PromoteAsync(Request(invalid));
+        ArtifactPromotionResult result = await service.PromoteAsync(Request(invalid));
 
         Assert.False(result.Promoted);
-        Assert.Equal(Cli.ArtifactPromotionStatus.StructurallyInvalid, result.Status);
-        Assert.Equal(existing, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
+        Assert.Equal(ArtifactPromotionStatus.StructurallyInvalid, result.Status);
+        Assert.Equal(existing, repo.Read(RoadmapArtifactPaths.ActiveEpic));
     }
 
     [Fact]
@@ -94,24 +95,24 @@ public sealed class ArtifactPromotionServiceTests
         using var repo = new TempRepo();
         string existing = RoadmapSamples.ValidEpic("Existing Epic", "EPIC-OLD");
         string replacement = RoadmapSamples.ValidEpic("Replacement Epic", "EPIC-NEW", "Realigned", "Realign");
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, existing);
-        var service = new Cli.ArtifactPromotionService(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts));
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, existing);
+        var service = new ArtifactPromotionService(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts));
 
-        Cli.ArtifactPromotionResult result = await service.PromoteAsync(Request(replacement));
+        ArtifactPromotionResult result = await service.PromoteAsync(Request(replacement));
 
         Assert.True(result.Promoted);
-        Assert.Equal(replacement, repo.Read(Cli.RoadmapArtifactPaths.ActiveEpic));
+        Assert.Equal(replacement, repo.Read(RoadmapArtifactPaths.ActiveEpic));
     }
 
-    private static Cli.ArtifactPromotionRequest Request(string candidate) =>
+    private static ArtifactPromotionRequest Request(string candidate) =>
         new(
-            Cli.RoadmapArtifactPaths.ActiveEpic,
+            RoadmapArtifactPaths.ActiveEpic,
             candidate,
-            Cli.RoadmapArtifactPaths.BlockerEvidenceDirectory,
+            RoadmapArtifactPaths.BlockerEvidenceDirectory,
             "active-epic-promotion",
             "active epic",
-            new EpicAuthoringOutputClassifier(),
-            new Cli.EpicArtifactValidator(),
-            Cli.ArtifactLifecycleState.Ready,
+            new Cli.Services.EpicAuthoringOutputClassifier(),
+            new EpicArtifactValidator(),
+            ArtifactLifecycleState.Ready,
             "Test promotion.");
 }

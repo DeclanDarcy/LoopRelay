@@ -1,8 +1,6 @@
-using System.Text;
-using System.Text.Json;
-using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 
-namespace LoopRelay.Agents.Services;
+namespace LoopRelay.Agents.Models;
 
 /// <summary>The accumulated result of one Codex app-server turn.</summary>
 public sealed record CodexAppServerTurnOutcome(

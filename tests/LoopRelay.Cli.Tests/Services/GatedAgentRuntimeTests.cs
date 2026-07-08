@@ -1,19 +1,23 @@
-using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Cli;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Infrastructure.Models.Diagnostics;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class GatedAgentRuntimeTests
 {
     private static Repository Repo() => new() { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-    private static AgentSessionSpec Spec() => Cli.AgentSpecs.Decision(Repo());
-    private static Cli.UsageLimitHit Hit() => new(TimeSpan.FromMinutes(5), null);
+    private static AgentSessionSpec Spec() => AgentSpecs.Decision(Repo());
+    private static UsageLimitHit Hit() => new(TimeSpan.FromMinutes(5), null);
 
     private sealed record Fixture(
-        Cli.GatedAgentRuntime Runtime, RecordingRuntime Inner, RecordingDetector Detector,
+        GatedAgentRuntime Runtime, RecordingRuntime Inner, RecordingDetector Detector,
         RecordingSessionTelemetryRecorder Recorder, List<string> Log);
 
     private static Fixture New()
@@ -22,7 +26,7 @@ public class GatedAgentRuntimeTests
         var inner = new RecordingRuntime(log);
         var detector = new RecordingDetector(log);
         var recorder = new RecordingSessionTelemetryRecorder();
-        var runtime = new Cli.GatedAgentRuntime(inner, detector, recorder, new FakeClock(), "myrepo");
+        var runtime = new GatedAgentRuntime(inner, detector, recorder, new FakeClock(), "myrepo");
         return new Fixture(runtime, inner, detector, recorder, log);
     }
 
@@ -96,9 +100,9 @@ public class GatedAgentRuntimeTests
         // A persistently failing codex must eventually surface loudly instead of waiting forever — and
         // say WHY it gave up, or the operator cannot tell "capped on quota" from an unrelated crash.
         Assert.Equal(AgentTurnState.Failed, result.State);
-        Assert.Equal(1 + Cli.GatedAgentSession.MaxUsageLimitRetriesPerTurn, f.Log.Count(e => e == "turn"));
-        Assert.Equal(Cli.GatedAgentSession.MaxUsageLimitRetriesPerTurn, f.Detector.Waits);
-        Assert.Equal(1 + Cli.GatedAgentSession.MaxUsageLimitRetriesPerTurn, f.Recorder.Calls.Count);
+        Assert.Equal(1 + GatedAgentSession.MaxUsageLimitRetriesPerTurn, f.Log.Count(e => e == "turn"));
+        Assert.Equal(GatedAgentSession.MaxUsageLimitRetriesPerTurn, f.Detector.Waits);
+        Assert.Equal(1 + GatedAgentSession.MaxUsageLimitRetriesPerTurn, f.Recorder.Calls.Count);
         Assert.Equal("exhausted", f.Log.Last());
     }
 
@@ -266,10 +270,10 @@ public class GatedAgentRuntimeTests
     {
         var log = new List<string>();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var gated = new Cli.GatedAgentSession(
-            new RecordingSession(log, Cli.AgentSpecs.Decision(repo)),
+        var gated = new GatedAgentSession(
+            new RecordingSession(log, AgentSpecs.Decision(repo)),
             new RecordingDetector(log),
-            new Cli.NullSessionTelemetryRecorder(),
+            new NullSessionTelemetryRecorder(),
             "r", "/repo", DateTimeOffset.UtcNow);
 
         // Persist-after-turn reads the thread id THROUGH the gate — a missing passthrough would silently
@@ -279,21 +283,21 @@ public class GatedAgentRuntimeTests
 
     // --- local recording fakes ---
 
-    private sealed class RecordingDetector(List<string> log) : Cli.IUsageLimitDetector
+    private sealed class RecordingDetector(List<string> log) : IUsageLimitDetector
     {
-        public Queue<Cli.UsageLimitHit?> Hits { get; } = new();
-        public Cli.UsageLimitHit? Default { get; set; }
+        public Queue<UsageLimitHit?> Hits { get; } = new();
+        public UsageLimitHit? Default { get; set; }
         public Exception? ThrowOnWait { get; set; }
         public Action? OnWait { get; set; }
         public int Waits { get; private set; }
 
-        public Cli.UsageLimitHit? Detect(AgentTurnResult result)
+        public UsageLimitHit? Detect(AgentTurnResult result)
         {
             log.Add("detect");
             return Hits.Count > 0 ? Hits.Dequeue() : Default;
         }
 
-        public Task WaitOutAsync(Cli.UsageLimitHit hit, CancellationToken cancellationToken)
+        public Task WaitOutAsync(UsageLimitHit hit, CancellationToken cancellationToken)
         {
             Waits++;
             log.Add("wait");
@@ -309,7 +313,7 @@ public class GatedAgentRuntimeTests
         public void WarnRetriesExhausted(int retries) => log.Add("exhausted");
     }
 
-    private sealed class RecordingSessionTelemetryRecorder : Cli.ISessionTelemetryRecorder
+    private sealed class RecordingSessionTelemetryRecorder : ISessionTelemetryRecorder
     {
         public List<(SessionRole Role, int TurnIndex, string? CachedLogPath)> Calls { get; } = new();
         public string? PathToReturn { get; set; } = "/log";
@@ -317,7 +321,7 @@ public class GatedAgentRuntimeTests
         public Task<string?> RecordTurnAsync(
             string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role,
             DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result,
-            LoopRelay.Infrastructure.Diagnostics.InputWaitObservation? inputWait,
+            InputWaitObservation? inputWait,
             CancellationToken cancellationToken)
         {
             Calls.Add((role, result.TurnIndex, cachedLogPath));

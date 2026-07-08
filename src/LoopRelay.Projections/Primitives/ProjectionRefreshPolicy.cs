@@ -1,4 +1,4 @@
-namespace LoopRelay.Projections;
+namespace LoopRelay.Projections.Primitives;
 
 public enum ProjectionRefreshPolicy
 {

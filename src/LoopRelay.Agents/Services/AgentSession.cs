@@ -2,6 +2,7 @@ using System.Text;
 using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 
 namespace LoopRelay.Agents.Services;
 

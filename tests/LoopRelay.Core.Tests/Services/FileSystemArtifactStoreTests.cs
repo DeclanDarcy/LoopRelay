@@ -1,7 +1,7 @@
 using System.Text;
-using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Services.Artifacts;
 
-namespace LoopRelay.Core.Tests;
+namespace LoopRelay.Core.Tests.Services;
 
 public sealed class FileSystemArtifactStoreTests
 {

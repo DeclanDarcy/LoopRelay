@@ -1,12 +1,12 @@
 using System.Text.Json;
-using LoopRelay.Cli;
+using LoopRelay.Cli.Models;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class SessionTelemetryRecordTests
 {
-    private static Cli.SessionTelemetryRecord Sample(string? path = "/logs/rollout.jsonl",
+    private static SessionTelemetryRecord Sample(string? path = "/logs/rollout.jsonl",
         int? post5h = 54) =>
         new(new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero),
             "myrepo", path, "sid-1", "Decision", 2,
@@ -15,7 +15,7 @@ public class SessionTelemetryRecordTests
     [Fact]
     public void SerializesToSingleCamelCaseJsonLine()
     {
-        string json = JsonSerializer.Serialize(Sample(), Cli.SessionTelemetryJson.Options);
+        string json = JsonSerializer.Serialize(Sample(), SessionTelemetryJson.Options);
 
         Assert.DoesNotContain("\n", json);
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -35,7 +35,7 @@ public class SessionTelemetryRecordTests
     public void EmitsNullsForAbsentCapacityAndPath()
     {
         string json = JsonSerializer.Serialize(Sample(path: null, post5h: null),
-            Cli.SessionTelemetryJson.Options);
+            SessionTelemetryJson.Options);
 
         using JsonDocument doc = JsonDocument.Parse(json);
         JsonElement r = doc.RootElement;

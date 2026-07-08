@@ -1,4 +1,4 @@
-namespace LoopRelay.Infrastructure.Diagnostics;
+namespace LoopRelay.Infrastructure.Primitives.Diagnostics;
 
 public enum RuntimeDiagnosticSeverity
 {

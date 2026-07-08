@@ -1,8 +1,9 @@
-using LoopRelay.Core.Repositories;
-using LoopRelay.Cli;
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Models.Repositories;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class AgentsSubmodulePublisherTests
 {
@@ -13,7 +14,7 @@ public class AgentsSubmodulePublisherTests
     private static bool IsSubmodule(string workingDirectory) =>
         workingDirectory.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);
 
-    private static Cli.AgentsSubmodulePublisher New(FakeProcessRunner fake) =>
+    private static AgentsSubmodulePublisher New(FakeProcessRunner fake) =>
         new(fake, Repo, new RecordingLoopConsole());
 
     /// <summary>Scripts the submodule git: a status porcelain and a branch name; everything else succeeds.</summary>
@@ -99,7 +100,7 @@ public class AgentsSubmodulePublisherTests
         Assert.All(parentCalls, c => Assert.Equal("/repo", c.WorkingDirectory.Replace('\\', '/')));
         Assert.DoesNotContain(parentCalls, c => c.Args[0] == "status");
         Assert.Equal(new[] { "add", "--", ".agents" }, parentCalls[0].Args);
-        Assert.Equal(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.GitlinkPointerMessage }, parentCalls[1].Args);
+        Assert.Equal(new[] { "commit", "-m", AgentsSubmodulePublisher.GitlinkPointerMessage }, parentCalls[1].Args);
         Assert.Equal(new[] { "push" }, parentCalls[2].Args);
     }
 
@@ -129,7 +130,7 @@ public class AgentsSubmodulePublisherTests
             }
         };
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(
+        await Assert.ThrowsAsync<LoopStepException>(
             () => New(fake).PublishAsync(Message, CancellationToken.None));
     }
 
@@ -165,12 +166,12 @@ public class AgentsSubmodulePublisherTests
     {
         var fake = Runner(status: " M handoffs/handoff.md");
 
-        await New(fake).PublishAsync(Cli.AgentsSubmodulePublisher.ExecutionHandoffMessage, CancellationToken.None);
+        await New(fake).PublishAsync(AgentsSubmodulePublisher.ExecutionHandoffMessage, CancellationToken.None);
 
         // The submodule commit carries the passed-through message (the parent gitlink commit is asserted
         // separately and carries GitlinkPointerMessage, so scope to the submodule working directory here).
         var commit = fake.Calls.Single(c => c.Args[0] == "commit" && IsSubmodule(c.WorkingDirectory));
-        Assert.Equal(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.ExecutionHandoffMessage }, commit.Args);
+        Assert.Equal(new[] { "commit", "-m", AgentsSubmodulePublisher.ExecutionHandoffMessage }, commit.Args);
     }
 
     [Fact]
@@ -179,7 +180,7 @@ public class AgentsSubmodulePublisherTests
         // Dirty tree but detached HEAD (blank `branch --show-current`) cannot be pushed.
         var fake = Runner(status: " M decisions/decisions.md", branch: string.Empty);
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(
+        await Assert.ThrowsAsync<LoopStepException>(
             () => New(fake).PublishAsync(Message, CancellationToken.None));
 
         Assert.DoesNotContain(fake.Calls, c => c.Args[0] is "commit" or "push");
@@ -199,7 +200,7 @@ public class AgentsSubmodulePublisherTests
             }
         };
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(
+        await Assert.ThrowsAsync<LoopStepException>(
             () => New(fake).PublishAsync(Message, CancellationToken.None));
     }
 
@@ -226,7 +227,7 @@ public class AgentsSubmodulePublisherTests
         Assert.Equal(2, submodulePushes);
         Assert.Contains(fake.Calls, c =>
             !IsSubmodule(c.WorkingDirectory) &&
-            c.Args.SequenceEqual(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.GitlinkPointerMessage }));
+            c.Args.SequenceEqual(new[] { "commit", "-m", AgentsSubmodulePublisher.GitlinkPointerMessage }));
     }
 
     [Fact]
@@ -253,7 +254,7 @@ public class AgentsSubmodulePublisherTests
         Assert.Single(fake.Calls, c => IsSubmodule(c.WorkingDirectory) && c.Args.SequenceEqual(new[] { "push" }));
         Assert.Contains(fake.Calls, c =>
             !IsSubmodule(c.WorkingDirectory) &&
-            c.Args.SequenceEqual(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.GitlinkPointerMessage }));
+            c.Args.SequenceEqual(new[] { "commit", "-m", AgentsSubmodulePublisher.GitlinkPointerMessage }));
     }
 
     [Fact]
@@ -270,7 +271,7 @@ public class AgentsSubmodulePublisherTests
             }
         };
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(
+        await Assert.ThrowsAsync<LoopStepException>(
             () => New(fake).PublishAsync(Message, CancellationToken.None));
     }
 
@@ -284,7 +285,7 @@ public class AgentsSubmodulePublisherTests
                 : FakeProcessRunner.Ok()
         };
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(
+        await Assert.ThrowsAsync<LoopStepException>(
             () => New(fake).PublishAsync(Message, CancellationToken.None));
     }
 }

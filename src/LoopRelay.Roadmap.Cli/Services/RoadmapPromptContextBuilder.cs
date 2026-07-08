@@ -1,7 +1,9 @@
 using System.Text;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Roadmap.Cli.Models;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class RoadmapPromptContextBuilder(
     RoadmapArtifacts artifacts,

@@ -1,8 +1,8 @@
-using LoopRelay.Roadmap.Cli;
-using ExecutionCompatibilityMaterializer = LoopRelay.Roadmap.Cli.ExecutionCompatibilityMaterializer;
-using ProjectContextLoader = LoopRelay.Roadmap.Cli.ProjectContextLoader;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class ExecutionPreparationProvenanceTests
 {
@@ -10,9 +10,9 @@ public sealed class ExecutionPreparationProvenanceTests
     public async Task Matching_provenance_allows_execution_preparation_reuse()
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
 
-        Cli.ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
+        ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
             requireSpecs: true,
             requireOperationalContext: true,
             requireExecutionPrompt: true,
@@ -25,91 +25,91 @@ public sealed class ExecutionPreparationProvenanceTests
     public async Task Active_epic_change_invalidates_downstream_provenance()
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic("Replacement Epic", "EPIC-NEW"));
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic("Replacement Epic", "EPIC-NEW"));
 
-        Cli.ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
+        ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
             requireSpecs: true,
             requireOperationalContext: true,
             requireExecutionPrompt: true,
             requireCompatibilityArtifacts: true);
 
         Assert.False(readiness.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.ActiveEpicDrift, readiness.Artifacts.SelectMany(result => result.Freshness.Reasons));
+        Assert.Contains(DerivedArtifactStaleReason.ActiveEpicDrift, readiness.Artifacts.SelectMany(result => result.Freshness.Reasons));
     }
 
     [Fact]
     public async Task Milestone_spec_change_invalidates_execution_preparation()
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
         repo.Write(".agents/specs/a.md", Spec("Changed Spec", "- [ ] Changed work."));
 
-        Cli.DerivedArtifactFreshness specs = await provenance.EvaluateMilestoneSpecsFreshnessAsync();
+        DerivedArtifactFreshness specs = await provenance.EvaluateMilestoneSpecsFreshnessAsync();
 
         Assert.False(specs.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.ArtifactHashDrift, specs.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.ArtifactHashDrift, specs.Reasons);
     }
 
     [Fact]
     public async Task Operational_context_change_invalidates_execution_prompt_and_compatibility()
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
-        repo.Write(Cli.RoadmapArtifactPaths.OperationalContext, "# Tampered Operational Context");
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
+        repo.Write(RoadmapArtifactPaths.OperationalContext, "# Tampered Operational Context");
 
-        Cli.DerivedArtifactFreshness prompt = await provenance.EvaluateExecutionPromptFreshnessAsync();
-        Cli.DerivedArtifactFreshness compatibility = await provenance.EvaluateCompatibilityFreshnessAsync();
+        DerivedArtifactFreshness prompt = await provenance.EvaluateExecutionPromptFreshnessAsync();
+        DerivedArtifactFreshness compatibility = await provenance.EvaluateCompatibilityFreshnessAsync();
 
         Assert.False(prompt.IsFresh);
         Assert.False(compatibility.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.OperationalContextDrift, compatibility.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.OperationalContextDrift, compatibility.Reasons);
     }
 
     [Fact]
     public async Task Execution_prompt_change_invalidates_compatibility_artifacts()
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
-        repo.Write(Cli.RoadmapArtifactPaths.ExecutionPrompt, "# Tampered Execution Prompt");
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
+        repo.Write(RoadmapArtifactPaths.ExecutionPrompt, "# Tampered Execution Prompt");
 
-        Cli.DerivedArtifactFreshness compatibility = await provenance.EvaluateCompatibilityFreshnessAsync();
+        DerivedArtifactFreshness compatibility = await provenance.EvaluateCompatibilityFreshnessAsync();
 
         Assert.False(compatibility.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.ExecutionPromptDrift, compatibility.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.ExecutionPromptDrift, compatibility.Reasons);
     }
 
     [Fact]
     public async Task Deleted_execution_prompt_is_not_fresh()
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
-        await repo.Artifacts.DeleteAsync(Cli.RoadmapArtifactPaths.ExecutionPrompt);
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
+        await repo.Artifacts.DeleteAsync(RoadmapArtifactPaths.ExecutionPrompt);
 
-        Cli.DerivedArtifactFreshness prompt = await provenance.EvaluateExecutionPromptFreshnessAsync();
+        DerivedArtifactFreshness prompt = await provenance.EvaluateExecutionPromptFreshnessAsync();
 
         Assert.False(prompt.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.ArtifactMissing, prompt.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.ArtifactMissing, prompt.Reasons);
     }
 
     [Fact]
     public async Task Decision_ledger_change_supports_partial_regeneration()
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
-        repo.Write(Cli.RoadmapArtifactPaths.DecisionLedgerJson, "{}");
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
+        repo.Write(RoadmapArtifactPaths.DecisionLedgerJson, "{}");
 
-        Cli.DerivedArtifactFreshness operationalContext = await provenance.EvaluateOperationalContextFreshnessAsync();
+        DerivedArtifactFreshness operationalContext = await provenance.EvaluateOperationalContextFreshnessAsync();
         Assert.False(operationalContext.IsFresh);
-        Assert.Contains(Cli.DerivedArtifactStaleReason.DecisionLedgerDrift, operationalContext.Reasons);
+        Assert.Contains(DerivedArtifactStaleReason.DecisionLedgerDrift, operationalContext.Reasons);
 
-        await new Cli.OperationalContextGenerator(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
+        await new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
         Assert.False((await provenance.EvaluateExecutionPromptFreshnessAsync()).IsFresh);
 
-        await new Cli.ExecutionPromptGenerator(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
-        await new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
+        await new ExecutionPromptGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
+        await new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
 
-        Cli.ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
+        ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
             requireSpecs: true,
             requireOperationalContext: true,
             requireExecutionPrompt: true,
@@ -121,43 +121,43 @@ public sealed class ExecutionPreparationProvenanceTests
     public async Task Reduced_milestone_count_supersedes_old_compatibility_artifacts_without_reusing_them()
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo, specCount: 2);
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo, specCount: 2);
         Assert.True(await repo.Artifacts.ExistsAsync(".agents/milestones/m002.md"));
 
         await provenance.RecordMilestoneSpecsAsync([".agents/specs/a.md"]);
-        await new Cli.OperationalContextGenerator(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
-        await new Cli.ExecutionPromptGenerator(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
-        await new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
+        await new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
+        await new ExecutionPromptGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
+        await new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
 
-        Cli.ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
+        ExecutionPreparationReadiness readiness = await provenance.EvaluateReadinessAsync(
             requireSpecs: true,
             requireOperationalContext: true,
             requireExecutionPrompt: true,
             requireCompatibilityArtifacts: true);
-        Cli.ExecutionPreparationManifest manifest = await new Cli.ExecutionPreparationManifestStore(repo.Artifacts).LoadAsync();
-        Cli.DerivedArtifactManifestEntry oldMilestone = Assert.Single(
+        ExecutionPreparationManifest manifest = await new ExecutionPreparationManifestStore(repo.Artifacts).LoadAsync();
+        DerivedArtifactManifestEntry oldMilestone = Assert.Single(
             manifest.Artifacts,
             entry => entry.ArtifactIdentity == ".agents/milestones/m002.md");
 
         Assert.True(readiness.IsFresh);
-        Assert.Equal(Cli.DerivedArtifactProvenanceStatus.Superseded, oldMilestone.ProvenanceStatus);
+        Assert.Equal(DerivedArtifactProvenanceStatus.Superseded, oldMilestone.ProvenanceStatus);
     }
 
     [Fact]
     public async Task Resume_does_not_advance_legacy_execution_preparation()
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
-        Cli.ProjectContext context = await SeedProjectAsync(repo);
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic("Replacement Epic", "EPIC-NEW"));
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
+        ProjectContext context = await SeedProjectAsync(repo);
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic("Replacement Epic", "EPIC-NEW"));
 
-        Cli.RoadmapResumePlan plan = await CreatePlanner(repo, provenance).PlanAsync(
-            State(Cli.RoadmapState.ExecutionPromptReady, output: Cli.RoadmapArtifactPaths.ExecutionPrompt),
+        RoadmapResumePlan plan = await CreatePlanner(repo, provenance).PlanAsync(
+            State(RoadmapState.ExecutionPromptReady, output: RoadmapArtifactPaths.ExecutionPrompt),
             context,
             CancellationToken.None);
 
-        Assert.Equal(Cli.RoadmapResumeAction.Terminal, plan.Action);
-        Assert.Equal(Cli.RoadmapOutcome.Paused, plan.TerminalOutcome);
+        Assert.Equal(RoadmapResumeAction.Terminal, plan.Action);
+        Assert.Equal(RoadmapOutcome.Paused, plan.TerminalOutcome);
         Assert.Contains("no longer advanced by Roadmap CLI", plan.Reason, StringComparison.Ordinal);
     }
 
@@ -168,8 +168,8 @@ public sealed class ExecutionPreparationProvenanceTests
     public async Task Invariant_rejects_stale_execution_preparation_before_execution(string staleArtifact)
     {
         using var repo = new TempRepo();
-        Cli.ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
-        Cli.ProjectContext context = await new ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
+        ExecutionPreparationProvenanceService provenance = await SeedFullPreparationAsync(repo);
+        ProjectContext context = await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
 
         switch (staleArtifact)
         {
@@ -177,30 +177,30 @@ public sealed class ExecutionPreparationProvenanceTests
                 repo.Write(".agents/specs/a.md", Spec("Changed Spec", "- [ ] Changed work."));
                 break;
             case "operational-context":
-                repo.Write(Cli.RoadmapArtifactPaths.OperationalContext, "# Tampered Operational Context");
+                repo.Write(RoadmapArtifactPaths.OperationalContext, "# Tampered Operational Context");
                 break;
             case "execution-prompt":
-                repo.Write(Cli.RoadmapArtifactPaths.ExecutionPrompt, "# Tampered Execution Prompt");
+                repo.Write(RoadmapArtifactPaths.ExecutionPrompt, "# Tampered Execution Prompt");
                 break;
         }
 
-        Cli.InvariantValidationResult result = await CreateInvariantValidator(repo, provenance)
-            .ValidateAsync(Cli.RoadmapState.ExecutionPromptReady, context.Hash);
+        InvariantValidationResult result = await CreateInvariantValidator(repo, provenance)
+            .ValidateAsync(RoadmapState.ExecutionPromptReady, context.Hash);
 
         Assert.False(result.IsValid);
-        Assert.Equal(Cli.RoadmapState.EvidenceBlocked, result.FailureState);
+        Assert.Equal(RoadmapState.EvidenceBlocked, result.FailureState);
         Assert.Equal("ExecutionPreparationStale", result.FailureCategory);
         Assert.Contains("provenance is not fresh", result.Error, StringComparison.Ordinal);
     }
 
-    private static async Task<Cli.ExecutionPreparationProvenanceService> SeedFullPreparationAsync(
+    private static async Task<ExecutionPreparationProvenanceService> SeedFullPreparationAsync(
         TempRepo repo,
         int specCount = 1)
     {
         repo.SeedProjectContext();
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
-        await new Cli.ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(Cli.RoadmapArtifactPaths.ActiveEpic, Cli.ArtifactLifecycleState.Ready);
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
+        await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(RoadmapArtifactPaths.ActiveEpic, ArtifactLifecycleState.Ready);
 
         var specPaths = new List<string> { ".agents/specs/a.md" };
         repo.Write(".agents/specs/a.md", Spec("Spec A", "- [ ] Do A."));
@@ -210,75 +210,75 @@ public sealed class ExecutionPreparationProvenanceTests
             repo.Write(".agents/specs/b.md", Spec("Spec B", "- [ ] Do B."));
         }
 
-        Cli.ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, specPaths.ToArray());
-        await new Cli.OperationalContextGenerator(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
-        await new Cli.ExecutionPromptGenerator(repo.Artifacts, new Cli.ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
-        await new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
+        ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, specPaths.ToArray());
+        await new OperationalContextGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
+        await new ExecutionPromptGenerator(repo.Artifacts, new ArtifactLifecycleStore(repo.Artifacts), provenance).GenerateAsync();
+        await new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
         return provenance;
     }
 
-    private static async Task<Cli.ProjectContext> SeedProjectAsync(TempRepo repo)
+    private static async Task<ProjectContext> SeedProjectAsync(TempRepo repo)
     {
         repo.SeedProjectContext();
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
-        return await new ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
+        return await new Cli.Services.ProjectContextLoader(repo.Artifacts).LoadAsync(CancellationToken.None);
     }
 
-    private static Cli.RoadmapResumePlanner CreatePlanner(
+    private static RoadmapResumePlanner CreatePlanner(
         TempRepo repo,
-        Cli.ExecutionPreparationProvenanceService provenance)
+        ExecutionPreparationProvenanceService provenance)
     {
-        var projections = new Cli.ProjectionRegistry();
-        var contextBuilder = new Cli.RoadmapPromptContextBuilder(repo.Artifacts, provenance);
-        var inputResolver = new Cli.TransitionInputResolver(repo.Artifacts, provenance);
-        var selectionProvenance = new Cli.SelectionProvenanceService(
+        var projections = new ProjectionRegistry();
+        var contextBuilder = new RoadmapPromptContextBuilder(repo.Artifacts, provenance);
+        var inputResolver = new TransitionInputResolver(repo.Artifacts, provenance);
+        var selectionProvenance = new SelectionProvenanceService(
             repo.Artifacts,
-            new Cli.SelectionProvenanceManifestStore(repo.Artifacts),
+            new SelectionProvenanceManifestStore(repo.Artifacts),
             contextBuilder,
             inputResolver);
-        return new Cli.RoadmapResumePlanner(
+        return new RoadmapResumePlanner(
             repo.Artifacts,
-            new Cli.PromptContractRegistry(projections),
-            new Cli.ProjectionManifestStore(repo.Artifacts),
-            new Cli.ArtifactLifecycleStore(repo.Artifacts),
-            new Cli.ProjectionProvenanceFactory(projections),
+            new PromptContractRegistry(projections),
+            new ProjectionManifestStore(repo.Artifacts),
+            new ArtifactLifecycleStore(repo.Artifacts),
+            new ProjectionProvenanceFactory(projections),
             selectionProvenance,
             provenance);
     }
 
-    private static Cli.InvariantValidator CreateInvariantValidator(
+    private static InvariantValidator CreateInvariantValidator(
         TempRepo repo,
-        Cli.ExecutionPreparationProvenanceService provenance)
+        ExecutionPreparationProvenanceService provenance)
     {
-        var projections = new Cli.ProjectionRegistry();
-        return new Cli.InvariantValidator(
+        var projections = new ProjectionRegistry();
+        return new InvariantValidator(
             repo.Artifacts,
-            new ProjectContextLoader(repo.Artifacts),
+            new Cli.Services.ProjectContextLoader(repo.Artifacts),
             projections,
-            new Cli.PromptContractRegistry(projections),
-            new Cli.ProjectionManifestStore(repo.Artifacts),
-            new Cli.ArtifactLifecycleStore(repo.Artifacts),
-            new Cli.SplitFamilyStore(repo.Artifacts),
+            new PromptContractRegistry(projections),
+            new ProjectionManifestStore(repo.Artifacts),
+            new ArtifactLifecycleStore(repo.Artifacts),
+            new SplitFamilyStore(repo.Artifacts),
             provenance);
     }
 
-    private static Cli.RoadmapStateDocument State(
-        Cli.RoadmapState state,
-        Cli.TransitionStatus status = Cli.TransitionStatus.Completed,
-        Cli.RoadmapState? from = null,
-        Cli.RoadmapState? to = null,
+    private static RoadmapStateDocument State(
+        RoadmapState state,
+        TransitionStatus status = TransitionStatus.Completed,
+        RoadmapState? from = null,
+        RoadmapState? to = null,
         string prompt = "None",
         string output = "None") =>
         new(
             state,
             [],
-            new Cli.RoadmapTransitionSummary(from ?? state, to ?? state, prompt, "None", output, "Completed", status, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            new RoadmapTransitionSummary(from ?? state, to ?? state, prompt, "None", output, "Completed", status, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
             [],
             "None",
             0,
             0,
-            new Cli.ProjectionManifestCounts(0, 0, 0),
-            Cli.RoadmapTransitionIntent.Empty(state),
+            new ProjectionManifestCounts(0, 0, 0),
+            RoadmapTransitionIntent.Empty(state),
             [],
             []);
 

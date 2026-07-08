@@ -1,11 +1,13 @@
 using System.Text.Json;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration.Services;
 using LoopRelay.Agents.Models;
-using LoopRelay.Cli;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Orchestration.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class SessionTelemetryCompositionTests : IDisposable
 {
@@ -22,7 +24,7 @@ public class SessionTelemetryCompositionTests : IDisposable
     [Fact]
     public async Task CreateRecorder_WhenEnabled_WritesUnderRepoLoopRelayTelemetry()
     {
-        Cli.ISessionTelemetryRecorder recorder = Cli.SessionTelemetryComposition.CreateRecorder(
+        ISessionTelemetryRecorder recorder = SessionTelemetryComposition.CreateRecorder(
             Repo(), enabled: true, new FakeCodexUsageProbe(), new EffectiveTokenCostModel(),
             new FakeClock(), new RecordingLoopConsole());
 
@@ -47,7 +49,7 @@ public class SessionTelemetryCompositionTests : IDisposable
     [Fact]
     public async Task CreateRecorder_WhenDisabled_IsANullRecorderThatWritesNothing()
     {
-        Cli.ISessionTelemetryRecorder recorder = Cli.SessionTelemetryComposition.CreateRecorder(
+        ISessionTelemetryRecorder recorder = SessionTelemetryComposition.CreateRecorder(
             Repo(), enabled: false, new FakeCodexUsageProbe(), new EffectiveTokenCostModel(),
             new FakeClock(), new RecordingLoopConsole());
 
@@ -55,14 +57,14 @@ public class SessionTelemetryCompositionTests : IDisposable
             SessionRole.Decision, DateTimeOffset.UnixEpoch, null, Turn(), inputWait: null, CancellationToken.None);
 
         Assert.False(Directory.Exists(Path.Combine(repoPath, ".LoopRelay")));
-        Assert.IsType<Cli.NullSessionTelemetryRecorder>(recorder);
+        Assert.IsType<NullSessionTelemetryRecorder>(recorder);
     }
 
     [Fact]
     public void RepoName_FallsBackToTheFolderNameWhenRepositoryNameIsBlank()
     {
-        Assert.Equal("AxiomRepo", Cli.SessionTelemetryComposition.RepoName(Repo("AxiomRepo")));
+        Assert.Equal("AxiomRepo", SessionTelemetryComposition.RepoName(Repo("AxiomRepo")));
         string folder = Path.GetFileName(repoPath);
-        Assert.Equal(folder, Cli.SessionTelemetryComposition.RepoName(new Repository { Id = Guid.NewGuid(), Name = "", Path = repoPath }));
+        Assert.Equal(folder, SessionTelemetryComposition.RepoName(new Repository { Id = Guid.NewGuid(), Name = "", Path = repoPath }));
     }
 }

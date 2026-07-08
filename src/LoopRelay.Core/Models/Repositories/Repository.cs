@@ -1,4 +1,4 @@
-namespace LoopRelay.Core.Repositories;
+namespace LoopRelay.Core.Models.Repositories;
 
 public sealed class Repository
 {

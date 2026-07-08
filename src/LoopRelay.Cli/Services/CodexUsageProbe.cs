@@ -1,8 +1,10 @@
 using System.Text.Json;
-using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Abstractions;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
+using LoopRelay.Core.Models.Repositories;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 /// <summary>
 /// Queries Codex quota over the app-server JSON-RPC protocol: it starts <c>codex app-server</c> on stdio,

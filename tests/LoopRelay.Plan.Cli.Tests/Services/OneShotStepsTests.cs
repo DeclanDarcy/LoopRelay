@@ -1,21 +1,23 @@
 using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Orchestration.Services;
+using LoopRelay.Plan.Cli.Models;
+using LoopRelay.Plan.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 public class OneShotStepsTests
 {
     private static string Resolve(Repository repo, string rel) => ArtifactPath.ResolveRepositoryPath(repo, rel);
 
-    private static (Cli.PlanArtifacts Artifacts, MemoryArtifactStore Store, Repository Repo) NewArtifacts()
+    private static (PlanArtifacts Artifacts, MemoryArtifactStore Store, Repository Repo) NewArtifacts()
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        return (new Cli.PlanArtifacts(store, repo), store, repo);
+        return (new PlanArtifacts(store, repo), store, repo);
     }
 
     [Fact]
@@ -26,7 +28,7 @@ public class OneShotStepsTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Spec(1)), "SPEC 1");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
 
-        Cli.ArtifactOperationPlan plan = await Cli.OneShotSteps.CollectDetailsAsync(artifacts);
+        ArtifactOperationPlan plan = await OneShotSteps.CollectDetailsAsync(artifacts);
 
         Assert.Equal("collect-details", plan.Label);
         Assert.Equal(CollectDetails.Text, plan.Prompt);
@@ -47,7 +49,7 @@ public class OneShotStepsTests
     {
         var (artifacts, _, _) = NewArtifacts();
 
-        Cli.ArtifactOperationPlan plan = await Cli.OneShotSteps.ExtractMilestonesAsync(artifacts);
+        ArtifactOperationPlan plan = await OneShotSteps.ExtractMilestonesAsync(artifacts);
 
         Assert.Equal("extract-milestones", plan.Label);
         Assert.Equal(ExtractMilestones.Text, plan.Prompt);
@@ -69,7 +71,7 @@ public class OneShotStepsTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Details), "DETAILS");
         await store.WriteAsync(Resolve(repo, ".agents/milestones/m1.md"), "- [ ] a");
 
-        Cli.ArtifactOperationPlan plan = await Cli.OneShotSteps.ExtractDetailsAsync(artifacts);
+        ArtifactOperationPlan plan = await OneShotSteps.ExtractDetailsAsync(artifacts);
 
         Assert.Equal("extract-details", plan.Label);
         Assert.Equal(ExtractDetails.Text, plan.Prompt);

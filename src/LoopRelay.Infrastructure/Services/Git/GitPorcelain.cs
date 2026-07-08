@@ -1,4 +1,4 @@
-namespace LoopRelay.Infrastructure.Git;
+namespace LoopRelay.Infrastructure.Services.Git;
 
 /// <summary>Parser for <c>git status --porcelain</c> v1 changed paths.</summary>
 public static class GitPorcelain

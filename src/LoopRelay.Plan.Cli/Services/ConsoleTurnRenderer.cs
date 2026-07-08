@@ -1,4 +1,6 @@
-namespace LoopRelay.Plan.Cli;
+using LoopRelay.Plan.Cli.Abstractions;
+
+namespace LoopRelay.Plan.Cli.Services;
 
 internal sealed class ConsoleTurnRenderer(ILoopConsole console)
-    : Infrastructure.Console.ConsoleTurnRenderer(console);
+    : Infrastructure.Services.Console.ConsoleTurnRenderer(console);

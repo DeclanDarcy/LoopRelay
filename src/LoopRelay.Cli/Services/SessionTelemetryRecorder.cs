@@ -1,8 +1,11 @@
 using LoopRelay.Agents.Models;
-using LoopRelay.Infrastructure.Diagnostics;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
+using LoopRelay.Infrastructure.Models.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 /// <summary>
 /// Adds one post-turn capacity probe, resolves the codex rollout file once per session, computes effective

@@ -1,6 +1,6 @@
-using System.Text.Json;
+using LoopRelay.Cli.Services;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Models;
 
 /// <summary>
 /// A snapshot of Codex quota. Percentages are the capacity REMAINING (0 = exhausted); the durations are

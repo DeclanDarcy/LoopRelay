@@ -1,7 +1,6 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using LoopRelay.Roadmap.Cli.Primitives;
 
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record SelectionProvenanceManifest(
     string SchemaVersion,

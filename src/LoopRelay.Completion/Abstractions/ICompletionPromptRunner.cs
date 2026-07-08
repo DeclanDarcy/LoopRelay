@@ -1,9 +1,6 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Completion.Models;
 
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Abstractions;
 
 public interface ICompletionPromptRunner
 {

@@ -1,7 +1,7 @@
 using LoopRelay.Permissions.Abstractions;
-using LoopRelay.Permissions.Codex;
 using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Services;
+using LoopRelay.Permissions.Services.Codex;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

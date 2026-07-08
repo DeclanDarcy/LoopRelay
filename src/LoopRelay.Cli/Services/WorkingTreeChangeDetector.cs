@@ -1,9 +1,10 @@
-using LoopRelay.Core.Repositories;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
-using LoopRelay.Orchestration;
+using LoopRelay.Cli.Models;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 /// <summary>
 /// The ONE definition of "did this iteration change anything real": the target repository's

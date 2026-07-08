@@ -1,7 +1,8 @@
-using LoopRelay.Core.Repositories;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Abstractions;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 /// <summary>
 /// Builds the per-turn telemetry recorder for the CLI loop. Enabled by default; set

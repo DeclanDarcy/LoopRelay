@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Models;
+using LoopRelay.Infrastructure.Primitives.Trust;
 
-namespace LoopRelay.Infrastructure.Trust;
+namespace LoopRelay.Infrastructure.Models.Trust;
 
 public sealed record TrustPolicy(
     string SandboxIdentifier,

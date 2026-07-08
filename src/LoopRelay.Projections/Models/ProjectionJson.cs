@@ -1,8 +1,7 @@
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace LoopRelay.Projections;
+namespace LoopRelay.Projections.Models;
 
 internal static class ProjectionJson
 {

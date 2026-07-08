@@ -1,6 +1,8 @@
-using LoopRelay.Infrastructure.Diagnostics;
+using LoopRelay.Infrastructure.Models.Diagnostics;
+using LoopRelay.Infrastructure.Primitives.Diagnostics;
+using LoopRelay.Infrastructure.Services.Diagnostics;
 
-namespace LoopRelay.Infrastructure.Tests;
+namespace LoopRelay.Infrastructure.Tests.Services;
 
 public sealed class RuntimePrerequisiteDoctorTests
 {

@@ -1,21 +1,14 @@
-using System.Collections.Concurrent;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Orchestration.Models;
-using LoopRelay.Completion;
-using LoopRelay.Projections;
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Cli;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
-internal sealed class FakeSessionTelemetrySink : Cli.ISessionTelemetrySink
+internal sealed class FakeSessionTelemetrySink : ISessionTelemetrySink
 {
-    public List<Cli.SessionTelemetryRecord> Records { get; } = new();
+    public List<SessionTelemetryRecord> Records { get; } = new();
     public bool Throw { get; set; }
 
-    public void Append(Cli.SessionTelemetryRecord record)
+    public void Append(SessionTelemetryRecord record)
     {
         if (Throw) throw new IOException("disk full");
         Records.Add(record);

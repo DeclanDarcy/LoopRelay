@@ -1,9 +1,6 @@
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
-using LoopRelay.Projections;
+using LoopRelay.Completion.Models;
 
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Abstractions;
 
 public interface ICompletionCertificationService
 {

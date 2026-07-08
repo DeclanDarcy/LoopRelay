@@ -1,7 +1,7 @@
-using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Orchestration.Models;
+using LoopRelay.Orchestration.Primitives;
+using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Orchestration.Services;
+namespace LoopRelay.Orchestration.Models;
 
 /// <summary>
 /// Tunable knobs for <see cref="DecisionSessionRouter"/> (m7). The router transfers either on the hard CAPACITY

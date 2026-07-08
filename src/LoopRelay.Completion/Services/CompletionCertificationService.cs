@@ -1,9 +1,11 @@
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
-using LoopRelay.Projections;
+using LoopRelay.Completion.Abstractions;
+using LoopRelay.Completion.Models;
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Orchestration.Services;
+using LoopRelay.Projections.Abstractions;
+using LoopRelay.Projections.Models;
 
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Services;
 
 public sealed class CompletionCertificationService(
     IArtifactStore store,

@@ -1,8 +1,8 @@
 using LoopRelay.Agents.Models;
-using LoopRelay.Orchestration.Models;
+using LoopRelay.Orchestration.Primitives;
 using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Orchestration.Primitives.Tests;
+namespace LoopRelay.Orchestration.Tests.Services;
 
 /// <summary>
 /// The default cost model (cache-adjusted effective tokens) is the one concrete <c>IDecisionCostModel</c> shipped

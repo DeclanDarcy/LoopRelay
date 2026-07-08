@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Models;
 
 /// <summary>Canonical serialization for the telemetry log: compact, camelCase, one object per line.</summary>
 internal static class SessionTelemetryJson

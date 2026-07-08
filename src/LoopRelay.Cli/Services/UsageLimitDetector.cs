@@ -1,8 +1,11 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 /// <summary>
 /// Always-on replacement for the old watermark usage gate: codex reports quota exhaustion only by failing

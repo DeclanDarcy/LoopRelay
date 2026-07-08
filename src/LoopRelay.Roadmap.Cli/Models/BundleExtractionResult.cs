@@ -1,6 +1,4 @@
-using System.Text.RegularExpressions;
-
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Models;
 
 internal sealed record BundleExtractionResult(bool IsBlocked, IReadOnlyList<ExtractedBundleFile> Files, string? BlockedReason)
 {

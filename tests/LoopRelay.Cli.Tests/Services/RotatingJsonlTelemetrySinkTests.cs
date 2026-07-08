@@ -1,14 +1,15 @@
 using System.Text.Json;
-using LoopRelay.Cli;
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class RotatingJsonlTelemetrySinkTests : IDisposable
 {
     private readonly string dir = Path.Combine(Path.GetTempPath(), "cc-tel-" + Guid.NewGuid().ToString("N"));
 
-    private static Cli.SessionTelemetryRecord Rec(string repo) =>
+    private static SessionTelemetryRecord Rec(string repo) =>
         new(new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero), repo, null, "sid", "Decision", 1,
             10, 5, 0, 15.0, 89, 88);
 
@@ -18,7 +19,7 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
     public void Append_WritesOneJsonLineToTodaysZeroSequenceFile_CreatingTheDirectory()
     {
         var clock = new FakeClock { UtcNow = new DateTimeOffset(2026, 7, 1, 8, 0, 0, TimeSpan.Zero) };
-        var sink = new Cli.RotatingJsonlTelemetrySink(dir, clock);
+        var sink = new RotatingJsonlTelemetrySink(dir, clock);
 
         sink.Append(Rec("a"));
 
@@ -34,7 +35,7 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
     public void Append_WhenActiveFileExceedsSizeCap_RollsToNextSequence_KeepingTheOld()
     {
         var clock = new FakeClock { UtcNow = new DateTimeOffset(2026, 7, 1, 8, 0, 0, TimeSpan.Zero) };
-        var sink = new Cli.RotatingJsonlTelemetrySink(dir, clock, maxBytes: 1); // any record exceeds 1 byte
+        var sink = new RotatingJsonlTelemetrySink(dir, clock, maxBytes: 1); // any record exceeds 1 byte
 
         sink.Append(Rec("first"));
         sink.Append(Rec("second"));
@@ -51,7 +52,7 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
     public void Append_OnANewDay_StartsAFreshZeroSequenceFile()
     {
         var clock = new FakeClock { UtcNow = new DateTimeOffset(2026, 7, 1, 23, 0, 0, TimeSpan.Zero) };
-        var sink = new Cli.RotatingJsonlTelemetrySink(dir, clock);
+        var sink = new RotatingJsonlTelemetrySink(dir, clock);
         sink.Append(Rec("day1"));
 
         clock.UtcNow = new DateTimeOffset(2026, 7, 2, 1, 0, 0, TimeSpan.Zero);

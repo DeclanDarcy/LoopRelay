@@ -1,59 +1,52 @@
-using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Completion;
-using LoopRelay.Infrastructure.Artifacts;
-using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Completion.Abstractions;
+using LoopRelay.Completion.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Roadmap.Cli;
-using BundleFileExtractor = LoopRelay.Roadmap.Cli.BundleFileExtractor;
-using DecisionLedgerStore = LoopRelay.Roadmap.Cli.DecisionLedgerStore;
-using ExecutionCompatibilityMaterializer = LoopRelay.Roadmap.Cli.ExecutionCompatibilityMaterializer;
-using ProjectContextLoader = LoopRelay.Roadmap.Cli.ProjectContextLoader;
-using RoadmapStateStore = LoopRelay.Roadmap.Cli.RoadmapStateStore;
-using SplitEpicBundleInterpreter = LoopRelay.Roadmap.Cli.SplitEpicBundleInterpreter;
+using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Services;
+using LoopRelay.Roadmap.Cli.Services.Transitions;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 internal static class StateMachineFactory
 {
-    public static Cli.RoadmapStateMachine Create(
+    public static RoadmapStateMachine Create(
         TempRepo repo,
         IAgentRuntime runtime,
-        Cli.ILoopConsole? console = null,
+        ILoopConsole? console = null,
         ExplicitHitlNonImplementationRequestCaptureService? hitlRequestCapture = null,
         ICompletedEpicArchiveService? completionArchive = null)
     {
-        Cli.ILoopConsole effectiveConsole = console ?? new TestConsole();
-        var projections = new Cli.ProjectionRegistry();
-        var contracts = new Cli.PromptContractRegistry(projections);
-        var manifest = new Cli.ProjectionManifestStore(repo.Artifacts);
-        var executionPreparationManifest = new Cli.ExecutionPreparationManifestStore(repo.Artifacts);
-        var executionPreparation = new Cli.ExecutionPreparationProvenanceService(repo.Artifacts, executionPreparationManifest);
-        var lifecycle = new Cli.ArtifactLifecycleStore(repo.Artifacts);
-        var stateStore = new RoadmapStateStore(repo.Artifacts);
-        var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
-        var decisionRecorder = new Cli.DecisionRecorder(decisionLedger);
-        var journal = new Cli.TransitionJournalStore(repo.Artifacts);
-        var transitionPersistence = new Cli.RoadmapTransitionPersistence(
+        ILoopConsole effectiveConsole = console ?? new TestConsole();
+        var projections = new ProjectionRegistry();
+        var contracts = new PromptContractRegistry(projections);
+        var manifest = new ProjectionManifestStore(repo.Artifacts);
+        var executionPreparationManifest = new ExecutionPreparationManifestStore(repo.Artifacts);
+        var executionPreparation = new ExecutionPreparationProvenanceService(repo.Artifacts, executionPreparationManifest);
+        var lifecycle = new ArtifactLifecycleStore(repo.Artifacts);
+        var stateStore = new Cli.Services.RoadmapStateStore(repo.Artifacts);
+        var decisionLedger = new Cli.Services.DecisionLedgerStore(repo.Artifacts);
+        var decisionRecorder = new DecisionRecorder(decisionLedger);
+        var journal = new TransitionJournalStore(repo.Artifacts);
+        var transitionPersistence = new RoadmapTransitionPersistence(
             repo.Artifacts,
             manifest,
             stateStore,
             decisionLedger,
             journal);
-        var split = new Cli.SplitFamilyStore(repo.Artifacts);
-        var loader = new ProjectContextLoader(repo.Artifacts);
-        var runner = new Cli.RoadmapPromptRunner(runtime, repo.Repository, effectiveConsole);
-        var projectionCache = new Cli.ProjectionCache(repo.Artifacts, projections, manifest, new Cli.ProjectionValidator(), runner);
-        var contextBuilder = new Cli.RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation);
-        var inputResolver = new Cli.TransitionInputResolver(repo.Artifacts, executionPreparation);
-        var promptTransitionRunner = new Cli.RoadmapPromptTransitionRunner(
+        var split = new SplitFamilyStore(repo.Artifacts);
+        var loader = new Cli.Services.ProjectContextLoader(repo.Artifacts);
+        var runner = new RoadmapPromptRunner(runtime, repo.Repository, effectiveConsole);
+        var projectionCache = new ProjectionCache(repo.Artifacts, projections, manifest, new ProjectionValidator(), runner);
+        var contextBuilder = new RoadmapPromptContextBuilder(repo.Artifacts, executionPreparation);
+        var inputResolver = new TransitionInputResolver(repo.Artifacts, executionPreparation);
+        var promptTransitionRunner = new RoadmapPromptTransitionRunner(
             inputResolver,
             runner,
             journal,
             transitionPersistence);
-        var hitlArtifactCapture = new Cli.HitlArtifactCapture(hitlRequestCapture);
-        var bootstrapRoadmapCompletionContextTransition = new Cli.BootstrapRoadmapCompletionContextTransition(
+        var hitlArtifactCapture = new HitlArtifactCapture(hitlRequestCapture);
+        var bootstrapRoadmapCompletionContextTransition = new BootstrapRoadmapCompletionContextTransition(
             repo.Artifacts,
             contracts,
             projectionCache,
@@ -61,12 +54,12 @@ internal static class StateMachineFactory
             hitlArtifactCapture,
             lifecycle,
             effectiveConsole);
-        var selectionProvenance = new Cli.SelectionProvenanceService(
+        var selectionProvenance = new SelectionProvenanceService(
             repo.Artifacts,
-            new Cli.SelectionProvenanceManifestStore(repo.Artifacts),
+            new SelectionProvenanceManifestStore(repo.Artifacts),
             contextBuilder,
             inputResolver);
-        var selectNextEpicTransition = new Cli.SelectNextEpicTransition(
+        var selectNextEpicTransition = new SelectNextEpicTransition(
             repo.Artifacts,
             contracts,
             projectionCache,
@@ -78,17 +71,17 @@ internal static class StateMachineFactory
             hitlArtifactCapture,
             lifecycle,
             effectiveConsole);
-        var activeSelectionReader = new Cli.ActiveSelectionReader(
+        var activeSelectionReader = new ActiveSelectionReader(
             repo.Artifacts,
             stateStore,
             selectionProvenance);
-        var selectionSuperseder = new Cli.SelectionSuperseder(selectionProvenance, lifecycle);
-        var activeEpicPromotionCoordinator = new Cli.ActiveEpicPromotionCoordinator(
-            new Cli.ArtifactPromotionService(repo.Artifacts, lifecycle),
+        var selectionSuperseder = new SelectionSuperseder(selectionProvenance, lifecycle);
+        var activeEpicPromotionCoordinator = new ActiveEpicPromotionCoordinator(
+            new ArtifactPromotionService(repo.Artifacts, lifecycle),
             hitlArtifactCapture,
             journal,
             transitionPersistence);
-        var createNewEpicTransition = new Cli.CreateNewEpicTransition(
+        var createNewEpicTransition = new CreateNewEpicTransition(
             contracts,
             projectionCache,
             contextBuilder,
@@ -96,7 +89,7 @@ internal static class StateMachineFactory
             promptTransitionRunner,
             activeEpicPromotionCoordinator,
             effectiveConsole);
-        var activeEpicRewriteTransition = new Cli.ActiveEpicRewriteTransition(
+        var activeEpicRewriteTransition = new ActiveEpicRewriteTransition(
             repo.Artifacts,
             contracts,
             projectionCache,
@@ -105,7 +98,7 @@ internal static class StateMachineFactory
             promptTransitionRunner,
             activeEpicPromotionCoordinator,
             effectiveConsole);
-        var epicPreparationAuditTransition = new Cli.EpicPreparationAuditTransition(
+        var epicPreparationAuditTransition = new EpicPreparationAuditTransition(
             repo.Artifacts,
             contracts,
             projectionCache,
@@ -119,10 +112,10 @@ internal static class StateMachineFactory
             selectionSuperseder,
             activeEpicRewriteTransition,
             effectiveConsole);
-        var bundleExtractor = new BundleFileExtractor();
-        var splitBundleInterpreter = new SplitEpicBundleInterpreter();
-        var bundleManifest = new Cli.BundleManifestWriter(repo.Artifacts);
-        var splitEpicTransition = new Cli.SplitEpicTransition(
+        var bundleExtractor = new Cli.Services.BundleFileExtractor();
+        var splitBundleInterpreter = new Cli.Services.SplitEpicBundleInterpreter();
+        var bundleManifest = new BundleManifestWriter(repo.Artifacts);
+        var splitEpicTransition = new SplitEpicTransition(
             repo.Artifacts,
             contracts,
             projectionCache,
@@ -139,8 +132,8 @@ internal static class StateMachineFactory
             transitionPersistence,
             hitlArtifactCapture,
             effectiveConsole);
-        var invariants = new Cli.InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
-        var generateMilestoneDeepDivesTransition = new Cli.GenerateMilestoneDeepDivesTransition(
+        var invariants = new InvariantValidator(repo.Artifacts, loader, projections, contracts, manifest, lifecycle, split, executionPreparation);
+        var generateMilestoneDeepDivesTransition = new GenerateMilestoneDeepDivesTransition(
             repo.Artifacts,
             contracts,
             projectionCache,
@@ -155,7 +148,7 @@ internal static class StateMachineFactory
             transitionPersistence,
             hitlArtifactCapture,
             effectiveConsole);
-        var roadmapCompletionContextUpdateTransition = new Cli.RoadmapCompletionContextUpdateTransition(
+        var roadmapCompletionContextUpdateTransition = new RoadmapCompletionContextUpdateTransition(
             repo.Artifacts,
             contracts,
             projectionCache,
@@ -165,7 +158,7 @@ internal static class StateMachineFactory
             decisionRecorder,
             hitlArtifactCapture,
             effectiveConsole);
-        var completionCertificationTransition = new Cli.CompletionCertificationTransition(
+        var completionCertificationTransition = new CompletionCertificationTransition(
             repo.Artifacts,
             loader,
             contracts,
@@ -183,9 +176,9 @@ internal static class StateMachineFactory
             lifecycle,
             hitlArtifactCapture,
             effectiveConsole);
-        var resumePlanner = new Cli.RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new Cli.ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
-        var unblockPlanner = new Cli.RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
-        return new Cli.RoadmapStateMachine(
+        var resumePlanner = new RoadmapResumePlanner(repo.Artifacts, contracts, manifest, lifecycle, new ProjectionProvenanceFactory(projections), selectionProvenance, executionPreparation);
+        var unblockPlanner = new RoadmapUnblockPlanner(repo.Artifacts, loader, contracts, new CompletionCertificationPolicy(), new CompletionCertificationRouter(), executionPreparation);
+        return new RoadmapStateMachine(
             repo.Artifacts,
             loader,
             contracts,
@@ -199,7 +192,7 @@ internal static class StateMachineFactory
             generateMilestoneDeepDivesTransition,
             completionCertificationTransition,
             activeSelectionReader,
-            new Cli.RoadmapStartupPlanner(),
+            new RoadmapStartupPlanner(),
             resumePlanner,
             unblockPlanner,
             decisionRecorder,

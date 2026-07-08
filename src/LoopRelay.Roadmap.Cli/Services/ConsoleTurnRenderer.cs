@@ -1,4 +1,6 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Abstractions;
+
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class ConsoleTurnRenderer(ILoopConsole console)
-    : Infrastructure.Console.ConsoleTurnRenderer(console);
+    : Infrastructure.Services.Console.ConsoleTurnRenderer(console);

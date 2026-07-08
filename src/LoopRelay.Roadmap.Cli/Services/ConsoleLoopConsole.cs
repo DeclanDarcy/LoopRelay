@@ -1,4 +1,6 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Abstractions;
+
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class ConsoleLoopConsole(TextWriter? output = null, TextWriter? error = null)
-    : Infrastructure.Console.ConsoleLoopConsole(output, error), ILoopConsole;
+    : Infrastructure.Services.Console.ConsoleLoopConsole(output, error), ILoopConsole;

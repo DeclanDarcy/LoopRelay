@@ -1,8 +1,7 @@
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using LoopRelay.Projections.Models;
 
-namespace LoopRelay.Projections;
+namespace LoopRelay.Projections.Services;
 
 internal static class MarkdownTableParser
 {

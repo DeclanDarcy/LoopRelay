@@ -1,7 +1,7 @@
-using LoopRelay.Roadmap.Cli;
-using LoopRelay.Completion;
+using LoopRelay.Completion.Models;
+using LoopRelay.Completion.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class CompletionCertificationPolicyTests
 {

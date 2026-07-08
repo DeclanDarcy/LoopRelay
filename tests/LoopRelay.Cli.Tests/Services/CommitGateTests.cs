@@ -1,8 +1,9 @@
-using LoopRelay.Core.Repositories;
-using LoopRelay.Cli;
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Models.Repositories;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class CommitGateTests
 {
@@ -11,10 +12,10 @@ public class CommitGateTests
     // git add stages everything except the `.agents` submodule — the gate never touches the gitlink.
     private static readonly string[] AddExcludingAgents = ["add", "-A", "--", ".", ":(exclude).agents"];
 
-    private static Cli.CommitGate New(FakeProcessRunner fake)
+    private static CommitGate New(FakeProcessRunner fake)
     {
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        return new Cli.CommitGate(new Cli.WorkingTreeChangeDetector(fake, repo), fake, repo, new RecordingLoopConsole());
+        return new CommitGate(new WorkingTreeChangeDetector(fake, repo), fake, repo, new RecordingLoopConsole());
     }
 
     /// <summary>Scripts a runner whose `git status` always returns the given porcelain; everything else succeeds.</summary>
@@ -116,7 +117,7 @@ public class CommitGateTests
         };
         var gate = New(fake);
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(
+        await Assert.ThrowsAsync<LoopStepException>(
             () => gate.CommitPushAndEvaluateAsync(0, 0, CancellationToken.None));
     }
 
@@ -134,7 +135,7 @@ public class CommitGateTests
         };
         var gate = New(fake);
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(
+        await Assert.ThrowsAsync<LoopStepException>(
             () => gate.CommitPushAndEvaluateAsync(0, 0, CancellationToken.None));
     }
 
@@ -149,7 +150,7 @@ public class CommitGateTests
         };
         var gate = New(fake);
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(
+        await Assert.ThrowsAsync<LoopStepException>(
             () => gate.CommitPushAndEvaluateAsync(0, 0, CancellationToken.None));
 
         // The failure happens at `status`, before any add/commit/push.

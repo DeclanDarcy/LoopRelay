@@ -1,4 +1,4 @@
-namespace LoopRelay.Orchestration;
+namespace LoopRelay.Orchestration.Services;
 
 /// <summary>
 /// Repository-relative artifact paths the CLIs read/write through <c>IArtifactStore</c>.

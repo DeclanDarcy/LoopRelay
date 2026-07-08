@@ -1,9 +1,6 @@
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Cli;
-using Xunit;
+using LoopRelay.Core.Abstractions.Artifacts;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 
 /// <summary>

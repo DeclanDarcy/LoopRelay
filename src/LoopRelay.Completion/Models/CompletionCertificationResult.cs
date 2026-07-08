@@ -1,9 +1,6 @@
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
-using LoopRelay.Projections;
+using LoopRelay.Completion.Primitives;
 
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Models;
 
 public sealed record CompletionCertificationResult(
     CompletionCertificationServiceOutcome Outcome,

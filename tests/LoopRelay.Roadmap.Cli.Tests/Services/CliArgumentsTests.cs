@@ -1,13 +1,15 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class CliArgumentsTests
 {
     [Fact]
     public void TryParse_requires_repo_dir()
     {
-        Assert.False(Cli.CliArguments.TryParse([], out Cli.RoadmapCliInvocation _, out string error));
+        Assert.False(CliArguments.TryParse([], out RoadmapCliInvocation _, out string error));
         Assert.Contains("REPO_DIR", error, StringComparison.Ordinal);
     }
 
@@ -16,10 +18,10 @@ public sealed class CliArgumentsTests
     {
         using var repo = new TempRepo();
 
-        Assert.True(Cli.CliArguments.TryParse([repo.Root], out Cli.RoadmapCliInvocation parsed, out string error));
+        Assert.True(CliArguments.TryParse([repo.Root], out RoadmapCliInvocation parsed, out string error));
 
         Assert.Equal(string.Empty, error);
-        Assert.Equal(Cli.RoadmapCliCommand.Run, parsed.Command);
+        Assert.Equal(RoadmapCliCommand.Run, parsed.Command);
         Assert.Equal(Path.GetFullPath(repo.Root), parsed.Repository.Path);
         Assert.Equal("workspace-write", parsed.ExecutionOptions.SandboxIdentifier);
         Assert.False(parsed.ExecutionOptions.AllowNetwork);
@@ -27,17 +29,17 @@ public sealed class CliArgumentsTests
     }
 
     [Theory]
-    [InlineData("status", (int)Cli.RoadmapCliCommand.Status)]
-    [InlineData("run", (int)Cli.RoadmapCliCommand.Run)]
-    [InlineData("unblock", (int)Cli.RoadmapCliCommand.Unblock)]
+    [InlineData("status", (int)RoadmapCliCommand.Status)]
+    [InlineData("run", (int)RoadmapCliCommand.Run)]
+    [InlineData("unblock", (int)RoadmapCliCommand.Unblock)]
     public void TryParse_accepts_leading_command(string command, int expectedValue)
     {
         using var repo = new TempRepo();
 
-        Assert.True(Cli.CliArguments.TryParse([command, repo.Root], out Cli.RoadmapCliInvocation parsed, out string error));
+        Assert.True(CliArguments.TryParse([command, repo.Root], out RoadmapCliInvocation parsed, out string error));
 
         Assert.Equal(string.Empty, error);
-        Assert.Equal((Cli.RoadmapCliCommand)expectedValue, parsed.Command);
+        Assert.Equal((RoadmapCliCommand)expectedValue, parsed.Command);
         Assert.Equal(Path.GetFullPath(repo.Root), parsed.Repository.Path);
     }
 
@@ -46,10 +48,10 @@ public sealed class CliArgumentsTests
     {
         using var repo = new TempRepo();
 
-        Assert.True(Cli.CliArguments.TryParse([repo.Root, "unblock"], out Cli.RoadmapCliInvocation parsed, out string error));
+        Assert.True(CliArguments.TryParse([repo.Root, "unblock"], out RoadmapCliInvocation parsed, out string error));
 
         Assert.Equal(string.Empty, error);
-        Assert.Equal(Cli.RoadmapCliCommand.Unblock, parsed.Command);
+        Assert.Equal(RoadmapCliCommand.Unblock, parsed.Command);
         Assert.Equal(Path.GetFullPath(repo.Root), parsed.Repository.Path);
     }
 
@@ -58,7 +60,7 @@ public sealed class CliArgumentsTests
     {
         using var repo = new TempRepo();
 
-        Assert.False(Cli.CliArguments.TryParse([repo.Root, "repair"], out Cli.RoadmapCliInvocation _, out string error));
+        Assert.False(CliArguments.TryParse([repo.Root, "repair"], out RoadmapCliInvocation _, out string error));
 
         Assert.Contains("Unsupported roadmap command", error, StringComparison.Ordinal);
     }
@@ -68,9 +70,9 @@ public sealed class CliArgumentsTests
     {
         using var repo = new TempRepo();
 
-        Assert.True(Cli.CliArguments.TryParse(
+        Assert.True(CliArguments.TryParse(
             ["run", repo.Root, "--elevated", "Needs package registry"],
-            out Cli.RoadmapCliInvocation parsed,
+            out RoadmapCliInvocation parsed,
             out string error));
 
         Assert.Equal(string.Empty, error);
@@ -84,9 +86,9 @@ public sealed class CliArgumentsTests
     {
         using var repo = new TempRepo();
 
-        Assert.True(Cli.CliArguments.TryParse(
+        Assert.True(CliArguments.TryParse(
             [repo.Root, "run", "--elevated", "Needs package registry"],
-            out Cli.RoadmapCliInvocation parsed,
+            out RoadmapCliInvocation parsed,
             out string error));
 
         Assert.Equal(string.Empty, error);
@@ -99,7 +101,7 @@ public sealed class CliArgumentsTests
     {
         using var repo = new TempRepo();
 
-        Assert.False(Cli.CliArguments.TryParse([repo.Root, "--elevated"], out Cli.RoadmapCliInvocation _, out string error));
+        Assert.False(CliArguments.TryParse([repo.Root, "--elevated"], out RoadmapCliInvocation _, out string error));
 
         Assert.Contains("requires a non-empty reason", error, StringComparison.Ordinal);
     }

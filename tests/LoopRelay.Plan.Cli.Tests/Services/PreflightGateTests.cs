@@ -1,18 +1,20 @@
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Orchestration.Services;
+using LoopRelay.Plan.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 public class PreflightGateTests
 {
-    private static (Cli.PreflightGate Gate, IArtifactStore Store, Repository Repo) New()
+    private static (PreflightGate Gate, IArtifactStore Store, Repository Repo) New()
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        return (new Cli.PreflightGate(new Cli.PlanArtifacts(store, repo)), store, repo);
+        return (new PreflightGate(new PlanArtifacts(store, repo)), store, repo);
     }
 
     private static string Resolve(Repository repo, string rel) => ArtifactPath.ResolveRepositoryPath(repo, rel);

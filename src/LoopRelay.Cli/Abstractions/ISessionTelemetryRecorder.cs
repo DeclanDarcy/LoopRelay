@@ -1,8 +1,8 @@
 using LoopRelay.Agents.Models;
-using LoopRelay.Infrastructure.Diagnostics;
-using LoopRelay.Orchestration.Abstractions;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Infrastructure.Models.Diagnostics;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Abstractions;
 
 /// <summary>Records one telemetry row per codex turn. Returns the resolved codex rollout path (cached across a
 /// session's turns), or null. MUST NOT throw — telemetry never breaks a turn.</summary>

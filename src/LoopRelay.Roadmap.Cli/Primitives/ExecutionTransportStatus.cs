@@ -1,9 +1,4 @@
-using LoopRelay.Core.Repositories;
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Infrastructure.Trust;
-
-namespace LoopRelay.Roadmap.Cli;
+namespace LoopRelay.Roadmap.Cli.Primitives;
 
 internal enum ExecutionTransportStatus
 {

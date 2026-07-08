@@ -1,7 +1,7 @@
-using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Primitives;
 using LoopRelay.Permissions.Services;
 
-namespace LoopRelay.Permissions.Tests;
+namespace LoopRelay.Permissions.Tests.Services;
 
 public sealed class CommandParserTests
 {

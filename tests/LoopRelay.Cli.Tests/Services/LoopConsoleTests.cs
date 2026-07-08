@@ -1,16 +1,16 @@
-using LoopRelay.Cli;
+using LoopRelay.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class LoopConsoleTests
 {
-    private static (Cli.ConsoleLoopConsole Console, StringWriter Out, StringWriter Err) New()
+    private static (ConsoleLoopConsole Console, StringWriter Out, StringWriter Err) New()
     {
         // Force "\n" so assertions are deterministic regardless of the host's Environment.NewLine.
         var outw = new StringWriter { NewLine = "\n" };
         var errw = new StringWriter { NewLine = "\n" };
-        return (new Cli.ConsoleLoopConsole(outw, errw), outw, errw);
+        return (new ConsoleLoopConsole(outw, errw), outw, errw);
     }
 
     // The core bug: a streamed codex turn arrives as deltas with no guaranteed trailing newline, so a status

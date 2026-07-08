@@ -12,7 +12,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
-namespace Lib.Prompts
+namespace LoopRelay.Prompts.Generator.Primitives
 {
     internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IReadOnlyList<T>
         where T : IEquatable<T>

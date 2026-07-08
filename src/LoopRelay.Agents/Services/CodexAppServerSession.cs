@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
 using LoopRelay.Permissions.Abstractions;
 using LoopRelay.Permissions.Models;
 

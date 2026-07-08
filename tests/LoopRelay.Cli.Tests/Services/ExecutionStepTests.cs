@@ -1,28 +1,31 @@
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
+using LoopRelay.Cli.Tests.Models;
 using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Cli;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Orchestration.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class ExecutionStepTests
 {
-    private static (Cli.ExecutionStep Step, FakeAgentRuntime Rt, MemoryArtifactStore Store, Cli.LoopArtifacts Art, Repository Repo, RecordingLoopConsole Con) New(
+    private static (ExecutionStep Step, FakeAgentRuntime Rt, MemoryArtifactStore Store, LoopArtifacts Art, Repository Repo, RecordingLoopConsole Con) New(
         FakeProcessRunner? git = null)
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new Cli.LoopArtifacts(store, repo);
+        var art = new LoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         // Default git: the work turn produced a real change, so turn 2 is the ordinary GenerateHandoff —
         // the shape every pre-existing test narrates. No-changes tests pass their own runner.
         git ??= StatusRunner(" M src/Foo.cs");
-        var detector = new Cli.WorkingTreeChangeDetector(git, repo);
-        var milestones = new Cli.MilestoneGate(store, repo);
-        return (new Cli.ExecutionStep(rt, art, con, repo, detector, milestones), rt, store, art, repo, con);
+        var detector = new WorkingTreeChangeDetector(git, repo);
+        var milestones = new MilestoneGate(store, repo);
+        return (new ExecutionStep(rt, art, con, repo, detector, milestones), rt, store, art, repo, con);
     }
 
     /// <summary>Scripts a runner whose `git status` always returns the given porcelain; everything else succeeds.</summary>
@@ -167,7 +170,7 @@ public class ExecutionStepTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("work done")));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("forgot the handoff")));
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(() => step.RunAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<LoopStepException>(() => step.RunAsync(CancellationToken.None));
         Assert.Equal(1, rt.ClosedSessions);
     }
 
@@ -180,7 +183,7 @@ public class ExecutionStepTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "DECISIONS");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(() => step.RunAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<LoopStepException>(() => step.RunAsync(CancellationToken.None));
         Assert.Equal(1, rt.ClosedSessions);
     }
 
@@ -194,7 +197,7 @@ public class ExecutionStepTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("work done")));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
-        await Assert.ThrowsAsync<Cli.LoopStepException>(() => step.RunAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<LoopStepException>(() => step.RunAsync(CancellationToken.None));
         Assert.Equal(1, rt.ClosedSessions);
     }
 

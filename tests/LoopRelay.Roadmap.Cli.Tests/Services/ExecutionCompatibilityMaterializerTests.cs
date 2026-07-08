@@ -1,7 +1,7 @@
-using LoopRelay.Roadmap.Cli;
-using ExecutionCompatibilityMaterializer = LoopRelay.Roadmap.Cli.ExecutionCompatibilityMaterializer;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class ExecutionCompatibilityMaterializerTests
 {
@@ -9,9 +9,9 @@ public sealed class ExecutionCompatibilityMaterializerTests
     public async Task Materializes_plan_and_milestones_from_specs()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.OperationalContext, "ops");
-        repo.Write(Cli.RoadmapArtifactPaths.ExecutionPrompt, "prompt");
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, "epic");
+        repo.Write(RoadmapArtifactPaths.OperationalContext, "ops");
+        repo.Write(RoadmapArtifactPaths.ExecutionPrompt, "prompt");
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "epic");
         repo.Write(".agents/specs/a.md", """
         # Spec
 
@@ -19,13 +19,13 @@ public sealed class ExecutionCompatibilityMaterializerTests
 
         - Do the thing
         """);
-        Cli.ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/a.md");
+        ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/a.md");
         await ExecutionPreparationTestSupport.SeedOperationalContextAsync(provenance, repo, "ops");
         await ExecutionPreparationTestSupport.SeedExecutionPromptAsync(provenance, repo, "prompt");
 
-        await new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
+        await new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync();
 
-        Assert.Contains(".agents/milestones/m001.md", repo.Read(Cli.RoadmapArtifactPaths.ExecutionPlan), StringComparison.Ordinal);
+        Assert.Contains(".agents/milestones/m001.md", repo.Read(RoadmapArtifactPaths.ExecutionPlan), StringComparison.Ordinal);
         Assert.Contains("Do the thing", repo.Read(".agents/milestones/m001.md"), StringComparison.Ordinal);
     }
 
@@ -33,14 +33,14 @@ public sealed class ExecutionCompatibilityMaterializerTests
     public async Task Materializer_blocks_when_no_auditable_checklist_exists()
     {
         using var repo = new TempRepo();
-        repo.Write(Cli.RoadmapArtifactPaths.OperationalContext, "ops");
-        repo.Write(Cli.RoadmapArtifactPaths.ExecutionPrompt, "prompt");
-        repo.Write(Cli.RoadmapArtifactPaths.ActiveEpic, "epic");
+        repo.Write(RoadmapArtifactPaths.OperationalContext, "ops");
+        repo.Write(RoadmapArtifactPaths.ExecutionPrompt, "prompt");
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "epic");
         repo.Write(".agents/specs/a.md", "no checklist");
-        Cli.ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/a.md");
+        ExecutionPreparationProvenanceService provenance = await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/a.md");
         await ExecutionPreparationTestSupport.SeedOperationalContextAsync(provenance, repo, "ops");
         await ExecutionPreparationTestSupport.SeedExecutionPromptAsync(provenance, repo, "prompt");
 
-        await Assert.ThrowsAsync<Cli.RoadmapStepException>(() => new ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync());
+        await Assert.ThrowsAsync<RoadmapStepException>(() => new Cli.Services.ExecutionCompatibilityMaterializer(repo.Artifacts, provenance).MaterializeAsync());
     }
 }

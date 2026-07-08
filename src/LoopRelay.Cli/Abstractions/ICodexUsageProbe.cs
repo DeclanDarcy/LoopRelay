@@ -1,8 +1,6 @@
-using System.Text.Json;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Agents.Abstractions;
+using LoopRelay.Cli.Models;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Abstractions;
 
 /// <summary>Reads a Codex quota snapshot, or null when it cannot be determined.</summary>
 internal interface ICodexUsageProbe

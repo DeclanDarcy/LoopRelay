@@ -1,9 +1,10 @@
 using System.Diagnostics;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Cli;
+using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services;
+using LoopRelay.Core.Models.Repositories;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class CodexUsageProbeTests
 {
@@ -18,9 +19,9 @@ public class CodexUsageProbeTests
     [Fact]
     public async Task Query_ParsesTheRateLimitsJsonReturnedByTheReader()
     {
-        var probe = new Cli.CodexUsageProbe(_ => Task.FromResult<string?>(RateLimitsResponse(75, 30)));
+        var probe = new CodexUsageProbe(_ => Task.FromResult<string?>(RateLimitsResponse(75, 30)));
 
-        Cli.CodexUsageStatus? status = await probe.QueryAsync(CancellationToken.None);
+        CodexUsageStatus? status = await probe.QueryAsync(CancellationToken.None);
 
         Assert.NotNull(status);
         Assert.Equal(25, status!.FiveHourRemainingPercent);   // 100 - 75
@@ -30,7 +31,7 @@ public class CodexUsageProbeTests
     [Fact]
     public async Task Query_ReturnsNullWhenTheReaderYieldsNothing()
     {
-        var probe = new Cli.CodexUsageProbe(_ => Task.FromResult<string?>(null));
+        var probe = new CodexUsageProbe(_ => Task.FromResult<string?>(null));
 
         Assert.Null(await probe.QueryAsync(CancellationToken.None));
     }
@@ -44,7 +45,7 @@ public class CodexUsageProbeTests
     [InlineData("""{"id":2,"result":{"rateLimits":{"primary":null,"secondary":null}}}""")] // both windows null
     public async Task Query_FailsOpenReturningNullWhenTheResponseHasNoUsableLimits(string response)
     {
-        var probe = new Cli.CodexUsageProbe(_ => Task.FromResult<string?>(response));
+        var probe = new CodexUsageProbe(_ => Task.FromResult<string?>(response));
 
         Assert.Null(await probe.QueryAsync(CancellationToken.None));
     }
@@ -54,7 +55,7 @@ public class CodexUsageProbeTests
     {
         // A bad codex binary (Win32Exception) or a codex child that dies at launch (IOException on a closed
         // stdin pipe) must NOT crash the loop — the probe swallows it and reports "unknown".
-        var probe = new Cli.CodexUsageProbe(_ => throw new IOException("broken pipe"));
+        var probe = new CodexUsageProbe(_ => throw new IOException("broken pipe"));
 
         Assert.Null(await probe.QueryAsync(CancellationToken.None));
     }
@@ -64,7 +65,7 @@ public class CodexUsageProbeTests
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        var probe = new Cli.CodexUsageProbe(ct => throw new OperationCanceledException(ct));
+        var probe = new CodexUsageProbe(ct => throw new OperationCanceledException(ct));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => probe.QueryAsync(cts.Token));
     }
@@ -82,9 +83,9 @@ public class CodexUsageProbeTests
             """{"id":99,"result":{}}""", // must never be read
         });
         var runner = new FakeInteractiveProcessRunner(process);
-        var probe = new Cli.CodexUsageProbe(runner, new FakeExecutableResolver { Executable = "codex.exe" }, Repo());
+        var probe = new CodexUsageProbe(runner, new FakeExecutableResolver { Executable = "codex.exe" }, Repo());
 
-        Cli.CodexUsageStatus? status = await probe.QueryAsync(CancellationToken.None);
+        CodexUsageStatus? status = await probe.QueryAsync(CancellationToken.None);
 
         Assert.NotNull(status);
         Assert.Equal(70, status!.FiveHourRemainingPercent);
@@ -105,11 +106,11 @@ public class CodexUsageProbeTests
         var process = new FakeAgentProcess(
             new[] { """{"id":1,"result":{}}""" }, hangAfterLines: true);
         var runner = new FakeInteractiveProcessRunner(process);
-        var probe = new Cli.CodexUsageProbe(
+        var probe = new CodexUsageProbe(
             runner, new FakeExecutableResolver(), Repo(), scrapeTimeout: TimeSpan.FromMilliseconds(100));
 
         var sw = Stopwatch.StartNew();
-        Cli.CodexUsageStatus? status = await probe.QueryAsync(CancellationToken.None);
+        CodexUsageStatus? status = await probe.QueryAsync(CancellationToken.None);
         sw.Stop();
 
         Assert.Null(status);

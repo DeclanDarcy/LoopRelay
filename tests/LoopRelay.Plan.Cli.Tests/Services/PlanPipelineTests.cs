@@ -1,13 +1,16 @@
 using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Projections;
-using LoopRelay.Plan.Cli;
+using LoopRelay.Plan.Cli.Primitives;
+using LoopRelay.Plan.Cli.Services;
+using LoopRelay.Plan.Cli.Tests.Models;
+using LoopRelay.Projections.Models;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 public class PlanPipelineTests
 {
@@ -22,7 +25,7 @@ public class PlanPipelineTests
             ImplementationFirstPromptPolicyComposer.ComposeDefault());
 
     private sealed record Harness(
-        Cli.PlanPipeline Pipeline,
+        PlanPipeline Pipeline,
         FakeAgentRuntime Runtime,
         FakeSandboxWorkspaceFactory Sandboxes,
         MemoryArtifactStore Store,
@@ -35,19 +38,19 @@ public class PlanPipelineTests
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var artifacts = new Cli.PlanArtifacts(store, repo);
+        var artifacts = new PlanArtifacts(store, repo);
         var console = new RecordingLoopConsole();
         var runtime = new FakeAgentRuntime(store);
         var sandboxes = new FakeSandboxWorkspaceFactory();
         var git = processes ?? new FakeProcessRunner();
         var projection = new FakeProjectionService("ADVERSARIAL REVIEW PROJECTION");
 
-        var preflight = new Cli.PreflightGate(artifacts);
-        var planSession = new Cli.PlanSession(runtime, artifacts, console, repo);
-        var review = new Cli.ReviewStep(runtime, artifacts, console, repo);
-        var artifactOperation = new Cli.PermissionedArtifactOperationStep(runtime, store, artifacts, console, repo);
-        var publisher = new Cli.AgentsSubmodulePublisher(git, repo, console);
-        var pipeline = new Cli.PlanPipeline(
+        var preflight = new PreflightGate(artifacts);
+        var planSession = new PlanSession(runtime, artifacts, console, repo);
+        var review = new ReviewStep(runtime, artifacts, console, repo);
+        var artifactOperation = new PermissionedArtifactOperationStep(runtime, store, artifacts, console, repo);
+        var publisher = new AgentsSubmodulePublisher(git, repo, console);
+        var pipeline = new PlanPipeline(
             preflight, planSession, review, projection, artifactOperation, publisher, artifacts, console);
 
         return new Harness(pipeline, runtime, sandboxes, store, repo, console, git, projection);
@@ -125,9 +128,9 @@ public class PlanPipelineTests
             return Turns.Completed("redistributed details");
         }));
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.Completed, outcome);
+        Assert.Equal(PlanOutcome.Completed, outcome);
 
         // Final artifact state.
         Assert.Equal(
@@ -136,7 +139,7 @@ public class PlanPipelineTests
         Assert.Equal("DETAILS FINAL", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Details)));
         string? milestone = await h.Store.ReadAsync(Resolve(h.Repo, MilestonePath("m1-thing.md")));
         Assert.Equal("- [ ] do the thing", milestone);
-        (int total, _) = Cli.MilestoneChecklist.CountCheckboxes(milestone!);
+        (int total, _) = MilestoneChecklist.CountCheckboxes(milestone!);
         Assert.True(total >= 1);
 
         // operational_context.md was seeded from the revised plan right after Revise Plan — before the extract
@@ -179,9 +182,9 @@ public class PlanPipelineTests
         Harness h = New();
         // .agents/specs/epic.md is never written -> preflight reports a violation.
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.PreflightBlocked, outcome);
+        Assert.Equal(PlanOutcome.PreflightBlocked, outcome);
         Assert.Equal(0, h.Runtime.OpenSessions);
         Assert.Empty(h.Runtime.OneShotCalls);
         Assert.Contains(h.Console.Events, e => e.Kind == "error");
@@ -209,9 +212,9 @@ public class PlanPipelineTests
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             Turns.Failed("boom", "collect-details stderr tail")));
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.Failed, outcome);
+        Assert.Equal(PlanOutcome.Failed, outcome);
         Assert.Equal(3, h.Runtime.ClosedSessions);
         Assert.Equal(
             "PLAN V2 REVISED",
@@ -241,9 +244,9 @@ public class PlanPipelineTests
             throw new OperationCanceledException(cts.Token);
         }));
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(cts.Token);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(cts.Token);
 
-        Assert.Equal(Cli.PlanOutcome.Cancelled, outcome);
+        Assert.Equal(PlanOutcome.Cancelled, outcome);
         // The review session closes itself (try/finally) even on the cancellation path; the planning
         // session opened by WritePlanAsync is still open at this point (RevisePlan/eager-close never ran).
         Assert.Equal(1, h.Runtime.ClosedSessions);
@@ -265,9 +268,9 @@ public class PlanPipelineTests
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             throw new InvalidOperationException("codex launcher exploded")));
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.Failed, outcome);
+        Assert.Equal(PlanOutcome.Failed, outcome);
         Assert.Contains(
             h.Console.Events,
             e => e.Kind == "error" && e.Text.Contains("codex launcher exploded"));
@@ -284,9 +287,9 @@ public class PlanPipelineTests
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             throw new OperationCanceledException("internal turn timeout")));
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.Failed, outcome);
+        Assert.Equal(PlanOutcome.Failed, outcome);
         Assert.Contains(h.Console.Events, e => e.Kind == "error" && e.Text.Contains("internal turn timeout"));
     }
 
@@ -336,9 +339,9 @@ public class PlanPipelineTests
         string? contextAtCollectDetails = null;
         ScriptFullHappyRun(h, ctx => contextAtCollectDetails = ctx);
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.Completed, outcome);
+        Assert.Equal(PlanOutcome.Completed, outcome);
 
         // operational_context.md was seeded (from the revised plan) BEFORE Collect Details ran, and equals
         // plan.md's content as of the revise step.
@@ -356,22 +359,22 @@ public class PlanPipelineTests
         Assert.Equal(
             new[]
             {
-                Cli.AgentsSubmodulePublisher.WritePlanMessage,
-                Cli.AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage,
-                Cli.AgentsSubmodulePublisher.RevisePlanMessage,
-                Cli.AgentsSubmodulePublisher.CollectDetailsMessage,
-                Cli.AgentsSubmodulePublisher.ExtractMilestonesMessage,
-                Cli.AgentsSubmodulePublisher.ExtractDetailsMessage,
+                AgentsSubmodulePublisher.WritePlanMessage,
+                AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage,
+                AgentsSubmodulePublisher.RevisePlanMessage,
+                AgentsSubmodulePublisher.CollectDetailsMessage,
+                AgentsSubmodulePublisher.ExtractMilestonesMessage,
+                AgentsSubmodulePublisher.ExtractDetailsMessage,
             },
             submoduleCommits);
 
         // Exactly ONE parent-repo commit — the gitlink pointer — and it is the LAST commit of the entire run.
         var parentCommit = Assert.Single(
             git.Calls, c => c.FileName == "git" && !IsSubmodule(c.WorkingDirectory) && c.Args[0] == "commit");
-        Assert.Equal(new[] { "commit", "-m", Cli.AgentsSubmodulePublisher.GitlinkPointerMessage }, parentCommit.Args);
+        Assert.Equal(new[] { "commit", "-m", AgentsSubmodulePublisher.GitlinkPointerMessage }, parentCommit.Args);
         var allCommits = git.Calls.Where(c => c.FileName == "git" && c.Args[0] == "commit").ToList();
         Assert.Equal(7, allCommits.Count);
-        Assert.Equal(Cli.AgentsSubmodulePublisher.GitlinkPointerMessage, allCommits[^1].Args[2]);
+        Assert.Equal(AgentsSubmodulePublisher.GitlinkPointerMessage, allCommits[^1].Args[2]);
     }
 
     private static async Task SeedCompletePreviousWorkspaceAsync(Harness h)
@@ -390,9 +393,9 @@ public class PlanPipelineTests
         await SeedCompletePreviousWorkspaceAsync(h);
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.SpecsEpic), "NEXT EPIC");
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.PreflightBlocked, outcome);
+        Assert.Equal(PlanOutcome.PreflightBlocked, outcome);
         Assert.Equal(new[] { "Preflight" }, PhaseSequence(h.Console));
         Assert.Empty(h.Processes.Calls);
         Assert.Equal(0, h.Runtime.OpenSessions);
@@ -420,9 +423,9 @@ public class PlanPipelineTests
         Harness h = New();
         await SeedCompletePreviousWorkspaceAsync(h);
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.PreflightBlocked, outcome);
+        Assert.Equal(PlanOutcome.PreflightBlocked, outcome);
         Assert.Equal(new[] { "Preflight" }, PhaseSequence(h.Console));
         Assert.Empty(h.Processes.Calls);
         Assert.Contains(
@@ -438,9 +441,9 @@ public class PlanPipelineTests
         // plan.md only — existing planning artifacts are operator-owned cleanup.
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "STRAY PLAN");
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.PreflightBlocked, outcome);
+        Assert.Equal(PlanOutcome.PreflightBlocked, outcome);
         // Nothing is published before a blocked preflight, so no process runs at all.
         Assert.Empty(h.Processes.Calls);
         Assert.Contains(
@@ -471,9 +474,9 @@ public class PlanPipelineTests
         }));
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed("boom", "stderr tail")));
 
-        Cli.PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
+        PlanOutcome outcome = await h.Pipeline.RunAsync(CancellationToken.None);
 
-        Assert.Equal(Cli.PlanOutcome.Failed, outcome);
+        Assert.Equal(PlanOutcome.Failed, outcome);
 
         // The steps that completed before the failure published their submodule commits...
         var submoduleCommits = git.Calls
@@ -483,9 +486,9 @@ public class PlanPipelineTests
         Assert.Equal(
             new[]
             {
-                Cli.AgentsSubmodulePublisher.WritePlanMessage,
-                Cli.AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage,
-                Cli.AgentsSubmodulePublisher.RevisePlanMessage,
+                AgentsSubmodulePublisher.WritePlanMessage,
+                AgentsSubmodulePublisher.GenerateAdversarialReviewProjectionMessage,
+                AgentsSubmodulePublisher.RevisePlanMessage,
             },
             submoduleCommits);
 

@@ -1,4 +1,6 @@
-namespace LoopRelay.Completion;
+using LoopRelay.Completion.Abstractions;
+
+namespace LoopRelay.Completion.Services;
 
 public sealed class NullCompletionObserver : ICompletionObserver
 {

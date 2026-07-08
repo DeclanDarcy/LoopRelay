@@ -1,9 +1,4 @@
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-using LoopRelay.Orchestration;
-using LoopRelay.Projections;
-
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Primitives;
 
 public enum CompletionCertificationServiceOutcome
 {

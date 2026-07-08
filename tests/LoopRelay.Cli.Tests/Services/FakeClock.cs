@@ -1,18 +1,10 @@
-using System.Collections.Concurrent;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Orchestration.Abstractions;
-using LoopRelay.Orchestration.Models;
-using LoopRelay.Completion;
-using LoopRelay.Projections;
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models;
-using LoopRelay.Cli;
+using LoopRelay.Cli.Abstractions;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 
 /// <summary>A clock a test can set to any instant (drives day-rotation + record timestamps).</summary>
-internal sealed class FakeClock : Cli.IClock
+internal sealed class FakeClock : IClock
 {
     public DateTimeOffset UtcNow { get; set; } = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero);
 }

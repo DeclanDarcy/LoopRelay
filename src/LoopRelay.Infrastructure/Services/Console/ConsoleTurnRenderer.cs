@@ -1,7 +1,9 @@
-using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models;
+using LoopRelay.Agents.Primitives;
+using LoopRelay.Agents.Services;
+using LoopRelay.Infrastructure.Abstractions.Console;
 
-namespace LoopRelay.Infrastructure.Console;
+namespace LoopRelay.Infrastructure.Services.Console;
 
 /// <summary>Renders a single agent turn stream and suppresses duplicate final echoes.</summary>
 public class ConsoleTurnRenderer(ILoopConsole console)

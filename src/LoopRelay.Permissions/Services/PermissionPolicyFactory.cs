@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
+using LoopRelay.Permissions.Models;
 
-namespace LoopRelay.Permissions.Models;
+namespace LoopRelay.Permissions.Services;
 
 internal static class PermissionPolicyFactory
 {

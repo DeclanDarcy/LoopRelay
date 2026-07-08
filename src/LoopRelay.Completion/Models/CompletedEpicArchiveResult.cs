@@ -1,8 +1,4 @@
-using System.Globalization;
-using LoopRelay.Core.Artifacts;
-using LoopRelay.Core.Repositories;
-
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Models;
 
 public sealed record CompletedEpicArchiveResult(
     int Index,

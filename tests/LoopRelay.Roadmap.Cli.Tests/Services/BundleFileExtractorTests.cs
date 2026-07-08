@@ -1,7 +1,7 @@
-using LoopRelay.Roadmap.Cli;
-using BundleFileExtractor = LoopRelay.Roadmap.Cli.BundleFileExtractor;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class BundleFileExtractorTests
 {
@@ -16,7 +16,7 @@ public sealed class BundleFileExtractorTests
         B
         """;
 
-        Cli.BundleExtractionResult result = new BundleFileExtractor().Extract(markdown);
+        BundleExtractionResult result = new Cli.Services.BundleFileExtractor().Extract(markdown);
 
         Assert.False(result.IsBlocked);
         Assert.Equal(2, result.Files.Count);
@@ -30,7 +30,7 @@ public sealed class BundleFileExtractorTests
         A
         """;
 
-        Assert.Throws<Cli.RoadmapStepException>(() => new BundleFileExtractor().Extract(markdown));
+        Assert.Throws<RoadmapStepException>(() => new Cli.Services.BundleFileExtractor().Extract(markdown));
     }
 
     [Fact]
@@ -43,13 +43,13 @@ public sealed class BundleFileExtractorTests
         B
         """;
 
-        Assert.Throws<Cli.RoadmapStepException>(() => new BundleFileExtractor().Extract(markdown));
+        Assert.Throws<RoadmapStepException>(() => new Cli.Services.BundleFileExtractor().Extract(markdown));
     }
 
     [Fact]
     public void No_files_is_typed_blocked_result()
     {
-        Cli.BundleExtractionResult result = new BundleFileExtractor().Extract("# Blocked");
+        BundleExtractionResult result = new Cli.Services.BundleFileExtractor().Extract("# Blocked");
 
         Assert.True(result.IsBlocked);
     }
@@ -62,7 +62,7 @@ public sealed class BundleFileExtractorTests
         A
         """;
 
-        Cli.BundleExtractionResult result = new BundleFileExtractor().Extract(markdown, Cli.BundleExtractionPolicy.RepositorySafe);
+        BundleExtractionResult result = new Cli.Services.BundleFileExtractor().Extract(markdown, BundleExtractionPolicy.RepositorySafe);
 
         Assert.False(result.IsBlocked);
         Assert.Equal("docs/split-output.md", Assert.Single(result.Files).Path);

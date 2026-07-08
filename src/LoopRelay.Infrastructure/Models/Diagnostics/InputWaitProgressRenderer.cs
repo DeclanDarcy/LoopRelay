@@ -1,6 +1,4 @@
-using LoopRelay.Infrastructure.Console;
-
-namespace LoopRelay.Infrastructure.Diagnostics;
+namespace LoopRelay.Infrastructure.Models.Diagnostics;
 
 public sealed record InputWaitProgressSnapshot(
     int PromptTokensEstimated,

@@ -1,7 +1,7 @@
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Services;
 
-namespace LoopRelay.Orchestration.Primitives.Tests;
+namespace LoopRelay.Orchestration.Tests.Services;
 
 /// <summary>
 /// The default sandbox workspace factory (Stage 2). It must give each transfer a fresh, real, empty directory

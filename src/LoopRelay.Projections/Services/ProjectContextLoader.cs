@@ -1,7 +1,8 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using LoopRelay.Projections.Models;
 
-namespace LoopRelay.Projections;
+namespace LoopRelay.Projections.Services;
 
 public sealed partial class ProjectContextLoader(ProjectionArtifacts artifacts)
 {

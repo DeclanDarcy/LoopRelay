@@ -3,8 +3,10 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using LoopRelay.Permissions.Abstractions;
 using LoopRelay.Permissions.Models;
+using LoopRelay.Permissions.Models.Codex;
+using LoopRelay.Permissions.Primitives;
 
-namespace LoopRelay.Permissions.Codex;
+namespace LoopRelay.Permissions.Services.Codex;
 
 public sealed class CodexPermissionAdapter : IPermissionAdapter
 {

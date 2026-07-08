@@ -1,4 +1,4 @@
-namespace LoopRelay.Completion;
+namespace LoopRelay.Completion.Primitives;
 
 public enum CompletionTransitionIntent
 {

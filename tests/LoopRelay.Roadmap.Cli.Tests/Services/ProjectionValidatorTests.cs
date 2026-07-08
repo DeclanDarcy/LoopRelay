@@ -1,13 +1,14 @@
-using LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Services;
 
-namespace LoopRelay.Roadmap.Cli.Tests;
+namespace LoopRelay.Roadmap.Cli.Tests.Services;
 
 public sealed class ProjectionValidatorTests
 {
     [Fact]
     public void Validate_accepts_structurally_valid_projection()
     {
-        Cli.ProjectionValidationResult result = new Cli.ProjectionValidator().Validate("SelectNextEpic", ProjectionSamples.Valid("SelectNextEpic"));
+        ProjectionValidationResult result = new ProjectionValidator().Validate("SelectNextEpic", ProjectionSamples.Valid("SelectNextEpic"));
 
         Assert.True(result.IsValid, result.Error);
     }
@@ -17,7 +18,7 @@ public sealed class ProjectionValidatorTests
     {
         string projection = ProjectionSamples.Valid("SelectNextEpic").Replace("## Canonical Vocabulary", "## Vocabulary", StringComparison.Ordinal);
 
-        Cli.ProjectionValidationResult result = new Cli.ProjectionValidator().Validate("SelectNextEpic", projection);
+        ProjectionValidationResult result = new ProjectionValidator().Validate("SelectNextEpic", projection);
 
         Assert.False(result.IsValid);
         Assert.Contains("Canonical Vocabulary", result.Error, StringComparison.Ordinal);
@@ -28,7 +29,7 @@ public sealed class ProjectionValidatorTests
     {
         string projection = ProjectionSamples.Valid("SelectNextEpic") + "\n## Current Roadmap Completion State\nstate";
 
-        Cli.ProjectionValidationResult result = new Cli.ProjectionValidator().Validate("SelectNextEpic", projection);
+        ProjectionValidationResult result = new ProjectionValidator().Validate("SelectNextEpic", projection);
 
         Assert.False(result.IsValid);
     }

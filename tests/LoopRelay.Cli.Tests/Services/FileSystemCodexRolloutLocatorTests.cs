@@ -1,7 +1,7 @@
-using LoopRelay.Cli;
+using LoopRelay.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Cli.Tests;
+namespace LoopRelay.Cli.Tests.Services;
 
 public class FileSystemCodexRolloutLocatorTests : IDisposable
 {
@@ -29,7 +29,7 @@ public class FileSystemCodexRolloutLocatorTests : IDisposable
         string cwd = Path.Combine(root, "work");
         string expected = WriteRollout("rollout-a.jsonl", cwd, new DateTimeOffset(2026, 7, 1, 10, 0, 0, TimeSpan.Zero));
 
-        string? found = new Cli.FileSystemCodexRolloutLocator(root)
+        string? found = new FileSystemCodexRolloutLocator(root)
             .Resolve(cwd, new DateTimeOffset(2026, 7, 1, 9, 59, 0, TimeSpan.Zero));
 
         Assert.Equal(expected, found);
@@ -40,7 +40,7 @@ public class FileSystemCodexRolloutLocatorTests : IDisposable
     {
         WriteRollout("rollout-a.jsonl", Path.Combine(root, "other"), new DateTimeOffset(2026, 7, 1, 10, 0, 0, TimeSpan.Zero));
 
-        string? found = new Cli.FileSystemCodexRolloutLocator(root)
+        string? found = new FileSystemCodexRolloutLocator(root)
             .Resolve(Path.Combine(root, "work"), new DateTimeOffset(2026, 7, 1, 9, 0, 0, TimeSpan.Zero));
 
         Assert.Null(found);
@@ -53,7 +53,7 @@ public class FileSystemCodexRolloutLocatorTests : IDisposable
         WriteRollout("rollout-old.jsonl", cwd, new DateTimeOffset(2026, 7, 1, 10, 0, 0, TimeSpan.Zero));
         string newer = WriteRollout("rollout-new.jsonl", cwd, new DateTimeOffset(2026, 7, 1, 11, 0, 0, TimeSpan.Zero));
 
-        string? found = new Cli.FileSystemCodexRolloutLocator(root)
+        string? found = new FileSystemCodexRolloutLocator(root)
             .Resolve(cwd, new DateTimeOffset(2026, 7, 1, 9, 0, 0, TimeSpan.Zero));
 
         Assert.Equal(newer, found);
@@ -62,7 +62,7 @@ public class FileSystemCodexRolloutLocatorTests : IDisposable
     [Fact]
     public void Resolve_WhenRootMissing_ReturnsNull()
     {
-        string? found = new Cli.FileSystemCodexRolloutLocator(Path.Combine(root, "nope"))
+        string? found = new FileSystemCodexRolloutLocator(Path.Combine(root, "nope"))
             .Resolve(root, DateTimeOffset.MinValue);
         Assert.Null(found);
     }
@@ -74,7 +74,7 @@ public class FileSystemCodexRolloutLocatorTests : IDisposable
         Directory.CreateDirectory(day);
         File.WriteAllText(Path.Combine(day, "rollout-bad.jsonl"), "not json\n");
 
-        string? found = new Cli.FileSystemCodexRolloutLocator(root).Resolve(root, DateTimeOffset.MinValue);
+        string? found = new FileSystemCodexRolloutLocator(root).Resolve(root, DateTimeOffset.MinValue);
         Assert.Null(found);
     }
 }

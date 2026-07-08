@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.Json;
+using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Models;
 
-namespace LoopRelay.Cli;
+namespace LoopRelay.Cli.Services;
 
 /// <summary>
 /// Per-day / size-hybrid rotating JSONL sink. A new file begins each UTC calendar day; within a day the

@@ -1,4 +1,7 @@
-namespace LoopRelay.Roadmap.Cli;
+using LoopRelay.Roadmap.Cli.Models;
+using LoopRelay.Roadmap.Cli.Primitives;
+
+namespace LoopRelay.Roadmap.Cli.Services;
 
 internal sealed class ExecutionPromptGenerator(
     RoadmapArtifacts artifacts,

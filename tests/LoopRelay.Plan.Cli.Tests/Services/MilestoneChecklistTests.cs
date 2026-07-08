@@ -1,7 +1,7 @@
-using LoopRelay.Plan.Cli;
+using LoopRelay.Plan.Cli.Services;
 using Xunit;
 
-namespace LoopRelay.Plan.Cli.Tests;
+namespace LoopRelay.Plan.Cli.Tests.Services;
 
 public class MilestoneChecklistTests
 {
@@ -18,7 +18,7 @@ public class MilestoneChecklistTests
     [InlineData("   - [x] indented\n", 1, 1)] // TrimStart tolerates leading whitespace
     public void CountCheckboxes_MatchesCanonicalRule(string content, int total, int completed)
     {
-        (int actualTotal, int actualCompleted) = Cli.MilestoneChecklist.CountCheckboxes(content);
+        (int actualTotal, int actualCompleted) = MilestoneChecklist.CountCheckboxes(content);
 
         Assert.Equal(total, actualTotal);
         Assert.Equal(completed, actualCompleted);
@@ -27,7 +27,7 @@ public class MilestoneChecklistTests
     [Fact]
     public void CountCheckboxes_UnterminatedFence_TreatsRestOfContentAsFenced()
     {
-        (int total, int completed) = Cli.MilestoneChecklist.CountCheckboxes("```\n- [x] never counted");
+        (int total, int completed) = MilestoneChecklist.CountCheckboxes("```\n- [x] never counted");
 
         Assert.Equal(0, total);
         Assert.Equal(0, completed);
