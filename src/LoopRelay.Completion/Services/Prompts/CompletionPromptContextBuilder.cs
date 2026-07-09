@@ -11,6 +11,8 @@ internal sealed class CompletionPromptContextBuilder(
     ArtifactStorage.CompletionArtifacts _artifacts,
     ILogicalArtifactResolver? logicalResolver = null)
 {
+    private const string ProjectContextMarker = "<!-- BEGIN PROJECT-CONTEXT FILE:";
+
     private readonly ILogicalArtifactResolver _logicalResolver =
         logicalResolver ?? CompletionLogicalArtifactServices.CreateResolver(_artifacts);
 
@@ -162,7 +164,13 @@ internal sealed class CompletionPromptContextBuilder(
                 .AppendLine(section.Content.Trim());
         }
 
-        return builder.ToString();
+        string content = builder.ToString();
+        if (content.Contains(ProjectContextMarker, StringComparison.Ordinal))
+        {
+            throw new CompletionCertificationException("Completion runtime prompt context contains raw Project Context markers.");
+        }
+
+        return content;
     }
 
     private static ContextSection Section(string title, string content) => new(title, content);

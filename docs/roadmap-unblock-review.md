@@ -26,7 +26,7 @@ Successful unblock writes durable unblock-review evidence, appends a journal rec
 
 ## Supported Intents
 
-- `ResolveBlocker`: supported only for fresh `Preflight` blockers. It reruns Project Context preflight, verifies roadmap source readiness, records inspected source hashes, and recovers to `CoreReady`.
+- `ResolveBlocker`: supported only for fresh `Preflight` blockers. It reruns Project Context preflight against the canonical nine `.agents/ctx` source files, verifies roadmap source readiness, records inspected source hashes, and recovers to `CoreReady`.
 - `ResolveMalformedExecutionOutput`: requires exactly one execution evidence path, reparses the repaired `Execution Disposition`, validates the protocol pair, and routes to the validated execution outcome.
 - `ResolveInvalidCompletionCertification`: requires completion evaluation evidence, reparses it, validates completion certification policy, and routes through the completion router. Completion-context updates still use the existing explicit prompt route when the selected completion route requires it.
 - `RepairExecutionRuntimeFailure`: legacy execution preparation recovery is no longer advanced by Roadmap CLI. The review preserves the failed state and reports that execution recovery must happen outside Roadmap CLI.

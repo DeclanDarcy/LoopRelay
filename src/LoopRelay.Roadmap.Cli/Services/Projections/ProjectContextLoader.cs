@@ -1,5 +1,5 @@
 using System.Text;
-using System.Text.RegularExpressions;
+using LoopRelay.Core.Services.ProjectContext;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.Projections;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
@@ -7,7 +7,7 @@ using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
-internal sealed partial class ProjectContextLoader(RoadmapArtifacts _artifacts)
+internal sealed class ProjectContextLoader(RoadmapArtifacts _artifacts)
 {
     public async Task<ProjectContext> LoadAsync(CancellationToken cancellationToken = default)
     {
@@ -30,34 +30,14 @@ internal sealed partial class ProjectContextLoader(RoadmapArtifacts _artifacts)
 
         IReadOnlyList<string> numberedFiles = await _artifacts.ListAsync(RoadmapArtifactPaths.ProjectContextDirectory, "*.md");
         string[] extras = numberedFiles
-            .Where(path => NumberedProjectContextFileRegex().IsMatch(Path.GetFileName(path)))
-            .Where(path => !Enumerable.Contains(RoadmapArtifactPaths.ProjectContextSourceFiles, path, StringComparer.Ordinal))
+            .Where(path => ProjectContextSourceContract.IsNumberedSourceFileName(Path.GetFileName(path)))
+            .Where(path => !ProjectContextSourceContract.IsCanonicalSourceFile(path))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
         if (missing.Count > 0 || extras.Length > 0)
         {
-            var message = new StringBuilder("Project Context source contract violation.");
-            if (missing.Count > 0)
-            {
-                message.Append("\nMissing required files:");
-                foreach (string path in missing)
-                {
-                    message.Append("\n- ").Append(path);
-                }
-            }
-
-            if (extras.Length > 0)
-            {
-                message.Append("\nUnexpected numbered Project Context source files were found. ")
-                    .Append("The Core contract is exactly 01 through 08:");
-                foreach (string path in extras)
-                {
-                    message.Append("\n- ").Append(path);
-                }
-            }
-
-            throw new RoadmapStepException(message.ToString());
+            throw new RoadmapStepException(ProjectContextSourceContract.BuildViolationMessage(missing, extras));
         }
 
         var builder = new StringBuilder();
@@ -78,7 +58,4 @@ internal sealed partial class ProjectContextLoader(RoadmapArtifacts _artifacts)
         string result = builder.ToString();
         return new ProjectContext(RoadmapArtifactPaths.ProjectContextSourceFiles, result, RoadmapHash.Sha256(result));
     }
-
-    [GeneratedRegex(@"^\d{2}-.+\.md$", RegexOptions.CultureInvariant)]
-    private static partial Regex NumberedProjectContextFileRegex();
 }

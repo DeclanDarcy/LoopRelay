@@ -6,6 +6,10 @@ Command Center is split into a React UI, a thin Tauri shell, and a .NET backend 
 
 Repository-owned state remains in each repository under `.agents`. Command Center reads, edits, and organizes those files, but it does not replace them with a private database. Missing artifact files and directories are valid states and must be projected explicitly rather than treated as application failures.
 
+Project Context source authority is the canonical ordered nine-file set under `.agents/ctx`: `01-purpose.md`, `02-capability-model.md`, `03-invariants.md`, `04-strategic-structure.md`, `05-authority-model.md`, `06-evaluation-model.md`, `07-drift-and-false-success.md`, `08-vocabulary.md`, and `09-eval-details.md`. These files are repository-owned inputs, not generated persistence records. Projection loaders concatenate the full set in that fixed order with file-boundary markers and hash the rendered context; adding, removing, or changing any canonical source intentionally invalidates stale projection manifests through existing freshness policy.
+
+Runtime prompt contexts consume projections and runtime artifacts, not raw Project Context source files. Raw Project Context boundary markers are rejected at runtime prompt construction boundaries so source authority does not leak past projection generation.
+
 ## Persistence Strategy
 
 Application configuration stores local Command Center metadata, starting with registered repositories. Repository artifacts remain in the repository filesystem. In-memory state is a performance cache only and must be rebuildable from configuration plus filesystem scans.

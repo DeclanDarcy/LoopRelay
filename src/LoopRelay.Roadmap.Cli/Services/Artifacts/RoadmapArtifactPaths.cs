@@ -1,3 +1,4 @@
+using LoopRelay.Core.Services.ProjectContext;
 using LoopRelay.Orchestration.Services;
 
 namespace LoopRelay.Roadmap.Cli.Services.Artifacts;
@@ -41,19 +42,10 @@ internal static class RoadmapArtifactPaths
     public const string EvaluationEvidenceDirectory = EvidenceDirectory + "/evaluations";
     public const string BlockerEvidenceDirectory = EvidenceDirectory + "/blockers";
     public const string OrchestrationEvidenceDirectory = EvidenceDirectory + "/orchestration";
-    public const string ProjectContextDirectory = AgentsDirectory + "/ctx";
+    public const string ProjectContextDirectory = ProjectContextSourceContract.DirectoryPath;
 
     public static readonly IReadOnlyList<string> ProjectContextSourceFiles =
-    [
-        $"{ProjectContextDirectory}/01-purpose.md",
-        $"{ProjectContextDirectory}/02-capability-model.md",
-        $"{ProjectContextDirectory}/03-invariants.md",
-        $"{ProjectContextDirectory}/04-strategic-structure.md",
-        $"{ProjectContextDirectory}/05-authority-model.md",
-        $"{ProjectContextDirectory}/06-evaluation-model.md",
-        $"{ProjectContextDirectory}/07-drift-and-false-success.md",
-        $"{ProjectContextDirectory}/08-vocabulary.md",
-    ];
+        ProjectContextSourceContract.SourceFiles;
 
     public static readonly IReadOnlyDictionary<string, string> ProjectionPaths =
         new Dictionary<string, string>(StringComparer.Ordinal)

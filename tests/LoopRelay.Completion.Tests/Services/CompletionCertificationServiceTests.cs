@@ -575,6 +575,20 @@ public sealed class CompletionCertificationServiceTests
     }
 
     [Fact]
+    public async Task CompletionRuntimeContextRejectsRawProjectContextMarkers()
+    {
+        Harness h = Harness.Create(projectionService: new FakeProjectionService(
+            "<!-- BEGIN PROJECT-CONTEXT FILE: 09-eval-details.md -->"));
+        await h.SeedExecutionWorkspaceAsync();
+
+        CompletionCertificationResult result = await h.Service.CertifyPlanCompletionAsync(new CompletionCertificationRequest(h.Repository));
+
+        Assert.Equal(CompletionCertificationServiceOutcome.Failed, result.Outcome);
+        Assert.Contains("raw Project Context markers", result.Message, StringComparison.Ordinal);
+        Assert.Empty(h.Prompts.Invocations);
+    }
+
+    [Fact]
     public async Task AgentCompletionPromptRunner_AppendsImplementationFirstPolicy()
     {
         var runtime = new RecordingAgentRuntime(new AgentTurnResult(
@@ -724,7 +738,9 @@ public sealed class CompletionCertificationServiceTests
 
         public CompletionCertificationService Service { get; }
 
-        public static Harness Create(IExecutionEvidenceStore? executionEvidenceStore = null)
+        public static Harness Create(
+            IExecutionEvidenceStore? executionEvidenceStore = null,
+            IProjectContextProjectionService? projectionService = null)
         {
             var store = new MemoryArtifactStore();
             var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" };
@@ -732,7 +748,7 @@ public sealed class CompletionCertificationServiceTests
             var archive = new CompletedEpicArchiveService(store, prompts);
             var service = new CompletionCertificationService(
                 store,
-                new FakeProjectionService(),
+                projectionService ?? new FakeProjectionService(),
                 prompts,
                 archive,
                 _executionEvidenceStore: executionEvidenceStore);
@@ -868,7 +884,7 @@ public sealed class CompletionCertificationServiceTests
         public ValueTask CloseSessionAsync(IAgentSession session) => ValueTask.CompletedTask;
     }
 
-    private sealed class FakeProjectionService : IProjectContextProjectionService
+    private sealed class FakeProjectionService(string? projectionContent = null) : IProjectContextProjectionService
     {
         public Task<ProjectContextProjectionResult> EnsureFreshAsync(
             string runtimePromptName,
@@ -880,7 +896,7 @@ public sealed class CompletionCertificationServiceTests
                     $".agents/projections/{runtimePromptName}.md",
                     "# Test Projection",
                     runtimePromptName),
-                $"# Projection for {runtimePromptName}",
+                projectionContent ?? $"# Projection for {runtimePromptName}",
                 Generated: false,
                 ProjectionStaleStatus.Fresh,
                 []));

@@ -75,6 +75,8 @@ public sealed class ProjectionServiceTests
         ProjectionManifest manifest = await h.ManifestStore.LoadAsync();
         ProjectionManifestEntry entry = Assert.Single(manifest.Entries);
         Assert.Equal(ProjectionRuntimePromptNames.AdversarialPlanReview, entry.RuntimePromptName);
+        Assert.Equal(9, entry.ProjectContextFiles.Count);
+        Assert.Equal(".agents/ctx/09-eval-details.md", entry.ProjectContextFiles[^1]);
         Assert.Equal("ProjectionForAdversarialPlanReview", entry.ProjectionPromptName);
         Assert.Equal(ProjectionValidationStatus.Valid, entry.ValidationStatus);
         Assert.Equal(ProjectionProvenanceStatus.Trusted, entry.ProvenanceStatus);
@@ -122,6 +124,25 @@ public sealed class ProjectionServiceTests
         await h.Store.WriteAsync(
             Resolve(h.Repo, ProjectionArtifactPaths.ProjectContextSourceFiles[0]),
             "# Context 1\n\nChanged");
+
+        ProjectionFreshness freshness = await h.Service.EvaluateFreshnessAsync(
+            ProjectionRuntimePromptNames.DecisionSession,
+            CancellationToken.None);
+
+        Assert.Equal(ProjectionStaleStatus.Stale, freshness.Status);
+        Assert.Contains(ProjectionStaleReason.ProjectContextDrift, freshness.Reasons);
+    }
+
+    [Fact]
+    public async Task EvaluateFreshnessAsync_WhenEvalDetailsChanges_ReturnsStale()
+    {
+        Harness h = New(ValidProjection("# Execution Agent System Prompt Projection", "DecisionSession"));
+        await SeedProjectContextAsync(h);
+        await h.Service.EnsureFreshAsync(ProjectionRuntimePromptNames.DecisionSession, CancellationToken.None);
+
+        await h.Store.WriteAsync(
+            Resolve(h.Repo, ".agents/ctx/09-eval-details.md"),
+            "# Context 9\n\nChanged evaluation details");
 
         ProjectionFreshness freshness = await h.Service.EvaluateFreshnessAsync(
             ProjectionRuntimePromptNames.DecisionSession,

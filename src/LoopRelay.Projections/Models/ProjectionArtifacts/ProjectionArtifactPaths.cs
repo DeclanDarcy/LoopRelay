@@ -1,22 +1,15 @@
+using LoopRelay.Core.Services.ProjectContext;
+
 namespace LoopRelay.Projections.Models.ProjectionArtifacts;
 
 public static class ProjectionArtifactPaths
 {
     public const string ProjectionsManifest = ".agents/projections/manifest.md";
     public const string ProjectionsManifestJson = ".agents/projections/manifest.json";
-    public const string ProjectContextDirectory = ".agents/ctx";
+    public const string ProjectContextDirectory = ProjectContextSourceContract.DirectoryPath;
 
     public static readonly IReadOnlyList<string> ProjectContextSourceFiles =
-    [
-        $"{ProjectContextDirectory}/01-purpose.md",
-        $"{ProjectContextDirectory}/02-capability-model.md",
-        $"{ProjectContextDirectory}/03-invariants.md",
-        $"{ProjectContextDirectory}/04-strategic-structure.md",
-        $"{ProjectContextDirectory}/05-authority-model.md",
-        $"{ProjectContextDirectory}/06-evaluation-model.md",
-        $"{ProjectContextDirectory}/07-drift-and-false-success.md",
-        $"{ProjectContextDirectory}/08-vocabulary.md",
-    ];
+        ProjectContextSourceContract.SourceFiles;
 
     public static readonly IReadOnlyDictionary<string, string> ProjectionPaths =
         new Dictionary<string, string>(StringComparer.Ordinal)

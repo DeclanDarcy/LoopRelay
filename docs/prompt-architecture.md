@@ -48,6 +48,10 @@ For each `*.prompt` additional file the generator:
 
 `SourceHash` is the build-time content pin. Current CLIs use generated prompt identities and hashes when writing derived artifact provenance, transition input evidence, and session telemetry; Core no longer exposes a separate prompt-provenance contract.
 
+## Project Context Projections
+
+Projection prompts under `src/LoopRelay.Core/Prompts/Projections/` receive one rendered `{projectContext}` input: the full canonical `.agents/ctx` source set in fixed order, including `09-eval-details.md`. The projection layer records the rendered Project Context hash and all canonical source paths in projection manifests. Runtime prompts receive projection content plus runtime evidence; they do not receive raw Project Context source files or file-boundary markers.
+
 ## Current CLI Provenance
 
 The retired backend loop used a Core `PromptProvenance` record to describe every rendered turn. The current CLI-shaped solution does not ship that record. Auditability is carried by the runtime surfaces that still have production owners:

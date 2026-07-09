@@ -1,5 +1,5 @@
 using System.Text;
-using System.Text.RegularExpressions;
+using LoopRelay.Core.Services.ProjectContext;
 using LoopRelay.Projections.Models.Context;
 using LoopRelay.Projections.Models.Definitions;
 using LoopRelay.Projections.Models.ProjectionArtifacts;
@@ -7,7 +7,7 @@ using LoopRelay.Projections.Services.Definitions;
 
 namespace LoopRelay.Projections.Services.Context;
 
-public sealed partial class ProjectContextLoader(ProjectionArtifacts.ProjectionArtifacts _artifacts)
+public sealed class ProjectContextLoader(ProjectionArtifacts.ProjectionArtifacts _artifacts)
 {
     public async Task<ProjectContext> LoadAsync(CancellationToken cancellationToken = default)
     {
@@ -30,34 +30,14 @@ public sealed partial class ProjectContextLoader(ProjectionArtifacts.ProjectionA
 
         IReadOnlyList<string> numberedFiles = await _artifacts.ListAsync(ProjectionArtifactPaths.ProjectContextDirectory, "*.md");
         string[] extras = numberedFiles
-            .Where(path => NumberedProjectContextFileRegex().IsMatch(Path.GetFileName(path)))
-            .Where(path => !ProjectionArtifactPaths.ProjectContextSourceFiles.Contains(path, StringComparer.Ordinal))
+            .Where(path => ProjectContextSourceContract.IsNumberedSourceFileName(Path.GetFileName(path)))
+            .Where(path => !ProjectContextSourceContract.IsCanonicalSourceFile(path))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
         if (missing.Count > 0 || extras.Length > 0)
         {
-            var message = new StringBuilder("Project Context source contract violation.");
-            if (missing.Count > 0)
-            {
-                message.Append("\nMissing required files:");
-                foreach (string path in missing)
-                {
-                    message.Append("\n- ").Append(path);
-                }
-            }
-
-            if (extras.Length > 0)
-            {
-                message.Append("\nUnexpected numbered Project Context source files were found. ")
-                    .Append("The Core contract is exactly 01 through 08:");
-                foreach (string path in extras)
-                {
-                    message.Append("\n- ").Append(path);
-                }
-            }
-
-            throw new ProjectionException(message.ToString());
+            throw new ProjectionException(ProjectContextSourceContract.BuildViolationMessage(missing, extras));
         }
 
         var builder = new StringBuilder();
@@ -78,7 +58,4 @@ public sealed partial class ProjectContextLoader(ProjectionArtifacts.ProjectionA
         string result = builder.ToString();
         return new ProjectContext(ProjectionArtifactPaths.ProjectContextSourceFiles, result, ProjectionHash.Sha256(result));
     }
-
-    [GeneratedRegex(@"^\d{2}-.+\.md$", RegexOptions.CultureInvariant)]
-    private static partial Regex NumberedProjectContextFileRegex();
 }

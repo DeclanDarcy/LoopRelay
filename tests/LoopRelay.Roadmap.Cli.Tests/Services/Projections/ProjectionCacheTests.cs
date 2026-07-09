@@ -51,6 +51,8 @@ public sealed class ProjectionCacheTests
         ProjectionManifestEntry entry = Assert.IsType<ProjectionManifestEntry>(
             (await new ProjectionManifestStore(repo.Artifacts).LoadAsync()).Find("SelectNextEpic"));
         Assert.Equal(ProjectionProvenanceStatus.Trusted, entry.ProvenanceStatus);
+        Assert.Equal(9, entry.ProjectContextFiles.Count);
+        Assert.Equal(".agents/ctx/09-eval-details.md", entry.ProjectContextFiles[^1]);
         Assert.Equal(LoopRelay.Core.Prompts.Projections.ProjectionForSelectNextEpic.SourceHash, entry.ProjectionPromptSourceHash);
     }
 
@@ -79,6 +81,25 @@ public sealed class ProjectionCacheTests
         ProjectionCache cache = CreateCache(repo, new ScriptedAgentRuntime());
 
         RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => cache.EnsureAsync("SelectNextEpic", projectContext, new PromptContractRegistry(new ProjectionRegistry()).Get("SelectNextEpic"), CancellationToken.None));
+        Assert.Contains(nameof(ProjectionStaleReason.ProjectContextDrift), ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Stale_projection_blocks_when_eval_details_changes()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        string path = RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"];
+        repo.Write(path, ProjectionSamples.Valid("SelectNextEpic"));
+        var loader = new ProjectContextLoader(repo.Artifacts);
+        ProjectContext previousContext = await loader.LoadAsync();
+        await SeedTrustedManifestAsync(repo, previousContext);
+        repo.Write(".agents/ctx/09-eval-details.md", "changed evaluation details");
+        ProjectContext currentContext = await loader.LoadAsync();
+        ProjectionCache cache = CreateCache(repo, new ScriptedAgentRuntime());
+
+        RoadmapStepException ex = await Assert.ThrowsAsync<RoadmapStepException>(() => cache.EnsureAsync("SelectNextEpic", currentContext, new PromptContractRegistry(new ProjectionRegistry()).Get("SelectNextEpic"), CancellationToken.None));
+
         Assert.Contains(nameof(ProjectionStaleReason.ProjectContextDrift), ex.Message, StringComparison.Ordinal);
     }
 
