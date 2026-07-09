@@ -1,4 +1,5 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
 using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
 using LoopRelay.Roadmap.Cli.Models.Execution;
@@ -17,7 +18,6 @@ using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.Splits;
 using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
-using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
@@ -32,9 +32,9 @@ internal sealed class SplitEpicTransition(
     ArtifactBundles.BundleFileExtractor _bundleExtractor,
     Splits.SplitEpicBundleInterpreter _splitBundleInterpreter,
     BundleManifestWriter _bundleManifestWriter,
-    SplitFamilyStore _splitFamilyStore,
-    ArtifactLifecycleStore _lifecycleStore,
-    TransitionJournalStore _journalStore,
+    ISplitFamilyStore _splitFamilyStore,
+    IArtifactLifecycleStore _lifecycleStore,
+    ITransitionJournalStore _journalStore,
     RoadmapTransitionPersistence _transitionPersistence,
     HitlArtifactCapture _hitlArtifactCapture,
     ILoopConsole _console)

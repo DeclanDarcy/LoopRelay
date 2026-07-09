@@ -4,13 +4,14 @@ using LoopRelay.Roadmap.Cli.Models.Decisions;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.Decisions;
 
-internal sealed partial class DecisionLedgerStore(RoadmapArtifacts _artifacts)
+internal sealed partial class DecisionLedgerStore(RoadmapArtifacts _artifacts) : IDecisionLedgerStore
 {
     private readonly StructuredDocumentStore<DecisionLedgerPersistenceDocument> _structuredStore = new(
         _artifacts,

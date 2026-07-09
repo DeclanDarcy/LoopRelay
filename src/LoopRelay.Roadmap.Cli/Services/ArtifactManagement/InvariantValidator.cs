@@ -6,11 +6,11 @@ using LoopRelay.Roadmap.Cli.Models.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 using LoopRelay.Roadmap.Cli.Primitives.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
-using LoopRelay.Roadmap.Cli.Services.Splits;
 
 namespace LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
@@ -19,9 +19,9 @@ internal sealed class InvariantValidator(
     Projections.ProjectContextLoader _projectContextLoader,
     ProjectionRegistry _projectionRegistry,
     PromptContractRegistry _contractRegistry,
-    ProjectionManifestStore _manifestStore,
-    ArtifactLifecycleStore _lifecycleStore,
-    SplitFamilyStore _splitFamilyStore,
+    IProjectionManifestStore _manifestStore,
+    IArtifactLifecycleStore _lifecycleStore,
+    ISplitFamilyStore _splitFamilyStore,
     ExecutionPreparationProvenanceService _executionPreparation)
 {
     private readonly EpicArtifactValidator epicValidator = new();

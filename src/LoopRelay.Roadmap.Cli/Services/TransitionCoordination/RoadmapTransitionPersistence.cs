@@ -9,19 +9,18 @@ using LoopRelay.Roadmap.Cli.Primitives.Execution;
 using LoopRelay.Roadmap.Cli.Primitives.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.State;
 using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Execution;
-using LoopRelay.Roadmap.Cli.Services.Projections;
-using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
 namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class RoadmapTransitionPersistence(
     RoadmapArtifacts _artifacts,
-    ProjectionManifestStore _manifestStore,
-    State.RoadmapStateStore _stateStore,
-    Decisions.DecisionLedgerStore _decisionLedger,
-    TransitionJournalStore _journalStore)
+    IProjectionManifestStore _manifestStore,
+    IRoadmapStateStore _stateStore,
+    IDecisionLedgerStore _decisionLedger,
+    ITransitionJournalStore _journalStore)
 {
     public async Task SaveAsync(
         RoadmapState current,

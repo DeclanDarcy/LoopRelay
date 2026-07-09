@@ -9,12 +9,13 @@ using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 using LoopRelay.Roadmap.Cli.Models.Transitions;
 using LoopRelay.Roadmap.Cli.Primitives.State;
 using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 
 namespace LoopRelay.Roadmap.Cli.Services.State;
 
-internal sealed partial class RoadmapStateStore(RoadmapArtifacts _artifacts)
+internal sealed partial class RoadmapStateStore(RoadmapArtifacts _artifacts) : IRoadmapStateStore
 {
     private readonly StructuredDocumentStore<RoadmapStatePersistenceDocument> _structuredStore = new(
         _artifacts,

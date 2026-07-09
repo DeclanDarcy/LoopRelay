@@ -2,13 +2,14 @@ using System.Globalization;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.Projections;
 using LoopRelay.Roadmap.Cli.Models.Splits;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.Splits;
 
-internal sealed class SplitFamilyStore(RoadmapArtifacts _artifacts)
+internal sealed class SplitFamilyStore(RoadmapArtifacts _artifacts) : ISplitFamilyStore
 {
     public async Task<string> WriteAsync(SplitFamily family)
     {

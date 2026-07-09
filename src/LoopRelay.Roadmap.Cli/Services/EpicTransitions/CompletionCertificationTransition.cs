@@ -6,6 +6,7 @@ using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models.NonImplementationCompletion;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.Invocation;
 using LoopRelay.Roadmap.Cli.Models.Projections;
@@ -39,8 +40,8 @@ internal sealed class CompletionCertificationTransition(
     RoadmapPromptTransitionRunner _promptTransitionRunner,
     RoadmapCompletionContextUpdateTransition _completionContextUpdateTransition,
     DecisionRecorder _decisionRecorder,
-    TransitionJournalStore _journalStore,
-    ArtifactLifecycleStore _lifecycleStore,
+    ITransitionJournalStore _journalStore,
+    IArtifactLifecycleStore _lifecycleStore,
     HitlArtifactCapture _hitlArtifactCapture,
     ILoopConsole _console,
     INonImplementationCompletionReviewService? _nonImplementationCompletionReview = null)

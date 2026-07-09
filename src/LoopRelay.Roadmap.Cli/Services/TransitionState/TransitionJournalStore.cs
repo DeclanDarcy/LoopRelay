@@ -1,10 +1,11 @@
 using System.Text.Json;
 using LoopRelay.Roadmap.Cli.Models.Transitions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 namespace LoopRelay.Roadmap.Cli.Services.TransitionState;
 
-internal sealed class TransitionJournalStore(RoadmapArtifacts _artifacts)
+internal sealed class TransitionJournalStore(RoadmapArtifacts _artifacts) : ITransitionJournalStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 

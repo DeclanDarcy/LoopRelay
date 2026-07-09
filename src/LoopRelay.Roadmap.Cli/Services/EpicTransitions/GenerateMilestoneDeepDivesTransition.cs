@@ -1,4 +1,5 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.Invocation;
@@ -15,7 +16,6 @@ using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
-using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
 namespace LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 
@@ -29,8 +29,8 @@ internal sealed class GenerateMilestoneDeepDivesTransition(
     BundleManifestWriter _bundleManifestWriter,
     ExecutionPreparationProvenanceService _executionPreparation,
     InvariantValidator _invariantValidator,
-    TransitionJournalStore _journalStore,
-    ArtifactLifecycleStore _lifecycleStore,
+    ITransitionJournalStore _journalStore,
+    IArtifactLifecycleStore _lifecycleStore,
     RoadmapTransitionPersistence _transitionPersistence,
     HitlArtifactCapture _hitlArtifactCapture,
     ILoopConsole _console)

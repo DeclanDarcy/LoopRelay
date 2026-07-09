@@ -12,6 +12,7 @@ using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 using LoopRelay.Roadmap.Cli.Primitives.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.State;
 using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Decisions;
@@ -24,8 +25,8 @@ namespace LoopRelay.Roadmap.Cli.Services.State;
 internal sealed class RoadmapResumePlanner(
     RoadmapArtifacts _artifacts,
     PromptContractRegistry _contractRegistry,
-    ProjectionManifestStore _manifestStore,
-    ArtifactLifecycleStore _lifecycleStore,
+    IProjectionManifestStore _manifestStore,
+    IArtifactLifecycleStore _lifecycleStore,
     ProjectionProvenanceFactory _provenanceFactory,
     SelectionProvenanceService _selectionProvenance,
     ExecutionPreparationProvenanceService _executionPreparation)

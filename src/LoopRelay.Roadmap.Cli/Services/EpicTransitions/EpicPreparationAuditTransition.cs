@@ -1,4 +1,5 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
 using LoopRelay.Roadmap.Cli.Models.Decisions;
 using LoopRelay.Roadmap.Cli.Models.Execution;
@@ -26,7 +27,7 @@ internal sealed class EpicPreparationAuditTransition(
     RoadmapPromptTransitionRunner _promptTransitionRunner,
     HitlArtifactCapture _hitlArtifactCapture,
     DecisionRecorder _decisionRecorder,
-    State.RoadmapStateStore _stateStore,
+    IRoadmapStateStore _stateStore,
     RoadmapTransitionPersistence _transitionPersistence,
     SelectionSuperseder _selectionSuperseder,
     ActiveEpicRewriteTransition _activeEpicRewriteTransition,

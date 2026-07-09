@@ -4,6 +4,7 @@ using LoopRelay.Roadmap.Cli.Models.RoadmapState;
 using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Decisions;
 
@@ -11,7 +12,7 @@ namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class ActiveSelectionReader(
     RoadmapArtifacts _artifacts,
-    State.RoadmapStateStore _stateStore,
+    IRoadmapStateStore _stateStore,
     SelectionProvenanceService _selectionProvenance)
 {
     public async Task<string> ReadAsync(CancellationToken cancellationToken)

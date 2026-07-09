@@ -1,4 +1,5 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
 using LoopRelay.Roadmap.Cli.Models.Decisions;
 using LoopRelay.Roadmap.Cli.Models.Execution;
@@ -17,7 +18,6 @@ using LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 using LoopRelay.Roadmap.Cli.Services.Execution;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
-using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
 namespace LoopRelay.Roadmap.Cli.Services.State;
 
@@ -25,7 +25,7 @@ internal sealed class RoadmapStateMachine(
     RoadmapArtifacts _artifacts,
     Projections.ProjectContextLoader _projectContextLoader,
     PromptContractRegistry _contractRegistry,
-    RoadmapStateStore _stateStore,
+    IRoadmapStateStore _stateStore,
     RoadmapTransitionPersistence _transitionPersistence,
     BootstrapRoadmapCompletionContextTransition _bootstrapRoadmapCompletionContextTransition,
     SelectNextEpicTransition _selectNextEpicTransition,
@@ -39,8 +39,8 @@ internal sealed class RoadmapStateMachine(
     RoadmapResumePlanner _resumePlanner,
     RoadmapUnblockPlanner _unblockPlanner,
     DecisionRecorder _decisionRecorder,
-    TransitionJournalStore _journalStore,
-    ArtifactLifecycleStore _lifecycleStore,
+    ITransitionJournalStore _journalStore,
+    IArtifactLifecycleStore _lifecycleStore,
     ILoopConsole _console)
 {
     public Task<RoadmapOutcome> ExecuteAsync(

@@ -2,6 +2,7 @@ using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.DerivedArtifacts;
 using LoopRelay.Roadmap.Cli.Services.State;
@@ -10,7 +11,7 @@ namespace LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 
 internal sealed class ExecutionPreparationProvenanceService(
     RoadmapArtifacts _artifacts,
-    ExecutionPreparationManifestStore _manifestStore)
+    IExecutionPreparationManifestStore _manifestStore)
 {
     public const string ActiveEpicInputKind = "ActiveEpic";
     public const string MilestoneSpecInputKind = "MilestoneSpec";

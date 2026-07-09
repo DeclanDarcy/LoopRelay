@@ -1,11 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 namespace LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 
-internal sealed class ExecutionPreparationManifestStore(RoadmapArtifacts _artifacts)
+internal sealed class ExecutionPreparationManifestStore(RoadmapArtifacts _artifacts) : IExecutionPreparationManifestStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

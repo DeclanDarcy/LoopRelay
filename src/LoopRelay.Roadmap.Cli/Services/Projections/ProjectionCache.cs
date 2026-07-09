@@ -4,6 +4,7 @@ using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
 using LoopRelay.Roadmap.Cli.Models.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.State;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.State;
@@ -13,7 +14,7 @@ namespace LoopRelay.Roadmap.Cli.Services.Projections;
 internal sealed class ProjectionCache(
     RoadmapArtifacts _artifacts,
     ProjectionRegistry _registry,
-    ProjectionManifestStore _manifestStore,
+    IProjectionManifestStore _manifestStore,
     ProjectionValidator _validator,
     RoadmapPromptRunner _promptRunner)
 {

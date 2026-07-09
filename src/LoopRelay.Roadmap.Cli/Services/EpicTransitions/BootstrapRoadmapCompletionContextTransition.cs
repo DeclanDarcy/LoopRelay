@@ -1,4 +1,5 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Models.Invocation;
 using LoopRelay.Roadmap.Cli.Models.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
@@ -18,7 +19,7 @@ internal sealed class BootstrapRoadmapCompletionContextTransition(
     ProjectionCache _projectionCache,
     RoadmapPromptTransitionRunner _promptTransitionRunner,
     HitlArtifactCapture _hitlArtifactCapture,
-    ArtifactLifecycleStore _lifecycleStore,
+    IArtifactLifecycleStore _lifecycleStore,
     ILoopConsole _console)
 {
     public async Task ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)

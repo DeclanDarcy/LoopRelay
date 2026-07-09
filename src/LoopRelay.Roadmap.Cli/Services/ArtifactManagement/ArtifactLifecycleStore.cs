@@ -2,13 +2,14 @@ using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
-internal sealed class ArtifactLifecycleStore(RoadmapArtifacts _artifacts)
+internal sealed class ArtifactLifecycleStore(RoadmapArtifacts _artifacts) : IArtifactLifecycleStore
 {
     private readonly StructuredDocumentStore<ArtifactLifecyclePersistenceDocument> _structuredStore = new(
         _artifacts,

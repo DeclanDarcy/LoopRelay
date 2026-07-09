@@ -3,6 +3,7 @@ using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
 using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.DerivedArtifacts;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
@@ -13,7 +14,7 @@ namespace LoopRelay.Roadmap.Cli.Services.Decisions;
 
 internal sealed class SelectionProvenanceService(
     RoadmapArtifacts _artifacts,
-    SelectionProvenanceManifestStore _manifestStore,
+    ISelectionProvenanceManifestStore _manifestStore,
     RoadmapPromptContextBuilder _contextBuilder,
     TransitionInputResolver _inputResolver)
 {

@@ -21,10 +21,12 @@ Move current behavior behind semantic domain contracts while files remain canoni
 
 ## Code Impact
 
-- [ ] Wrap `DecisionLedgerStore`, `RoadmapStateStore`, `ArtifactLifecycleStore`, `SplitFamilyStore`, `ExecutionPreparationManifestStore`, `SelectionProvenanceManifestStore`, `ProjectionManifestStore`, and `TransitionJournalStore` behind interfaces.
+- [x] Wrap `DecisionLedgerStore`, `RoadmapStateStore`, `ArtifactLifecycleStore`, `SplitFamilyStore`, `ExecutionPreparationManifestStore`, `SelectionProvenanceManifestStore`, `ProjectionManifestStore`, and `TransitionJournalStore` behind interfaces.
 - [ ] Extract loop history behavior out of `LoopArtifacts` into a history store/facade while preserving live-file methods.
 - [ ] Extract numbered execution evidence behavior out of `RoadmapArtifacts.WriteNumberedEvidenceAsync` and `CompletionArtifacts.WriteNumberedEvidenceAsync`.
 - [ ] Update `RoadmapCliComposition` and Main CLI composition to construct contract-based services.
+  - [x] Roadmap CLI composition constructs file-backed roadmap stores behind contract-typed variables.
+  - [ ] Main CLI composition constructs loop history/evidence stores behind contract-typed variables.
 
 ## Tests
 

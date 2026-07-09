@@ -1,10 +1,11 @@
 using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 namespace LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 
-internal sealed class ArtifactPromotionService(RoadmapArtifacts _artifacts, ArtifactLifecycleStore _lifecycleStore)
+internal sealed class ArtifactPromotionService(RoadmapArtifacts _artifacts, IArtifactLifecycleStore _lifecycleStore)
 {
     public async Task<ArtifactPromotionResult> PromoteAsync(ArtifactPromotionRequest request)
     {

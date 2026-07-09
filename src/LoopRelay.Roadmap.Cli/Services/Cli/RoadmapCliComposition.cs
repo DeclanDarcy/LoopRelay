@@ -17,6 +17,7 @@ using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
 using LoopRelay.Orchestration.Services.RepositorySlices;
 using LoopRelay.Permissions.Services.Configuration;
 using LoopRelay.Roadmap.Cli.Models.Invocation;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
@@ -103,15 +104,15 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var projectionRegistry = new ProjectionRegistry();
         var provenanceFactory = new ProjectionProvenanceFactory(projectionRegistry);
         var contractRegistry = new PromptContractRegistry(projectionRegistry);
-        var manifestStore = new ProjectionManifestStore(artifacts);
-        var executionPreparationManifest = new ExecutionPreparationManifestStore(artifacts);
+        IProjectionManifestStore manifestStore = new ProjectionManifestStore(artifacts);
+        IExecutionPreparationManifestStore executionPreparationManifest = new ExecutionPreparationManifestStore(artifacts);
         var executionPreparation = new ExecutionPreparationProvenanceService(artifacts, executionPreparationManifest);
         var validator = new ProjectionValidator();
         var promptRunner = new RoadmapPromptRunner(progressRuntime, repository, console, promptPolicy);
         var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
         var contextBuilder = new RoadmapPromptContextBuilder(artifacts, executionPreparation);
         var inputResolver = new TransitionInputResolver(artifacts, executionPreparation);
-        var selectionProvenanceManifest = new SelectionProvenanceManifestStore(artifacts);
+        ISelectionProvenanceManifestStore selectionProvenanceManifest = new SelectionProvenanceManifestStore(artifacts);
         var selectionProvenance = new SelectionProvenanceService(
             artifacts,
             selectionProvenanceManifest,
@@ -123,17 +124,17 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             store,
             new AgentCompletionPromptRunner(progressRuntime, repository, promptPolicy),
             new RoadmapCompletionObserver(console));
-        var stateStore = new State.RoadmapStateStore(artifacts);
-        var decisionLedger = new Decisions.DecisionLedgerStore(artifacts);
+        IRoadmapStateStore stateStore = new State.RoadmapStateStore(artifacts);
+        IDecisionLedgerStore decisionLedger = new Decisions.DecisionLedgerStore(artifacts);
         var decisionRecorder = new DecisionRecorder(decisionLedger);
-        var journal = new TransitionJournalStore(artifacts);
+        ITransitionJournalStore journal = new TransitionJournalStore(artifacts);
         var transitionPersistence = new RoadmapTransitionPersistence(
             artifacts,
             manifestStore,
             stateStore,
             decisionLedger,
             journal);
-        var lifecycle = new ArtifactLifecycleStore(artifacts);
+        IArtifactLifecycleStore lifecycle = new ArtifactLifecycleStore(artifacts);
         var promptTransitionRunner = new RoadmapPromptTransitionRunner(
             inputResolver,
             promptRunner,
@@ -185,7 +186,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var bundleExtractor = new ArtifactBundles.BundleFileExtractor();
         var splitBundleInterpreter = new Splits.SplitEpicBundleInterpreter();
         var bundleManifest = new BundleManifestWriter(artifacts);
-        var splitFamilies = new SplitFamilyStore(artifacts);
+        ISplitFamilyStore splitFamilies = new SplitFamilyStore(artifacts);
         var activeEpicPromotionCoordinator = new ActiveEpicPromotionCoordinator(
             promotion,
             hitlArtifactCapture,

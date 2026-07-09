@@ -4,16 +4,16 @@ using LoopRelay.Roadmap.Cli.Models.Transitions;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 using LoopRelay.Roadmap.Cli.Primitives.State;
 using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
-using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
 namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
 internal sealed class ActiveEpicPromotionCoordinator(
     ArtifactPromotionService _promotionService,
     HitlArtifactCapture _hitlArtifactCapture,
-    TransitionJournalStore _journalStore,
+    ITransitionJournalStore _journalStore,
     RoadmapTransitionPersistence _transitionPersistence)
 {
     public async Task<ArtifactPromotionResult> PromoteAsync(

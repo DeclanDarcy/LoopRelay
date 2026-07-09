@@ -1,4 +1,5 @@
 using LoopRelay.Roadmap.Cli.Abstractions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Models.Decisions;
 using LoopRelay.Roadmap.Cli.Models.Invocation;
 using LoopRelay.Roadmap.Cli.Models.Projections;
@@ -20,12 +21,12 @@ internal sealed class SelectNextEpicTransition(
     PromptContractRegistry _contractRegistry,
     ProjectionCache _projectionCache,
     RoadmapPromptContextBuilder _contextBuilder,
-    State.RoadmapStateStore _stateStore,
+    IRoadmapStateStore _stateStore,
     RoadmapPromptTransitionRunner _promptTransitionRunner,
     SelectionProvenanceService _selectionProvenance,
     DecisionRecorder _decisionRecorder,
     HitlArtifactCapture _hitlArtifactCapture,
-    ArtifactLifecycleStore _lifecycleStore,
+    IArtifactLifecycleStore _lifecycleStore,
     ILoopConsole _console)
 {
     public async Task<SelectionDecision> ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)

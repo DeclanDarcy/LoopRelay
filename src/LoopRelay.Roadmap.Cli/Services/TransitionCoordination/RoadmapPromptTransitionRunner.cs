@@ -5,6 +5,7 @@ using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 using LoopRelay.Roadmap.Cli.Models.Transitions;
 using LoopRelay.Roadmap.Cli.Primitives.State;
 using LoopRelay.Roadmap.Cli.Primitives.Transitions;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
@@ -13,7 +14,7 @@ namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 internal sealed class RoadmapPromptTransitionRunner(
     TransitionInputResolver _inputResolver,
     RoadmapPromptRunner _promptRunner,
-    TransitionJournalStore _journalStore,
+    ITransitionJournalStore _journalStore,
     RoadmapTransitionPersistence _transitionPersistence)
 {
     public async Task<string> RunNormalAsync(

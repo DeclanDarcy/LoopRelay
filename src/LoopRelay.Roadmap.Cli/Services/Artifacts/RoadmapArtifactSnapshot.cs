@@ -1,6 +1,7 @@
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 using LoopRelay.Roadmap.Cli.Services.Projections;
@@ -34,8 +35,8 @@ internal sealed class RoadmapArtifactSnapshot
 
     public static async Task<RoadmapArtifactSnapshot> CaptureAsync(
         RoadmapArtifacts artifacts,
-        ProjectionManifestStore manifestStore,
-        ArtifactLifecycleStore lifecycleStore,
+        IProjectionManifestStore manifestStore,
+        IArtifactLifecycleStore lifecycleStore,
         ExecutionPreparationProvenanceService executionPreparation)
     {
         string[] knownPaths =

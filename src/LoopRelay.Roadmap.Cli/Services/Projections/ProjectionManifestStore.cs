@@ -3,12 +3,13 @@ using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
 using LoopRelay.Roadmap.Cli.Models.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.Projections;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.Projections;
 
-internal sealed class ProjectionManifestStore(RoadmapArtifacts _artifacts)
+internal sealed class ProjectionManifestStore(RoadmapArtifacts _artifacts) : IProjectionManifestStore
 {
     private readonly StructuredDocumentStore<ProjectionManifestPersistenceDocument> _structuredStore = new(
         _artifacts,
