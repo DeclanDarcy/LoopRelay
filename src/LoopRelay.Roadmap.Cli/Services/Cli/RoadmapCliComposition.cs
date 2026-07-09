@@ -110,7 +110,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var contractRegistry = new PromptContractRegistry(projectionRegistry);
         IProjectionManifestStore manifestStore = new ProjectionManifestStore(artifacts);
         IExecutionPreparationManifestStore executionPreparationManifest = new ExecutionPreparationManifestStore(artifacts);
-        var executionPreparation = new ExecutionPreparationProvenanceService(artifacts, executionPreparationManifest);
+        var executionPreparation = new ExecutionPreparationProvenanceService(artifacts, executionPreparationManifest, canonicalHasher);
         var validator = new ProjectionValidator();
         var promptRunner = new RoadmapPromptRunner(progressRuntime, repository, console, promptPolicy);
         var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);

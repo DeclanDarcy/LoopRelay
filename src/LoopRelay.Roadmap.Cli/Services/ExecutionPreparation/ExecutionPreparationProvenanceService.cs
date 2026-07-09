@@ -1,6 +1,7 @@
 using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
@@ -11,8 +12,12 @@ namespace LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 
 internal sealed class ExecutionPreparationProvenanceService(
     RoadmapArtifacts _artifacts,
-    IExecutionPreparationManifestStore _manifestStore)
+    IExecutionPreparationManifestStore _manifestStore,
+    ICanonicalArtifactHasher? canonicalHasher = null)
 {
+    private readonly ICanonicalArtifactHasher _canonicalHasher =
+        canonicalHasher ?? RoadmapLogicalArtifactServices.CreateCanonicalHasher(_artifacts);
+
     public const string ActiveEpicInputKind = "ActiveEpic";
     public const string MilestoneSpecInputKind = "MilestoneSpec";
     public const string DecisionLedgerInputKind = "DecisionLedger";
@@ -435,7 +440,7 @@ internal sealed class ExecutionPreparationProvenanceService(
         return new ExecutionPreparationInputSet(
             new ExecutionPreparationManifestInput(ActiveEpicInputKind, RoadmapArtifactPaths.ActiveEpic, activeEpicHash),
             manifest.MilestoneSpecs,
-            await CaptureDecisionLedgerInputAsync());
+            await CaptureDecisionLedgerInputAsync(cancellationToken));
     }
 
     private async Task<ExecutionPreparationInputSet> CaptureInputSetFromSpecPathsAsync(
@@ -463,12 +468,16 @@ internal sealed class ExecutionPreparationProvenanceService(
                 RoadmapArtifactPaths.ActiveEpic,
                 await RequireHashAsync(RoadmapArtifactPaths.ActiveEpic)),
             specs,
-            await CaptureDecisionLedgerInputAsync());
+            await CaptureDecisionLedgerInputAsync(cancellationToken));
     }
 
-    private async Task<ExecutionPreparationManifestInput> CaptureDecisionLedgerInputAsync()
+    private async Task<ExecutionPreparationManifestInput> CaptureDecisionLedgerInputAsync(
+        CancellationToken cancellationToken)
     {
-        string version = await HashIfPresentAsync(RoadmapArtifactPaths.DecisionLedgerJson) ?? MissingInputVersion;
+        CanonicalArtifactHash? hash = await _canonicalHasher.HashIfPresentAsync(
+            RoadmapArtifactPaths.DecisionLedgerJson,
+            cancellationToken);
+        string version = hash?.Value ?? MissingInputVersion;
         return new ExecutionPreparationManifestInput(
             DecisionLedgerInputKind,
             RoadmapArtifactPaths.DecisionLedgerJson,

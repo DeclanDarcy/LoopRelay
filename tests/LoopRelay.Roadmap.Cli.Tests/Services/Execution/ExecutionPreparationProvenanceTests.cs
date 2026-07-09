@@ -1,3 +1,5 @@
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
 using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
 using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
@@ -134,6 +136,40 @@ public sealed class ExecutionPreparationProvenanceTests
             requireExecutionPrompt: true,
             requireCompatibilityArtifacts: true);
         Assert.True(readiness.IsFresh);
+    }
+
+    [Fact]
+    public async Task Decision_ledger_input_uses_canonical_hash()
+    {
+        using var repo = new TempRepo();
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
+        repo.Write(".agents/specs/a.md", Spec("Spec A", "- [ ] Do A."));
+        repo.Write(RoadmapArtifactPaths.DecisionLedgerJson, "{\"raw\":\"file-backed export\"}");
+
+        const string canonicalLedgerHash = "canonical-decision-ledger-hash";
+        var provenance = new ExecutionPreparationProvenanceService(
+            repo.Artifacts,
+            new ExecutionPreparationManifestStore(repo.Artifacts),
+            new DecisionLedgerHashOverride(
+                RoadmapLogicalArtifactServices.CreateCanonicalHasher(repo.Artifacts),
+                canonicalLedgerHash));
+
+        await provenance.RecordMilestoneSpecsAsync([".agents/specs/a.md"]);
+        await ExecutionPreparationTestSupport.SeedOperationalContextAsync(
+            provenance,
+            repo,
+            "# Operational Context");
+
+        ExecutionPreparationManifest manifest = await new ExecutionPreparationManifestStore(repo.Artifacts).LoadAsync();
+        DerivedArtifactManifestEntry operationalContext = manifest.FindActive(
+            ExecutionPreparationProvenanceService.OperationalContextArtifactKind,
+            RoadmapArtifactPaths.OperationalContext)!;
+        DerivedArtifactCausalInput ledgerInput = Assert.Single(
+            operationalContext.CausalInputs,
+            input => input.Kind == ExecutionPreparationProvenanceService.DecisionLedgerInputKind);
+
+        Assert.Equal(RoadmapArtifactPaths.DecisionLedgerJson, ledgerInput.Identity);
+        Assert.Equal(canonicalLedgerHash, ledgerInput.Version);
     }
 
     [Fact]
@@ -312,4 +348,41 @@ public sealed class ExecutionPreparationProvenanceTests
 
         {{checklist}}
         """;
+
+    private sealed class DecisionLedgerHashOverride(
+        ICanonicalArtifactHasher inner,
+        string decisionLedgerHash) : ICanonicalArtifactHasher
+    {
+        public async Task<CanonicalArtifactHash?> HashIfPresentAsync(
+            string relativePath,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.Equals(relativePath, RoadmapArtifactPaths.DecisionLedgerJson, StringComparison.OrdinalIgnoreCase))
+            {
+                return new CanonicalArtifactHash(
+                    new LogicalArtifactDescriptor(
+                        RoadmapArtifactPaths.DecisionLedgerJson,
+                        LogicalArtifactDomain.DecisionLedger,
+                        LogicalArtifactStorageKind.SqliteCanonicalRecord,
+                        RoadmapArtifactPaths.DecisionLedgerJson),
+                    CanonicalArtifactHasher.Sha256Algorithm,
+                    decisionLedgerHash);
+            }
+
+            return await inner.HashIfPresentAsync(relativePath, cancellationToken);
+        }
+
+        public async Task<CanonicalArtifactHash> RequireHashAsync(
+            string relativePath,
+            CancellationToken cancellationToken = default)
+        {
+            CanonicalArtifactHash? hash = await HashIfPresentAsync(relativePath, cancellationToken);
+            if (hash is null)
+            {
+                throw new InvalidOperationException($"Logical artifact could not be resolved: {relativePath}");
+            }
+
+            return hash;
+        }
+    }
 }
