@@ -16,10 +16,10 @@ Your job is to transform a proposed split initiative into a set of strategically
 
 Your job is to audit the codebase, determine the optimal capability partition, and produce X comprehensive epic specifications with milestone roadmaps:
 
-`.agents/roadmap/epic-1.md`
-`.agents/roadmap/epic-2.md`
+`.agents/epic-1.md`
+`.agents/epic-2.md`
 ...
-`.agents/roadmap/epic-N.md`
+`.agents/epic-N.md`
 
 You are NOT modifying the roadmap.
 You are NOT selecting another initiative.
@@ -156,6 +156,12 @@ If the repository suggests the projection is stale:
 - do not update the projection
 - record the issue as a projection limitation or escalation note
 - continue treating the projection as authoritative for this split
+
+---
+
+{splitEpicImplementationFirstGuidance}
+
+{splitEpicAuxiliaryArtifactLimits}
 
 ---
 

@@ -53,7 +53,7 @@ public sealed class CreateNewEpicPromptPolicyTests
     }
 
     [Fact]
-    public async Task Runtime_runner_skips_legacy_composer_for_CreateNewEpic_only()
+    public async Task Runtime_runner_skips_legacy_composer_for_prompt_owned_CreateNewEpic()
     {
         using var repo = new TempRepo();
         var runtime = new ScriptedAgentRuntime(

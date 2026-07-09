@@ -1,0 +1,19 @@
+# ReimagineEpic Auxiliary Artifact Limits
+
+For ReimagineEpic, `.agents/epic.md` is the implementation-bearing artifact.
+
+The audit-grounded replacement must carry the strategic continuity, replacement strategy, scope, dependencies, constraints, milestone roadmap, risks, acceptance criteria, and traceability needed by later implementation stages.
+
+Do not create companion design reports, rationale appendices, research notes, architecture proposals, governance notes, raw audit-detail files, migration reports, readiness reports, or certification notes.
+
+Do not move redesign reasoning into a side document when it can be compressed into the replacement epic.
+
+Reimagination may be larger than realignment, but the output boundary remains one operational epic artifact.
+
+The useful parts of audit reasoning belong in the epic only to the degree that they change capability, scope, dependency order, constraints, validation, drift prevention, or future milestone expansion.
+
+The blocked response `# Epic Reimagination Blocked` replaces the epic output for that run.
+
+It does not authorize extra explanatory artifacts.
+
+Output only the replacement `.agents/epic.md` Markdown content or the documented blocked response unless the user explicitly requests another machine-consumed artifact.

@@ -20,26 +20,48 @@ internal sealed record RoadmapRuntimePromptPolicy(
 
     public TransitionPromptPolicyIdentity CreateIdentity(string runtimePromptName)
     {
-        if (RoadmapPromptCatalog.UsesPromptOwnedNonImplementationPolicy(runtimePromptName))
+        switch (runtimePromptName)
         {
-            CreateNewEpicPromptSectionSet sections =
-                CreateNewEpicPromptSections.ForAuxiliaryArtifactPolicy(AllowAuxiliaryNonImplementationFiles);
-            var inputs = new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["allowAuxiliaryNonImplementationFiles"] =
-                    AllowAuxiliaryNonImplementationFiles ? "true" : "false",
-                ["createNewEpicSourceHash"] = Core.Prompts.Planning.CreateNewEpic.SourceHash,
-                ["sectionMode"] = sections.ActiveSectionSourceHashes.Count == 0 ? "omitted" : "strict",
-            };
-
-            foreach ((string sectionName, string sourceHash) in sections.ActiveSectionSourceHashes)
-            {
-                inputs[$"section.{sectionName}.sourceHash"] = sourceHash;
-            }
-
-            return TransitionPromptPolicyIdentity.Create(
-                "create-new-epic-prompt-owned-v1",
-                inputs);
+            case "CreateNewEpic":
+                return CreatePromptOwnedIdentity(
+                    "create-new-epic-prompt-owned-v1",
+                    "createNewEpicSourceHash",
+                    Core.Prompts.Planning.CreateNewEpic.SourceHash,
+                    CreateNewEpicPromptSections.ForAuxiliaryArtifactPolicy(
+                            AllowAuxiliaryNonImplementationFiles)
+                        .ActiveSectionSourceHashes);
+            case "RealignEpic":
+                return CreatePromptOwnedIdentity(
+                    "realign-epic-prompt-owned-v1",
+                    "realignEpicSourceHash",
+                    Core.Prompts.Planning.RealignEpic.SourceHash,
+                    RealignEpicPromptSections.ForAuxiliaryArtifactPolicy(
+                            AllowAuxiliaryNonImplementationFiles)
+                        .ActiveSectionSourceHashes);
+            case "ReimagineEpic":
+                return CreatePromptOwnedIdentity(
+                    "reimagine-epic-prompt-owned-v1",
+                    "reimagineEpicSourceHash",
+                    Core.Prompts.Planning.ReimagineEpic.SourceHash,
+                    ReimagineEpicPromptSections.ForAuxiliaryArtifactPolicy(
+                            AllowAuxiliaryNonImplementationFiles)
+                        .ActiveSectionSourceHashes);
+            case "GenerateMilestoneDeepDivesForEpic":
+                return CreatePromptOwnedIdentity(
+                    "generate-milestone-deep-dives-for-epic-prompt-owned-v1",
+                    "generateMilestoneDeepDivesForEpicSourceHash",
+                    Core.Prompts.Planning.GenerateMilestoneDeepDivesForEpic.SourceHash,
+                    GenerateMilestoneDeepDivesForEpicPromptSections.ForAuxiliaryArtifactPolicy(
+                            AllowAuxiliaryNonImplementationFiles)
+                        .ActiveSectionSourceHashes);
+            case "SplitEpic":
+                return CreatePromptOwnedIdentity(
+                    "split-epic-prompt-owned-v1",
+                    "splitEpicSourceHash",
+                    Core.Prompts.Planning.SplitEpic.SourceHash,
+                    SplitEpicPromptSections.ForAuxiliaryArtifactPolicy(
+                            AllowAuxiliaryNonImplementationFiles)
+                        .ActiveSectionSourceHashes);
         }
 
         return TransitionPromptPolicyIdentity.Create(
@@ -49,5 +71,27 @@ internal sealed record RoadmapRuntimePromptPolicy(
                 ["legacyImplementationFirstPromptPolicyHash"] =
                     RoadmapHash.Sha256(LegacyImplementationFirstPromptPolicy),
             });
+    }
+
+    private TransitionPromptPolicyIdentity CreatePromptOwnedIdentity(
+        string mode,
+        string promptSourceHashKey,
+        string promptSourceHash,
+        IReadOnlyDictionary<string, string> activeSectionSourceHashes)
+    {
+        var inputs = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["allowAuxiliaryNonImplementationFiles"] =
+                AllowAuxiliaryNonImplementationFiles ? "true" : "false",
+            [promptSourceHashKey] = promptSourceHash,
+            ["sectionMode"] = activeSectionSourceHashes.Count == 0 ? "omitted" : "strict",
+        };
+
+        foreach ((string sectionName, string sourceHash) in activeSectionSourceHashes)
+        {
+            inputs[$"section.{sectionName}.sourceHash"] = sourceHash;
+        }
+
+        return TransitionPromptPolicyIdentity.Create(mode, inputs);
     }
 }

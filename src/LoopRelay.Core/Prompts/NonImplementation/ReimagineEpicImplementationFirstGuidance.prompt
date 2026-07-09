@@ -1,0 +1,21 @@
+# ReimagineEpic Implementation-First Guidance
+
+ReimagineEpic is implementation-first because it replaces an obsolete active epic with a better implementation-bearing epic for the same audited strategic need.
+
+The sanctioned output is the replacement `.agents/epic.md` document.
+
+Replacing the epic is valid only because the EpicPreparationAudit disposition requires a better strategic artifact before downstream milestone expansion and execution can be safe.
+
+The strategic need and desired capability remain authoritative unless the audit explicitly justifies changing their boundary.
+
+The previous framing may be replaced, but the replacement must still be grounded in the audit, projection context, and repository-grounded capability needs supplied to the prompt.
+
+Full replacement may change title, framing, milestone roadmap, dependencies, assumptions, acceptance criteria, risks, non-goals, and capability boundaries when those changes are audit-supported.
+
+Every material redesign decision should trace to audit findings, projection constraints, or repository-grounded capability needs already present in the prompt inputs.
+
+Do not treat reimagination as permission for speculative architecture, open-ended design, or unrelated roadmap opportunity.
+
+The replacement epic should be complete enough for later milestone expansion and precise enough to constrain implementation.
+
+If the audit evidence cannot support a coherent replacement, output the documented `# Epic Reimagination Blocked` response.

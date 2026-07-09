@@ -136,6 +136,12 @@ If a milestone appears impossible to expand without changing the epic’s archit
 
 ---
 
+{generateMilestoneDeepDivesForEpicImplementationFirstGuidance}
+
+{generateMilestoneDeepDivesForEpicAuxiliaryArtifactLimits}
+
+---
+
 ## Milestone Deep Dive Definition
 
 A milestone deep dive is an implementation-planning specification for one milestone.

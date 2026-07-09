@@ -1,0 +1,21 @@
+# SplitEpic Implementation-First Guidance
+
+SplitEpic is implementation-first because it creates the machine-consumed split bundle that partitions one strategic opportunity into implementation-bearing child epics.
+
+The sanctioned output boundary is the split bundle consumed by the split transition.
+
+The bundle includes the split plan and `# FILE: .agents/epic-N.md` child epic sections required by the prompt contract.
+
+Child epic files are primary contracted outputs, not invalid auxiliary artifacts.
+
+The bundle is valid because it supplies capability partitioning, coverage proof, non-overlap evidence, sibling dependencies, split lineage input, and selected-child promotion input.
+
+Each child epic should follow the CreateNewEpic authoring standard at the concept level: complete strategic purpose, desired capability, repository grounding, scope, non-goals, assumptions, dependencies, constraints, acceptance criteria, risks, milestone roadmap, and implementation-ready completion signals.
+
+SplitEpic owns the capability partition.
+
+It must prove coverage of the original opportunity, prevent overlapping ownership, define sibling dependencies, and preserve selected-child promotion semantics.
+
+Splits are invalid when they merely divide planning phases, file areas, implementation layers, task lists, or work breakdowns.
+
+If the proposal cannot be decomposed into coherent capability-owning child epics, output the documented `# Split Epic Blocked` response.
