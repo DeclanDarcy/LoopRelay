@@ -1,13 +1,21 @@
 using System.Text.RegularExpressions;
 using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 
 namespace LoopRelay.Completion.Services.ArtifactStorage;
 
-public sealed partial class CompletionArtifacts(IArtifactStore _store, Repository _repository)
+public sealed partial class CompletionArtifacts(
+    IArtifactStore _store,
+    Repository _repository,
+    IExecutionEvidenceStore? executionEvidenceStore = null)
 {
+    private readonly IExecutionEvidenceStore _executionEvidenceStore =
+        executionEvidenceStore ?? new FileBackedExecutionEvidenceStore(_store, _repository);
+
     public Repository Repository => _repository;
 
     public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));
@@ -43,6 +51,11 @@ public sealed partial class CompletionArtifacts(IArtifactStore _store, Repositor
 
     public async Task<string> WriteNumberedEvidenceAsync(string evidenceDirectory, string stem, string content)
     {
+        if (IsExecutionEvidenceDirectory(evidenceDirectory))
+        {
+            return (await _executionEvidenceStore.WriteAsync(stem, content)).RelativePath;
+        }
+
         string path = await NextNumberedPathAsync(evidenceDirectory, stem);
         await WriteAsync(path, content);
         return path;
@@ -50,6 +63,11 @@ public sealed partial class CompletionArtifacts(IArtifactStore _store, Repositor
 
     public async Task<string> NextNumberedPathAsync(string evidenceDirectory, string stem)
     {
+        if (IsExecutionEvidenceDirectory(evidenceDirectory))
+        {
+            return await _executionEvidenceStore.NextPathAsync(stem);
+        }
+
         IReadOnlyList<string> existing = await ListAsync(evidenceDirectory, $"{stem}.*.md");
         int max = 0;
         foreach (string path in existing)
@@ -108,6 +126,12 @@ public sealed partial class CompletionArtifacts(IArtifactStore _store, Repositor
     }
 
     public string Resolve(string relativePath) => ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
+
+    private static bool IsExecutionEvidenceDirectory(string evidenceDirectory) =>
+        string.Equals(
+            evidenceDirectory.Replace('\\', '/').TrimEnd('/'),
+            FileBackedExecutionEvidenceStore.ExecutionEvidenceDirectory,
+            StringComparison.Ordinal);
 
     private static string RelativeSuffix(string sourceDirectory, string sourcePath)
     {

@@ -7,6 +7,7 @@ using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Completion.Services.Observers;
 using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models.Context;
@@ -20,14 +21,15 @@ public sealed class CompletionCertificationService(
     ICompletedEpicArchiveService _archiveService,
     CompletionCertificationPolicy? _policy = null,
     CompletionCertificationRouter? _router = null,
-    ICompletionObserver? _observer = null) : ICompletionCertificationService
+    ICompletionObserver? _observer = null,
+    IExecutionEvidenceStore? _executionEvidenceStore = null) : ICompletionCertificationService
 {
 
     public async Task<CompletionCertificationResult> CertifyPlanCompletionAsync(
         CompletionCertificationRequest request,
         CancellationToken cancellationToken = default)
     {
-        var artifacts = new ArtifactStorage.CompletionArtifacts(_store, request.Repository);
+        var artifacts = new ArtifactStorage.CompletionArtifacts(_store, request.Repository, _executionEvidenceStore);
         var contextBuilder = new CompletionPromptContextBuilder(artifacts);
         string? evaluationPath = null;
         try

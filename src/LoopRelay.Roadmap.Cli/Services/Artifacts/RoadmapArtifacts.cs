@@ -1,14 +1,22 @@
 using System.Text.RegularExpressions;
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
 
 namespace LoopRelay.Roadmap.Cli.Services.Artifacts;
 
-internal sealed partial class RoadmapArtifacts(IArtifactStore _store, Repository _repository)
+internal sealed partial class RoadmapArtifacts(
+    IArtifactStore _store,
+    Repository _repository,
+    IExecutionEvidenceStore? executionEvidenceStore = null)
 {
+    private readonly IExecutionEvidenceStore _executionEvidenceStore =
+        executionEvidenceStore ?? new FileBackedExecutionEvidenceStore(_store, _repository);
+
     public Repository Repository => _repository;
 
     public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));
@@ -73,6 +81,11 @@ internal sealed partial class RoadmapArtifacts(IArtifactStore _store, Repository
 
     public async Task<string> WriteNumberedEvidenceAsync(string evidenceDirectory, string stem, string content)
     {
+        if (IsExecutionEvidenceDirectory(evidenceDirectory))
+        {
+            return (await _executionEvidenceStore.WriteAsync(stem, content)).RelativePath;
+        }
+
         string path = await NextNumberedPathAsync(evidenceDirectory, stem);
         await WriteAsync(path, content);
         return path;
@@ -80,6 +93,11 @@ internal sealed partial class RoadmapArtifacts(IArtifactStore _store, Repository
 
     public async Task<string> NextNumberedPathAsync(string evidenceDirectory, string stem)
     {
+        if (IsExecutionEvidenceDirectory(evidenceDirectory))
+        {
+            return await _executionEvidenceStore.NextPathAsync(stem);
+        }
+
         IReadOnlyList<string> existing = await ListAsync(evidenceDirectory, $"{stem}.*.md");
         int max = 0;
         foreach (string path in existing)
@@ -106,6 +124,12 @@ internal sealed partial class RoadmapArtifacts(IArtifactStore _store, Repository
     }
 
     public string Resolve(string relativePath) => ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
+
+    private static bool IsExecutionEvidenceDirectory(string evidenceDirectory) =>
+        string.Equals(
+            evidenceDirectory.Replace('\\', '/').TrimEnd('/'),
+            FileBackedExecutionEvidenceStore.ExecutionEvidenceDirectory,
+            StringComparison.Ordinal);
 
     [GeneratedRegex(@"\.(?<number>\d{4})\.md$", RegexOptions.CultureInvariant)]
     private static partial Regex NumberedEvidenceRegex();

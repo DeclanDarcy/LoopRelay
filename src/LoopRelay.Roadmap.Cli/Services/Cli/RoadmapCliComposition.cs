@@ -5,7 +5,9 @@ using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Completion.Services.Certification;
 using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Infrastructure.Services.Diagnostics;
 using LoopRelay.Orchestration.Services.Hitl;
@@ -79,7 +81,8 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             tokenEstimator,
             new ConsoleInputWaitProgressRenderer(console));
 
-        var artifacts = new RoadmapArtifacts(store, repository);
+        IExecutionEvidenceStore executionEvidence = new FileBackedExecutionEvidenceStore(store, repository);
+        var artifacts = new RoadmapArtifacts(store, repository, executionEvidence);
         var repositoryArtifacts = new RepositoryArtifactStore(store, repository);
         var nonImplementationLedger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
         var hitlRequestCapture = new ExplicitHitlNonImplementationRequestCaptureService(

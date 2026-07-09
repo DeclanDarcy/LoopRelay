@@ -11,8 +11,10 @@ using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Completion.Services.Certification;
 using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Infrastructure.Services.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
@@ -77,6 +79,7 @@ internal sealed class LoopCliComposition : IAsyncDisposable
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
         ILoopHistoryStore loopHistory = new FileBackedLoopHistoryStore(store, repository);
+        IExecutionEvidenceStore executionEvidence = new FileBackedExecutionEvidenceStore(store, repository);
         var artifacts = new LoopArtifacts(store, repository, loopHistory);
         var repositoryArtifacts = new RepositoryArtifactStore(store, repository);
         var nonImplementationLedger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
@@ -133,7 +136,8 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             projectionService,
             completionPromptRunner,
             completionArchive,
-            _observer: completionObserver);
+            _observer: completionObserver,
+            _executionEvidenceStore: executionEvidence);
         var nonImplementationInsightSynthesizer = new NonImplementationInsightSynthesizer(
             nonImplementationLedger,
             nonImplementationReviewRunner,

@@ -23,17 +23,17 @@ Move current behavior behind semantic domain contracts while files remain canoni
 
 - [x] Wrap `DecisionLedgerStore`, `RoadmapStateStore`, `ArtifactLifecycleStore`, `SplitFamilyStore`, `ExecutionPreparationManifestStore`, `SelectionProvenanceManifestStore`, `ProjectionManifestStore`, and `TransitionJournalStore` behind interfaces.
 - [x] Extract loop history behavior out of `LoopArtifacts` into a history store/facade while preserving live-file methods.
-- [ ] Extract numbered execution evidence behavior out of `RoadmapArtifacts.WriteNumberedEvidenceAsync` and `CompletionArtifacts.WriteNumberedEvidenceAsync`.
-- [ ] Update `RoadmapCliComposition` and Main CLI composition to construct contract-based services.
+- [x] Extract numbered execution evidence behavior out of `RoadmapArtifacts.WriteNumberedEvidenceAsync` and `CompletionArtifacts.WriteNumberedEvidenceAsync`.
+- [x] Update `RoadmapCliComposition` and Main CLI composition to construct contract-based services.
   - [x] Roadmap CLI composition constructs file-backed roadmap stores behind contract-typed variables.
   - [x] Main CLI composition constructs the file-backed loop history store behind a contract-typed variable.
-  - [ ] Main CLI composition constructs execution evidence stores behind contract-typed variables.
+  - [x] Main CLI composition constructs execution evidence stores behind contract-typed variables.
 
 ## Tests
 
-- [ ] Sequence allocation for decisions, handoffs, deltas, and evidence.
+- [x] Sequence allocation for decisions, handoffs, deltas, and evidence.
   - [x] Loop history sequence allocation for decisions, handoffs, and deltas.
-  - [ ] Execution evidence sequence allocation.
+  - [x] Execution evidence sequence allocation.
 - [x] Live-first read for decisions and handoffs.
 - [ ] Strict JSON malformed behavior.
 - [ ] Empty-on-malformed execution/selection manifest behavior.
