@@ -38,7 +38,7 @@ Move current behavior behind semantic domain contracts while files remain canoni
 - [x] Strict JSON malformed behavior.
 - [x] Empty-on-malformed execution/selection manifest behavior.
 - [x] Split family legacy markdown migration.
-- [ ] Journal started/completed/failed append compatibility.
+- [x] Journal started/completed/failed append compatibility.
 
 ## Exit Criteria
 
