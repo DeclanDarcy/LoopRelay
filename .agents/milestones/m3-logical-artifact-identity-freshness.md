@@ -6,11 +6,11 @@ Resolve content and hashes by logical repo-relative path independent of physical
 
 ## Implementation
 
-- [ ] Add `LogicalArtifactDescriptor`, `LogicalArtifactContent`, and `LogicalArtifactResolutionResult`.
-- [ ] Add resolver providers for retained filesystem files and file-backed migrated domains.
-- [ ] Add canonical hash service using retained file bytes or canonical export-equivalent migrated content.
+- [x] Add `LogicalArtifactDescriptor`, `LogicalArtifactContent`, and `LogicalArtifactResolutionResult`.
+- [x] Add resolver providers for retained filesystem files and file-backed migrated domains.
+- [x] Add canonical hash service using retained file bytes or canonical export-equivalent migrated content.
 - [ ] Update freshness and prompt consumers to use logical resolution for any path that can become SQLite-backed.
-- [ ] Keep missing-path behavior domain-specific.
+- [x] Keep missing-path behavior domain-specific.
 
 ## Implementation Constraints
 
@@ -28,9 +28,9 @@ Resolve content and hashes by logical repo-relative path independent of physical
 
 ## Tests
 
-- [ ] Retained spec, active epic, plan, operational context, live decision, and live handoff resolve from disk.
-- [ ] Historical decision/handoff/delta paths resolve after import.
-- [ ] Execution evidence paths resolve from file-backed evidence store.
+- [x] Retained spec, active epic, plan, operational context, live decision, and live handoff resolve from disk.
+- [x] Historical decision/handoff/delta paths resolve after import.
+- [x] Execution evidence paths resolve from file-backed evidence store.
 - [ ] Hash drift in retained and migrated domains reports stale.
 - [ ] Missing migrated evidence reports stale, invalid, or blocked according to consumer behavior.
 

@@ -25,6 +25,25 @@ public sealed partial class FileBackedExecutionEvidenceStore(
         return path;
     }
 
+    public async Task<ExecutionEvidenceRecord?> ReadAsync(string relativePath)
+    {
+        string normalizedPath = relativePath.Replace('\\', '/').TrimStart('/');
+        Match match = ExecutionEvidencePathRegex().Match(normalizedPath);
+        if (!match.Success || !int.TryParse(match.Groups["number"].Value, out int sequence) || sequence <= 0)
+        {
+            return null;
+        }
+
+        string? content = await _store.ReadAsync(Resolve(normalizedPath));
+        return content is null
+            ? null
+            : new ExecutionEvidenceRecord(
+                match.Groups["stem"].Value,
+                sequence,
+                normalizedPath,
+                content);
+    }
+
     private async Task<(int Sequence, string Path)> NextAsync(string stem)
     {
         IReadOnlyList<string> files = await _store.ListAsync(
@@ -49,4 +68,7 @@ public sealed partial class FileBackedExecutionEvidenceStore(
 
     [GeneratedRegex(@"\.(?<number>\d{4})\.md$", RegexOptions.CultureInvariant)]
     private static partial Regex NumberedEvidenceRegex();
+
+    [GeneratedRegex(@"^\.agents/evidence/execution/(?<stem>.+)\.(?<number>\d{4})\.md$", RegexOptions.CultureInvariant)]
+    private static partial Regex ExecutionEvidencePathRegex();
 }

@@ -11,4 +11,6 @@ public interface IExecutionEvidenceStore
     Task<ExecutionEvidenceRecord> WriteAsync(string stem, string content);
 
     Task<string> NextPathAsync(string stem);
+
+    Task<ExecutionEvidenceRecord?> ReadAsync(string relativePath);
 }
