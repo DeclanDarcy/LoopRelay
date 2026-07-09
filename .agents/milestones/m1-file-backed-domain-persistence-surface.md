@@ -35,7 +35,7 @@ Move current behavior behind semantic domain contracts while files remain canoni
   - [x] Loop history sequence allocation for decisions, handoffs, and deltas.
   - [x] Execution evidence sequence allocation.
 - [x] Live-first read for decisions and handoffs.
-- [ ] Strict JSON malformed behavior.
+- [x] Strict JSON malformed behavior.
 - [ ] Empty-on-malformed execution/selection manifest behavior.
 - [ ] Split family legacy markdown migration.
 - [ ] Journal started/completed/failed append compatibility.
