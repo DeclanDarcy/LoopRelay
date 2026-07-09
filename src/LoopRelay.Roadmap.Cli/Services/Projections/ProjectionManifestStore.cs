@@ -58,7 +58,7 @@ internal sealed class ProjectionManifestStore(RoadmapArtifacts _artifacts) : IPr
         await SaveAsync(manifest.Upsert(entry));
     }
 
-    private static ProjectionManifest ParseLegacyMarkdown(string content)
+    internal static ProjectionManifest ParseLegacyMarkdown(string content)
     {
         MarkdownTableParser.ValidateTables(content);
         var entries = new List<ProjectionManifestEntry>();

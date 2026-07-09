@@ -87,7 +87,7 @@ internal sealed partial class DecisionLedgerStore(RoadmapArtifacts _artifacts) :
         await _structuredStore.SaveAsync(document);
     }
 
-    private static DecisionLedgerPersistenceDocument ParseLegacyMarkdown(string content)
+    internal static DecisionLedgerPersistenceDocument ParseLegacyMarkdown(string content)
     {
         MarkdownTableParser.ValidateTables(content);
         var entries = new List<DecisionLedgerEntry>();

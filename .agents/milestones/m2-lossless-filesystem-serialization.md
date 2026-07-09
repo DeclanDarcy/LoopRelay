@@ -6,10 +6,10 @@ Make filesystem import/export a first-class capability for every migrated domain
 
 ## Implementation
 
-- [ ] Add immutable snapshot models for every migrated domain.
-- [ ] Add domain importers from current filesystem shapes.
-- [ ] Add deterministic domain exporters to current filesystem shapes.
-- [ ] Add workspace snapshot aggregate for all domains.
+- [x] Add immutable snapshot models for every migrated domain.
+- [x] Add domain importers from current filesystem shapes.
+- [x] Add deterministic domain exporters to current filesystem shapes.
+- [x] Add workspace snapshot aggregate for all domains.
 - [ ] Add validation for duplicate, malformed, missing, partial, and invalid sequence state.
 
 ## Implementation Constraints
@@ -22,15 +22,15 @@ Make filesystem import/export a first-class capability for every migrated domain
 
 ## Tests
 
-- [ ] Full `.agents` tree import to workspace snapshot.
-- [ ] Snapshot export to clean `.agents` tree.
-- [ ] Export/import/export stability for stable domains.
+- [x] Full `.agents` tree import to workspace snapshot.
+- [x] Snapshot export to clean `.agents` tree.
+- [x] Export/import/export stability for stable domains.
 - [ ] Duplicate `DNNNN`, duplicate `NNNN`, duplicate lifecycle path, duplicate runtime prompt, duplicate family ID.
-- [ ] Optional missing execution/selection manifests load empty.
+- [x] Optional missing execution/selection manifests load empty.
 - [ ] Legacy markdown-only fixtures for stores that currently support legacy migration.
 
 ## Exit Criteria
 
 - [ ] Every migrated domain supports import and export.
 - [ ] Stable domains are byte-stable after filesystem to snapshot to filesystem.
-- [ ] Identity-preserving markdown histories and evidence preserve path, sequence, and body.
+- [x] Identity-preserving markdown histories and evidence preserve path, sequence, and body.

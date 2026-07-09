@@ -63,7 +63,7 @@ internal sealed class ArtifactLifecycleStore(RoadmapArtifacts _artifacts) : IArt
         await _structuredStore.SaveAsync(persisted);
     }
 
-    private static IReadOnlyList<ArtifactLifecycleEntry> ParseLegacyMarkdown(string content)
+    internal static IReadOnlyList<ArtifactLifecycleEntry> ParseLegacyMarkdown(string content)
     {
         MarkdownTableParser.ValidateTables(content);
         var entries = new List<ArtifactLifecycleEntry>();

@@ -66,7 +66,7 @@ internal sealed class SplitFamilyStore(RoadmapArtifacts _artifacts) : ISplitFami
         return false;
     }
 
-    private SplitFamily ParseLegacyMarkdown(string path, string content)
+    internal static SplitFamily ParseLegacyMarkdown(string path, string content)
     {
         MarkdownTableParser.ValidateTables(content);
         IReadOnlyDictionary<string, string> fields = MarkdownTableParser.ParseFieldTableStrict(content, "# Split Family");
@@ -138,7 +138,7 @@ internal sealed class SplitFamilyStore(RoadmapArtifacts _artifacts) : ISplitFami
             ? parsed
             : null;
 
-    private static string FamilyIdFromPath(string path)
+    internal static string FamilyIdFromPath(string path)
     {
         string fileName = Path.GetFileNameWithoutExtension(path);
         const string prefix = "split-family-";

@@ -58,7 +58,7 @@ internal sealed partial class RoadmapStateStore(RoadmapArtifacts _artifacts) : I
         return migrated;
     }
 
-    private static RoadmapStateDocument ParseLegacyMarkdown(string content)
+    internal static RoadmapStateDocument ParseLegacyMarkdown(string content)
     {
         MarkdownTableParser.ValidateTables(content);
 
