@@ -14,12 +14,26 @@ Provide full and domain-scoped synchronization between canonical SQLite state an
 - [ ] Detect stale exports and external edit conflicts before overwrite.
 - [ ] Integrate `.agents` submodule publishing with fresh export preflight.
 
+## Implementation Constraints
+
+- Full export/import/export is stable by domain rules.
+- Selective sync must leave unrelated domains unchanged.
+- Stale/conflicting exports are blocked before overwrite.
+- Older filesystem-only state imports without losing legacy-supported data.
+- Publisher integration must verify fresh export before publishing.
+
 ## Conflict Rules
 
 - [ ] If database changed and export changed since last sync, report conflict.
 - [ ] If export is stale and database is newer, block import unless explicit reconciliation is requested.
 - [ ] If scoped sync would leave unresolved cross-domain references, fail or require dependent domains.
 - [ ] Unsupported schema or export versions fail safely.
+
+## Open Questions
+
+- What explicit conflict resolution commands should exist after sync detects divergent database/export edits?
+- Will older CLIs need to operate directly against migrated workspaces, or only against generated filesystem exports?
+- Are any external scripts or user workflows known to inspect `.agents` JSONL/JSON/markdown directly?
 
 ## Code Impact
 

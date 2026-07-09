@@ -21,6 +21,14 @@ Coordinate multi-domain workflow writes across SQLite stores and retained filesy
 - [ ] Ensure journal started/completed/failed records reflect actual outcomes.
 - [ ] Keep transactions out of agent execution time; only persistence phases are transactional.
 
+## Implementation Constraints
+
+- Do not claim distributed transactions across SQLite and filesystem.
+- Use staging, commit ordering, markers, and recovery classification.
+- Journal started records must not be lost when a workflow begins; completed/failed records must reflect outcome.
+- Integrity detects orphaned evidence/history, missing logical paths, duplicates, invalid archive references, stale sync metadata, and sequence conflicts.
+- Do not hold database transactions open during long-running agent or prompt work.
+
 ## Integrity Rules
 
 Detect:

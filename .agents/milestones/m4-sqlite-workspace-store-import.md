@@ -13,6 +13,13 @@ Introduce SQLite initialization, versioning, integrity validation, transactions,
 - [ ] Compare imported database snapshot to filesystem snapshot before classifying as valid.
 - [ ] Add `storage-init` and `storage-import` command behavior.
 
+## Implementation Constraints
+
+- Workflows remain file-backed after import.
+- Import is all-or-nothing and idempotent.
+- Integrity validation distinguishes valid empty/imported state, corrupt state, unsupported schema, and incompatible partial state.
+- Existing file-backed workflow tests must still pass after database import.
+
 ## Tests
 
 - [ ] Missing database initializes to valid empty state.

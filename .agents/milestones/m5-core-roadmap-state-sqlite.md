@@ -21,6 +21,14 @@ Make decision ledger, roadmap state, artifact lifecycle, and split lineage SQLit
   - [ ] `.agents/artifacts/lifecycle.json`
   - [ ] `.agents/splits/split-family-*.json`
 
+## Implementation Constraints
+
+- Migrate decision ledger, roadmap state, lifecycle, and split lineage only.
+- Decision append and ID allocation occur inside a database transaction.
+- Lifecycle path uniqueness remains case-insensitive.
+- Split lookup by child path must not scan stale files in SQLite mode.
+- Delete/regenerate export tests prove database authority.
+
 ## Code Impact
 
 - [ ] `RoadmapTransitionPersistence.CaptureSummaryAsync` must use canonical stores for last decision ID and split family count.

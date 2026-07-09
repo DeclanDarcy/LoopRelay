@@ -18,6 +18,14 @@ Move `.agents/evidence/execution/*` to SQLite while preserving path-compatible e
   - [ ] completion context builders
 - [ ] Ensure consumers pass when exported evidence files are deleted but SQLite rows exist.
 
+## Implementation Constraints
+
+- Only `.agents/evidence/execution/*` migrates.
+- Evidence body, logical path, stem, suffix, hash, and metadata are stored together.
+- Roadmap and completion evidence writers use the same domain store.
+- Prompt context, unblock planner, and completion evaluation pass with exported evidence removed.
+- Archive recovery remains pending until M10.
+
 ## Tests
 
 - [ ] Existing stem `execution-trust-posture.0003.md` imports and next write allocates `0004`.

@@ -1,8 +1,10 @@
 # SQLite Persistence Plan Details
 
-This file is an implementation addendum for `.agents/plan.md`. It captures detailed facts from `.agents/specs/roadmap.md`, `.agents/specs/audit.md`, and the M01-M13 deep-dives that are necessary to fill meaningful gaps in the condensed plan.
+This file is an implementation addendum for `.agents/plan.md`. It captures cross-cutting facts from `.agents/specs/roadmap.md`, `.agents/specs/audit.md`, and the M01-M13 deep-dives that are necessary to fill meaningful gaps in the condensed plan.
 
 It should be treated as supporting detail, not a replacement for the plan. When this file and the plan differ, prefer the plan for settled roadmap decisions and use this file for implementation constraints, current behavior, diagnostics, tests, and unresolved questions.
+
+Milestone-scoped constraints belong in `.agents/milestones/m*.md`. Duplicate shared requirements there when a milestone needs them.
 
 ## Gap 1: Current Filesystem Behavior Is a Contract
 
@@ -483,111 +485,7 @@ Required detections:
 
 Mutation guard tests must compare pre/post hashes of the canonical database and export tree. Optional repair or re-export modes must be explicit and separate from default verification.
 
-## Gap 10: Milestone-Specific Implementation Constraints
-
-### M01: File-Backed Domain Persistence Surface
-
-- No SQLite schema, database, import command, or export command.
-- Files remain canonical.
-- Domain contracts return semantic results, not raw file lists.
-- Preserve sequence collisions, live-first fallback, strict JSON failures, and provenance empty-on-malformed behavior.
-- Conformance tests freeze file-backed behavior for all migrated domains.
-
-### M02: Lossless Filesystem Serialization
-
-- Serializers are snapshot/interchange components, not runtime authority.
-- Import validates malformed, missing, partial, duplicate, and out-of-order exports before producing certified snapshots.
-- Export overwrites only explicit export scope.
-- Filesystem -> snapshot -> filesystem must be byte-stable for stable domains.
-- Ambiguous `.agents/core/0*.md` and `.agents/evals/*.md` must not be migrated by inference.
-
-### M03: Logical Artifact Identity and Freshness
-
-- Resolver classifies and dispatches; domain stores parse domain identities.
-- Hashing migrated records uses canonical export-equivalent content unless explicitly overridden.
-- Freshness results in file-backed mode must match current behavior.
-- Missing migrated artifacts fail explicitly as stale/invalid/blocked, never as silent file-read nulls.
-
-### M04: SQLite Workspace Store and Importable Database State
-
-- Workflows remain file-backed after import.
-- Import is all-or-nothing and idempotent.
-- Integrity validation distinguishes valid empty/imported state, corrupt state, unsupported schema, and incompatible partial state.
-- Existing file-backed workflow tests must still pass after database import.
-
-### M05: Core Roadmap State in SQLite
-
-- Migrates decision ledger, roadmap state, lifecycle, and split lineage only.
-- Decision append and ID allocation occur inside a database transaction.
-- Lifecycle path uniqueness remains case-insensitive.
-- Split lookup by child path must not scan stale files in SQLite mode.
-- Delete/regenerate export tests prove database authority.
-
-### M06: Provenance and Projection Metadata in SQLite
-
-- Migrates execution preparation provenance, selection provenance, and projection manifest only.
-- Projection bodies remain filesystem-backed.
-- Metadata writes occur after referenced artifacts exist or are explicitly recorded as missing/stale.
-- Malformed exported provenance loads empty only at import/compatibility boundary.
-- Roadmap and projections projection-manifest behavior must be consolidated or conformance-tested.
-
-### M07: Transition Journal in SQLite
-
-- No workflow-level transaction atomicity yet.
-- Journal rows are append-only.
-- Append assigns monotonic order independent of filesystem order.
-- Started/completed/failed records sharing correlation ID remain queryable together.
-- JSONL export is debugging/interchange, not runtime authority.
-
-### M08: Loop Histories in SQLite
-
-- Live decisions, live handoff, and live operational delta stay on disk.
-- History writes allocate sequence inside SQLite transaction/constraint behavior.
-- Rotation must not delete live files until SQLite history write succeeds.
-- Latest fallback is numeric sequence order.
-- Archive integration is still pending until M10.
-
-### M09: Execution Evidence in SQLite
-
-- Only `.agents/evidence/execution/*` migrates.
-- Evidence body, logical path, stem, suffix, hash, and metadata are stored together.
-- Roadmap and completion evidence writers use the same domain store.
-- Prompt context, unblock planner, and completion evaluation pass with exported evidence removed.
-- Archive recovery remains pending until M10.
-
-### M10: Completed Epic Archives
-
-- Association must select migrated records from persisted state/journal/paths deterministically.
-- Missing migrated record fails archive; do not silently complete.
-- Materialize archive into deterministic filesystem form.
-- Validate and stage before destructive retained-file moves.
-- Archive import/recovery must not pollute active state.
-
-### M11: Bidirectional Workspace Synchronization
-
-- Full export/import/export is stable by domain rules.
-- Selective sync must leave unrelated domains unchanged.
-- Stale/conflicting exports are blocked before overwrite.
-- Older filesystem-only state imports without losing legacy-supported data.
-- Publisher integration must verify fresh export before publishing.
-
-### M12: Transactional Workflow Persistence and Recovery
-
-- Do not claim distributed transactions across SQLite and filesystem.
-- Use staging, commit ordering, markers, and recovery classification.
-- Journal started record must not be lost when a workflow begins; completed/failed must reflect outcome.
-- Integrity detects orphaned evidence/history, missing logical paths, duplicates, invalid archive references, stale sync metadata, and sequence conflicts.
-- No long-running agent/prompt work inside DB transactions.
-
-### M13: Storage Compatibility and Verification Mode
-
-- No new architecture or persistence domains.
-- Verification composes existing validators and sync services, not duplicate parsers.
-- Default verify is read-only; temp workspaces are used for round-trip checks.
-- CLI/API result maps deterministically to verification categories.
-- Failure fixtures cover every required detection class.
-
-## Gap 11: Existing and New Test Surface
+## Gap 10: Existing and New Test Surface
 
 Existing tests directly covering the split boundary:
 
@@ -648,16 +546,10 @@ New test fixtures and scenarios needed:
 - Clarification fixtures for `.agents/core/0*.md` versus `.agents/ctx/0*.md`.
 - Clarification fixtures for `.agents/evals/*.md` versus `.agents/evidence/evaluations/*.md`.
 
-## Gap 12: Open Questions That Remain Implementation Blockers
+## Gap 11: Cross-Cutting Open Questions That Remain Implementation Blockers
 
-The plan resolves some audit questions, such as the database path and retained status of several implemented artifacts. These questions still need explicit implementation decisions before or during the relevant milestones:
+The plan resolves some audit questions, such as the database path and retained status of several implemented artifacts. These questions still need explicit implementation decisions because they affect multiple milestones or future roadmap scope:
 
 - Should migrated freshness preserve byte-identical hashes of current canonical JSON exports, or intentionally reset baselines with a migration diagnostic?
 - What timestamp/generated-time fields are non-canonical for byte-stability tests?
-- What JSONL byte-compatibility level is required for external transition journal tools beyond deterministic logical content?
-- What exact archive export layout should materialize DB-backed histories and evidence while preserving existing archive discovery?
-- What explicit conflict resolution commands should exist after sync detects divergent database/export edits?
-- Will older CLIs need to operate directly against migrated workspaces, or only against generated filesystem exports?
-- Are any external scripts or user workflows known to inspect `.agents` JSONL/JSON/markdown directly?
 - Is SQLite limited to the listed machine-managed domains, or will future roadmaps migrate projection bodies/project context?
-

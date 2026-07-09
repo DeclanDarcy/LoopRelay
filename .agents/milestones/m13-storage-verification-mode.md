@@ -13,6 +13,14 @@ Expose executable verification that proves the database, filesystem exports, ret
 - [ ] Expose `storage-verify`.
 - [ ] Add optional `--full-roundtrip` for slower export/import/export checks.
 
+## Implementation Constraints
+
+- Do not introduce new architecture or persistence domains.
+- Verification composes existing validators and sync services, not duplicate parsers.
+- Default verify is read-only; temp workspaces are used for round-trip checks.
+- CLI/API results map deterministically to verification categories.
+- Failure fixtures cover every required detection class.
+
 ## Verification Findings
 
 Verification reports:

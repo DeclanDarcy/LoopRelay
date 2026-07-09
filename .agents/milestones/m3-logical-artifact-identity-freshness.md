@@ -12,6 +12,13 @@ Resolve content and hashes by logical repo-relative path independent of physical
 - [ ] Update freshness and prompt consumers to use logical resolution for any path that can become SQLite-backed.
 - [ ] Keep missing-path behavior domain-specific.
 
+## Implementation Constraints
+
+- Resolver classifies and dispatches; domain stores parse domain identities.
+- Hashing migrated records uses canonical export-equivalent content unless explicitly overridden.
+- Freshness results in file-backed mode must match current behavior.
+- Missing migrated artifacts fail explicitly as stale, invalid, or blocked, never as silent file-read nulls.
+
 ## Code Impact
 
 - [ ] Replace direct `RoadmapArtifacts.ReadAsync(path)` hashing in `TransitionInputAccumulator`.

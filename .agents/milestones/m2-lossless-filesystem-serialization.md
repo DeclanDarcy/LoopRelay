@@ -12,6 +12,14 @@ Make filesystem import/export a first-class capability for every migrated domain
 - [ ] Add workspace snapshot aggregate for all domains.
 - [ ] Add validation for duplicate, malformed, missing, partial, and invalid sequence state.
 
+## Implementation Constraints
+
+- Serializers are snapshot/interchange components, not runtime authority.
+- Import validates malformed, missing, partial, duplicate, and out-of-order exports before producing certified snapshots.
+- Export overwrites only explicit export scope.
+- Filesystem -> snapshot -> filesystem must be byte-stable for stable domains.
+- Ambiguous `.agents/core/0*.md` and `.agents/evals/*.md` must not be migrated by inference.
+
 ## Tests
 
 - [ ] Full `.agents` tree import to workspace snapshot.

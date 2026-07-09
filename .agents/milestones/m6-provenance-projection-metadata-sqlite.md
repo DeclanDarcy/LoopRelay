@@ -13,6 +13,14 @@ Make execution preparation provenance, selection provenance, and projection mani
 - [ ] Keep projection body markdown files on disk.
 - [ ] Preserve empty-on-malformed compatibility only at import/export boundaries for execution and selection manifests.
 
+## Implementation Constraints
+
+- Migrate execution preparation provenance, selection provenance, and projection manifest only.
+- Projection bodies remain filesystem-backed.
+- Metadata writes occur after referenced artifacts exist or are explicitly recorded as missing/stale.
+- Malformed exported provenance loads empty only at import/compatibility boundary.
+- Roadmap and projections projection-manifest behavior must be consolidated or conformance-tested.
+
 ## Code Impact
 
 - [ ] `ExecutionPreparationProvenanceService` reads/writes SQLite metadata and hashes retained inputs through the logical hasher.

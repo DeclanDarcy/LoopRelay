@@ -12,6 +12,18 @@ Make transition chronology SQLite-canonical while preserving ordered JSONL impor
 - [ ] Export deterministic JSONL ordered by `event_order`.
 - [ ] Route transition runner and state-machine journal writes through the SQLite store.
 
+## Implementation Constraints
+
+- Do not add workflow-level transaction atomicity yet.
+- Journal rows are append-only.
+- Append assigns monotonic order independent of filesystem order.
+- Started, completed, and failed records sharing a correlation ID remain queryable together.
+- JSONL export is debugging/interchange, not runtime authority.
+
+## Open Questions
+
+- What JSONL byte-compatibility level is required for external transition journal tools beyond deterministic logical content?
+
 ## Tests
 
 - [ ] Started/completed/failed event order is stable.

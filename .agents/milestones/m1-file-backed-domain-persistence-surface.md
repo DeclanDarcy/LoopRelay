@@ -12,6 +12,13 @@ Move current behavior behind semantic domain contracts while files remain canoni
 - [ ] Keep retained live file reads/writes as file operations.
 - [ ] Add conformance tests that freeze current behavior.
 
+## Implementation Constraints
+
+- Files remain canonical; do not add SQLite schema, database behavior, import commands, or export commands in this milestone.
+- Domain contracts return semantic results, not raw file lists.
+- Preserve sequence collisions, live-first fallback, strict JSON failures, and provenance empty-on-malformed behavior.
+- Conformance tests freeze file-backed behavior for all migrated domains.
+
 ## Code Impact
 
 - [ ] Wrap `DecisionLedgerStore`, `RoadmapStateStore`, `ArtifactLifecycleStore`, `SplitFamilyStore`, `ExecutionPreparationManifestStore`, `SelectionProvenanceManifestStore`, `ProjectionManifestStore`, and `TransitionJournalStore` behind interfaces.

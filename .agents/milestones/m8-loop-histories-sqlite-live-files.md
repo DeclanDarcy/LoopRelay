@@ -16,6 +16,14 @@ Move historical decisions, handoffs, and operational deltas to SQLite while reta
   - [ ] keep live file when history write fails.
 - [ ] Export/import numbered markdown histories.
 
+## Implementation Constraints
+
+- Live decisions, live handoff, and live operational delta stay on disk.
+- History writes allocate sequence inside SQLite transaction/constraint behavior.
+- Rotation must not delete live files until SQLite history write succeeds.
+- Latest fallback is numeric sequence order.
+- Archive integration is still pending until M10.
+
 ## Tests
 
 - [ ] Decision proposal writes live decisions file and SQLite `decisions.NNNN.md` history.
