@@ -6,7 +6,10 @@ using LoopRelay.Orchestration.Models;
 namespace LoopRelay.Orchestration.Services;
 
 /// <summary>
-/// Persists the CLI loop's decision-session resume state at <c>{repo}/.LoopRelay/decision-session.json</c>.
+/// Legacy file-backed decision-session resume store at <c>{repo}/.LoopRelay/decision-session.json</c>.
+/// The loop CLI uses SQLite as its canonical runtime store; this type is retained for compatibility with
+/// existing legacy state and focused file-store tests.
+///
 /// Fail-open in the telemetry sense: no read/write/clear failure may ever break a turn or the loop — failures
 /// surface only through <paramref name="onWarning"/> (each CLI passes its console's Warn; ILoopConsole is
 /// internal and duplicated per CLI, so this shared type takes a callback instead). Creating the directory also

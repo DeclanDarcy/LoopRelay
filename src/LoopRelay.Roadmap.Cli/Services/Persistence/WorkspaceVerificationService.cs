@@ -1,10 +1,13 @@
 using System.Security.Cryptography;
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using LoopRelay.Roadmap.Cli;
 using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
 using LoopRelay.Roadmap.Cli.Models.Execution;
@@ -12,6 +15,7 @@ using LoopRelay.Roadmap.Cli.Models.RoadmapState;
 using LoopRelay.Roadmap.Cli.Models.Transitions;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
+using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Roadmap.Cli.Services.Persistence;
 
@@ -149,6 +153,7 @@ internal sealed class WorkspaceVerificationService(
 
         await AddSyncFindingsAsync(artifacts, domains, canonicalSnapshot, exportSnapshot, findings, cancellationToken);
         await AddMissingExportFindingsAsync(artifacts, domains, canonicalSnapshot, findings);
+        await AddRuntimePersistenceFindingsAsync(artifacts.Repository, findings, cancellationToken);
         await AddUnresolvedPathFindingsAsync(artifacts, findings, cancellationToken);
         await AddCrossDomainIntegrityFindingsAsync(artifacts, canonicalSnapshot, findings, cancellationToken);
         await AddArchiveFindingsAsync(artifacts, findings, cancellationToken);
@@ -263,6 +268,142 @@ internal sealed class WorkspaceVerificationService(
                         "exported file exists",
                         "Run storage-export for the affected domain."));
                 }
+            }
+        }
+    }
+
+    private static async Task AddRuntimePersistenceFindingsAsync(
+        Repository repository,
+        List<WorkspaceVerificationFinding> findings,
+        CancellationToken cancellationToken)
+    {
+        string databasePath = WorkspaceDatabaseLocator.Resolve(repository);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+
+        bool hasCanonicalResume = false;
+        if (await TableExistsAsync(connection, "decision_session_resume", cancellationToken))
+        {
+            string? resumeJson = await ScalarStringAsync(
+                connection,
+                "SELECT document_json FROM decision_session_resume WHERE id = 1;",
+                cancellationToken);
+            if (!string.IsNullOrWhiteSpace(resumeJson))
+            {
+                hasCanonicalResume = true;
+                if (!IsValidDecisionResumeJson(resumeJson))
+                {
+                    findings.Add(Finding(
+                        WorkspaceVerificationFindingKind.CorruptDomain,
+                        "runtime-decision-resume",
+                        "decision_session_resume",
+                        "resume-state-schema",
+                        "invalid",
+                        "schemaVersion=1 with non-empty threadId",
+                        "Clear the decision resume state or rerun the loop to repersist it."));
+                }
+            }
+        }
+
+        string legacyResumePath = Path.Combine(repository.Path, ".LoopRelay", "decision-session.json");
+        if (hasCanonicalResume && File.Exists(legacyResumePath))
+        {
+            findings.Add(Finding(
+                WorkspaceVerificationFindingKind.Conflict,
+                "runtime-decision-resume",
+                legacyResumePath,
+                "legacy-file-authority",
+                "legacy file exists beside canonical SQLite state",
+                "SQLite is the only canonical decision resume store",
+                "Delete the legacy decision-session.json file after confirming SQLite resume state is present."));
+        }
+
+        if (!await TableExistsAsync(connection, "session_telemetry_events", cancellationToken))
+        {
+            return;
+        }
+
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT event_id, recorded_at, document_json, content_hash
+            FROM session_telemetry_events
+            ORDER BY event_id;
+            """;
+        long previousEventId = 0;
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            long eventId = reader.GetInt64(0);
+            string identity = $"session_telemetry_events:{eventId}";
+            if (eventId <= previousEventId)
+            {
+                findings.Add(Finding(
+                    WorkspaceVerificationFindingKind.CorruptDomain,
+                    "runtime-telemetry",
+                    identity,
+                    "event-order",
+                    eventId.ToString(CultureInfo.InvariantCulture),
+                    "strictly increasing event_id",
+                    "Rebuild telemetry from a known-good database or discard corrupt runtime telemetry."));
+            }
+
+            previousEventId = eventId;
+            string recordedAt = reader.GetString(1);
+            string json = reader.GetString(2);
+            string hash = reader.GetString(3);
+            if (!DateTimeOffset.TryParse(
+                    recordedAt,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out _))
+            {
+                findings.Add(Finding(
+                    WorkspaceVerificationFindingKind.CorruptDomain,
+                    "runtime-telemetry",
+                    identity,
+                    "recorded-at-format",
+                    recordedAt,
+                    "round-trip DateTimeOffset",
+                    "Discard or repair the corrupt telemetry event row."));
+            }
+
+            if (!string.Equals(hash, Sha256(json), StringComparison.Ordinal))
+            {
+                findings.Add(Finding(
+                    WorkspaceVerificationFindingKind.CorruptDomain,
+                    "runtime-telemetry",
+                    identity,
+                    "content-hash",
+                    hash,
+                    Sha256(json),
+                    "Discard or repair the corrupt telemetry event row."));
+            }
+
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    findings.Add(Finding(
+                        WorkspaceVerificationFindingKind.CorruptDomain,
+                        "runtime-telemetry",
+                        identity,
+                        "event-json-shape",
+                        document.RootElement.ValueKind.ToString(),
+                        "JSON object",
+                        "Discard or repair the corrupt telemetry event row."));
+                }
+            }
+            catch (JsonException ex)
+            {
+                findings.Add(Finding(
+                    WorkspaceVerificationFindingKind.CorruptDomain,
+                    "runtime-telemetry",
+                    identity,
+                    "event-json",
+                    ex.Message,
+                    "valid telemetry JSON object",
+                    "Discard or repair the corrupt telemetry event row."));
             }
         }
     }
@@ -667,6 +808,55 @@ internal sealed class WorkspaceVerificationService(
             yield return split.RelativePath;
         }
     }
+
+    private static async Task<bool> TableExistsAsync(
+        SqliteConnection connection,
+        string table,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $table;";
+        command.Parameters.AddWithValue("$table", table);
+        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt64(scalar, CultureInfo.InvariantCulture) == 1;
+    }
+
+    private static async Task<string?> ScalarStringAsync(
+        SqliteConnection connection,
+        string commandText,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = commandText;
+        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
+        return scalar is null or DBNull ? null : Convert.ToString(scalar, CultureInfo.InvariantCulture);
+    }
+
+    private static bool IsValidDecisionResumeJson(string json)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            JsonElement root = document.RootElement;
+            return root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("schemaVersion", out JsonElement schema) &&
+                schema.TryGetInt32(out int schemaVersion) &&
+                schemaVersion == 1 &&
+                root.TryGetProperty("threadId", out JsonElement threadId) &&
+                !string.IsNullOrWhiteSpace(threadId.GetString());
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static string Sha256(string content) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
 
     private static WorkspaceVerificationFinding Finding(
         WorkspaceVerificationFindingKind kind,

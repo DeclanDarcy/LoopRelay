@@ -7,7 +7,9 @@ using LoopRelay.Cli.Services.Telemetry;
 using LoopRelay.Cli.Tests.Services.Support;
 using LoopRelay.Cli.Tests.Services.Usage;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Services;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace LoopRelay.Cli.Tests.Services.Telemetry;
@@ -25,7 +27,7 @@ public class SessionTelemetryCompositionTests : IDisposable
         new(1, AgentTurnState.Completed, "o", new AgentTokenUsage(10, 2, 0));
 
     [Fact]
-    public async Task CreateRecorder_WhenEnabled_WritesUnderRepoLoopRelayTelemetry()
+    public async Task CreateRecorder_WhenEnabled_WritesCanonicalSqliteTelemetryAndJsonlCompatibilityExport()
     {
         ISessionTelemetryRecorder recorder = SessionTelemetryComposition.CreateRecorder(
             Repo(), enabled: true, new FakeCodexUsageProbe(), new EffectiveTokenCostModel(),
@@ -47,6 +49,16 @@ public class SessionTelemetryCompositionTests : IDisposable
         Assert.Equal("Decision", r.GetProperty("sessionType").GetString());
         Assert.Equal(10, r.GetProperty("promptTokens").GetInt32());
         Assert.Equal(12.0, r.GetProperty("effectiveTokens").GetDouble());
+
+        await using SqliteConnection connection =
+            LoopRelayWorkspaceDatabase.OpenReadOnly(LoopRelayWorkspaceDatabase.Resolve(Repo()));
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT document_json FROM session_telemetry_events ORDER BY event_id;";
+        string dbJson = Convert.ToString(await command.ExecuteScalarAsync())!;
+        using JsonDocument dbDoc = JsonDocument.Parse(dbJson);
+        Assert.Equal("AxiomRepo", dbDoc.RootElement.GetProperty("repoName").GetString());
+        Assert.Equal("Decision", dbDoc.RootElement.GetProperty("sessionType").GetString());
     }
 
     [Fact]

@@ -6,9 +6,9 @@ using LoopRelay.Cli.Models;
 namespace LoopRelay.Cli.Services.Telemetry;
 
 /// <summary>
-/// Per-day / size-hybrid rotating JSONL sink. A new file begins each UTC calendar day; within a day the
-/// active file rolls to the next 4-digit sequence once it crosses <c>maxBytes</c>. Files are NEVER deleted
-/// (a separate visualizer manages pruning). One compact JSON object per line.
+/// Compatibility JSONL export sink. A new file begins each UTC calendar day; within a day the active file rolls
+/// to the next 4-digit sequence once it crosses <c>maxBytes</c>. Files are NEVER deleted (a separate visualizer
+/// manages pruning). One compact JSON object per line.
 /// </summary>
 internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
 {

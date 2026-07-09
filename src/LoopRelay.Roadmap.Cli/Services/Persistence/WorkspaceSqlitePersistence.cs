@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
 using LoopRelay.Roadmap.Cli.Models.Decisions;
 using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
@@ -57,28 +58,15 @@ internal sealed record WorkspaceSqliteOperationResult(
 
 internal static class WorkspaceDatabaseLocator
 {
-    public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
+    public const string RelativeDatabasePath = LoopRelayWorkspaceDatabase.RelativeDatabasePath;
 
-    public static string Resolve(Repository repository)
-    {
-        string workspaceRoot = Path.GetFullPath(repository.Path);
-        string databasePath = Path.GetFullPath(Path.Combine(
-            workspaceRoot,
-            RelativeDatabasePath.Replace('/', Path.DirectorySeparatorChar)));
-        string relative = Path.GetRelativePath(workspaceRoot, databasePath);
-        if (relative.StartsWith("..", StringComparison.Ordinal) ||
-            Path.IsPathRooted(relative))
-        {
-            throw new InvalidOperationException("Resolved workspace database path escaped the repository root.");
-        }
-
-        return databasePath;
-    }
+    public static string Resolve(Repository repository) =>
+        LoopRelayWorkspaceDatabase.Resolve(repository);
 }
 
 internal sealed class WorkspaceSqliteStore
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = LoopRelayWorkspaceDatabase.CurrentSchemaVersion;
 
     private const string PersistenceStateKey = "persistence_state";
     private const string EmptyPersistenceState = "empty";
@@ -492,14 +480,7 @@ internal sealed class WorkspaceSqliteStore
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
-        await ExecuteAsync(connection, null, "PRAGMA foreign_keys = ON;", cancellationToken);
-        await ExecuteAsync(connection, null, SchemaSql, cancellationToken);
-        await SetSchemaMetadataAsync(
-            connection,
-            null,
-            "schema_version",
-            CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture),
-            cancellationToken);
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
     }
 
     private static async Task ClearImportedTablesAsync(
@@ -1314,20 +1295,10 @@ internal sealed class WorkspaceSqliteStore
         command.Parameters.AddWithValue(name, value ?? DBNull.Value);
 
     internal static SqliteConnection OpenReadWriteCreate(string databasePath) =>
-        new(new SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-            Pooling = false,
-        }.ToString());
+        LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
 
     internal static SqliteConnection OpenReadOnly(string databasePath) =>
-        new(new SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-            Pooling = false,
-        }.ToString());
+        LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
 
     private static string SnapshotJson(WorkspaceFilesystemSnapshot snapshot) =>
         JsonSerializer.Serialize(snapshot, SnapshotJsonOptions);

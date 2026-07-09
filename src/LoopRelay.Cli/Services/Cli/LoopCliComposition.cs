@@ -112,7 +112,7 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             inputWaitObservations);
         var gate = new MilestoneGate(store, repository);
         var changeDetector = new WorkingTreeChangeDetector(processRunner, repository);
-        var resumeStore = new FileDecisionSessionResumeStore(repository, console.Warn);
+        var resumeStore = new SqliteDecisionSessionResumeStore(repository, console.Warn);
         resumeStore.EnsureDirectoryProtection();
         var repositoryChangeSetDetector = new RepositoryChangeSetDetector(processRunner, repository);
         var nonImplementationReviewRunner = new AgentNonImplementationReviewRunner(gatedRuntime, repository);

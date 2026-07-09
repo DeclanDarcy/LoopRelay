@@ -4,6 +4,7 @@ using System.Text;
 using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Services;
 using Microsoft.Data.Sqlite;
 
@@ -19,23 +20,11 @@ internal static class LoopHistoryStoreFactory
 
 internal static class LoopWorkspaceDatabase
 {
-    public const int CurrentSchemaVersion = 1;
-    public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
+    public const int CurrentSchemaVersion = LoopRelayWorkspaceDatabase.CurrentSchemaVersion;
+    public const string RelativeDatabasePath = LoopRelayWorkspaceDatabase.RelativeDatabasePath;
 
-    public static string Resolve(Repository repository)
-    {
-        string workspaceRoot = Path.GetFullPath(repository.Path);
-        string databasePath = Path.GetFullPath(Path.Combine(
-            workspaceRoot,
-            RelativeDatabasePath.Replace('/', Path.DirectorySeparatorChar)));
-        string relative = Path.GetRelativePath(workspaceRoot, databasePath);
-        if (relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative))
-        {
-            throw new InvalidOperationException("Resolved workspace database path escaped the repository root.");
-        }
-
-        return databasePath;
-    }
+    public static string Resolve(Repository repository) =>
+        LoopRelayWorkspaceDatabase.Resolve(repository);
 
     public static bool HasUsableLoopHistoryDatabase(Repository repository)
     {
@@ -84,20 +73,10 @@ internal static class LoopWorkspaceDatabase
     }
 
     internal static SqliteConnection OpenReadOnly(string databasePath) =>
-        new(new SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-            Pooling = false,
-        }.ToString());
+        LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
 
     internal static SqliteConnection OpenReadWrite(string databasePath) =>
-        new(new SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWrite,
-            Pooling = false,
-        }.ToString());
+        LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath);
 
     private static string? ScalarString(SqliteConnection connection, string commandText)
     {

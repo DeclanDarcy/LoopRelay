@@ -35,8 +35,8 @@ namespace LoopRelay.Cli.Services.Decisions;
 /// yet), else GenerateSystemPromptForNextExecutionAgent(latestHandoff) (a post-Transfer process still has a
 /// handoff, so it is a NEXT proposal, not a first) — persists the proposal to decisions.{N:0000}.md AND
 /// canonical decisions.md; verifies decisions.md exists. Across CLI runs, the warm process is resumable: the
-/// codex thread id + router accounting persist to {repo}/.LoopRelay/decision-session.json after every
-/// successful proposal (see OpenOrResumeSessionAsync).
+/// codex thread id + router accounting persist to the runtime SQLite database after every successful proposal
+/// (see OpenOrResumeSessionAsync).
 /// </summary>
 internal sealed class DecisionSession(
     IAgentRuntime _runtime,
@@ -221,7 +221,7 @@ internal sealed class DecisionSession(
 
     /// <summary>
     /// The state is only ever written after a SUCCESSFUL proposal turn, so its existence implies the thread is
-    /// primed (no seeded field in the schema). One small file write per decision step; the store is fail-open.
+    /// primed (no seeded field in the schema). One small SQLite upsert per decision step; the store is fail-open.
     /// </summary>
     private async Task PersistResumeStateAsync(CancellationToken cancellationToken)
     {

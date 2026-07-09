@@ -8,7 +8,8 @@ namespace LoopRelay.Cli.Services.Telemetry;
 /// <summary>
 /// Builds the per-turn telemetry recorder for the CLI loop. Enabled by default; set
 /// <c>LoopRelay_SESSION_LOG=0</c> (or <c>false</c>) to disable (swaps in the no-op recorder, which also
-/// skips the extra post-turn probe). The log lives under <c>&lt;repo&gt;/.LoopRelay/telemetry/</c>.
+/// skips the extra post-turn probe). SQLite under <c>&lt;repo&gt;/.LoopRelay/persistence/looprelay.sqlite3</c>
+/// is canonical; JSONL under <c>&lt;repo&gt;/.LoopRelay/telemetry/</c> remains a compatibility export.
 /// </summary>
 internal static class SessionTelemetryComposition
 {
@@ -38,7 +39,11 @@ internal static class SessionTelemetryComposition
         }
 
         string directory = Path.Combine(repository.Path, ".LoopRelay", "telemetry");
-        var sink = new RotatingJsonlTelemetrySink(directory, clock);
+        var sink = new CompositeSessionTelemetrySink(
+        [
+            new SqliteSessionTelemetrySink(repository),
+            new RotatingJsonlTelemetrySink(directory, clock),
+        ]);
         var locator = new FileSystemCodexRolloutLocator(FileSystemCodexRolloutLocator.ResolveDefaultSessionsRoot());
         return new SessionTelemetryRecorder(probe, locator, sink, costModel, clock, console);
     }

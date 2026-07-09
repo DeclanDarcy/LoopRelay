@@ -11,7 +11,6 @@ namespace LoopRelay.Core.Services.Persistence;
 public sealed partial class SqliteExecutionEvidenceStore(Repository repository) : IExecutionEvidenceStore
 {
     public const string ExecutionEvidenceDirectory = FileBackedExecutionEvidenceStore.ExecutionEvidenceDirectory;
-    private const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public async Task<ExecutionEvidenceRecord> WriteAsync(string stem, string content)
     {
@@ -161,36 +160,14 @@ public sealed partial class SqliteExecutionEvidenceStore(Repository repository) 
     private static string EvidencePath(string stem, int sequence) =>
         $"{ExecutionEvidenceDirectory}/{stem}.{sequence:0000}.md";
 
-    private static string ResolveDatabase(Repository repository)
-    {
-        string workspaceRoot = Path.GetFullPath(repository.Path);
-        string databasePath = Path.GetFullPath(Path.Combine(
-            workspaceRoot,
-            RelativeDatabasePath.Replace('/', Path.DirectorySeparatorChar)));
-        string relative = Path.GetRelativePath(workspaceRoot, databasePath);
-        if (relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative))
-        {
-            throw new InvalidOperationException("Resolved workspace database path escaped the repository root.");
-        }
-
-        return databasePath;
-    }
+    private static string ResolveDatabase(Repository repository) =>
+        LoopRelayWorkspaceDatabase.Resolve(repository);
 
     private static SqliteConnection OpenReadOnly(string databasePath) =>
-        new(new SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-            Pooling = false,
-        }.ToString());
+        LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
 
     private static SqliteConnection OpenReadWrite(string databasePath) =>
-        new(new SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWrite,
-            Pooling = false,
-        }.ToString());
+        LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath);
 
     private static string Sha256(string content) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();

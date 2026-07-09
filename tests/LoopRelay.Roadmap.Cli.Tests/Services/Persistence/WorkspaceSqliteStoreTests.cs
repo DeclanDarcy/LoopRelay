@@ -1005,6 +1005,97 @@ public sealed class WorkspaceSqliteStoreTests
     }
 
     [Fact]
+    public async Task Workspace_verify_valid_runtime_persistence_rows_succeeds()
+    {
+        using var repo = new TempRepo();
+        await SeedMigratedWorkspaceAsync(repo);
+        await SeedMetadataFilesAsync(repo);
+        repo.Write(RoadmapArtifactPaths.Selection, "# Selection");
+        var sqlite = new WorkspaceSqliteStore();
+        await sqlite.ImportAsync(repo.Artifacts);
+        await new WorkspaceSyncService(sqlite).ExportAsync(repo.Artifacts);
+        string databasePath = WorkspaceDatabaseLocator.Resolve(repo.Repository);
+        const string telemetryJson = """{"repoName":"repo","sessionType":"Decision"}""";
+        await ExecuteSqlAsync(
+            databasePath,
+            $$"""
+            INSERT INTO decision_session_resume (id, document_json, saved_at)
+            VALUES (1, '{"schemaVersion":1,"threadId":"thread-1"}', '2026-01-01T00:00:00.0000000+00:00');
+
+            INSERT INTO session_telemetry_events (
+                recorded_at, repo_name, session_id, session_type, turn_index, document_json, content_hash)
+            VALUES (
+                '2026-01-01T00:00:00.0000000+00:00',
+                'repo',
+                'sid',
+                'Decision',
+                1,
+                '{{telemetryJson}}',
+                '{{WorkspaceSqliteStore.Sha256(telemetryJson)}}');
+            """);
+
+        WorkspaceVerificationResult result = await new WorkspaceVerificationService(sqlite).VerifyAsync(repo.Artifacts);
+
+        Assert.True(result.Success, string.Join(Environment.NewLine, result.Findings.Select(finding => finding.ToString())));
+    }
+
+    [Fact]
+    public async Task Workspace_verify_corrupt_runtime_telemetry_hash_fails()
+    {
+        using var repo = new TempRepo();
+        var sqlite = new WorkspaceSqliteStore();
+        await sqlite.InitializeAsync(repo.Repository);
+        string databasePath = WorkspaceDatabaseLocator.Resolve(repo.Repository);
+        await ExecuteSqlAsync(
+            databasePath,
+            """
+            INSERT INTO session_telemetry_events (
+                recorded_at, repo_name, session_id, session_type, turn_index, document_json, content_hash)
+            VALUES (
+                '2026-01-01T00:00:00.0000000+00:00',
+                'repo',
+                'sid',
+                'Decision',
+                1,
+                '{"repoName":"repo"}',
+                'wrong-hash');
+            """);
+
+        WorkspaceVerificationResult result = await new WorkspaceVerificationService(sqlite).VerifyAsync(repo.Artifacts);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Findings, finding =>
+            finding.Kind == WorkspaceVerificationFindingKind.CorruptDomain &&
+            finding.Domain == "runtime-telemetry" &&
+            finding.Rule == "content-hash");
+    }
+
+    [Fact]
+    public async Task Workspace_verify_legacy_resume_file_conflicts_with_canonical_resume()
+    {
+        using var repo = new TempRepo();
+        var sqlite = new WorkspaceSqliteStore();
+        await sqlite.InitializeAsync(repo.Repository);
+        string databasePath = WorkspaceDatabaseLocator.Resolve(repo.Repository);
+        await ExecuteSqlAsync(
+            databasePath,
+            """
+            INSERT INTO decision_session_resume (id, document_json, saved_at)
+            VALUES (1, '{"schemaVersion":1,"threadId":"thread-1"}', '2026-01-01T00:00:00.0000000+00:00');
+            """);
+        string legacyPath = Path.Combine(repo.Root, ".LoopRelay", "decision-session.json");
+        await File.WriteAllTextAsync(legacyPath, """{"schemaVersion":1,"threadId":"legacy"}""");
+
+        WorkspaceVerificationResult result = await new WorkspaceVerificationService(sqlite).VerifyAsync(repo.Artifacts);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Findings, finding =>
+            finding.Kind == WorkspaceVerificationFindingKind.Conflict &&
+            finding.Domain == "runtime-decision-resume" &&
+            finding.Rule == "legacy-file-authority");
+    }
+
+    [Fact]
     public async Task Workspace_verify_unsupported_schema_fails()
     {
         using var repo = new TempRepo();
