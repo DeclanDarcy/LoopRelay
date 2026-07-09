@@ -6,11 +6,11 @@ Move current behavior behind semantic domain contracts while files remain canoni
 
 ## Implementation
 
-- [ ] Add contracts for all migrated domains.
-- [ ] Implement file-backed adapters that delegate to current stores/helpers.
-- [ ] Replace direct persistence semantics in callers with domain operations where the behavior belongs to a migrated domain.
-- [ ] Keep retained live file reads/writes as file operations.
-- [ ] Add conformance tests that freeze current behavior.
+- [x] Add contracts for all migrated domains.
+- [x] Implement file-backed adapters that delegate to current stores/helpers.
+- [x] Replace direct persistence semantics in callers with domain operations where the behavior belongs to a migrated domain.
+- [x] Keep retained live file reads/writes as file operations.
+- [x] Add conformance tests that freeze current behavior.
 
 ## Implementation Constraints
 
@@ -42,6 +42,6 @@ Move current behavior behind semantic domain contracts while files remain canoni
 
 ## Exit Criteria
 
-- [ ] Existing workflows pass with file-backed persistence.
-- [ ] Migrated-domain behavior is available through semantic contracts.
-- [ ] No SQLite schema or canonical database behavior is introduced.
+- [x] Existing workflows pass with file-backed persistence.
+- [x] Migrated-domain behavior is available through semantic contracts.
+- [x] No SQLite schema or canonical database behavior is introduced.

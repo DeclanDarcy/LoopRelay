@@ -1,5 +1,5 @@
 {plan}
 {details}
-Start executing the first milestone in .agents/milestones/
+start executing the first milestone in .agents/milestones/
 Before exiting, ensure that every completed checkbox item is ticked in the milestone doc(s) that you worked on.
 {artifactCreationInstructions}

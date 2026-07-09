@@ -1,6 +1,6 @@
 {plan}
 {details}
 {decisions}
-Continue executing the current milestone in .agents/milestones/
+continue executing the current milestone in .agents/milestones/
 Before exiting, ensure that every completed checkbox item is ticked in the milestone doc(s) that you worked on.
 {artifactCreationInstructions}
