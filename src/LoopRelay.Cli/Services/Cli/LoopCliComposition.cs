@@ -1,3 +1,4 @@
+using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Services.Sessions;
@@ -75,7 +76,8 @@ internal sealed class LoopCliComposition : IAsyncDisposable
         var processRunner = provider.GetRequiredService<IProcessRunner>();
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
-        var artifacts = new LoopArtifacts(store, repository);
+        ILoopHistoryStore loopHistory = new FileBackedLoopHistoryStore(store, repository);
+        var artifacts = new LoopArtifacts(store, repository, loopHistory);
         var repositoryArtifacts = new RepositoryArtifactStore(store, repository);
         var nonImplementationLedger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
         var hitlRequestCapture = new ExplicitHitlNonImplementationRequestCaptureService(

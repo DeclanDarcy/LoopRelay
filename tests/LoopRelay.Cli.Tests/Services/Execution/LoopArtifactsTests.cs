@@ -1,3 +1,4 @@
+using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;
@@ -18,6 +19,57 @@ public class LoopArtifactsTests
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
+
+    [Theory]
+    [InlineData(nameof(LoopHistoryKind.Decisions), ".agents/decisions/decisions.0001.md")]
+    [InlineData(nameof(LoopHistoryKind.Handoff), ".agents/handoffs/handoff.0001.md")]
+    [InlineData(nameof(LoopHistoryKind.OperationalDelta), ".agents/deltas/operational_delta.0001.md")]
+    public async Task FileBackedLoopHistoryStore_AppendsExpectedHistoricalPath(string kindName, string expectedRelativePath)
+    {
+        var (_, store, repo) = New();
+        var history = new FileBackedLoopHistoryStore(store, repo);
+        LoopHistoryKind kind = Enum.Parse<LoopHistoryKind>(kindName);
+
+        LoopHistoryRecord record = await history.AppendAsync(kind, "BODY");
+
+        Assert.Equal(kind, record.Kind);
+        Assert.Equal(1, record.Sequence);
+        Assert.Equal(expectedRelativePath, record.RelativePath);
+        Assert.Equal("BODY", record.Content);
+        Assert.Equal("BODY", await store.ReadAsync(Resolve(repo, expectedRelativePath)));
+    }
+
+    [Fact]
+    public async Task FileBackedLoopHistoryStore_ReadLatestUsesHighestNumericSequence()
+    {
+        var (_, store, repo) = New();
+        var history = new FileBackedLoopHistoryStore(store, repo);
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(2)), "H2");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(10)), "H10");
+
+        LoopHistoryRecord? latest = await history.ReadLatestAsync(LoopHistoryKind.Handoff);
+
+        Assert.NotNull(latest);
+        Assert.Equal(10, latest.Sequence);
+        Assert.Equal(OrchestrationArtifactPaths.HistoricalHandoff(10), latest.RelativePath);
+        Assert.Equal("H10", latest.Content);
+    }
+
+    [Fact]
+    public async Task ReadLatestDecisions_PrefersLiveBeforeHistoryStore()
+    {
+        var (_, store, repo) = New();
+        var history = new RecordingLoopHistoryStore(
+            new LoopHistoryRecord(LoopHistoryKind.Decisions, 1, OrchestrationArtifactPaths.HistoricalDecision(1), "numbered"));
+        var art = new LoopArtifacts(store, repo, history);
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "live");
+
+        var latest = await art.ReadLatestDecisionsAsync();
+
+        Assert.Equal("live", latest.Content);
+        Assert.Equal(OrchestrationArtifactPaths.Decisions, latest.RelativePath);
+        Assert.Equal(0, history.ReadLatestCalls);
+    }
 
     [Fact]
     public async Task RotateLiveHandoff_ArchivesNumberedAndDeletesLive()
@@ -207,5 +259,19 @@ public class LoopArtifactsTests
         await art.EnsureOperationalContextAsync();
 
         Assert.Equal("PLAN", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
+    }
+
+    private sealed class RecordingLoopHistoryStore(LoopHistoryRecord? latest) : ILoopHistoryStore
+    {
+        public int ReadLatestCalls { get; private set; }
+
+        public Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content) =>
+            Task.FromResult(new LoopHistoryRecord(kind, 1, ".agents/history.0001.md", content));
+
+        public Task<LoopHistoryRecord?> ReadLatestAsync(LoopHistoryKind kind)
+        {
+            ReadLatestCalls++;
+            return Task.FromResult(latest);
+        }
     }
 }
