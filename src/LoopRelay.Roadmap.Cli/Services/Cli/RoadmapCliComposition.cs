@@ -64,7 +64,8 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
     public static RoadmapCliComposition Create(RoadmapCliInvocation invocation)
     {
         var settings = CliSettingsLoader.Load();
-        string promptPolicy = ImplementationFirstPromptPolicyComposer.Compose(settings.ArtifactPolicy);
+        RoadmapRuntimePromptPolicy runtimePromptPolicy =
+            RoadmapRuntimePromptPolicy.FromArtifactPolicy(settings.ArtifactPolicy);
         var services = new ServiceCollection();
         services.AddAgents(settings.Permissions);
         services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();
@@ -141,7 +142,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
 
         var executionPreparation = new ExecutionPreparationProvenanceService(artifacts, executionPreparationManifest, canonicalHasher);
         var validator = new ProjectionValidator();
-        var promptRunner = new RoadmapPromptRunner(progressRuntime, repository, console, promptPolicy);
+        var promptRunner = new RoadmapPromptRunner(progressRuntime, repository, console, runtimePromptPolicy);
         var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
         var contextBuilder = new RoadmapPromptContextBuilder(artifacts, executionPreparation);
         var inputResolver = new TransitionInputResolver(artifacts, executionPreparation, canonicalHasher);
@@ -152,12 +153,16 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             artifacts,
             selectionProvenanceManifest,
             contextBuilder,
-            inputResolver);
+            inputResolver,
+            runtimePromptPolicy);
         var completionPolicy = new CompletionCertificationPolicy();
         var completionRouter = new CompletionCertificationRouter();
         ICompletedEpicArchiveService completionArchive = new CompletedEpicArchiveService(
             store,
-            new AgentCompletionPromptRunner(progressRuntime, repository, promptPolicy),
+            new AgentCompletionPromptRunner(
+                progressRuntime,
+                repository,
+                runtimePromptPolicy.LegacyImplementationFirstPromptPolicy),
             new RoadmapCompletionObserver(console),
             _archiveMaterializer: useSqliteStores ? new SqliteCompletedEpicArchiveMaterializer() : null);
         if (useSqliteStores)
@@ -203,7 +208,8 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             inputResolver,
             promptRunner,
             journal,
-            transitionPersistence);
+            transitionPersistence,
+            runtimePromptPolicy);
         var bootstrapRoadmapCompletionContextTransition = new BootstrapRoadmapCompletionContextTransition(
             artifacts,
             contractRegistry,

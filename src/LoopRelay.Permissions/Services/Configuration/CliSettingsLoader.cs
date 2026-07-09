@@ -99,6 +99,8 @@ public static class CliSettingsLoader
     private sealed class ArtifactPolicyDocument
     {
         public bool? AllowHitlRequestedNonImplementationFiles { get; set; }
+
+        public bool? AllowAuxiliaryNonImplementationFiles { get; set; }
     }
 
     private sealed class PermissionPolicyDocument
@@ -376,6 +378,8 @@ public static class CliSettingsLoader
         public static NonImplementationArtifactPolicyOptions ToOptions(ArtifactPolicyDocument? document) =>
             new(
                 document?.AllowHitlRequestedNonImplementationFiles
-                    ?? NonImplementationArtifactPolicyOptions.Default.AllowHitlRequestedNonImplementationFiles);
+                    ?? NonImplementationArtifactPolicyOptions.Default.AllowHitlRequestedNonImplementationFiles,
+                document?.AllowAuxiliaryNonImplementationFiles
+                    ?? NonImplementationArtifactPolicyOptions.Default.AllowAuxiliaryNonImplementationFiles);
     }
 }

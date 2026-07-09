@@ -86,8 +86,14 @@ internal static class RoadmapPromptCatalog
             _ => throw new ArgumentOutOfRangeException(nameof(projectionPromptName), projectionPromptName, "Unknown projection prompt."),
         };
 
-    public static string RenderRuntime(string runtimePromptName, string projectContext, string secondaryInput = "") =>
-        runtimePromptName switch
+    public static string RenderRuntime(
+        string runtimePromptName,
+        string projectContext,
+        string secondaryInput = "",
+        RoadmapRuntimePromptPolicy? policy = null)
+    {
+        RoadmapRuntimePromptPolicy effectivePolicy = policy ?? RoadmapRuntimePromptPolicy.Default;
+        return runtimePromptName switch
         {
             "CreateRoadmapCompletionContext" =>
                 Core.Prompts.Planning.CreateRoadmapCompletionContext.Render(projectContext, secondaryInput),
@@ -102,7 +108,7 @@ internal static class RoadmapPromptCatalog
             "ReimagineEpic" =>
                 Core.Prompts.Planning.ReimagineEpic.Render(projectContext, secondaryInput),
             "CreateNewEpic" =>
-                Core.Prompts.Planning.CreateNewEpic.Render(projectContext, secondaryInput),
+                RenderCreateNewEpic(projectContext, secondaryInput, effectivePolicy),
             "SplitEpic" =>
                 Core.Prompts.Planning.SplitEpic.Render(projectContext, secondaryInput),
             "GenerateMilestoneDeepDivesForEpic" =>
@@ -113,6 +119,25 @@ internal static class RoadmapPromptCatalog
                 Core.Prompts.Planning.SynthesizeCompletedEpic.Render(secondaryInput),
             _ => throw new ArgumentOutOfRangeException(nameof(runtimePromptName), runtimePromptName, "Unknown runtime prompt."),
         };
+    }
+
+    public static bool UsesPromptOwnedNonImplementationPolicy(string runtimePromptName) =>
+        string.Equals(runtimePromptName, "CreateNewEpic", StringComparison.Ordinal);
+
+    private static string RenderCreateNewEpic(
+        string projectContext,
+        string secondaryInput,
+        RoadmapRuntimePromptPolicy policy)
+    {
+        CreateNewEpicPromptSectionSet sections =
+            CreateNewEpicPromptSections.ForAuxiliaryArtifactPolicy(
+                policy.AllowAuxiliaryNonImplementationFiles);
+        return Core.Prompts.Planning.CreateNewEpic.Render(
+            projectContext,
+            secondaryInput,
+            sections.EpicImplementationFirstGuidance,
+            sections.EpicAuxiliaryArtifactLimits);
+    }
 
     private static ProjectionPromptMetadata Metadata(string promptName, string? promptType, string sourceHash) =>
         new(promptName, promptType ?? promptName, sourceHash);

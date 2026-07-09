@@ -81,7 +81,9 @@ public sealed class NonImplementationReviewFoundationTests
     public void Prompt_policy_composer_preserves_hitl_requested_exception_when_enabled()
     {
         string policy = ImplementationFirstPromptPolicyComposer.Compose(
-            new NonImplementationArtifactPolicyOptions(AllowHitlRequestedNonImplementationFiles: true));
+            new NonImplementationArtifactPolicyOptions(
+                AllowHitlRequestedNonImplementationFiles: true,
+                AllowAuxiliaryNonImplementationFiles: false));
 
         Assert.Contains("explicit HITL request evidence", policy, StringComparison.Ordinal);
         Assert.Contains("HITL-requested documentation exception", policy, StringComparison.Ordinal);

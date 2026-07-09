@@ -1,6 +1,7 @@
 {
   "artifactPolicy": {
-    "allowHitlRequestedNonImplementationFiles": false
+    "allowHitlRequestedNonImplementationFiles": false,
+    "allowAuxiliaryNonImplementationFiles": false
   },
   "permissions": {
     "fingerprintVersion": "v1",

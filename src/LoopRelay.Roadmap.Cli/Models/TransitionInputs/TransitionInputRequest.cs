@@ -5,4 +5,8 @@ internal sealed record TransitionInputRequest(
     string ProjectionPath,
     string RenderedContext,
     string SecondaryInput,
-    TransitionInputContext Context);
+    TransitionInputContext Context)
+{
+    public TransitionPromptPolicyIdentity PromptPolicy { get; init; } =
+        TransitionPromptPolicyIdentity.None;
+}

@@ -10,6 +10,9 @@ internal sealed record TransitionInputSnapshot(
     string SecondaryInputHash,
     string SnapshotHash)
 {
+    public TransitionPromptPolicyIdentity PromptPolicy { get; init; } =
+        TransitionPromptPolicyIdentity.None;
+
     public IReadOnlyDictionary<string, string> ToInputArtifactHashes() =>
         new SortedDictionary<string, string>(
             ArtifactInputs

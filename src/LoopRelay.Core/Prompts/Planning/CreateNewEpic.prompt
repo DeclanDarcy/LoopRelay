@@ -146,6 +146,12 @@ If the repository suggests the projection is stale:
 
 ---
 
+{epicImplementationFirstGuidance}
+
+{epicAuxiliaryArtifactLimits}
+
+---
+
 ## New Epic Definition
 
 A new epic is a strategic execution artifact that defines:

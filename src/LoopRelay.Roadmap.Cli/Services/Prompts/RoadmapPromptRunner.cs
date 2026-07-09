@@ -14,7 +14,7 @@ internal sealed class RoadmapPromptRunner(
     IAgentRuntime _runtime,
     Repository _repository,
     ILoopConsole _console,
-    string? _promptPolicy = null)
+    RoadmapRuntimePromptPolicy? _runtimePromptPolicy = null)
 {
 
     public async Task<string> RunProjectionPromptAsync(
@@ -32,9 +32,19 @@ internal sealed class RoadmapPromptRunner(
         string secondaryInput,
         CancellationToken cancellationToken)
     {
-        string prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-            RoadmapPromptCatalog.RenderRuntime(runtimePromptName, projectContext, secondaryInput),
-            (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
+        RoadmapRuntimePromptPolicy effectivePolicy = _runtimePromptPolicy ?? RoadmapRuntimePromptPolicy.Default;
+        string prompt = RoadmapPromptCatalog.RenderRuntime(
+            runtimePromptName,
+            projectContext,
+            secondaryInput,
+            effectivePolicy);
+        if (!RoadmapPromptCatalog.UsesPromptOwnedNonImplementationPolicy(runtimePromptName))
+        {
+            prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
+                prompt,
+                effectivePolicy.LegacyImplementationFirstPromptPolicy);
+        }
+
         return await RunOneShotAsync(runtimePromptName, prompt, cancellationToken);
     }
 

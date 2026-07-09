@@ -22,6 +22,9 @@ public sealed class PermissionSettingsTests
 
         Assert.Equal("v1", policy.FingerprintVersion);
         Assert.False(result.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
+        Assert.False(result.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+        Assert.True(Object(DefaultSettings(), "artifactPolicy").ContainsKey("allowHitlRequestedNonImplementationFiles"));
+        Assert.True(Object(DefaultSettings(), "artifactPolicy").ContainsKey("allowAuxiliaryNonImplementationFiles"));
 
         AssertAllowed(policy, "pwd");
         AssertAllowed(policy, "git status");
@@ -112,10 +115,11 @@ public sealed class PermissionSettingsTests
         CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
 
         Assert.False(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
+        Assert.False(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
     }
 
     [Fact]
-    public void Missing_artifact_policy_flag_defaults_to_implementation_first_mode()
+    public void Missing_artifact_policy_flags_default_to_implementation_first_mode()
     {
         JsonObject settings = DefaultSettings();
         settings["artifactPolicy"] = new JsonObject();
@@ -123,6 +127,7 @@ public sealed class PermissionSettingsTests
         CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
 
         Assert.False(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
+        Assert.False(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
     }
 
     [Fact]
@@ -134,6 +139,32 @@ public sealed class PermissionSettingsTests
         CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
 
         Assert.True(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
+        Assert.False(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+    }
+
+    [Fact]
+    public void Loader_reads_enabled_auxiliary_non_implementation_mode()
+    {
+        JsonObject settings = DefaultSettings();
+        Object(settings, "artifactPolicy")["allowAuxiliaryNonImplementationFiles"] = true;
+
+        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
+
+        Assert.False(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
+        Assert.True(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+    }
+
+    [Fact]
+    public void Artifact_policy_flags_are_independent()
+    {
+        JsonObject settings = DefaultSettings();
+        Object(settings, "artifactPolicy")["allowHitlRequestedNonImplementationFiles"] = true;
+        Object(settings, "artifactPolicy")["allowAuxiliaryNonImplementationFiles"] = true;
+
+        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
+
+        Assert.True(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
+        Assert.True(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
     }
 
     private static void AssertAllowed(PermissionPolicyOptions policy, string rawCommand)

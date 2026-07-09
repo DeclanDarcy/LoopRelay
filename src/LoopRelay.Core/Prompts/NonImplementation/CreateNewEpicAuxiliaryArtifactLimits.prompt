@@ -1,0 +1,9 @@
+# CreateNewEpic Auxiliary Artifact Limits
+
+Output only the `.agents/epic.md` Markdown content, or the documented Create New Epic blocked response when epic creation is unsafe.
+
+Do not create auxiliary non-implementation files or side artifacts. Reject separate analysis reports, roadmap revisions, governance documents, RFCs, ADRs, research reports, inventories, implementation-support documents, design documents, certification notes, or planning appendices.
+
+Only create artifacts that are machine-required or explicitly requested. For this prompt, the sanctioned requested artifact is `.agents/epic.md` unless the blocked response is required.
+
+If auxiliary non-implementation files are allowed by settings, this extra strict guidance is omitted from the prompt. That setting does not change runtime artifact promotion, validator, ledger, HITL capture, or non-implementation review policy.

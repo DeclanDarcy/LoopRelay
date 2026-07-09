@@ -44,12 +44,15 @@ internal sealed class TransitionInputResolver(
             projectionHash);
         string promptContextHash = RoadmapHash.Sha256(request.RenderedContext);
         string secondaryInputHash = RoadmapHash.Sha256(request.SecondaryInput);
+        TransitionPromptPolicyIdentity promptPolicy =
+            request.PromptPolicy ?? TransitionPromptPolicyIdentity.None;
         string snapshotHash = ComputeSnapshotHash(
             request.RuntimePromptName,
             projection,
             artifactInputs,
             promptContextHash,
-            secondaryInputHash);
+            secondaryInputHash,
+            promptPolicy);
 
         return new TransitionInputSnapshot(
             request.RuntimePromptName,
@@ -57,7 +60,10 @@ internal sealed class TransitionInputResolver(
             artifactInputs,
             promptContextHash,
             secondaryInputHash,
-            snapshotHash);
+            snapshotHash)
+        {
+            PromptPolicy = promptPolicy,
+        };
     }
 
     private async Task AddPromptInputsAsync(TransitionInputRequest request, TransitionInputAccumulator inputs)
@@ -159,7 +165,8 @@ internal sealed class TransitionInputResolver(
         TransitionProjectionIdentity projection,
         IReadOnlyList<TransitionArtifactInput> artifactInputs,
         string promptContextHash,
-        string secondaryInputHash)
+        string secondaryInputHash,
+        TransitionPromptPolicyIdentity promptPolicy)
     {
         var builder = new StringBuilder();
         AppendField(builder, "runtimePromptName", runtimePromptName);
@@ -168,6 +175,12 @@ internal sealed class TransitionInputResolver(
         AppendField(builder, "projectionHash", projection.ProjectionHash ?? string.Empty);
         AppendField(builder, "promptContextHash", promptContextHash);
         AppendField(builder, "secondaryInputHash", secondaryInputHash);
+        AppendField(builder, "promptPolicy.mode", promptPolicy.Mode);
+        AppendField(builder, "promptPolicy.hash", promptPolicy.Hash);
+        foreach ((string name, string value) in promptPolicy.Inputs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            AppendField(builder, $"promptPolicy.input.{name}", value);
+        }
 
         foreach (TransitionArtifactInput input in artifactInputs)
         {

@@ -15,7 +15,8 @@ internal sealed class RoadmapPromptTransitionRunner(
     TransitionInputResolver _inputResolver,
     RoadmapPromptRunner _promptRunner,
     ITransitionJournalStore _journalStore,
-    RoadmapTransitionPersistence _transitionPersistence)
+    RoadmapTransitionPersistence _transitionPersistence,
+    RoadmapRuntimePromptPolicy? _runtimePromptPolicy = null)
 {
     public async Task<string> RunNormalAsync(
         RoadmapState from,
@@ -52,12 +53,12 @@ internal sealed class RoadmapPromptTransitionRunner(
         CancellationToken cancellationToken,
         TransitionInputContext? inputContext = null)
     {
-        TransitionInputSnapshot inputSnapshot = await _inputResolver.ResolveAsync(new TransitionInputRequest(
+        TransitionInputSnapshot inputSnapshot = await ResolveInputSnapshotAsync(
             prompt,
             projectionPath,
             projectContext,
             secondaryInput,
-            inputContext ?? TransitionInputContext.Empty));
+            inputContext ?? TransitionInputContext.Empty);
         string correlationId = Guid.NewGuid().ToString("N");
         DateTimeOffset started = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
@@ -109,12 +110,12 @@ internal sealed class RoadmapPromptTransitionRunner(
         CancellationToken cancellationToken,
         TransitionInputContext? inputContext = null)
     {
-        TransitionInputSnapshot inputSnapshot = await _inputResolver.ResolveAsync(new TransitionInputRequest(
+        TransitionInputSnapshot inputSnapshot = await ResolveInputSnapshotAsync(
             prompt,
             projectionPath,
             projectContext,
             secondaryInput,
-            inputContext ?? TransitionInputContext.Empty));
+            inputContext ?? TransitionInputContext.Empty);
         string correlationId = Guid.NewGuid().ToString("N");
         DateTimeOffset started = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
@@ -153,5 +154,24 @@ internal sealed class RoadmapPromptTransitionRunner(
                 ["Resolve blocker and rerun"]);
             throw RoadmapStepException.AlreadyPersisted(exception);
         }
+    }
+
+    private async Task<TransitionInputSnapshot> ResolveInputSnapshotAsync(
+        string prompt,
+        string projectionPath,
+        string projectContext,
+        string secondaryInput,
+        TransitionInputContext inputContext)
+    {
+        RoadmapRuntimePromptPolicy effectivePolicy = _runtimePromptPolicy ?? RoadmapRuntimePromptPolicy.Default;
+        return await _inputResolver.ResolveAsync(new TransitionInputRequest(
+            prompt,
+            projectionPath,
+            projectContext,
+            secondaryInput,
+            inputContext)
+        {
+            PromptPolicy = effectivePolicy.CreateIdentity(prompt),
+        });
     }
 }

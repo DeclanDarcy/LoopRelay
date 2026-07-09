@@ -1,9 +1,11 @@
+using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Process;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Roadmap.Cli.Models.RoadmapState;
+using LoopRelay.Roadmap.Cli.Models.Transitions;
 using LoopRelay.Roadmap.Cli.Primitives.State;
 using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
@@ -73,6 +75,15 @@ public sealed class RoadmapPromptTransitionRunnerTests
         string journal = repo.Read(RoadmapArtifactPaths.TransitionJournal);
         Assert.Contains("\"event\":\"TransitionStarted\"", journal, StringComparison.Ordinal);
         Assert.DoesNotContain("\"event\":\"TransitionFailed\"", journal, StringComparison.Ordinal);
+        TransitionJournalRecord started = JsonSerializer.Deserialize<TransitionJournalRecord>(
+            journal.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)[0],
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.NotNull(started.InputSnapshot);
+        Assert.Equal(
+            promotionCandidate
+                ? "create-new-epic-prompt-owned-v1"
+                : "legacy-implementation-first-composer-v1",
+            started.InputSnapshot!.PromptPolicy.Mode);
     }
 
     private static RoadmapPromptTransitionRunner CreateRunner(
