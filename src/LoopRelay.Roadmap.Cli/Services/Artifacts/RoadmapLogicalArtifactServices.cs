@@ -15,7 +15,21 @@ internal static class RoadmapLogicalArtifactServices
             artifacts.Repository,
             artifacts.ExecutionEvidenceStore);
 
+    public static ILogicalArtifactResolver CreateResolver(RoadmapArtifacts artifacts) =>
+        CreateResolver(
+            artifacts.Store,
+            artifacts.Repository,
+            artifacts.ExecutionEvidenceStore);
+
     public static ICanonicalArtifactHasher CreateCanonicalHasher(
+        IArtifactStore store,
+        Repository repository,
+        IExecutionEvidenceStore executionEvidenceStore)
+    {
+        return new CanonicalArtifactHasher(CreateResolver(store, repository, executionEvidenceStore));
+    }
+
+    public static ILogicalArtifactResolver CreateResolver(
         IArtifactStore store,
         Repository repository,
         IExecutionEvidenceStore executionEvidenceStore)
@@ -35,7 +49,7 @@ internal static class RoadmapLogicalArtifactServices
             new FileBackedExecutionEvidenceLogicalArtifactProvider(executionEvidenceStore),
         ]);
 
-        return new CanonicalArtifactHasher(resolver);
+        return resolver;
     }
 
     private static IReadOnlyDictionary<string, LogicalArtifactDomain> RetainedExactPaths()

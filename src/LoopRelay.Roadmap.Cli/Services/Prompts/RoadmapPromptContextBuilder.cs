@@ -1,4 +1,5 @@
 using System.Text;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Roadmap.Cli.Models.Execution;
@@ -10,9 +11,12 @@ namespace LoopRelay.Roadmap.Cli.Services.Prompts;
 
 internal sealed class RoadmapPromptContextBuilder(
     RoadmapArtifacts _artifacts,
-    ExecutionPreparationProvenanceService _executionPreparation)
+    ExecutionPreparationProvenanceService _executionPreparation,
+    ILogicalArtifactResolver? logicalResolver = null)
 {
     private const string ProjectContextMarker = "<!-- BEGIN PROJECT-CONTEXT FILE:";
+    private readonly ILogicalArtifactResolver _logicalResolver =
+        logicalResolver ?? RoadmapLogicalArtifactServices.CreateResolver(_artifacts);
 
     public async Task<string> BuildSelectionContextAsync(string projectionContent, IReadOnlyList<RetiredEpic> retiredEpics)
     {
@@ -60,7 +64,7 @@ internal sealed class RoadmapPromptContextBuilder(
     public async Task<string> BuildCompletionEvaluationContextAsync(string projectionContent, string executionEvidencePath)
     {
         string activeEpic = await _artifacts.ReadRequiredAsync(RoadmapArtifactPaths.ActiveEpic);
-        string executionEvidence = await _artifacts.ReadRequiredAsync(executionEvidencePath);
+        string executionEvidence = await ReadRequiredLogicalAsync(executionEvidencePath);
         IReadOnlyList<string> specs = await _executionPreparation.RequireFreshMilestoneSpecPathsAsync();
         var sections = new List<ContextSection>
         {
@@ -98,6 +102,18 @@ internal sealed class RoadmapPromptContextBuilder(
         };
         await AddNonImplementationReviewSectionsAsync(sections);
         return ValidateNoRawProjectContext(Build(sections));
+    }
+
+    private async Task<string> ReadRequiredLogicalAsync(string relativePath)
+    {
+        LogicalArtifactResolutionResult result = await _logicalResolver.ResolveAsync(relativePath);
+        if (!result.IsResolved || string.IsNullOrWhiteSpace(result.Content?.Text))
+        {
+            throw new RoadmapStepException(
+                result.Message ?? $"Required artifact is missing or empty: {relativePath}");
+        }
+
+        return result.Content.Text;
     }
 
     private async Task AddNonImplementationReviewSectionsAsync(List<ContextSection> sections)

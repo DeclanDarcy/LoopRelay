@@ -14,6 +14,7 @@ using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Completion.Services.Certification;
 using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Artifacts;
+using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
@@ -182,6 +183,35 @@ public sealed class CompletionCertificationServiceTests
     }
 
     [Fact]
+    public async Task CompletionEvaluationContextReadsExecutionClaimThroughLogicalResolver()
+    {
+        var executionEvidence = new MemoryExecutionEvidenceStore();
+        Harness h = Harness.Create(executionEvidence);
+        await h.SeedExecutionWorkspaceAsync();
+
+        h.Prompts.Handler = async invocation =>
+        {
+            if (invocation.RuntimePromptName == CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift)
+            {
+                Assert.Contains(
+                    "Execution Completion Claim: .agents/evidence/execution/main-cli-completion-claim.0001.md",
+                    invocation.ProjectContext,
+                    StringComparison.Ordinal);
+                Assert.Contains("# Main CLI Completion Claim", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Null(await h.ReadAsync(".agents/evidence/execution/main-cli-completion-claim.0001.md"));
+                return Evaluation("Partially Complete", "None", "Continue Epic");
+            }
+
+            throw new InvalidOperationException(invocation.RuntimePromptName);
+        };
+
+        CompletionCertificationResult result = await h.Service.CertifyPlanCompletionAsync(new CompletionCertificationRequest(h.Repository));
+
+        Assert.Equal(CompletionCertificationServiceOutcome.Blocked, result.Outcome);
+        Assert.Equal(".agents/evidence/execution/main-cli-completion-claim.0001.md", Assert.Single(executionEvidence.Records).RelativePath);
+    }
+
+    [Fact]
     public async Task AgentCompletionPromptRunner_AppendsImplementationFirstPolicy()
     {
         var runtime = new RecordingAgentRuntime(new AgentTurnResult(
@@ -236,7 +266,7 @@ public sealed class CompletionCertificationServiceTests
 
         public CompletionCertificationService Service { get; }
 
-        public static Harness Create()
+        public static Harness Create(IExecutionEvidenceStore? executionEvidenceStore = null)
         {
             var store = new MemoryArtifactStore();
             var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" };
@@ -246,7 +276,8 @@ public sealed class CompletionCertificationServiceTests
                 store,
                 new FakeProjectionService(),
                 prompts,
-                archive);
+                archive,
+                _executionEvidenceStore: executionEvidenceStore);
             return new Harness(store, repository, prompts, service);
         }
 
@@ -286,6 +317,46 @@ public sealed class CompletionCertificationServiceTests
         {
             Invocations.Add(invocation);
             return await Handler(invocation);
+        }
+    }
+
+    private sealed class MemoryExecutionEvidenceStore : IExecutionEvidenceStore
+    {
+        private readonly List<ExecutionEvidenceRecord> records = [];
+
+        public IReadOnlyList<ExecutionEvidenceRecord> Records => records;
+
+        public Task<ExecutionEvidenceRecord> WriteAsync(string stem, string content)
+        {
+            int sequence = records
+                .Where(record => string.Equals(record.Stem, stem, StringComparison.Ordinal))
+                .Select(record => record.Sequence)
+                .DefaultIfEmpty()
+                .Max() + 1;
+            var record = new ExecutionEvidenceRecord(
+                stem,
+                sequence,
+                $".agents/evidence/execution/{stem}.{sequence:0000}.md",
+                content);
+            records.Add(record);
+            return Task.FromResult(record);
+        }
+
+        public Task<string> NextPathAsync(string stem)
+        {
+            int sequence = records
+                .Where(record => string.Equals(record.Stem, stem, StringComparison.Ordinal))
+                .Select(record => record.Sequence)
+                .DefaultIfEmpty()
+                .Max() + 1;
+            return Task.FromResult($".agents/evidence/execution/{stem}.{sequence:0000}.md");
+        }
+
+        public Task<ExecutionEvidenceRecord?> ReadAsync(string relativePath)
+        {
+            ExecutionEvidenceRecord? record = records.FirstOrDefault(item =>
+                string.Equals(item.RelativePath, relativePath, StringComparison.OrdinalIgnoreCase));
+            return Task.FromResult(record);
         }
     }
 

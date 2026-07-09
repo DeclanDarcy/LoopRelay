@@ -18,6 +18,8 @@ public sealed partial class CompletionArtifacts(
 
     public Repository Repository => _repository;
 
+    public IExecutionEvidenceStore ExecutionEvidenceStore => _executionEvidenceStore;
+
     public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));
 
     public Task<string?> ReadAsync(string relativePath) => _store.ReadAsync(Resolve(relativePath));

@@ -1,13 +1,19 @@
 using System.Text;
 using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Services.ArtifactStorage;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 
 namespace LoopRelay.Completion.Services.Prompts;
 
-internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionArtifacts _artifacts)
+internal sealed class CompletionPromptContextBuilder(
+    ArtifactStorage.CompletionArtifacts _artifacts,
+    ILogicalArtifactResolver? logicalResolver = null)
 {
+    private readonly ILogicalArtifactResolver _logicalResolver =
+        logicalResolver ?? CompletionLogicalArtifactServices.CreateResolver(_artifacts);
+
     public async Task<string> BuildEvaluationContextAsync(
         CompletionCertificationRequest request,
         string projectionContent,
@@ -34,7 +40,7 @@ internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionA
             sections.Add(Section($"Executed Milestone Evidence: {milestonePath}", await _artifacts.ReadRequiredAsync(milestonePath)));
         }
 
-        sections.Add(Section($"Execution Completion Claim: {executionEvidencePath}", await _artifacts.ReadRequiredAsync(executionEvidencePath)));
+        sections.Add(Section($"Execution Completion Claim: {executionEvidencePath}", await ReadRequiredLogicalAsync(executionEvidencePath)));
 
         foreach (ContextSection handoff in await BuildHandoffSectionsAsync())
         {
@@ -120,6 +126,18 @@ internal sealed class CompletionPromptContextBuilder(ArtifactStorage.CompletionA
         {
             sections.Add(Section(title, content));
         }
+    }
+
+    private async Task<string> ReadRequiredLogicalAsync(string relativePath)
+    {
+        LogicalArtifactResolutionResult result = await _logicalResolver.ResolveAsync(relativePath);
+        if (!result.IsResolved || string.IsNullOrWhiteSpace(result.Content?.Text))
+        {
+            throw new CompletionCertificationException(
+                result.Message ?? $"Required artifact is missing or empty: {relativePath}");
+        }
+
+        return result.Content.Text;
     }
 
     private static string Build(IReadOnlyList<ContextSection> sections)
