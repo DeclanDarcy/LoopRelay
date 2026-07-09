@@ -1,7 +1,52 @@
 # CreateNewEpic Implementation-First Guidance
 
-The required `.agents/epic.md` output is a sanctioned LoopRelay operational artifact. Creating it is part of the roadmap loop, not auxiliary documentation.
+An epic exists to define how a strategic initiative becomes implemented software capability.
 
-Preserve the strategic epic authoring that this prompt requires: repository grounding, explicit assumptions, dependencies, constraints, risks, acceptance criteria, and milestone roadmap content all belong in `.agents/epic.md`.
+A proposed initiative is justified only if completing it would cause the software itself to become meaningfully more capable, more correct, more robust, more integrated, or more executable.
 
-Keep the implementation-first boundary clear. The epic should define capability outcomes, constraints, dependency signals, validation expectations, and milestone-level strategic progress. It must not become an implementation task list, file-level plan, code-change prescription, execution prompt, separate design document, or repository inventory.
+Strategic epic authoring is valid when it clarifies the path from proposal to capability.
+
+Examples of valid epic content include:
+
+* desired capability
+* strategic purpose
+* projection alignment
+* repository grounding
+* scope and non-goals
+* assumptions
+* constraints
+* dependencies
+* risks and watchpoints
+* acceptance criteria
+* milestone roadmap content
+* completion signals that future work can audit
+
+These are not substitutes for implementation.
+
+They are valid because they define the capability boundary that implementation must eventually satisfy.
+
+Repository grounding is valuable when it changes how the capability should be framed, scoped, ordered, constrained, or validated.
+
+It is not valuable as an inventory of the repository.
+
+A milestone is valid when it names a meaningful state of capability realization.
+
+It is not valid when it merely groups implementation tasks, names files to edit, records a work breakdown, or turns the epic into an execution prompt.
+
+Improved understanding, clearer rationale, cleaner planning, or better documentation are valuable only when they are absorbed into the epic as constraints on implemented capability.
+
+They are not epic outcomes by themselves.
+
+Once the capability frame is clear, `.agents/epic.md` is the sanctioned operational artifact for that frame.
+
+Creating it is part of the roadmap loop because it is the artifact later prompts consume to expand and execute the initiative.
+
+It is not an exception to implementation-first thinking.
+
+It is the place where strategic reasoning is compressed into an implementation-bearing artifact.
+
+Do not weaken the boundary because this prompt is authoring rather than coding.
+
+If a statement helps only human readers feel better informed, it probably does not belong.
+
+If it defines what must become true of the software, what must be preserved while making it true, or how later milestones will prove it true, it probably belongs.

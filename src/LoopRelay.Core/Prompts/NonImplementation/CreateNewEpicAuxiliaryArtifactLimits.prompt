@@ -1,9 +1,41 @@
 # CreateNewEpic Auxiliary Artifact Limits
 
-Output only the `.agents/epic.md` Markdown content, or the documented Create New Epic blocked response when epic creation is unsafe.
+Implementation-first authoring has a single center of gravity.
 
-Do not create auxiliary non-implementation files or side artifacts. Reject separate analysis reports, roadmap revisions, governance documents, RFCs, ADRs, research reports, inventories, implementation-support documents, design documents, certification notes, or planning appendices.
+The work product should leave behind one operational artifact that directs later implementation, not a collection of artifacts about directing implementation.
 
-Only create artifacts that are machine-required or explicitly requested. For this prompt, the sanctioned requested artifact is `.agents/epic.md` unless the blocked response is required.
+An auxiliary artifact is invalid when it moves reasoning out of the sanctioned epic and into a side channel.
 
-If auxiliary non-implementation files are allowed by settings, this extra strict guidance is omitted from the prompt. That setting does not change runtime artifact promotion, validator, ledger, HITL capture, or non-implementation review policy.
+The question is not whether the material would be thoughtful, accurate, or useful to a human reader.
+
+The question is whether the material is part of the implementation-bearing epic, explicitly requested by the user, or required by the project as a machine-consumed implementation artifact.
+
+For CreateNewEpic, the implementation-bearing artifact is `.agents/epic.md`.
+
+Strategic purpose, repository grounding, assumptions, constraints, dependencies, risks, acceptance criteria, and milestone roadmap content remain valid there.
+
+They become invalid when copied into separate reports, appendices, inventories, RFCs, ADRs, governance notes, research notes, analysis documents, planning documents, certification notes, or other companion files whose primary result is human understanding rather than software capability.
+
+The problem with those artifacts is not their format.
+
+The problem is that they make documentation, coordination, governance, or analysis the produced outcome.
+
+CreateNewEpic should instead compress the useful reasoning into the epic itself, and only to the degree that it changes capability, scope, dependency order, constraints, validation, or future milestone expansion.
+
+If the initiative cannot be safely authored as an epic, output the documented Create New Epic blocked response.
+
+The blocked response replaces the epic for that run.
+
+It does not authorize additional explanatory artifacts.
+
+General test:
+
+> If this additional artifact were completed perfectly, but `.agents/epic.md` already contained the capability definition, constraints, dependencies, risks, acceptance criteria, and milestone roadmap needed for future implementation, would the software be meaningfully closer to the intended system?
+
+If the answer is no, the artifact almost certainly does not belong.
+
+If the answer is yes only because humans would have more surrounding narrative, it almost certainly does not belong.
+
+If the answer is yes because the project explicitly requires that artifact as a machine-consumed implementation input, or because the user explicitly requested it, it may belong.
+
+Otherwise, output only the `.agents/epic.md` Markdown content or the documented blocked response.
