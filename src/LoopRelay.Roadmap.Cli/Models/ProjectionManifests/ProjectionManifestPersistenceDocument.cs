@@ -20,9 +20,21 @@ internal sealed record ProjectionManifestPersistenceDocument(
     public static IReadOnlyList<string> Validate(ProjectionManifestPersistenceDocument document)
     {
         var errors = new List<string>();
+        if (document.Entries is null)
+        {
+            errors.Add("Projection manifest entries are required.");
+            return errors;
+        }
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (ProjectionManifestEntryDto entry in document.Entries)
         {
+            if (entry is null)
+            {
+                errors.Add("Projection manifest entries cannot be null.");
+                continue;
+            }
+
             if (string.IsNullOrWhiteSpace(entry.RuntimePromptName))
             {
                 errors.Add("Projection manifest entries must include a runtime prompt name.");
@@ -41,6 +53,21 @@ internal sealed record ProjectionManifestPersistenceDocument(
             if (string.IsNullOrWhiteSpace(entry.ProjectionHash))
             {
                 errors.Add($"Projection manifest entry `{entry.RuntimePromptName}` must include a projection hash.");
+            }
+
+            if (entry.ProjectContextFiles is null)
+            {
+                errors.Add($"Projection manifest entry `{entry.RuntimePromptName}` must include project context files.");
+            }
+
+            if (entry.CausalInputs is null)
+            {
+                errors.Add($"Projection manifest entry `{entry.RuntimePromptName}` must include causal inputs.");
+            }
+
+            if (entry.StaleReasons is null)
+            {
+                errors.Add($"Projection manifest entry `{entry.RuntimePromptName}` must include stale reasons.");
             }
         }
 

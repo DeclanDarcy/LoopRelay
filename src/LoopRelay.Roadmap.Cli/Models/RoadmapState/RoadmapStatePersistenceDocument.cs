@@ -52,12 +52,20 @@ internal sealed record RoadmapStatePersistenceDocument(
     public static IReadOnlyList<string> Validate(RoadmapStatePersistenceDocument document)
     {
         var errors = new List<string>();
-        if (document.ActiveArtifacts.Any(row => string.IsNullOrWhiteSpace(row.Path)))
+        if (document.ActiveArtifacts is null)
+        {
+            errors.Add("Active artifact rows are required.");
+        }
+        else if (document.ActiveArtifacts.Any(row => row is null || string.IsNullOrWhiteSpace(row.Path)))
         {
             errors.Add("Active artifact rows must include a path.");
         }
 
-        if (document.Blockers.Any(row => string.IsNullOrWhiteSpace(row.Blocker)))
+        if (document.Blockers is null)
+        {
+            errors.Add("Blocker rows are required.");
+        }
+        else if (document.Blockers.Any(row => row is null || string.IsNullOrWhiteSpace(row.Blocker)))
         {
             errors.Add("Blocker rows must include a blocker.");
         }
@@ -92,12 +100,28 @@ internal sealed record RoadmapStatePersistenceDocument(
             errors.Add("Projection manifest counts cannot be negative.");
         }
 
-        foreach (RetiredEpic retired in document.RetiredEpics.Select(retired => retired.ToDomain()))
+        if (document.NextValidTransitions is null)
+        {
+            errors.Add("Next valid transitions are required.");
+        }
+
+        if (document.RetiredEpics is null)
+        {
+            errors.Add("Retired epic records are required.");
+            return errors;
+        }
+
+        foreach (RetiredEpic retired in document.RetiredEpics.Where(retired => retired is not null).Select(retired => retired.ToDomain()))
         {
             if (!retired.HasStableIdentity)
             {
                 errors.Add("Retired epic records must include a stable identity.");
             }
+        }
+
+        if (document.RetiredEpics.Any(retired => retired is null))
+        {
+            errors.Add("Retired epic records cannot be null.");
         }
 
         return errors;

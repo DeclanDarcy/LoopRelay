@@ -25,16 +25,26 @@ internal sealed record SplitFamilyPersistenceDocument(
             errors.Add("Split family must include a family ID.");
         }
 
-        if (document.Family.ChildEpicPaths.Count == 0)
+        if (document.Family.ChildEpicPaths is null)
         {
             errors.Add("Split family must include child epic paths.");
+        }
+        else if (document.Family.ChildEpicPaths.Count == 0)
+        {
+            errors.Add("Split family must include child epic paths.");
+        }
+
+        if (document.Family.DependencyOrder is null)
+        {
+            errors.Add("Split family must include a dependency order.");
         }
 
         if (string.IsNullOrWhiteSpace(document.Family.SelectedChildPath))
         {
             errors.Add("Split family must include a selected child path.");
         }
-        else if (!document.Family.ChildEpicPaths.Contains(document.Family.SelectedChildPath, StringComparer.Ordinal))
+        else if (document.Family.ChildEpicPaths is not null &&
+            !document.Family.ChildEpicPaths.Contains(document.Family.SelectedChildPath, StringComparer.Ordinal))
         {
             errors.Add($"Selected child `{document.Family.SelectedChildPath}` must be present in child epic paths.");
         }

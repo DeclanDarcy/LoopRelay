@@ -22,9 +22,21 @@ internal sealed record DecisionLedgerPersistenceDocument(
     public static IReadOnlyList<string> Validate(DecisionLedgerPersistenceDocument document)
     {
         var errors = new List<string>();
+        if (document.Entries is null)
+        {
+            errors.Add("Decision ledger entries are required.");
+            return errors;
+        }
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (DecisionLedgerEntryDto entry in document.Entries)
         {
+            if (entry is null)
+            {
+                errors.Add("Decision ledger entries cannot be null.");
+                continue;
+            }
+
             if (string.IsNullOrWhiteSpace(entry.DecisionId))
             {
                 errors.Add("Decision ledger entries must include a decision ID.");
@@ -39,6 +51,16 @@ internal sealed record DecisionLedgerPersistenceDocument(
             if (!seen.Add(entry.DecisionId))
             {
                 errors.Add($"Decision ledger contains duplicate decision ID `{entry.DecisionId}`.");
+            }
+
+            if (entry.InputArtifactPaths is null)
+            {
+                errors.Add($"Decision ledger entry `{entry.DecisionId}` must include input artifact paths.");
+            }
+
+            if (entry.OutputArtifactPaths is null)
+            {
+                errors.Add($"Decision ledger entry `{entry.DecisionId}` must include output artifact paths.");
             }
         }
 

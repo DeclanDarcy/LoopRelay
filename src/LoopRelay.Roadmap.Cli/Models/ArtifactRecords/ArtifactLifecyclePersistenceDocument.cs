@@ -20,9 +20,21 @@ internal sealed record ArtifactLifecyclePersistenceDocument(
     public static IReadOnlyList<string> Validate(ArtifactLifecyclePersistenceDocument document)
     {
         var errors = new List<string>();
+        if (document.Entries is null)
+        {
+            errors.Add("Artifact lifecycle entries are required.");
+            return errors;
+        }
+
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (ArtifactLifecycleEntryDto entry in document.Entries)
         {
+            if (entry is null)
+            {
+                errors.Add("Artifact lifecycle entries cannot be null.");
+                continue;
+            }
+
             if (string.IsNullOrWhiteSpace(entry.Path))
             {
                 errors.Add("Artifact lifecycle entries must include a path.");
