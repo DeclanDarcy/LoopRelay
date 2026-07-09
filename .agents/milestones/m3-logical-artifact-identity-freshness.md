@@ -1,0 +1,33 @@
+# Milestone 3: Logical Artifact Identity and Freshness Resolution
+
+## Objective
+
+Resolve content and hashes by logical repo-relative path independent of physical storage.
+
+## Implementation
+
+- [ ] Add `LogicalArtifactDescriptor`, `LogicalArtifactContent`, and `LogicalArtifactResolutionResult`.
+- [ ] Add resolver providers for retained filesystem files and file-backed migrated domains.
+- [ ] Add canonical hash service using retained file bytes or canonical export-equivalent migrated content.
+- [ ] Update freshness and prompt consumers to use logical resolution for any path that can become SQLite-backed.
+- [ ] Keep missing-path behavior domain-specific.
+
+## Code Impact
+
+- [ ] Replace direct `RoadmapArtifacts.ReadAsync(path)` hashing in `TransitionInputAccumulator`.
+- [ ] Replace `ExecutionPreparationProvenanceService.CaptureDecisionLedgerInputAsync` file hash of `decision-ledger.json` with canonical decision ledger hash.
+- [ ] Update completion evaluation context construction to resolve execution evidence through the resolver.
+- [ ] Update unblock evidence hashing for execution evidence and migrated histories.
+
+## Tests
+
+- [ ] Retained spec, active epic, plan, operational context, live decision, and live handoff resolve from disk.
+- [ ] Historical decision/handoff/delta paths resolve after import.
+- [ ] Execution evidence paths resolve from file-backed evidence store.
+- [ ] Hash drift in retained and migrated domains reports stale.
+- [ ] Missing migrated evidence reports stale, invalid, or blocked according to consumer behavior.
+
+## Exit Criteria
+
+- [ ] File-backed freshness results match current tests.
+- [ ] All path references that may later point to SQLite-backed records resolve through the logical resolver.

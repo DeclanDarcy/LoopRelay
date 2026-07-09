@@ -253,483 +253,55 @@ Storage result categories:
 
 ## Milestone 1: File-Backed Domain Persistence Surface
 
-### Objective
-
-Move current behavior behind semantic domain contracts while files remain canonical.
-
-### Implementation
-
-1. Add contracts for all migrated domains.
-2. Implement file-backed adapters that delegate to current stores/helpers.
-3. Replace direct persistence semantics in callers with domain operations where the behavior belongs to a migrated domain.
-4. Keep retained live file reads/writes as file operations.
-5. Add conformance tests that freeze current behavior.
-
-### Code Impact
-
-- Wrap `DecisionLedgerStore`, `RoadmapStateStore`, `ArtifactLifecycleStore`, `SplitFamilyStore`, `ExecutionPreparationManifestStore`, `SelectionProvenanceManifestStore`, `ProjectionManifestStore`, and `TransitionJournalStore` behind interfaces.
-- Extract loop history behavior out of `LoopArtifacts` into a history store/facade while preserving live-file methods.
-- Extract numbered execution evidence behavior out of `RoadmapArtifacts.WriteNumberedEvidenceAsync` and `CompletionArtifacts.WriteNumberedEvidenceAsync`.
-- Update `RoadmapCliComposition` and Main CLI composition to construct contract-based services.
-
-### Tests
-
-- Sequence allocation for decisions, handoffs, deltas, and evidence.
-- Live-first read for decisions and handoffs.
-- Strict JSON malformed behavior.
-- Empty-on-malformed execution/selection manifest behavior.
-- Split family legacy markdown migration.
-- Journal started/completed/failed append compatibility.
-
-### Exit Criteria
-
-- Existing workflows pass with file-backed persistence.
-- Migrated-domain behavior is available through semantic contracts.
-- No SQLite schema or canonical database behavior is introduced.
+(See ./milestones/m1-file-backed-domain-persistence-surface.md)
 
 ## Milestone 2: Lossless Filesystem Serialization
 
-### Objective
-
-Make filesystem import/export a first-class capability for every migrated domain while files are still canonical.
-
-### Implementation
-
-1. Add immutable snapshot models for every migrated domain.
-2. Add domain importers from current filesystem shapes.
-3. Add deterministic domain exporters to current filesystem shapes.
-4. Add workspace snapshot aggregate for all domains.
-5. Add validation for duplicate, malformed, missing, partial, and invalid sequence state.
-
-### Tests
-
-- Full `.agents` tree import to workspace snapshot.
-- Snapshot export to clean `.agents` tree.
-- Export/import/export stability for stable domains.
-- Duplicate `DNNNN`, duplicate `NNNN`, duplicate lifecycle path, duplicate runtime prompt, duplicate family ID.
-- Optional missing execution/selection manifests load empty.
-- Legacy markdown-only fixtures for stores that currently support legacy migration.
-
-### Exit Criteria
-
-- Every migrated domain supports import and export.
-- Stable domains are byte-stable after filesystem to snapshot to filesystem.
-- Identity-preserving markdown histories and evidence preserve path, sequence, and body.
+(See ./milestones/m2-lossless-filesystem-serialization.md)
 
 ## Milestone 3: Logical Artifact Identity and Freshness Resolution
 
-### Objective
-
-Resolve content and hashes by logical repo-relative path independent of physical storage.
-
-### Implementation
-
-1. Add `LogicalArtifactDescriptor`, `LogicalArtifactContent`, and `LogicalArtifactResolutionResult`.
-2. Add resolver providers for retained filesystem files and file-backed migrated domains.
-3. Add canonical hash service using retained file bytes or canonical export-equivalent migrated content.
-4. Update freshness and prompt consumers to use logical resolution for any path that can become SQLite-backed.
-5. Keep missing-path behavior domain-specific.
-
-### Code Impact
-
-- Replace direct `RoadmapArtifacts.ReadAsync(path)` hashing in `TransitionInputAccumulator`.
-- Replace `ExecutionPreparationProvenanceService.CaptureDecisionLedgerInputAsync` file hash of `decision-ledger.json` with canonical decision ledger hash.
-- Update completion evaluation context construction to resolve execution evidence through the resolver.
-- Update unblock evidence hashing for execution evidence and migrated histories.
-
-### Tests
-
-- Retained spec, active epic, plan, operational context, live decision, and live handoff resolve from disk.
-- Historical decision/handoff/delta paths resolve after import.
-- Execution evidence paths resolve from file-backed evidence store.
-- Hash drift in retained and migrated domains reports stale.
-- Missing migrated evidence reports stale, invalid, or blocked according to consumer behavior.
-
-### Exit Criteria
-
-- File-backed freshness results match current tests.
-- All path references that may later point to SQLite-backed records resolve through the logical resolver.
+(See ./milestones/m3-logical-artifact-identity-freshness.md)
 
 ## Milestone 4: SQLite Workspace Store and Importable Database State
 
-### Objective
-
-Introduce SQLite initialization, versioning, integrity validation, transactions, and snapshot import without changing runtime workflow authority.
-
-### Implementation
-
-1. Add SQLite package and workspace database locator.
-2. Create schema metadata and initial tables.
-3. Implement schema migrator and integrity validator.
-4. Implement filesystem snapshot import into SQLite in one transaction.
-5. Compare imported database snapshot to filesystem snapshot before classifying as valid.
-6. Add `storage-init` and `storage-import` command behavior.
-
-### Tests
-
-- Missing database initializes to valid empty state.
-- Full filesystem snapshot imports to logically equivalent database.
-- Re-import with unchanged source is idempotent.
-- Import failure rolls back.
-- Unsupported schema version blocks access without mutation.
-- Corrupt database and invalid row fixtures classify correctly.
-- Existing workflows still run file-backed after database import.
-
-### Exit Criteria
-
-- SQLite database can be initialized, imported, and validated.
-- Workflows still use file-backed stores.
-- No exported files are deleted or treated as projections yet.
+(See ./milestones/m4-sqlite-workspace-store-import.md)
 
 ## Milestone 5: Core Roadmap State Runs from SQLite
 
-### Objective
-
-Make decision ledger, roadmap state, artifact lifecycle, and split lineage SQLite-canonical.
-
-### Implementation
-
-1. Implement SQLite-backed stores for:
-   - decision ledger;
-   - roadmap state;
-   - artifact lifecycle;
-   - split lineage.
-2. Route Roadmap CLI composition to SQLite stores when database mode is active.
-3. Make decision append and next `DNNNN` allocation transaction-safe.
-4. Enforce case-insensitive lifecycle path uniqueness.
-5. Make split lookup by child path read SQLite, not filesystem globs.
-6. Export deterministic equivalents:
-   - `.agents/decision-ledger.json`
-   - `.agents/state.json`
-   - `.agents/artifacts/lifecycle.json`
-   - `.agents/splits/split-family-*.json`
-
-### Code Impact
-
-- `RoadmapTransitionPersistence.CaptureSummaryAsync` must use canonical stores for last decision ID and split family count.
-- Legacy markdown import is allowed only during explicit import, not normal SQLite runtime.
-- Stale filesystem JSON must not override database state.
-
-### Tests
-
-- Delete exported core JSON files, load state from SQLite, regenerate exports.
-- Append decisions after imported `D0003` and verify next ID is `D0004`.
-- Lifecycle upsert rejects duplicate case variants.
-- Split child lookup works with only SQLite rows.
-- Exported core files import into a clean equivalent database.
-
-### Exit Criteria
-
-- Core structured machine state is SQLite-canonical.
-- Regenerated exports can be deleted and restored without logical loss.
+(See ./milestones/m5-core-roadmap-state-sqlite.md)
 
 ## Milestone 6: Provenance and Projection Metadata Run from SQLite
 
-### Objective
-
-Make execution preparation provenance, selection provenance, and projection manifest metadata SQLite-canonical while preserving freshness.
-
-### Implementation
-
-1. Implement SQLite-backed execution preparation manifest store.
-2. Implement SQLite-backed selection provenance manifest store.
-3. Implement SQLite-backed projection manifest store keyed by runtime prompt name.
-4. Consolidate duplicated projection manifest behavior so Roadmap and Projections use one canonical contract or conformance suite.
-5. Keep projection body markdown files on disk.
-6. Preserve empty-on-malformed compatibility only at import/export boundaries for execution and selection manifests.
-
-### Code Impact
-
-- `ExecutionPreparationProvenanceService` reads/writes SQLite metadata and hashes retained inputs through the logical hasher.
-- `SelectionProvenanceService` evaluates drift from SQLite metadata and logical input snapshots.
-- `ProjectionCache` and `ProjectContextProjectionService` observe the same manifest semantics.
-
-### Tests
-
-- Freshness parity for retained-file drift, decision ledger drift, retired epic drift, projection body drift, and missing projection bodies.
-- Malformed exported execution/selection manifests load empty during compatibility import.
-- Projection manifest upsert by runtime prompt replaces existing metadata.
-- Roadmap and Projections project tests pass against the same behavior.
-- Metadata export/import into clean database preserves logical equality.
-
-### Exit Criteria
-
-- Provenance and projection metadata are SQLite-canonical.
-- Projection body content remains filesystem-backed.
-- Freshness decisions match file-backed behavior.
+(See ./milestones/m6-provenance-projection-metadata-sqlite.md)
 
 ## Milestone 7: Transition Journal Runs from SQLite with JSONL Interchange
 
-### Objective
-
-Make transition chronology SQLite-canonical while preserving ordered JSONL import/export and legacy records without input snapshots.
-
-### Implementation
-
-1. Implement SQLite journal append with monotonic `event_order`.
-2. Preserve correlation IDs, event kind, states, transition, projection, input hashes, output paths, result, decision, error, and optional input snapshot.
-3. Import legacy JSONL lines, including records without input snapshots.
-4. Export deterministic JSONL ordered by `event_order`.
-5. Route transition runner and state-machine journal writes through the SQLite store.
-
-### Tests
-
-- Started/completed/failed event order is stable.
-- Legacy no-snapshot records import.
-- JSONL export imports into a clean equivalent database.
-- Concurrent append smoke test.
-- Verification hook reports unresolved output paths without mutating journal rows.
-
-### Exit Criteria
-
-- Journal runtime authority is SQLite.
-- JSONL remains an importable/exportable debugging surface.
+(See ./milestones/m7-transition-journal-sqlite-jsonl.md)
 
 ## Milestone 8: Loop Histories Move to SQLite While Live Files Stay on Filesystem
 
-### Objective
-
-Move historical decisions, handoffs, and operational deltas to SQLite while retaining live files and live-first behavior.
-
-### Implementation
-
-1. Implement `ILoopHistoryStore` for decision, handoff, and operational delta histories.
-2. Adapt `LoopArtifacts` into a live/history facade:
-   - live `decisions.md`, `handoff.md`, and `operational_delta.md` remain filesystem files;
-   - numbered histories are SQLite rows;
-   - latest reads check live file first, then highest SQLite sequence.
-3. Preserve rotation ordering:
-   - write SQLite history before deleting live file;
-   - keep live file when history write fails.
-4. Export/import numbered markdown histories.
-
-### Tests
-
-- Decision proposal writes live decisions file and SQLite `decisions.NNNN.md` history.
-- Execution handoff rotates into SQLite before next decision.
-- Operational delta transfer writes live delta, evolves context, then rotates into SQLite.
-- Latest read prefers live files.
-- Export/import preserves sequences and markdown bodies.
-- Injected history write failure keeps live file available.
-
-### Exit Criteria
-
-- Histories are SQLite-canonical.
-- Live files remain filesystem-backed and live-first.
-- Completion archive support is not claimed until the next milestone.
+(See ./milestones/m8-loop-histories-sqlite-live-files.md)
 
 ## Milestone 9: Execution Evidence Moves to SQLite with Path-Compatible Access
 
-### Objective
-
-Move `.agents/evidence/execution/*` to SQLite while preserving path-compatible evidence reads, sequence allocation, search, prompt consumption, completion evaluation, and export/import.
-
-### Implementation
-
-1. Implement `IExecutionEvidenceStore` with write, read by logical path, search, allocation, import, export, and hash validation.
-2. Route `RoadmapArtifacts.WriteNumberedEvidenceAsync` and `CompletionArtifacts.WriteNumberedEvidenceAsync` through the evidence store only for `.agents/evidence/execution`.
-3. Keep non-execution evidence directories filesystem-backed.
-4. Update consumers:
-   - `RoadmapExecutionBridge`
-   - `CompletionCertificationService`
-   - `TransitionInputResolver`
-   - `RoadmapPromptContextBuilder`
-   - `RoadmapUnblockPlanner`
-   - completion context builders
-5. Ensure consumers pass when exported evidence files are deleted but SQLite rows exist.
-
-### Tests
-
-- Existing stem `execution-trust-posture.0003.md` imports and next write allocates `0004`.
-- Prompt context reads SQLite-backed execution evidence.
-- Unblock planner searches or hashes SQLite-backed evidence.
-- Completion evaluation consumes SQLite-backed claim evidence.
-- Missing referenced evidence maps to existing stale/invalid/blocked behavior.
-- Export/import preserves body, path, stem, sequence, and hash.
-
-### Exit Criteria
-
-- Execution evidence is SQLite-canonical.
-- All path-compatible consumers work without physical evidence export files.
+(See ./milestones/m9-execution-evidence-sqlite.md)
 
 ## Milestone 10: Completed Epic Archives Preserve DB-Backed Historical State
 
-### Objective
-
-Make completed epic archives recover histories and execution evidence after those records move to SQLite.
-
-### Implementation
-
-1. Add archive association logic that selects DB-backed decisions, handoffs, deltas, and execution evidence for the completed epic.
-2. Use persisted state, journal output paths, transition intents, and completion context to determine associations.
-3. Materialize associated DB-backed records into deterministic archive filesystem form.
-4. Preserve retained file archive behavior exactly where files remain filesystem-backed.
-5. Add archive import/recovery that reconstructs logical archived state without promoting it to active workspace state.
-6. Use staging before destructive retained-file moves.
-
-### Code Impact
-
-- Refactor `CompletedEpicArchiveService` so it no longer assumes history/evidence directories are canonical file directories.
-- Add storage-neutral archive provider interfaces in `LoopRelay.Completion.Abstractions` and wire SQLite implementations in CLI compositions.
-- Update completed epic evidence loaders to understand archive metadata when present.
-
-### Tests
-
-- Archive includes DB-backed decisions, handoffs, deltas, and execution evidence.
-- Retained plan/context/milestones/review artifacts archive as before.
-- Missing migrated record fails archive instead of silently dropping it.
-- Archive path collisions abort before overwrite.
-- Exported archive imports into a clean recovery context with equivalent archived state.
-
-### Exit Criteria
-
-- Completed epics remain recoverable with DB-backed histories/evidence.
-- Active workspace state and archived state remain distinct.
+(See ./milestones/m10-completed-epic-archives.md)
 
 ## Milestone 11: Bidirectional Workspace Synchronization
 
-### Objective
-
-Provide full and domain-scoped synchronization between canonical SQLite state and deterministic filesystem exports.
-
-### Implementation
-
-1. Implement `IWorkspaceSyncService`.
-2. Add full export for every migrated domain.
-3. Add full import from export into clean or existing database with conflict detection.
-4. Add domain-scoped import/export with dependency validation.
-5. Add sync markers and canonical hashes per domain.
-6. Detect stale exports and external edit conflicts before overwrite.
-7. Integrate `.agents` submodule publishing with fresh export preflight.
-
-### Conflict Rules
-
-- If database changed and export changed since last sync, report conflict.
-- If export is stale and database is newer, block import unless explicit reconciliation is requested.
-- If scoped sync would leave unresolved cross-domain references, fail or require dependent domains.
-- Unsupported schema or export versions fail safely.
-
-### Code Impact
-
-- Existing `AgentsSubmodulePublisher` calls in Main/Roadmap flows must ensure the migrated export surface is fresh before publishing.
-- `storage-export`, `storage-import`, and `storage-sync` commands report changed rows, changed files, domain scope, marker hashes, and conflicts.
-
-### Tests
-
-- Full export regenerates all migrated files.
-- Full import from generated export creates equivalent database.
-- Export/import/export is stable.
-- Scoped sync leaves unrelated domains unchanged.
-- Stale export and divergent edit fixtures fail safely.
-- Fake publisher publishes only after fresh export.
-- Older filesystem-only state imports without losing legacy-supported data.
-
-### Exit Criteria
-
-- Workspace synchronization is intentional, safe, and test-covered.
-- `.agents` submodule publishing can publish the intended export surface.
+(See ./milestones/m11-bidirectional-workspace-sync.md)
 
 ## Milestone 12: Transactional Workflow Persistence and Recovery
 
-### Objective
-
-Coordinate multi-domain workflow writes across SQLite stores and retained filesystem artifacts so failures are deterministic and recoverable.
-
-### Implementation
-
-1. Define persistence units for covered workflows:
-   - roadmap transition save;
-   - decision recording plus state update;
-   - split lineage plus child artifacts plus lifecycle;
-   - execution preparation/provenance updates;
-   - journal event emission;
-   - loop history/evidence writes;
-   - completed epic archive.
-2. Implement `IWorkflowPersistenceCoordinator` around SQLite transactions.
-3. Implement retained file staging/commit/rollback adapter for filesystem artifacts.
-4. Add workflow transaction markers and recovery classification.
-5. Add cross-domain integrity validator.
-6. Ensure journal started/completed/failed records reflect actual outcomes.
-7. Keep transactions out of agent execution time; only persistence phases are transactional.
-
-### Integrity Rules
-
-Detect:
-
-- state or journal references to missing logical paths;
-- orphaned execution evidence;
-- orphaned loop histories;
-- duplicate identities;
-- invalid archive references;
-- stale sync metadata;
-- incomplete workflow transaction markers;
-- invalid split child references;
-- lifecycle rows pointing to invalid paths.
-
-### Tests
-
-- Injected failure after decision append rolls back state/journal claims.
-- Injected split failure does not leave incomplete split family state.
-- Evidence write plus state/journal update either commits coherently or classifies retryable partial state.
-- Retained file finalization failure classifies retryable versus corrupt based on commit point.
-- Concurrent sequence allocation remains unique.
-- Integrity validator reports valid, retryable partial, corrupt, unsupported, and conflict categories.
-
-### Exit Criteria
-
-- Covered workflows use the coordinator.
-- Failure paths are deterministic.
-- No stronger cross-store atomicity guarantee is claimed than staging and recovery can enforce.
+(See ./milestones/m12-transactional-workflow-persistence.md)
 
 ## Milestone 13: Storage Compatibility and Verification Mode
 
-### Objective
-
-Expose executable verification that proves the database, filesystem exports, retained files, logical references, archive recovery, and storage-mode behavior are mutually consistent.
-
-### Implementation
-
-1. Implement `IWorkspaceVerificationService`.
-2. Compose existing domain validators, sync service, logical resolver, archive recovery checks, and transaction integrity validator.
-3. Add temporary export/import round-trip verification in an isolated temp workspace.
-4. Add read-only database open and mutation guard checks.
-5. Expose `storage-verify`.
-6. Add optional `--full-roundtrip` for slower export/import/export checks.
-
-### Verification Findings
-
-Verification reports:
-
-- success;
-- stale export;
-- missing exported file;
-- unresolved logical path;
-- nondeterministic round trip;
-- unrecoverable archive;
-- corrupt domain;
-- unsupported version;
-- mutation required;
-- conflict.
-
-Each finding includes domain, identity/path, rule, severity, current state, expected state, and recommended executable recovery action.
-
-### Tests
-
-- Valid SQLite-canonical workspace with fresh exports verifies successfully.
-- Legacy filesystem workspace imports and verifies successfully.
-- Stale export fixture fails.
-- Missing export fixture fails.
-- Unresolved path fixture fails.
-- Nondeterministic serializer fixture fails.
-- Broken completed epic archive fixture fails.
-- Unsupported schema/export version fixture fails.
-- Read-only verification does not change database bytes or export tree hashes.
-
-### Exit Criteria
-
-- Verification is read-only by default.
-- Required consistency failures are detected.
-- Full migrated persistence architecture is covered by executable checks.
+(See ./milestones/m13-storage-verification-mode.md)
 
 ## Cross-Cutting Test Plan
 

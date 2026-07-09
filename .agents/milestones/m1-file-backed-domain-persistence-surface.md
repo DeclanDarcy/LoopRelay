@@ -1,0 +1,35 @@
+# Milestone 1: File-Backed Domain Persistence Surface
+
+## Objective
+
+Move current behavior behind semantic domain contracts while files remain canonical.
+
+## Implementation
+
+- [ ] Add contracts for all migrated domains.
+- [ ] Implement file-backed adapters that delegate to current stores/helpers.
+- [ ] Replace direct persistence semantics in callers with domain operations where the behavior belongs to a migrated domain.
+- [ ] Keep retained live file reads/writes as file operations.
+- [ ] Add conformance tests that freeze current behavior.
+
+## Code Impact
+
+- [ ] Wrap `DecisionLedgerStore`, `RoadmapStateStore`, `ArtifactLifecycleStore`, `SplitFamilyStore`, `ExecutionPreparationManifestStore`, `SelectionProvenanceManifestStore`, `ProjectionManifestStore`, and `TransitionJournalStore` behind interfaces.
+- [ ] Extract loop history behavior out of `LoopArtifacts` into a history store/facade while preserving live-file methods.
+- [ ] Extract numbered execution evidence behavior out of `RoadmapArtifacts.WriteNumberedEvidenceAsync` and `CompletionArtifacts.WriteNumberedEvidenceAsync`.
+- [ ] Update `RoadmapCliComposition` and Main CLI composition to construct contract-based services.
+
+## Tests
+
+- [ ] Sequence allocation for decisions, handoffs, deltas, and evidence.
+- [ ] Live-first read for decisions and handoffs.
+- [ ] Strict JSON malformed behavior.
+- [ ] Empty-on-malformed execution/selection manifest behavior.
+- [ ] Split family legacy markdown migration.
+- [ ] Journal started/completed/failed append compatibility.
+
+## Exit Criteria
+
+- [ ] Existing workflows pass with file-backed persistence.
+- [ ] Migrated-domain behavior is available through semantic contracts.
+- [ ] No SQLite schema or canonical database behavior is introduced.
