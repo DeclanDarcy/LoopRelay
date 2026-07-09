@@ -37,7 +37,7 @@ Move current behavior behind semantic domain contracts while files remain canoni
 - [x] Live-first read for decisions and handoffs.
 - [x] Strict JSON malformed behavior.
 - [x] Empty-on-malformed execution/selection manifest behavior.
-- [ ] Split family legacy markdown migration.
+- [x] Split family legacy markdown migration.
 - [ ] Journal started/completed/failed append compatibility.
 
 ## Exit Criteria
