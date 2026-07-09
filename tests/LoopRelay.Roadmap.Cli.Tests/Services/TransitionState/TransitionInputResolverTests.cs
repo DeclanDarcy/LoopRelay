@@ -1,3 +1,4 @@
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
@@ -170,15 +171,50 @@ public sealed class TransitionInputResolverTests
         Assert.DoesNotContain(snapshot.ArtifactInputs, input => input.Path == ".agents/specs/stale.md");
     }
 
+    [Fact]
+    public async Task Completion_evaluation_hashes_execution_evidence_through_canonical_hasher()
+    {
+        using var repo = new TempRepo();
+        string projectionPath = SeedProjection(repo, "EvaluateEpicCompletionAndDrift");
+        string evidencePath = ".agents/evidence/execution/execution.0001.md";
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
+        repo.Write(evidencePath, "execution evidence");
+        repo.Write(".agents/specs/active.md", "Epic Path: .agents/epic.md");
+        await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/active.md");
+        string logicalEvidenceHash = "logical-evidence-hash";
+        ICanonicalArtifactHasher canonicalHasher = new OverridingCanonicalArtifactHasher(
+            RoadmapLogicalArtifactServices.CreateCanonicalHasher(repo.Artifacts),
+            evidencePath,
+            logicalEvidenceHash);
+
+        TransitionInputSnapshot snapshot = await ResolveAsync(
+            repo,
+            "EvaluateEpicCompletionAndDrift",
+            projectionPath,
+            context: TransitionInputContext.ExecutionEvidence(evidencePath),
+            canonicalHasher: canonicalHasher);
+
+        TransitionArtifactInput evidenceInput = Assert.Single(
+            snapshot.ArtifactInputs,
+            input => input.Path == evidencePath);
+        Assert.Equal(logicalEvidenceHash, evidenceInput.Hash);
+        Assert.NotEqual(RoadmapHash.Sha256("execution evidence"), evidenceInput.Hash);
+        Assert.Equal(logicalEvidenceHash, snapshot.ToInputArtifactHashes()[evidencePath]);
+    }
+
     private static async Task<TransitionInputSnapshot> ResolveAsync(
         TempRepo repo,
         string runtimePromptName,
         string projectionPath,
         string renderedContext = "rendered context",
         string secondaryInput = "",
-        TransitionInputContext? context = null)
+        TransitionInputContext? context = null,
+        ICanonicalArtifactHasher? canonicalHasher = null)
     {
-        return await new TransitionInputResolver(repo.Artifacts, ExecutionPreparationTestSupport.CreateProvenance(repo)).ResolveAsync(new TransitionInputRequest(
+        return await new TransitionInputResolver(
+            repo.Artifacts,
+            ExecutionPreparationTestSupport.CreateProvenance(repo),
+            canonicalHasher ?? RoadmapLogicalArtifactServices.CreateCanonicalHasher(repo.Artifacts)).ResolveAsync(new TransitionInputRequest(
             runtimePromptName,
             projectionPath,
             renderedContext,
@@ -191,5 +227,38 @@ public sealed class TransitionInputResolverTests
         string path = RoadmapArtifactPaths.ProjectionPaths[runtimePromptName];
         repo.Write(path, ProjectionSamples.Valid(runtimePromptName));
         return path;
+    }
+
+    private sealed class OverridingCanonicalArtifactHasher(
+        ICanonicalArtifactHasher inner,
+        string overriddenPath,
+        string overriddenHash) : ICanonicalArtifactHasher
+    {
+        public async Task<CanonicalArtifactHash?> HashIfPresentAsync(
+            string relativePath,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.Equals(relativePath, overriddenPath, StringComparison.Ordinal))
+            {
+                return new CanonicalArtifactHash(
+                    new LogicalArtifactDescriptor(
+                        relativePath,
+                        LogicalArtifactDomain.ExecutionEvidence,
+                        LogicalArtifactStorageKind.SqliteCanonicalRecord,
+                        relativePath),
+                    "test",
+                    overriddenHash);
+            }
+
+            return await inner.HashIfPresentAsync(relativePath, cancellationToken);
+        }
+
+        public async Task<CanonicalArtifactHash> RequireHashAsync(
+            string relativePath,
+            CancellationToken cancellationToken = default)
+        {
+            CanonicalArtifactHash? hash = await HashIfPresentAsync(relativePath, cancellationToken);
+            return hash ?? throw new InvalidOperationException($"Missing hash for {relativePath}.");
+        }
     }
 }

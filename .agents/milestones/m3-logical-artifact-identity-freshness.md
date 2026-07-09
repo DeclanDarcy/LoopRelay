@@ -21,7 +21,7 @@ Resolve content and hashes by logical repo-relative path independent of physical
 
 ## Code Impact
 
-- [ ] Replace direct `RoadmapArtifacts.ReadAsync(path)` hashing in `TransitionInputAccumulator`.
+- [x] Replace direct `RoadmapArtifacts.ReadAsync(path)` hashing in `TransitionInputAccumulator`.
 - [ ] Replace `ExecutionPreparationProvenanceService.CaptureDecisionLedgerInputAsync` file hash of `decision-ledger.json` with canonical decision ledger hash.
 - [ ] Update completion evaluation context construction to resolve execution evidence through the resolver.
 - [ ] Update unblock evidence hashing for execution evidence and migrated histories.

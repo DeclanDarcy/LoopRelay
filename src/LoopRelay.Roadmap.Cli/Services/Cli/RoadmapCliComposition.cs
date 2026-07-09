@@ -83,6 +83,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
 
         IExecutionEvidenceStore executionEvidence = new FileBackedExecutionEvidenceStore(store, repository);
         var artifacts = new RoadmapArtifacts(store, repository, executionEvidence);
+        ICanonicalArtifactHasher canonicalHasher = RoadmapLogicalArtifactServices.CreateCanonicalHasher(artifacts);
         var repositoryArtifacts = new RepositoryArtifactStore(store, repository);
         var nonImplementationLedger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
         var hitlRequestCapture = new ExplicitHitlNonImplementationRequestCaptureService(
@@ -114,7 +115,7 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var promptRunner = new RoadmapPromptRunner(progressRuntime, repository, console, promptPolicy);
         var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
         var contextBuilder = new RoadmapPromptContextBuilder(artifacts, executionPreparation);
-        var inputResolver = new TransitionInputResolver(artifacts, executionPreparation);
+        var inputResolver = new TransitionInputResolver(artifacts, executionPreparation, canonicalHasher);
         ISelectionProvenanceManifestStore selectionProvenanceManifest = new SelectionProvenanceManifestStore(artifacts);
         var selectionProvenance = new SelectionProvenanceService(
             artifacts,

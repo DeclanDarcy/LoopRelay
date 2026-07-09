@@ -1,8 +1,7 @@
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 using LoopRelay.Roadmap.Cli.Primitives.Transitions;
-using LoopRelay.Roadmap.Cli.Services.Artifacts;
-using LoopRelay.Roadmap.Cli.Services.State;
 
 namespace LoopRelay.Roadmap.Cli.Services.TransitionState;
 
@@ -14,13 +13,13 @@ internal sealed class TransitionInputAccumulator
 
     public void AddOptional(string path, string role) => Add(path, role, required: false);
 
-    public async Task<IReadOnlyList<TransitionArtifactInput>> SnapshotAsync(RoadmapArtifacts artifacts)
+    public async Task<IReadOnlyList<TransitionArtifactInput>> SnapshotAsync(ICanonicalArtifactHasher canonicalHasher)
     {
         var snapshot = new List<TransitionArtifactInput>();
         foreach (PendingTransitionInput input in inputs.Values.OrderBy(input => input.Path, StringComparer.Ordinal))
         {
-            string? content = await artifacts.ReadAsync(input.Path);
-            if (content is null)
+            CanonicalArtifactHash? hash = await canonicalHasher.HashIfPresentAsync(input.Path);
+            if (hash is null)
             {
                 if (input.Required)
                 {
@@ -41,7 +40,7 @@ internal sealed class TransitionInputAccumulator
                 input.JoinedRoles(),
                 input.Required,
                 TransitionInputPresence.Present,
-                RoadmapHash.Sha256(content)));
+                hash.Value));
         }
 
         return snapshot;

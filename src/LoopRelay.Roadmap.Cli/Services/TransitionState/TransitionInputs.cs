@@ -1,4 +1,5 @@
 using System.Text;
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
@@ -9,8 +10,19 @@ namespace LoopRelay.Roadmap.Cli.Services.TransitionState;
 
 internal sealed class TransitionInputResolver(
     RoadmapArtifacts _artifacts,
-    ExecutionPreparationProvenanceService _executionPreparation)
+    ExecutionPreparationProvenanceService _executionPreparation,
+    ICanonicalArtifactHasher _canonicalHasher)
 {
+    public TransitionInputResolver(
+        RoadmapArtifacts artifacts,
+        ExecutionPreparationProvenanceService executionPreparation)
+        : this(
+            artifacts,
+            executionPreparation,
+            RoadmapLogicalArtifactServices.CreateCanonicalHasher(artifacts))
+    {
+    }
+
     public async Task<TransitionInputSnapshot> ResolveAsync(TransitionInputRequest request)
     {
         var inputs = new TransitionInputAccumulator();
@@ -22,7 +34,7 @@ internal sealed class TransitionInputResolver(
 
         await AddPromptInputsAsync(request, inputs);
 
-        IReadOnlyList<TransitionArtifactInput> artifactInputs = await inputs.SnapshotAsync(_artifacts);
+        IReadOnlyList<TransitionArtifactInput> artifactInputs = await inputs.SnapshotAsync(_canonicalHasher);
         string? projectionHash = artifactInputs
             .FirstOrDefault(input => string.Equals(input.Path, request.ProjectionPath, StringComparison.Ordinal))
             ?.Hash;

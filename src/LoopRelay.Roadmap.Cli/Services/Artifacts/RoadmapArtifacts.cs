@@ -19,6 +19,10 @@ internal sealed partial class RoadmapArtifacts(
 
     public Repository Repository => _repository;
 
+    public IArtifactStore Store => _store;
+
+    public IExecutionEvidenceStore ExecutionEvidenceStore => _executionEvidenceStore;
+
     public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));
 
     public Task<string?> ReadAsync(string relativePath) => _store.ReadAsync(Resolve(relativePath));
