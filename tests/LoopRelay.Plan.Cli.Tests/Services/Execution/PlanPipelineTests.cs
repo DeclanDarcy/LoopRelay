@@ -98,8 +98,11 @@ public class PlanPipelineTests
         }));
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
         {
-            seenPlanAtReview = AdversarialPlanReview.Render("ADVERSARIAL REVIEW PROJECTION", "PLAN V1");
-            Assert.Equal(seenPlanAtReview, prompt);
+            seenPlanAtReview = prompt;
+            AdversarialPlanReviewPromptTestAssertions.AssertContainsImplementationFirstReviewSemantics(prompt);
+            AdversarialPlanReviewPromptTestAssertions.AssertNoUnresolvedPlaceholders(prompt);
+            Assert.Contains("ADVERSARIAL REVIEW PROJECTION", prompt);
+            Assert.Contains("PLAN V1", prompt);
             reviewOutput = "- CONDITIONAL PASS\nTighten milestone 2.";
             return Turns.Completed(reviewOutput);
         }));
