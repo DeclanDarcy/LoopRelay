@@ -10,6 +10,7 @@ using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
+using LoopRelay.Roadmap.Cli.Services.Splits;
 using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 using LoopRelay.Roadmap.Cli.Services.TransitionState;
 using LoopRelay.Roadmap.Cli.Tests.Services.Cli;
@@ -92,7 +93,8 @@ public sealed class RoadmapPromptTransitionRunnerTests
             manifest,
             stateStore,
             decisionLedger,
-            journal);
+            journal,
+            new SplitFamilyStore(repo.Artifacts));
         return new RoadmapPromptTransitionRunner(
             inputResolver,
             promptRunner,

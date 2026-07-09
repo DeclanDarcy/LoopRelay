@@ -6,15 +6,15 @@ Move historical decisions, handoffs, and operational deltas to SQLite while reta
 
 ## Implementation
 
-- [ ] Implement `ILoopHistoryStore` for decision, handoff, and operational delta histories.
-- [ ] Adapt `LoopArtifacts` into a live/history facade:
-  - [ ] live `decisions.md`, `handoff.md`, and `operational_delta.md` remain filesystem files;
-  - [ ] numbered histories are SQLite rows;
-  - [ ] latest reads check live file first, then highest SQLite sequence.
-- [ ] Preserve rotation ordering:
-  - [ ] write SQLite history before deleting live file;
-  - [ ] keep live file when history write fails.
-- [ ] Export/import numbered markdown histories.
+- [x] Implement `ILoopHistoryStore` for decision, handoff, and operational delta histories.
+- [x] Adapt `LoopArtifacts` into a live/history facade:
+  - [x] live `decisions.md`, `handoff.md`, and `operational_delta.md` remain filesystem files;
+  - [x] numbered histories are SQLite rows;
+  - [x] latest reads check live file first, then highest SQLite sequence.
+- [x] Preserve rotation ordering:
+  - [x] write SQLite history before deleting live file;
+  - [x] keep live file when history write fails.
+- [x] Export/import numbered markdown histories.
 
 ## Implementation Constraints
 
@@ -26,15 +26,15 @@ Move historical decisions, handoffs, and operational deltas to SQLite while reta
 
 ## Tests
 
-- [ ] Decision proposal writes live decisions file and SQLite `decisions.NNNN.md` history.
-- [ ] Execution handoff rotates into SQLite before next decision.
-- [ ] Operational delta transfer writes live delta, evolves context, then rotates into SQLite.
-- [ ] Latest read prefers live files.
-- [ ] Export/import preserves sequences and markdown bodies.
-- [ ] Injected history write failure keeps live file available.
+- [x] Decision proposal writes live decisions file and SQLite `decisions.NNNN.md` history.
+- [x] Execution handoff rotates into SQLite before next decision.
+- [x] Operational delta transfer writes live delta, evolves context, then rotates into SQLite.
+- [x] Latest read prefers live files.
+- [x] Export/import preserves sequences and markdown bodies.
+- [x] Injected history write failure keeps live file available.
 
 ## Exit Criteria
 
-- [ ] Histories are SQLite-canonical.
-- [ ] Live files remain filesystem-backed and live-first.
-- [ ] Completion archive support is not claimed until the next milestone.
+- [x] Histories are SQLite-canonical.
+- [x] Live files remain filesystem-backed and live-first.
+- [x] Completion archive support is not claimed until the next milestone.

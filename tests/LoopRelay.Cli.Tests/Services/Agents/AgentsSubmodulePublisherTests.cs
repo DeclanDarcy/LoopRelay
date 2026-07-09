@@ -1,7 +1,12 @@
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Agents;
+using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Cli.Tests.Services.Support;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Infrastructure.Services.Artifacts;
+using LoopRelay.Orchestration.Services;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace LoopRelay.Cli.Tests.Services.Agents;
@@ -83,6 +88,41 @@ public class AgentsSubmodulePublisherTests
         Assert.Equal(new[] { "add", "-A" }, submoduleCalls[2].Args);
         Assert.Equal(new[] { "commit", "-m", Message }, submoduleCalls[3].Args);
         Assert.Equal(new[] { "push" }, submoduleCalls[4].Args);
+    }
+
+    [Fact]
+    public async Task Publish_exports_sqlite_backed_agents_files_before_git_status()
+    {
+        using var repo = new TempFileRepo();
+        await InitializeWorkspaceDatabaseAsync(repo.Repository);
+        await InsertLoopHistoryAsync(
+            repo.Repository,
+            "Handoff",
+            1,
+            OrchestrationArtifactPaths.HistoricalHandoff(1),
+            "handoff from sqlite");
+        var fake = new FakeProcessRunner
+        {
+            Handler = (_, args) => args[0] switch
+            {
+                "status" => File.Exists(repo.Resolve(OrchestrationArtifactPaths.HistoricalHandoff(1)))
+                    ? FakeProcessRunner.Ok(" M handoffs/handoff.0001.md")
+                    : FakeProcessRunner.Ok(string.Empty),
+                "branch" => FakeProcessRunner.Ok("main"),
+                _ => FakeProcessRunner.Ok()
+            }
+        };
+        var publisher = new AgentsSubmodulePublisher(
+            fake,
+            repo.Repository,
+            new RecordingLoopConsole(),
+            new SqliteAgentsSubmodulePublishPreflight(repo.Store, repo.Repository));
+
+        bool committed = await publisher.PublishAsync(Message, CancellationToken.None);
+
+        Assert.True(committed);
+        Assert.Equal("handoff from sqlite", File.ReadAllText(repo.Resolve(OrchestrationArtifactPaths.HistoricalHandoff(1))));
+        Assert.Contains(fake.Calls, call => call.Args[0] == "commit" && IsSubmodule(call.WorkingDirectory));
     }
 
     [Fact]
@@ -288,5 +328,120 @@ public class AgentsSubmodulePublisherTests
 
         await Assert.ThrowsAsync<LoopStepException>(
             () => New(fake).PublishAsync(Message, CancellationToken.None));
+    }
+
+    private sealed class TempFileRepo : IDisposable
+    {
+        public TempFileRepo()
+        {
+            Root = Path.Combine(Path.GetTempPath(), "looprelay-publisher-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Root);
+            Directory.CreateDirectory(Path.Combine(Root, ".agents"));
+            Repository = new Repository
+            {
+                Id = Guid.NewGuid(),
+                Name = "repo",
+                Path = Root,
+            };
+            Store = new FileSystemArtifactStore();
+        }
+
+        public string Root { get; }
+
+        public Repository Repository { get; }
+
+        public FileSystemArtifactStore Store { get; }
+
+        public string Resolve(string relativePath) =>
+            ArtifactPath.ResolveRepositoryPath(Repository, relativePath);
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Root))
+            {
+                Directory.Delete(Root, recursive: true);
+            }
+        }
+    }
+
+    private static async Task InitializeWorkspaceDatabaseAsync(Repository repository)
+    {
+        string databasePath = LoopWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = false,
+        }.ToString());
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE IF NOT EXISTS schema_metadata(
+                key text primary key,
+                value text not null
+            );
+
+            CREATE TABLE IF NOT EXISTS workspace_metadata(
+                key text primary key,
+                value text not null
+            );
+
+            CREATE TABLE IF NOT EXISTS loop_history(
+                kind text not null,
+                sequence integer not null,
+                logical_path text not null unique,
+                body text not null,
+                content_hash text not null,
+                created_at text not null,
+                primary key(kind, sequence)
+            );
+
+            CREATE TABLE IF NOT EXISTS execution_evidence(
+                logical_path text primary key,
+                stem text not null,
+                sequence integer not null,
+                body text not null,
+                content_hash text not null,
+                created_at text not null,
+                writer text null,
+                metadata_json text not null
+            );
+
+            INSERT INTO schema_metadata (key, value)
+            VALUES ('schema_version', '1')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+
+            INSERT INTO workspace_metadata (key, value)
+            VALUES ('persistence_state', 'imported')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+            """;
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task InsertLoopHistoryAsync(
+        Repository repository,
+        string kind,
+        int sequence,
+        string relativePath,
+        string body)
+    {
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = LoopWorkspaceDatabase.Resolve(repository),
+            Mode = SqliteOpenMode.ReadWrite,
+            Pooling = false,
+        }.ToString());
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO loop_history (kind, sequence, logical_path, body, content_hash, created_at)
+            VALUES ($kind, $sequence, $logical_path, $body, 'test-hash', '2026-01-01T00:00:00.0000000+00:00');
+            """;
+        command.Parameters.AddWithValue("$kind", kind);
+        command.Parameters.AddWithValue("$sequence", sequence);
+        command.Parameters.AddWithValue("$logical_path", relativePath);
+        command.Parameters.AddWithValue("$body", body);
+        await command.ExecuteNonQueryAsync();
     }
 }

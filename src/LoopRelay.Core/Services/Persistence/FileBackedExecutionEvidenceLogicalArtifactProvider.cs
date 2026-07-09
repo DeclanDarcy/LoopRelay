@@ -7,6 +7,11 @@ namespace LoopRelay.Core.Services.Persistence;
 public sealed partial class FileBackedExecutionEvidenceLogicalArtifactProvider(
     IExecutionEvidenceStore evidenceStore) : ILogicalArtifactProvider
 {
+    private readonly LogicalArtifactStorageKind _storageKind =
+        evidenceStore is SqliteExecutionEvidenceStore
+            ? LogicalArtifactStorageKind.SqliteCanonicalRecord
+            : LogicalArtifactStorageKind.FileBackedMigratedDomain;
+
     public bool CanResolve(string relativePath) =>
         relativePath.Replace('\\', '/').TrimStart('/').StartsWith(
             FileBackedExecutionEvidenceStore.ExecutionEvidenceDirectory + "/",
@@ -25,7 +30,7 @@ public sealed partial class FileBackedExecutionEvidenceLogicalArtifactProvider(
         LogicalArtifactDescriptor descriptor = new(
             normalizedPath,
             LogicalArtifactDomain.ExecutionEvidence,
-            LogicalArtifactStorageKind.FileBackedMigratedDomain,
+            _storageKind,
             validSequence ? $"{match.Groups["stem"].Value}:{match.Groups["number"].Value}" : normalizedPath);
         if (!validSequence)
         {

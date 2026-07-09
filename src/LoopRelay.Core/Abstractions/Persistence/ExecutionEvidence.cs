@@ -13,4 +13,6 @@ public interface IExecutionEvidenceStore
     Task<string> NextPathAsync(string stem);
 
     Task<ExecutionEvidenceRecord?> ReadAsync(string relativePath);
+
+    Task<IReadOnlyList<ExecutionEvidenceRecord>> ListAsync(string searchPattern = "*.md");
 }

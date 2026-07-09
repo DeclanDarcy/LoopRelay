@@ -549,8 +549,8 @@ internal sealed class ExecutionPreparationProvenanceService(
 
     private async Task<string?> HashIfPresentAsync(string path)
     {
-        string? content = await _artifacts.ReadAsync(path);
-        return string.IsNullOrWhiteSpace(content) ? null : RoadmapHash.Sha256(content);
+        CanonicalArtifactHash? hash = await _canonicalHasher.HashIfPresentAsync(path);
+        return hash?.Value;
     }
 
     private static DerivedArtifactCausalInput ToCausalInput(ExecutionPreparationManifestInput input) =>

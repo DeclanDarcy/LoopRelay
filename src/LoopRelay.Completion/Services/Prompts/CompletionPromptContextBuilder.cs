@@ -96,13 +96,21 @@ internal sealed class CompletionPromptContextBuilder(
         var sections = new List<ContextSection>();
         foreach (string path in paths.Order(StringComparer.Ordinal).TakeLast(5))
         {
-            if (await _artifacts.ReadAsync(path) is { } content)
+            if (await ReadOptionalLogicalAsync(path) is { } content)
             {
                 sections.Add(Section($"Recent Handoff: {path}", content));
             }
         }
 
         return sections;
+    }
+
+    private async Task<string?> ReadOptionalLogicalAsync(string relativePath)
+    {
+        LogicalArtifactResolutionResult result = await _logicalResolver.ResolveAsync(relativePath);
+        return result.IsResolved && !string.IsNullOrWhiteSpace(result.Content?.Text)
+            ? result.Content.Text
+            : null;
     }
 
     private async Task AddNonImplementationReviewSummarySectionsAsync(

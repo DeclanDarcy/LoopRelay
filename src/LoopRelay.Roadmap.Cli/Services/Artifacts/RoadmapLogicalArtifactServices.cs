@@ -4,6 +4,7 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Roadmap.Cli.Services.Persistence;
 
 namespace LoopRelay.Roadmap.Cli.Services.Artifacts;
 
@@ -34,20 +35,33 @@ internal static class RoadmapLogicalArtifactServices
         Repository repository,
         IExecutionEvidenceStore executionEvidenceStore)
     {
-        var resolver = new LogicalArtifactResolver(
-        [
+        var providers = new List<ILogicalArtifactProvider>
+        {
             new RetainedFilesystemLogicalArtifactProvider(
                 store,
                 repository,
                 RetainedExactPaths(),
                 RetainedPatterns()),
-            new FileBackedMigratedDomainLogicalArtifactProvider(
-                store,
-                repository,
-                FileBackedMigratedExactPaths(),
-                FileBackedMigratedPatterns()),
-            new FileBackedExecutionEvidenceLogicalArtifactProvider(executionEvidenceStore),
-        ]);
+        };
+
+        WorkspaceDatabaseIntegrityResult databaseIntegrity = new WorkspaceSqliteStore()
+            .ValidateAsync(repository)
+            .GetAwaiter()
+            .GetResult();
+        if (databaseIntegrity.Status is WorkspaceDatabaseIntegrityStatus.ValidImported or WorkspaceDatabaseIntegrityStatus.ValidCanonical)
+        {
+            providers.Add(new SqliteStructuredLogicalArtifactProvider(repository));
+            providers.Add(new SqliteLoopHistoryLogicalArtifactProvider(repository));
+        }
+
+        providers.Add(new FileBackedMigratedDomainLogicalArtifactProvider(
+            store,
+            repository,
+            FileBackedMigratedExactPaths(),
+            FileBackedMigratedPatterns()));
+        providers.Add(new FileBackedExecutionEvidenceLogicalArtifactProvider(executionEvidenceStore));
+
+        var resolver = new LogicalArtifactResolver(providers);
 
         return resolver;
     }

@@ -5,4 +5,9 @@ internal enum RoadmapCliCommand
     Status,
     Run,
     Unblock,
+    StorageInit,
+    StorageImport,
+    StorageExport,
+    StorageSync,
+    StorageVerify,
 }

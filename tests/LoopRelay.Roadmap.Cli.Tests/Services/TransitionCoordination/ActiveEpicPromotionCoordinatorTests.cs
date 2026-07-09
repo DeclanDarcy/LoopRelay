@@ -15,6 +15,7 @@ using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Splits;
 using LoopRelay.Roadmap.Cli.Services.State;
 using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 using LoopRelay.Roadmap.Cli.Services.TransitionState;
@@ -197,7 +198,8 @@ public sealed class ActiveEpicPromotionCoordinatorTests
             manifestStore,
             stateStore,
             decisionLedger,
-            journalStore);
+            journalStore,
+            new SplitFamilyStore(repo.Artifacts));
         var promotionService = new ArtifactPromotionService(repo.Artifacts, lifecycleStore);
         return new CoordinatorHarness(
             new ActiveEpicPromotionCoordinator(

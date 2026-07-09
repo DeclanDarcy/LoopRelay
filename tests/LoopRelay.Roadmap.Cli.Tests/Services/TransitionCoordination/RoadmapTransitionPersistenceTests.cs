@@ -1,4 +1,6 @@
 using System.Text.Json;
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Models.Decisions;
 using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
 using LoopRelay.Roadmap.Cli.Models.RoadmapState;
@@ -8,7 +10,9 @@ using LoopRelay.Roadmap.Cli.Primitives.Projections;
 using LoopRelay.Roadmap.Cli.Primitives.State;
 using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Splits;
 using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 using LoopRelay.Roadmap.Cli.Services.TransitionState;
 using LoopRelay.Roadmap.Cli.Tests.Services.Support;
@@ -88,7 +92,8 @@ public sealed class RoadmapTransitionPersistenceTests
             manifestStore,
             stateStore,
             decisionLedger,
-            new TransitionJournalStore(repo.Artifacts));
+            new TransitionJournalStore(repo.Artifacts),
+            new SplitFamilyStore(repo.Artifacts));
 
         await persistence.SaveAsync(
             RoadmapState.ActiveEpicReady,
@@ -139,7 +144,8 @@ public sealed class RoadmapTransitionPersistenceTests
             manifestStore,
             stateStore,
             decisionLedger,
-            journalStore);
+            journalStore,
+            new SplitFamilyStore(repo.Artifacts));
 
         DateTimeOffset failedAt = DateTimeOffset.Parse("2026-01-04T00:00:00Z");
         string[] evidencePaths =
@@ -201,6 +207,93 @@ public sealed class RoadmapTransitionPersistenceTests
     }
 
     [Fact]
+    public async Task Save_and_failure_persistence_execute_through_workflow_coordinator()
+    {
+        using var repo = new TempRepo();
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "# Epic: Active\n");
+        var coordinator = new RecordingWorkflowPersistenceCoordinator();
+        var persistence = new RoadmapTransitionPersistence(
+            repo.Artifacts,
+            new ProjectionManifestStore(repo.Artifacts),
+            new RoadmapStateStore(repo.Artifacts),
+            new DecisionLedgerStore(repo.Artifacts),
+            new TransitionJournalStore(repo.Artifacts),
+            new SplitFamilyStore(repo.Artifacts),
+            coordinator);
+
+        await persistence.SaveAsync(
+            RoadmapState.ActiveEpicReady,
+            TransitionStatus.Completed,
+            RoadmapState.CreateNewEpic,
+            RoadmapState.ActiveEpicReady,
+            "CreateNewEpic",
+            RoadmapArtifactPaths.ProjectionPaths["CreateNewEpic"],
+            RoadmapArtifactPaths.ActiveEpic,
+            "Completed",
+            DateTimeOffset.Parse("2026-01-03T00:00:00Z"),
+            DateTimeOffset.Parse("2026-01-03T00:00:01Z"),
+            null,
+            null);
+        await persistence.PersistWorkflowFailureAsync(new RoadmapWorkflowFailure(
+            "InvariantFailed",
+            RoadmapState.ActiveEpicReady,
+            RoadmapState.MilestoneSpecsReady,
+            RoadmapState.EvidenceBlocked,
+            TransitionStatus.Paused,
+            "GenerateMilestoneDeepDivesForEpic",
+            RoadmapArtifactPaths.ProjectionPaths["GenerateMilestoneDeepDivesForEpic"],
+            "InvariantValidator",
+            "SpecEpicMismatch",
+            [".agents/evidence/blockers/fallback.0001.md"],
+            "Spec epic path does not match the active epic.",
+            "Repair the milestone spec bundle.",
+            "ResolveInvariantViolation",
+            "Invariant Failed: SpecEpicMismatch",
+            DateTimeOffset.Parse("2026-01-04T00:00:00Z")));
+
+        Assert.Contains(WorkflowPersistenceUnit.RoadmapTransitionSave, coordinator.Units);
+        Assert.Contains(WorkflowPersistenceUnit.DecisionRecordingAndStateUpdate, coordinator.Units);
+    }
+
+    [Fact]
+    public async Task Injected_failure_after_decision_append_does_not_write_state_or_journal_claims()
+    {
+        using var repo = new TempRepo();
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "# Epic: Active\n");
+        var decisionLedger = new RecordingDecisionLedgerStore();
+        var stateStore = new ThrowingRoadmapStateStore();
+        var journalStore = new RecordingTransitionJournalStore();
+        var persistence = new RoadmapTransitionPersistence(
+            repo.Artifacts,
+            new ProjectionManifestStore(repo.Artifacts),
+            stateStore,
+            decisionLedger,
+            journalStore,
+            new SplitFamilyStore(repo.Artifacts),
+            new RecordingWorkflowPersistenceCoordinator());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => persistence.RecordDecisionAndSaveAsync(
+            RoadmapState.StrategicInvestigationRequired,
+            TransitionStatus.Completed,
+            RoadmapState.SelectNextStrategicInitiative,
+            RoadmapState.StrategicInvestigationRequired,
+            "SelectNextEpic",
+            "SelectNextEpic",
+            RoadmapArtifactPaths.Selection,
+            "Strategic Investigation Required",
+            "High",
+            "Needs investigation.",
+            DateTimeOffset.Parse("2026-01-05T00:00:00Z"),
+            DateTimeOffset.Parse("2026-01-05T00:00:01Z"),
+            null,
+            null));
+
+        Assert.Single(decisionLedger.Entries);
+        Assert.Empty(stateStore.SavedDocuments);
+        Assert.Empty(journalStore.Records);
+    }
+
+    [Fact]
     public void Parse_output_evidence_paths_preserves_non_none_paths()
     {
         IReadOnlyList<string> paths = RoadmapTransitionPersistence.ParseOutputEvidencePaths(
@@ -227,4 +320,67 @@ public sealed class RoadmapTransitionPersistenceTests
             validationStatus,
             staleStatus,
             null);
+
+    private sealed class RecordingWorkflowPersistenceCoordinator : IWorkflowPersistenceCoordinator
+    {
+        public List<WorkflowPersistenceUnit> Units { get; } = [];
+
+        public async Task<WorkflowPersistenceResult> ExecuteAsync(
+            Repository repository,
+            WorkflowPersistenceUnit unit,
+            string correlationId,
+            Func<CancellationToken, Task> persistencePhase,
+            CancellationToken cancellationToken = default)
+        {
+            Units.Add(unit);
+            await persistencePhase(cancellationToken);
+            return new WorkflowPersistenceResult(correlationId, WorkflowPersistenceMarkerStatus.Completed);
+        }
+
+        public Task<IReadOnlyList<WorkflowRecoveryFinding>> ClassifyAsync(
+            Repository repository,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WorkflowRecoveryFinding>>([]);
+    }
+
+    private sealed class RecordingDecisionLedgerStore : IDecisionLedgerStore
+    {
+        public List<DecisionLedgerEntry> Entries { get; } = [];
+
+        public Task<string> AppendAsync(DecisionLedgerEntry entry)
+        {
+            Entries.Add(entry);
+            return Task.FromResult(entry.DecisionId);
+        }
+
+        public Task<string> NextDecisionIdAsync() =>
+            Task.FromResult($"D{Entries.Count + 1:0000}");
+
+        public Task<string> LastDecisionIdAsync() =>
+            Task.FromResult(Entries.LastOrDefault()?.DecisionId ?? "None");
+    }
+
+    private sealed class ThrowingRoadmapStateStore : IRoadmapStateStore
+    {
+        public List<RoadmapStateDocument> SavedDocuments { get; } = [];
+
+        public Task SaveAsync(RoadmapStateDocument document)
+        {
+            throw new InvalidOperationException("state save failed");
+        }
+
+        public Task<RoadmapStateDocument?> LoadAsync() =>
+            Task.FromResult<RoadmapStateDocument?>(null);
+    }
+
+    private sealed class RecordingTransitionJournalStore : ITransitionJournalStore
+    {
+        public List<TransitionJournalRecord> Records { get; } = [];
+
+        public Task AppendAsync(TransitionJournalRecord record)
+        {
+            Records.Add(record);
+            return Task.CompletedTask;
+        }
+    }
 }

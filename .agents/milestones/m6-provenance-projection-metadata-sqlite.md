@@ -6,12 +6,12 @@ Make execution preparation provenance, selection provenance, and projection mani
 
 ## Implementation
 
-- [ ] Implement SQLite-backed execution preparation manifest store.
-- [ ] Implement SQLite-backed selection provenance manifest store.
-- [ ] Implement SQLite-backed projection manifest store keyed by runtime prompt name.
-- [ ] Consolidate duplicated projection manifest behavior so Roadmap and Projections use one canonical contract or conformance suite.
-- [ ] Keep projection body markdown files on disk.
-- [ ] Preserve empty-on-malformed compatibility only at import/export boundaries for execution and selection manifests.
+- [x] Implement SQLite-backed execution preparation manifest store.
+- [x] Implement SQLite-backed selection provenance manifest store.
+- [x] Implement SQLite-backed projection manifest store keyed by runtime prompt name.
+- [x] Consolidate duplicated projection manifest behavior so Roadmap and Projections use one canonical contract or conformance suite.
+- [x] Keep projection body markdown files on disk.
+- [x] Preserve empty-on-malformed compatibility only at import/export boundaries for execution and selection manifests.
 
 ## Implementation Constraints
 
@@ -23,20 +23,20 @@ Make execution preparation provenance, selection provenance, and projection mani
 
 ## Code Impact
 
-- [ ] `ExecutionPreparationProvenanceService` reads/writes SQLite metadata and hashes retained inputs through the logical hasher.
-- [ ] `SelectionProvenanceService` evaluates drift from SQLite metadata and logical input snapshots.
-- [ ] `ProjectionCache` and `ProjectContextProjectionService` observe the same manifest semantics.
+- [x] `ExecutionPreparationProvenanceService` reads/writes SQLite metadata and hashes retained inputs through the logical hasher.
+- [x] `SelectionProvenanceService` evaluates drift from SQLite metadata and logical input snapshots.
+- [x] `ProjectionCache` and `ProjectContextProjectionService` observe the same manifest semantics.
 
 ## Tests
 
-- [ ] Freshness parity for retained-file drift, decision ledger drift, retired epic drift, projection body drift, and missing projection bodies.
-- [ ] Malformed exported execution/selection manifests load empty during compatibility import.
-- [ ] Projection manifest upsert by runtime prompt replaces existing metadata.
-- [ ] Roadmap and Projections project tests pass against the same behavior.
-- [ ] Metadata export/import into clean database preserves logical equality.
+- [x] Freshness parity for retained-file drift, decision ledger drift, retired epic drift, projection body drift, and missing projection bodies.
+- [x] Malformed exported execution/selection manifests load empty during compatibility import.
+- [x] Projection manifest upsert by runtime prompt replaces existing metadata.
+- [x] Roadmap and Projections project tests pass against the same behavior.
+- [x] Metadata export/import into clean database preserves logical equality.
 
 ## Exit Criteria
 
-- [ ] Provenance and projection metadata are SQLite-canonical.
-- [ ] Projection body content remains filesystem-backed.
-- [ ] Freshness decisions match file-backed behavior.
+- [x] Provenance and projection metadata are SQLite-canonical.
+- [x] Projection body content remains filesystem-backed.
+- [x] Freshness decisions match file-backed behavior.

@@ -66,6 +66,12 @@ internal sealed class SplitFamilyStore(RoadmapArtifacts _artifacts) : ISplitFami
         return false;
     }
 
+    public async Task<int> CountAsync()
+    {
+        IReadOnlyList<string> structuredFamilies = await _artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json");
+        return structuredFamilies.Count;
+    }
+
     internal static SplitFamily ParseLegacyMarkdown(string path, string content)
     {
         MarkdownTableParser.ValidateTables(content);

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using LoopRelay.Roadmap.Cli.Models.ArtifactBundles;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Projections;
@@ -34,7 +35,7 @@ internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts _artifacts)
                 continue;
             }
 
-            evidence.Add(CreateEvidence(path, content));
+            evidence.Add(CreateEvidence(path, content, await ReadArchiveMetadataSummaryAsync(path)));
         }
 
         return evidence;
@@ -81,12 +82,30 @@ internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts _artifacts)
         return builder.ToString().TrimEnd();
     }
 
-    private static CompletedEpicEvidence CreateEvidence(string path, string content)
+    private async Task<string?> ReadArchiveMetadataSummaryAsync(string synthesisPath)
+    {
+        string normalized = synthesisPath.Replace('\\', '/');
+        int slash = normalized.LastIndexOf('/');
+        string parent = slash >= 0 ? normalized[..slash] : string.Empty;
+        string stem = Path.GetFileNameWithoutExtension(normalized);
+        string metadataPath = string.IsNullOrEmpty(parent)
+            ? $"{stem}/archive-metadata.json"
+            : $"{parent}/{stem}/archive-metadata.json";
+        string? metadata = await _artifacts.ReadAsync(metadataPath);
+        return metadata is null ? null : RenderArchiveMetadataSummary(metadataPath, metadata);
+    }
+
+    private static CompletedEpicEvidence CreateEvidence(string path, string content, string? archiveMetadataSummary)
     {
         string? title = ExtractTitle(content);
         string? extractedEpicId = ExtractEpicId(content);
         string? epicId = extractedEpicId ?? Path.GetFileNameWithoutExtension(path);
         string renderedContent = ExtractRenderedContent(content);
+        if (!string.IsNullOrWhiteSpace(archiveMetadataSummary))
+        {
+            renderedContent = $"{renderedContent}\n\n{archiveMetadataSummary}";
+        }
+
         return new CompletedEpicEvidence(
             path,
             title,
@@ -110,6 +129,48 @@ internal sealed class CompletedEpicEvidenceLoader(RoadmapArtifacts _artifacts)
         builder.AppendLine();
         builder.AppendLine(epic.RenderedContent);
         return builder.ToString();
+    }
+
+    private static string RenderArchiveMetadataSummary(string metadataPath, string metadata)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(metadata);
+            JsonElement root = document.RootElement;
+            if (!root.TryGetProperty("Records", out JsonElement records) &&
+                !root.TryGetProperty("records", out records))
+            {
+                return $"## Archive Metadata\n\nArchive metadata sidecar `{metadataPath}` is present but has no records.";
+            }
+
+            int count = records.ValueKind == JsonValueKind.Array ? records.GetArrayLength() : 0;
+            IEnumerable<string> domainValues = records.ValueKind == JsonValueKind.Array
+                ? records.EnumerateArray()
+                    .Select(record => record.TryGetProperty("Domain", out JsonElement domain)
+                        ? domain.GetString()
+                        : record.TryGetProperty("domain", out domain)
+                            ? domain.GetString()
+                            : null)
+                    .Where(domain => !string.IsNullOrWhiteSpace(domain))
+                    .Select(domain => domain!)
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                : [];
+            string domains = string.Join(", ", domainValues);
+            return $"""
+                ## Archive Metadata
+
+                | Field | Value |
+                |---|---|
+                | Metadata Path | {EscapeCell(metadataPath)} |
+                | Migrated Records | {count} |
+                | Domains | {EscapeCell(string.IsNullOrWhiteSpace(domains) ? "None" : domains)} |
+                """;
+        }
+        catch (JsonException exception)
+        {
+            return $"## Archive Metadata\n\nArchive metadata sidecar `{metadataPath}` is invalid: {exception.Message}";
+        }
     }
 
     private static string ExtractRenderedContent(string content)

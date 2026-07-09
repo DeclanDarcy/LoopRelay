@@ -44,6 +44,25 @@ public sealed partial class FileBackedExecutionEvidenceStore(
                 content);
     }
 
+    public async Task<IReadOnlyList<ExecutionEvidenceRecord>> ListAsync(string searchPattern = "*.md")
+    {
+        IReadOnlyList<string> files = await _store.ListAsync(Resolve(ExecutionEvidenceDirectory), searchPattern);
+        var records = new List<ExecutionEvidenceRecord>();
+        foreach (string file in files.Order(StringComparer.Ordinal))
+        {
+            string relativePath = ArtifactPath.ToRepositoryRelativePath(_repository, file);
+            if (await ReadAsync(relativePath) is { } record)
+            {
+                records.Add(record);
+            }
+        }
+
+        return records
+            .OrderBy(record => record.Stem, StringComparer.Ordinal)
+            .ThenBy(record => record.Sequence)
+            .ToArray();
+    }
+
     private async Task<(int Sequence, string Path)> NextAsync(string stem)
     {
         IReadOnlyList<string> files = await _store.ListAsync(

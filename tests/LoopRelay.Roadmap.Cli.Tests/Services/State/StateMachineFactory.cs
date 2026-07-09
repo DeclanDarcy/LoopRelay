@@ -45,13 +45,14 @@ internal static class StateMachineFactory
         var decisionLedger = new DecisionLedgerStore(repo.Artifacts);
         var decisionRecorder = new DecisionRecorder(decisionLedger);
         var journal = new TransitionJournalStore(repo.Artifacts);
+        var split = new SplitFamilyStore(repo.Artifacts);
         var transitionPersistence = new RoadmapTransitionPersistence(
             repo.Artifacts,
             manifest,
             stateStore,
             decisionLedger,
-            journal);
-        var split = new SplitFamilyStore(repo.Artifacts);
+            journal,
+            split);
         var loader = new ProjectContextLoader(repo.Artifacts);
         var runner = new RoadmapPromptRunner(runtime, repo.Repository, effectiveConsole);
         var projectionCache = new ProjectionCache(repo.Artifacts, projections, manifest, new ProjectionValidator(), runner);
@@ -142,7 +143,6 @@ internal static class StateMachineFactory
             activeEpicPromotionCoordinator,
             bundleExtractor,
             splitBundleInterpreter,
-            bundleManifest,
             split,
             lifecycle,
             journal,
@@ -212,7 +212,6 @@ internal static class StateMachineFactory
             new RoadmapStartupPlanner(),
             resumePlanner,
             unblockPlanner,
-            decisionRecorder,
             journal,
             lifecycle,
             effectiveConsole);

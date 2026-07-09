@@ -20,6 +20,7 @@ using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Decisions;
 using LoopRelay.Roadmap.Cli.Services.Projections;
+using LoopRelay.Roadmap.Cli.Services.Splits;
 using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 using LoopRelay.Roadmap.Cli.Services.TransitionState;
 using LoopRelay.Roadmap.Cli.Tests.Services.ArtifactManagement;
@@ -638,7 +639,8 @@ public sealed class RoadmapFailurePersistenceTests
             new ProjectionManifestStore(repo.Artifacts),
             new RoadmapStateStore(repo.Artifacts),
             new DecisionLedgerStore(repo.Artifacts),
-            new TransitionJournalStore(repo.Artifacts));
+            new TransitionJournalStore(repo.Artifacts),
+            new SplitFamilyStore(repo.Artifacts));
         InvariantValidationResult invariant = InvariantValidationResult.Invalid(
             RoadmapState.EvidenceBlocked,
             "Validator failed without evidence.",

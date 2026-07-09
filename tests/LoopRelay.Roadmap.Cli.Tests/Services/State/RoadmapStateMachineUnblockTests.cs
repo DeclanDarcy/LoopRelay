@@ -1,4 +1,5 @@
 using System.Collections;
+using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
 using LoopRelay.Roadmap.Cli.Models.RoadmapState;
 using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
@@ -138,6 +139,60 @@ public sealed class RoadmapStateMachineUnblockTests
         Assert.Empty(state.Blockers);
         Assert.Equal(evidence, repo.Read(evidencePath));
         Assert.Contains("UnblockReviewCompleted", repo.Read(RoadmapArtifactPaths.TransitionJournal), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResolveMalformedExecutionOutput_reads_execution_evidence_through_logical_resolver()
+    {
+        const string evidencePath = ".agents/evidence/execution/execution-turn.0001.md";
+        string evidence = ExecutionDisposition("Continue Required", "ContinueExecution");
+        var evidenceStore = new MemoryExecutionEvidenceStore(
+            new ExecutionEvidenceRecord("execution-turn", 1, evidencePath, evidence));
+        using var repo = SeedProject(evidenceStore);
+        await SaveStateAsync(repo, BlockedState(
+            "ResolveMalformedExecutionOutput",
+            RoadmapState.EvidenceBlocked,
+            evidencePath,
+            from: RoadmapState.ExecutionLoop,
+            prompt: "ExecutionOutcomeInterpretation",
+            decision: "Malformed Execution Output"));
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.ExecutionLoop, state.CurrentState);
+        Assert.Equal("ContinueExecution", state.TransitionIntent.Intent);
+        Assert.False(await repo.Artifacts.ExistsAsync(evidencePath));
+        string review = repo.Read(Assert.Single(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md")));
+        Assert.Contains($"| TransitionIntentEvidence | {evidencePath} | Present |", review, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResolveMalformedExecutionOutput_missing_logical_execution_evidence_remains_blocked()
+    {
+        const string evidencePath = ".agents/evidence/execution/execution-turn.0001.md";
+        using var repo = SeedProject(new MemoryExecutionEvidenceStore());
+        await SaveStateAsync(repo, BlockedState(
+            "ResolveMalformedExecutionOutput",
+            RoadmapState.EvidenceBlocked,
+            evidencePath,
+            from: RoadmapState.ExecutionLoop,
+            prompt: "ExecutionOutcomeInterpretation",
+            decision: "Malformed Execution Output"));
+
+        RoadmapOutcome outcome = await StateMachineFactory.Create(repo, new ScriptedAgentRuntime()).UnblockAsync(CancellationToken.None);
+
+        Assert.Equal(RoadmapOutcome.Paused, outcome);
+        RoadmapStateDocument state = (await new RoadmapStateStore(repo.Artifacts).LoadAsync())!;
+        Assert.Equal(RoadmapState.EvidenceBlocked, state.CurrentState);
+        Assert.Equal("ResolveMalformedExecutionOutput", state.TransitionIntent.Intent);
+        Assert.Contains(
+            $"Execution evidence is missing or empty: {evidencePath}",
+            Assert.Single(state.Blockers, blocker => blocker.Blocker.StartsWith("Unblock Review Failed:", StringComparison.Ordinal)).Blocker,
+            StringComparison.Ordinal);
+        string review = repo.Read(Assert.Single(await repo.Artifacts.ListAsync(RoadmapArtifactPaths.BlockerEvidenceDirectory, "unblock-review.*.md")));
+        Assert.Contains($"| TransitionIntentEvidence | {evidencePath} | MissingOrEmpty |  |", review, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -351,9 +406,9 @@ public sealed class RoadmapStateMachineUnblockTests
         Assert.Contains("support", review, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static TempRepo SeedProject()
+    private static TempRepo SeedProject(IExecutionEvidenceStore? executionEvidenceStore = null)
     {
-        var repo = new TempRepo();
+        var repo = new TempRepo(executionEvidenceStore);
         repo.SeedProjectContext();
         repo.Write(".agents/roadmap/001-roadmap.md", "roadmap source");
         return repo;
@@ -462,4 +517,67 @@ public sealed class RoadmapStateMachineUnblockTests
         | Overall Drift Classification | {{driftClassification}} |
         | Closure Recommendation | {{recommendation}} |
         """;
+
+    private sealed class MemoryExecutionEvidenceStore(params ExecutionEvidenceRecord[] seed) : IExecutionEvidenceStore
+    {
+        private readonly List<ExecutionEvidenceRecord> records = [..seed];
+
+        public Task<ExecutionEvidenceRecord> WriteAsync(string stem, string content)
+        {
+            int sequence = records
+                .Where(record => string.Equals(record.Stem, stem, StringComparison.Ordinal))
+                .Select(record => record.Sequence)
+                .DefaultIfEmpty()
+                .Max() + 1;
+            var record = new ExecutionEvidenceRecord(
+                stem,
+                sequence,
+                $"{RoadmapArtifactPaths.ExecutionEvidenceDirectory}/{stem}.{sequence:0000}.md",
+                content);
+            records.Add(record);
+            return Task.FromResult(record);
+        }
+
+        public Task<string> NextPathAsync(string stem)
+        {
+            int sequence = records
+                .Where(record => string.Equals(record.Stem, stem, StringComparison.Ordinal))
+                .Select(record => record.Sequence)
+                .DefaultIfEmpty()
+                .Max() + 1;
+            return Task.FromResult($"{RoadmapArtifactPaths.ExecutionEvidenceDirectory}/{stem}.{sequence:0000}.md");
+        }
+
+        public Task<ExecutionEvidenceRecord?> ReadAsync(string relativePath) =>
+            Task.FromResult(records.FirstOrDefault(record =>
+                string.Equals(record.RelativePath, relativePath, StringComparison.OrdinalIgnoreCase)));
+
+        public Task<IReadOnlyList<ExecutionEvidenceRecord>> ListAsync(string searchPattern = "*.md") =>
+            Task.FromResult<IReadOnlyList<ExecutionEvidenceRecord>>(
+                records
+                    .Where(record => GlobMatches(Path.GetFileName(record.RelativePath), searchPattern))
+                    .OrderBy(record => record.Stem, StringComparer.Ordinal)
+                    .ThenBy(record => record.Sequence)
+                    .ToArray());
+
+        private static bool GlobMatches(string fileName, string searchPattern)
+        {
+            if (searchPattern == "*")
+            {
+                return true;
+            }
+
+            int star = searchPattern.IndexOf('*', StringComparison.Ordinal);
+            if (star < 0)
+            {
+                return string.Equals(fileName, searchPattern, StringComparison.OrdinalIgnoreCase);
+            }
+
+            string prefix = searchPattern[..star];
+            string suffix = searchPattern[(star + 1)..];
+            return fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+                fileName.Length >= prefix.Length + suffix.Length;
+        }
+    }
 }

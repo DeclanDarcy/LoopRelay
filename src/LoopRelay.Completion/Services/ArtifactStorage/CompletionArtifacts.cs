@@ -5,6 +5,7 @@ using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
+using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Completion.Services.ArtifactStorage;
 
@@ -30,6 +31,21 @@ public sealed partial class CompletionArtifacts(
 
     public async Task<IReadOnlyList<string>> ListAsync(string relativeDirectory, string searchPattern)
     {
+        if (IsExecutionEvidenceDirectory(relativeDirectory) &&
+            _executionEvidenceStore is SqliteExecutionEvidenceStore)
+        {
+            return (await _executionEvidenceStore.ListAsync(searchPattern))
+                .Select(record => record.RelativePath)
+                .ToArray();
+        }
+
+        if (TryLoopHistoryKind(relativeDirectory, out string? kind) &&
+            kind is not null &&
+            await ListSqliteLoopHistoryAsync(kind, searchPattern) is { } sqliteLoopHistory)
+        {
+            return sqliteLoopHistory;
+        }
+
         IReadOnlyList<string> files = await _store.ListAsync(Resolve(relativeDirectory), searchPattern);
         return files.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToArray();
     }
@@ -135,6 +151,74 @@ public sealed partial class CompletionArtifacts(
             FileBackedExecutionEvidenceStore.ExecutionEvidenceDirectory,
             StringComparison.Ordinal);
 
+    private async Task<IReadOnlyList<string>?> ListSqliteLoopHistoryAsync(string kind, string searchPattern)
+    {
+        string databasePath = Path.Combine(
+            Path.GetFullPath(_repository.Path),
+            ".LoopRelay",
+            "persistence",
+            "looprelay.sqlite3");
+        if (!File.Exists(databasePath))
+        {
+            return null;
+        }
+
+        await using SqliteConnection connection = new(new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false,
+        }.ToString());
+        await connection.OpenAsync();
+        if (!await TableExistsAsync(connection, "loop_history"))
+        {
+            return null;
+        }
+
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT logical_path
+            FROM loop_history
+            WHERE kind = $kind
+            ORDER BY sequence;
+            """;
+        command.Parameters.AddWithValue("$kind", kind);
+        var paths = new List<string>();
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            string path = reader.GetString(0);
+            if (FileNameMatches(Path.GetFileName(path), searchPattern))
+            {
+                paths.Add(path);
+            }
+        }
+
+        return paths;
+    }
+
+    private static async Task<bool> TableExistsAsync(SqliteConnection connection, string table)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $table;";
+        command.Parameters.AddWithValue("$table", table);
+        object? scalar = await command.ExecuteScalarAsync();
+        return Convert.ToInt64(scalar) == 1;
+    }
+
+    private static bool TryLoopHistoryKind(string relativeDirectory, out string? kind)
+    {
+        string normalized = relativeDirectory.Replace('\\', '/').TrimEnd('/');
+        kind = normalized switch
+        {
+            CompletionArtifactPaths.DecisionsDirectory => "Decisions",
+            CompletionArtifactPaths.HandoffsDirectory => "Handoff",
+            CompletionArtifactPaths.DeltasDirectory => "OperationalDelta",
+            _ => null,
+        };
+        return kind is not null;
+    }
+
     private static string RelativeSuffix(string sourceDirectory, string sourcePath)
     {
         string normalizedDirectory = Normalize(sourceDirectory).TrimEnd('/');
@@ -152,6 +236,26 @@ public sealed partial class CompletionArtifacts(
 
     private static string Normalize(string path) =>
         path.Replace('\\', '/');
+
+    private static bool FileNameMatches(string fileName, string searchPattern)
+    {
+        if (searchPattern == "*")
+        {
+            return true;
+        }
+
+        int star = searchPattern.IndexOf('*', StringComparison.Ordinal);
+        if (star < 0)
+        {
+            return string.Equals(fileName, searchPattern, StringComparison.OrdinalIgnoreCase);
+        }
+
+        string prefix = searchPattern[..star];
+        string suffix = searchPattern[(star + 1)..];
+        return fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+            fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+            fileName.Length >= prefix.Length + suffix.Length;
+    }
 
     [GeneratedRegex(@"\.(?<number>\d{4})\.md$", RegexOptions.CultureInvariant)]
     private static partial Regex NumberedEvidenceRegex();

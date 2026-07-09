@@ -6,17 +6,17 @@ Move `.agents/evidence/execution/*` to SQLite while preserving path-compatible e
 
 ## Implementation
 
-- [ ] Implement `IExecutionEvidenceStore` with write, read by logical path, search, allocation, import, export, and hash validation.
-- [ ] Route `RoadmapArtifacts.WriteNumberedEvidenceAsync` and `CompletionArtifacts.WriteNumberedEvidenceAsync` through the evidence store only for `.agents/evidence/execution`.
-- [ ] Keep non-execution evidence directories filesystem-backed.
-- [ ] Update consumers:
-  - [ ] `RoadmapExecutionBridge`
-  - [ ] `CompletionCertificationService`
-  - [ ] `TransitionInputResolver`
-  - [ ] `RoadmapPromptContextBuilder`
-  - [ ] `RoadmapUnblockPlanner`
-  - [ ] completion context builders
-- [ ] Ensure consumers pass when exported evidence files are deleted but SQLite rows exist.
+- [x] Implement `IExecutionEvidenceStore` with write, read by logical path, search, allocation, import, export, and hash validation.
+- [x] Route `RoadmapArtifacts.WriteNumberedEvidenceAsync` and `CompletionArtifacts.WriteNumberedEvidenceAsync` through the evidence store only for `.agents/evidence/execution`.
+- [x] Keep non-execution evidence directories filesystem-backed.
+- [x] Update consumers:
+  - [x] `RoadmapExecutionBridge`
+  - [x] `CompletionCertificationService`
+  - [x] `TransitionInputResolver`
+  - [x] `RoadmapPromptContextBuilder`
+  - [x] `RoadmapUnblockPlanner`
+  - [x] completion context builders
+- [x] Ensure consumers pass when exported evidence files are deleted but SQLite rows exist.
 
 ## Implementation Constraints
 
@@ -28,14 +28,14 @@ Move `.agents/evidence/execution/*` to SQLite while preserving path-compatible e
 
 ## Tests
 
-- [ ] Existing stem `execution-trust-posture.0003.md` imports and next write allocates `0004`.
-- [ ] Prompt context reads SQLite-backed execution evidence.
-- [ ] Unblock planner searches or hashes SQLite-backed evidence.
-- [ ] Completion evaluation consumes SQLite-backed claim evidence.
-- [ ] Missing referenced evidence maps to existing stale/invalid/blocked behavior.
-- [ ] Export/import preserves body, path, stem, sequence, and hash.
+- [x] Existing stem `execution-trust-posture.0003.md` imports and next write allocates `0004`.
+- [x] Prompt context reads SQLite-backed execution evidence.
+- [x] Unblock planner searches or hashes SQLite-backed evidence.
+- [x] Completion evaluation consumes SQLite-backed claim evidence.
+- [x] Missing referenced evidence maps to existing stale/invalid/blocked behavior.
+- [x] Export/import preserves body, path, stem, sequence, and hash.
 
 ## Exit Criteria
 
-- [ ] Execution evidence is SQLite-canonical.
-- [ ] All path-compatible consumers work without physical evidence export files.
+- [x] Execution evidence is SQLite-canonical.
+- [x] All path-compatible consumers work without physical evidence export files.

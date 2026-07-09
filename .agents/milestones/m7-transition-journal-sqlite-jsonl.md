@@ -6,11 +6,11 @@ Make transition chronology SQLite-canonical while preserving ordered JSONL impor
 
 ## Implementation
 
-- [ ] Implement SQLite journal append with monotonic `event_order`.
-- [ ] Preserve correlation IDs, event kind, states, transition, projection, input hashes, output paths, result, decision, error, and optional input snapshot.
-- [ ] Import legacy JSONL lines, including records without input snapshots.
-- [ ] Export deterministic JSONL ordered by `event_order`.
-- [ ] Route transition runner and state-machine journal writes through the SQLite store.
+- [x] Implement SQLite journal append with monotonic `event_order`.
+- [x] Preserve correlation IDs, event kind, states, transition, projection, input hashes, output paths, result, decision, error, and optional input snapshot.
+- [x] Import legacy JSONL lines, including records without input snapshots.
+- [x] Export deterministic JSONL ordered by `event_order`.
+- [x] Route transition runner and state-machine journal writes through the SQLite store.
 
 ## Implementation Constraints
 
@@ -26,13 +26,13 @@ Make transition chronology SQLite-canonical while preserving ordered JSONL impor
 
 ## Tests
 
-- [ ] Started/completed/failed event order is stable.
-- [ ] Legacy no-snapshot records import.
-- [ ] JSONL export imports into a clean equivalent database.
-- [ ] Concurrent append smoke test.
-- [ ] Verification hook reports unresolved output paths without mutating journal rows.
+- [x] Started/completed/failed event order is stable.
+- [x] Legacy no-snapshot records import.
+- [x] JSONL export imports into a clean equivalent database.
+- [x] Concurrent append smoke test.
+- [x] Verification hook reports unresolved output paths without mutating journal rows.
 
 ## Exit Criteria
 
-- [ ] Journal runtime authority is SQLite.
-- [ ] JSONL remains an importable/exportable debugging surface.
+- [x] Journal runtime authority is SQLite.
+- [x] JSONL remains an importable/exportable debugging surface.

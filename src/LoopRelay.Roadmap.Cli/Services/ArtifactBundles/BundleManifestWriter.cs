@@ -12,6 +12,18 @@ internal sealed class BundleManifestWriter(RoadmapArtifacts _artifacts)
         BundleExtractionResult result,
         string validationResult)
     {
+        await _artifacts.WriteAsync(
+            manifestPath,
+            Render(sourcePrompt, projectionPath, result, validationResult));
+        return manifestPath;
+    }
+
+    public static string Render(
+        string sourcePrompt,
+        string projectionPath,
+        BundleExtractionResult result,
+        string validationResult)
+    {
         var lines = new List<string>
         {
             "# Bundle Manifest",
@@ -34,8 +46,7 @@ internal sealed class BundleManifestWriter(RoadmapArtifacts _artifacts)
             lines.Add($"| {file.Path} | {file.Hash} |");
         }
 
-        await _artifacts.WriteAsync(manifestPath, string.Join(Environment.NewLine, lines) + Environment.NewLine);
-        return manifestPath;
+        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 
     public static string DefaultManifestPath(IReadOnlyList<ExtractedBundleFile> files)

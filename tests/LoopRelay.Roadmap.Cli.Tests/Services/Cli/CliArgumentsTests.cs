@@ -1,6 +1,7 @@
 using LoopRelay.Roadmap.Cli.Models.Invocation;
 using LoopRelay.Roadmap.Cli.Primitives.State;
 using LoopRelay.Roadmap.Cli.Services.Cli;
+using LoopRelay.Roadmap.Cli.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
 namespace LoopRelay.Roadmap.Cli.Tests.Services.Cli;
@@ -33,6 +34,11 @@ public sealed class CliArgumentsTests
     [InlineData("status", (int)RoadmapCliCommand.Status)]
     [InlineData("run", (int)RoadmapCliCommand.Run)]
     [InlineData("unblock", (int)RoadmapCliCommand.Unblock)]
+    [InlineData("storage-init", (int)RoadmapCliCommand.StorageInit)]
+    [InlineData("storage-import", (int)RoadmapCliCommand.StorageImport)]
+    [InlineData("storage-export", (int)RoadmapCliCommand.StorageExport)]
+    [InlineData("storage-sync", (int)RoadmapCliCommand.StorageSync)]
+    [InlineData("storage-verify", (int)RoadmapCliCommand.StorageVerify)]
     public void TryParse_accepts_leading_command(string command, int expectedValue)
     {
         using var repo = new TempRepo();
@@ -105,5 +111,51 @@ public sealed class CliArgumentsTests
         Assert.False(CliArguments.TryParse([repo.Root, "--elevated"], out RoadmapCliInvocation _, out string error));
 
         Assert.Contains("requires a non-empty reason", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TryParse_accepts_storage_domain_and_force_flags()
+    {
+        using var repo = new TempRepo();
+
+        Assert.True(CliArguments.TryParse(
+            ["storage-sync", repo.Root, "--domain", "core,execution-evidence", "--force-import"],
+            out RoadmapCliInvocation parsed,
+            out string error));
+
+        Assert.Equal(string.Empty, error);
+        Assert.Equal(RoadmapCliCommand.StorageSync, parsed.Command);
+        Assert.Contains(WorkspaceSyncDomain.Core, parsed.StorageOptions!.Domains!);
+        Assert.Contains(WorkspaceSyncDomain.ExecutionEvidence, parsed.StorageOptions.Domains!);
+        Assert.True(parsed.StorageOptions.ForceImport);
+        Assert.False(parsed.StorageOptions.ForceExport);
+    }
+
+    [Fact]
+    public void TryParse_rejects_unknown_storage_domain()
+    {
+        using var repo = new TempRepo();
+
+        Assert.False(CliArguments.TryParse(
+            ["storage-export", repo.Root, "--domain", "unknown"],
+            out RoadmapCliInvocation _,
+            out string error));
+
+        Assert.Contains("Unsupported storage domain", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TryParse_accepts_storage_verify_full_roundtrip()
+    {
+        using var repo = new TempRepo();
+
+        Assert.True(CliArguments.TryParse(
+            ["storage-verify", repo.Root, "--full-roundtrip"],
+            out RoadmapCliInvocation parsed,
+            out string error));
+
+        Assert.Equal(string.Empty, error);
+        Assert.Equal(RoadmapCliCommand.StorageVerify, parsed.Command);
+        Assert.True(parsed.StorageOptions!.FullRoundtrip);
     }
 }

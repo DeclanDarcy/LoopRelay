@@ -6,12 +6,12 @@ Expose executable verification that proves the database, filesystem exports, ret
 
 ## Implementation
 
-- [ ] Implement `IWorkspaceVerificationService`.
-- [ ] Compose existing domain validators, sync service, logical resolver, archive recovery checks, and transaction integrity validator.
-- [ ] Add temporary export/import round-trip verification in an isolated temp workspace.
-- [ ] Add read-only database open and mutation guard checks.
-- [ ] Expose `storage-verify`.
-- [ ] Add optional `--full-roundtrip` for slower export/import/export checks.
+- [x] Implement `IWorkspaceVerificationService`.
+- [x] Compose existing domain validators, sync service, logical resolver, archive recovery checks, and transaction integrity validator.
+- [x] Add temporary export/import round-trip verification in an isolated temp workspace.
+- [x] Add read-only database open and mutation guard checks.
+- [x] Expose `storage-verify`.
+- [x] Add optional `--full-roundtrip` for slower export/import/export checks.
 
 ## Implementation Constraints
 
@@ -25,33 +25,33 @@ Expose executable verification that proves the database, filesystem exports, ret
 
 Verification reports:
 
-- [ ] success;
-- [ ] stale export;
-- [ ] missing exported file;
-- [ ] unresolved logical path;
-- [ ] nondeterministic round trip;
-- [ ] unrecoverable archive;
-- [ ] corrupt domain;
-- [ ] unsupported version;
-- [ ] mutation required;
-- [ ] conflict.
+- [x] success;
+- [x] stale export;
+- [x] missing exported file;
+- [x] unresolved logical path;
+- [x] nondeterministic round trip;
+- [x] unrecoverable archive;
+- [x] corrupt domain;
+- [x] unsupported version;
+- [x] mutation required;
+- [x] conflict.
 
 Each finding includes domain, identity/path, rule, severity, current state, expected state, and recommended executable recovery action.
 
 ## Tests
 
-- [ ] Valid SQLite-canonical workspace with fresh exports verifies successfully.
-- [ ] Legacy filesystem workspace imports and verifies successfully.
-- [ ] Stale export fixture fails.
-- [ ] Missing export fixture fails.
-- [ ] Unresolved path fixture fails.
-- [ ] Nondeterministic serializer fixture fails.
-- [ ] Broken completed epic archive fixture fails.
-- [ ] Unsupported schema/export version fixture fails.
-- [ ] Read-only verification does not change database bytes or export tree hashes.
+- [x] Valid SQLite-canonical workspace with fresh exports verifies successfully.
+- [x] Legacy filesystem workspace imports and verifies successfully.
+- [x] Stale export fixture fails.
+- [x] Missing export fixture fails.
+- [x] Unresolved path fixture fails.
+- [x] Nondeterministic serializer fixture fails.
+- [x] Broken completed epic archive fixture fails.
+- [x] Unsupported schema/export version fixture fails.
+- [x] Read-only verification does not change database bytes or export tree hashes.
 
 ## Exit Criteria
 
-- [ ] Verification is read-only by default.
-- [ ] Required consistency failures are detected.
-- [ ] Full migrated persistence architecture is covered by executable checks.
+- [x] Verification is read-only by default.
+- [x] Required consistency failures are detected.
+- [x] Full migrated persistence architecture is covered by executable checks.

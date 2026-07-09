@@ -1,3 +1,4 @@
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
@@ -11,8 +12,12 @@ namespace LoopRelay.Roadmap.Cli.Services.Projections;
 internal sealed class OperationalContextGenerator(
     RoadmapArtifacts _artifacts,
     IArtifactLifecycleStore _lifecycleStore,
-    ExecutionPreparationProvenanceService _provenanceService)
+    ExecutionPreparationProvenanceService _provenanceService,
+    ILogicalArtifactResolver? logicalResolver = null)
 {
+    private readonly ILogicalArtifactResolver _logicalResolver =
+        logicalResolver ?? RoadmapLogicalArtifactServices.CreateResolver(_artifacts);
+
     public async Task<string> GenerateAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -23,7 +28,7 @@ internal sealed class OperationalContextGenerator(
             throw new RoadmapStepException("Cannot generate operational context without milestone specs.");
         }
 
-        string ledger = await _artifacts.ReadAsync(RoadmapArtifactPaths.DecisionLedgerJson) ?? "No roadmap decisions recorded.";
+        string ledger = await ReadDecisionLedgerAsync(cancellationToken);
         IReadOnlyList<ArtifactLifecycleEntry> lifecycle = await _lifecycleStore.LoadAsync();
 
         var lines = new List<string>
@@ -68,6 +73,16 @@ internal sealed class OperationalContextGenerator(
         await _provenanceService.RecordOperationalContextAsync(content, cancellationToken);
         await _lifecycleStore.UpsertAsync(RoadmapArtifactPaths.OperationalContext, ArtifactLifecycleState.Ready);
         return content;
+    }
+
+    private async Task<string> ReadDecisionLedgerAsync(CancellationToken cancellationToken)
+    {
+        LogicalArtifactResolutionResult result = await _logicalResolver.ResolveAsync(
+            RoadmapArtifactPaths.DecisionLedgerJson,
+            cancellationToken);
+        return result.IsResolved && !string.IsNullOrWhiteSpace(result.Content?.Text)
+            ? result.Content.Text
+            : "No roadmap decisions recorded.";
     }
 
     private static string EnsureNoRawProjectContext(string content)

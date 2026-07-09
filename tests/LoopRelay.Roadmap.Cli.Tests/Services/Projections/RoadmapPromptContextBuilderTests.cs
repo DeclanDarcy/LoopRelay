@@ -1,8 +1,10 @@
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.RoadmapTracking;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Tests.Services.Cli;
 using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
@@ -62,6 +64,31 @@ public sealed class RoadmapPromptContextBuilderTests
 
         Assert.Contains("## Execution Evidence: .agents/evidence/execution/execution.0001.md", context, StringComparison.Ordinal);
         Assert.Contains("# SQLite-backed execution evidence", context, StringComparison.Ordinal);
+        Assert.False(await repo.Artifacts.ExistsAsync(evidencePath));
+    }
+
+    [Fact]
+    public async Task CompletionEvaluationContextReadsSqliteExecutionEvidenceAfterExportIsDeleted()
+    {
+        using var repo = new TempRepo();
+        const string evidencePath = ".agents/evidence/execution/execution.0001.md";
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, "# Active Epic");
+        repo.Write(".agents/specs/s001.md", "# Spec");
+        repo.Write(evidencePath, "# SQLite execution evidence");
+        ExecutionPreparationProvenanceService provenance =
+            await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/s001.md");
+        var sqlite = new WorkspaceSqliteStore();
+        await sqlite.ImportAsync(repo.Artifacts);
+        await repo.Artifacts.DeleteAsync(evidencePath);
+        var sqliteArtifacts = new RoadmapArtifacts(
+            repo.Store,
+            repo.Repository,
+            new SqliteExecutionEvidenceStore(repo.Repository));
+        var builder = new RoadmapPromptContextBuilder(sqliteArtifacts, provenance);
+
+        string context = await builder.BuildCompletionEvaluationContextAsync("# Projection", evidencePath);
+
+        Assert.Contains("# SQLite execution evidence", context, StringComparison.Ordinal);
         Assert.False(await repo.Artifacts.ExistsAsync(evidencePath));
     }
 

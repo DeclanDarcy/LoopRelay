@@ -52,6 +52,21 @@ public sealed class FileBackedExecutionEvidenceStoreTests
         Assert.Null(await repo.ReadAsync(path));
     }
 
+    [Fact]
+    public async Task ListAsync_ReturnsMatchingEvidenceRecordsInNumericOrder()
+    {
+        using TempRepo repo = TempRepo.Create();
+        await repo.WriteAsync(".agents/evidence/execution/execution-result.0002.md", "old 2");
+        await repo.WriteAsync(".agents/evidence/execution/execution-result.0010.md", "old 10");
+        await repo.WriteAsync(".agents/evidence/execution/other.0001.md", "other");
+        var evidence = new FileBackedExecutionEvidenceStore(repo.Store, repo.Repository);
+
+        IReadOnlyList<ExecutionEvidenceRecord> records = await evidence.ListAsync("execution-result.*.md");
+
+        Assert.Equal([2, 10], records.Select(record => record.Sequence).ToArray());
+        Assert.Equal(["old 2", "old 10"], records.Select(record => record.Content).ToArray());
+    }
+
     private sealed class TempRepo : IDisposable
     {
         private TempRepo(string root)

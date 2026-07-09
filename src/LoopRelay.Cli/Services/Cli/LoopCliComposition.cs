@@ -78,8 +78,10 @@ internal sealed class LoopCliComposition : IAsyncDisposable
         var processRunner = provider.GetRequiredService<IProcessRunner>();
         var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
-        ILoopHistoryStore loopHistory = new FileBackedLoopHistoryStore(store, repository);
-        IExecutionEvidenceStore executionEvidence = new FileBackedExecutionEvidenceStore(store, repository);
+        ILoopHistoryStore loopHistory = LoopHistoryStoreFactory.Create(store, repository);
+        IExecutionEvidenceStore executionEvidence = LoopWorkspaceDatabase.HasUsableLoopHistoryDatabase(repository)
+            ? new SqliteExecutionEvidenceStore(repository)
+            : new FileBackedExecutionEvidenceStore(store, repository);
         var artifacts = new LoopArtifacts(store, repository, loopHistory);
         var repositoryArtifacts = new RepositoryArtifactStore(store, repository);
         var nonImplementationLedger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
@@ -130,7 +132,10 @@ internal sealed class LoopCliComposition : IAsyncDisposable
         var completionArchive = new CompletedEpicArchiveService(
             store,
             completionPromptRunner,
-            completionObserver);
+            completionObserver,
+            _archiveMaterializer: LoopWorkspaceDatabase.HasUsableLoopHistoryDatabase(repository)
+                ? new SqliteCompletedEpicArchiveMaterializer()
+                : null);
         var completionCertification = new CompletionCertificationService(
             store,
             projectionService,
@@ -176,7 +181,11 @@ internal sealed class LoopCliComposition : IAsyncDisposable
             _resumeEnabled: DecisionResumeComposition.IsEnabled(),
             _promptPolicy: promptPolicy,
             _hitlRequestCapture: hitlRequestCapture);
-        var submodulePublisher = new AgentsSubmodulePublisher(processRunner, repository, console);
+        var submodulePublisher = new AgentsSubmodulePublisher(
+            processRunner,
+            repository,
+            console,
+            new SqliteAgentsSubmodulePublishPreflight(store, repository));
         var commitGate = new CommitGate(changeDetector, processRunner, repository, console);
         var loop = new LoopRunner(
             gate,

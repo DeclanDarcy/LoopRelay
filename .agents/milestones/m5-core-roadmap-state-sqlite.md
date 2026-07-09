@@ -6,20 +6,20 @@ Make decision ledger, roadmap state, artifact lifecycle, and split lineage SQLit
 
 ## Implementation
 
-- [ ] Implement SQLite-backed stores:
-  - [ ] decision ledger;
-  - [ ] roadmap state;
-  - [ ] artifact lifecycle;
-  - [ ] split lineage.
-- [ ] Route Roadmap CLI composition to SQLite stores when database mode is active.
-- [ ] Make decision append and next `DNNNN` allocation transaction-safe.
-- [ ] Enforce case-insensitive lifecycle path uniqueness.
-- [ ] Make split lookup by child path read SQLite, not filesystem globs.
-- [ ] Export deterministic equivalents:
-  - [ ] `.agents/decision-ledger.json`
-  - [ ] `.agents/state.json`
-  - [ ] `.agents/artifacts/lifecycle.json`
-  - [ ] `.agents/splits/split-family-*.json`
+- [x] Implement SQLite-backed stores:
+  - [x] decision ledger;
+  - [x] roadmap state;
+  - [x] artifact lifecycle;
+  - [x] split lineage.
+- [x] Route Roadmap CLI composition to SQLite stores when database mode is active.
+- [x] Make decision append and next `DNNNN` allocation transaction-safe.
+- [x] Enforce case-insensitive lifecycle path uniqueness.
+- [x] Make split lookup by child path read SQLite, not filesystem globs.
+- [x] Export deterministic equivalents:
+  - [x] `.agents/decision-ledger.json`
+  - [x] `.agents/state.json`
+  - [x] `.agents/artifacts/lifecycle.json`
+  - [x] `.agents/splits/split-family-*.json`
 
 ## Implementation Constraints
 
@@ -31,19 +31,19 @@ Make decision ledger, roadmap state, artifact lifecycle, and split lineage SQLit
 
 ## Code Impact
 
-- [ ] `RoadmapTransitionPersistence.CaptureSummaryAsync` must use canonical stores for last decision ID and split family count.
-- [ ] Legacy markdown import is allowed only during explicit import, not normal SQLite runtime.
-- [ ] Stale filesystem JSON must not override database state.
+- [x] `RoadmapTransitionPersistence.CaptureSummaryAsync` must use canonical stores for last decision ID and split family count.
+- [x] Legacy markdown import is allowed only during explicit import, not normal SQLite runtime.
+- [x] Stale filesystem JSON must not override database state.
 
 ## Tests
 
-- [ ] Delete exported core JSON files, load state from SQLite, regenerate exports.
-- [ ] Append decisions after imported `D0003` and verify next ID is `D0004`.
-- [ ] Lifecycle upsert rejects duplicate case variants.
-- [ ] Split child lookup works with only SQLite rows.
-- [ ] Exported core files import into a clean equivalent database.
+- [x] Delete exported core JSON files, load state from SQLite, regenerate exports.
+- [x] Append decisions after imported `D0003` and verify next ID is `D0004`.
+- [x] Lifecycle upsert rejects duplicate case variants.
+- [x] Split child lookup works with only SQLite rows.
+- [x] Exported core files import into a clean equivalent database.
 
 ## Exit Criteria
 
-- [ ] Core structured machine state is SQLite-canonical.
-- [ ] Regenerated exports can be deleted and restored without logical loss.
+- [x] Core structured machine state is SQLite-canonical.
+- [x] Regenerated exports can be deleted and restored without logical loss.

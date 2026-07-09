@@ -14,6 +14,7 @@ using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 using LoopRelay.Roadmap.Cli.Services.ArtifactBundles;
 using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.Splits;
@@ -31,14 +32,17 @@ internal sealed class SplitEpicTransition(
     ActiveEpicPromotionCoordinator _activeEpicPromotionCoordinator,
     ArtifactBundles.BundleFileExtractor _bundleExtractor,
     Splits.SplitEpicBundleInterpreter _splitBundleInterpreter,
-    BundleManifestWriter _bundleManifestWriter,
     ISplitFamilyStore _splitFamilyStore,
     IArtifactLifecycleStore _lifecycleStore,
     ITransitionJournalStore _journalStore,
     RoadmapTransitionPersistence _transitionPersistence,
     HitlArtifactCapture _hitlArtifactCapture,
-    ILoopConsole _console)
+    ILoopConsole _console,
+    IWorkflowPersistenceCoordinator? workflowCoordinator = null)
 {
+    private readonly SplitLineagePersistence _splitLineagePersistence =
+        new(_artifacts, _lifecycleStore, _splitFamilyStore, workflowCoordinator);
+
     public async Task<ArtifactPromotionResult> ExecuteAsync(ProjectContext projectContext, CancellationToken cancellationToken)
     {
         const string runtimePrompt = "SplitEpic";
@@ -76,15 +80,6 @@ internal sealed class SplitEpicTransition(
             return await BlockSplitEpicAsync(runtimePrompt, projection.Definition.ProjectionPath, completion, interpretation);
         }
 
-        BundleExtractionResult validatedBundle = BundleExtractionResult.Extracted(interpretation.ValidatedChildEpics);
-        await _bundleExtractor.WriteExtractedFilesAsync(_artifacts, validatedBundle);
-        await _bundleManifestWriter.WriteAsync(BundleManifestWriter.DefaultManifestPath(interpretation.ValidatedChildEpics), runtimePrompt, projection.Definition.ProjectionPath, validatedBundle, "Valid");
-        foreach (ExtractedBundleFile child in interpretation.ValidatedChildEpics)
-        {
-            await _lifecycleStore.UpsertAsync(child.Path, ArtifactLifecycleState.Draft, "Validated split child epic.");
-            await _hitlArtifactCapture.CaptureAsync(child.Path, child.Content);
-        }
-
         ExtractedBundleFile selectedChild = interpretation.SelectedChild
             ?? throw new RoadmapStepException("Validated SplitEpic bundle did not select a child epic.");
         var family = new SplitFamily(
@@ -95,7 +90,17 @@ internal sealed class SplitEpicTransition(
             selectedChild.Path,
             interpretation.SelectedChildRationale,
             DateTimeOffset.UtcNow);
-        await _splitFamilyStore.WriteAsync(family);
+        BundleExtractionResult validatedBundle = BundleExtractionResult.Extracted(interpretation.ValidatedChildEpics);
+        await _splitLineagePersistence.PersistAsync(
+            validatedBundle,
+            runtimePrompt,
+            projection.Definition.ProjectionPath,
+            family);
+
+        foreach (ExtractedBundleFile child in interpretation.ValidatedChildEpics)
+        {
+            await _hitlArtifactCapture.CaptureAsync(child.Path, child.Content);
+        }
 
         PromptTransitionCompletion childPromotionCompletion = completion with { Output = selectedChild.Content };
         return await _activeEpicPromotionCoordinator.PromoteAsync(

@@ -1,3 +1,4 @@
+using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Models.Parsing;
 using LoopRelay.Completion.Services.Certification;
@@ -20,10 +21,16 @@ internal sealed class RoadmapUnblockPlanner(
     PromptContractRegistry _contractRegistry,
     CompletionCertificationPolicy _completionPolicy,
     CompletionCertificationRouter _completionRouter,
-    ExecutionPreparationProvenanceService _executionPreparation)
+    ExecutionPreparationProvenanceService _executionPreparation,
+    ICanonicalArtifactHasher? canonicalHasher = null,
+    ILogicalArtifactResolver? logicalResolver = null)
 {
     private readonly ExecutionDispositionParser executionDispositionParser = new();
     private readonly ExecutionDispositionPolicy executionDispositionPolicy = new();
+    private readonly ICanonicalArtifactHasher _canonicalHasher =
+        canonicalHasher ?? RoadmapLogicalArtifactServices.CreateCanonicalHasher(_artifacts);
+    private readonly ILogicalArtifactResolver _logicalResolver =
+        logicalResolver ?? RoadmapLogicalArtifactServices.CreateResolver(_artifacts);
 
     public async Task<RoadmapUnblockPlan> PlanAsync(
         RoadmapStateDocument? persistedState,
@@ -191,7 +198,7 @@ internal sealed class RoadmapUnblockPlanner(
                 "Restore the original execution evidence relationship before running unblock again.");
         }
 
-        string? content = await _artifacts.ReadAsync(evidencePath);
+        string? content = await ReadOptionalLogicalContentAsync(evidencePath, cancellationToken);
         if (string.IsNullOrWhiteSpace(content))
         {
             return RoadmapUnblockPlan.Failed(
@@ -430,15 +437,23 @@ internal sealed class RoadmapUnblockPlanner(
         var evidence = new List<RoadmapUnblockEvidence>();
         foreach (string path in paths.Distinct(StringComparer.Ordinal))
         {
-            string? content = await _artifacts.ReadAsync(path);
+            CanonicalArtifactHash? hash = await _canonicalHasher.HashIfPresentAsync(path);
             evidence.Add(new RoadmapUnblockEvidence(
                 path,
                 "TransitionIntentEvidence",
-                string.IsNullOrWhiteSpace(content) ? string.Empty : RoadmapHash.Sha256(content),
-                string.IsNullOrWhiteSpace(content) ? "MissingOrEmpty" : "Present"));
+                hash?.Value ?? string.Empty,
+                hash is null ? "MissingOrEmpty" : "Present"));
         }
 
         return evidence;
+    }
+
+    private async Task<string?> ReadOptionalLogicalContentAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        LogicalArtifactResolutionResult result = await _logicalResolver.ResolveAsync(path, cancellationToken);
+        return result.IsResolved ? result.Content!.Text : null;
     }
 
     private async Task<IReadOnlyList<RoadmapUnblockEvidence>> HashProjectContextSourcesAsync()

@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Services.Sessions;
+using LoopRelay.Completion.Abstractions;
 using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Completion.Services.Certification;
 using LoopRelay.Completion.Services.Prompts;
@@ -27,6 +28,7 @@ using LoopRelay.Roadmap.Cli.Services.Decisions;
 using LoopRelay.Roadmap.Cli.Services.EpicTransitions;
 using LoopRelay.Roadmap.Cli.Services.Execution;
 using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.Splits;
@@ -81,8 +83,23 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             tokenEstimator,
             new ConsoleInputWaitProgressRenderer(console));
 
-        IExecutionEvidenceStore executionEvidence = new FileBackedExecutionEvidenceStore(store, repository);
-        var artifacts = new RoadmapArtifacts(store, repository, executionEvidence);
+        WorkspaceDatabaseIntegrityResult databaseIntegrity = new WorkspaceSqliteStore()
+            .ValidateAsync(repository)
+            .GetAwaiter()
+            .GetResult();
+        bool useSqliteStores =
+            databaseIntegrity.Status is WorkspaceDatabaseIntegrityStatus.ValidImported or WorkspaceDatabaseIntegrityStatus.ValidCanonical;
+        IWorkflowPersistenceCoordinator workflowCoordinator = useSqliteStores
+            ? new WorkflowPersistenceCoordinator()
+            : NullWorkflowPersistenceCoordinator.Instance;
+        IExecutionEvidenceStore executionEvidence = useSqliteStores
+            ? new SqliteExecutionEvidenceStore(repository)
+            : new FileBackedExecutionEvidenceStore(store, repository);
+        var artifacts = new RoadmapArtifacts(
+            store,
+            repository,
+            executionEvidence,
+            useSqliteStores ? workflowCoordinator : null);
         ICanonicalArtifactHasher canonicalHasher = RoadmapLogicalArtifactServices.CreateCanonicalHasher(artifacts);
         var repositoryArtifacts = new RepositoryArtifactStore(store, repository);
         var nonImplementationLedger = new NonImplementationReviewLedgerStore(repositoryArtifacts);
@@ -108,15 +125,29 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var projectionRegistry = new ProjectionRegistry();
         var provenanceFactory = new ProjectionProvenanceFactory(projectionRegistry);
         var contractRegistry = new PromptContractRegistry(projectionRegistry);
-        IProjectionManifestStore manifestStore = new ProjectionManifestStore(artifacts);
-        IExecutionPreparationManifestStore executionPreparationManifest = new ExecutionPreparationManifestStore(artifacts);
+        IProjectionManifestStore manifestStore = useSqliteStores
+            ? new SqliteProjectionManifestStore(repository)
+            : new ProjectionManifestStore(artifacts);
+        IExecutionPreparationManifestStore executionPreparationManifest = useSqliteStores
+            ? new SqliteExecutionPreparationManifestStore(repository)
+            : new ExecutionPreparationManifestStore(artifacts);
+        if (useSqliteStores)
+        {
+            executionPreparationManifest = new CoordinatedExecutionPreparationManifestStore(
+                executionPreparationManifest,
+                repository,
+                workflowCoordinator);
+        }
+
         var executionPreparation = new ExecutionPreparationProvenanceService(artifacts, executionPreparationManifest, canonicalHasher);
         var validator = new ProjectionValidator();
         var promptRunner = new RoadmapPromptRunner(progressRuntime, repository, console, promptPolicy);
         var projectionCache = new ProjectionCache(artifacts, projectionRegistry, manifestStore, validator, promptRunner);
         var contextBuilder = new RoadmapPromptContextBuilder(artifacts, executionPreparation);
         var inputResolver = new TransitionInputResolver(artifacts, executionPreparation, canonicalHasher);
-        ISelectionProvenanceManifestStore selectionProvenanceManifest = new SelectionProvenanceManifestStore(artifacts);
+        ISelectionProvenanceManifestStore selectionProvenanceManifest = useSqliteStores
+            ? new SqliteSelectionProvenanceManifestStore(repository)
+            : new SelectionProvenanceManifestStore(artifacts);
         var selectionProvenance = new SelectionProvenanceService(
             artifacts,
             selectionProvenanceManifest,
@@ -124,21 +155,50 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             inputResolver);
         var completionPolicy = new CompletionCertificationPolicy();
         var completionRouter = new CompletionCertificationRouter();
-        var completionArchive = new CompletedEpicArchiveService(
+        ICompletedEpicArchiveService completionArchive = new CompletedEpicArchiveService(
             store,
             new AgentCompletionPromptRunner(progressRuntime, repository, promptPolicy),
-            new RoadmapCompletionObserver(console));
-        IRoadmapStateStore stateStore = new State.RoadmapStateStore(artifacts);
-        IDecisionLedgerStore decisionLedger = new Decisions.DecisionLedgerStore(artifacts);
+            new RoadmapCompletionObserver(console),
+            _archiveMaterializer: useSqliteStores ? new SqliteCompletedEpicArchiveMaterializer() : null);
+        if (useSqliteStores)
+        {
+            completionArchive = new CoordinatedCompletedEpicArchiveService(completionArchive, workflowCoordinator);
+        }
+
+        IRoadmapStateStore stateStore = useSqliteStores
+            ? new SqliteRoadmapStateStore(repository)
+            : new State.RoadmapStateStore(artifacts);
+        IDecisionLedgerStore decisionLedger = useSqliteStores
+            ? new SqliteDecisionLedgerStore(repository)
+            : new Decisions.DecisionLedgerStore(artifacts);
+        if (useSqliteStores)
+        {
+            decisionLedger = new CoordinatedDecisionLedgerStore(decisionLedger, repository, workflowCoordinator);
+        }
+
         var decisionRecorder = new DecisionRecorder(decisionLedger);
-        ITransitionJournalStore journal = new TransitionJournalStore(artifacts);
+        ITransitionJournalStore journal = useSqliteStores
+            ? new SqliteTransitionJournalStore(repository)
+            : new TransitionJournalStore(artifacts);
+        if (useSqliteStores)
+        {
+            journal = new CoordinatedTransitionJournalStore(journal, repository, workflowCoordinator);
+        }
+
+        IArtifactLifecycleStore lifecycle = useSqliteStores
+            ? new SqliteArtifactLifecycleStore(repository)
+            : new ArtifactLifecycleStore(artifacts);
+        ISplitFamilyStore splitFamilies = useSqliteStores
+            ? new SqliteSplitFamilyStore(repository)
+            : new SplitFamilyStore(artifacts);
         var transitionPersistence = new RoadmapTransitionPersistence(
             artifacts,
             manifestStore,
             stateStore,
             decisionLedger,
-            journal);
-        IArtifactLifecycleStore lifecycle = new ArtifactLifecycleStore(artifacts);
+            journal,
+            splitFamilies,
+            useSqliteStores ? workflowCoordinator : null);
         var promptTransitionRunner = new RoadmapPromptTransitionRunner(
             inputResolver,
             promptRunner,
@@ -190,7 +250,6 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
         var bundleExtractor = new ArtifactBundles.BundleFileExtractor();
         var splitBundleInterpreter = new Splits.SplitEpicBundleInterpreter();
         var bundleManifest = new BundleManifestWriter(artifacts);
-        ISplitFamilyStore splitFamilies = new SplitFamilyStore(artifacts);
         var activeEpicPromotionCoordinator = new ActiveEpicPromotionCoordinator(
             promotion,
             hitlArtifactCapture,
@@ -237,13 +296,13 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             activeEpicPromotionCoordinator,
             bundleExtractor,
             splitBundleInterpreter,
-            bundleManifest,
             splitFamilies,
             lifecycle,
             journal,
             transitionPersistence,
             hitlArtifactCapture,
-            console);
+            console,
+            useSqliteStores ? workflowCoordinator : null);
         var invariants = new InvariantValidator(
             artifacts,
             projectContextLoader,
@@ -314,7 +373,6 @@ internal sealed class RoadmapCliComposition : IAsyncDisposable
             startupPlanner,
             resumePlanner,
             unblockPlanner,
-            decisionRecorder,
             journal,
             lifecycle,
             console);

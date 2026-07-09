@@ -1,3 +1,4 @@
+using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
@@ -6,7 +7,7 @@ namespace LoopRelay.Roadmap.Cli.Tests.Services.Support;
 
 internal sealed class TempRepo : IDisposable
 {
-    public TempRepo()
+    public TempRepo(IExecutionEvidenceStore? executionEvidenceStore = null)
     {
         Root = Path.Combine(Path.GetTempPath(), "cc-roadmap-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Root);
@@ -17,7 +18,7 @@ internal sealed class TempRepo : IDisposable
             Path = Root,
         };
         Store = new FileSystemArtifactStore();
-        Artifacts = new RoadmapArtifacts(Store, Repository);
+        Artifacts = new RoadmapArtifacts(Store, Repository, executionEvidenceStore);
     }
 
     public string Root { get; }

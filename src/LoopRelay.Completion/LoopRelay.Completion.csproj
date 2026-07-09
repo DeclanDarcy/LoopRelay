@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\LoopRelay.Agents\LoopRelay.Agents.csproj" />
     <ProjectReference Include="..\LoopRelay.Core\LoopRelay.Core.csproj" />
     <ProjectReference Include="..\LoopRelay.Orchestration.Primitives\LoopRelay.Orchestration.csproj" />

@@ -39,6 +39,8 @@ internal interface ISplitFamilyStore
     Task<string> WriteAsync(SplitFamily family);
 
     Task<bool> ExistsForChildAsync(string childEpicPath);
+
+    Task<int> CountAsync();
 }
 
 internal interface IExecutionPreparationManifestStore

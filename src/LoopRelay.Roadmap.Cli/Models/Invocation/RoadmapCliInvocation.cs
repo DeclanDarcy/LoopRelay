@@ -7,4 +7,5 @@ namespace LoopRelay.Roadmap.Cli.Models.Invocation;
 internal sealed record RoadmapCliInvocation(
     RoadmapCliCommand Command,
     Repository Repository,
-    RoadmapExecutionOptions ExecutionOptions);
+    RoadmapExecutionOptions ExecutionOptions,
+    RoadmapStorageOptions? StorageOptions = null);

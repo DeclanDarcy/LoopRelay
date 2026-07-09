@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Decisions;
 using LoopRelay.Cli.Services.Execution;
@@ -23,6 +24,7 @@ using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Projections.Models.Definitions;
 using LoopRelay.Projections.Models.ProjectionArtifacts;
 using LoopRelay.Projections.Primitives;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace LoopRelay.Cli.Tests.Services.Decisions;
@@ -557,6 +559,43 @@ public class DecisionSessionTests
     }
 
     [Fact]
+    public async Task Run_Transfer_WritesOperationalDeltaHistoryToSqlite()
+    {
+        using var repo = new TempFileRepo();
+        await InitializeLoopHistoryDatabaseAsync(repo.Repository);
+        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var art = new LoopArtifacts(repo.Store, repo.Repository, history);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(repo.Store);
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        var session = new DecisionSession(rt, router, art, con, repo.Repository, _costModel: null);
+
+        await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(repo.Resolve(ScopedContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));
+        await session.RunAsync(CancellationToken.None);
+
+        LoopHistoryRecord latestDelta = (await history.ReadLatestAsync(LoopHistoryKind.OperationalDelta))!;
+        Assert.Equal(OrchestrationArtifactPaths.HistoricalDelta(1), latestDelta.RelativePath);
+        Assert.Equal("DELTA-TEXT", latestDelta.Content);
+        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
+        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("OPCTX-1", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalContext)));
+    }
+
+    [Fact]
     public async Task Run_Transfer_FailedDeltaArchive_FailsTheTransfer()
     {
         var inner = new MemoryArtifactStore();
@@ -1068,5 +1107,85 @@ public class DecisionSessionTests
 
         Assert.Null(rt.OpenedSpecs.Single().ResumeThreadId);   // the kill switch skips ONLY the resume attempt
         Assert.NotEmpty(resume.Written);                        // persist/clear behavior is unchanged
+    }
+
+    private sealed class TempFileRepo : IDisposable
+    {
+        public TempFileRepo()
+        {
+            Root = Path.Combine(Path.GetTempPath(), "looprelay-decision-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Root);
+            Repository = new Repository
+            {
+                Id = Guid.NewGuid(),
+                Name = "repo",
+                Path = Root,
+            };
+            Store = new FileSystemArtifactStore();
+        }
+
+        public string Root { get; }
+
+        public Repository Repository { get; }
+
+        public FileSystemArtifactStore Store { get; }
+
+        public string Resolve(string relativePath) =>
+            ArtifactPath.ResolveRepositoryPath(Repository, relativePath);
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Root))
+            {
+                Directory.Delete(Root, recursive: true);
+            }
+        }
+    }
+
+    private static async Task InitializeLoopHistoryDatabaseAsync(Repository repository)
+    {
+        string databasePath = LoopWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = false,
+        }.ToString());
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE IF NOT EXISTS schema_metadata(
+                key text primary key,
+                value text not null
+            );
+
+            CREATE TABLE IF NOT EXISTS workspace_metadata(
+                key text primary key,
+                value text not null
+            );
+
+            CREATE TABLE IF NOT EXISTS loop_history(
+                kind text not null,
+                sequence integer not null,
+                logical_path text not null unique,
+                body text not null,
+                content_hash text not null,
+                created_at text not null,
+                primary key(kind, sequence)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_loop_history_kind_sequence_desc
+            ON loop_history(kind, sequence desc);
+
+            INSERT INTO schema_metadata (key, value)
+            VALUES ('schema_version', '1')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+
+            INSERT INTO workspace_metadata (key, value)
+            VALUES ('persistence_state', 'imported')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+            """;
+        await command.ExecuteNonQueryAsync();
     }
 }

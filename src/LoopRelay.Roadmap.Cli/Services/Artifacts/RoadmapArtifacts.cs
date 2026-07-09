@@ -6,16 +6,20 @@ using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Primitives.ArtifactStatuses;
+using LoopRelay.Roadmap.Cli.Services.Persistence;
 
 namespace LoopRelay.Roadmap.Cli.Services.Artifacts;
 
 internal sealed partial class RoadmapArtifacts(
     IArtifactStore _store,
     Repository _repository,
-    IExecutionEvidenceStore? executionEvidenceStore = null)
+    IExecutionEvidenceStore? executionEvidenceStore = null,
+    IWorkflowPersistenceCoordinator? workflowCoordinator = null)
 {
     private readonly IExecutionEvidenceStore _executionEvidenceStore =
         executionEvidenceStore ?? new FileBackedExecutionEvidenceStore(_store, _repository);
+    private readonly IWorkflowPersistenceCoordinator _workflowCoordinator =
+        workflowCoordinator ?? NullWorkflowPersistenceCoordinator.Instance;
 
     public Repository Repository => _repository;
 
@@ -33,8 +37,22 @@ internal sealed partial class RoadmapArtifacts(
 
     public async Task<IReadOnlyList<string>> ListAsync(string relativeDirectory, string searchPattern)
     {
+        if (IsExecutionEvidenceDirectory(relativeDirectory) &&
+            _executionEvidenceStore is SqliteExecutionEvidenceStore)
+        {
+            return (await _executionEvidenceStore.ListAsync(searchPattern))
+                .Select(record => record.RelativePath)
+                .ToArray();
+        }
+
         IReadOnlyList<string> files = await _store.ListAsync(Resolve(relativeDirectory), searchPattern);
         return files.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToList();
+    }
+
+    public async Task<IReadOnlyList<string>> ListDirectoriesAsync(string relativeDirectory)
+    {
+        IReadOnlyList<string> directories = await _store.ListDirectoriesAsync(Resolve(relativeDirectory));
+        return directories.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToArray();
     }
 
     public async Task<string> ReadRequiredAsync(string relativePath)
@@ -84,6 +102,17 @@ internal sealed partial class RoadmapArtifacts(
     }
 
     public async Task<string> WriteNumberedEvidenceAsync(string evidenceDirectory, string stem, string content)
+    {
+        string? path = null;
+        await _workflowCoordinator.ExecuteAsync(
+            _repository,
+            WorkflowPersistenceUnit.LoopHistoryEvidenceWrite,
+            $"{evidenceDirectory}:{stem}",
+            async _ => path = await WriteNumberedEvidenceCoreAsync(evidenceDirectory, stem, content));
+        return path ?? throw new InvalidOperationException("Numbered evidence workflow did not produce a path.");
+    }
+
+    private async Task<string> WriteNumberedEvidenceCoreAsync(string evidenceDirectory, string stem, string content)
     {
         if (IsExecutionEvidenceDirectory(evidenceDirectory))
         {

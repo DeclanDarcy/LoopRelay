@@ -1,5 +1,6 @@
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
 using LoopRelay.Roadmap.Cli.Models.DerivedArtifacts;
 using LoopRelay.Roadmap.Cli.Models.ExecutionPreparation;
 using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
@@ -13,6 +14,7 @@ using LoopRelay.Roadmap.Cli.Services.ArtifactManagement;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Decisions;
 using LoopRelay.Roadmap.Cli.Services.ExecutionPreparation;
+using LoopRelay.Roadmap.Cli.Services.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Projections;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.Splits;
@@ -170,6 +172,55 @@ public sealed class ExecutionPreparationProvenanceTests
 
         Assert.Equal(RoadmapArtifactPaths.DecisionLedgerJson, ledgerInput.Identity);
         Assert.Equal(canonicalLedgerHash, ledgerInput.Version);
+    }
+
+    [Fact]
+    public async Task SQLite_decision_ledger_drift_invalidates_operational_context_even_when_export_is_stale()
+    {
+        using var repo = new TempRepo();
+        repo.SeedProjectContext();
+        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
+        repo.Write(RoadmapArtifactPaths.ActiveEpic, RoadmapSamples.ValidEpic());
+        repo.Write(".agents/specs/a.md", Spec("Spec A", "- [ ] Do A."));
+        await new ArtifactLifecycleStore(repo.Artifacts).UpsertAsync(
+            RoadmapArtifactPaths.ActiveEpic,
+            ArtifactLifecycleState.Ready);
+        await new DecisionLedgerStore(repo.Artifacts).AppendAsync(Decision("D0001"));
+
+        ExecutionPreparationProvenanceService fileBackedProvenance =
+            await ExecutionPreparationTestSupport.SeedMilestoneSpecsAsync(repo, ".agents/specs/a.md");
+        await new OperationalContextGenerator(
+            repo.Artifacts,
+            new ArtifactLifecycleStore(repo.Artifacts),
+            fileBackedProvenance).GenerateAsync();
+        string staleExport = await repo.Artifacts.ReadRequiredAsync(RoadmapArtifactPaths.DecisionLedgerJson);
+
+        await new WorkspaceSqliteStore().ImportAsync(repo.Artifacts);
+        var sqliteBackedProvenance = new ExecutionPreparationProvenanceService(
+            repo.Artifacts,
+            new ExecutionPreparationManifestStore(repo.Artifacts));
+        Assert.True((await sqliteBackedProvenance.EvaluateOperationalContextFreshnessAsync()).IsFresh);
+
+        await new SqliteDecisionLedgerStore(repo.Repository).AppendAsync(Decision("D0002"));
+        Assert.Equal(staleExport, await repo.Artifacts.ReadRequiredAsync(RoadmapArtifactPaths.DecisionLedgerJson));
+        CanonicalArtifactHash currentLedgerHash =
+            await RoadmapLogicalArtifactServices.CreateCanonicalHasher(repo.Artifacts)
+                .RequireHashAsync(RoadmapArtifactPaths.DecisionLedgerJson);
+
+        DerivedArtifactFreshness operationalContext =
+            await sqliteBackedProvenance.EvaluateOperationalContextFreshnessAsync();
+
+        Assert.Equal(LogicalArtifactStorageKind.SqliteCanonicalRecord, currentLedgerHash.Descriptor.StorageKind);
+        Assert.False(operationalContext.IsFresh);
+        Assert.Contains(DerivedArtifactStaleReason.DecisionLedgerDrift, operationalContext.Reasons);
+
+        string regenerated = await new OperationalContextGenerator(
+            repo.Artifacts,
+            new ArtifactLifecycleStore(repo.Artifacts),
+            sqliteBackedProvenance).GenerateAsync();
+
+        Assert.Contains("D0002", regenerated, StringComparison.Ordinal);
+        Assert.True((await sqliteBackedProvenance.EvaluateOperationalContextFreshnessAsync()).IsFresh);
     }
 
     [Fact]
@@ -348,6 +399,20 @@ public sealed class ExecutionPreparationProvenanceTests
 
         {{checklist}}
         """;
+
+    private static DecisionLedgerEntry Decision(string decisionId) =>
+        new(
+            decisionId,
+            DateTimeOffset.UtcNow,
+            RoadmapState.CoreReady,
+            "SelectNextEpic",
+            "SelectNextEpic",
+            RoadmapArtifactPaths.Selection,
+            [RoadmapArtifactPaths.ActiveEpic],
+            [RoadmapArtifactPaths.Selection],
+            "Select Existing Epic",
+            "High",
+            "reason");
 
     private sealed class DecisionLedgerHashOverride(
         ICanonicalArtifactHasher inner,

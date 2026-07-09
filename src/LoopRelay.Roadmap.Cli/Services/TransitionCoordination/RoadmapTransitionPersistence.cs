@@ -1,4 +1,5 @@
 using LoopRelay.Roadmap.Cli.Models.ArtifactRecords;
+using LoopRelay.Roadmap.Cli.Models.Decisions;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.ProjectionManifests;
 using LoopRelay.Roadmap.Cli.Models.Projections;
@@ -12,6 +13,7 @@ using LoopRelay.Roadmap.Cli.Primitives.Transitions;
 using LoopRelay.Roadmap.Cli.Abstractions.Persistence;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.Execution;
+using LoopRelay.Roadmap.Cli.Services.Persistence;
 
 namespace LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 
@@ -20,8 +22,13 @@ internal sealed class RoadmapTransitionPersistence(
     IProjectionManifestStore _manifestStore,
     IRoadmapStateStore _stateStore,
     IDecisionLedgerStore _decisionLedger,
-    ITransitionJournalStore _journalStore)
+    ITransitionJournalStore _journalStore,
+    ISplitFamilyStore _splitFamilyStore,
+    IWorkflowPersistenceCoordinator? workflowCoordinator = null)
 {
+    private readonly IWorkflowPersistenceCoordinator _workflowCoordinator =
+        workflowCoordinator ?? NullWorkflowPersistenceCoordinator.Instance;
+
     public async Task SaveAsync(
         RoadmapState current,
         TransitionStatus status,
@@ -37,6 +44,43 @@ internal sealed class RoadmapTransitionPersistence(
         IReadOnlyList<BlockerRow>? blockers,
         RoadmapTransitionIntent? transitionIntent = null,
         IReadOnlyList<string>? nextTransitions = null)
+    {
+        await _workflowCoordinator.ExecuteAsync(
+            _artifacts.Repository,
+            WorkflowPersistenceUnit.RoadmapTransitionSave,
+            $"{prompt}:{started:O}",
+            _ => SaveCoreAsync(
+                current,
+                status,
+                from,
+                to,
+                prompt,
+                projection,
+                output,
+                decision,
+                started,
+                completed,
+                retiredEpics,
+                blockers,
+                transitionIntent,
+                nextTransitions));
+    }
+
+    private async Task SaveCoreAsync(
+        RoadmapState current,
+        TransitionStatus status,
+        RoadmapState from,
+        RoadmapState to,
+        string prompt,
+        string projection,
+        string output,
+        string decision,
+        DateTimeOffset started,
+        DateTimeOffset? completed,
+        IReadOnlyList<RetiredEpic>? retiredEpics,
+        IReadOnlyList<BlockerRow>? blockers,
+        RoadmapTransitionIntent? transitionIntent,
+        IReadOnlyList<string>? nextTransitions)
     {
         RoadmapStateDocument? existing = await _stateStore.LoadAsync();
         RoadmapStateSummarySnapshot summary = await CaptureSummaryAsync();
@@ -57,7 +101,71 @@ internal sealed class RoadmapTransitionPersistence(
             effectiveRetiredEpics));
     }
 
+    public async Task RecordDecisionAndSaveAsync(
+        RoadmapState current,
+        TransitionStatus status,
+        RoadmapState from,
+        RoadmapState to,
+        string prompt,
+        string projection,
+        string output,
+        string decision,
+        string confidence,
+        string rationale,
+        DateTimeOffset started,
+        DateTimeOffset? completed,
+        IReadOnlyList<RetiredEpic>? retiredEpics,
+        IReadOnlyList<BlockerRow>? blockers,
+        RoadmapTransitionIntent? transitionIntent = null,
+        IReadOnlyList<string>? nextTransitions = null)
+    {
+        await _workflowCoordinator.ExecuteAsync(
+            _artifacts.Repository,
+            WorkflowPersistenceUnit.DecisionRecordingAndStateUpdate,
+            $"{prompt}:{started:O}",
+            async _ =>
+            {
+                string id = await _decisionLedger.NextDecisionIdAsync();
+                await _decisionLedger.AppendAsync(new DecisionLedgerEntry(
+                    id,
+                    DateTimeOffset.UtcNow,
+                    current,
+                    prompt,
+                    prompt,
+                    projection,
+                    [],
+                    [output],
+                    decision,
+                    confidence,
+                    rationale));
+                await SaveCoreAsync(
+                    current,
+                    status,
+                    from,
+                    to,
+                    prompt,
+                    projection,
+                    output,
+                    decision,
+                    started,
+                    completed,
+                    retiredEpics,
+                    blockers,
+                    transitionIntent,
+                    nextTransitions);
+            });
+    }
+
     public async Task RefreshAndSaveAsync(RoadmapStateDocument document)
+    {
+        await _workflowCoordinator.ExecuteAsync(
+            _artifacts.Repository,
+            WorkflowPersistenceUnit.RoadmapTransitionSave,
+            $"{document.CurrentState}:{DateTimeOffset.UtcNow:O}",
+            _ => RefreshAndSaveCoreAsync(document));
+    }
+
+    private async Task RefreshAndSaveCoreAsync(RoadmapStateDocument document)
     {
         RoadmapStateSummarySnapshot summary = await CaptureSummaryAsync();
         await _stateStore.SaveAsync(document with
@@ -71,6 +179,15 @@ internal sealed class RoadmapTransitionPersistence(
     }
 
     public async Task PersistWorkflowFailureAsync(RoadmapWorkflowFailure failure)
+    {
+        await _workflowCoordinator.ExecuteAsync(
+            _artifacts.Repository,
+            WorkflowPersistenceUnit.DecisionRecordingAndStateUpdate,
+            $"{failure.JournalEvent}:{failure.FailedAt:O}",
+            _ => PersistWorkflowFailureCoreAsync(failure));
+    }
+
+    private async Task PersistWorkflowFailureCoreAsync(RoadmapWorkflowFailure failure)
     {
         IReadOnlyDictionary<string, string> inputHashes = failure.InputSnapshot?.ToInputArtifactHashes()
             ?? new Dictionary<string, string>(StringComparer.Ordinal);
@@ -91,7 +208,7 @@ internal sealed class RoadmapTransitionPersistence(
             failure.Reason,
             failure.InputSnapshot));
 
-        await SaveAsync(
+        await SaveCoreAsync(
             failure.FailureState,
             failure.StateTransitionStatus,
             failure.OriginatingState,
@@ -158,7 +275,7 @@ internal sealed class RoadmapTransitionPersistence(
         ProjectionManifest manifest = await _manifestStore.LoadAsync();
         IReadOnlyList<ArtifactStateRow> activeArtifacts = await ActiveArtifactRowsAsync();
         string lastDecision = await _decisionLedger.LastDecisionIdAsync();
-        int splitFamilyCount = (await _artifacts.ListAsync(RoadmapArtifactPaths.SplitFamiliesDirectory, "split-family-*.json")).Count;
+        int splitFamilyCount = await _splitFamilyStore.CountAsync();
 
         return new RoadmapStateSummarySnapshot(
             activeArtifacts,

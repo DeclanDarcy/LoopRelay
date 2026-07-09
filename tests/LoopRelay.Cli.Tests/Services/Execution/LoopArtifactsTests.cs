@@ -5,6 +5,7 @@ using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace LoopRelay.Cli.Tests.Services.Execution;
@@ -53,6 +54,114 @@ public class LoopArtifactsTests
         Assert.Equal(10, latest.Sequence);
         Assert.Equal(OrchestrationArtifactPaths.HistoricalHandoff(10), latest.RelativePath);
         Assert.Equal("H10", latest.Content);
+    }
+
+    [Fact]
+    public async Task LoopHistoryStoreFactory_FallsBackToFileBackedStoreWhenDatabaseIsMissing()
+    {
+        var (_, store, repo) = New();
+
+        ILoopHistoryStore history = LoopHistoryStoreFactory.Create(store, repo);
+
+        Assert.IsType<FileBackedLoopHistoryStore>(history);
+    }
+
+    [Fact]
+    public async Task LoopHistoryStoreFactory_UsesSqliteStoreForImportedWorkspaceDatabase()
+    {
+        using var repo = new TempFileRepo();
+        await InitializeLoopHistoryDatabaseAsync(repo.Repository);
+
+        ILoopHistoryStore history = LoopHistoryStoreFactory.Create(repo.Store, repo.Repository);
+
+        Assert.IsType<SqliteLoopHistoryStore>(history);
+    }
+
+    [Fact]
+    public async Task PersistDecisions_WritesLiveFileAndSqliteHistory()
+    {
+        using var repo = new TempFileRepo();
+        await InitializeLoopHistoryDatabaseAsync(repo.Repository);
+        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var artifacts = new LoopArtifacts(repo.Store, repo.Repository, history);
+
+        await artifacts.PersistDecisionsAsync("D1\r\nopaque body");
+
+        Assert.Equal("D1\r\nopaque body", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.Decisions)));
+        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDecision(1))));
+        LoopHistoryRecord latest = (await history.ReadLatestAsync(LoopHistoryKind.Decisions))!;
+        Assert.Equal(1, latest.Sequence);
+        Assert.Equal(OrchestrationArtifactPaths.HistoricalDecision(1), latest.RelativePath);
+        Assert.Equal("D1\r\nopaque body", latest.Content);
+    }
+
+    [Fact]
+    public async Task RotateLiveHandoff_WritesSqliteHistoryBeforeDeletingLiveFile()
+    {
+        using var repo = new TempFileRepo();
+        await InitializeLoopHistoryDatabaseAsync(repo.Repository);
+        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var artifacts = new LoopArtifacts(repo.Store, repo.Repository, history);
+        await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        string? rotated = await artifacts.RotateLiveHandoffAsync();
+
+        Assert.Equal("H1", rotated);
+        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff)));
+        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalHandoff(1))));
+        LoopHistoryRecord latest = (await history.ReadLatestAsync(LoopHistoryKind.Handoff))!;
+        Assert.Equal(OrchestrationArtifactPaths.HistoricalHandoff(1), latest.RelativePath);
+        Assert.Equal("H1", latest.Content);
+    }
+
+    [Fact]
+    public async Task RotateOperationalDelta_WritesSqliteHistoryBeforeDeletingLiveFile()
+    {
+        using var repo = new TempFileRepo();
+        await InitializeLoopHistoryDatabaseAsync(repo.Repository);
+        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var artifacts = new LoopArtifacts(repo.Store, repo.Repository, history);
+        await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalDelta), "DELTA-1");
+
+        string? rotated = await artifacts.RotateOperationalDeltaAsync();
+
+        Assert.Equal("DELTA-1", rotated);
+        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
+        LoopHistoryRecord latest = (await history.ReadLatestAsync(LoopHistoryKind.OperationalDelta))!;
+        Assert.Equal(OrchestrationArtifactPaths.HistoricalDelta(1), latest.RelativePath);
+        Assert.Equal("DELTA-1", latest.Content);
+    }
+
+    [Fact]
+    public async Task ReadLatestHandoff_PrefersLiveFileBeforeSqliteHistory()
+    {
+        using var repo = new TempFileRepo();
+        await InitializeLoopHistoryDatabaseAsync(repo.Repository);
+        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var artifacts = new LoopArtifacts(repo.Store, repo.Repository, history);
+        await history.AppendAsync(LoopHistoryKind.Handoff, "numbered");
+
+        var numbered = await artifacts.ReadLatestHandoffAsync();
+        await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff), "live");
+        var live = await artifacts.ReadLatestHandoffAsync();
+
+        Assert.Equal("numbered", numbered.Content);
+        Assert.Equal(OrchestrationArtifactPaths.HistoricalHandoff(1), numbered.RelativePath);
+        Assert.Equal("live", live.Content);
+        Assert.Equal(OrchestrationArtifactPaths.LiveHandoff, live.RelativePath);
+    }
+
+    [Fact]
+    public async Task RotateLiveFile_WhenHistoryWriteFails_KeepsLiveFileAvailable()
+    {
+        var (_, store, repo) = New();
+        var artifacts = new LoopArtifacts(store, repo, new ThrowingLoopHistoryStore());
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        await Assert.ThrowsAsync<IOException>(() => artifacts.RotateLiveHandoffAsync());
+
+        Assert.Equal("H1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff)));
     }
 
     [Fact]
@@ -273,5 +382,94 @@ public class LoopArtifactsTests
             ReadLatestCalls++;
             return Task.FromResult(latest);
         }
+    }
+
+    private sealed class ThrowingLoopHistoryStore : ILoopHistoryStore
+    {
+        public Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content) =>
+            throw new IOException("Configured history write failure.");
+
+        public Task<LoopHistoryRecord?> ReadLatestAsync(LoopHistoryKind kind) =>
+            Task.FromResult<LoopHistoryRecord?>(null);
+    }
+
+    private sealed class TempFileRepo : IDisposable
+    {
+        public TempFileRepo()
+        {
+            Root = Path.Combine(Path.GetTempPath(), "looprelay-cli-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Root);
+            Repository = new Repository
+            {
+                Id = Guid.NewGuid(),
+                Name = "repo",
+                Path = Root,
+            };
+            Store = new FileSystemArtifactStore();
+        }
+
+        public string Root { get; }
+
+        public Repository Repository { get; }
+
+        public FileSystemArtifactStore Store { get; }
+
+        public string Resolve(string relativePath) =>
+            ArtifactPath.ResolveRepositoryPath(Repository, relativePath);
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Root))
+            {
+                Directory.Delete(Root, recursive: true);
+            }
+        }
+    }
+
+    private static async Task InitializeLoopHistoryDatabaseAsync(Repository repository)
+    {
+        string databasePath = LoopWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = false,
+        }.ToString());
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE IF NOT EXISTS schema_metadata(
+                key text primary key,
+                value text not null
+            );
+
+            CREATE TABLE IF NOT EXISTS workspace_metadata(
+                key text primary key,
+                value text not null
+            );
+
+            CREATE TABLE IF NOT EXISTS loop_history(
+                kind text not null,
+                sequence integer not null,
+                logical_path text not null unique,
+                body text not null,
+                content_hash text not null,
+                created_at text not null,
+                primary key(kind, sequence)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_loop_history_kind_sequence_desc
+            ON loop_history(kind, sequence desc);
+
+            INSERT INTO schema_metadata (key, value)
+            VALUES ('schema_version', '1')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+
+            INSERT INTO workspace_metadata (key, value)
+            VALUES ('persistence_state', 'imported')
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+            """;
+        await command.ExecuteNonQueryAsync();
     }
 }

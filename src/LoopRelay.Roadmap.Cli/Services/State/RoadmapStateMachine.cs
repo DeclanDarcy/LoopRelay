@@ -38,7 +38,6 @@ internal sealed class RoadmapStateMachine(
     RoadmapStartupPlanner _startupPlanner,
     RoadmapResumePlanner _resumePlanner,
     RoadmapUnblockPlanner _unblockPlanner,
-    DecisionRecorder _decisionRecorder,
     ITransitionJournalStore _journalStore,
     IArtifactLifecycleStore _lifecycleStore,
     ILoopConsole _console)
@@ -501,16 +500,13 @@ internal sealed class RoadmapStateMachine(
 
                 break;
             case "Strategic Investigation Required":
-                await _decisionRecorder.AppendAsync(RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
-                await SaveStateAsync(RoadmapState.StrategicInvestigationRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.StrategicInvestigationRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
+                await RecordSelectionTerminalDecisionAsync(selection, RoadmapState.StrategicInvestigationRequired);
                 return RoadmapOutcome.Paused;
             case "Roadmap Revision Required":
-                await _decisionRecorder.AppendAsync(RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
-                await SaveStateAsync(RoadmapState.RoadmapRevisionRequired, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.RoadmapRevisionRequired, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
+                await RecordSelectionTerminalDecisionAsync(selection, RoadmapState.RoadmapRevisionRequired);
                 return RoadmapOutcome.Paused;
             default:
-                await _decisionRecorder.AppendAsync(RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, selection.Confidence, selection.PrimaryReason);
-                await SaveStateAsync(RoadmapState.NoSuitableInitiative, TransitionStatus.Completed, RoadmapState.SelectNextStrategicInitiative, RoadmapState.NoSuitableInitiative, "SelectNextEpic", "SelectNextEpic", RoadmapArtifactPaths.Selection, selection.RecommendedOutcome, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
+                await RecordSelectionTerminalDecisionAsync(selection, RoadmapState.NoSuitableInitiative);
                 return RoadmapOutcome.Paused;
         }
 
@@ -569,6 +565,28 @@ internal sealed class RoadmapStateMachine(
             blockers,
             transitionIntent,
             nextTransitions);
+    }
+
+    private async Task RecordSelectionTerminalDecisionAsync(
+        SelectionDecision selection,
+        RoadmapState targetState)
+    {
+        DateTimeOffset completed = DateTimeOffset.UtcNow;
+        await _transitionPersistence.RecordDecisionAndSaveAsync(
+            targetState,
+            TransitionStatus.Completed,
+            RoadmapState.SelectNextStrategicInitiative,
+            targetState,
+            "SelectNextEpic",
+            "SelectNextEpic",
+            RoadmapArtifactPaths.Selection,
+            selection.RecommendedOutcome,
+            selection.Confidence,
+            selection.PrimaryReason,
+            completed,
+            completed,
+            null,
+            null);
     }
 
     private static string ExecutionCommandText(ExecutionDispositionCommand command) =>
