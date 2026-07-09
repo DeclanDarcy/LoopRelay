@@ -3,6 +3,7 @@ using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Plan.Cli.Models;
 using LoopRelay.Plan.Cli.Services.Execution;
@@ -60,6 +61,7 @@ public class ReviewStepTests
         // The .prompt file is CRLF on disk and the generator preserves line endings verbatim — assert equality
         // against Render() itself rather than a literal "\n" fragment.
         Assert.Equal(AdversarialPlanReview.Render("PROJECT CONTEXT PROJECTION", "PLAN CONTENT"), capturedPrompt);
+        Assert.DoesNotContain(ImplementationFirstPromptPolicyComposer.SectionHeading, capturedPrompt ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("PROJECT CONTEXT PROJECTION", capturedPrompt);
         Assert.Contains("PLAN CONTENT", capturedPrompt);
     }
