@@ -4,6 +4,7 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Permissions.Models.Policy;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Plan.Cli.Models;
 using LoopRelay.Plan.Cli.Services.Execution;
 using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
@@ -65,8 +66,7 @@ public class PermissionedArtifactOperationStepTests
             Assert.False(spec.Sandbox.CanWriteWorkspace);
             Assert.False(spec.Sandbox.CanAccessNetwork);
             Assert.True(spec.Sandbox.RequiresApproval);
-            Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
-            Assert.Equal("xhigh", spec.Effort.Identifier);
+            Assert.Equal(AgentEffort.XHigh, spec.Effort);
             Assert.NotNull(spec.OperationPermissionProfile);
             Assert.Equal("MY PROMPT", prompt);
             Assert.Equal("PLAN", s.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Plan)).Result);

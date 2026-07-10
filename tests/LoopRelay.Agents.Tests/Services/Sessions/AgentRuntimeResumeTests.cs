@@ -8,6 +8,7 @@ using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Agents.Services.Usage;
 using LoopRelay.Agents.Tests.Services.Process;
 using System.Text.Json;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Agents.Tests.Services.Sessions;
 
@@ -31,7 +32,9 @@ public sealed class AgentRuntimeResumeTests
         "repo-1",
         SessionRole.Decision,
         new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
-        new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
+        AgentModel.Gpt56Sol,
+        AgentEffort.XHigh,
+        AgentConfigurationAuthority.Brain,
         workingDirectory: "/repo",
         resumeThreadId: "thread-old");
 
@@ -178,8 +181,8 @@ public sealed class AgentRuntimeResumeTests
         AgentRuntime runtime = NewRuntime(process, registry);
         AgentSessionSpec spec = ResumeSpec();
         spec = new AgentSessionSpec(
-            spec.SessionId, spec.RepositoryId, spec.Role, spec.Sandbox, spec.Effort,
-            spec.WorkingDirectory, spec.StartupOptions, resumeThreadId: null,
+            spec.SessionId, spec.RepositoryId, spec.Role, spec.Sandbox, spec.Model, spec.Effort,
+            spec.ConfigurationAuthority, spec.WorkingDirectory, spec.StartupOptions, resumeThreadId: null,
             operationPermissionProfile: spec.OperationPermissionProfile);
 
         SessionCreateResult result = await runtime.CreateSessionAsync(new SessionCreateRequest(
@@ -214,7 +217,9 @@ public sealed class AgentRuntimeResumeTests
             "repo-1",
             SessionRole.Decision,
             new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
+            AgentModel.Gpt56Sol,
+            AgentEffort.XHigh,
+            AgentConfigurationAuthority.Brain,
             workingDirectory: "/repo");
 
         IAgentSession session = await runtime.OpenSessionAsync(spec);
@@ -267,8 +272,8 @@ public sealed class AgentRuntimeResumeTests
         AgentRuntime runtime = NewRuntime(process, registry);
         AgentSessionSpec baseSpec = ResumeSpec();
         var forkSpec = new AgentSessionSpec(
-            SessionIdentity.New(), baseSpec.RepositoryId, baseSpec.Role, baseSpec.Sandbox, baseSpec.Effort,
-            baseSpec.WorkingDirectory);
+            SessionIdentity.New(), baseSpec.RepositoryId, baseSpec.Role, baseSpec.Sandbox,
+            baseSpec.Model, baseSpec.Effort, baseSpec.ConfigurationAuthority, baseSpec.WorkingDirectory);
 
         SessionForkResult result = await runtime.ForkSessionAsync(new SessionForkRequest(
             forkSpec,
@@ -292,8 +297,8 @@ public sealed class AgentRuntimeResumeTests
         AgentRuntime runtime = NewRuntime(process, new AgentSessionRegistry());
         AgentSessionSpec baseSpec = ResumeSpec();
         var forkSpec = new AgentSessionSpec(
-            SessionIdentity.New(), baseSpec.RepositoryId, baseSpec.Role, baseSpec.Sandbox, baseSpec.Effort,
-            baseSpec.WorkingDirectory);
+            SessionIdentity.New(), baseSpec.RepositoryId, baseSpec.Role, baseSpec.Sandbox,
+            baseSpec.Model, baseSpec.Effort, baseSpec.ConfigurationAuthority, baseSpec.WorkingDirectory);
 
         SessionForkResult result = await runtime.ForkSessionAsync(new SessionForkRequest(
             forkSpec,

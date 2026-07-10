@@ -2,6 +2,7 @@ using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Codex;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Agents.Tests.Services.Codex;
 
@@ -10,7 +11,7 @@ public sealed class CodexAgentArgumentBuilderTests
     private static AgentSessionSpec Spec(
         bool canWrite,
         bool requiresApproval,
-        AgentEffortLevel effort,
+        AgentEffort effort,
         string? workingDirectory = "/repo") =>
         new(
             SessionIdentity.New(),
@@ -19,14 +20,16 @@ public sealed class CodexAgentArgumentBuilderTests
             // Identifier is the codex sandbox mode the persistent path now emits verbatim, so it must be a
             // real mode string that matches the write posture (not a placeholder).
             new SandboxProfile(canWrite ? "workspace-write" : "read-only", canWrite, CanAccessNetwork: false, requiresApproval),
-            new EffortProfile(effort),
+            AgentModel.Gpt56Terra,
+            effort,
+            AgentConfigurationAuthority.Brain,
             workingDirectory);
 
     [Fact]
     public void OneShotBuildsExecJsonArgsWithStdinAndWorkingDirectory()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.Medium),
             AgentSessionMode.OneShot);
 
         Assert.Equal("exec", args[0]);
@@ -34,6 +37,7 @@ public sealed class CodexAgentArgumentBuilderTests
         Assert.Contains("--cd", args);
         Assert.Contains("/repo", args);
         Assert.Equal("-", args[^1]); // stdin prompt is the trailing positional
+        Assert.Contains("gpt-5.6-terra", args);
         Assert.DoesNotContain("--sandbox", args); // exec path intentionally omits the sandbox flag
     }
 
@@ -45,7 +49,7 @@ public sealed class CodexAgentArgumentBuilderTests
     public void OneShotSkipsGitRepoTrustCheck_BeforeTheTrailingStdinPositional()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.Medium),
             AgentSessionMode.OneShot);
 
         Assert.Contains("--skip-git-repo-check", args);
@@ -58,7 +62,7 @@ public sealed class CodexAgentArgumentBuilderTests
     public void PersistentDoesNotSkipGitRepoTrustCheck()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.Medium),
             AgentSessionMode.Persistent);
 
         Assert.DoesNotContain("--skip-git-repo-check", args);
@@ -69,7 +73,7 @@ public sealed class CodexAgentArgumentBuilderTests
     {
         // codex 0.139 removed `codex proto`; the held-open path is the app-server JSON-RPC transport.
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.High),
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.High),
             AgentSessionMode.Persistent);
 
         Assert.Contains("app-server", args);
@@ -79,6 +83,8 @@ public sealed class CodexAgentArgumentBuilderTests
         Assert.Contains("never", args);
         Assert.DoesNotContain("proto", args);
         Assert.DoesNotContain("exec", args);
+        Assert.Contains("gpt-5.6-terra", args);
+        Assert.Contains("model_reasoning_effort=\"high\"", args);
     }
 
     // The exec/one-shot path intentionally omits the --sandbox flag (the sandbox posture is left to codex's
@@ -87,7 +93,7 @@ public sealed class CodexAgentArgumentBuilderTests
     public void OneShotDoesNotPassSandboxFlag()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: false, requiresApproval: true, AgentEffortLevel.Low),
+            Spec(canWrite: false, requiresApproval: true, AgentEffort.Low),
             AgentSessionMode.OneShot);
 
         Assert.DoesNotContain("--sandbox", args);
@@ -100,13 +106,13 @@ public sealed class CodexAgentArgumentBuilderTests
     public void PersistentSandboxMapsPosture()
     {
         IReadOnlyList<string> readOnly = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: false, requiresApproval: false, AgentEffortLevel.Low),
+            Spec(canWrite: false, requiresApproval: false, AgentEffort.Low),
             AgentSessionMode.Persistent);
         Assert.Contains("--sandbox", readOnly);
         Assert.Contains("read-only", readOnly);
 
         IReadOnlyList<string> writable = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Low),
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.Low),
             AgentSessionMode.Persistent);
         Assert.Contains("workspace-write", writable);
     }
@@ -122,7 +128,9 @@ public sealed class CodexAgentArgumentBuilderTests
             "repo-1",
             SessionRole.OperationalExecution,
             new SandboxProfile("danger-full-access", CanWriteWorkspace: true, CanAccessNetwork: true, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.Medium),
+            AgentModel.Gpt55,
+            AgentEffort.Medium,
+            AgentConfigurationAuthority.Execution,
             workingDirectory: "/repo");
 
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(spec, AgentSessionMode.Persistent);
@@ -135,7 +143,7 @@ public sealed class CodexAgentArgumentBuilderTests
     public void ApprovalsOffEmitsNeverPolicy()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.High),
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.High),
             AgentSessionMode.OneShot);
 
         Assert.Contains("approval_policy=\"never\"", args);
@@ -147,7 +155,7 @@ public sealed class CodexAgentArgumentBuilderTests
     public void OneShotAlwaysEmitsNeverApprovalPolicy()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: false, requiresApproval: true, AgentEffortLevel.Low),
+            Spec(canWrite: false, requiresApproval: true, AgentEffort.Low),
             AgentSessionMode.OneShot);
 
         Assert.Contains("approval_policy=\"never\"", args);
@@ -157,21 +165,23 @@ public sealed class CodexAgentArgumentBuilderTests
     public void EffortLevelMapsToReasoningConfig()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.High),
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.High),
             AgentSessionMode.OneShot);
 
         Assert.Contains("model_reasoning_effort=\"high\"", args);
     }
 
     [Fact]
-    public void EffortIdentifierOverridesLevelMapping()
+    public void XHighEffortMapsToCanonicalReasoningConfig()
     {
         var spec = new AgentSessionSpec(
             SessionIdentity.New(),
             "repo-1",
             SessionRole.Planning,
             new SandboxProfile("sandbox", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
+            AgentModel.Gpt56Sol,
+            AgentEffort.XHigh,
+            AgentConfigurationAuthority.Brain,
             workingDirectory: "/repo");
 
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(spec, AgentSessionMode.OneShot);
@@ -179,14 +189,14 @@ public sealed class CodexAgentArgumentBuilderTests
         Assert.Contains("model_reasoning_effort=\"xhigh\"", args);
     }
 
-    // m10 (A) Medium-value certification: AgentEffortLevel.Medium with no identifier maps to "medium" — the tier
+    // m10 (A) Medium-value certification: canonical AgentEffort.Medium maps to "medium" — the tier
     // StartExecution/ContinueExecution run at. (The exec-path "xhigh" and isolated-protocol "high" are already
     // pinned; this completes the level map's middle rung.)
     [Fact]
     public void MediumEffortMapsToMediumReasoningConfig()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.Medium),
             AgentSessionMode.OneShot);
 
         Assert.Contains("model_reasoning_effort=\"medium\"", args);
@@ -199,7 +209,7 @@ public sealed class CodexAgentArgumentBuilderTests
     public void ExecArgsCarryNoToolsWebSearchOrPlanToolConfigKeys()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
-            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.Medium),
             AgentSessionMode.OneShot);
 
         // Every -c key is one of the two governed defaults — nothing else.
@@ -222,19 +232,19 @@ public sealed class CodexAgentArgumentBuilderTests
     // m10 (A): explicit StartupOptions ARE emitted as additional -c keys (so the guard above is a real constraint,
     // not vacuous) — and ONLY those the caller passed.
     [Fact]
-    public void ExplicitStartupOptionsAreEmittedAsAdditionalConfigKeys()
+    public void ReservedStartupOptionsCannotOverrideCanonicalModel()
     {
-        var spec = new AgentSessionSpec(
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => new AgentSessionSpec(
             SessionIdentity.New(),
             "repo-1",
             SessionRole.OperationalExecution,
             new SandboxProfile("sandbox", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.Medium),
+            AgentModel.Gpt56Luna,
+            AgentEffort.Medium,
+            AgentConfigurationAuthority.Execution,
             workingDirectory: "/repo",
-            startupOptions: new Dictionary<string, string> { ["model"] = "\"gpt-5\"" });
+            startupOptions: new Dictionary<string, string> { ["model"] = "\"gpt-5\"" }));
 
-        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(spec, AgentSessionMode.OneShot);
-
-        Assert.Contains("model=\"gpt-5\"", args);
+        Assert.Contains("cannot override", exception.Message, StringComparison.Ordinal);
     }
 }

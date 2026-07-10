@@ -3,6 +3,7 @@ using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Models;
 
 namespace LoopRelay.Cli.Services.Execution;
 
@@ -42,7 +43,12 @@ internal sealed class LoopArtifacts(IArtifactStore _store, Repository _repositor
 
     public Task<string?> RotateLiveHandoffAsync() => RotateAsync(OrchestrationArtifactPaths.LiveHandoff, LoopHistoryKind.Handoff);
 
-    public Task<string?> RotateLiveDecisionsAsync() => RotateAsync(OrchestrationArtifactPaths.Decisions, LoopHistoryKind.Decisions);
+    public async Task<string?> RotateLiveDecisionsAsync()
+    {
+        string? content = await RotateAsync(OrchestrationArtifactPaths.Decisions, LoopHistoryKind.Decisions);
+        await InvalidateExecutionRecommendationAsync();
+        return content;
+    }
 
     public Task<string?> RotateOperationalDeltaAsync() => RotateAsync(OrchestrationArtifactPaths.OperationalDelta, LoopHistoryKind.OperationalDelta);
 
@@ -62,17 +68,60 @@ internal sealed class LoopArtifacts(IArtifactStore _store, Repository _repositor
         string live = Resolve(OrchestrationArtifactPaths.Decisions);
         if (!await _store.ExistsAsync(live))
         {
+            await InvalidateExecutionRecommendationAsync();
             return false;
         }
 
         await _store.DeleteAsync(live);
+        await InvalidateExecutionRecommendationAsync();
         return true;
     }
 
-    public async Task PersistDecisionsAsync(string decisions)
+    public async Task PersistDecisionsAsync(string decisions, ExecutionRecommendation recommendation)
     {
+        PersistedExecutionRecommendation persisted = ExecutionRecommendationContract.Bind(decisions, recommendation);
         await _historyStore.AppendAsync(LoopHistoryKind.Decisions, decisions);
         await _store.WriteAsync(Resolve(OrchestrationArtifactPaths.Decisions), decisions);
+        await _store.WriteAsync(
+            Resolve(OrchestrationArtifactPaths.ExecutionRecommendation),
+            ExecutionRecommendationContract.SerializePersisted(persisted));
+    }
+
+    public async Task PersistExecutionRecommendationAsync(
+        string decisions,
+        ExecutionRecommendation recommendation)
+    {
+        PersistedExecutionRecommendation persisted = ExecutionRecommendationContract.Bind(decisions, recommendation);
+        await _store.WriteAsync(
+            Resolve(OrchestrationArtifactPaths.ExecutionRecommendation),
+            ExecutionRecommendationContract.SerializePersisted(persisted));
+    }
+
+    public async Task InvalidateExecutionRecommendationAsync()
+    {
+        string path = Resolve(OrchestrationArtifactPaths.ExecutionRecommendation);
+        if (await _store.ExistsAsync(path))
+        {
+            await _store.DeleteAsync(path);
+        }
+    }
+
+    public async Task<ValidatedExecutionRecommendation> ReadValidatedExecutionRecommendationAsync()
+    {
+        string? prompt = await ReadAsync(OrchestrationArtifactPaths.Decisions);
+        if (prompt is null)
+        {
+            throw new InvalidDataException($"{OrchestrationArtifactPaths.Decisions} was not found.");
+        }
+
+        string? recommendation = await ReadAsync(OrchestrationArtifactPaths.ExecutionRecommendation);
+        if (recommendation is null)
+        {
+            throw new InvalidDataException(
+                $"{OrchestrationArtifactPaths.ExecutionRecommendation} was not found.");
+        }
+
+        return ExecutionRecommendationContract.ValidatePair(prompt, recommendation);
     }
 
     public async Task EnsureOperationalContextAsync()

@@ -3,6 +3,7 @@ using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Orchestration.Recovery;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Orchestration.Tests.Recovery;
 
@@ -57,7 +58,10 @@ public sealed class NativeForkRecoveryMechanismTests
         var spec = new AgentSessionSpec(
             SessionIdentity.New(), "repo", SessionRole.Decision,
             new SandboxProfile("read-only", false, false, false),
-            new EffortProfile(AgentEffortLevel.High, "high"), "/repo");
+            AgentModel.Gpt56Sol,
+            AgentEffort.High,
+            AgentConfigurationAuthority.Brain,
+            "/repo");
         return new RecoveryMechanismExecutionRequest(
             RecoveryMechanismExecutionPhase.CreateReplacement,
             plan,

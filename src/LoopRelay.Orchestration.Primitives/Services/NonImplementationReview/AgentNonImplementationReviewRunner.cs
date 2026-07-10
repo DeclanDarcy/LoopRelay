@@ -7,12 +7,14 @@ using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
 public sealed class AgentNonImplementationReviewRunner(
     IAgentRuntime _runtime,
-    Repository _repository) : INonImplementationReviewRunner
+    Repository _repository,
+    BrainConfiguration _brainConfiguration) : INonImplementationReviewRunner
 {
     public NonImplementationReviewRunnerConstraints Capabilities =>
         NonImplementationReviewRunnerConstraints.ReadOnly;
@@ -25,7 +27,7 @@ public sealed class AgentNonImplementationReviewRunner(
         request.Constraints.EnsureReadOnly();
 
         AgentTurnResult result = await _runtime.RunOneShotAsync(
-            ReadOnlyReviewSpec(_repository),
+            ReadOnlyReviewSpec(_repository, _brainConfiguration),
             request.PromptPayload,
             onChunk: null,
             cancellationToken);
@@ -41,13 +43,15 @@ public sealed class AgentNonImplementationReviewRunner(
         return new NonImplementationReviewRunnerResponse(result.Output);
     }
 
-    private static AgentSessionSpec ReadOnlyReviewSpec(Repository repository) =>
+    private static AgentSessionSpec ReadOnlyReviewSpec(Repository repository, BrainConfiguration brain) =>
         new(
             SessionIdentity.New(),
             repository.Id.ToString("N"),
             SessionRole.Planning,
             new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.High, "xhigh"),
+            brain.Model,
+            brain.Effort,
+            AgentConfigurationAuthority.Brain,
             repository.Path);
 
     private static string WithDiagnostics(string message, string? diagnostics) =>

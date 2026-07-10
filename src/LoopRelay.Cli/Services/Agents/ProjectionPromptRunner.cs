@@ -7,13 +7,15 @@ using LoopRelay.Cli.Services.Console;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models.Definitions;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Cli.Services.Agents;
 
 internal sealed class ProjectionPromptRunner(
     IAgentRuntime _runtime,
     Repository _repository,
-    ILoopConsole _console) : IProjectionPromptRunner
+    ILoopConsole _console,
+    BrainConfiguration _brainConfiguration) : IProjectionPromptRunner
 {
     public async Task<string> RunProjectionPromptAsync(
         ProjectionDefinition definition,
@@ -22,7 +24,7 @@ internal sealed class ProjectionPromptRunner(
     {
         var renderer = new ConsoleTurnRenderer(_console);
         AgentTurnResult result = await _runtime.RunOneShotAsync(
-            AgentSpecs.Decision(_repository),
+            AgentSpecs.Decision(_repository, _brainConfiguration),
             prompt,
             renderer.Stream,
             cancellationToken);

@@ -1,6 +1,6 @@
-using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Agents.Services.Codex;
 
@@ -22,9 +22,7 @@ namespace LoopRelay.Agents.Services.Codex;
 /// with <c>exec</c> (each <c>exec</c> turn reads its prompt to stdin EOF and exits), which is why the
 /// persistent path uses <c>app-server</c>.
 /// <para>
-/// <c>model_reasoning_effort</c> is a free-string config value; canonical tiers are
-/// <c>minimal|low|medium|high</c> (and <c>xhigh</c>). The <see cref="AgentEffortLevel"/> map emits
-/// <c>low|medium|high</c>; <see cref="EffortProfile.Identifier"/> is the escape hatch for any other tier.
+/// Model and effort are canonical session fields and are always projected explicitly.
 /// </para>
 /// </summary>
 public static class CodexAgentArgumentBuilder
@@ -46,6 +44,10 @@ public static class CodexAgentArgumentBuilder
                 sandbox,
                 "--ask-for-approval",
                 spec.Sandbox.RequiresApproval ? "on-request" : "never",
+                "--model",
+                AgentConfigurationCatalog.Format(spec.Model),
+                "-c",
+                $"model_reasoning_effort=\"{AgentConfigurationCatalog.Format(spec.Effort)}\"",
                 "app-server",
                 "--listen",
                 "stdio://"
@@ -61,10 +63,12 @@ public static class CodexAgentArgumentBuilder
             "--skip-git-repo-check",
             "--cd",
             workingDirectory,
+            "--model",
+            AgentConfigurationCatalog.Format(spec.Model),
             "-c",
             "approval_policy=\"never\"",
             "-c",
-            $"model_reasoning_effort=\"{MapEffort(spec.Effort)}\""
+            $"model_reasoning_effort=\"{AgentConfigurationCatalog.Format(spec.Effort)}\""
         };
 
         foreach (KeyValuePair<string, string> option in spec.StartupOptions)
@@ -78,14 +82,4 @@ public static class CodexAgentArgumentBuilder
 
         return arguments;
     }
-
-    private static string MapEffort(EffortProfile effort) =>
-        effort.Identifier is { Length: > 0 } identifier
-            ? identifier
-            : effort.Level switch
-            {
-                AgentEffortLevel.High => "high",
-                AgentEffortLevel.Medium => "medium",
-                _ => "low"
-            };
 }

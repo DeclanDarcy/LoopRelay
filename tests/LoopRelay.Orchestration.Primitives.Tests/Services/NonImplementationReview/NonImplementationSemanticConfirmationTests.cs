@@ -15,6 +15,7 @@ using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Orchestration.Tests.Services.NonImplementationReview;
 
@@ -307,7 +308,10 @@ public sealed class NonImplementationSemanticConfirmationTests
             Name = "repo",
             Path = "C:/repo",
         };
-        var runner = new AgentNonImplementationReviewRunner(runtime, repository);
+        var runner = new AgentNonImplementationReviewRunner(
+            runtime,
+            repository,
+            new BrainConfiguration(AgentModel.Gpt56Sol, AgentEffort.XHigh));
         var request = new NonImplementationReviewRunnerRequest(
             "ConfirmNonImplementationCandidate",
             "prompt",

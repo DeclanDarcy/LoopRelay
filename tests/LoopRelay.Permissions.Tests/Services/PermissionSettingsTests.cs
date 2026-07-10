@@ -25,6 +25,8 @@ public sealed class PermissionSettingsTests
         Assert.False(result.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
         Assert.True(Object(DefaultSettings(), "artifactPolicy").ContainsKey("allowHitlRequestedNonImplementationFiles"));
         Assert.True(Object(DefaultSettings(), "artifactPolicy").ContainsKey("allowAuxiliaryNonImplementationFiles"));
+        Assert.Equal(AgentModel.Gpt56Sol, result.Brain.Model);
+        Assert.Equal(AgentEffort.XHigh, result.Brain.Effort);
 
         AssertAllowed(policy, "pwd");
         AssertAllowed(policy, "git status");
@@ -40,6 +42,24 @@ public sealed class PermissionSettingsTests
         AssertDenied(policy, "bash -c ls", "Indirect shell execution");
         AssertDenied(policy, "git commit -m msg", "requires review");
         AssertDenied(policy, "python deploy.py", "closed-world deny");
+    }
+
+    [Theory]
+    [InlineData("brainModel", null)]
+    [InlineData("brainModel", "")]
+    [InlineData("brainModel", "gpt-unknown")]
+    [InlineData("brainEffort", null)]
+    [InlineData("brainEffort", "")]
+    [InlineData("brainEffort", "extreme")]
+    public void Loader_rejects_missing_blank_or_unsupported_brain_values(string property, string? value)
+    {
+        JsonObject settings = DefaultSettings();
+        settings[property] = value;
+
+        CliSettingsException exception = Assert.Throws<CliSettingsException>(
+            () => CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
+
+        Assert.Contains(property, exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -44,7 +44,8 @@ public class DecisionSessionTests
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
-        return (new DecisionSession(rt, router, art, con, repo, costModel), rt, store, repo, con);
+        return (new DecisionSession(
+            rt, router, art, con, repo, TestAgentConfiguration.Brain, costModel), rt, store, repo, con);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
@@ -63,7 +64,8 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
         var resume = new FakeDecisionSessionResumeStore { State = state };
-        var session = new DecisionSession(rt, router, art, con, repo, _costModel: null,
+        var session = new DecisionSession(
+            rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
             _resumeStore: resume, _resumeEnabled: resumeEnabled);
         return (session, rt, store, repo, con, resume);
     }
@@ -119,6 +121,7 @@ public class DecisionSessionTests
             art,
             con,
             repo,
+            TestAgentConfiguration.Brain,
             _costModel: null,
             _resumeStore: resume,
             _projectionService: projection);
@@ -152,8 +155,32 @@ public class DecisionSessionTests
 
         Assert.Equal("DECISIONS-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
         Assert.Equal("DECISIONS-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+        string recommendationJson = Assert.IsType<string>(await store.ReadAsync(
+            Resolve(repo, OrchestrationArtifactPaths.ExecutionRecommendation)));
+        ValidatedExecutionRecommendation recommendation =
+            ExecutionRecommendationContract.ValidatePair("DECISIONS-TEXT", recommendationJson);
+        Assert.Equal(TestAgentConfiguration.Execution.Model, recommendation.Model);
+        Assert.Equal(TestAgentConfiguration.Execution.Effort, recommendation.Effort);
+        Assert.Equal(2, rt.SessionCalls.Count);
+        Assert.StartsWith("Select the model and reasoning effort", rt.SessionCalls[1].Prompt, StringComparison.Ordinal);
         Assert.Contains("DECISIONS-TEXT", con.Messages);
         Assert.Equal(1, rt.OpenSessions);
+    }
+
+    [Fact]
+    public async Task Run_InvalidRecommendationFailsWithoutLeavingALaunchablePair()
+    {
+        var (session, runtime, store, repo, _) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("NEW-PROMPT")));
+        runtime.RecommendationOutput = """{"Model":"gpt-unknown","Effort":"high"}""";
+
+        LoopStepException exception = await Assert.ThrowsAsync<LoopStepException>(
+            () => session.RunAsync(CancellationToken.None));
+
+        Assert.Contains("recommendation was invalid", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
+        Assert.Null(await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.ExecutionRecommendation)));
     }
 
     [Fact]
@@ -172,6 +199,7 @@ public class DecisionSessionTests
             artifacts,
             new RecordingLoopConsole(),
             repo,
+            TestAgentConfiguration.Brain,
             _hitlRequestCapture: capture);
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
         const string decisions = """
@@ -447,7 +475,7 @@ public class DecisionSessionTests
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new DecisionSession(rt, router, art, con, repo, _costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -515,7 +543,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new DecisionSession(rt, router, art, con, repo, _costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -557,7 +585,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new DecisionSession(rt, router, art, con, repo, _costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -594,7 +622,8 @@ public class DecisionSessionTests
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(repo.Store);
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new DecisionSession(rt, router, art, con, repo.Repository, _costModel: null);
+        var session = new DecisionSession(
+            rt, router, art, con, repo.Repository, TestAgentConfiguration.Brain, _costModel: null);
 
         await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -632,7 +661,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new DecisionSession(rt, router, art, con, repo, _costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -669,7 +698,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory(); // distinct root (genuinely separate from the repo)
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new DecisionSession(rt, router, art, con, repo, _costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Details), "DETAILS-0");
@@ -739,7 +768,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new DecisionSession(rt, router, art, con, repo, _costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -784,7 +813,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new DecisionSession(rt, router, art, con, repo, _costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -841,7 +870,7 @@ public class DecisionSessionTests
         int archive = phases.LastIndexOf("Decision: Transfer/ArchiveOperationalDelta");
         Assert.True(archive >= 0);
         Assert.True(phases.LastIndexOf("Decision: Propose") > archive);
-        Assert.Equal("Decision: Propose", phases[^1]);
+        Assert.Equal("Decision: Recommend execution configuration", phases[^1]);
     }
 
     [Fact]
@@ -858,7 +887,7 @@ public class DecisionSessionTests
         var rt = new FakeAgentRuntime(store);
         var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        var session = new DecisionSession(rt, router, art, con, repo, _costModel: null);
+        var session = new DecisionSession(rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null);
 
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -952,7 +981,7 @@ public class DecisionSessionTests
         DecisionSessionResumeState written = Assert.Single(resume.Written);
         Assert.Equal("thread-old", written.ThreadId);
         Assert.Equal(3, written.ReuseCycles);
-        Assert.Equal(5d, written.ReuseCost);
+        Assert.Equal(7d, written.ReuseCost);
         Assert.Equal(300_000d, written.TransferCost);
         Assert.Equal(1, written.TransferCount);
     }
@@ -1055,6 +1084,7 @@ public class DecisionSessionTests
             new Dictionary<string, string>());
         var decision = new DecisionSession(
             runtime, new DecisionSessionRouter(), artifacts, new RecordingLoopConsole(), repo,
+            TestAgentConfiguration.Brain,
             _recoveryStore: recoveryStore);
 
         await decision.RunAsync(new DecisionExecutionContext(scope, promptRequest), CancellationToken.None);
@@ -1083,7 +1113,7 @@ public class DecisionSessionTests
         DecisionSessionResumeState written = Assert.Single(resume.Written);
         Assert.Equal("thread-1", written.ThreadId);
         Assert.Equal(1, written.ReuseCycles);
-        Assert.Equal(20, written.OccupancyTokens);
+        Assert.Equal(22, written.OccupancyTokens);
     }
 
     [Fact]

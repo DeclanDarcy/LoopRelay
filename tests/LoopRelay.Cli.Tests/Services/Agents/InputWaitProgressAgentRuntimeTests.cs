@@ -19,7 +19,9 @@ namespace LoopRelay.Cli.Tests.Services.Agents;
 public class InputWaitProgressAgentRuntimeTests
 {
     private static AgentSessionSpec Spec() =>
-        AgentSpecs.Decision(new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" });
+        AgentSpecs.Decision(
+            new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" },
+            TestAgentConfiguration.Brain);
 
     [Fact]
     public async Task OneShot_ShowsEstimatedPromptTokensWithoutEtaPercentOrCacheClaims()

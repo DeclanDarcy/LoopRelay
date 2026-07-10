@@ -19,6 +19,8 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime, IA
 
     /// <summary>When true, the continuity operation returns a structured deterministic protocol failure.</summary>
     public bool FailResume { get; set; }
+    public string RecommendationOutput { get; set; } =
+        """{"Model":"gpt-5.6-terra","Effort":"high"}""";
 
     public Task<AgentTurnResult> RunOneShotAsync(
         AgentSessionSpec spec, string prompt, Func<AgentStreamChunk, Task>? onChunk = null, CancellationToken ct = default)
@@ -94,6 +96,15 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime, IA
     internal AgentTurnResult RunSessionTurn(AgentSessionSpec spec, string prompt)
     {
         SessionCalls.Add((spec, prompt));
+        if (prompt.StartsWith("Select the model and reasoning effort", StringComparison.Ordinal))
+        {
+            return new AgentTurnResult(
+                0,
+                AgentTurnState.Completed,
+                RecommendationOutput,
+                new AgentTokenUsage(1, 1));
+        }
+
         return SessionTurns.Dequeue().Handler(spec, prompt, store);
     }
 

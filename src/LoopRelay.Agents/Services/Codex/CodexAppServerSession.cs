@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Codex;
-using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Codex;
@@ -12,6 +11,7 @@ using LoopRelay.Agents.Primitives.Process;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Permissions.Abstractions.Evaluation;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Models.Evaluation;
 
 namespace LoopRelay.Agents.Services.Codex;
@@ -119,7 +119,12 @@ public sealed class CodexAppServerSession : IAgentSession
                 long requestId = NextId();
                 CodexAppServerMessage ack = await SendRequestAsync(
                     requestId,
-                    CodexAppServerProtocol.TurnStart(requestId, threadId!, prompt, MapEffort(_spec.Effort)),
+                    CodexAppServerProtocol.TurnStart(
+                        requestId,
+                        threadId!,
+                        prompt,
+                        AgentConfigurationCatalog.Format(_spec.Model),
+                        AgentConfigurationCatalog.Format(_spec.Effort)),
                     linked.Token,
                     () => AgentTurnProgress.Notify(progress, observer => observer.RequestWriteStarted()),
                     () => AgentTurnProgress.Notify(progress, observer => observer.RequestSubmitted()));
@@ -362,7 +367,8 @@ public sealed class CodexAppServerSession : IAgentSession
                 _spec.ResumeThreadId!,
                 _spec.WorkingDirectory,
                 Sandbox(),
-                ApprovalPolicy());
+                ApprovalPolicy(),
+                AgentConfigurationCatalog.Format(_spec.Model));
         }
 
         await EnsureInitializedAsync(cancellationToken);
@@ -370,7 +376,12 @@ public sealed class CodexAppServerSession : IAgentSession
         long threadRequestId = NextId();
         string threadFrame = resuming
             ? CodexAppServerProtocol.ThreadResume(threadRequestId, resumeOptions!)
-            : CodexAppServerProtocol.ThreadStart(threadRequestId, _spec.WorkingDirectory, Sandbox(), ApprovalPolicy());
+            : CodexAppServerProtocol.ThreadStart(
+                threadRequestId,
+                _spec.WorkingDirectory,
+                Sandbox(),
+                ApprovalPolicy(),
+                AgentConfigurationCatalog.Format(_spec.Model));
         CodexAppServerMessage threadResponse = await SendRequestAsync(threadRequestId, threadFrame, cancellationToken);
         ThrowIfError(threadResponse, resuming ? "thread/resume" : "thread/start", threadRequestId);
 
@@ -594,16 +605,6 @@ public sealed class CodexAppServerSession : IAgentSession
     private string Sandbox() => _spec.Sandbox.Identifier;
 
     private string? ApprovalPolicy() => _spec.Sandbox.RequiresApproval ? null : "never";
-
-    private static string MapEffort(EffortProfile effort) =>
-        effort.Identifier is { Length: > 0 } identifier
-            ? identifier
-            : effort.Level switch
-            {
-                AgentEffortLevel.High => "high",
-                AgentEffortLevel.Medium => "medium",
-                _ => "low"
-            };
 
     private static string? NonWhitespace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 

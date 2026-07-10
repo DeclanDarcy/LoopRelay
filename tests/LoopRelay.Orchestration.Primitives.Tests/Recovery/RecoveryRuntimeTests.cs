@@ -6,6 +6,7 @@ using LoopRelay.Agents.Primitives.Process;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Recovery;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Orchestration.Tests.Recovery;
 
@@ -263,8 +264,11 @@ public sealed class RecoveryRuntimeTests
             AgentSessionSpec Spec(string? resume) => new(
                 SessionIdentity.New(), Repository.Id.ToString(), SessionRole.Decision,
                 new SandboxProfile("read-only", false, false, false),
-                new EffortProfile(AgentEffortLevel.High, "high"),
-                Repository.Path, resumeThreadId: resume);
+                AgentModel.Gpt56Sol,
+                AgentEffort.High,
+                AgentConfigurationAuthority.Brain,
+                Repository.Path,
+                resumeThreadId: resume);
             return new RecoveryRuntimeRequest(
                 Scope.ScopeId, "run-1", Spec("thread-original"), Spec(null), Profile,
                 new Dictionary<string, string> { ["rank:RepositoryReconstruction@1"] = "1" },

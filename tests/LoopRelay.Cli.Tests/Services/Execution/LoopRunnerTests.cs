@@ -70,8 +70,10 @@ public class LoopRunnerTests
         // These tests exercise loop orchestration only; usage-limit detection is unit-tested separately
         // (UsageLimitDetectorTests) and its per-turn retry seam in GatedAgentRuntimeTests, so the loop
         // runs unwatched.
-        var exec = new ExecutionStep(rt, art, con, repo, detector, gate);
-        var dec = new DecisionSession(rt, router, art, con, repo);
+        var exec = new ExecutionStep(
+            rt, art, con, repo, detector, gate, TestAgentConfiguration.ValidatedExecution);
+        var dec = new DecisionSession(
+            rt, router, art, con, repo, TestAgentConfiguration.Brain);
         // CommitGate IGNORES `.agents`; the submodule is committed+pushed only by the publisher (pre-codex).
         var submodulePublisher = new AgentsSubmodulePublisher(git, repo, con);
         var commitGate = new CommitGate(detector, git, repo, con);
@@ -749,13 +751,15 @@ public class LoopRunnerTests
         var git = new FakeProcessRunner();
         var detector = new WorkingTreeChangeDetector(git, repo);
         var gate = new MilestoneGate(store, repo);
-        var execution = new ExecutionStep(runtime, artifacts, console, repo, detector, gate);
+        var execution = new ExecutionStep(
+            runtime, artifacts, console, repo, detector, gate, TestAgentConfiguration.ValidatedExecution);
         var decision = new DecisionSession(
             runtime,
             new DecisionSessionRouter(new DecisionSessionRouterOptions()),
             artifacts,
             console,
-            repo);
+            repo,
+            TestAgentConfiguration.Brain);
         var submodulePublisher = new AgentsSubmodulePublisher(git, repo, console);
         var commitGate = new CommitGate(detector, git, repo, console);
         var resume = new FakeDecisionSessionResumeStore();

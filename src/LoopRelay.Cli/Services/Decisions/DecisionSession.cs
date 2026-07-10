@@ -21,6 +21,7 @@ using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models.Context;
@@ -50,6 +51,7 @@ internal sealed class DecisionSession(
     LoopArtifacts _artifacts,
     ILoopConsole _console,
     Repository _repository,
+    BrainConfiguration _brainConfiguration,
     IDecisionCostModel? _costModel = null,
     IDecisionSessionResumeStore? _resumeStore = null,
     IProjectContextProjectionService? _projectionService = null,
@@ -154,22 +156,62 @@ internal sealed class DecisionSession(
                 $"Decision turn ended in state {proposed.State}.", proposed.Diagnostics));
         }
 
+        // Any completed proposal supersedes the previous live recommendation. Invalidating first ensures an
+        // empty proposal cannot leave the previous pair launchable after this transition has failed.
+        await _artifacts.InvalidateExecutionRecommendationAsync();
+
+        if (string.IsNullOrWhiteSpace(proposed.Output))
+        {
+            await CloseAsync();
+            throw new LoopStepException("Decision turn returned no execution system prompt.");
+        }
+
         // The process now holds the operational context (delivered inline in this turn), so subsequent proposals
         // on it are cheap handoff-only deltas.
         seeded = true;
-        RecordProposalCost(proposed.Usage);
         proposalRenderer.EchoIfSilent(proposed.Output);
 
+        _console.Phase("Decision: Recommend execution configuration");
+        var recommendationRenderer = new ConsoleTurnRenderer(_console);
+        AgentTurnResult recommended = await session.RunTurnAsync(
+            ExecutionRecommendationContract.RenderPrompt(proposed.Output),
+            recommendationRenderer.Stream,
+            cancellationToken);
+        if (recommended.State != AgentTurnState.Completed)
+        {
+            await CloseAsync();
+            throw new LoopStepException(WithDiagnostics(
+                $"Execution recommendation turn ended in state {recommended.State}.",
+                recommended.Diagnostics));
+        }
+
+        recommendationRenderer.EchoIfSilent(recommended.Output);
+        ExecutionRecommendation recommendation;
+        try
+        {
+            recommendation = ExecutionRecommendationContract.ParseAgentOutput(recommended.Output);
+        }
+        catch (InvalidDataException exception)
+        {
+            await CloseAsync();
+            throw new LoopStepException($"Execution recommendation was invalid: {exception.Message}", exception);
+        }
+
+        RecordProposalCost(proposed.Usage.Add(recommended.Usage));
         if (durableTurn is not null)
         {
             durableTurn.RecordTerminalResult(proposed);
-            await CommitDurableDecisionOutputAsync(durableTurn.Record, proposed.Output, cancellationToken);
+            await CommitDurableDecisionOutputAsync(
+                durableTurn.Record,
+                proposed.Output,
+                recommendation,
+                cancellationToken);
         }
         else
         {
             await PersistResumeStateAsync(cancellationToken);
-            // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
-            await _artifacts.PersistDecisionsAsync(proposed.Output);
+            // Auto-submit: persist the exact prompt and its correlated, validated recommendation as the live pair.
+            await _artifacts.PersistDecisionsAsync(proposed.Output, recommendation);
         }
         if (_hitlRequestCapture is not null)
         {
@@ -249,7 +291,9 @@ internal sealed class DecisionSession(
 
         if (state is null)
         {
-            return await _runtime.OpenSessionAsync(AgentSpecs.Decision(_repository), cancellationToken);
+            return await _runtime.OpenSessionAsync(
+                AgentSpecs.Decision(_repository, _brainConfiguration),
+                cancellationToken);
         }
 
         IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
@@ -262,7 +306,7 @@ internal sealed class DecisionSession(
 
         SessionResumeResult resume = await continuityRuntime.ResumeSessionAsync(
             new SessionResumeRequest(
-                AgentSpecs.Decision(_repository, state.ThreadId),
+                AgentSpecs.Decision(_repository, _brainConfiguration, state.ThreadId),
                 new ProviderSessionReference("codex", state.ThreadId),
                 profile),
             cancellationToken);
@@ -345,8 +389,8 @@ internal sealed class DecisionSession(
                 coordinated = await coordinator.OpenAsync(
                     scope.ScopeId.Value,
                     decisionExecutionContext.PromptExecution.RunId,
-                    AgentSpecs.Decision(_repository, durableLineage.ProviderSessionId),
-                    AgentSpecs.Decision(_repository),
+                    AgentSpecs.Decision(_repository, _brainConfiguration, durableLineage.ProviderSessionId),
+                    AgentSpecs.Decision(_repository, _brainConfiguration),
                     durableProfile,
                     new Dictionary<string, string>
                     {
@@ -373,7 +417,7 @@ internal sealed class DecisionSession(
 
         SessionResumeResult resume = await continuityRuntime.ResumeSessionAsync(
             new SessionResumeRequest(
-                AgentSpecs.Decision(_repository, durableLineage.ProviderSessionId),
+                AgentSpecs.Decision(_repository, _brainConfiguration, durableLineage.ProviderSessionId),
                 new ProviderSessionReference(durableLineage.Provider, durableLineage.ProviderSessionId),
                 durableProfile),
             cancellationToken);
@@ -402,7 +446,10 @@ internal sealed class DecisionSession(
         durableProfile = _continuityProfile
             ?? (await continuityRuntime.NegotiateAsync(ProductionNegotiationRequest(), cancellationToken)).Profile;
         SessionCreateResult create = await continuityRuntime.CreateSessionAsync(
-            new SessionCreateRequest(AgentSpecs.Decision(_repository), durableProfile, $"fresh:{scope.ScopeId.Value}"),
+            new SessionCreateRequest(
+                AgentSpecs.Decision(_repository, _brainConfiguration),
+                durableProfile,
+                $"fresh:{scope.ScopeId.Value}"),
             cancellationToken);
         if (!create.Succeeded || create.Session is null || create.Created is null)
         {
@@ -447,7 +494,7 @@ internal sealed class DecisionSession(
             ?? throw new LoopStepException("Decision-session continuity runtime is unavailable for planned transfer.");
         SessionCreateResult create = await continuityRuntime.CreateSessionAsync(
             new SessionCreateRequest(
-                AgentSpecs.Decision(_repository),
+                AgentSpecs.Decision(_repository, _brainConfiguration),
                 durableProfile,
                 $"planned-transfer:{durableActiveState.ScopeId}:{durableActiveState.RowVersion}"),
             cancellationToken);
@@ -573,6 +620,7 @@ internal sealed class DecisionSession(
     private async Task CommitDurableDecisionOutputAsync(
         DecisionSessionTurnRecord turn,
         string output,
+        ExecutionRecommendation recommendation,
         CancellationToken cancellationToken)
     {
         DecisionTurnCommitResult commit = await _recoveryStore!.CommitDecisionOutputAsync(
@@ -593,6 +641,7 @@ internal sealed class DecisionSession(
         {
             await _artifacts.WriteAsync(historyPath, output);
         }
+        await _artifacts.PersistExecutionRecommendationAsync(output, recommendation);
         RecoveryStoreWriteResult materialized = await _recoveryStore.MarkDecisionArtifactMaterializedAsync(
             commit.Turn, cancellationToken);
         if (!materialized.Succeeded)
@@ -905,8 +954,7 @@ internal sealed class DecisionSession(
             scopedSession = await _runtime.OpenSessionAsync(
                 AgentSpecs.ScopedArtifactOperation(
                     _repository,
-                    AgentEffortLevel.High,
-                    identifier: "xhigh",
+                    _brainConfiguration,
                     operation.Profile),
                 cancellationToken);
             AgentTurnResult result = await scopedSession.RunTurnAsync(

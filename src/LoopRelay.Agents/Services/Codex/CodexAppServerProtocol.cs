@@ -53,12 +53,18 @@ public static class CodexAppServerProtocol
         }, Options);
 
     /// <summary>Creates a thread; the response carries <c>thread.id</c> used to address turns.</summary>
-    public static string ThreadStart(long id, string? cwd, string? sandbox, string? approvalPolicy) =>
+    public static string ThreadStart(
+        long id,
+        string? cwd,
+        string? sandbox,
+        string? approvalPolicy,
+        string model) =>
         Request(id, "thread/start", Compact(new Dictionary<string, object?>
         {
             ["cwd"] = cwd,
             ["sandbox"] = sandbox,
-            ["approvalPolicy"] = approvalPolicy
+            ["approvalPolicy"] = approvalPolicy,
+            ["model"] = model
         }));
 
     /// <summary>
@@ -74,6 +80,7 @@ public static class CodexAppServerProtocol
             ["cwd"] = options.Cwd,
             ["sandbox"] = options.Sandbox,
             ["approvalPolicy"] = options.ApprovalPolicy,
+            ["model"] = options.Model,
         });
         if (options.ExcludeTurns)
         {
@@ -100,7 +107,7 @@ public static class CodexAppServerProtocol
         }));
 
     /// <summary>Submits a turn to an existing thread. The prompt is the turn's text user input.</summary>
-    public static string TurnStart(long id, string threadId, string prompt, string? effort) =>
+    public static string TurnStart(long id, string threadId, string prompt, string model, string effort) =>
         Request(id, "turn/start", Compact(new Dictionary<string, object?>
         {
             ["threadId"] = threadId,
@@ -113,6 +120,7 @@ public static class CodexAppServerProtocol
                     ["text_elements"] = Array.Empty<object>()
                 }
             },
+            ["model"] = model,
             ["effort"] = effort
         }));
 
@@ -158,6 +166,7 @@ public sealed record CodexThreadResumeOptions(
     string? Cwd,
     string? Sandbox,
     string? ApprovalPolicy,
+    string Model,
     bool ExcludeTurns)
 {
     public static CodexThreadResumeOptions FromProfile(
@@ -165,7 +174,8 @@ public sealed record CodexThreadResumeOptions(
         string threadId,
         string? cwd,
         string? sandbox,
-        string? approvalPolicy)
+        string? approvalPolicy,
+        string model)
     {
         if (profile.Operation(SessionContinuityOperation.Resume).Status != SessionOperationSupport.Supported)
         {
@@ -192,6 +202,7 @@ public sealed record CodexThreadResumeOptions(
             cwd,
             sandbox,
             approvalPolicy,
+            model,
             ExcludeTurns: excludeTurns.Status == SessionOperationSupport.Supported);
     }
 }

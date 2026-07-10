@@ -18,7 +18,7 @@ namespace LoopRelay.Cli.Tests.Services.Agents;
 public class GatedAgentRuntimeTests
 {
     private static Repository Repo() => new() { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-    private static AgentSessionSpec Spec() => AgentSpecs.Decision(Repo());
+    private static AgentSessionSpec Spec() => AgentSpecs.Decision(Repo(), TestAgentConfiguration.Brain);
     private static UsageLimitHit Hit() => new(TimeSpan.FromMinutes(5), null);
 
     private sealed record Fixture(
@@ -276,7 +276,7 @@ public class GatedAgentRuntimeTests
         var log = new List<string>();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
         var gated = new GatedAgentSession(
-            new RecordingSession(log, AgentSpecs.Decision(repo)),
+            new RecordingSession(log, AgentSpecs.Decision(repo, TestAgentConfiguration.Brain)),
             new RecordingDetector(log),
             new NullSessionTelemetryRecorder(),
             "r", "/repo", DateTimeOffset.UtcNow);
