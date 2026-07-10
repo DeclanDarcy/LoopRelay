@@ -58,7 +58,7 @@ Objective: implement one workflow-agnostic lifecycle for executing a prompt-driv
 - [ ] Keep output validation after prompt execution and before completion.
 - [ ] Ensure a successful prompt response cannot complete a transition unless required products validate.
 - [ ] Add effect execution with deterministic ordering and durable partial-failure evidence.
-- [ ] Add representative adapter coverage for one roadmap transition, preferably completion-context bootstrap, without making the Roadmap CLI use the runtime in production.
+    - [ ] Add representative runtime harness coverage for one roadmap transition, preferably completion-context bootstrap, without migrating workflows yet.
 
 ## Detail Requirements
 
@@ -79,7 +79,7 @@ Input resolution should locate required products and determine:
 - freshness
 - usability
 - validation state
-- compatibility representation
+- storage representation
 - evidence
 - causal or hash identity
 
@@ -87,11 +87,11 @@ Failure modes should include missing, blocked, invalid, ambiguous, stale, and un
 
 ### Input Gate Checks
 
-The input gate should check required products, authority, freshness, lifecycle, compatibility, and dependencies. It must return a structured gate result, not a boolean.
+The input gate should check required products, authority, freshness, lifecycle, storage representation, and dependencies. It must return a structured gate result, not a boolean.
 
 ### Prompt Context Versus Prompt Rendering
 
-Prompt context construction should resolve projections, project context, products, metadata, and compatibility inputs. It should not render the prompt.
+Prompt context construction should resolve projections, project context, products, metadata, and migration inputs. It should not render the prompt.
 
 Prompt rendering should load prompt content, inject resolved inputs, inject projections, inject metadata, and produce an immutable rendered prompt. It should not persist state, validate outputs, apply effects, or advance lifecycle.
 
@@ -128,7 +128,7 @@ The output gate should verify that products exist, validate, are authoritative, 
 
 Effects execute after output gate satisfaction. They must be ordered, explicit, observable, recoverable where required, and able to persist partial failure evidence.
 
-Effect categories include persistence, lifecycle, evidence, decision recording, publication, Git, archive, compatibility, telemetry if present, and recovery bookkeeping.
+Effect categories include persistence, lifecycle, evidence, decision recording, publication, Git, archive, migration bookkeeping, telemetry if present, and recovery bookkeeping.
 
 ### Transition Persistence Metadata
 

@@ -29,6 +29,34 @@ Write one `.agents/specs/*.md` document per milestone.
 
 ---
 
+## Runtime Input Contract
+
+The selected epic is not implicit.
+
+The runtime must provide a prompt-context section named:
+
+```text
+## Active Epic
+```
+
+That section is loaded from the canonical active epic artifact:
+
+```text
+.agents/epic.md
+```
+
+Treat `.agents/epic.md` as the only selected epic for this transition.
+
+Do not search for another epic.
+Do not infer the selected epic from roadmap files, archived epics, prior specs, eval artifacts, completion context, projection text, or repository structure.
+Do not use `.agents/specs/epic.md` as the selected epic.
+
+If the `## Active Epic` context section is missing, empty, malformed, contradictory, or appears to contain content from any path other than `.agents/epic.md`, do not generate milestone specs.
+
+Instead output the documented blocked response and identify the missing or ambiguous active-epic context as the blocking issue.
+
+---
+
 ## Core Objective
 
 Transform each milestone in the selected epic into an independently actionable implementation-planning document while preserving the epic’s:
@@ -65,9 +93,9 @@ The milestone deep dives must make implementation boundaries, dependencies, cons
 
 ## Preconditions
 
-Before generating milestone deep dives, verify that the selected epic contains a milestone roadmap or equivalent milestone structure.
+Before generating milestone deep dives, verify that the runtime context contains the `## Active Epic` section loaded from `.agents/epic.md`, and that this selected epic contains a milestone roadmap or equivalent milestone structure.
 
-If the selected epic lacks milestones, has contradictory milestone sequencing, or is too underspecified to expand safely, do NOT invent milestones.
+If the active epic context is missing, if the selected epic lacks milestones, has contradictory milestone sequencing, or is too underspecified to expand safely, do NOT invent milestones.
 
 Instead output a blocking document using this structure:
 
@@ -83,7 +111,7 @@ GenerateMilestoneDeepDivesForEpic requires a selected epic with a coherent miles
 
 ## Required Next Step
 
-Return the epic to realignment, reimagination, creation, or human clarification before milestone deep dives are generated.
+Return `.agents/epic.md` to realignment, reimagination, creation, or human clarification before milestone deep dives are generated.
 
 Do not generate milestone deep dives from an epic whose milestone structure is missing, incoherent, or unsafe.
 
@@ -101,7 +129,7 @@ Treat the Milestone Deep Dive Projection as authoritative for:
 - validation expectations
 - canonical vocabulary
 
-Treat the selected epic as authoritative for:
+Treat the selected epic from the `## Active Epic` context section, loaded from `.agents/epic.md`, as authoritative for:
 
 - strategic purpose
 - desired capability
@@ -133,6 +161,8 @@ If a milestone appears impossible to expand without changing the epic’s archit
 - do not redesign the milestone
 - mark the milestone as blocked
 - identify the required upstream correction
+
+If any other source appears to describe a different selected epic, ignore that source for epic identity and milestone ownership. If the conflict affects safe generation, block and require `.agents/epic.md` to be corrected.
 
 ---
 
@@ -333,7 +363,7 @@ Extract from the projection:
 
 ### Step 2 — Parse selected epic
 
-Extract from the selected epic:
+Extract from the `## Active Epic` context section loaded from `.agents/epic.md`:
 
 - epic ID
 - epic name
@@ -353,6 +383,8 @@ Extract from the selected epic:
 - milestone order
 - milestone dependencies
 - milestone completion signals
+
+Do not use any other artifact as the selected epic source.
 
 ### Step 3 — Validate milestone roadmap
 
@@ -440,6 +472,7 @@ Use file markers exactly as shown.
 |---|---|
 | Epic ID | {{epic_id_or_unknown}} |
 | Epic Name | {{epic_name_or_unknown}} |
+| Source Epic Path | .agents/epic.md |
 | Output Spec Count | {{N}} |
 | Source Projection | {{projection_name_or_unknown}} |
 | Generation Status | Complete / Blocked / Partial |
@@ -508,6 +541,7 @@ No material milestone overlap requiring clarification was identified.
 |---|---|
 | Epic ID | {{epic_id_or_unknown}} |
 | Epic Name | {{epic_name_or_unknown}} |
+| Source Epic Path | .agents/epic.md |
 | Milestone ID | {{milestone_id}} |
 | Milestone Name | {{milestone_name}} |
 | Milestone Order | {{index}} of {{N}} |
@@ -783,6 +817,8 @@ Repeat the full milestone spec structure above for every additional milestone.
 Before finalizing, verify:
 
 - One spec file exists for every milestone in the selected epic.
+- The selected epic was taken only from the `## Active Epic` context section loaded from `.agents/epic.md`.
+- No roadmap file, archived epic, eval artifact, prior spec, projection text, or repository structure was used as a substitute selected epic.
 - No extra milestones were created.
 - No milestones were removed.
 - Milestone ordering is preserved.

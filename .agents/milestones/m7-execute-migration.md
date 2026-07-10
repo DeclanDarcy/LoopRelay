@@ -50,7 +50,7 @@ Objective: migrate the implementation loop into a first-class iterative Execute 
   - [ ] Completion evidence.
   - [ ] Product references that remain resolvable after live Plan/milestone artifacts are archived.
 - [ ] Make completion authority singular.
-- [ ] Ensure compatibility callers may delegate to Execute completion, but no other active orchestration path may own completion closure.
+- [ ] Ensure Execute is the only active orchestration path that may own completion closure; old execution entry points are retired rather than delegated.
 - [ ] Add recovery for interruption during:
   - [ ] Completion review.
   - [ ] Completion evaluation.
@@ -145,7 +145,7 @@ Canonical execution products include:
 - Completion Evidence
 - Certified Completion
 
-Filesystem, SQLite, history, and live artifacts are serialization or compatibility forms.
+Filesystem, SQLite, history, and live artifacts are serialization or migration forms.
 
 ### Completion Components
 

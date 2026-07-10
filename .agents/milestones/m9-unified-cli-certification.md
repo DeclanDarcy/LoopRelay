@@ -1,4 +1,4 @@
-# Milestone 9: Unified CLI, Compatibility Retirement, and Certification
+# Milestone 9: Unified CLI, Old CLI Retirement, and Certification
 
 Objective: make the unified CLI the authoritative orchestration surface.
 
@@ -11,7 +11,6 @@ Objective: make the unified CLI the authoritative orchestration surface.
   - [ ] `--traditional`.
   - [ ] Bounded workflow subcommands.
   - [ ] Status, unblock, and storage subcommands.
-  - [ ] Legacy positional repository compatibility.
 - [ ] Update `src/LoopRelay.Cli/Program.cs` to:
   - [ ] Set UTF-8 output.
   - [ ] Parse unified invocation.
@@ -26,14 +25,15 @@ Objective: make the unified CLI the authoritative orchestration surface.
   - [ ] Transition runtime.
   - [ ] Workflow controller.
   - [ ] Workflow definitions.
-  - [ ] Adapters for prompts, agents, permissions, projections, artifacts, completion, Git, and publication.
-- [ ] Convert old CLI projects into thin compatibility surfaces:
-  - [ ] `LoopRelay.Roadmap.Cli` translates legacy args and delegates to unified orchestration or storage compatibility.
-  - [ ] `LoopRelay.Plan.Cli` delegates to bounded `Plan`.
-  - [ ] Existing Execute invocation delegates to bounded `Execute`.
+  - [ ] Integrations for prompts, agents, permissions, projections, artifacts, completion, Git, and publication.
+- [ ] Retire old CLI entry points:
+  - [ ] `LoopRelay.Roadmap.Cli` no longer ships as a public executable.
+  - [ ] `LoopRelay.Plan.Cli` no longer ships as a public executable.
+  - [ ] The old Execute invocation no longer ships as a separate public executable.
+  - [ ] Reusable domain code may remain only as internal services invoked by `src/LoopRelay.Cli`.
 - [ ] Update publish scripts:
   - [ ] `publish-cli.bat` publishes the unified executable.
-  - [ ] `publish-plan-cli.bat` and `publish-roadmap-cli.bat` either publish compatibility adapters or are retired after a documented compatibility decision.
+  - [ ] `publish-plan-cli.bat` and `publish-roadmap-cli.bat` are retired or changed to fail with migration guidance to `publish-cli.bat`.
 - [ ] Add unified status output that explains:
   - [ ] Invocation mode.
   - [ ] Selected chain.
@@ -51,14 +51,14 @@ Objective: make the unified CLI the authoritative orchestration surface.
   - [ ] Execution loop orchestration.
   - [ ] Duplicate completion ownership.
   - [ ] CLI-to-CLI chaining.
-- [ ] Keep compatibility readers for:
+- [ ] Keep universal-CLI migration readers for:
   - [ ] Old roadmap state.
   - [ ] Partial Plan artifacts.
   - [ ] Old decision-session resume state.
   - [ ] Filesystem exports.
   - [ ] Imported/canonical SQLite states.
-  - [ ] Legacy transition journals.
-  - [ ] Legacy lifecycle rows.
+  - [ ] Pre-unification transition journals.
+  - [ ] Pre-unification lifecycle rows.
   - [ ] Completion archives.
 
 ## Detail Requirements
@@ -102,7 +102,7 @@ Storage verification
   -> Transition eligibility
 ```
 
-There should be no duplicated discovery, storage validation, or stage selection in compatibility entry points.
+There should be no duplicated discovery, storage validation, or stage selection in retired entry points.
 
 ### Unified User Experience Fields
 
@@ -122,13 +122,13 @@ The unified CLI should be able to report:
 
 Every decision should identify evidence, authority, ignored evidence, conflicts, and uncertainty.
 
-### Compatibility Layer Responsibilities
+### Old CLI Retirement Responsibilities
 
-Existing Roadmap, Plan, and Execute entry points should become thin adapters. Their responsibilities are argument translation, legacy compatibility, exit-code compatibility, and migration assistance.
+Existing Roadmap, Plan, and Execute entry points should be retired as public executable surfaces. They should not translate arguments, delegate to the universal CLI, or preserve separate exit-code behavior.
 
-Compatibility layers must not contain orchestration logic and must not compete as authorities.
+Any reusable code from old CLI projects must be treated as internal/domain services owned by the universal composition. It must not be exposed as a second orchestration surface and must not compete as an authority.
 
-### Legacy Retirement Scope
+### Old Orchestration Retirement Scope
 
 Retire duplicate ownership of:
 
@@ -166,7 +166,7 @@ Verification must never silently mutate repository state, and storage authority 
 M9 should separately certify:
 
 - behavioral equivalence across TraditionalRoadmap, EvalRoadmap, Plan, Execute, Completion, Storage, Recovery, and CLI
-- legacy compatibility across filesystem repositories, SQLite repositories, mixed repositories, legacy exports, legacy state, legacy journals, legacy lifecycle, legacy execution state, legacy roadmap state, decision resume, and completion archives
+- pre-unification repository migration across filesystem repositories, SQLite repositories, mixed repositories, exports, old state files, journals, lifecycle rows, execution state, roadmap state, decision resume, and completion archives
 - orchestration architecture consistency
 
 ### Orchestration Certification Questions
@@ -213,13 +213,13 @@ End-to-end validation should explicitly cover:
 - `looprelay plan`
 - `looprelay execute`
 
-For each, validate storage verification, workflow resolution, stage resolution, transition execution, workflow chaining, repository progression, completion, cancellation, recovery, legacy compatibility, and explainability.
+For each, validate storage verification, workflow resolution, stage resolution, transition execution, workflow chaining, repository progression, completion, cancellation, recovery, pre-unification state migration, and explainability.
 
-### Legacy Retirement Matrix
+### Old Responsibility Retirement Matrix
 
 Every retired responsibility should have exactly one new owner:
 
-| Legacy Responsibility | New Owner |
+| Old Responsibility | New Owner |
 |---|---|
 | Roadmap state-machine orchestration | Workflow Controller + Transition Runtime |
 | Plan pipeline sequencing | Workflow Controller + Transition Runtime |
@@ -245,7 +245,7 @@ The final closure package should contain:
 - Workflow Definitions
 - Unified CLI
 - Behavioral Certification
-- Compatibility Certification
+- Migration Certification
 - Architecture Certification
 
 Final state:
@@ -273,5 +273,5 @@ Final state:
 - [ ] Bounded commands stop after one workflow.
 - [ ] Execute certified closure ends the chain.
 - [ ] Automatic storage verification is present and non-repairing.
-- [ ] Legacy entry points no longer own orchestration.
+- [ ] Old CLI entry points are retired and no longer ship as public executable surfaces.
 - [ ] `dotnet test LoopRelay.slnx` passes.

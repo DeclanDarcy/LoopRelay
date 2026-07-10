@@ -23,7 +23,7 @@ Objective: migrate the existing roadmap workflow onto the canonical runtime and 
   - [ ] Retire Epic.
   - [ ] Generate Milestone Deep Dives.
   - [ ] Verify Workflow Exit Gate.
-- [ ] Convert existing transition classes into runtime adapters:
+- [ ] Convert existing transition classes into runtime transition definitions and components:
   - [ ] Prompt identity.
   - [ ] Product requirements.
   - [ ] Parser.
@@ -50,9 +50,9 @@ Objective: migrate the existing roadmap workflow onto the canonical runtime and 
 - [ ] Define the canonical downstream products:
   - [ ] `PreparedEpic`
   - [ ] `MilestoneSpecificationSet`
-- [ ] Treat legacy roadmap states related only to old execution handoff as compatibility states.
-- [ ] Recognize and report legacy execution handoff states safely, but do not let them define active orchestration.
-- [ ] Keep `LoopRelay.Roadmap.Cli` as a compatibility adapter while `src/LoopRelay.Cli` becomes able to run `TraditionalRoadmap`.
+- [ ] Treat pre-unification roadmap states related only to old execution handoff as migration-only states.
+- [ ] Recognize and report pre-unification execution handoff states safely, but do not let them define active orchestration.
+- [ ] Retire `LoopRelay.Roadmap.Cli` as a public entry point once `src/LoopRelay.Cli` runs `TraditionalRoadmap`; reusable roadmap services may remain only as internal/domain services.
 
 ## Detail Requirements
 
@@ -105,9 +105,9 @@ Required semantic products include:
 
 Existing files continue to exist as serialization, but products are authoritative.
 
-### Legacy State Handling
+### Pre-Unification State Handling
 
-Legacy persisted states remain readable and must preserve resume capability where supported. They no longer define active orchestration and should not dictate the new model.
+Pre-unification persisted states remain readable and must preserve resume capability where supported. They no longer define active orchestration and should not dictate the new model.
 
 ### TraditionalRoadmap Resolution
 
@@ -126,4 +126,4 @@ TraditionalRoadmap certification should answer whether it executes through the r
 - [ ] TraditionalRoadmap runs through the canonical transition runtime.
 - [ ] TraditionalRoadmap reaches a canonical workflow-complete state that satisfies Plan entry.
 - [ ] Existing roadmap characterization tests pass.
-- [ ] Legacy roadmap orchestration is no longer an active authority.
+- [ ] Old roadmap orchestration is no longer an active authority.

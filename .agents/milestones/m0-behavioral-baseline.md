@@ -25,7 +25,7 @@ The baseline certification package must contain:
 - behavioral contract inventory
 - executable characterization coverage
 - behavioral invariant inventory
-- compatibility inventory
+- pre-unification state migration inventory
 - known-defect inventory
 - migration risk inventory
 - baseline certification summary
@@ -54,16 +54,16 @@ Invariants must be categorized, observable, and testable. Useful categories incl
 - recovery invariants, such as blockers, evidence, and cancellation being preserved
 - CLI invariants, such as exit codes, command semantics, and cancellation behavior
 
-### Compatibility Inventory Classification
+### Pre-Unification State Inventory Classification
 
-Every compatibility behavior should be classified as one of:
+Every pre-unification behavior should be classified as one of:
 
 - required
 - optional
 - deprecated
 - historical only
 
-The inventory should cover filesystem compatibility, SQLite compatibility, legacy state compatibility, legacy exports, legacy journals, legacy lifecycle, legacy execution states, legacy roadmap state, and decision resume.
+The inventory should cover filesystem migration, SQLite migration, pre-unification state readability, pre-unification exports, journals, lifecycle rows, execution states, roadmap state, and decision resume.
 
 ### Known-Defect Inventory Fields
 

@@ -47,7 +47,7 @@ Objective: migrate `PlanPipeline` into a first-class Plan workflow.
   - [ ] `ExecutionReadiness`
 - [ ] Replace fresh-run preflight ambiguity with durable partial-state semantics.
 - [ ] Treat existing outputs as products with producer evidence, validation state, and resume eligibility.
-- [ ] Keep `LoopRelay.Plan.Cli` as a compatibility adapter while `src/LoopRelay.Cli` becomes able to run `Plan`.
+- [ ] Retire `LoopRelay.Plan.Cli` as a public entry point once `src/LoopRelay.Cli` runs `Plan`; reusable planning services may remain only as internal/domain services.
 
 ## Detail Requirements
 

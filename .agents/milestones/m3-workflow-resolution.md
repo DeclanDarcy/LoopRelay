@@ -129,6 +129,6 @@ Resolution should explicitly represent required human interaction with reason, a
 
 ## Acceptance
 
-- [ ] Resolution tests cover fresh, partial, blocked, cancelled, failed, completed, legacy, SQLite, filesystem, mixed, corrupt, and ambiguous repositories.
+- [ ] Resolution tests cover fresh, partial, blocked, cancelled, failed, completed, pre-unification, SQLite, filesystem, mixed, corrupt, and ambiguous repositories.
 - [ ] Resolution is deterministic and non-mutating.
 - [ ] Default eval/traditional selection is covered.

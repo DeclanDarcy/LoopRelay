@@ -158,7 +158,7 @@ Product records should include:
 - freshness
 - dependencies
 - version or causal identity
-- compatibility representations
+- storage representations
 
 Representative products include Prepared Epic, Milestone Specification Set, Executable Plan, Operational Context, Execution Details, Milestone Set, Decision Set, Execution Handoff, Completion Evaluation, Certified Completion, and Roadmap Completion Context.
 
@@ -201,7 +201,7 @@ Effects are repository mutations performed after a validated transition result. 
 - Git
 - archives
 - recovery bookkeeping
-- compatibility exports
+- pre-unification exports
 
 Each effect should declare identity, trigger, inputs, outputs, ordering, and failure semantics.
 

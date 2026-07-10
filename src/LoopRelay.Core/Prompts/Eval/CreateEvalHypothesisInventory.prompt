@@ -1,0 +1,1251 @@
+# Create Eval Hypothesis Inventory Prompt
+
+This prompt reads an eval dependency inventory from:
+
+```text
+.agents/eval-dependency-inventory
+```
+
+and produces an exhaustive, comprehensive, fully detailed inventory of **implementation-first falsifiable hypotheses** corresponding to every implementation-aligned dependency necessary for the evaluations to run, pass, fail safely, produce machine-verifiable evidence, and provide result aggregation inputs.
+
+You are NOT creating or modifying evaluation specs.
+You are NOT creating or modifying the dependency inventory.
+You are NOT creating a roadmap.
+You are NOT creating epics.
+You are NOT creating milestones.
+You are NOT implementing anything.
+You are NOT designing architecture.
+You are NOT writing tests.
+You are NOT executing tests.
+You are NOT reporting actual evaluation results.
+You are NOT determining whether hypotheses are true unless explicitly instructed to assess repository evidence.
+You are NOT creating policy-mediated documents, policy-mediated judgments, readiness labels, policy packages, policy artifacts, public-claim controls, support-label controls, or policy-mediated checklists.
+You are NOT modeling non-implementation artifacts as hypotheses, dependencies, prerequisites, evidence, statuses, output sections, or open-question resolutions.
+
+Your output must be only the final Markdown content for:
+
+```text
+.agents/eval-hypothesis-inventory.md
+```
+
+If the caller provides a different output path, use that path instead.
+
+---
+
+## Core Objective
+
+Create a comprehensive **Eval Hypothesis Inventory**.
+
+The file should answer:
+
+> What falsifiable hypotheses must be true for the dependencies in `.agents/eval-dependency-inventory` to be satisfied?
+
+Each dependency should be translated into one or more hypotheses that can be tested, inspected, observed, or otherwise falsified.
+
+The hypothesis inventory must be:
+
+* exhaustive
+* source-traceable
+* dependency-driven
+* project-agnostic
+* falsifiable
+* evidence-oriented
+* detailed enough to drive test design, verification planning, completion evaluation, and remediation planning
+* explicit about what would confirm, falsify, block, or make each hypothesis inconclusive
+
+The output should not merely repeat dependencies.
+
+It should convert dependencies into **claims about observable reality**.
+
+The inventory must remain implementation-first.
+It must model executable behavior, runtime state, persisted evidence, machine-verifiable eval outputs, deterministic comparisons, validation mechanisms, generated eval reports, and other machine-required prerequisites.
+
+It must not model policy-mediated documents, policy-mediated judgments, readiness labels, policy inspection packages, public-claim inspections, support-label inspections, release-policy controls, or policy-mediated checklists as hypothesis dependencies.
+This prohibition is mandatory: any hypothesis row that makes those artifacts first-class prerequisites is invalid.
+Semantic artifacts are invalid when they function as policy, even if they are described as metadata, machine-checkable, implementation-adjacent, or governance-supporting.
+Non-implementation artifacts are mediated outside this agent artifact by policy and must not be put forth by agents.
+
+This prohibition does not apply to implementation-aligned, machine-required artifacts.
+Artifacts that are consumed, produced, compared, retained, queried, or validated by an executable eval are permitted when they satisfy the implementation-first boundary.
+A permitted artifact must have a deterministic execution tie: an eval runner, fixture, validator, comparator, serializer, replay mechanism, persistence path, or runtime/API query must produce it, consume it, validate it, compare it, or require its fields.
+
+---
+
+## Project-Agnostic Rule
+
+This prompt must remain project-agnostic.
+
+Do not hardcode:
+
+* product names
+* programming languages
+* frameworks
+* providers
+* file extensions
+* repository paths
+* architecture patterns
+* report names
+* evaluation IDs
+* result aggregation states
+* fixture names
+* public capability rows
+* ontology categories
+* domain-specific constructs
+
+unless those details appear in `.agents/eval-dependency-inventory`.
+
+When the dependency inventory contains project-specific details, preserve them as source-derived hypothesis content.
+
+Do not generalize away concrete dependency requirements.
+
+Do not invent missing requirements.
+
+Use `TBD` when a hypothesis, evidence requirement, falsification condition, method, scope, or source mapping is unclear.
+
+---
+
+## Source Authority
+
+The dependency inventory under `.agents/eval-dependency-inventory` is the primary authority for:
+
+* dependency IDs
+* dependency names
+* dependency classes
+* dependency strictness
+* planning weights
+* source eval mappings
+* source requirement mappings
+* dependency graph relationships
+* functional dependencies
+* technical dependencies
+* operational dependencies
+* evidence dependencies
+* fixture dependencies
+* report dependencies
+* negative-control dependencies
+* determinism, replay, reproducibility, stability, or regression dependencies
+* runtime/API public or external surface dependencies with deterministic execution ties
+* machine-checkable schema validation, ontology, validation, or model-change dependencies
+* conditional dependencies
+* open dependency questions
+
+If the dependency inventory references evaluation specs, those references may be preserved as traceability.
+
+Do not re-read or reinterpret eval specs unless explicitly instructed.
+
+If the dependency inventory contains a policy-mediated non-implementation artifact, source authority does not override the implementation-first boundary.
+Use that source text only as internal derivation context for implementation-first hypotheses.
+Do not preserve, summarize, list, or reframe the forbidden artifact as a hypothesis output.
+Do not launder a forbidden artifact by adding qualifiers such as `Implementation`, `machine-checkable`, `support`, `review`, `governance`, or `certification-support`.
+Do not preserve the forbidden artifact as the target state, public surface, gate, status, aggregate row, or open-question resolution.
+Output only the lower-level deterministic artifact that is produced or consumed by eval execution, validation, fixture loading, evidence serialization, replay, or runtime query behavior.
+If that execution-tied artifact cannot be identified, omit the source item from agent output.
+
+If repository evidence is available, it may be used only if the task explicitly requests current hypothesis status. Otherwise, every hypothesis status must be:
+
+```text
+Not Tested
+```
+
+---
+
+## Implementation-First Boundary
+
+This hypothesis inventory is implementation-first.
+
+A hypothesis must name an implementation-aligned claim, such as:
+
+* runtime behavior
+* evaluator behavior
+* executable fixture input
+* fixture artifact, fixture corpus, fixture manifest, or machine-consumed scenario input
+* machine-consumed configuration or metadata
+* generated machine-verifiable eval report
+* persisted evidence record
+* deterministic comparison artifact
+* static scan output, replay record, negative-control output, or capability fingerprint
+* runtime/API capability metadata produced, consumed, or queried by eval execution
+* validation hook, scanner, runner, comparator, or harness
+* storage, identity, linkage, serialization, or replay mechanism
+* machine-verifiable result aggregation or result aggregation input
+
+The following violation patterns are forbidden as hypothesis rows, source dependencies, evidence requirements, status fields, summary counts, graph nodes, gate prerequisites, specialized sections, or open-question resolutions:
+
+* policy-mediated documents
+* policy-mediated judgments
+* final realization declarations
+* gate-ordering policies
+* readiness-state labels
+* policy-mediated checklists or minimum-bar checklists
+* policy packages
+* ontology admission packages
+* policy-authority packages
+* manual approval records
+* public documentation policy artifacts
+* support-label policy artifacts
+* release-policy controls
+* report overviews or aggregation narratives whose only role is human policy outcome
+
+The forbidden list does not include machine-required eval artifacts such as fixtures, fixture manifests, generated evaluator reports, report schemas, persisted evidence records, static scan outputs, negative-control outputs, replay records, deterministic comparison artifacts, capability fingerprints, queryable runtime metadata, or generated machine-verifiable evidence packages.
+Those are valid when required by executable eval behavior or machine-verifiable checks.
+Named artifacts are valid only when their fields are deterministic inputs, outputs, or checks in the eval system.
+
+A source-defined requirement does not override this prohibition.
+Do not place forbidden artifacts in the hypothesis tables, specialized hypothesis sections, foundational hypotheses, executive-summary counts, graph, gate matrix, coverage matrix, evidence fields, or status fields.
+Do not assign them hypothesis class, strictness, verification mode, dependency coverage, implementation status, or result-aggregation status.
+
+These items are outside agent output scope.
+Use source text about them only as internal derivation context for implementation-first hypotheses.
+Do not preserve, summarize, list, or reframe them as policy outputs.
+
+Do not collapse valid machine-required artifacts into the forbidden category merely because they are named artifacts.
+Classify them by their role in execution, validation, evidence production, comparison, replay, or runtime metadata.
+
+When a source-defined obligation is a policy-mediated document, judgment, readiness label, policy proof package, public-claim rule, support-label rule, or checklist, ignore the policy artifact as an output target and recover only independently execution-tied requirements:
+
+* For a policy-mediated document or judgment, output only executable checks, generated evidence packages, deterministic report schemas, or result records that the eval runner actually produces or consumes.
+* For a gate-ordering or readiness-state rule, do not model the ordering rule, label, or derived state. Output only prerequisite eval outputs or evidence links that are deterministic inputs to another eval.
+* For a policy-mediated checklist or minimum bar, do not keep the aggregate checklist or bar. Output only discrete executable capabilities, evaluator checks, evidence records, fixture requirements, generated reports, or machine-verifiable outputs.
+* For a validation evidence or ontology admission package, output only schema or ontology extension points, validation hooks, compatibility checks, and machine-checkable records required by execution.
+* For public documentation or support-label inspection, output only runtime/API capability metadata, public projection behavior, limitation fields, or evidence links that are deterministic machine surfaces. Do not output the external wording rule, label discipline, or permitted public claim.
+
+If a concrete execution-tied dependency exists but its required field shape, producer, consumer, or validation mechanism is underspecified, create an open hypothesis question phrased only in those terms.
+If no concrete execution-tied dependency can be identified, omit the source item without an open question.
+
+If a candidate can only be expressed as a forbidden artifact, omit it from all output sections.
+Do not create an exclusion table for forbidden artifacts.
+
+---
+
+## Hypothesis Definition
+
+A hypothesis is a falsifiable claim about reality that can be checked using evidence.
+
+A valid hypothesis is:
+
+* implementation-aligned and machine-required
+* traceable to one or more dependencies
+* phrased as an observable claim
+* testable, inspectable, or queryable
+* clear about expected evidence
+* clear about what would falsify it
+* clear about what would make it blocked or inconclusive
+* scoped enough that failure points to a dependency gap
+* independent enough to support remediation planning
+
+A valid hypothesis is NOT merely:
+
+* a dependency restated as prose
+* a task
+* a roadmap item
+* an implementation suggestion
+* a preferred architecture
+* a vague goal
+* a non-falsifiable aspiration
+* a test command
+* a claim that cannot be observed
+* a result-aggregation output
+* a policy-mediated document, judgment, checklist, readiness label, public-claim inspection, support-label control, policy proof package, or manual approval record
+
+---
+
+## Hypothesis Form
+
+Prefer the following structure:
+
+```text
+Given {{precondition or input}},
+when {{observable action, inspection, run, query, comparison, inspection, or scenario}},
+then {{expected observable outcome}}.
+```
+
+Every hypothesis must include:
+
+* hypothesis statement
+* dependency source
+* hypothesis type
+* falsification condition
+* required evidence
+* verification mode
+* expected status defaulting to `Not Tested`
+* blocked or inconclusive condition
+
+Avoid vague hypotheses such as:
+
+```text
+The system supports X.
+```
+
+Prefer falsifiable hypotheses such as:
+
+```text
+Given a source-defined fixture requiring X, when the evaluation runner processes that fixture, then the produced report contains evidence that X occurred and that evidence remains linked to the required semantic identifier.
+```
+
+Use project-specific wording only when source-derived.
+
+---
+
+## Hypothesis Classes
+
+Classify every hypothesis into one primary class.
+
+### Functional Hypothesis
+
+A falsifiable claim about required system behavior.
+
+Typical form:
+
+```text
+Given required input or scenario A, when behavior B is exercised, then observable outcome C occurs.
+```
+
+### Technical Hypothesis
+
+A falsifiable claim about a required technical condition, mechanism, contract, storage behavior, validator, comparator, reporter, or internal representation.
+
+Typical form:
+
+```text
+Given dependency D, when the relevant internal contract or artifact is inspected or exercised, then technical condition C is observable.
+```
+
+### Operational Hypothesis
+
+A falsifiable claim about implementation-aligned evaluation operation, maintenance practice, run discipline, generated reporting workflow, evidence collection, replay procedure, or machine-verifiable result aggregation.
+
+Typical form:
+
+```text
+Given evaluation process P, when the evaluation is prepared, run, replayed, reported, or aggregated by machine-verifiable means, then operational condition C is followed and evidenced.
+```
+
+Human policy inspection, release-policy control, public-claim inspection, manual approval, readiness labeling, and support-label discipline are not operational hypotheses.
+
+### Evidence Hypothesis
+
+A falsifiable claim about required evidence being produced, retained, linked, serialized, reported, or queryable.
+
+Typical form:
+
+```text
+Given event or behavior B, when evidence is inspected after the required boundary, then evidence E exists and remains linked to target T.
+```
+
+### Negative-Control Hypothesis
+
+A falsifiable claim that a failure-mode scenario exposes unsafe fallback, silent omission, false success, overclaiming, or unsupported behavior.
+
+Typical form:
+
+```text
+Given negative condition N, when the evaluation runs, then the system fails safely by producing explicit non-pass evidence rather than appearing successful.
+```
+
+### Stability Hypothesis
+
+A falsifiable claim about determinism, replay, reproducibility, regression safety, baseline stability, or controlled-change behavior.
+
+Typical form:
+
+```text
+Given equivalent or controlled-variation inputs, when outputs are compared, then the required identity, evidence, report, or behavior remains stable or changes only within the specified boundary.
+```
+
+### Public / External Surface Hypothesis
+
+A falsifiable claim about implemented public output, external interfaces, queryable runtime/API capability metadata, or consumer-facing machine-readable limitation and evidence surfaces.
+
+Typical form:
+
+```text
+Given required public or external surface S, when a consumer or evaluator queries or inspects S, then the required capability, limitation, unsupported outcome, absence marker, or evidence link is visible as machine-backed metadata.
+```
+
+Public-documentation policy inspection, support-label inspection, release-policy controls, and manual public-claim discipline are policy-mediated and must not be output as hypotheses.
+Runtime/API capability metadata is valid only when it is a deterministic machine surface; it must not encode external label policy as the hypothesis target.
+
+### Schema / Model-Change Validation Hypothesis
+
+A falsifiable claim about machine-checkable schema discipline, ontology discipline, durable model-change mechanisms, compatibility artifacts, validation hooks, or validated extension points.
+
+Typical form:
+
+```text
+Given durable model change M, when the relevant schema, ontology, compatibility, validation, or admission mechanism is inspected or exercised, then required machine-checkable controls and evidence exist.
+```
+
+Policy packages, ontology admission packages, policy-authority packages, manual approval records, and policy discipline are policy-mediated and must not be output as hypotheses.
+
+### Result Aggregation Hypothesis
+
+A falsifiable claim about machine-verifiable result aggregation inputs, result aggregation, report data completeness, non-pass evidence classification, or suite-level evidence completeness.
+
+Typical form:
+
+```text
+Given evaluation evidence E, when machine-verifiable result aggregation is produced, then the output exposes source-defined evidence, non-pass states, and missing prerequisites without emitting policy conclusions.
+```
+
+Policy-mediated documents, policy-mediated judgments, readiness labels, final realization declarations, and policy-mediated checklists are policy-mediated and must not be output as hypotheses.
+
+### Cross-Cutting Hypothesis
+
+Use only when a hypothesis spans multiple classes and splitting it would obscure the failure mode.
+
+If separable, split into functional, technical, operational, and evidence hypotheses.
+
+---
+
+## Hypothesis Strictness
+
+Assign every hypothesis one strictness value inherited or derived from its dependency.
+
+| Strictness                | Meaning                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| Required                  | The eval cannot pass or provide machine-verifiable result aggregation input unless the hypothesis is true. |
+| Required to Run           | The eval cannot execute meaningfully unless the hypothesis is true.                   |
+| Required to Pass          | The eval may run but cannot pass unless the hypothesis is true.                       |
+| Required for Result Aggregation       | Behavior may exist but cannot support machine-verifiable result aggregation unless the hypothesis is true. |
+| Required for Safe Failure | Negative controls or explicit non-pass behavior depend on this hypothesis being true. |
+| Conditional               | The hypothesis applies only when a source-defined condition applies.                  |
+| Optional / Deferred       | The dependency source marks the area optional, deferred, or out of current scope.     |
+| TBD                       | Strictness cannot be determined from the dependency inventory.                        |
+
+Do not mark a hypothesis optional unless the source dependency is optional, deferred, or explicitly out of scope.
+
+---
+
+## Verification Modes
+
+Assign one or more verification modes.
+
+Use generic modes unless the dependency inventory specifies a domain-specific method.
+
+| Verification Mode                | Meaning                                                                                                   |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Source Inspection                | Inspect source, configuration, declarations, contracts, schemas, or static artifacts.                     |
+| Runtime Observation              | Execute or observe behavior under source-defined conditions.                                              |
+| Fixture Run                      | Exercise a required fixture, corpus, input, scenario, or dataset.                                         |
+| Generated Report Inspection                    | Inspect generated machine-verifiable eval reports, report schemas, report data, or evidence packages.     |
+| Evidence Inspection              | Inspect persisted, linked, serialized, or queryable evidence.                                             |
+| Public Surface Inspection        | Inspect implemented public, external, consumer-facing, queryable metadata, or disclosure surfaces.        |
+| Static Scan                      | Scan for required or forbidden patterns defined by the dependency inventory.                              |
+| Repeated-Run Comparison          | Compare equivalent repeated runs.                                                                         |
+| Controlled-Change Comparison     | Compare outputs across source-defined controlled variations.                                              |
+| Negative-Control Run             | Exercise required failure-mode or safe-failure scenario.                                                  |
+| Baseline / Regression Comparison | Compare against required baseline or compatibility output.                                                |
+| Schema Validation | Inspect machine-checkable schema, ontology, compatibility, validation, admission, or model-change controls. |
+| Operational Trace Inspection                | Inspect run procedure, maintenance practice, evidence collection, or machine trace workflow.                     |
+| TBD                              | Verification mode is unclear.                                                                             |
+
+Do not include exact commands unless the dependency inventory specifies them.
+
+---
+
+## Hypothesis Status Mode
+
+Default mode is **hypothesis generation only**.
+
+Do not assess whether hypotheses are true unless explicitly requested.
+
+Set hypothesis status to:
+
+```text
+Not Tested
+```
+
+If the caller explicitly requests repository assessment, classify each hypothesis as:
+
+* Supported
+* Falsified
+* Partially Supported
+* Blocked
+* Inconclusive
+* Not Tested
+* Not Applicable
+* TBD
+
+and cite the evidence separately.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the final file.
+
+### Step 1 — Read Dependency Inventory
+
+Read `.agents/eval-dependency-inventory`.
+
+If it is a file, read that file.
+
+If it is a directory, recursively read Markdown, MDX, YAML, JSON, TOML, or other obvious dependency-inventory files.
+
+For each source, identify:
+
+* source file path
+* inventory title
+* inventory version if stated
+* dependency IDs
+* dependency classes
+* dependency strictness
+* planning weights
+* dependency tables
+* evidence tables
+* fixture tables
+* report tables
+* negative-control tables
+* stability tables
+* public/external tables
+* schema/model-change validation tables
+* dependency graph
+* coverage matrix
+* gates
+* conditional dependencies
+* open dependency questions
+
+Do not silently ignore files.
+
+If a file appears unrelated to dependency inventory, list it in the source inventory with an exclusion reason.
+
+---
+
+### Step 2 — Extract Dependency Records
+
+Extract every dependency record from:
+
+* Foundational Dependency Map
+* Functional Dependencies
+* Technical Dependencies
+* Operational Dependencies
+* Cross-Cutting Dependencies
+* Evidence Dependencies
+* Fixture / Corpus / Input Dependencies
+* Generated Eval Report and Machine Evidence Package Dependencies
+* Negative-Control and Safe-Failure Dependencies
+* Determinism / Replay / Reproducibility / Regression Dependencies
+* Runtime / Queryable Public / External Surface Dependencies
+* Machine-Checkable Schema / Model-Change Validation Dependencies
+* Dependency Graph
+* Eval Coverage Matrix
+* Run / Pass / Result-Aggregation Gate Dependencies
+* Conditional Dependencies
+* Open Dependency Questions
+
+Retain source dependency IDs and source trace.
+
+Do not discard duplicate-looking dependencies until after traceability is preserved.
+
+Before deriving hypotheses, apply the implementation-first boundary to every candidate dependency and specialized requirement.
+
+Reject any candidate whose primary deliverable is:
+
+* a policy-mediated document or judgment
+* a readiness label or suite state label
+* a gate-ordering rule
+* a policy-mediated checklist or minimum-bar checklist
+* a policy proof package, ontology admission package, policy-authority package, or manual policy artifact
+* a public-documentation policy inspection, support-label inspection, release-policy control, or public-claim discipline
+
+Do not reject a candidate merely because it is an artifact.
+Reject it only when it is non-implementation and policy-mediated, or when it has no deterministic execution tie.
+Permit machine-required artifacts used as eval inputs, generated outputs, evidence, comparison targets, replay records, validation results, or runtime/API metadata that is produced, consumed, queried, compared, retained, or validated by eval execution.
+
+For each rejected candidate:
+
+* recover one or more implementation-first hypotheses only when the source text also identifies required executable behavior, generated evidence, runtime/API metadata, validation, generated report data, or machine-verifiable result aggregation with an execution tie; or
+* omit the source item from every output section.
+
+If only the forbidden artifact remains after reduction, omit it from every output section.
+Do not create an output row merely to document that a policy-mediated artifact was rejected.
+Do not create an open question merely to preserve a rejected policy artifact.
+
+---
+
+### Step 3 — Derive Hypotheses From Every Dependency
+
+For each included implementation-first dependency, derive one or more falsifiable hypotheses.
+
+Ask:
+
+* Does this dependency satisfy the implementation-first boundary?
+* If source text names a forbidden artifact, what executable behavior, generated evidence, runtime metadata, validation mechanism, or machine-verifiable result aggregation is independently required by eval execution?
+* Does the proposed row still target the forbidden artifact's state, label, gate, public wording, or aggregate conclusion? If yes, omit it.
+* What observable claim must be true for this dependency to be satisfied?
+* What input, fixture, scenario, or precondition is required?
+* What action, inspection, run, comparison, or inspection would expose the claim?
+* What exact observable outcome is expected?
+* What evidence would support the claim?
+* What result would falsify the claim?
+* What result would make the claim blocked or inconclusive?
+* What non-pass state would apply if the claim is false?
+* Does this dependency need separate functional, technical, evidence, operational, or negative-control hypotheses?
+
+Every included implementation-first dependency must map to at least one hypothesis.
+Policy-mediated non-implementation artifacts must not map to hypotheses.
+
+---
+
+### Step 4 — Split Composite Dependencies Into Atomic Hypotheses
+
+Split a dependency into multiple hypotheses when:
+
+* one hypothesis can be true while another is false
+* different evidence proves different parts
+* different verification modes are needed
+* different failure modes imply different remediation
+* positive-path and negative-control behavior differ
+* run, pass, result aggregation, and safe-failure requirements differ
+* functional behavior and technical mechanism are separable
+* evidence production and evidence retention are separable
+* public visibility and internal evidence are separable
+* deterministic identity and serialized hash stability are separable
+
+Do not split when the parts are inseparable and would produce duplicate hypotheses with identical evidence and falsification conditions.
+
+---
+
+### Step 5 — Create Hypothesis Families
+
+Group hypotheses into families.
+
+Use source-derived family names where possible.
+
+Generic families may include:
+
+* input or fixture availability hypotheses
+* participant, provider, actor, or component participation hypotheses
+* artifact recognition or classification hypotheses
+* processing, extraction, transformation, or evaluation-boundary hypotheses
+* durable record or canonical admission hypotheses
+* evidence production hypotheses
+* evidence retention and linkage hypotheses
+* identity or identifier stability hypotheses
+* relationship, linkage, dependency, or interaction hypotheses
+* unsupported, partial, ambiguous, unresolved, blocked, or inconclusive state hypotheses
+* runtime/API public, external, or consumer-facing machine-surface hypotheses
+* generated report-data completeness hypotheses
+* machine-verifiable result aggregation or result-aggregation hypotheses
+* negative-control and safe-failure hypotheses
+* determinism, replay, reproducibility, or regression hypotheses
+* machine-checkable schema validation, ontology, validation, admission, or model-change hypotheses
+* operational run, replay, generated-report, maintenance, or baseline hypotheses
+
+Include only families supported by the dependency inventory.
+Do not create families whose only basis is a policy-mediated document, judgment, checklist, inspection, readiness label, support label, or release-policy control.
+
+---
+
+### Step 6 — Identify Confirmation and Falsification Criteria
+
+For every hypothesis, specify:
+
+* confirmation condition
+* falsification condition
+* blocked condition
+* inconclusive condition
+
+The falsification condition must be concrete enough that a future evaluator could decide whether the hypothesis failed.
+
+Avoid vague falsification such as:
+
+```text
+The system does not work.
+```
+
+Prefer:
+
+```text
+The required report lacks the source-defined field, or the field exists but is not linked to the required evidence.
+```
+
+---
+
+### Step 7 — Identify Evidence Requirements
+
+For every hypothesis, identify evidence required to assess it.
+
+Evidence may include:
+
+* source inspection result
+* fixture run output
+* runtime observation
+* generated report field
+* persisted evidence record
+* evidence linkage
+* serialized output
+* hash comparison
+* static scan result
+* runtime/API public metadata with deterministic execution ties
+* capability descriptor
+* negative-control output
+* diagnostic
+* baseline comparison
+* validation result
+* machine-checkable schema, ontology, compatibility, admission, or model-change evidence
+* machine-verifiable eval result or result aggregation
+
+Evidence must be specific enough to prevent status or implementation existence from substituting for validation evidence.
+Do not use policy-mediated judgments, manual approvals, readiness labels, public support labels, policy proof packages, policy artifacts, or public documentation as required evidence for a hypothesis.
+They may cite or summarize evidence outside this agent artifact, but the hypothesis evidence must be execution-tied behavior, generated report data, persisted record, validation result, comparison artifact, or runtime/API metadata with deterministic producer or consumer semantics.
+
+---
+
+### Step 8 — Identify Source Traceability
+
+Every hypothesis must retain traceability to:
+
+* source dependency ID
+* source dependency class
+* source dependency strictness
+* source dependency planning weight
+* source eval or requirement reference, if present
+* source inventory file
+
+If the hypothesis is derived implicitly from a dependency, explain the inference.
+
+Do not include a hypothesis without source or inference rationale.
+
+---
+
+### Step 9 — Identify Hypothesis Graph
+
+Map hypotheses to each other.
+
+For each hypothesis, identify:
+
+* prerequisite hypotheses
+* downstream hypotheses it enables
+* dependencies it supports
+* eval requirements it protects
+* hypotheses that may be falsified together
+* hypotheses that must be tested before machine-verifiable result aggregation input is meaningful
+* hypotheses that must be tested before negative controls are meaningful
+
+Do not infer graph order merely from table order unless dependency graph or source text supports it.
+Do not add graph nodes or edges for policy-mediated documents, judgments, checklists, inspections, readiness labels, or support-label controls.
+
+---
+
+### Step 10 — Identify Run / Pass / Result Aggregation / Safe-Failure Hypotheses
+
+Group hypotheses by gate:
+
+* required before eval run
+* required before a generated pass result
+* required before machine-verifiable result aggregation output
+* required for safe failure or negative control
+* required for machine-derived result input, if source-defined
+
+Use source strictness and dependency gate tables where available.
+Do not model readiness labels, policy-mediated judgments, or support labels as gates.
+
+---
+
+### Step 11 — Identify Conditional Hypotheses
+
+For conditional dependencies, create conditional hypotheses.
+
+Each conditional hypothesis must specify:
+
+* condition under which it applies
+* expected outcome if condition applies
+* expected outcome if condition does not apply
+* evidence required to establish whether the condition applies
+* falsification condition under each branch where relevant
+
+Do not turn conditional hypotheses into unconditional requirements.
+
+---
+
+### Step 12 — Identify Hypotheses For Open Dependency Questions
+
+For unresolved dependency questions, create open hypothesis placeholders where appropriate.
+
+Example:
+
+```text
+Hypothesis: TBD because the dependency inventory does not define whether X is required for Y.
+```
+
+These should not be treated as testable until clarified, but they should preserve the uncertainty.
+Open questions must be phrased only in terms of missing implementation-first behavior, machine-verifiable evidence, metadata, validation, generated report data, result aggregation, producer, consumer, serializer, comparator, validator, or runtime/API query shape.
+Do not ask for policy-mediated artifacts as the resolution.
+Do not preserve a source question whose only missing object is a policy artifact.
+
+---
+
+### Step 13 — Avoid Test Design Overreach
+
+Do not write detailed tests.
+
+Do not prescribe exact test framework, test command, implementation hook, API call, file path, or architecture unless the dependency inventory specifies it.
+
+You may describe verification mode and evidence required.
+
+This inventory answers:
+
+```text
+What hypotheses must be falsifiable?
+```
+
+not:
+
+```text
+How exactly should the test be implemented?
+```
+
+---
+
+### Step 14 — Exhaustiveness Verification
+
+Before finalizing, verify:
+
+* every dependency inventory source was considered
+* every included implementation-first dependency ID is represented
+* every functional dependency maps to at least one functional or cross-cutting hypothesis
+* every technical dependency maps to at least one technical or evidence hypothesis
+* every operational dependency maps to at least one operational hypothesis
+* every evidence dependency maps to at least one evidence hypothesis
+* every fixture dependency maps to at least one fixture or input hypothesis
+* every generated report or machine-verifiable report-data dependency maps to at least one report-data completeness hypothesis
+* every negative-control dependency maps to at least one negative-control hypothesis
+* every stability dependency maps to at least one stability hypothesis
+* every included runtime/API public or external dependency with a deterministic execution tie maps to at least one public-surface hypothesis
+* every machine-checkable schema/model-change validation dependency maps to at least one schema validation hypothesis
+* every conditional dependency maps to conditional hypotheses
+* every included implementation-first open dependency question is preserved
+* every hypothesis has confirmation and falsification conditions
+* every hypothesis has required evidence
+* every hypothesis has source traceability
+* no hypothesis is merely a dependency restatement
+* every source requirement that names a policy-mediated non-implementation artifact is reduced to independently execution-tied hypotheses or omitted from output
+* no hypothesis row, specialized section, evidence field, graph node, gate row, coverage row, status field, or open question emits a forbidden non-implementation artifact
+* no implementation-aligned machine-required artifact is omitted merely because it is an artifact
+* no implementation design is invented
+* no actual evaluation result is claimed
+
+---
+
+## Output Requirements
+
+Output only the final Markdown content for:
+
+```text
+.agents/eval-hypothesis-inventory.md
+```
+
+Do not include commentary.
+Do not include a preface.
+Do not include hidden analysis.
+Do not include a separate explanation.
+Do not wrap the entire output in code fences.
+
+Use the structure below.
+
+---
+
+# Eval Hypothesis Inventory
+
+## Purpose of This Document
+
+This document identifies falsifiable hypotheses corresponding to the dependencies in:
+
+```text
+.agents/eval-dependency-inventory
+```
+
+It translates implementation-first functional, technical, operational, evidence, fixture, generated-report, negative-control, stability, runtime/API public-surface, machine-checkable schema validation, and result aggregation dependencies into observable claims.
+
+It excludes policy-mediated non-implementation artifacts from agent output.
+It includes implementation-aligned machine-required artifacts, such as executable fixtures, generated evaluator outputs, evidence records, scan outputs, replay records, comparison artifacts, capability fingerprints, queryable runtime metadata, and machine-verifiable result aggregation.
+
+It does not define implementation design, architecture, roadmap, epics, milestones, repository structure, release-policy control, policy-mediated artifacts, execution workflow, tests, policy-mediated judgments, or evaluation results.
+
+---
+
+## Source Inventory
+
+List every dependency-inventory source file read.
+
+| ID                  | Source File     | Source Type     | Included In Analysis | Notes     |
+| ------------------- | --------------- | --------------- | -------------------- | --------- |
+| EVAL-HYP-SOURCE-001 | {{source_file}} | {{source_type}} | {{yes_no}}           | {{notes}} |
+
+---
+
+## Hypothesis Extraction Method
+
+Describe how hypotheses were derived.
+
+| ID                  | Extraction Rule | Meaning     | Applied To |
+| ------------------- | --------------- | ----------- | ---------- |
+| EVAL-HYP-METHOD-001 | {{rule}}        | {{meaning}} | {{scope}}  |
+
+Include rules for:
+
+* dependency-to-hypothesis conversion
+* direct hypotheses
+* implicit hypotheses
+* hypothesis splitting
+* functional hypotheses
+* technical hypotheses
+* operational hypotheses
+* evidence hypotheses
+* negative-control hypotheses
+* stability hypotheses
+* runtime/API public-surface hypotheses with deterministic execution ties
+* machine-checkable schema validation hypotheses
+* result aggregation hypotheses
+* conditional hypotheses
+* implementation-first boundary decisions
+
+---
+
+## Hypothesis Taxonomy
+
+Define hypothesis classes used in this inventory.
+
+| ID                    | Hypothesis Class          | Definition     | Typical Verification Modes |
+| --------------------- | ------------------------- | -------------- | -------------------------- |
+| EVAL-HYP-TAXONOMY-001 | Functional                | {{definition}} | {{verification_modes}}     |
+| EVAL-HYP-TAXONOMY-002 | Technical                 | {{definition}} | {{verification_modes}}     |
+| EVAL-HYP-TAXONOMY-003 | Operational               | {{definition}} | {{verification_modes}}     |
+| EVAL-HYP-TAXONOMY-004 | Evidence                  | {{definition}} | {{verification_modes}}     |
+| EVAL-HYP-TAXONOMY-005 | Negative-Control          | {{definition}} | {{verification_modes}}     |
+| EVAL-HYP-TAXONOMY-006 | Stability                 | {{definition}} | {{verification_modes}}     |
+| EVAL-HYP-TAXONOMY-007 | Public / External Surface | {{runtime_queryable_definition}} | {{verification_modes}}     |
+| EVAL-HYP-TAXONOMY-008 | Schema / Model-Change Validation | {{machine_checkable_definition}} | {{verification_modes}}     |
+| EVAL-HYP-TAXONOMY-009 | Result Aggregation     | {{machine_verifiable_definition}} | {{verification_modes}}     |
+| EVAL-HYP-TAXONOMY-010 | Cross-Cutting             | {{definition}} | {{verification_modes}}     |
+
+---
+
+## Executive Summary
+
+Summarize the hypothesis landscape.
+
+| ID                   | Summary Area                       | Finding             |
+| -------------------- | ---------------------------------- | ------------------- |
+| EVAL-HYP-SUMMARY-001 | Total dependency sources analyzed  | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-002 | Total hypotheses identified        | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-003 | Functional hypotheses              | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-004 | Technical hypotheses               | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-005 | Operational hypotheses             | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-006 | Evidence hypotheses                | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-007 | Negative-control hypotheses        | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-008 | Stability hypotheses               | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-009 | Runtime/queryable public/external hypotheses | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-010 | Machine-checkable schema/model-change validation hypotheses | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-011 | Result aggregation hypotheses   | {{count_and_notes}} |
+| EVAL-HYP-SUMMARY-012 | Highest-risk hypothesis families   | {{summary_or_TBD}}  |
+
+Summary counts must not include policy-mediated documents, judgments, inspections, readiness labels, support labels, or checklists.
+
+If repository status was not requested, state:
+
+```text
+Repository hypothesis status was not assessed.
+```
+
+---
+
+## Foundational Hypotheses
+
+List hypotheses that many other hypotheses, dependencies, or eval claims depend on.
+
+| ID                      | Hypothesis               | Hypothesis Class | Source Dependency | Strictness     | Planning Weight     | Enables                          | Status                   |
+| ----------------------- | ------------------------ | ---------------- | ----------------- | -------------- | ------------------- | -------------------------------- | ------------------------ |
+| EVAL-HYP-FOUNDATION-001 | {{hypothesis_statement}} | {{class}}        | {{dependency_id}} | {{strictness}} | {{planning_weight}} | {{enabled_hypotheses_or_claims}} | {{status_or_Not_Tested}} |
+
+---
+
+## Functional Hypotheses
+
+List all functional hypotheses.
+
+| ID                | Hypothesis               | Given / When / Then | Source Dependency           | Required Evidence | Confirmation Condition | Falsification Condition | Blocked / Inconclusive Condition | Verification Mode | Status                   |
+| ----------------- | ------------------------ | ------------------- | --------------------------- | ----------------- | ---------------------- | ----------------------- | -------------------------------- | ----------------- | ------------------------ |
+| EVAL-HYP-FUNC-001 | {{hypothesis_statement}} | {{given_when_then}} | {{dependency_id_and_trace}} | {{evidence}}      | {{confirmation}}       | {{falsification}}       | {{blocked_or_inconclusive}}      | {{mode}}          | {{status_or_Not_Tested}} |
+
+---
+
+## Technical Hypotheses
+
+List all technical hypotheses.
+
+| ID                | Hypothesis               | Given / When / Then | Source Dependency           | Required Evidence | Confirmation Condition | Falsification Condition | Blocked / Inconclusive Condition | Verification Mode | Status                   |
+| ----------------- | ------------------------ | ------------------- | --------------------------- | ----------------- | ---------------------- | ----------------------- | -------------------------------- | ----------------- | ------------------------ |
+| EVAL-HYP-TECH-001 | {{hypothesis_statement}} | {{given_when_then}} | {{dependency_id_and_trace}} | {{evidence}}      | {{confirmation}}       | {{falsification}}       | {{blocked_or_inconclusive}}      | {{mode}}          | {{status_or_Not_Tested}} |
+
+---
+
+## Operational Hypotheses
+
+List all operational hypotheses.
+
+| ID               | Hypothesis               | Given / When / Then | Source Dependency           | Required Evidence | Confirmation Condition | Falsification Condition | Blocked / Inconclusive Condition | Verification Mode | Status                   |
+| ---------------- | ------------------------ | ------------------- | --------------------------- | ----------------- | ---------------------- | ----------------------- | -------------------------------- | ----------------- | ------------------------ |
+| EVAL-HYP-OPS-001 | {{hypothesis_statement}} | {{given_when_then}} | {{dependency_id_and_trace}} | {{evidence}}      | {{confirmation}}       | {{falsification}}       | {{blocked_or_inconclusive}}      | {{mode}}          | {{status_or_Not_Tested}} |
+
+---
+
+## Evidence Hypotheses
+
+List hypotheses about evidence production, retention, linkage, queryability, serialization, and reporting.
+
+| ID                    | Hypothesis               | Source Dependency           | Evidence Required To Test     | Evidence Must Be Linked To | Confirmation Condition | Falsification Condition | Verification Mode | Status                   |
+| --------------------- | ------------------------ | --------------------------- | ----------------------------- | -------------------------- | ---------------------- | ----------------------- | ----------------- | ------------------------ |
+| EVAL-HYP-EVIDENCE-001 | {{hypothesis_statement}} | {{dependency_id_and_trace}} | {{evidence_required_to_test}} | {{linked_target}}          | {{confirmation}}       | {{falsification}}       | {{mode}}          | {{status_or_Not_Tested}} |
+
+---
+
+## Fixture / Corpus / Input Hypotheses
+
+List hypotheses about required fixtures, corpora, inputs, scenarios, or datasets.
+
+| ID                   | Hypothesis               | Source Dependency           | Required Input / Fixture | Expected Observable Use     | Falsification Condition | Dependent Eval(s) / Requirement(s) | Status                   |
+| -------------------- | ------------------------ | --------------------------- | ------------------------ | --------------------------- | ----------------------- | ---------------------------------- | ------------------------ |
+| EVAL-HYP-FIXTURE-001 | {{hypothesis_statement}} | {{dependency_id_and_trace}} | {{fixture_or_input}}     | {{expected_observable_use}} | {{falsification}}       | {{dependent_eval_or_requirement}}  | {{status_or_Not_Tested}} |
+
+If no fixture or input hypotheses are required, write:
+
+```text
+No fixture, corpus, input, scenario, or dataset hypotheses are required by the dependency inventory.
+```
+
+---
+
+## Generated Eval Report and Machine Evidence Package Hypotheses
+
+List hypotheses about generated eval reports, report schemas, report fields, machine-verifiable evidence packages, or machine-produced summary outputs.
+Do not list policy-mediated documents, policy-mediated judgments, human report narratives, final declarations, or policy-mediated artifacts.
+
+| ID                  | Hypothesis               | Source Dependency           | Required Generated Output | Required Machine-Readable Fields / Contents | Confirmation Condition | Falsification Condition | Status                   |
+| ------------------- | ------------------------ | --------------------------- | ------------------------- | ------------------------------------------- | ---------------------- | ----------------------- | ------------------------ |
+| EVAL-HYP-REPORT-001 | {{hypothesis_statement}} | {{dependency_id_and_trace}} | {{generated_output}}      | {{fields_or_contents}}                      | {{confirmation}}       | {{falsification}}       | {{status_or_Not_Tested}} |
+
+If no report hypotheses are required, write:
+
+```text
+No generated eval report or machine evidence package hypotheses are required by the dependency inventory.
+```
+
+---
+
+## Negative-Control and Safe-Failure Hypotheses
+
+List hypotheses that expose false success or unsafe failure behavior.
+
+| ID                    | Hypothesis               | Given / When / Then | Source Dependency           | Failure Exposed     | Required Evidence | Falsification Condition | Status                   |
+| --------------------- | ------------------------ | ------------------- | --------------------------- | ------------------- | ----------------- | ----------------------- | ------------------------ |
+| EVAL-HYP-NEGATIVE-001 | {{hypothesis_statement}} | {{given_when_then}} | {{dependency_id_and_trace}} | {{failure_exposed}} | {{evidence}}      | {{falsification}}       | {{status_or_Not_Tested}} |
+
+---
+
+## Stability Hypotheses
+
+List hypotheses about determinism, replay, reproducibility, regression, baseline stability, or controlled-change behavior.
+
+| ID                     | Hypothesis               | Source Dependency           | Required Comparison     | Expected Stability / Change Boundary | Falsification Condition | Verification Mode | Status                   |
+| ---------------------- | ------------------------ | --------------------------- | ----------------------- | ------------------------------------ | ----------------------- | ----------------- | ------------------------ |
+| EVAL-HYP-STABILITY-001 | {{hypothesis_statement}} | {{dependency_id_and_trace}} | {{comparison_required}} | {{expected_stability_or_TBD}}        | {{falsification}}       | {{mode}}          | {{status_or_Not_Tested}} |
+
+If no stability hypotheses are required, write:
+
+```text
+No determinism, replay, reproducibility, stability, or regression hypotheses are required by the dependency inventory.
+```
+
+---
+
+## Public / External Surface Hypotheses
+
+List hypotheses involving implemented public output, external interfaces, queryable disclosures, runtime/API capability metadata, or consumer-facing machine-readable limitation and evidence surfaces.
+Do not list public-documentation policy inspections, support-label policy artifacts, release-policy controls, or manual public-claim discipline.
+
+| ID                  | Hypothesis               | Source Dependency           | Required Machine Surface | Backing Evidence     | Omission / Overclaim Falsifier | Verification Mode | Status                   |
+| ------------------- | ------------------------ | --------------------------- | ------------------------ | -------------------- | ------------------------------ | ----------------- | ------------------------ |
+| EVAL-HYP-PUBLIC-001 | {{hypothesis_statement}} | {{dependency_id_and_trace}} | {{machine_surface}}      | {{backing_evidence}} | {{falsifier}}                  | {{mode}}          | {{status_or_Not_Tested}} |
+
+If no public or external surface hypotheses are required, write:
+
+```text
+No public or external surface hypotheses are required by the dependency inventory.
+```
+
+---
+
+## Schema / Model-Change Validation Hypotheses
+
+List hypotheses involving machine-checkable durable model, schema, ontology, public contract, compatibility artifact, relationship taxonomy, identity domain, validation, admission mechanism, or validated extension point.
+Do not list policy packages, ontology admission packages, policy-authority packages, manual approval records, or policy discipline.
+
+| ID               | Hypothesis               | Source Dependency           | Required Mechanism / Validation | Required Machine Evidence | Falsification Condition | Verification Mode | Status                   |
+| ---------------- | ------------------------ | --------------------------- | ------------------------------- | ------------------------- | ----------------------- | ----------------- | ------------------------ |
+| EVAL-HYP-SCHEMA-001 | {{hypothesis_statement}} | {{dependency_id_and_trace}} | {{mechanism_or_validation}}      | {{machine_evidence}}      | {{falsification}}       | {{mode}}          | {{status_or_Not_Tested}} |
+
+If no schema or model-change validation hypotheses are required, write:
+
+```text
+No machine-checkable schema, ontology, validation, compatibility, or durable model-change hypotheses are required by the dependency inventory.
+```
+
+---
+
+## Result Aggregation Hypotheses
+
+List hypotheses about machine-verifiable result aggregation inputs, non-pass evidence classification, result aggregation, generated report-data completeness, or pass/fail/block/inconclusive data handling.
+Do not list policy-mediated documents, policy-mediated judgments, readiness labels, final realization declarations, or policy-mediated checklists.
+
+| ID                | Hypothesis               | Source Dependency           | Result-Aggregation Scope | Expected Machine-Verifiable Behavior | Falsification Condition | Required Evidence | Status                   |
+| ----------------- | ------------------------ | --------------------------- | --------------------------- | ------------------------------------ | ----------------------- | ----------------- | ------------------------ |
+| EVAL-HYP-RESULT-001 | {{hypothesis_statement}} | {{dependency_id_and_trace}} | {{scope}}                   | {{expected_behavior}}                | {{falsification}}       | {{evidence}}      | {{status_or_Not_Tested}} |
+
+---
+
+## Cross-Cutting Hypotheses
+
+List hypotheses that span functional, technical, operational, evidence, runtime/API public-surface, stability, machine-checkable schema validation, or result aggregation-support classes where splitting would obscure meaning.
+
+| ID                 | Hypothesis               | Classes Spanned | Source Dependency           | Confirmation Condition | Falsification Condition | Required Evidence | Status                   |
+| ------------------ | ------------------------ | --------------- | --------------------------- | ---------------------- | ----------------------- | ----------------- | ------------------------ |
+| EVAL-HYP-CROSS-001 | {{hypothesis_statement}} | {{classes}}     | {{dependency_id_and_trace}} | {{confirmation}}       | {{falsification}}       | {{evidence}}      | {{status_or_Not_Tested}} |
+
+Use this section only when necessary.
+
+---
+
+## Conditional Hypotheses
+
+List hypotheses that apply only under source-defined conditions.
+
+| ID                       | Conditional Hypothesis   | Applies When  | Expected If Condition Applies | Expected If Condition Does Not Apply | Evidence To Determine Condition | Falsification Condition | Status                   |
+| ------------------------ | ------------------------ | ------------- | ----------------------------- | ------------------------------------ | ------------------------------- | ----------------------- | ------------------------ |
+| EVAL-HYP-CONDITIONAL-001 | {{hypothesis_statement}} | {{condition}} | {{expected_if_applies}}       | {{expected_if_not_applies}}          | {{evidence_for_condition}}      | {{falsification}}       | {{status_or_Not_Tested}} |
+
+---
+
+## Hypothesis Graph
+
+Represent prerequisite and enabling relationships among hypotheses.
+
+| ID                 | Hypothesis                     | Prerequisite Hypotheses   | Enables                          | Falsified Together With        | Graph Notes |
+| ------------------ | ------------------------------ | ------------------------- | -------------------------------- | ------------------------------ | ----------- |
+| EVAL-HYP-GRAPH-001 | {{hypothesis_id_or_statement}} | {{prerequisites_or_none}} | {{enabled_hypotheses_or_claims}} | {{related_hypotheses_or_none}} | {{notes}}   |
+
+---
+
+## Run / Pass / Result Aggregation / Safe-Failure Hypotheses
+
+Group hypotheses by evaluation gate.
+
+| ID                | Gate                          | Hypotheses Required | Missing Or Falsified Hypothesis Effect | Source Trace     |
+| ----------------- | ----------------------------- | ------------------- | -------------------------------------- | ---------------- |
+| EVAL-HYP-GATE-001 | Required before run           | {{hypothesis_ids}}  | {{effect}}                             | {{source_trace}} |
+| EVAL-HYP-GATE-002 | Required before pass          | {{hypothesis_ids}}  | {{effect}}                             | {{source_trace}} |
+| EVAL-HYP-GATE-003 | Required before result aggregation output | {{hypothesis_ids}}  | {{effect}}                             | {{source_trace}} |
+| EVAL-HYP-GATE-004 | Required for safe failure     | {{hypothesis_ids}}  | {{effect}}                             | {{source_trace}} |
+
+Add or remove gates only if source dependencies justify different gate semantics.
+Do not create gates for readiness labels, policy-mediated judgments, support labels, public-claim inspections, or policy-mediated ordering rules.
+
+---
+
+## Dependency-to-Hypothesis Coverage Matrix
+
+Show that every included implementation-first dependency is covered by hypotheses.
+Do not include rows for policy-mediated non-implementation artifacts that were omitted by the implementation-first boundary.
+
+| ID                    | Source Dependency | Dependency Class     | Hypotheses         | Coverage Status         | Notes     |
+| --------------------- | ----------------- | -------------------- | ------------------ | ----------------------- | --------- |
+| EVAL-HYP-COVERAGE-001 | {{dependency_id}} | {{dependency_class}} | {{hypothesis_ids}} | {{covered_partial_TBD}} | {{notes}} |
+
+Coverage status values:
+
+* Covered
+* Partially Covered
+* TBD
+* Conflict
+* Not Applicable
+
+Do not mark a dependency Covered unless one or more hypotheses explicitly represent it.
+Do not use `Not Applicable` as a workaround for listing a forbidden policy-mediated artifact.
+
+---
+
+## Open Hypothesis Questions
+
+List unresolved questions about missing implementation-first behavior, evidence, metadata, validation, generated report data, result aggregation, or source ambiguity.
+Do not ask for policy-mediated documents, policy packages, manual approvals, readiness labels, support-label inspections, public-claim controls, or policy-mediated checklists as the resolution.
+
+| ID                    | Question     | Affected Dependencies     | Affected Hypotheses       | Why It Matters     | Recommended Handling     |
+| --------------------- | ------------ | ------------------------- | ------------------------- | ------------------ | ------------------------ |
+| EVAL-HYP-QUESTION-001 | {{question}} | {{dependency_ids_or_TBD}} | {{hypothesis_ids_or_TBD}} | {{why_it_matters}} | {{recommended_handling}} |
+
+If no unresolved hypothesis questions are known, write:
+
+```text
+No unresolved hypothesis questions are currently known.
+```
+
+---
+
+## Hypothesis Anti-Patterns To Avoid
+
+List anti-patterns relevant to hypothesis interpretation.
+
+| ID                       | Anti-Pattern                                                        | Why It Is Harmful                                                                      | Corrective Principle                                                                                   |
+| ------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| EVAL-HYP-ANTIPATTERN-001 | Restating dependencies as hypotheses without observable falsifiers. | It creates a checklist of claims that cannot guide tests, audits, or remediation.      | Every hypothesis must include expected observation and falsification condition.                        |
+| EVAL-HYP-ANTIPATTERN-002 | Treating implementation existence as hypothesis confirmation.       | A component or artifact may exist while the falsifiable behavior is absent.            | Require evidence that the expected observable outcome occurred.                                        |
+| EVAL-HYP-ANTIPATTERN-003 | Writing test designs instead of hypotheses.                         | The inventory becomes implementation guidance rather than falsifiable claim structure. | Specify verification mode and evidence, not test framework or commands.                                |
+| EVAL-HYP-ANTIPATTERN-004 | Omitting negative-control hypotheses.                               | False success can remain undetected.                                                   | Represent safe-failure and negative-control claims separately from positive-path behavior.             |
+| EVAL-HYP-ANTIPATTERN-005 | Hiding evidence-retention hypotheses inside functional behavior.    | Behavior may occur transiently while required evidence disappears.                     | Separate behavior production from evidence retention and linkage where needed.                         |
+| EVAL-HYP-ANTIPATTERN-006 | Marking hypotheses as true without assessment.                      | The inventory would become an unevidenced result-aggregation output.                        | Default status is `Not Tested` unless repository assessment is explicitly requested.                   |
+| EVAL-HYP-ANTIPATTERN-007 | Over-compressing hypotheses across dependencies.                    | Eval-specific falsifiers or evidence requirements can disappear.                       | Consolidate only when confirmation, falsification, evidence, and source traceability remain intact.    |
+| EVAL-HYP-ANTIPATTERN-008 | Inventing architecture from hypothesis analysis.                    | Hypotheses become design prescriptions rather than observable claims.                  | Keep hypotheses implementation-independent unless the source dependency requires a specific mechanism. |
+| EVAL-HYP-ANTIPATTERN-009 | Treating policy-mediated artifacts as hypotheses.                   | It allows policy-mediated documents, judgments, inspections, labels, or checklists to replace executable checks, generated evidence, runtime metadata, validation, or result aggregation. | Model only the implementation-first basis as hypotheses; otherwise omit the source item from agent output. |
+
+Add project-specific anti-patterns only if present in the dependency inventory.
+
+---
+
+## Completeness Checklist
+
+Before finalizing this hypothesis inventory, verify:
+
+* Every dependency-inventory source was considered.
+* Every included dependency source appears in the Source Inventory.
+* Every included implementation-first dependency ID is represented.
+* Every included functional dependency maps to at least one functional or cross-cutting hypothesis.
+* Every included technical dependency maps to at least one technical or evidence hypothesis.
+* Every included operational dependency maps to at least one operational hypothesis.
+* Every included evidence dependency maps to at least one evidence hypothesis.
+* Every included fixture, corpus, input, scenario, or dataset dependency maps to at least one fixture/input hypothesis.
+* Every included generated report, report schema, machine-verifiable report data, or machine evidence package dependency maps to at least one report-data hypothesis.
+* Every included negative-control or safe-failure dependency maps to at least one negative-control hypothesis.
+* Every included determinism, replay, reproducibility, stability, or regression dependency maps to at least one stability hypothesis.
+* Every included runtime/API public, external, capability, limitation, or disclosure metadata dependency with a deterministic execution tie maps to at least one public/external hypothesis.
+* Every included machine-checkable schema validation, ontology, model-change, relationship taxonomy, identity-domain, public-contract, compatibility, validation, or admission dependency maps to at least one schema/model-change validation hypothesis.
+* Every included result aggregation dependency maps to at least one result aggregation hypothesis.
+* Every conditional dependency maps to conditional hypotheses.
+* Every included implementation-first open dependency question is preserved or represented as an open hypothesis question.
+* Every hypothesis has a confirmation condition.
+* Every hypothesis has a falsification condition.
+* Every hypothesis has a blocked or inconclusive condition where relevant.
+* Every hypothesis has required evidence.
+* Every hypothesis has a verification mode.
+* Every hypothesis has source traceability.
+* Every hypothesis status is `Not Tested` unless explicit assessment was requested.
+* No hypothesis is merely a dependency restatement.
+* Every source requirement that names a policy-mediated non-implementation artifact is reduced to independently execution-tied hypotheses or omitted from output.
+* No hypothesis row, specialized section, evidence field, graph node, gate row, coverage row, status field, summary count, or open question emits a forbidden non-implementation artifact.
+* No implementation-aligned machine-required artifact is omitted merely because it is an artifact.
+* No exact tests, commands, implementation hooks, or architecture are invented.
+* No roadmap appears.
+* No actual epics appear.
+* No actual milestones appear.
+* No evaluation result or result-aggregation output is claimed.
+* The inventory is detailed enough to drive downstream test design, verification planning, completion evaluation, and remediation planning.

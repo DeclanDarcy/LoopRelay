@@ -26,7 +26,7 @@ Objective: compose workflows through the same product/gate mechanism used by tra
   - [ ] Ambiguous.
   - [ ] No eligible transition.
 - [ ] Add explainability for why chaining occurred or stopped.
-- [ ] Use fake workflow definitions and compatibility adapters for tests.
+- [ ] Use fake workflow definitions and test doubles for tests.
 - [ ] Do not migrate production workflows yet.
 
 ## Detail Requirements
@@ -71,7 +71,7 @@ Workflow completion does not advance execution directly; it makes the downstream
 
 ### Product Transfer Details
 
-Product transfer determines products produced, products required, compatibility representations, authority, freshness, and ownership. Filesystem, SQLite, legacy exports, and current runtime records are compatibility details, not workflow contract boundaries.
+Product transfer determines products produced, products required, storage representations, authority, freshness, and ownership. Filesystem, SQLite, pre-unification exports, and current runtime records are representation details, not workflow contract boundaries.
 
 ### Chain Progression Algorithm
 

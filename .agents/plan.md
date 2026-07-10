@@ -16,7 +16,7 @@ The final system has one public CLI, four explicit workflow identities, one repo
 - Do not implement telemetry-driven confidence scoring or confidence-based routing.
 - Do not automatically repair storage, overwrite conflicts, discard state, or silently import/export data during verification.
 - Do not redesign prompt substance unless a prompt cannot satisfy the declared product contract.
-- Do not remove compatibility handling until the new path is behaviorally certified.
+- Do not retire old CLI entry points until the universal CLI is behaviorally certified. Once certified, old CLI entry points are removed rather than retained as adapters.
 
 ## Current Codebase Baseline
 
@@ -38,7 +38,7 @@ The implementation should prefer extracting or adapting existing behavior into s
 
 ## Target Public CLI Contract
 
-Use `src/LoopRelay.Cli` as the final public executable. The CLI resolves the repository from the current working directory by default and accepts `--repo <path>` for explicit repository selection. Legacy positional repository arguments remain accepted during compatibility.
+Use `src/LoopRelay.Cli` as the final public executable. The CLI resolves the repository from the current working directory by default and accepts `--repo <path>` for explicit repository selection.
 
 Required chained invocations:
 
@@ -53,7 +53,7 @@ Required bounded workflow invocations:
 - `looprelay plan`
 - `looprelay execute`
 
-Compatibility commands to preserve under the unified CLI:
+Operational subcommands to preserve under the unified CLI:
 
 - `looprelay status`
 - `looprelay unblock`
@@ -107,12 +107,12 @@ Canonical products:
 | Evaluation Intent | `.agents/evals/*.md` | EvalRoadmap |
 | Roadmap Completion Context | `RoadmapArtifactPaths.RoadmapCompletionContext` | Roadmap selection and update |
 | Strategic Initiative Selection | `RoadmapArtifactPaths.Selection` plus provenance | TraditionalRoadmap |
-| Dependency Inventory | evaluation artifact plus evidence | EvalRoadmap |
-| Hypothesis Inventory | evaluation artifact plus evidence | EvalRoadmap |
-| Architectural Catalog | evaluation artifact plus evidence | EvalRoadmap |
-| Dependency Graph | evaluation artifact plus evidence | EvalRoadmap |
-| Epic Roadmap | evaluation artifact plus evidence | EvalRoadmap |
-| Prepared Epic | `RoadmapArtifactPaths.ActiveEpic` | Plan |
+| Dependency Inventory | `.agents/eval-dependency-inventory.md` plus transition evidence | EvalRoadmap |
+| Hypothesis Inventory | `.agents/eval-hypothesis-inventory.md` plus transition evidence | EvalRoadmap |
+| Architectural Catalog | `.agents/eval-architectural-catalog.md` plus transition evidence | EvalRoadmap |
+| Eval DAG | `.agents/eval-dag.md` plus transition evidence | EvalRoadmap |
+| Next Epic Roadmap | `.agents/next-epic-roadmap.md` plus transition evidence | EvalRoadmap |
+| Prepared Epic | `RoadmapArtifactPaths.ActiveEpic` (`.agents/epic.md`) | EvalRoadmap and Plan |
 | Milestone Specification Set | `OrchestrationArtifactPaths.SpecsDirectory` validated set | Plan |
 | Executable Plan | `OrchestrationArtifactPaths.Plan` | Execute |
 | Operational Context | `OrchestrationArtifactPaths.OperationalContext` | Execute and decision sessions |
@@ -149,7 +149,7 @@ Implementation direction:
 
 - Extract shared database path/schema ownership from `LoopRelay.Core.Services.Persistence.LoopRelayWorkspaceDatabase`.
 - Move generic verification result types and authority vocabulary into `LoopRelay.Orchestration.Primitives`.
-- Keep roadmap export/import details behind adapters until the storage domains are generalized.
+- Move roadmap export/import details behind shared storage services until the storage domains are generalized.
 - Add schema migration support before introducing canonical workflow tables. Existing exact-version validation must become explicit migration or explicit unsupported-schema reporting.
 
 Canonical workflow persistence needs durable rows for:
@@ -203,7 +203,7 @@ The current `workflow_transactions` table remains useful for partial persistence
 
 (See ./milestones/m8-eval-roadmap.md)
 
-## Milestone 9: Unified CLI, Compatibility Retirement, and Certification
+## Milestone 9: Unified CLI, Old CLI Retirement, and Certification
 
 (See ./milestones/m9-unified-cli-certification.md)
 
@@ -322,5 +322,5 @@ The architecture is complete when:
 - partial progress, blockers, failures, cancellation, waiting, and ambiguity are distinguishable
 - serial execution does not hard-code a linear-only topology
 - duplicate orchestration and completion authorities are retired
-- supported legacy repository states are migrated or interpreted safely
-- the full behavioral, compatibility, failure, recovery, and CLI certification suite passes
+- supported pre-unification repository states are migrated or interpreted safely by the universal CLI
+- the full behavioral, migration, failure, recovery, and CLI certification suite passes
