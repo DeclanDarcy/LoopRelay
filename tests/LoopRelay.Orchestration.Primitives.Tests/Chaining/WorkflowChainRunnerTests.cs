@@ -7,15 +7,23 @@ namespace LoopRelay.Orchestration.Tests.Chaining;
 
 public sealed class WorkflowChainRunnerTests
 {
+    private static WorkflowChainDefinition TraditionalRoadmapChain =>
+        CanonicalWorkflowDefinitionSketches.CreateChains()
+            .Single(chain => chain.InitialWorkflow == WorkflowIdentity.TraditionalRoadmap);
+
+    private static WorkflowChainDefinition EvalRoadmapChain =>
+        CanonicalWorkflowDefinitionSketches.CreateChains()
+            .Single(chain => chain.InitialWorkflow == WorkflowIdentity.EvalRoadmap);
+
     [Fact]
     public void Canonical_chain_definitions_cover_traditional_and_eval_routes()
     {
         Assert.Equal(
             [WorkflowIdentity.TraditionalRoadmap, WorkflowIdentity.Plan, WorkflowIdentity.Execute],
-            CanonicalWorkflowChains.TraditionalRoadmapChain.Workflows.Select(workflow => workflow.Identity));
+            TraditionalRoadmapChain.Workflows.Select(workflow => workflow.Identity));
         Assert.Equal(
             [WorkflowIdentity.EvalRoadmap, WorkflowIdentity.Plan, WorkflowIdentity.Execute],
-            CanonicalWorkflowChains.EvalRoadmapChain.Workflows.Select(workflow => workflow.Identity));
+            EvalRoadmapChain.Workflows.Select(workflow => workflow.Identity));
     }
 
     [Fact]
@@ -37,7 +45,7 @@ public sealed class WorkflowChainRunnerTests
         WorkflowChainRunResult result = await runner.RunAsync(new WorkflowChainRunRequest(
             new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
             observation,
-            CanonicalWorkflowChains.TraditionalRoadmapChain,
+            TraditionalRoadmapChain,
             Definitions));
 
         WorkflowBoundaryEvaluation boundary = Assert.Single(result.Boundaries);
@@ -62,7 +70,7 @@ public sealed class WorkflowChainRunnerTests
         WorkflowChainRunResult result = await runner.RunAsync(new WorkflowChainRunRequest(
             new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
             observation,
-            CanonicalWorkflowChains.TraditionalRoadmapChain,
+            TraditionalRoadmapChain,
             Definitions));
 
         Assert.Equal(WorkflowStopReason.Blocked, result.StopReason);
@@ -90,7 +98,7 @@ public sealed class WorkflowChainRunnerTests
         WorkflowChainRunResult result = await runner.RunAsync(new WorkflowChainRunRequest(
             new WorkflowInvocation(InvocationModeKind.ForcedEvalChain),
             observation,
-            CanonicalWorkflowChains.EvalRoadmapChain,
+            EvalRoadmapChain,
             Definitions));
 
         Assert.Equal(WorkflowStopReason.Blocked, result.StopReason);
@@ -120,7 +128,7 @@ public sealed class WorkflowChainRunnerTests
         WorkflowChainRunResult result = await runner.RunAsync(new WorkflowChainRunRequest(
             new WorkflowInvocation(InvocationModeKind.BoundedPlan),
             observation,
-            CanonicalWorkflowChains.TraditionalRoadmapChain,
+            TraditionalRoadmapChain,
             Definitions));
 
         Assert.Equal(WorkflowStopReason.BoundedWorkflowCompleted, result.StopReason);
@@ -153,7 +161,7 @@ public sealed class WorkflowChainRunnerTests
         WorkflowChainRunResult result = await runner.RunAsync(new WorkflowChainRunRequest(
             new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
             observation,
-            CanonicalWorkflowChains.TraditionalRoadmapChain,
+            TraditionalRoadmapChain,
             Definitions));
 
         Assert.Equal(WorkflowStopReason.ChainCompleted, result.StopReason);

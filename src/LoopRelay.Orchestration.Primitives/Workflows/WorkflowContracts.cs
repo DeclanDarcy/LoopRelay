@@ -291,27 +291,6 @@ public sealed record GateRequirementResult(
     string Explanation,
     IReadOnlyList<string> Evidence);
 
-public sealed record WorkflowOutcome(
-    RuntimeOutcomeKind Status,
-    WorkflowIdentity Workflow,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
-
-public sealed record StageOutcome(
-    RuntimeOutcomeKind Status,
-    WorkflowIdentity Workflow,
-    WorkflowStageIdentity Stage,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
-
-public sealed record TransitionOutcome(
-    RuntimeOutcomeKind Status,
-    WorkflowIdentity Workflow,
-    WorkflowStageIdentity Stage,
-    WorkflowTransitionIdentity Transition,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
-
 public sealed record EffectDefinition(
     EffectIdentity Identity,
     EffectCategory Category,

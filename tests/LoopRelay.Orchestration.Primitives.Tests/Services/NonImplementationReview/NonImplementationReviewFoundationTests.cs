@@ -18,7 +18,6 @@ public sealed class NonImplementationReviewFoundationTests
         Assert.Equal("AmbiguousForSemanticReview", nameof(NonImplementationArtifactRoute.AmbiguousForSemanticReview));
         Assert.Equal("Uncertain", nameof(NonImplementationSemanticDisposition.Uncertain));
         Assert.DoesNotContain("UncertainCandidate", Enum.GetNames<NonImplementationArtifactRoute>());
-        Assert.Equal("HITL-requested non-implementation file", NonImplementationReviewTerms.HitlRequestedNonImplementationFile);
     }
 
     [Fact]

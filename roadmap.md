@@ -96,6 +96,85 @@ Nothing disappears implicitly: each behavior is preserved, intentionally
 changed, or intentionally retired, with the owner as judge. Disputed semantics
 are listed as open decisions in §10 and resolved in-flow.
 
+### 2.3 Authority ownership map (constitution, M0)
+
+Every production behavior family maps to exactly one canonical owner; where a
+row names a second authority it is the execution mechanism ("via") or the
+governing policy ("under"), never a co-owner. This table is the sole ownership
+registry (no side-registry files). "Today" records the baseline owner(s) per
+the audits; **bold** marks zero-owner or multiple-owner defects the program
+eliminates.
+
+| Subsystem | Behavior family | Canonical owner | Today |
+|---|---|---|---|
+| Application boundary | Application entry and host composition | Application Boundary (M20) | **LoopRelay.Cli plus two compiled retirement stubs** |
+| Application boundary | Typed outcome to exit-code mapping | Application Boundary (M20) | LoopRelay.Cli |
+| Application boundary | Composition uniqueness and dependency validation | Application Boundary (M20) | **None** — optional constructors and null adapters selectable |
+| Workflow catalog | Workflow definition authoring and cataloging | Workflow Catalog (M13) | CanonicalWorkflowDefinitionSketches (duplicate wrappers deleted at M0) |
+| Workflow catalog | Catalog validation, fail-closed at startup | Workflow Catalog (M13) | **Test-only** WorkflowDefinitionValidator in a production assembly |
+| Resolution and chaining | Workflow resolution and selection | Orchestration Kernel (M14) | Canonical resolver (bridge); compiled legacy alternates remain |
+| Resolution and chaining | Chaining and successor progression | Orchestration Kernel (M14) | Canonical chain runner (bridge) |
+| Resolution and chaining | Repository and workspace observation (normalized source/Git/workspace/effect evidence; reports facts, never selects or repairs) | Orchestration Kernel (M14) | RepositoryObserver (bridge); **workflow-specific filesystem scans compete** |
+| Resolution and chaining | Resolution explainability (alternatives, conflicts, uncertainty) | Canonical Read Model (M16) | **None** |
+| Transition execution | Universal transition lifecycle | Orchestration Kernel (M14) | Canonical transition runtime and controller (bridge) |
+| Transition execution | Step sequencing intent (today hidden inside handlers) | Workflow Catalog (M13) | **Hidden workflow-specific sequencing in transition handlers** |
+| Transition execution | Durable agent session state | Runtime Authority (M7), persisted via Workspace State Authority (M1) | **Live in-memory sessions** (RevisePlan/GenerateHandoff fail after restart) |
+| Transition execution | Alternate progression models (legacy state machine, pipeline, loop) | None — retired via M17–M19 | Compiled legacy Roadmap/Plan/Execute bodies (spec only) |
+| Products and evaluation | Product identity, receipts, retrievability | Product Authority (M3) | **SQLite rows, .agents files, legacy files, archives compete** |
+| Products and evaluation | Gate evaluation | Evaluation Authority (M2) | **Canonical gates plus residual prompt-success/file-existence gates** |
+| Products and evaluation | Clean-input gate over declared input surfaces (§5.2) | Evaluation Authority (M2), enforced by the kernel (M14) | **None** |
+| Products and evaluation | Semantic product validation | Evaluation Authority (M2) | Detailed validators only in retired Roadmap body (spec) |
+| Persistence and history | Mutable orchestration state | Workspace State Authority (M1) | Canonical workflow SQLite (active) |
+| Persistence and history | Decision/handoff/delta history | History Authority (M4) | **Split:** file-backed writer, SQLite completion reader |
+| Persistence and history | Append-only evidence ledger | History Authority (M4) | **None** — numbered files, exports, console output compete |
+| Persistence and history | Exports and archives as derived projections | History Authority (M4); execution via Effect Coordinator (M8) | **Derived forms can outrank canonical records** |
+| Effects and Git | Effect declaration | Workflow Catalog (M13) | Canonical workflow definitions |
+| Effects and Git | Effect execution, journaling, idempotency, reconciliation | Effect Coordinator (M8) | **None** — direct unjournaled execution in handlers |
+| Effects and Git | Auto-inserted output-surface commit (blocking) and push (required-async) (§5.2) | Effect Coordinator (M8) | **None** |
+| Effects and Git | Plan publication and parent-gitlink recording | Effect Coordinator (M8); converges at M18 | **Zero production owner** — complete behavior only in retired Plan pipeline |
+| Recovery | Restart/resume continuity | Recovery Coordinator (M9) | **In-memory session dependence** |
+| Recovery | Cancellation and salvage semantics | Recovery Coordinator (M9) | **Unowned** — differs between old Execute loop (spec) and active path |
+| Recovery | Unknown-outcome classification and reconciliation | Recovery Coordinator (M9) | **None** |
+| Recovery | Recovery plan selection | Recovery Coordinator (M9) | Workflow-local error branches |
+| Completion | Completion decision and certification | Completion Authority (M15) | **Four cooperating owners** (service, observer, CLI mapping, archive) |
+| Completion | Blocked vs failed closure semantics | Completion Authority (M15) | **Split across service and transport mapping** |
+| Completion | Archive materialization and recovery | Completion Authority (M15) via closure effects (M8) | Independent archive service; SQLite materializer uncomposed |
+| Completion | Roadmap-context closure updates | Completion Authority (M15) via closure effects (M8) | Separate update path |
+| Completion | Completion history resolution | History Authority (M4) | **Reads SQLite while production writes files** |
+| Storage and import | Verify/init/import/export/sync truthfulness | Workspace Storage Authority (M11) | **Unified commands label-only; real movement only in legacy Roadmap** |
+| Storage and import | Legacy format detection and one-way migration | Import Gateway (M12) | Scattered compatibility readers |
+| Storage and import | Supported-input registry (D2: owner workspaces only, no windows) | Import Gateway (M12) | **None** |
+| Prompt and policy | Prompt identity, rendering, policy-complete composition | Prompt Authority (M6) | **Partial canonical rendering; legacy fragments unproven** |
+| Prompt and policy | Policy resolution with provenance | Policy Authority (M5) | **Scattered ambient defaults at call sites** |
+| Prompt and policy | Configuration resolution and provenance | Policy Authority (M5) | **Scattered readers; settings.ArtifactPolicy has no consumer** |
+| Agent runtime | Session execution and capability negotiation | Runtime Authority (M7) | Canonical runtime component (bridge) |
+| Agent runtime | Telemetry capture and export (D3: active) | Runtime Authority (M7) under Policy (M5) | **Implemented but bypassed** |
+| Agent runtime | Usage-limit wait/retry (D3: active) | Runtime Authority (M7) under Policy (M5) | **Implemented but bypassed** |
+| Agent runtime | Input-wait reporting (D3: active) | Runtime Authority (M7) under Policy (M5) | **Implemented but bypassed** |
+| Agent runtime | Runtime prerequisites and provider-selection evidence (D3: active) | Runtime Authority (M7) under Policy (M5) | **Distributed, partially bypassed** |
+| Interaction | Durable human-interaction requests and responses | Interaction Broker (M10) | **Contract exists, always empty — zero effective owner** |
+| Interaction | Status and diagnostics read model | Canonical Read Model (M16) | Partial console rendering |
+| Certification | Product intent (required outcomes and observable semantics) | Owner as judge, via §2.2 spec-of-intent and §10 rulings | Compiled legacy bodies consulted as executable spec |
+| Certification | Behavioral verification | Agent practice (§0) + owner acceptance (§11) — no CI | Legacy-owner tests (not canonical parity evidence) |
+| Certification | Ownership registry maintenance | This document, §2.3 | Established at M0 |
+
+**Nucleus bridge confirmation (M0, 2026-07-10):** production routing is
+`LoopRelay.Cli` Program.cs → `UnifiedCliComposition.CreateProduction` →
+`WorkflowChainRunner` → `WorkflowController` → `TransitionRuntime`, resolving
+through `WorkflowResolver`, with catalog access through
+`CanonicalWorkflowDefinitionSketches.CreateAll()` / `CreateChains()` — the
+§5.1 nucleus, confirmed as the registered bridge until M14.
+`CanonicalWorkflowPersistenceStore` is its supporting store.
+
+**Named routing exceptions (visible, owned, with removal conditions):**
+`looprelay unblock` upserts blocker/workflow/stage records directly and
+`looprelay storage init|import|export|sync` writes schema/metadata directly,
+both bypassing the nucleus — owned as storage plumbing until M11/M14 replace
+them. The retired Plan/Roadmap projects remain compiled (their bodies are
+executable specification, deleted on M17–M19 acceptance; their historical
+entrypoints are deleted at M20; M21 confirms). No other production path
+bypasses the nucleus.
+
 ## 3. Canonical End-State Vision
 
 1. Operators and automation use one application boundary. Clients submit
@@ -316,8 +395,9 @@ sidecar.
 
 **Encoded decisions:** orchestration state lives in the existing SQLite-backed
 store (replaceable mechanism, not an authority); collaboration file *content*
-is out of scope here — it is git-authoritative (§3.5); one active run per
-workspace is the working assumption (concurrency deferred).
+is out of scope here — it is filesystem-authoritative with git provenance
+(§3.5); one active run per workspace is the working assumption (concurrency
+deferred).
 
 **Open at spec time:** the identity model is the most irreversible artifact in
 the program — the owner rules on it when this milestone is specified.
@@ -770,6 +850,7 @@ merely because a workflow body did. Declaration-only debris goes at M0.
 | D7 physical topology | Product bodies in git; orchestration state in the existing SQLite-backed store (replaceable); one deployable; concurrency deferred (one active run per workspace) |
 | Rigor posture | Ephemeral epic-scoped instruments; agent best-effort verification; owner is acceptance authority; no CI, fixtures, cert tooling |
 | Evaluation | Agent-executed judgment is first-class; verdicts + evidence recorded; no purity mandate |
+| Catalog validation | Fail-closed at startup under M13 (convergence audit GAP-17/ACI-29) — supersedes the retirement audit's test/build-only disposition |
 
 ### Open — resolved by owner prose ruling when the gating milestone is specified
 

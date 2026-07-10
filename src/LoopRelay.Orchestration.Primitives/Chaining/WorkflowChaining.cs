@@ -64,17 +64,6 @@ public sealed record WorkflowChainRunResult(
     WorkflowControllerResult? ControllerResult,
     string Explanation);
 
-public static class CanonicalWorkflowChains
-{
-    public static WorkflowChainDefinition TraditionalRoadmapChain =>
-        CanonicalWorkflowDefinitionSketches.CreateChains()
-            .Single(chain => chain.InitialWorkflow == WorkflowIdentity.TraditionalRoadmap);
-
-    public static WorkflowChainDefinition EvalRoadmapChain =>
-        CanonicalWorkflowDefinitionSketches.CreateChains()
-            .Single(chain => chain.InitialWorkflow == WorkflowIdentity.EvalRoadmap);
-}
-
 public sealed class WorkflowEntryGateEvaluator
 {
     public GateResult Evaluate(
