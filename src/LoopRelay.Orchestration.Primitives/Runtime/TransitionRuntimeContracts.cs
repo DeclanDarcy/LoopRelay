@@ -56,7 +56,20 @@ public sealed record TransitionRuntimeRequest(
     WorkflowIdentity Workflow,
     WorkflowStageIdentity Stage,
     WorkflowTransitionIdentity Transition,
-    IReadOnlyDictionary<string, string>? Metadata = null);
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    WorkflowInvocation? RootInvocation = null,
+    string? RunId = null);
+
+public sealed record PromptExecutionRequest(
+    string RunId,
+    WorkflowIdentity Workflow,
+    WorkflowStageIdentity Stage,
+    WorkflowTransitionIdentity Transition,
+    WorkflowTransitionDefinition Definition,
+    RenderedPrompt RenderedPrompt,
+    string InputSnapshotHash,
+    WorkflowInvocation RootInvocation,
+    IReadOnlyDictionary<string, string> Metadata);
 
 public sealed record ProductResolutionResult(
     IReadOnlyList<ProductRecord> Products,
@@ -285,8 +298,7 @@ public interface IPromptRenderer
 public interface IPromptExecutor
 {
     Task<PromptExecutionResult> ExecuteAsync(
-        WorkflowTransitionDefinition definition,
-        RenderedPrompt prompt,
+        PromptExecutionRequest request,
         CancellationToken cancellationToken);
 }
 

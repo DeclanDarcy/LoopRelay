@@ -16,7 +16,10 @@ Telemetry JSONL files under `.LoopRelay/telemetry/sessions.YYYY-MM-DD.NNNN.jsonl
 
 Runtime switches remain unchanged:
 
-- `LoopRelay_DECISION_RESUME=0` or `false` skips resume attempts.
+- `LoopRelay_DECISION_RESUME=0` or `false` disables resume and automatic replacement without deleting the active pointer, lineage, or recovery journal. If an active decision session exists, Execute stops with `ContinuityDisabled`; it never silently starts clean.
+- `LoopRelay_DECISION_RECOVERY_POLICY=resume-only|reconstructed|certified` controls which already-implemented recovery mechanisms may run. The default is `resume-only`. `reconstructed` enables verified public/repository reconstruction; `certified` additionally permits a native fork only for an exact supported compatibility profile.
+- Codex continuity is fail-closed by exact version and app-server schema digest. Unlisted profiles do not emit resume/read/fork requests.
+- The checked-in `0.142.5` profile currently certifies exact-ID resume/read only. Reconstruction and native fork remain profile-gated until authenticated context-write/limit evidence and lost-response fork reconciliation are certified.
 - `LoopRelay_SESSION_LOG=0` or `false` disables telemetry recording.
 
 Roadmap storage verification validates the SQLite runtime rows when present and reports corrupt telemetry/resume rows or legacy resume files that conflict with canonical SQLite state.

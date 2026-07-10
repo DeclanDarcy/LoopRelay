@@ -6,12 +6,15 @@ using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Process;
+using LoopRelay.Agents.Services.Codex;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
 using LoopRelay.Cli.Services.Decisions;
+using LoopRelay.Cli.Services.Decisions.Recovery;
 using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Services.Telemetry;
 using LoopRelay.Completion.Abstractions;
 using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Primitives;
@@ -29,6 +32,7 @@ using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.RepositorySlices;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Primitives;
+using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
@@ -113,18 +117,45 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             CliSettingsLoader.Load().Brain,
             provider: null);
 
-    public static UnifiedCliComposition CreateProduction(Repository repository)
+    public static UnifiedCliComposition CreateProduction(
+        Repository repository,
+        TextWriter? output = null,
+        TextWriter? error = null)
     {
         var settings = CliSettingsLoader.Load();
         var services = new ServiceCollection();
         services.AddAgents(settings.Permissions);
         ServiceProvider provider = services.BuildServiceProvider();
+        TextWriter effectiveOutput = output ?? System.Console.Out;
+        TextWriter effectiveError = error ?? System.Console.Error;
+        var loopConsole = new ConsoleLoopConsole(effectiveOutput, effectiveError);
+        var clock = new SystemClock();
+        IAgentRuntime rawRuntime = provider.GetRequiredService<IAgentRuntime>();
+        ISessionTelemetryRecorder telemetry = SessionTelemetryComposition.CreateRecorder(
+            repository,
+            SessionTelemetryComposition.IsEnabled(),
+            new CodexUsageProbe(
+                provider.GetRequiredService<IProcessRunner>(),
+                provider.GetRequiredService<IAgentExecutableResolver>(),
+                repository),
+            new EffectiveTokenCostModel(),
+            clock,
+            loopConsole);
+        var agentRuntime = new GatedAgentRuntime(
+            rawRuntime,
+            new UsageLimitDetector(clock, new TaskDelayScheduler(), loopConsole),
+            telemetry,
+            clock,
+            SessionTelemetryComposition.RepoName(repository));
         return CreateCore(
             repository,
-            provider.GetRequiredService<IAgentRuntime>(),
+            agentRuntime,
             provider.GetRequiredService<IProcessRunner>(),
             settings.Brain,
-            provider);
+            provider,
+            effectiveOutput,
+            effectiveError,
+            agentRuntime);
     }
 
     internal static UnifiedCliComposition Create(
@@ -148,7 +179,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IAgentRuntime? agentRuntime,
         IProcessRunner processRunner,
         BrainConfiguration brainConfiguration,
-        ServiceProvider? provider)
+        ServiceProvider? provider,
+        TextWriter? output = null,
+        TextWriter? error = null,
+        IAgentSessionContinuityRuntime? continuityRuntime = null)
     {
         IStorageVerifier storageVerifier = new FileSystemStorageVerifier();
         var repositoryObserver = new RepositoryObserver(storageVerifier);
@@ -156,7 +190,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IReadOnlyList<WorkflowDefinition> workflowDefinitions = CanonicalWorkflowDefinitionSketches.CreateAll();
         IReadOnlyList<WorkflowChainDefinition> workflowChains = CanonicalWorkflowDefinitionSketches.CreateChains();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var promptExecutor = new UnifiedPromptExecutor(repository, agentRuntime, processRunner, brainConfiguration);
+        var promptExecutor = new UnifiedPromptExecutor(
+            repository, agentRuntime, processRunner,
+            new ConsoleLoopConsole(output ?? TextWriter.Null, error ?? TextWriter.Null),
+            continuityRuntime ?? agentRuntime as IAgentSessionContinuityRuntime,
+            brainConfiguration);
         ITransitionRuntime transitionRuntime = new TransitionRuntime(
             new UnifiedTransitionDefinitionResolver(workflowDefinitions),
             new RepositoryObservationProductResolver(repositoryObserver, repository),
@@ -826,12 +864,14 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         Repository _repository,
         IAgentRuntime? _agentRuntime,
         IProcessRunner _processRunner,
+        ILoopConsole console,
+        IAgentSessionContinuityRuntime? _continuityRuntime,
         BrainConfiguration _brainConfiguration) : IPromptExecutor, IAsyncDisposable
     {
         private readonly IArtifactStore artifactStore = new FileSystemArtifactStore();
-        private readonly ILoopConsole console = new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null);
         private IAgentSession? planAuthoringSession;
         private DecisionSession? executeDecisionSession;
+        private IRecoveryStore? executeRecoveryStore;
         private IAgentSession? executionSession;
         private RepositorySliceBaseline? executionSliceBaseline;
         private IReadOnlyList<string> changedPathsAfterExecution = [];
@@ -842,10 +882,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private CompletionCertificationResult? completionCertificationResult;
 
         public async Task<PromptExecutionResult> ExecuteAsync(
-            WorkflowTransitionDefinition definition,
-            RenderedPrompt prompt,
+            PromptExecutionRequest request,
             CancellationToken cancellationToken)
         {
+            WorkflowTransitionDefinition definition = request.Definition;
+            RenderedPrompt prompt = request.RenderedPrompt;
             if (LocalVerificationTransitions.Supports(definition))
             {
                 return new PromptExecutionResult(
@@ -921,7 +962,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             if (ExecuteDecisionSessionTransitions.Supports(definition))
             {
-                return await ExecuteDecisionSessionAsync(definition, prompt, cancellationToken);
+                return await ExecuteDecisionSessionAsync(request, cancellationToken);
             }
 
             if (ExecuteImplementationTransitions.Supports(definition))
@@ -1136,7 +1177,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 new ProjectionPromptRunner(
                     _agentRuntime ?? throw new InvalidOperationException("Projection prompt runner requires an agent runtime."),
                     _repository,
-                    new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null),
+                    console,
                     _brainConfiguration));
         }
 
@@ -1448,10 +1489,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         }
 
         private async Task<PromptExecutionResult> ExecuteDecisionSessionAsync(
-            WorkflowTransitionDefinition definition,
-            RenderedPrompt prompt,
+            PromptExecutionRequest executionRequest,
             CancellationToken cancellationToken)
         {
+            WorkflowTransitionDefinition definition = executionRequest.Definition;
+            RenderedPrompt prompt = executionRequest.RenderedPrompt;
             if (_agentRuntime is null)
             {
                 return NotWired(definition);
@@ -1459,6 +1501,36 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             try
             {
+                executeRecoveryStore ??= new SqliteRecoveryStore(_repository);
+                IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
+                    ?? _agentRuntime as IAgentSessionContinuityRuntime
+                    ?? throw new InvalidOperationException("The configured agent runtime does not support decision continuity.");
+                string codexHome = Environment.GetEnvironmentVariable("CODEX_HOME")
+                    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
+                DecisionRecoveryPolicy recoveryPolicy = DecisionResumeComposition.RecoveryPolicy();
+                var recoveryMechanisms = new List<IRecoveryMechanism>();
+                if (recoveryPolicy is DecisionRecoveryPolicy.Reconstructed or DecisionRecoveryPolicy.Certified)
+                {
+                    recoveryMechanisms.Add(new ThreadReadReconstructionMechanism());
+                    recoveryMechanisms.Add(new RolloutReconstructionMechanism());
+                    recoveryMechanisms.Add(new RepositoryReconstructionMechanism());
+                }
+                if (recoveryPolicy == DecisionRecoveryPolicy.Certified)
+                {
+                    recoveryMechanisms.Add(new NativeForkRecoveryMechanism());
+                }
+                var recoveryRuntime = new RecoveryRuntime(
+                    executeRecoveryStore,
+                    continuityRuntime,
+                    new RecoverySourceCatalog(
+                    [
+                        new ThreadReadRecoverySource(continuityRuntime),
+                        new RolloutSalvageRecoverySource(new CodexRolloutRepository(), codexHome),
+                        new RepositoryContinuationRecoverySource(_repository),
+                    ]),
+                    new RecoveryPlanner(),
+                    new RecoveryMechanismCatalog(recoveryMechanisms),
+                    new CanonicalRecoveryEnvelopeFactory());
                 executeDecisionSession ??= new DecisionSession(
                     _agentRuntime,
                     new DecisionSessionRouter(),
@@ -1467,20 +1539,72 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     _repository,
                     _brainConfiguration,
                     _costModel: null,
-                    _resumeStore: new SqliteDecisionSessionResumeStore(_repository),
+                    _resumeStore: null,
                     _projectionService: null,
-                    _resumeEnabled: DecisionResumeComposition.IsEnabled());
-                await executeDecisionSession.RunAsync(cancellationToken);
+                    _resumeEnabled: DecisionResumeComposition.IsEnabled(),
+                    _continuityRuntime: continuityRuntime,
+                    _recoveryStore: executeRecoveryStore,
+                    _recoveryRuntime: recoveryRuntime,
+                    _recoveryPolicyVersion: recoveryPolicy switch
+                    {
+                        DecisionRecoveryPolicy.ResumeOnly => "decision-recovery-resume-only.v1",
+                        DecisionRecoveryPolicy.Reconstructed => "decision-recovery-reconstructed.v1",
+                        _ => "decision-recovery-certified.v1",
+                    });
+                DecisionSessionScope scope = await new DecisionSessionScopeResolver(_repository)
+                    .ResolveAsync(cancellationToken);
+                await executeDecisionSession.RunAsync(
+                    new DecisionExecutionContext(scope, executionRequest),
+                    cancellationToken);
                 string decisions = await ReadRequiredAsync(OrchestrationArtifactPaths.Decisions, cancellationToken);
+                DecisionSessionTurnRecord? turn = await executeRecoveryStore.ReadDecisionTurnAsync(
+                    executionRequest.RunId,
+                    executionRequest.InputSnapshotHash,
+                    cancellationToken);
+                var metadata = new Dictionary<string, string>
+                {
+                    ["execute-decision-session"] = definition.Identity.Value,
+                    ["evidence"] = prompt.EvidenceLocation,
+                    ["run-id"] = executionRequest.RunId,
+                    ["session-scope"] = scope.ScopeId.Value,
+                    ["root-invocation"] = executionRequest.RootInvocation.Mode.ToString(),
+                };
+                if (turn is not null)
+                {
+                    metadata["lineage-id"] = turn.LineageId;
+                    metadata["provider-thread-id"] = turn.ProviderThreadId;
+                    metadata["provider-turn-id"] = turn.ProviderTurnId ?? string.Empty;
+                    metadata["turn-record-id"] = turn.TurnRecordId;
+                    metadata["history-sequence"] = turn.HistorySequence?.ToString() ?? string.Empty;
+                }
+                RecoveryAttempt? recoveryAttempt = await executeRecoveryStore.ReadLatestAttemptAsync(
+                    scope.ScopeId.Value, cancellationToken);
+                if (recoveryAttempt is not null)
+                {
+                    metadata["recovery-attempt-id"] = recoveryAttempt.AttemptId;
+                    metadata["recovery-status"] = recoveryAttempt.Status.ToString();
+                    metadata["continuity-profile-digest"] = recoveryAttempt.ProfileDigest;
+                    if (recoveryAttempt.Mechanism is { } mechanism)
+                    {
+                        metadata["recovery-mechanism"] = $"{mechanism.Identity}@{mechanism.Version}";
+                    }
+                    if (recoveryAttempt.PlanDigest is { } planDigest)
+                    {
+                        metadata["recovery-plan-digest"] = planDigest;
+                        RecoveryPlan? recoveryPlan = await executeRecoveryStore.ReadPlanAsync(
+                            planDigest, cancellationToken);
+                        if (recoveryPlan is not null)
+                        {
+                            metadata["recovery-completeness"] = recoveryPlan.ExpectedCompleteness.ToString();
+                            metadata["recovery-source-count"] = recoveryPlan.Sources.Count.ToString();
+                        }
+                    }
+                }
                 return new PromptExecutionResult(
                     PromptExecutionStatus.Completed,
                     decisions,
                     TimeSpan.Zero,
-                    new Dictionary<string, string>
-                    {
-                        ["execute-decision-session"] = definition.Identity.Value,
-                        ["evidence"] = prompt.EvidenceLocation,
-                    });
+                    metadata);
             }
             catch (OperationCanceledException)
             {

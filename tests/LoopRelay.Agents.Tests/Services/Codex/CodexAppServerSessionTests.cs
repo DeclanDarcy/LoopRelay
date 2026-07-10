@@ -45,6 +45,8 @@ public sealed class CodexAppServerSessionTests
         Assert.Null(result.Diagnostics); // diagnostics are failure-only; a completed turn never carries them
         Assert.Equal(11, result.Usage.PromptTokens);
         Assert.Equal(5, result.Usage.OutputTokens);
+        Assert.Equal("u1", result.ProviderTurnId);
+        Assert.Equal(AgentTurnTransportState.Terminal, result.TransportState);
         Assert.Equal(1, session.CompletedTurns);
 
         // Handshake ran once, initialize first, then initialized, thread/start, turn/start.
@@ -522,11 +524,30 @@ public sealed class CodexAppServerSessionTests
         workingDirectory: "/repo",
         resumeThreadId: threadId);
 
+    private static SessionContinuityProfile ResumeProfile() => new(
+        "codex", "test", "0.142.5", "codex", "app-server-v2", "schema",
+        new Dictionary<string, bool> { ["experimentalApi"] = true },
+        new Dictionary<string, string>(),
+        new Dictionary<SessionContinuityOperation, SessionOperationSupportDescriptor>
+        {
+            [SessionContinuityOperation.Resume] = new SessionOperationSupportDescriptor(
+                SessionOperationSupport.Supported,
+                "v2",
+                new Dictionary<string, SessionParameterSupport>
+                {
+                    [SessionContinuityProfile.ExcludeTurnsParameter] =
+                        new(SessionOperationSupport.Supported, "test"),
+                },
+                "load", "same-id", "none", "exact-id", "test"),
+        },
+        256_000, "test", "test", negotiatedAt: DateTimeOffset.UnixEpoch);
+
     [Fact]
     public async Task ResumeSpecSendsThreadResumeInsteadOfThreadStartAndAddressesTurnsAtTheResumedThread()
     {
         var process = new ScriptedAppServerProcess();
-        await using var session = new CodexAppServerSession(ResumeSpec("thread-old"), process, new DeterministicAgentTokenEstimator());
+        await using var session = new CodexAppServerSession(
+            ResumeSpec("thread-old"), process, new DeterministicAgentTokenEstimator(), null, ResumeProfile());
 
         await session.EnsureReadyAsync();
         AgentTurnResult result = await session.RunTurnAsync("hello");
@@ -541,7 +562,8 @@ public sealed class CodexAppServerSessionTests
     public async Task ResumeFrameCarriesTheSessionPostureAndExcludeTurns()
     {
         var process = new ScriptedAppServerProcess();
-        await using var session = new CodexAppServerSession(ResumeSpec("thread-old"), process, new DeterministicAgentTokenEstimator());
+        await using var session = new CodexAppServerSession(
+            ResumeSpec("thread-old"), process, new DeterministicAgentTokenEstimator(), null, ResumeProfile());
 
         await session.EnsureReadyAsync();
 
@@ -554,14 +576,17 @@ public sealed class CodexAppServerSessionTests
     }
 
     [Fact]
-    public async Task RejectedResumeThrowsTheTypedExceptionFromEnsureReady()
+    public async Task RejectedResumePreservesTheStructuredResponseFromEnsureReady()
     {
         var process = new ScriptedAppServerProcess { RejectResume = true };
-        await using var session = new CodexAppServerSession(ResumeSpec("thread-old"), process, new DeterministicAgentTokenEstimator());
+        await using var session = new CodexAppServerSession(
+            ResumeSpec("thread-old"), process, new DeterministicAgentTokenEstimator(), null, ResumeProfile());
 
-        AgentSessionResumeException ex =
-            await Assert.ThrowsAsync<AgentSessionResumeException>(() => session.EnsureReadyAsync());
-        Assert.Contains("no rollout found", ex.Message);
+        CodexAppServerRequestException ex =
+            await Assert.ThrowsAsync<CodexAppServerRequestException>(() => session.EnsureReadyAsync());
+        Assert.Equal("thread/resume", ex.ProviderMethod);
+        Assert.Equal(-32602, ex.Response.ErrorCode);
+        Assert.Equal("excludeTurns", ex.Response.ErrorData.GetProperty("field").GetString());
     }
 
     [Fact]

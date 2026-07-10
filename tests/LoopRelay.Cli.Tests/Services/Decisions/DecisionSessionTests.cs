@@ -18,9 +18,13 @@ using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Recovery;
+using LoopRelay.Orchestration.Resolution;
+using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationLedger;
+using LoopRelay.Orchestration.Workflows;
 using LoopRelay.Projections.Models.Definitions;
 using LoopRelay.Projections.Models.ProjectionArtifacts;
 using LoopRelay.Projections.Primitives;
@@ -68,6 +72,28 @@ public class DecisionSessionTests
 
     private static DecisionSessionResumeState ResumeState(string threadId = "thread-old") =>
         new(threadId, 100, 5d, 2, 3d, 2d, 300_000d, 1, 500, 1);
+
+    private static SessionContinuityProfile TestContinuityProfile() => new(
+        "codex", "test", "0.142.5", "codex", "v2", "schema",
+        new Dictionary<string, bool> { ["experimentalApi"] = true },
+        new Dictionary<string, string>(),
+        new Dictionary<SessionContinuityOperation, SessionOperationSupportDescriptor>
+        {
+            [SessionContinuityOperation.Resume] = new SessionOperationSupportDescriptor(
+                SessionOperationSupport.Supported, "v2",
+                new Dictionary<string, SessionParameterSupport>
+                {
+                    [SessionContinuityProfile.ExcludeTurnsParameter] = new(SessionOperationSupport.Supported, "test"),
+                },
+                "load", "same-id", "none", "read", "test"),
+        },
+        256_000, "test", "test", negotiatedAt: DateTimeOffset.UnixEpoch);
+
+    private static ProductRecord ScopeProduct(ProductIdentity identity, WorkflowIdentity workflow, char hash) => new(
+        identity, workflow, new WorkflowTransitionIdentity($"Produce{identity.Value}"), [WorkflowIdentity.Execute],
+        "repository", "canonical", [$".agents/{identity.Value}.md"], new string(hash, 64),
+        ProductFreshness.Fresh, ProductValidationState.Valid, ProductLifecycle.Active,
+        [$".agents/{identity.Value}.md"]);
 
     private static (DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
         RecordingLoopConsole Con, FakeDecisionSessionResumeStore Resume, FakeProjectionService Projection)
@@ -985,27 +1011,91 @@ public class DecisionSessionTests
     }
 
     [Fact]
-    public async Task Run_FirstEntry_ResumeFails_WarnsClearsAndFallsBackToAFreshPrimedProcess()
+    public async Task Run_FirstEntry_DeterministicResumeFailure_PreservesStateAndStartsNoReplacement()
     {
         var (session, rt, store, repo, con, resume) = NewWithResume(state: ResumeState());
         rt.FailResume = true;
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
-        {
-            Assert.Contains("OPCTX", prompt);   // fresh process: primed inline, byte-identical to today
-            return Turns.Completed("D-FRESH");
-        }));
+        LoopStepException exception = await Assert.ThrowsAsync<LoopStepException>(
+            () => session.RunAsync(CancellationToken.None));
 
-        await session.RunAsync(CancellationToken.None);
-
-        Assert.Equal(2, rt.OpenedSpecs.Count);
+        Assert.Single(rt.OpenedSpecs);
         Assert.Equal("thread-old", rt.OpenedSpecs[0].ResumeThreadId);
-        Assert.Null(rt.OpenedSpecs[1].ResumeThreadId);
-        Assert.Contains(con.Events, e => e.Kind == "warn" && e.Text.Contains("Could not resume"));
-        Assert.Equal(1, resume.ClearCalls);
-        // The fresh thread re-persisted after its successful turn — the next run resumes THAT thread.
-        Assert.Equal("thread-1", Assert.Single(resume.Written).ThreadId);
+        Assert.Contains("no replacement was started", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(con.Events, e => e.Kind == "warn" && e.Text.Contains("protocol repair"));
+        Assert.Equal(0, resume.ClearCalls);
+        Assert.Empty(resume.Written);
+    }
+
+    [Fact]
+    public async Task Run_RestartAfterOutputCommit_RepairsArtifactWithoutSubmittingAnotherTurn()
+    {
+        string root = Directory.CreateTempSubdirectory("looprelay-decision-rehydrate-").FullName;
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = root };
+        var artifactStore = new MemoryArtifactStore();
+        var artifacts = new LoopArtifacts(artifactStore, repo);
+        var runtime = new FakeAgentRuntime(artifactStore);
+        var recoveryStore = new SqliteRecoveryStore(repo);
+        SessionContinuityProfile profile = TestContinuityProfile();
+        DateTimeOffset now = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
+        ProductRecord epic = ScopeProduct(ProductIdentity.PreparedEpic, WorkflowIdentity.TraditionalRoadmap, 'a');
+        ProductRecord plan = ScopeProduct(ProductIdentity.ExecutablePlan, WorkflowIdentity.Plan, 'b');
+        DecisionSessionScope scope = DecisionSessionScopeResolver.Resolve(
+            "0123456789abcdef0123456789abcdef", [epic, plan]);
+        var scopeRecord = new DecisionSessionScopeRecord(
+            scope.ScopeId.Value, scope.WorkspaceId, epic.CausalIdentity, plan.CausalIdentity,
+            "Decision", scope.ContractVersion, "Active", now, null);
+        var lineage = new DecisionSessionLineageNode(
+            "lineage-rehydrate", scope.ScopeId.Value, "codex", "thread-rehydrate", null,
+            "lineage-rehydrate", "Fresh", RecoveryCompleteness.Full, null, profile.Digest, null,
+            now, now, null, "Authoritative");
+        var active = new DecisionSessionActiveState(
+            scope.ScopeId.Value, lineage.LineageId,
+            new DecisionSessionAccounting(0, 0, 0, 0, 0, 250_000, 0, null, 0),
+            "policy", null, 0, now);
+        await recoveryStore.CreateScopeAndActivateAsync(scopeRecord, lineage, active, profile);
+        var pending = new DecisionSessionTurnRecord(
+            "turn-rehydrate", scope.ScopeId.Value, lineage.LineageId, "run-rehydrate", "input-rehydrate",
+            lineage.ProviderSessionId, "provider-turn-1", null, DecisionTurnState.Pending,
+            false, false, false, false, null, null, null, null, false, null, 0, now, now);
+        await recoveryStore.BeginDecisionTurnAsync(pending);
+        DecisionSessionTurnRecord terminal = pending with
+        {
+            State = DecisionTurnState.Terminal,
+            WriteStarted = true,
+            Submitted = true,
+            Accepted = true,
+            Terminal = true,
+            RowVersion = 1,
+        };
+        await recoveryStore.CompareAndSwapDecisionTurnAsync(pending, terminal);
+        DecisionTurnCommitResult committed = await recoveryStore.CommitDecisionOutputAsync(
+            terminal, active, active.Accounting, "# Decisions\n\nRecovered output.", "policy");
+        Assert.Equal(DecisionTurnState.Committed, committed.Turn!.State);
+
+        WorkflowTransitionDefinition definition = CanonicalWorkflowDefinitionSketches.CreateAll()
+            .Single(workflow => workflow.Identity == WorkflowIdentity.Execute)
+            .Transitions.Single(transition => transition.Identity == new WorkflowTransitionIdentity("GenerateDecision"));
+        var promptRequest = new PromptExecutionRequest(
+            "run-rehydrate", WorkflowIdentity.Execute, new WorkflowStageIdentity("Implementation Planning"),
+            definition.Identity, definition, new RenderedPrompt(definition.PromptIdentity, "prompt", "prompt.md"),
+            "input-rehydrate", new WorkflowInvocation(InvocationModeKind.BoundedExecute),
+            new Dictionary<string, string>());
+        var decision = new DecisionSession(
+            runtime, new DecisionSessionRouter(), artifacts, new RecordingLoopConsole(), repo,
+            TestAgentConfiguration.Brain,
+            _recoveryStore: recoveryStore);
+
+        await decision.RunAsync(new DecisionExecutionContext(scope, promptRequest), CancellationToken.None);
+
+        Assert.Empty(runtime.OpenedSpecs);
+        Assert.Empty(runtime.SessionCalls);
+        Assert.Equal("# Decisions\n\nRecovered output.",
+            await artifactStore.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
+        DecisionSessionTurnRecord repaired = (await recoveryStore.ReadDecisionTurnAsync(
+            "run-rehydrate", "input-rehydrate"))!;
+        Assert.Equal(DecisionTurnState.Materialized, repaired.State);
     }
 
     [Fact]

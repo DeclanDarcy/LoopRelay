@@ -2,6 +2,7 @@ using System.Globalization;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Workflows;
 using Microsoft.Data.Sqlite;
@@ -85,7 +86,13 @@ internal sealed class UnifiedCliRunner(
     {
         RepositoryObservation observation = await _composition.ObserveAsync(cancellationToken);
         WorkflowResolutionResult resolution = _composition.Resolve(invocation.WorkflowInvocation, observation);
-        _output.WriteLine(UnifiedCliStatusFormatter.Format(invocation, observation, resolution));
+        DecisionContinuityStatusSnapshot? continuity = null;
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_composition.Repository);
+        if (File.Exists(databasePath))
+        {
+            continuity = await new SqliteRecoveryStore(_composition.Repository).ReadStatusAsync(cancellationToken);
+        }
+        _output.WriteLine(UnifiedCliStatusFormatter.Format(invocation, observation, resolution, continuity));
         return 0;
     }
 
@@ -280,13 +287,23 @@ internal sealed class UnifiedCliRunner(
                 cancellationToken);
             PrintRunResult(result);
 
+            RepositoryObservation? postTransitionObservation = null;
+            if (result.ControllerResult?.Transition is not null)
+            {
+                postTransitionObservation = await _composition.ObserveAsync(cancellationToken);
+                if (!await RetireCertifiedDecisionScopeAsync(postTransitionObservation, cancellationToken))
+                {
+                    return 4;
+                }
+            }
+
             if (invocation.WorkflowInvocation.IsBounded ||
                 result.StopReason != WorkflowStopReason.TransitionCompleted)
             {
                 return ExitCodeFor(result.StopReason);
             }
 
-            observation = await _composition.ObserveAsync(cancellationToken);
+            observation = postTransitionObservation ?? await _composition.ObserveAsync(cancellationToken);
             if (invocation.Command.RequiresStorageVerification &&
                 observation.StorageVerification.IsBlocked)
             {
@@ -298,6 +315,41 @@ internal sealed class UnifiedCliRunner(
         _output.WriteLine($"Stop reason: {WorkflowStopReason.Stalled}");
         _output.WriteLine($"Explanation: Unbounded workflow continuation guard exhausted after {guard} completed transitions.");
         return ExitCodeFor(WorkflowStopReason.Stalled);
+    }
+
+    private async Task<bool> RetireCertifiedDecisionScopeAsync(
+        RepositoryObservation observation,
+        CancellationToken cancellationToken)
+    {
+        if (!observation.Products.Any(product =>
+                product.Product.Identity == ProductIdentity.CertifiedCompletion && product.GateUsable))
+        {
+            return true;
+        }
+
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_composition.Repository);
+        if (!File.Exists(databasePath))
+        {
+            return true;
+        }
+
+        var store = new SqliteRecoveryStore(_composition.Repository);
+        DecisionContinuityStatusSnapshot status = await store.ReadStatusAsync(cancellationToken);
+        if (status.Active is null)
+        {
+            return true;
+        }
+
+        RecoveryStoreWriteResult retired = await store.RetireScopeAsync(
+            status.Active.ScopeId, status.Active.RowVersion, cancellationToken);
+        if (!retired.Succeeded)
+        {
+            _error.WriteLine($"CertifiedCompletion was recorded, but decision continuity scope retirement failed: {retired.Diagnostic}");
+            return false;
+        }
+
+        _output.WriteLine($"Decision continuity scope retired after CertifiedCompletion: {status.Active.ScopeId}");
+        return true;
     }
 
     private void PrintRunResult(WorkflowChainRunResult result)

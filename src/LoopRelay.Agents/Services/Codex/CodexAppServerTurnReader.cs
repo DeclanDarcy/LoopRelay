@@ -22,6 +22,7 @@ public sealed class CodexAppServerTurnReader
     private AgentTokenUsage? usage;
     private AgentTurnState? terminalState;
     private string? failureMessage;
+    private string? providerTurnId;
     private string? currentItemId;   // the agent-message item the deltas currently belong to
     private readonly HashSet<string> renderedToolItems = new();   // tool items already surfaced (dedupe started/completed)
 
@@ -41,6 +42,10 @@ public sealed class CodexAppServerTurnReader
 
         switch (message.Method)
         {
+            case "turn/started":
+                providerTurnId ??= TurnId(message.Params);
+                return null;
+
             case "item/agentMessage/delta":
                 return ApplyAgentMessageDelta(message.Params) is { } delta
                     ? new CodexStreamEmission(delta, AgentStreamChunkKind.AgentMessage)
@@ -83,7 +88,7 @@ public sealed class CodexAppServerTurnReader
     }
 
     public CodexAppServerTurnOutcome Result() =>
-        new(output.ToString(), usage, terminalState ?? AgentTurnState.Failed, failureMessage);
+        new(output.ToString(), usage, terminalState ?? AgentTurnState.Failed, failureMessage, providerTurnId);
 
     // A turn's reply can arrive as SEVERAL agent-message items (codex narrates a long turn as separate messages),
     // and their deltas would otherwise concatenate into one run-on blob — most visible on execution turns. When a
@@ -167,6 +172,7 @@ public sealed class CodexAppServerTurnReader
         string status = @params.TryGetProperty("turn", out JsonElement turn) && turn.ValueKind == JsonValueKind.Object
             ? (StringProperty(turn, "status") ?? string.Empty)
             : string.Empty;
+        providerTurnId ??= turn.ValueKind == JsonValueKind.Object ? StringProperty(turn, "id") : null;
 
         terminalState = status switch
         {
@@ -182,6 +188,11 @@ public sealed class CodexAppServerTurnReader
             failureMessage ??= StringProperty(error, "message");
         }
     }
+
+    private static string? TurnId(JsonElement @params) =>
+        @params.TryGetProperty("turn", out JsonElement turn) && turn.ValueKind == JsonValueKind.Object
+            ? StringProperty(turn, "id")
+            : null;
 
     private static AgentTokenUsage? ReadUsage(JsonElement @params)
     {

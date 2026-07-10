@@ -375,8 +375,11 @@ public class LoopArtifactsTests
     {
         public int ReadLatestCalls { get; private set; }
 
-        public Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content) =>
-            Task.FromResult(new LoopHistoryRecord(kind, 1, ".agents/history.0001.md", content));
+        public Task<LoopHistoryRecord> AppendAsync(
+            LoopHistoryKind kind,
+            string content,
+            LoopHistoryProducerCorrelation? producer = null) =>
+            Task.FromResult(new LoopHistoryRecord(kind, 1, ".agents/history.0001.md", content, producer));
 
         public Task<LoopHistoryRecord?> ReadLatestAsync(LoopHistoryKind kind)
         {
@@ -387,7 +390,10 @@ public class LoopArtifactsTests
 
     private sealed class ThrowingLoopHistoryStore : ILoopHistoryStore
     {
-        public Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content) =>
+        public Task<LoopHistoryRecord> AppendAsync(
+            LoopHistoryKind kind,
+            string content,
+            LoopHistoryProducerCorrelation? producer = null) =>
             throw new IOException("Configured history write failure.");
 
         public Task<LoopHistoryRecord?> ReadLatestAsync(LoopHistoryKind kind) =>

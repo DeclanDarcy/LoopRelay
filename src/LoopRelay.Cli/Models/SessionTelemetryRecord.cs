@@ -37,4 +37,11 @@ internal sealed record SessionTelemetryRecord(
     int? ReportedCachedTokens = null,
     int? ReportedOutputTokens = null,
     string? InputWaitStatus = null,
-    string? EstimatorVersion = null);
+    string? EstimatorVersion = null,
+    string? ProviderThreadId = null,
+    string? ProviderTurnId = null,
+    string? ContinuityEvent = null,
+    string? RecoveryAttemptId = null,
+    string? RecoveryPlanDigest = null,
+    string? RecoveryMechanism = null,
+    string? RecoveryCompleteness = null);

@@ -19,5 +19,6 @@ internal interface ISessionTelemetryRecorder
         string? cachedLogPath,
         AgentTurnResult result,
         InputWaitObservation? inputWait,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? providerThreadId = null);
 }

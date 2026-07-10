@@ -15,4 +15,8 @@
     <ProjectReference Include="..\LoopRelay.Permissions\LoopRelay.Permissions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Services\Codex\Compatibility\codex-compatibility-manifest.json" />
+  </ItemGroup>
+
 </Project>

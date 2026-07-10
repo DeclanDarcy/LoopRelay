@@ -44,7 +44,9 @@ public sealed class WorkflowChainRunnerTests
         Assert.True(boundary.CanAdvance);
         Assert.Equal(WorkflowIdentity.Plan, boundary.TargetWorkflow);
         Assert.Equal(WorkflowStopReason.TransitionCompleted, result.StopReason);
-        Assert.Single(runtime.Requests);
+        TransitionRuntimeRequest transitionRequest = Assert.Single(runtime.Requests);
+        Assert.Equal(InvocationModeKind.ForcedTraditionalChain, transitionRequest.RootInvocation!.Mode);
+        Assert.Equal(WorkflowIdentity.Plan, transitionRequest.Workflow);
         Assert.Single(evidence.Records);
     }
 

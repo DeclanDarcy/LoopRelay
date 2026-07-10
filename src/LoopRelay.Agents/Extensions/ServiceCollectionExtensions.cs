@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Services;
 using LoopRelay.Agents.Services.Codex;
+using LoopRelay.Agents.Services.Codex.Compatibility;
 using LoopRelay.Agents.Services.Process;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Agents.Services.Usage;
@@ -40,7 +41,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAgentExecutableResolver, EnvironmentAgentExecutableResolver>();
         services.TryAddSingleton<IAgentProcessLauncher, CodexAgentProcessLauncher>();
         services.TryAddSingleton<AgentSessionRegistry>();
-        services.TryAddSingleton<IAgentRuntime, AgentRuntime>();
+        services.TryAddSingleton(CodexCompatibilityManifest.LoadEmbedded());
+        services.TryAddSingleton<CodexSessionContinuityProfileResolver>();
+        services.TryAddSingleton<AgentRuntime>();
+        services.TryAddSingleton<IAgentRuntime>(provider => provider.GetRequiredService<AgentRuntime>());
+        services.TryAddSingleton<IAgentSessionContinuityRuntime>(provider => provider.GetRequiredService<AgentRuntime>());
         return services;
     }
 }

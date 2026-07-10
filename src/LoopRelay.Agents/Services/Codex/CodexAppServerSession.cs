@@ -39,6 +39,7 @@ public sealed class CodexAppServerSession : IAgentSession
     private readonly IAgentProcess _process;
     private readonly IAgentTokenEstimator _tokenEstimator;
     private readonly IPermissionGateway? _permissionGateway;
+    private readonly SessionContinuityProfile? _continuityProfile;
 
     private readonly SemaphoreSlim turnGate = new(1, 1);
     private readonly Channel<string> outbound = Channel.CreateUnbounded<string>(
@@ -51,6 +52,7 @@ public sealed class CodexAppServerSession : IAgentSession
     private long nextId;
     private bool initialized;
     private string? threadId;
+    private JsonElement initializeResult;
     private volatile ActiveTurn? activeTurn;
     private volatile bool pumpEnded;
     private volatile int completedTurns;
@@ -61,12 +63,14 @@ public sealed class CodexAppServerSession : IAgentSession
         AgentSessionSpec spec,
         IAgentProcess process,
         IAgentTokenEstimator tokenEstimator,
-        IPermissionGateway? permissionGateway = null)
+        IPermissionGateway? permissionGateway = null,
+        SessionContinuityProfile? continuityProfile = null)
     {
         _spec = spec;
         _process = process;
         _tokenEstimator = tokenEstimator;
         _permissionGateway = permissionGateway;
+        _continuityProfile = continuityProfile;
         pumpTask = Task.Run(PumpAsync);
         writerTask = Task.Run(WriteLoopAsync);
     }
@@ -86,6 +90,10 @@ public sealed class CodexAppServerSession : IAgentSession
     public AgentTokenUsage TotalUsage => Volatile.Read(ref totalUsage);
 
     public string? ThreadId => threadId;
+
+    public SessionContinuityProfile? ContinuityProfile => _continuityProfile;
+
+    public JsonElement InitializeResult => initializeResult;
 
     public async Task<AgentTurnResult> RunTurnAsync(
         string prompt,
@@ -120,7 +128,7 @@ public sealed class CodexAppServerSession : IAgentSession
                     linked.Token,
                     () => AgentTurnProgress.Notify(progress, observer => observer.RequestWriteStarted()),
                     () => AgentTurnProgress.Notify(progress, observer => observer.RequestSubmitted()));
-                ThrowIfError(ack, "turn/start");
+                ThrowIfError(ack, "turn/start", requestId);
                 AgentTurnProgress.Notify(progress, observer => observer.RequestAccepted());
 
                 // Deltas are surfaced on this (caller) path, never on the pump, so onChunk cannot
@@ -141,6 +149,11 @@ public sealed class CodexAppServerSession : IAgentSession
             }
 
             CodexAppServerTurnOutcome outcome = turn.Reader.Result();
+            if (outcome.ProviderTurnId is { Length: > 0 } providerTurnId)
+            {
+                AgentTurnProgress.Notify(progress, observer => observer.ProviderTurnIdentified(providerTurnId));
+            }
+            AgentTurnProgress.Notify(progress, observer => observer.Terminal());
             AgentTokenUsage usage = outcome.Usage
                 ?? new AgentTokenUsage(_tokenEstimator.Estimate(prompt), _tokenEstimator.Estimate(outcome.Output));
 
@@ -156,7 +169,9 @@ public sealed class CodexAppServerSession : IAgentSession
                 usage,
                 outcome.State == AgentTurnState.Completed
                     ? null
-                    : NonWhitespace(outcome.FailureMessage) ?? NonWhitespace(_process.ErrorSnapshot));
+                    : NonWhitespace(outcome.FailureMessage) ?? NonWhitespace(_process.ErrorSnapshot),
+                outcome.ProviderTurnId,
+                AgentTurnTransportState.Terminal);
         }
         finally
         {
@@ -180,6 +195,98 @@ public sealed class CodexAppServerSession : IAgentSession
         try
         {
             await EnsureHandshakeAsync(linked.Token);
+        }
+        finally
+        {
+            turnGate.Release();
+        }
+    }
+
+    public async Task<CodexThreadReadResult> ReadThreadAsync(
+        string requestedThreadId,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (_continuityProfile is null)
+        {
+            throw new SessionOperationProfileGateException("A captured continuity profile is required for thread/read.");
+        }
+
+        CodexThreadReadOptions options = CodexThreadReadOptions.FromProfile(_continuityProfile, requestedThreadId);
+        using CancellationTokenSource linked =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, sessionCts.Token);
+        await turnGate.WaitAsync(linked.Token);
+        try
+        {
+            await EnsureInitializedAsync(linked.Token);
+            long requestId = NextId();
+            CodexAppServerMessage response = await SendRequestAsync(
+                requestId,
+                CodexAppServerProtocol.ThreadRead(requestId, options),
+                linked.Token);
+            ThrowIfError(response, "thread/read", requestId);
+            return new CodexThreadReadParser().Parse(response.Result, requestedThreadId);
+        }
+        finally
+        {
+            turnGate.Release();
+        }
+    }
+
+    public async Task<(string ChildThreadId, string? ParentThreadId, string? HistoryDigest)> ForkThreadAsync(
+        string parentThreadId,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (_continuityProfile is null)
+        {
+            throw new SessionOperationProfileGateException("A captured continuity profile is required for thread/fork.");
+        }
+
+        CodexThreadForkOptions options = CodexThreadForkOptions.FromProfile(
+            _continuityProfile, parentThreadId, _spec.WorkingDirectory, Sandbox(), ApprovalPolicy());
+        using CancellationTokenSource linked =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, sessionCts.Token);
+        await turnGate.WaitAsync(linked.Token);
+        try
+        {
+            await EnsureInitializedAsync(linked.Token);
+            long requestId = NextId();
+            CodexAppServerMessage response = await SendRequestAsync(
+                requestId,
+                CodexAppServerProtocol.ThreadFork(requestId, options),
+                linked.Token);
+            ThrowIfError(response, "thread/fork", requestId);
+            string? child = ExtractThreadId(response.Result);
+            if (child is null || string.Equals(child, parentThreadId, StringComparison.Ordinal))
+            {
+                throw new CodexAppServerRequestException(
+                    "Codex thread/fork did not return a distinct child thread id.",
+                    "thread/fork",
+                    requestId,
+                    response);
+            }
+
+            string? reportedParent = ExtractString(response.Result, "parentThreadId")
+                ?? (response.Result.TryGetProperty("thread", out JsonElement thread)
+                    ? ExtractString(thread, "parentThreadId")
+                    : null);
+            if (reportedParent is not null && !string.Equals(reportedParent, parentThreadId, StringComparison.Ordinal))
+            {
+                throw new CodexAppServerRequestException(
+                    "Codex thread/fork returned a mismatched parent thread id.",
+                    "thread/fork",
+                    requestId,
+                    response);
+            }
+
+            string? historyDigest = ExtractString(response.Result, "historyDigest")
+                ?? (response.Result.TryGetProperty("thread", out thread)
+                    ? ExtractString(thread, "historyDigest")
+                    : null);
+            threadId = child;
+            initialized = true;
+            return (child, reportedParent, historyDigest);
         }
         finally
         {
@@ -245,23 +352,30 @@ public sealed class CodexAppServerSession : IAgentSession
             return;
         }
 
-        long initId = NextId();
-        CodexAppServerMessage initResponse = await SendRequestAsync(
-            initId, CodexAppServerProtocol.Initialize(initId), cancellationToken);
-        ThrowIfError(initResponse, "initialize");
-
-        Enqueue(CodexAppServerProtocol.Initialized());
-
-        long threadRequestId = NextId();
         bool resuming = _spec.ResumeThreadId is { Length: > 0 };
-        string threadFrame = resuming
-            ? CodexAppServerProtocol.ThreadResume(
-                threadRequestId,
+        CodexThreadResumeOptions? resumeOptions = null;
+        if (resuming)
+        {
+            if (_continuityProfile is null)
+            {
+                throw new SessionOperationProfileGateException(
+                    "A captured SessionContinuityProfile is required before thread/resume can be attempted.");
+            }
+
+            resumeOptions = CodexThreadResumeOptions.FromProfile(
+                _continuityProfile,
                 _spec.ResumeThreadId!,
                 _spec.WorkingDirectory,
                 Sandbox(),
                 ApprovalPolicy(),
-                AgentConfigurationCatalog.Format(_spec.Model))
+                AgentConfigurationCatalog.Format(_spec.Model));
+        }
+
+        await EnsureInitializedAsync(cancellationToken);
+
+        long threadRequestId = NextId();
+        string threadFrame = resuming
+            ? CodexAppServerProtocol.ThreadResume(threadRequestId, resumeOptions!)
             : CodexAppServerProtocol.ThreadStart(
                 threadRequestId,
                 _spec.WorkingDirectory,
@@ -269,21 +383,18 @@ public sealed class CodexAppServerSession : IAgentSession
                 ApprovalPolicy(),
                 AgentConfigurationCatalog.Format(_spec.Model));
         CodexAppServerMessage threadResponse = await SendRequestAsync(threadRequestId, threadFrame, cancellationToken);
-        if (resuming && threadResponse.ErrorMessage is { } resumeError)
-        {
-            // A rejected resume (rollout deleted, unknown thread, protocol drift) is RECOVERABLE: the typed
-            // exception lets the runtime tear this process down and the caller fall back to a fresh thread.
-            throw new AgentSessionResumeException($"Codex thread/resume failed: {resumeError}");
-        }
-
-        ThrowIfError(threadResponse, "thread/start");
+        ThrowIfError(threadResponse, resuming ? "thread/resume" : "thread/start", threadRequestId);
 
         string? extractedThreadId = ExtractThreadId(threadResponse.Result);
         if (extractedThreadId is null)
         {
             if (resuming)
             {
-                throw new AgentSessionResumeException("Codex thread/resume response did not contain a thread id.");
+                throw new CodexAppServerRequestException(
+                    "Codex thread/resume response did not contain a thread id.",
+                    "thread/resume",
+                    threadRequestId,
+                    threadResponse);
             }
 
             throw new InvalidOperationException("Codex thread/start response did not contain a thread id.");
@@ -291,6 +402,27 @@ public sealed class CodexAppServerSession : IAgentSession
 
         threadId = extractedThreadId;
         initialized = true;
+    }
+
+    private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
+    {
+        if (initializeResult.ValueKind != JsonValueKind.Undefined)
+        {
+            return;
+        }
+
+        long initId = NextId();
+        CodexAppServerMessage initResponse = await SendRequestAsync(
+            initId,
+            CodexAppServerProtocol.Initialize(
+                initId,
+                _continuityProfile is null
+                    ? new CodexInitializeOptions(ExperimentalApi: false)
+                    : CodexInitializeOptions.FromProfile(_continuityProfile)),
+            cancellationToken);
+        ThrowIfError(initResponse, "initialize", initId);
+        initializeResult = initResponse.Result.Clone();
+        Enqueue(CodexAppServerProtocol.Initialized());
     }
 
     private async Task PumpAsync()
@@ -476,11 +608,15 @@ public sealed class CodexAppServerSession : IAgentSession
 
     private static string? NonWhitespace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
-    private static void ThrowIfError(CodexAppServerMessage message, string context)
+    private static void ThrowIfError(CodexAppServerMessage message, string context, long requestId)
     {
-        if (message.ErrorMessage is { } error)
+        if (message.ErrorCode is not null || message.ErrorMessage is not null)
         {
-            throw new InvalidOperationException($"Codex {context} failed: {error}");
+            throw new CodexAppServerRequestException(
+                $"Codex {context} failed.",
+                context,
+                requestId,
+                message);
         }
     }
 
@@ -489,6 +625,13 @@ public sealed class CodexAppServerSession : IAgentSession
         && result.TryGetProperty("thread", out JsonElement thread) && thread.ValueKind == JsonValueKind.Object
         && thread.TryGetProperty("id", out JsonElement id) && id.ValueKind == JsonValueKind.String
             ? id.GetString()
+            : null;
+
+    private static string? ExtractString(JsonElement value, string property) =>
+        value.ValueKind == JsonValueKind.Object
+        && value.TryGetProperty(property, out JsonElement element)
+        && element.ValueKind == JsonValueKind.String
+            ? element.GetString()
             : null;
 
     private sealed class ActiveTurn(int _turnIndex, IAgentTurnProgressObserver? _progress)
@@ -504,4 +647,15 @@ public sealed class CodexAppServerSession : IAgentSession
         public Channel<AgentStreamChunk> Chunks { get; } = Channel.CreateUnbounded<AgentStreamChunk>(
             new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
     }
+}
+
+public sealed class CodexAppServerRequestException(
+    string message,
+    string providerMethod,
+    long requestId,
+    CodexAppServerMessage response) : InvalidOperationException(message)
+{
+    public string ProviderMethod { get; } = providerMethod;
+    public long RequestId { get; } = requestId;
+    public CodexAppServerMessage Response { get; } = response;
 }

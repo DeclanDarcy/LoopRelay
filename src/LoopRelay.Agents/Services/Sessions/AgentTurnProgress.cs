@@ -30,7 +30,7 @@ public static class AgentTurnProgress
         {
             notification(observer);
         }
-        catch
+        catch when (observer is not ICriticalAgentTurnProgressObserver)
         {
             // Progress is informational. Transport and turn execution must remain fail-open.
         }

@@ -9,18 +9,24 @@ public sealed class RuntimePrerequisiteDoctor(
 {
     public const string CodexExecutableVariable = "CODEX_EXECUTABLE";
     public const string DecisionResumeVariable = "LoopRelay_DECISION_RESUME";
+    public const string DecisionRecoveryPolicyVariable = "LoopRelay_DECISION_RECOVERY_POLICY";
+
+    private readonly Func<string, string?> getEnvironmentVariable =
+        _getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
+    private readonly Func<string, bool> fileExists = _fileExists ?? File.Exists;
 
     public IReadOnlyList<RuntimeDiagnostic> Inspect()
     {
         var diagnostics = new List<RuntimeDiagnostic>();
         InspectCodexExecutable(diagnostics);
         InspectDecisionResume(diagnostics);
+        InspectDecisionRecoveryPolicy(diagnostics);
         return diagnostics;
     }
 
     private void InspectCodexExecutable(List<RuntimeDiagnostic> diagnostics)
     {
-        string? value = _getEnvironmentVariable(CodexExecutableVariable);
+        string? value = getEnvironmentVariable(CodexExecutableVariable);
         if (string.IsNullOrWhiteSpace(value))
         {
             diagnostics.Add(new RuntimeDiagnostic(
@@ -30,7 +36,7 @@ public sealed class RuntimePrerequisiteDoctor(
             return;
         }
 
-        if (LooksLikePath(value) && !_fileExists(value))
+        if (LooksLikePath(value) && !fileExists(value))
         {
             diagnostics.Add(new RuntimeDiagnostic(
                 "runtime.codex_executable.not_found",
@@ -41,7 +47,7 @@ public sealed class RuntimePrerequisiteDoctor(
 
     private void InspectDecisionResume(List<RuntimeDiagnostic> diagnostics)
     {
-        string? value = _getEnvironmentVariable(DecisionResumeVariable);
+        string? value = getEnvironmentVariable(DecisionResumeVariable);
         if (string.IsNullOrWhiteSpace(value))
         {
             diagnostics.Add(new RuntimeDiagnostic(
@@ -60,6 +66,29 @@ public sealed class RuntimePrerequisiteDoctor(
             "runtime.decision_resume.invalid",
             RuntimeDiagnosticSeverity.Warning,
             $"{DecisionResumeVariable} should be 0, 1, false, or true."));
+    }
+
+    private void InspectDecisionRecoveryPolicy(List<RuntimeDiagnostic> diagnostics)
+    {
+        string? value = getEnvironmentVariable(DecisionRecoveryPolicyVariable);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            diagnostics.Add(new RuntimeDiagnostic(
+                "runtime.decision_recovery_policy.default",
+                RuntimeDiagnosticSeverity.Info,
+                $"{DecisionRecoveryPolicyVariable} is not set; resume-only policy is active."));
+            return;
+        }
+
+        if (value is "resume-only" or "reconstructed" or "certified")
+        {
+            return;
+        }
+
+        diagnostics.Add(new RuntimeDiagnostic(
+            "runtime.decision_recovery_policy.invalid",
+            RuntimeDiagnosticSeverity.Warning,
+            $"{DecisionRecoveryPolicyVariable} must be resume-only, reconstructed, or certified."));
     }
 
     private static bool IsBooleanFlag(string value) =>

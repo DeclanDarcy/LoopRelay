@@ -87,6 +87,16 @@ internal sealed class LoopArtifacts(IArtifactStore _store, Repository _repositor
             ExecutionRecommendationContract.SerializePersisted(persisted));
     }
 
+    public async Task PersistExecutionRecommendationAsync(
+        string decisions,
+        ExecutionRecommendation recommendation)
+    {
+        PersistedExecutionRecommendation persisted = ExecutionRecommendationContract.Bind(decisions, recommendation);
+        await _store.WriteAsync(
+            Resolve(OrchestrationArtifactPaths.ExecutionRecommendation),
+            ExecutionRecommendationContract.SerializePersisted(persisted));
+    }
+
     public async Task InvalidateExecutionRecommendationAsync()
     {
         string path = Resolve(OrchestrationArtifactPaths.ExecutionRecommendation);

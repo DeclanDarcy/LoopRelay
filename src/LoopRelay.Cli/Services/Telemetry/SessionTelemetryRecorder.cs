@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Services.Codex;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
 using LoopRelay.Infrastructure.Models.Diagnostics;
@@ -31,13 +32,22 @@ internal sealed class SessionTelemetryRecorder(
         string? cachedLogPath,
         AgentTurnResult result,
         InputWaitObservation? inputWait,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? providerThreadId = null)
     {
         string? path = cachedLogPath;
         try
         {
             CodexUsageStatus? post = await ProbePostAsync(cancellationToken);
-            path ??= _locator.Resolve(workingDirectory, openedAtUtc);
+            if (path is null && providerThreadId is { Length: > 0 })
+            {
+                string codexHome = Environment.GetEnvironmentVariable("CODEX_HOME")
+                    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
+                CodexRolloutReadResult exact = await new CodexRolloutRepository().ReadExactAsync(
+                    codexHome, providerThreadId, cancellationToken);
+                path = exact.Location;
+            }
+            path ??= providerThreadId is null ? _locator.Resolve(workingDirectory, openedAtUtc) : null;
 
             AgentTokenUsage usage = result.Usage;
             var record = new SessionTelemetryRecord(
@@ -70,7 +80,9 @@ internal sealed class SessionTelemetryRecorder(
                 usage.CachedInputTokens,
                 usage.OutputTokens,
                 inputWait?.Status,
-                inputWait?.EstimatorVersion);
+                inputWait?.EstimatorVersion,
+                providerThreadId,
+                result.ProviderTurnId);
 
             _sink.Append(record);
         }

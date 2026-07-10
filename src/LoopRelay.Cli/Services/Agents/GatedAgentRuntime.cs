@@ -22,7 +22,7 @@ internal sealed class GatedAgentRuntime(
     ISessionTelemetryRecorder _recorder,
     IClock _clock,
     string repoName,
-    InputWaitObservationStore? _inputWaitObservations = null) : IAgentRuntime
+    InputWaitObservationStore? _inputWaitObservations = null) : IAgentRuntime, IAgentSessionContinuityRuntime
 {
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec, CancellationToken cancellationToken = default)
@@ -53,4 +53,62 @@ internal sealed class GatedAgentRuntime(
 
     public ValueTask CloseSessionAsync(IAgentSession session) =>
         _inner.CloseSessionAsync(session is GatedAgentSession gated ? gated.Inner : session);
+
+    public Task<SessionContinuityNegotiationResult> NegotiateAsync(
+        SessionContinuityNegotiationRequest request,
+        CancellationToken cancellationToken = default) =>
+        Continuity.NegotiateAsync(request, cancellationToken);
+
+    public async Task<SessionCreateResult> CreateSessionAsync(
+        SessionCreateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        SessionCreateResult result = await Continuity.CreateSessionAsync(request, cancellationToken);
+        return result.Session is null
+            ? result
+            : result with { Session = Wrap(result.Session, request.SessionSpec) };
+    }
+
+    public async Task<SessionResumeResult> ResumeSessionAsync(
+        SessionResumeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        SessionResumeResult result = await Continuity.ResumeSessionAsync(request, cancellationToken);
+        return result.Session is null
+            ? result
+            : result with { Session = Wrap(result.Session, request.SessionSpec) };
+    }
+
+    public Task<SessionContentResult> ReadSessionAsync(
+        SessionContentRequest request,
+        CancellationToken cancellationToken = default) =>
+        Continuity.ReadSessionAsync(request, cancellationToken);
+
+    public Task<SessionSeedResult> SeedSessionAsync(
+        SessionSeedRequest request,
+        CancellationToken cancellationToken = default) =>
+        Continuity.SeedSessionAsync(request, cancellationToken);
+
+    public async Task<SessionForkResult> ForkSessionAsync(
+        SessionForkRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        SessionForkResult result = await Continuity.ForkSessionAsync(request, cancellationToken);
+        return result.Session is null
+            ? result
+            : result with { Session = Wrap(result.Session, request.SessionSpec) };
+    }
+
+    public Task<SessionReconcileResult> ReconcileAsync(
+        SessionReconcileRequest request,
+        CancellationToken cancellationToken = default) =>
+        Continuity.ReconcileAsync(request, cancellationToken);
+
+    private IAgentSessionContinuityRuntime Continuity => _inner as IAgentSessionContinuityRuntime
+        ?? throw new InvalidOperationException("The inner agent runtime does not support continuity operations.");
+
+    private IAgentSession Wrap(IAgentSession session, AgentSessionSpec spec) =>
+        new GatedAgentSession(
+            session, _usageLimit, _recorder, repoName, spec.WorkingDirectory ?? string.Empty,
+            _clock.UtcNow, _inputWaitObservations);
 }

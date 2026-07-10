@@ -327,7 +327,8 @@ public class GatedAgentRuntimeTests
             string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role,
             DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result,
             InputWaitObservation? inputWait,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string? providerThreadId = null)
         {
             Calls.Add((role, result.TurnIndex, cachedLogPath));
             return Task.FromResult(PathToReturn);

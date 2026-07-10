@@ -43,7 +43,8 @@ public sealed record WorkflowBoundaryEvidenceRecord(
 public sealed record WorkflowControllerRequest(
     WorkflowInvocation Invocation,
     RepositoryObservation Observation,
-    IReadOnlyList<WorkflowDefinition> Definitions);
+    IReadOnlyList<WorkflowDefinition> Definitions,
+    WorkflowInvocation? RootInvocation = null);
 
 public sealed record WorkflowControllerResult(
     WorkflowResolutionResult Resolution,
@@ -294,7 +295,8 @@ public sealed class WorkflowController(
             new TransitionRuntimeRequest(
                 resolution.Selection.SelectedWorkflow,
                 resolution.SelectedStage ?? new WorkflowStageIdentity("Unknown"),
-                selectedTransition.Transition),
+                selectedTransition.Transition,
+                RootInvocation: request.RootInvocation ?? request.Invocation),
             cancellationToken);
         return new WorkflowControllerResult(
             resolution,
@@ -359,7 +361,11 @@ public sealed class WorkflowChainRunner(
             if (resolution.WorkflowState != WorkflowResolutionState.Completed)
             {
                 WorkflowControllerResult controller = await _controller.RunAsync(
-                    new WorkflowControllerRequest(InvocationFor(current), request.Observation, request.Definitions),
+                    new WorkflowControllerRequest(
+                        InvocationFor(current),
+                        request.Observation,
+                        request.Definitions,
+                        request.Invocation),
                     cancellationToken);
                 return new WorkflowChainRunResult(
                     current,

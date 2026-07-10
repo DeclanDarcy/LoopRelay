@@ -13,6 +13,7 @@
     <Project Path="src/LoopRelay.Roadmap.Cli/LoopRelay.Roadmap.Cli.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/LoopRelay.Agents.Compatibility.Tests/LoopRelay.Agents.Compatibility.Tests.csproj" />
     <Project Path="tests/LoopRelay.Agents.Tests/LoopRelay.Agents.Tests.csproj" />
     <Project Path="tests/LoopRelay.Cli.Tests/LoopRelay.Cli.Tests.csproj" />
     <Project Path="tests/LoopRelay.Completion.Tests/LoopRelay.Completion.Tests.csproj" />

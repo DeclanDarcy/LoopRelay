@@ -309,6 +309,13 @@ public sealed class TransitionRuntimeTests
             ],
             harness.RunStore.States);
         Assert.Matches("^[a-f0-9]{64}$", harness.RunStore.Started.Single().InputSnapshot.Hash);
+        PromptExecutionRequest execution = Assert.IsType<PromptExecutionRequest>(harness.Executor.Request);
+        Assert.Equal(harness.RunStore.Started.Single().RunId, execution.RunId);
+        Assert.Equal(harness.RunStore.Started.Single().InputSnapshot.Hash, execution.InputSnapshotHash);
+        Assert.Equal(harness.Request.Workflow, execution.Workflow);
+        Assert.Equal(harness.Request.Stage, execution.Stage);
+        Assert.Equal(InvocationModeKind.ForcedEvalChain, execution.RootInvocation.Mode);
+        Assert.Equal("hash", execution.Metadata["project-context"]);
         Assert.Empty(harness.RecoveryMarkers.Markers);
         Assert.Equal(
             [RuntimeHarness.Definition.InputGate.Identity, RuntimeHarness.Definition.OutputGate.Identity],
@@ -319,6 +326,20 @@ public sealed class TransitionRuntimeTests
         Assert.Equal(new EffectIdentity("write-output"), effect.Effect);
         Assert.Equal(EffectCategory.ProductPersistence, effect.Category);
         Assert.Equal(EffectExecutionStatus.Succeeded, effect.Status);
+    }
+
+    [Fact]
+    public async Task ExplicitPersistedRunIdentityFlowsToExecutorAndEvidence()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        TransitionRuntimeRequest request = harness.Request with { RunId = "persisted-run-001" };
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(request);
+
+        Assert.Equal(RuntimeOutcomeKind.Completed, result.Outcome);
+        Assert.Equal("persisted-run-001", harness.RunStore.Started.Single().RunId);
+        Assert.Equal("persisted-run-001", harness.Executor.Request!.RunId);
+        Assert.All(harness.Evidence.Events, item => Assert.Equal("persisted-run-001", item.RunId));
     }
 
     [Fact]
@@ -462,7 +483,8 @@ public sealed class TransitionRuntimeTests
                 WorkflowIdentity.Plan,
                 new WorkflowStageIdentity("Planning"),
                 Definition.Identity,
-                new Dictionary<string, string> { ["project-context"] = "hash" });
+                new Dictionary<string, string> { ["project-context"] = "hash" },
+                new WorkflowInvocation(InvocationModeKind.ForcedEvalChain));
         }
 
         public TransitionRuntime Runtime { get; }
@@ -631,15 +653,17 @@ public sealed class TransitionRuntimeTests
 
         public bool WasCalled { get; private set; }
 
+        public PromptExecutionRequest? Request { get; private set; }
+
         public PromptExecutionResult Result { get; set; } =
             new(PromptExecutionStatus.Completed, "raw output", TimeSpan.FromMilliseconds(5), new Dictionary<string, string>());
 
         public Task<PromptExecutionResult> ExecuteAsync(
-            WorkflowTransitionDefinition definition,
-            RenderedPrompt prompt,
+            PromptExecutionRequest request,
             CancellationToken cancellationToken)
         {
             WasCalled = true;
+            Request = request;
             if (ThrowCancellation)
             {
                 throw new OperationCanceledException(cancellationToken);

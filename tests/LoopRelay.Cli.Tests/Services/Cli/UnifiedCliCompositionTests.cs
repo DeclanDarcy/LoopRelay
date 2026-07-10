@@ -1033,7 +1033,9 @@ public sealed class UnifiedCliCompositionTests
                 await composition.ObserveAsync(CancellationToken.None),
                 composition.WorkflowDefinitions));
         TransitionRuntimeResult decision = Assert.IsType<TransitionRuntimeResult>(readinessController.Transition);
-        Assert.Equal(WorkflowStopReason.TransitionCompleted, readinessController.StopReason);
+        Assert.True(
+            readinessController.StopReason == WorkflowStopReason.TransitionCompleted,
+            readinessController.Explanation);
         Assert.Equal(new WorkflowTransitionIdentity("GenerateDecision"), decision.Transition);
         TransitionRuntimeResult implementation = await RunExecuteAsync(composition, "Implementation", "ExecuteImplementationSlice");
         TransitionRuntimeResult handoff = await RunExecuteAsync(composition, "Execution Continuity", "GenerateHandoff");
