@@ -11,11 +11,22 @@ internal sealed record LoopHistoryRecord(
     LoopHistoryKind Kind,
     int Sequence,
     string RelativePath,
-    string? Content);
+    string? Content,
+    LoopHistoryProducerCorrelation? Producer = null);
+
+internal sealed record LoopHistoryProducerCorrelation(
+    string TransitionRunId,
+    string LineageId,
+    string ProviderThreadId,
+    string? ProviderTurnId,
+    string? RecoveryAttemptId);
 
 internal interface ILoopHistoryStore
 {
-    Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content);
+    Task<LoopHistoryRecord> AppendAsync(
+        LoopHistoryKind kind,
+        string content,
+        LoopHistoryProducerCorrelation? producer = null);
 
     Task<LoopHistoryRecord?> ReadLatestAsync(LoopHistoryKind kind);
 }

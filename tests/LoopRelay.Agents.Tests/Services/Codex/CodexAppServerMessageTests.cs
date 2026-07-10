@@ -20,10 +20,14 @@ public sealed class CodexAppServerMessageTests
     public void ErrorResponseExposesErrorMessage()
     {
         CodexAppServerMessage message = CodexAppServerMessage.Parse(
-            """{"jsonrpc":"2.0","id":2,"error":{"message":"boom"}}""");
+            """{"jsonrpc":"2.0","id":2,"error":{"code":-32602,"message":"boom","data":{"field":"excludeTurns"}}}""");
 
         Assert.Equal(CodexAppServerMessageKind.Response, message.Kind);
         Assert.Equal("boom", message.ErrorMessage);
+        Assert.Equal(-32602, message.ErrorCode);
+        Assert.Equal("excludeTurns", message.ErrorData.GetProperty("field").GetString());
+        Assert.Equal(2, message.CompleteResponse.GetProperty("id").GetInt32());
+        Assert.True(message.ParseIntegrity);
     }
 
     [Fact]
@@ -50,6 +54,8 @@ public sealed class CodexAppServerMessageTests
     [Fact]
     public void NonJsonLineIsUnknown()
     {
-        Assert.Equal(CodexAppServerMessageKind.Unknown, CodexAppServerMessage.Parse("ready.").Kind);
+        CodexAppServerMessage message = CodexAppServerMessage.Parse("ready.");
+        Assert.Equal(CodexAppServerMessageKind.Unknown, message.Kind);
+        Assert.False(message.ParseIntegrity);
     }
 }

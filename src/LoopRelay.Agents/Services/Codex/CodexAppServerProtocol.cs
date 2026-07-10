@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Primitives.Sessions;
 
 namespace LoopRelay.Agents.Services.Codex;
 
@@ -21,15 +23,23 @@ public static class CodexAppServerProtocol
     };
 
     /// <summary>The required first request; negotiates capabilities and identifies the client.</summary>
-    public static string Initialize(long id) =>
-        Request(id, "initialize", new Dictionary<string, object?>
+    public static string Initialize(long id, CodexInitializeOptions options)
+    {
+        var parameters = new Dictionary<string, object?>
         {
             ["clientInfo"] = new Dictionary<string, object?>
             {
                 ["name"] = ClientName,
                 ["version"] = ClientVersion
             }
-        });
+        };
+        if (options.ExperimentalApi)
+        {
+            parameters["capabilities"] = new Dictionary<string, object?> { ["experimentalApi"] = true };
+        }
+
+        return Request(id, "initialize", parameters);
+    }
 
     /// <summary>
     /// The notification the client sends immediately after the <c>initialize</c> response and before
@@ -56,14 +66,37 @@ public static class CodexAppServerProtocol
     /// carries the same <c>thread.id</c> shape as <c>thread/start</c>. <c>excludeTurns</c> is always true —
     /// replayed history is never consumed and can be arbitrarily large. Verified against codex-cli 0.142.5.
     /// </summary>
-    public static string ThreadResume(long id, string threadId, string? cwd, string? sandbox, string? approvalPolicy) =>
-        Request(id, "thread/resume", Compact(new Dictionary<string, object?>
+    public static string ThreadResume(long id, CodexThreadResumeOptions options)
+    {
+        var parameters = Compact(new Dictionary<string, object?>
         {
-            ["threadId"] = threadId,
-            ["cwd"] = cwd,
-            ["sandbox"] = sandbox,
-            ["approvalPolicy"] = approvalPolicy,
-            ["excludeTurns"] = true
+            ["threadId"] = options.ThreadId,
+            ["cwd"] = options.Cwd,
+            ["sandbox"] = options.Sandbox,
+            ["approvalPolicy"] = options.ApprovalPolicy,
+        });
+        if (options.ExcludeTurns)
+        {
+            parameters["excludeTurns"] = true;
+        }
+
+        return Request(id, "thread/resume", parameters);
+    }
+
+    public static string ThreadRead(long id, CodexThreadReadOptions options) =>
+        Request(id, "thread/read", new Dictionary<string, object?>
+        {
+            ["threadId"] = options.ThreadId,
+            ["includeTurns"] = options.IncludeTurns,
+        });
+
+    public static string ThreadFork(long id, CodexThreadForkOptions options) =>
+        Request(id, "thread/fork", Compact(new Dictionary<string, object?>
+        {
+            ["threadId"] = options.ParentThreadId,
+            ["cwd"] = options.Cwd,
+            ["sandbox"] = options.Sandbox,
+            ["approvalPolicy"] = options.ApprovalPolicy,
         }));
 
     /// <summary>Submits a turn to an existing thread. The prompt is the turn's text user input.</summary>
@@ -112,4 +145,92 @@ public static class CodexAppServerProtocol
             ["method"] = method,
             ["params"] = @params
         }, Options);
+}
+
+public sealed record CodexInitializeOptions(bool ExperimentalApi)
+{
+    public static CodexInitializeOptions FromProfile(SessionContinuityProfile profile) =>
+        new(profile.OfferedClientCapabilities.TryGetValue("experimentalApi", out bool offered) && offered);
+}
+
+public sealed record CodexThreadResumeOptions(
+    string ThreadId,
+    string? Cwd,
+    string? Sandbox,
+    string? ApprovalPolicy,
+    bool ExcludeTurns)
+{
+    public static CodexThreadResumeOptions FromProfile(
+        SessionContinuityProfile profile,
+        string threadId,
+        string? cwd,
+        string? sandbox,
+        string? approvalPolicy)
+    {
+        if (profile.Operation(SessionContinuityOperation.Resume).Status != SessionOperationSupport.Supported)
+        {
+            throw new SessionOperationProfileGateException("thread/resume is not Supported by the captured continuity profile.");
+        }
+
+        SessionParameterSupport excludeTurns = profile.Parameter(
+            SessionContinuityOperation.Resume,
+            SessionContinuityProfile.ExcludeTurnsParameter);
+        if (excludeTurns.Status == SessionOperationSupport.Unknown)
+        {
+            throw new SessionOperationProfileGateException("thread/resume excludeTurns support is Unknown; the request was not emitted.");
+        }
+
+        bool experimentalOffered = profile.OfferedClientCapabilities.TryGetValue("experimentalApi", out bool offered) && offered;
+        if (excludeTurns.Status == SessionOperationSupport.Supported && !experimentalOffered)
+        {
+            throw new SessionOperationProfileGateException(
+                "thread/resume excludeTurns requires capabilities.experimentalApi=true in initialize.");
+        }
+
+        return new CodexThreadResumeOptions(
+            threadId,
+            cwd,
+            sandbox,
+            approvalPolicy,
+            ExcludeTurns: excludeTurns.Status == SessionOperationSupport.Supported);
+    }
+}
+
+public sealed class SessionOperationProfileGateException(string message) : InvalidOperationException(message);
+
+public sealed record CodexThreadReadOptions(string ThreadId, bool IncludeTurns)
+{
+    public static CodexThreadReadOptions FromProfile(SessionContinuityProfile profile, string threadId)
+    {
+        if (profile.Operation(SessionContinuityOperation.ConversationRead).Status != SessionOperationSupport.Supported)
+        {
+            throw new SessionOperationProfileGateException(
+                "thread/read is not Supported by the captured continuity profile.");
+        }
+
+        return new CodexThreadReadOptions(threadId, IncludeTurns: true);
+    }
+}
+
+public sealed record CodexThreadForkOptions(
+    string ParentThreadId,
+    string? Cwd,
+    string? Sandbox,
+    string? ApprovalPolicy)
+{
+    public static CodexThreadForkOptions FromProfile(
+        SessionContinuityProfile profile,
+        string parentThreadId,
+        string? cwd,
+        string? sandbox,
+        string? approvalPolicy)
+    {
+        if (profile.Operation(SessionContinuityOperation.Fork).Status != SessionOperationSupport.Supported)
+        {
+            throw new SessionOperationProfileGateException(
+                "thread/fork is not Supported by the captured continuity profile.");
+        }
+
+        return new CodexThreadForkOptions(parentThreadId, cwd, sandbox, approvalPolicy);
+    }
 }

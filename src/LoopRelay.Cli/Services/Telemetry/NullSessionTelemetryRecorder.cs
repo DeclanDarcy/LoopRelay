@@ -12,6 +12,7 @@ internal sealed class NullSessionTelemetryRecorder : ISessionTelemetryRecorder
         string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role,
         DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result,
         InputWaitObservation? inputWait,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        string? providerThreadId = null) =>
         Task.FromResult(cachedLogPath);
 }

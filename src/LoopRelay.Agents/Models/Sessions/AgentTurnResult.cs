@@ -13,4 +13,6 @@ public sealed record AgentTurnResult(
     AgentTurnState State,
     string Output,
     AgentTokenUsage Usage,
-    string? Diagnostics = null);
+    string? Diagnostics = null,
+    string? ProviderTurnId = null,
+    AgentTurnTransportState TransportState = AgentTurnTransportState.Terminal);

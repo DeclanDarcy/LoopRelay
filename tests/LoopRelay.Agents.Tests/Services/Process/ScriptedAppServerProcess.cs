@@ -53,6 +53,20 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
     /// <summary>When true, a thread/resume request is answered with a JSON-RPC error (rollout gone).</summary>
     public bool RejectResume { get; init; }
 
+    public int ResumeErrorCode { get; init; } = -32602;
+
+    public object? ResumeErrorData { get; init; } = new { field = "excludeTurns" };
+
+    public string? ResumeResponseThreadIdOverride { get; init; }
+
+    public string ForkChildThreadId { get; init; } = "thread-fork-child";
+    public string? ForkParentThreadIdOverride { get; init; }
+
+    public bool InitializeExperimentalApiSupported { get; init; } = true;
+    public string CodexHome { get; init; } = "h";
+
+    public bool? LastInitializeExperimentalApi { get; private set; }
+
     /// <summary>The threadId carried by the last thread/resume request (null if none arrived).</summary>
     public string? LastResumeThreadId { get; private set; }
 
@@ -157,7 +171,22 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
         switch (method)
         {
             case "initialize":
-                EmitResponse(id, new { userAgent = "x", codexHome = "h", platformFamily = "windows", platformOs = "windows" });
+                using (JsonDocument initializeDocument = JsonDocument.Parse(line))
+                {
+                    JsonElement initializeParams = initializeDocument.RootElement.GetProperty("params");
+                    LastInitializeExperimentalApi = initializeParams.TryGetProperty("capabilities", out JsonElement capabilities)
+                        && capabilities.TryGetProperty("experimentalApi", out JsonElement experimental)
+                        && experimental.ValueKind == JsonValueKind.True;
+                }
+
+                EmitResponse(id, new
+                {
+                    userAgent = "x",
+                    codexHome = CodexHome,
+                    platformFamily = "windows",
+                    platformOs = "windows",
+                    capabilities = new { experimentalApi = InitializeExperimentalApiSupported }
+                });
                 break;
 
             case "thread/start":
@@ -181,13 +210,59 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
                 LastResumeThreadId = requested;
                 if (RejectResume)
                 {
-                    EmitError(id, $"no rollout found for thread {requested}");
+                    EmitError(id, ResumeErrorCode, $"resume rejected for thread {requested}", ResumeErrorData);
                 }
                 else
                 {
-                    EmitResponse(id, new { thread = new { id = requested } });
+                    EmitResponse(id, new { thread = new { id = ResumeResponseThreadIdOverride ?? requested } });
                 }
 
+                break;
+
+            case "thread/read":
+                string readThreadId = "thread-old";
+                using (JsonDocument readDoc = JsonDocument.Parse(line))
+                {
+                    readThreadId = readDoc.RootElement.GetProperty("params").GetProperty("threadId").GetString()
+                        ?? readThreadId;
+                }
+
+                EmitResponse(id, new
+                {
+                    thread = new
+                    {
+                        id = readThreadId,
+                        turns = new[]
+                        {
+                            new
+                            {
+                                items = new object[]
+                                {
+                                    new { type = "userMessage", id = "read-u1", role = "user", text = "previous request" },
+                                    new { type = "agentMessage", id = "read-a1", role = "assistant", text = "previous answer" },
+                                },
+                            },
+                        },
+                    },
+                });
+                break;
+
+            case "thread/fork":
+                string forkParent = "thread-old";
+                using (JsonDocument forkDoc = JsonDocument.Parse(line))
+                {
+                    forkParent = forkDoc.RootElement.GetProperty("params").GetProperty("threadId").GetString()
+                        ?? forkParent;
+                }
+                EmitResponse(id, new
+                {
+                    thread = new
+                    {
+                        id = ForkChildThreadId,
+                        parentThreadId = ForkParentThreadIdOverride ?? forkParent,
+                        historyDigest = "history-digest",
+                    },
+                });
                 break;
 
             case "turn/start":
@@ -259,8 +334,8 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
     private void EmitResponse(long id, object result) =>
         Emit(new Dictionary<string, object?> { ["id"] = id, ["result"] = result });
 
-    private void EmitError(long id, string message) =>
-        Emit(new Dictionary<string, object?> { ["id"] = id, ["error"] = new { message } });
+    private void EmitError(long id, int code, string message, object? data) =>
+        Emit(new Dictionary<string, object?> { ["id"] = id, ["error"] = new { code, message, data } });
 
     private void EmitNotification(string method, object @params) =>
         Emit(new Dictionary<string, object?> { ["method"] = method, ["params"] = @params });

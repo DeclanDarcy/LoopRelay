@@ -8,7 +8,10 @@ namespace LoopRelay.Cli.Services.Execution;
 
 internal sealed class FileBackedLoopHistoryStore(IArtifactStore _store, Repository _repository) : ILoopHistoryStore
 {
-    public async Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content)
+    public async Task<LoopHistoryRecord> AppendAsync(
+        LoopHistoryKind kind,
+        string content,
+        LoopHistoryProducerCorrelation? producer = null)
     {
         LoopHistorySpec spec = GetSpec(kind);
         int sequence = await NextSequenceAsync(spec);
@@ -20,7 +23,7 @@ internal sealed class FileBackedLoopHistoryStore(IArtifactStore _store, Reposito
         }
 
         await _store.WriteAsync(target, content);
-        return new LoopHistoryRecord(kind, sequence, relativePath, content);
+        return new LoopHistoryRecord(kind, sequence, relativePath, content, producer);
     }
 
     public async Task<LoopHistoryRecord?> ReadLatestAsync(LoopHistoryKind kind)

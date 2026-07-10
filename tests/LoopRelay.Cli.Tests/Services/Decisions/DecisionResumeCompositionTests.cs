@@ -26,4 +26,40 @@ public sealed class DecisionResumeCompositionTests
             Environment.SetEnvironmentVariable("LoopRelay_DECISION_RESUME", original);
         }
     }
+
+    [Theory]
+    [InlineData(null, "ResumeOnly")]
+    [InlineData("resume-only", "ResumeOnly")]
+    [InlineData("reconstructed", "Reconstructed")]
+    [InlineData("certified", "Certified")]
+    public void RecoveryPolicyIsExplicitAndDefaultsToResumeOnly(
+        string? value,
+        string expected)
+    {
+        string? original = Environment.GetEnvironmentVariable(DecisionResumeComposition.RecoveryPolicyVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(DecisionResumeComposition.RecoveryPolicyVariable, value);
+            Assert.Equal(expected, DecisionResumeComposition.RecoveryPolicy().ToString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(DecisionResumeComposition.RecoveryPolicyVariable, original);
+        }
+    }
+
+    [Fact]
+    public void InvalidRecoveryPolicyFailsClosed()
+    {
+        string? original = Environment.GetEnvironmentVariable(DecisionResumeComposition.RecoveryPolicyVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(DecisionResumeComposition.RecoveryPolicyVariable, "guess");
+            Assert.Throws<InvalidOperationException>(() => DecisionResumeComposition.RecoveryPolicy());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(DecisionResumeComposition.RecoveryPolicyVariable, original);
+        }
+    }
 }

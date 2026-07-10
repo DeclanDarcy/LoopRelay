@@ -221,6 +221,16 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         "canonical_blockers",
         "canonical_recovery_markers",
         "canonical_workflow_chain_runs",
+        "session_continuity_profiles",
+        "decision_session_scopes",
+        "decision_session_lineage",
+        "decision_session_active",
+        "session_recovery_attempts",
+        "session_recovery_plans",
+        "session_recovery_sources",
+        "decision_session_turns",
+        "session_transition_correlations",
+        "decision_session_legacy_imports",
     ];
 
     private static Repository CreateRepository()

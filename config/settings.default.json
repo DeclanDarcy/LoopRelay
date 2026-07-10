@@ -1,4 +1,9 @@
 {
+  "continuity": {
+    "decisionResume": true,
+    "recoveryPolicy": "resume-only",
+    "supportedCodexProfiles": []
+  },
   "artifactPolicy": {
     "allowHitlRequestedNonImplementationFiles": false,
     "allowAuxiliaryNonImplementationFiles": false

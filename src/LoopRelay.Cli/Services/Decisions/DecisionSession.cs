@@ -2,11 +2,15 @@ using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Services.Codex;
+using LoopRelay.Agents.Services.Codex.Compatibility;
+using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
 using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Services.Decisions.Recovery;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Orchestration.Abstractions;
@@ -15,6 +19,8 @@ using LoopRelay.Orchestration.Primitives;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Orchestration.Recovery;
+using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models.Context;
@@ -49,11 +55,20 @@ internal sealed class DecisionSession(
     IProjectContextProjectionService? _projectionService = null,
     bool _resumeEnabled = true,
     string? _promptPolicy = null,
-    ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = null) : IAsyncDisposable
+    ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = null,
+    IAgentSessionContinuityRuntime? _continuityRuntime = null,
+    SessionContinuityProfile? _continuityProfile = null,
+    IRecoveryStore? _recoveryStore = null,
+    IRecoveryRuntime? _recoveryRuntime = null,
+    string _recoveryPolicyVersion = "decision-recovery-resume-only.v1") : IAsyncDisposable
 {
     private IAgentSession? session;
     private bool seeded;
     private bool resumeAttempted;
+    private DecisionExecutionContext? decisionExecutionContext;
+    private DecisionSessionActiveState? durableActiveState;
+    private DecisionSessionLineageNode? durableLineage;
+    private SessionContinuityProfile? durableProfile;
 
     // Operational-context size-health state (Stage 2, mirrors RepositoryOrchestrator). Single-threaded, no lock.
     private const int OperationalContextGrowthStreakWarningThreshold = 2;
@@ -70,8 +85,31 @@ internal sealed class DecisionSession(
     private double transferCost = 250_000d; // C: seed -> measured -> running average
     private int transferCount;
 
-    public async Task RunAsync(CancellationToken cancellationToken)
+    public Task RunAsync(CancellationToken cancellationToken) => RunAsync(context: null, cancellationToken);
+
+    public async Task RunAsync(DecisionExecutionContext? context, CancellationToken cancellationToken)
     {
+        if (context is not null)
+        {
+            if (decisionExecutionContext is not null
+                && decisionExecutionContext.Scope.ScopeId != context.Scope.ScopeId)
+            {
+                throw new LoopStepException("A warm DecisionSession cannot cross an Execute scope boundary.");
+            }
+
+            decisionExecutionContext = context;
+            _console.Info(
+                $"Decision continuity scope {context.Scope.ScopeId} " +
+                $"(workspace {context.Scope.WorkspaceId}, run {context.PromptExecution.RunId}, " +
+                $"{context.PromptExecution.Workflow}/{context.PromptExecution.Stage}/{context.PromptExecution.Transition}, " +
+                $"invocation {context.PromptExecution.RootInvocation.Mode}).");
+
+            if (_recoveryStore is not null && await TryRehydrateCommittedDecisionAsync(context, cancellationToken))
+            {
+                return;
+            }
+        }
+
         DecisionRoute route = _router.Evaluate(BuildRouterInputs());
         // Eligibility downgrade: a Transfer needs a primed warm process to extract a delta from.
         if (route == DecisionRoute.Transfer && !seeded)
@@ -95,8 +133,19 @@ internal sealed class DecisionSession(
         // "Decision: Transfer/…" header.
         _console.Phase("Decision: Propose");
         var proposalRenderer = new ConsoleTurnRenderer(_console);
-        AgentTurnResult proposed = await session.RunTurnAsync(
-            proposalPrompt, proposalRenderer.Stream, cancellationToken);
+        DurableTurnProgressObserver? durableTurn = await BeginDurableTurnAsync(cancellationToken);
+        AgentTurnResult proposed;
+        try
+        {
+            using IDisposable progressScope = AgentTurnProgress.Use(durableTurn);
+            proposed = await session.RunTurnAsync(
+                proposalPrompt, proposalRenderer.Stream, cancellationToken);
+        }
+        catch
+        {
+            durableTurn?.MarkUnknown();
+            throw;
+        }
 
         if (proposed.State != AgentTurnState.Completed)
         {
@@ -109,11 +158,19 @@ internal sealed class DecisionSession(
         // on it are cheap handoff-only deltas.
         seeded = true;
         RecordProposalCost(proposed.Usage);
-        await PersistResumeStateAsync(cancellationToken);
         proposalRenderer.EchoIfSilent(proposed.Output);
 
-        // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
-        await _artifacts.PersistDecisionsAsync(proposed.Output);
+        if (durableTurn is not null)
+        {
+            durableTurn.RecordTerminalResult(proposed);
+            await CommitDurableDecisionOutputAsync(durableTurn.Record, proposed.Output, cancellationToken);
+        }
+        else
+        {
+            await PersistResumeStateAsync(cancellationToken);
+            // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
+            await _artifacts.PersistDecisionsAsync(proposed.Output);
+        }
         if (_hitlRequestCapture is not null)
         {
             await _hitlRequestCapture.CaptureFromSourceAsync(OrchestrationArtifactPaths.Decisions, proposed.Output);
@@ -170,6 +227,11 @@ internal sealed class DecisionSession(
         bool firstOpen = !resumeAttempted;
         resumeAttempted = true;
 
+        if (_recoveryStore is not null && decisionExecutionContext is not null)
+        {
+            return await OpenOrResumeDurableSessionAsync(firstOpen, cancellationToken);
+        }
+
         DecisionSessionResumeState? state = firstOpen && _resumeEnabled
             ? await (_resumeStore ?? new NullDecisionSessionResumeStore()).ReadAsync(cancellationToken)
             : null;
@@ -190,11 +252,22 @@ internal sealed class DecisionSession(
             return await _runtime.OpenSessionAsync(AgentSpecs.Decision(_repository), cancellationToken);
         }
 
-        try
-        {
-            IAgentSession resumed = await _runtime.OpenSessionAsync(
-                AgentSpecs.Decision(_repository, state.ThreadId), cancellationToken);
+        IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
+            ?? _runtime as IAgentSessionContinuityRuntime
+            ?? throw new LoopStepException(
+                "Decision-session continuity is not available; the active thread was preserved and no replacement was started.");
+        SessionContinuityProfile profile = _continuityProfile
+            ?? (await continuityRuntime.NegotiateAsync(
+                ProductionNegotiationRequest(), cancellationToken)).Profile;
 
+        SessionResumeResult resume = await continuityRuntime.ResumeSessionAsync(
+            new SessionResumeRequest(
+                AgentSpecs.Decision(_repository, state.ThreadId),
+                new ProviderSessionReference("codex", state.ThreadId),
+                profile),
+            cancellationToken);
+        if (resume.Outcome == SessionResumeOutcome.SuccessfulResume && resume.Session is { } resumed)
+        {
             // The resumed thread already holds the operational context (its first proposal primed it), and
             // the router accounting it accrued — restore both so priming and transfer economics continue
             // where the previous run left off.
@@ -211,12 +284,336 @@ internal sealed class DecisionSession(
             _console.Info($"Resumed decision session (thread {state.ThreadId}).");
             return resumed;
         }
-        catch (AgentSessionResumeException ex)
+
+        string failure = resume.Outcome == SessionResumeOutcome.DeterministicProtocolFailure
+            ? "Decision-session resume requires a protocol repair"
+            : $"Decision-session resume stopped with {resume.Outcome}";
+        _console.Warn($"{failure} (thread {state.ThreadId}); the active thread was preserved and no replacement was started.");
+        throw new LoopStepException($"{failure}. The active thread was preserved; no replacement was started.");
+    }
+
+    private async Task<IAgentSession> OpenOrResumeDurableSessionAsync(
+        bool firstOpen,
+        CancellationToken cancellationToken)
+    {
+        DecisionSessionScope scope = decisionExecutionContext!.Scope;
+        ActiveStateReadResult read = await _recoveryStore!.ReadActiveAsync(scope.ScopeId.Value, cancellationToken);
+        if (read.Status is ActiveStateReadStatus.Corrupt or ActiveStateReadStatus.Conflict)
         {
-            _console.Warn($"Could not resume decision session (thread {state.ThreadId}): {ex.Message} Starting fresh.");
-            await (_resumeStore ?? new NullDecisionSessionResumeStore()).ClearAsync(cancellationToken);
-            return await _runtime.OpenSessionAsync(AgentSpecs.Decision(_repository), cancellationToken);
+            throw new LoopStepException(
+                $"Decision-session active state is {read.Status}: {read.Diagnostic}. No provider operation was started.");
         }
+
+        if (!firstOpen || read.Status == ActiveStateReadStatus.Absent)
+        {
+            if (!firstOpen)
+            {
+                return await CreatePlannedTransferSuccessorAsync(cancellationToken);
+            }
+
+            return await CreateAndActivateFreshDurableSessionAsync(scope, cancellationToken);
+        }
+
+        if (!_resumeEnabled)
+        {
+            throw new LoopStepException(
+                "ContinuityDisabled: decision continuity is disabled while an active session exists; the active thread was preserved and no replacement was started.");
+        }
+
+        durableActiveState = read.Active!;
+        durableLineage = read.Lineage!;
+        IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
+            ?? _runtime as IAgentSessionContinuityRuntime
+            ?? throw new LoopStepException("Decision-session continuity runtime is unavailable.");
+        durableProfile = _continuityProfile
+            ?? (await continuityRuntime.NegotiateAsync(ProductionNegotiationRequest(), cancellationToken)).Profile;
+        if (!string.Equals(durableLineage.ProfileDigest, durableProfile.Digest, StringComparison.Ordinal))
+        {
+            throw new LoopStepException(
+                "The active decision session continuity profile does not match the installed provider profile; no provider operation was started.");
+        }
+
+        if (_recoveryRuntime is not null)
+        {
+            int contextBudget = durableProfile.MaximumRecoverableContext is { } maximum
+                ? Math.Max(0, (int)(maximum * 0.80) - 8_000)
+                : 0;
+            var coordinator = new DecisionSessionRecoveryCoordinator(_recoveryRuntime, _recoveryStore);
+            DecisionSessionRecoveryResult coordinated;
+            try
+            {
+                coordinated = await coordinator.OpenAsync(
+                    scope.ScopeId.Value,
+                    decisionExecutionContext.PromptExecution.RunId,
+                    AgentSpecs.Decision(_repository, durableLineage.ProviderSessionId),
+                    AgentSpecs.Decision(_repository),
+                    durableProfile,
+                    new Dictionary<string, string>
+                    {
+                        ["policy-version"] = _recoveryPolicyVersion,
+                        ["rank:ThreadReadReconstruction@1"] = "100",
+                        ["rank:RolloutReconstruction@1"] = "200",
+                        ["rank:RepositoryReconstruction@1"] = "300",
+                    },
+                    contextBudget,
+                    cancellationToken);
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw new LoopStepException(exception.Message, exception);
+            }
+
+            durableActiveState = coordinated.Active;
+            durableLineage = coordinated.Lineage;
+            RestoreAccounting(durableActiveState.Accounting);
+            seeded = coordinated.Seeded;
+            _console.Info(ContinuityMessage(coordinated.Recovery, durableLineage.ProviderSessionId));
+            return coordinated.Session;
+        }
+
+        SessionResumeResult resume = await continuityRuntime.ResumeSessionAsync(
+            new SessionResumeRequest(
+                AgentSpecs.Decision(_repository, durableLineage.ProviderSessionId),
+                new ProviderSessionReference(durableLineage.Provider, durableLineage.ProviderSessionId),
+                durableProfile),
+            cancellationToken);
+        if (resume.Outcome != SessionResumeOutcome.SuccessfulResume || resume.Session is null)
+        {
+            string failure = resume.Outcome == SessionResumeOutcome.DeterministicProtocolFailure
+                ? "Decision-session resume requires a protocol repair"
+                : $"Decision-session resume stopped with {resume.Outcome}";
+            _console.Warn($"{failure}; the active thread was preserved and no replacement was started.");
+            throw new LoopStepException($"{failure}. The active thread was preserved; no replacement was started.");
+        }
+
+        RestoreAccounting(durableActiveState.Accounting);
+        seeded = true;
+        _console.Info($"Resumed decision session (thread {durableLineage.ProviderSessionId}).");
+        return resume.Session;
+    }
+
+    private async Task<IAgentSession> CreateAndActivateFreshDurableSessionAsync(
+        DecisionSessionScope scope,
+        CancellationToken cancellationToken)
+    {
+        IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
+            ?? _runtime as IAgentSessionContinuityRuntime
+            ?? throw new LoopStepException("Decision-session continuity runtime is unavailable for durable creation.");
+        durableProfile = _continuityProfile
+            ?? (await continuityRuntime.NegotiateAsync(ProductionNegotiationRequest(), cancellationToken)).Profile;
+        SessionCreateResult create = await continuityRuntime.CreateSessionAsync(
+            new SessionCreateRequest(AgentSpecs.Decision(_repository), durableProfile, $"fresh:{scope.ScopeId.Value}"),
+            cancellationToken);
+        if (!create.Succeeded || create.Session is null || create.Created is null)
+        {
+            throw new LoopStepException(
+                $"Failed to eagerly create the durable decision session ({create.Failure?.Classification ?? "Unknown"}).");
+        }
+
+        string lineageId = Guid.NewGuid().ToString("N");
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        var scopeRecord = new DecisionSessionScopeRecord(
+            scope.ScopeId.Value, scope.WorkspaceId, scope.PreparedEpic.CausalIdentity,
+            scope.ExecutablePlan.CausalIdentity, "Decision", scope.ContractVersion, "Active", now, null);
+        durableLineage = new DecisionSessionLineageNode(
+            lineageId, scope.ScopeId.Value, create.Created.Provider, create.Created.ThreadId, null, lineageId,
+            "Fresh", RecoveryCompleteness.Full, null, durableProfile.Digest, null, now, now, null, "Authoritative");
+        durableActiveState = new DecisionSessionActiveState(
+            scope.ScopeId.Value, lineageId, CurrentAccounting(),
+            Hash(_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()),
+            null, 0, now);
+        RecoveryStoreWriteResult persisted = await _recoveryStore!.CreateScopeAndActivateAsync(
+            scopeRecord, durableLineage, durableActiveState, durableProfile, cancellationToken);
+        if (!persisted.Succeeded)
+        {
+            await _runtime.CloseSessionAsync(create.Session);
+            throw new LoopStepException($"Failed to activate the fresh decision session: {persisted.Diagnostic}");
+        }
+
+        return create.Session;
+    }
+
+    private async Task<IAgentSession> CreatePlannedTransferSuccessorAsync(
+        CancellationToken cancellationToken)
+    {
+        if (durableActiveState is null || durableLineage is null || durableProfile is null)
+        {
+            throw new LoopStepException(
+                "A planned transfer requires the original durable active pointer, lineage, and continuity profile.");
+        }
+
+        IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
+            ?? _runtime as IAgentSessionContinuityRuntime
+            ?? throw new LoopStepException("Decision-session continuity runtime is unavailable for planned transfer.");
+        SessionCreateResult create = await continuityRuntime.CreateSessionAsync(
+            new SessionCreateRequest(
+                AgentSpecs.Decision(_repository),
+                durableProfile,
+                $"planned-transfer:{durableActiveState.ScopeId}:{durableActiveState.RowVersion}"),
+            cancellationToken);
+        if (!create.Succeeded || create.Session is null || create.Created is null)
+        {
+            throw new LoopStepException(
+                $"Planned transfer replacement creation failed ({create.Failure?.Classification ?? "Unknown"}); " +
+                "the original active lineage was preserved.");
+        }
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        var successor = new DecisionSessionLineageNode(
+            Guid.NewGuid().ToString("N"),
+            durableActiveState.ScopeId,
+            create.Created.Provider,
+            create.Created.ThreadId,
+            durableActiveState.LineageId,
+            durableLineage.RootLineageId,
+            "PlannedTransfer",
+            RecoveryCompleteness.Full,
+            null,
+            durableProfile.Digest,
+            null,
+            now,
+            null,
+            null,
+            "Inactive");
+        RecoveryStoreWriteResult recorded = await _recoveryStore!.RecordPlannedSuccessorAsync(
+            durableActiveState, successor, cancellationToken);
+        if (!recorded.Succeeded)
+        {
+            await _runtime.CloseSessionAsync(create.Session);
+            throw new LoopStepException(
+                $"Planned transfer successor was not persisted: {recorded.Diagnostic}. The original remains active.");
+        }
+
+        durableLineage = successor;
+        return create.Session;
+    }
+
+    private async Task<bool> TryRehydrateCommittedDecisionAsync(
+        DecisionExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        DecisionSessionTurnRecord? turn = await _recoveryStore!.ReadDecisionTurnAsync(
+            context.PromptExecution.RunId,
+            context.PromptExecution.InputSnapshotHash,
+            cancellationToken);
+        if (turn is null)
+        {
+            return false;
+        }
+
+        if ((turn.State is DecisionTurnState.Committed or DecisionTurnState.Materialized)
+            && turn.OutputBody is { } output)
+        {
+            await _artifacts.WriteAsync(OrchestrationArtifactPaths.Decisions, output);
+            if (turn.HistorySequence is { } sequence)
+            {
+                await _artifacts.WriteAsync($".agents/decisions/decisions.{sequence:0000}.md", output);
+            }
+            if (turn.State == DecisionTurnState.Committed)
+            {
+                RecoveryStoreWriteResult materialized = await _recoveryStore.MarkDecisionArtifactMaterializedAsync(
+                    turn, cancellationToken);
+                if (!materialized.Succeeded)
+                {
+                    throw new LoopStepException($"Failed to repair committed decisions.md: {materialized.Diagnostic}");
+                }
+            }
+
+            _console.Info("Rehydrated committed decision output; no provider turn was submitted.");
+            return true;
+        }
+
+        if (turn.State == DecisionTurnState.Pending && !turn.WriteStarted)
+        {
+            return false;
+        }
+
+        throw new LoopStepException(
+            $"Decision turn {turn.TurnRecordId} is {turn.State}; its provider outcome must be reconciled before another turn can start.");
+    }
+
+    private async Task<DurableTurnProgressObserver?> BeginDurableTurnAsync(CancellationToken cancellationToken)
+    {
+        if (_recoveryStore is null || decisionExecutionContext is null || durableActiveState is null || durableLineage is null)
+        {
+            return null;
+        }
+
+        PromptExecutionRequest prompt = decisionExecutionContext.PromptExecution;
+        DecisionSessionTurnRecord? existing = await _recoveryStore.ReadDecisionTurnAsync(
+            prompt.RunId, prompt.InputSnapshotHash, cancellationToken);
+        DecisionSessionTurnRecord turn;
+        if (existing is null)
+        {
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            turn = new DecisionSessionTurnRecord(
+                Guid.NewGuid().ToString("N"), durableActiveState.ScopeId, durableLineage.LineageId,
+                prompt.RunId, prompt.InputSnapshotHash, durableLineage.ProviderSessionId,
+                null, null, DecisionTurnState.Pending, false, false, false, false,
+                null, null, null, null, false, null, 0, now, now);
+            RecoveryStoreWriteResult begun = await _recoveryStore.BeginDecisionTurnAsync(turn, cancellationToken);
+            if (!begun.Succeeded)
+            {
+                throw new LoopStepException($"Failed to persist decision turn intent: {begun.Diagnostic}");
+            }
+        }
+        else if (existing.State == DecisionTurnState.Pending && !existing.WriteStarted)
+        {
+            turn = existing;
+        }
+        else
+        {
+            throw new LoopStepException(
+                $"Decision turn {existing.TurnRecordId} is {existing.State}; duplicate submission is blocked.");
+        }
+
+        return new DurableTurnProgressObserver(_recoveryStore, turn);
+    }
+
+    private async Task CommitDurableDecisionOutputAsync(
+        DecisionSessionTurnRecord turn,
+        string output,
+        CancellationToken cancellationToken)
+    {
+        DecisionTurnCommitResult commit = await _recoveryStore!.CommitDecisionOutputAsync(
+            turn,
+            durableActiveState!,
+            CurrentAccounting(),
+            output,
+            Hash(_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()),
+            cancellationToken);
+        if (!commit.Write.Succeeded || commit.Turn is null || commit.Active is null)
+        {
+            throw new LoopStepException($"Failed to atomically commit decision output: {commit.Write.Diagnostic}");
+        }
+
+        durableActiveState = commit.Active;
+        await _artifacts.WriteAsync(OrchestrationArtifactPaths.Decisions, output);
+        if (commit.HistoryRelativePath is { } historyPath)
+        {
+            await _artifacts.WriteAsync(historyPath, output);
+        }
+        RecoveryStoreWriteResult materialized = await _recoveryStore.MarkDecisionArtifactMaterializedAsync(
+            commit.Turn, cancellationToken);
+        if (!materialized.Succeeded)
+        {
+            throw new LoopStepException($"Decision output committed but live artifact materialization was not recorded: {materialized.Diagnostic}");
+        }
+    }
+
+    private static SessionContinuityNegotiationRequest ProductionNegotiationRequest()
+    {
+        CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
+        using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse("{}");
+        return new SessionContinuityNegotiationRequest(
+            "codex",
+            CodexAppServerProtocol.ClientVersion,
+            Environment.GetEnvironmentVariable("LOOPRELAY_CODEX_VERSION") ?? identity.ServerVersion,
+            identity.ExecutableIdentity,
+            "app-server-v2",
+            Environment.GetEnvironmentVariable("LOOPRELAY_CODEX_SCHEMA_DIGEST") ?? identity.SchemaDigest,
+            document.RootElement.Clone(),
+            OfferExperimentalApi: true);
     }
 
     /// <summary>
@@ -230,10 +627,113 @@ internal sealed class DecisionSession(
             return; // no codex thread id (legacy/one-shot shapes) — nothing a later run could resume
         }
 
+        if (_recoveryStore is not null && decisionExecutionContext is not null)
+        {
+            await PersistDurableActiveStateAsync(threadId, cancellationToken);
+            return;
+        }
+
         await (_resumeStore ?? new NullDecisionSessionResumeStore()).WriteAsync(new DecisionSessionResumeState(
             threadId, occupancyTokens, reuseCost, reuseCycles, lastCycleCost, prevCycleCost,
             transferCost, transferCount, previousOperationalContextSize, operationalContextGrowthStreak),
             cancellationToken);
+    }
+
+    private async Task PersistDurableActiveStateAsync(string threadId, CancellationToken cancellationToken)
+    {
+        DecisionSessionScope scope = decisionExecutionContext!.Scope;
+        DecisionSessionAccounting accounting = CurrentAccounting();
+        string policyDigest = Hash(_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault());
+        if (durableActiveState is null)
+        {
+            IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
+                ?? _runtime as IAgentSessionContinuityRuntime
+                ?? throw new LoopStepException("Decision-session continuity runtime is unavailable for durable activation.");
+            durableProfile ??= _continuityProfile
+                ?? (await continuityRuntime.NegotiateAsync(ProductionNegotiationRequest(), cancellationToken)).Profile;
+            string lineageId = Guid.NewGuid().ToString("N");
+            var scopeRecord = new DecisionSessionScopeRecord(
+                scope.ScopeId.Value,
+                scope.WorkspaceId,
+                scope.PreparedEpic.CausalIdentity,
+                scope.ExecutablePlan.CausalIdentity,
+                "Decision",
+                scope.ContractVersion,
+                "Active",
+                DateTimeOffset.UtcNow,
+                null);
+            durableLineage = new DecisionSessionLineageNode(
+                lineageId,
+                scope.ScopeId.Value,
+                durableProfile.Provider,
+                threadId,
+                null,
+                lineageId,
+                "Fresh",
+                RecoveryCompleteness.Full,
+                null,
+                durableProfile.Digest,
+                null,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                null,
+                "Authoritative");
+            durableActiveState = new DecisionSessionActiveState(
+                scope.ScopeId.Value,
+                lineageId,
+                accounting,
+                policyDigest,
+                null,
+                0,
+                DateTimeOffset.UtcNow);
+            RecoveryStoreWriteResult created = await _recoveryStore!.CreateScopeAndActivateAsync(
+                scopeRecord, durableLineage, durableActiveState, durableProfile, cancellationToken);
+            if (!created.Succeeded)
+            {
+                throw new LoopStepException($"Failed to durably activate the fresh decision session: {created.Diagnostic}");
+            }
+
+            return;
+        }
+
+        DecisionSessionActiveState updated = durableActiveState with
+        {
+            Accounting = accounting,
+            PolicyDigest = policyDigest,
+            RowVersion = durableActiveState.RowVersion + 1,
+        };
+        RecoveryStoreWriteResult result = await _recoveryStore!.UpdateActiveAccountingAsync(
+            durableActiveState, updated, cancellationToken);
+        if (!result.Succeeded)
+        {
+            throw new LoopStepException($"Failed to commit decision session accounting: {result.Diagnostic}");
+        }
+
+        durableActiveState = updated;
+    }
+
+    private DecisionSessionAccounting CurrentAccounting() => new(
+        occupancyTokens,
+        reuseCost,
+        reuseCycles,
+        lastCycleCost,
+        prevCycleCost,
+        transferCost,
+        transferCount,
+        previousOperationalContextSize,
+        operationalContextGrowthStreak);
+
+    private void RestoreAccounting(DecisionSessionAccounting accounting)
+    {
+        occupancyTokens = accounting.OccupancyTokens;
+        reuseCost = accounting.ReuseCost;
+        reuseCycles = accounting.ReuseCycles;
+        lastCycleCost = accounting.LastCycleCost;
+        prevCycleCost = accounting.PreviousCycleCost;
+        transferCost = accounting.TransferCost;
+        transferCount = accounting.TransferCount;
+        previousOperationalContextSize = accounting.PreviousContextSize;
+        operationalContextGrowthStreak = accounting.ContextGrowthStreak;
     }
 
     /// <summary>
@@ -473,6 +973,112 @@ internal sealed class DecisionSession(
         IReadOnlyList<string> RequiredOutputs,
         string? ChangedGuard);
 
+    private sealed class DurableTurnProgressObserver(
+        IRecoveryStore _store,
+        DecisionSessionTurnRecord initial) : ICriticalAgentTurnProgressObserver
+    {
+        public DecisionSessionTurnRecord Record { get; private set; } = initial;
+
+        public void RequestWriteStarted() => Advance(
+            DecisionTurnState.WriteStarted,
+            writeStarted: true);
+
+        public void RequestSubmitted() => Advance(
+            DecisionTurnState.Submitted,
+            writeStarted: true,
+            submitted: true);
+
+        public void RequestAccepted() => Advance(
+            DecisionTurnState.Accepted,
+            writeStarted: true,
+            submitted: true,
+            accepted: true);
+
+        public void FirstProtocolEvent() { }
+
+        public void FirstOutput() { }
+
+        public void ProviderTurnIdentified(string providerTurnId) => Advance(
+            Record.State,
+            Record.WriteStarted,
+            Record.Submitted,
+            Record.Accepted,
+            Record.Terminal,
+            providerTurnId);
+
+        public void Terminal()
+        {
+            if (Record.State != DecisionTurnState.Terminal)
+            {
+                Advance(
+                    DecisionTurnState.Terminal,
+                    Record.WriteStarted,
+                    Record.Submitted,
+                    Record.Accepted,
+                    terminal: true,
+                    Record.ProviderTurnId);
+            }
+        }
+
+        public void Unknown() => MarkUnknown();
+
+        public void MarkUnknown()
+        {
+            if (Record.State is DecisionTurnState.Committed or DecisionTurnState.Materialized)
+            {
+                return;
+            }
+
+            Advance(
+                DecisionTurnState.Unknown,
+                Record.WriteStarted,
+                Record.Submitted,
+                Record.Accepted,
+                Record.Terminal,
+                Record.ProviderTurnId);
+        }
+
+        public void RecordTerminalResult(AgentTurnResult result)
+        {
+            if (result.ProviderTurnId is { Length: > 0 } providerTurnId
+                && !string.Equals(providerTurnId, Record.ProviderTurnId, StringComparison.Ordinal))
+            {
+                ProviderTurnIdentified(providerTurnId);
+            }
+
+            Terminal();
+        }
+
+        private void Advance(
+            DecisionTurnState state,
+            bool writeStarted = false,
+            bool submitted = false,
+            bool accepted = false,
+            bool terminal = false,
+            string? providerTurnId = null)
+        {
+            DecisionSessionTurnRecord updated = Record with
+            {
+                State = state,
+                WriteStarted = writeStarted,
+                Submitted = submitted,
+                Accepted = accepted,
+                Terminal = terminal,
+                ProviderTurnId = providerTurnId ?? Record.ProviderTurnId,
+                RowVersion = Record.RowVersion + 1,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            RecoveryStoreWriteResult write = _store.CompareAndSwapDecisionTurnAsync(Record, updated)
+                .GetAwaiter().GetResult();
+            if (!write.Succeeded)
+            {
+                throw new InvalidOperationException($"Decision turn progress persistence failed: {write.Diagnostic}");
+            }
+
+            Record = updated;
+        }
+    }
+
     // Size-health guard: warn on a sustained upward ratchet of the operational-context size across consecutive
     // transfers. Kept local so the CLI does not depend on the legacy orchestration host's monitor service.
     private void RecordOperationalContextHealth(int newSize)
@@ -576,6 +1182,25 @@ internal sealed class DecisionSession(
             ? message
             : $"{message} Agent stderr (tail):\n{diagnostics}";
 
+    private static string Hash(string value) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private static string ContinuityMessage(RecoveryRuntimeResult result, string threadId) => result.Outcome switch
+    {
+        RecoveryRuntimeOutcome.ResumedOriginal =>
+            $"ResumedOriginal: resumed decision session (thread {threadId}).",
+        RecoveryRuntimeOutcome.ReplacementNativeFork =>
+            $"ReplacementNativeFork: activated certified fork (thread {threadId}).",
+        RecoveryRuntimeOutcome.ReplacementRecoveredFull =>
+            $"ReplacementRecoveredFull: activated full public-context replacement (thread {threadId}).",
+        RecoveryRuntimeOutcome.ReplacementRecoveredPartial =>
+            $"ReplacementRecoveredPartial: activated selective replacement (thread {threadId}, completeness {result.Completeness}).",
+        RecoveryRuntimeOutcome.ReplacementRepositoryOnly =>
+            $"ReplacementRepositoryOnly: the original conversation was unavailable; activated repository-only replacement (thread {threadId}).",
+        _ => $"Decision continuity {result.Outcome} (thread {threadId}).",
+    };
+
     // clearResumeState: a Transfer recycle or a failed turn ends the thread's useful life — the persisted
     // resume state must die with it (the recycled process re-persists after its first successful turn).
     // Disposal (loop exit) KEEPS the state: it is precisely the next run's resume payload, and no turn can
@@ -594,7 +1219,7 @@ internal sealed class DecisionSession(
             lastCycleCost = 0d;
             prevCycleCost = 0d;
 
-            if (clearResumeState)
+            if (clearResumeState && _recoveryStore is null)
             {
                 await (_resumeStore ?? new NullDecisionSessionResumeStore()).ClearAsync(CancellationToken.None);
             }

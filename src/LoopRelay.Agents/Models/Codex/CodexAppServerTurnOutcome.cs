@@ -8,4 +8,5 @@ public sealed record CodexAppServerTurnOutcome(
     string Output,
     AgentTokenUsage? Usage,
     AgentTurnState State,
-    string? FailureMessage);
+    string? FailureMessage,
+    string? ProviderTurnId);

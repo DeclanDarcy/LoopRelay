@@ -25,7 +25,7 @@ public sealed class TransitionRuntime(
         TransitionRuntimeRequest request,
         CancellationToken cancellationToken = default)
     {
-        string runId = Guid.NewGuid().ToString("N");
+        string runId = request.RunId ?? Guid.NewGuid().ToString("N");
         WorkflowTransitionIdentity transitionIdentity = request.Transition;
         WorkflowTransitionDefinition? resolvedDefinition = null;
         GateResult? inputGate = null;
@@ -98,8 +98,16 @@ public sealed class TransitionRuntime(
 
             var stopwatch = Stopwatch.StartNew();
             PromptExecutionResult executionResult = await _promptExecutor.ExecuteAsync(
-                definition,
-                renderedPrompt,
+                new PromptExecutionRequest(
+                    runId,
+                    request.Workflow,
+                    request.Stage,
+                    definition.Identity,
+                    definition,
+                    renderedPrompt,
+                    context.InputSnapshot.Hash,
+                    request.RootInvocation ?? new WorkflowInvocation(InvocationModeKind.BoundedExecute),
+                    request.Metadata ?? new Dictionary<string, string>()),
                 cancellationToken);
             stopwatch.Stop();
 

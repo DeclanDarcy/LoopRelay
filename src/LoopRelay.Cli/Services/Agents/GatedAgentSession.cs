@@ -55,7 +55,8 @@ internal sealed class GatedAgentSession(
                 repoName, workingDirectory, _inner.SessionId, _inner.Role, _openedAtUtc,
                 cachedLogPath, result,
                 _inputWaitObservations?.Take(_inner.SessionId, result.TurnIndex),
-                cancellationToken);
+                cancellationToken,
+                providerThreadId: _inner.ThreadId);
 
             UsageLimitHit? hit = _usageLimit.Detect(result);
             if (hit is null)

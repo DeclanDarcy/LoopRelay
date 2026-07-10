@@ -21,7 +21,8 @@ if (!CliArguments.TryParse(args, out UnifiedCliInvocation invocation, out string
     return 2;
 }
 
-await using UnifiedCliComposition unifiedComposition = UnifiedCliComposition.CreateProduction(invocation.Repository);
+await using UnifiedCliComposition unifiedComposition = UnifiedCliComposition.CreateProduction(
+    invocation.Repository, Console.Out, Console.Error);
 var runner = new UnifiedCliRunner(unifiedComposition, Console.Out, Console.Error);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---
