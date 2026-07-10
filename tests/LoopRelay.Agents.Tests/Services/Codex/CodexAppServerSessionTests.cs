@@ -9,6 +9,7 @@ using LoopRelay.Agents.Services.Usage;
 using LoopRelay.Agents.Tests.Services.Process;
 using LoopRelay.Permissions.Abstractions.Evaluation;
 using LoopRelay.Permissions.Models.Policy;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Services.Codex;
 using LoopRelay.Permissions.Services.Evaluation;
 using LoopRelay.Permissions.Services.Parsing;
@@ -23,7 +24,9 @@ public sealed class CodexAppServerSessionTests
         "repo-1",
         SessionRole.OperationalExecution,
         new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: requiresApproval),
-        new EffortProfile(AgentEffortLevel.Medium),
+        AgentModel.Gpt55,
+        AgentEffort.Medium,
+        AgentConfigurationAuthority.Execution,
         workingDirectory: "/repo");
 
     private static CodexAppServerSession NewSession(ScriptedAppServerProcess process) =>
@@ -227,14 +230,16 @@ public sealed class CodexAppServerSessionTests
     // ---------------------------------------------------------------------------------------------------------
 
     // The Decision-session spec the orchestrator's BuildDecisionSpec produces: read-only / approvals never /
-    // EffortProfile(High, "xhigh"). The Decision session is the HELD-OPEN app-server path, so its wire frames must
+    // canonical Brain effort xhigh. The Decision session is the HELD-OPEN app-server path, so its wire frames must
     // carry exactly this posture.
     private static AgentSessionSpec DecisionSpec() => new(
         SessionIdentity.New(),
         "repo-decision",
         SessionRole.Decision,
         new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
-        new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
+        AgentModel.Gpt56Sol,
+        AgentEffort.XHigh,
+        AgentConfigurationAuthority.Brain,
         workingDirectory: "/repo");
 
     private static JsonElement ParamsOf(ScriptedAppServerProcess process, string method)
@@ -250,14 +255,15 @@ public sealed class CodexAppServerSessionTests
     [Fact]
     public async Task DecisionSessionTurnStartFrameCarriesXhighEffortOnTheWire()
     {
-        // The held-open Decision session built from EffortProfile(High, "xhigh") must put params.effort == "xhigh"
-        // on the actual turn/start frame — the identifier escape-hatch, NOT the "high" level mapping.
+        // The held-open Decision session must put canonical params.effort == "xhigh" on the turn/start frame.
         var process = new ScriptedAppServerProcess();
         await using var session = new CodexAppServerSession(DecisionSpec(), process, new DeterministicAgentTokenEstimator());
 
         await session.RunTurnAsync("propose decisions");
 
-        Assert.Equal("xhigh", ParamsOf(process, "turn/start").GetProperty("effort").GetString());
+        JsonElement turnStart = ParamsOf(process, "turn/start");
+        Assert.Equal("xhigh", turnStart.GetProperty("effort").GetString());
+        Assert.Equal("gpt-5.6-sol", turnStart.GetProperty("model").GetString());
     }
 
     [Fact]
@@ -274,6 +280,7 @@ public sealed class CodexAppServerSessionTests
         Assert.Equal("read-only", threadStart.GetProperty("sandbox").GetString());
         Assert.Equal("never", threadStart.GetProperty("approvalPolicy").GetString());
         Assert.Equal("/repo", threadStart.GetProperty("cwd").GetString());
+        Assert.Equal("gpt-5.6-sol", threadStart.GetProperty("model").GetString());
     }
 
     // The CLI execution session's spec carries SandboxProfile("danger-full-access"), and the held-open
@@ -284,7 +291,9 @@ public sealed class CodexAppServerSessionTests
         "repo-execution",
         SessionRole.OperationalExecution,
         new SandboxProfile("danger-full-access", CanWriteWorkspace: true, CanAccessNetwork: true, RequiresApproval: false),
-        new EffortProfile(AgentEffortLevel.Medium),
+        AgentModel.Gpt56Terra,
+        AgentEffort.Medium,
+        AgentConfigurationAuthority.Execution,
         workingDirectory: "/repo");
 
     [Fact]
@@ -298,6 +307,10 @@ public sealed class CodexAppServerSessionTests
         JsonElement threadStart = ParamsOf(process, "thread/start");
         Assert.Equal("danger-full-access", threadStart.GetProperty("sandbox").GetString());
         Assert.Equal("never", threadStart.GetProperty("approvalPolicy").GetString());
+        Assert.Equal("gpt-5.6-terra", threadStart.GetProperty("model").GetString());
+        JsonElement turnStart = ParamsOf(process, "turn/start");
+        Assert.Equal("gpt-5.6-terra", turnStart.GetProperty("model").GetString());
+        Assert.Equal("medium", turnStart.GetProperty("effort").GetString());
     }
 
     // m10 (A) LIVE-ONLY: real codex-cli 0.139 acceptance of params.effort=="xhigh" and sandbox=="read-only" on a
@@ -480,7 +493,9 @@ public sealed class CodexAppServerSessionTests
         "repo-1",
         SessionRole.OperationalExecution,
         new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: true),
-        new EffortProfile(AgentEffortLevel.Medium),
+        AgentModel.Gpt56Sol,
+        AgentEffort.XHigh,
+        AgentConfigurationAuthority.Brain,
         workingDirectory: "/repo",
         operationPermissionProfile: new OperationPermissionProfile(
             "test-operation",
@@ -501,7 +516,9 @@ public sealed class CodexAppServerSessionTests
         "repo-1",
         SessionRole.Decision,
         new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
-        new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
+        AgentModel.Gpt56Sol,
+        AgentEffort.XHigh,
+        AgentConfigurationAuthority.Brain,
         workingDirectory: "/repo",
         resumeThreadId: threadId);
 

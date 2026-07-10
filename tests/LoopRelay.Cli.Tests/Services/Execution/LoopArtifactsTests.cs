@@ -1,5 +1,6 @@
 using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Tests.Services.Agents;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
@@ -85,7 +86,7 @@ public class LoopArtifactsTests
         var history = new SqliteLoopHistoryStore(repo.Repository);
         var artifacts = new LoopArtifacts(repo.Store, repo.Repository, history);
 
-        await artifacts.PersistDecisionsAsync("D1\r\nopaque body");
+        await artifacts.PersistDecisionsAsync("D1\r\nopaque body", TestAgentConfiguration.Execution);
 
         Assert.Equal("D1\r\nopaque body", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.Decisions)));
         Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDecision(1))));
@@ -338,7 +339,7 @@ public class LoopArtifactsTests
     public async Task PersistDecisions_WritesNumberedAndCanonical()
     {
         var (art, store, repo) = New();
-        await art.PersistDecisionsAsync("D1");
+        await art.PersistDecisionsAsync("D1", TestAgentConfiguration.Execution);
 
         Assert.Equal("D1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
         Assert.Equal("D1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
@@ -349,10 +350,10 @@ public class LoopArtifactsTests
     {
         var (art, store, repo) = New();
 
-        await art.PersistDecisionsAsync("D1");
+        await art.PersistDecisionsAsync("D1", TestAgentConfiguration.Execution);
         // Delete the live decisions.md so NextSequence re-scans the directory correctly.
         await store.DeleteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions));
-        await art.PersistDecisionsAsync("D2");
+        await art.PersistDecisionsAsync("D2", TestAgentConfiguration.Execution);
 
         Assert.Equal("D1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
         Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(2))));
@@ -424,6 +425,40 @@ public class LoopArtifactsTests
                 Directory.Delete(Root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task Persisted_decision_pair_loads_as_validated_execution_configuration()
+    {
+        var (artifacts, _, _) = New();
+        await artifacts.PersistDecisionsAsync("exact prompt", TestAgentConfiguration.Execution);
+
+        var validated = await artifacts.ReadValidatedExecutionRecommendationAsync();
+
+        Assert.Equal("exact prompt", validated.Prompt);
+        Assert.Equal(TestAgentConfiguration.Execution.Model, validated.Model);
+        Assert.Equal(TestAgentConfiguration.Execution.Effort, validated.Effort);
+    }
+
+    [Fact]
+    public async Task Missing_recommendation_blocks_execution_configuration_loading()
+    {
+        var (artifacts, store, repo) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "prompt");
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            artifacts.ReadValidatedExecutionRecommendationAsync);
+    }
+
+    [Fact]
+    public async Task Prompt_hash_mismatch_blocks_execution_configuration_loading()
+    {
+        var (artifacts, store, repo) = New();
+        await artifacts.PersistDecisionsAsync("prompt one", TestAgentConfiguration.Execution);
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "prompt two");
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            artifacts.ReadValidatedExecutionRecommendationAsync);
     }
 
     private static async Task InitializeLoopHistoryDatabaseAsync(Repository repository)

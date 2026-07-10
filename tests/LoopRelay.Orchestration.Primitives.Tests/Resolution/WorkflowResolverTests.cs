@@ -6,6 +6,8 @@ using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Workflows;
+using LoopRelay.Orchestration.Models;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Orchestration.Tests.Resolution;
 
@@ -417,6 +419,13 @@ public sealed class WorkflowResolverTests
     {
         string repo = CreateRepo();
         Write(repo, ".agents/decisions/decisions.md", "# Decisions");
+        Write(
+            repo,
+            ".agents/decisions/decisions.recommendation.json",
+            ExecutionRecommendationContract.SerializePersisted(
+                ExecutionRecommendationContract.Bind(
+                    "# Decisions",
+                    new ExecutionRecommendation(AgentModel.Gpt56Terra, AgentEffort.High))));
         IReadOnlyDictionary<string, string> before = Snapshot(repo);
 
         RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
@@ -430,13 +439,14 @@ public sealed class WorkflowResolverTests
         Assert.Equal(new WorkflowStageIdentity("Implementation"), state.CurrentStage);
         Assert.Contains(new WorkflowStageIdentity("Implementation Planning"), state.CompletedStages);
         Assert.Contains(".agents/decisions/decisions.md", state.Evidence);
+        Assert.Contains(".agents/decisions/decisions.recommendation.json", state.Evidence);
         Assert.Contains("repository-observation:Execute:artifact-inferred-state", state.Evidence);
 
         ObservedProduct decisionSet = Assert.Single(
             observation.Products,
             product => product.Product.Identity == ProductIdentity.DecisionSet);
         Assert.True(decisionSet.GateUsable);
-        Assert.Equal(ProductValidationState.Unknown, decisionSet.Product.ValidationState);
+        Assert.Equal(ProductValidationState.Valid, decisionSet.Product.ValidationState);
 
         Assert.Equal(RepositoryClassification.InProgress, result.Classification);
         Assert.Equal(WorkflowResolutionState.Resumable, result.WorkflowState);
@@ -445,6 +455,25 @@ public sealed class WorkflowResolverTests
             transition.Transition == new WorkflowTransitionIdentity("ExecuteImplementationSlice") &&
             transition.State == TransitionEligibilityState.Eligible);
         Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public async Task Existing_execute_decision_without_recommendation_is_not_launchable()
+    {
+        string repo = CreateRepo();
+        Write(repo, ".agents/decisions/decisions.md", "# Decisions");
+
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+
+        Assert.DoesNotContain(
+            observation.WorkflowStates,
+            item => item.Workflow == WorkflowIdentity.Execute &&
+                item.CurrentStage == new WorkflowStageIdentity("Implementation"));
+        ObservedProduct decisionSet = Assert.Single(
+            observation.Products,
+            product => product.Product.Identity == ProductIdentity.DecisionSet);
+        Assert.False(decisionSet.GateUsable);
+        Assert.Equal(ProductValidationState.Invalid, decisionSet.Product.ValidationState);
     }
 
     [Fact]

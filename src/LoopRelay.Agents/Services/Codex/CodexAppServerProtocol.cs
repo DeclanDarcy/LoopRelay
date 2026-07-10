@@ -43,12 +43,18 @@ public static class CodexAppServerProtocol
         }, Options);
 
     /// <summary>Creates a thread; the response carries <c>thread.id</c> used to address turns.</summary>
-    public static string ThreadStart(long id, string? cwd, string? sandbox, string? approvalPolicy) =>
+    public static string ThreadStart(
+        long id,
+        string? cwd,
+        string? sandbox,
+        string? approvalPolicy,
+        string model) =>
         Request(id, "thread/start", Compact(new Dictionary<string, object?>
         {
             ["cwd"] = cwd,
             ["sandbox"] = sandbox,
-            ["approvalPolicy"] = approvalPolicy
+            ["approvalPolicy"] = approvalPolicy,
+            ["model"] = model
         }));
 
     /// <summary>
@@ -56,18 +62,25 @@ public static class CodexAppServerProtocol
     /// carries the same <c>thread.id</c> shape as <c>thread/start</c>. <c>excludeTurns</c> is always true —
     /// replayed history is never consumed and can be arbitrarily large. Verified against codex-cli 0.142.5.
     /// </summary>
-    public static string ThreadResume(long id, string threadId, string? cwd, string? sandbox, string? approvalPolicy) =>
+    public static string ThreadResume(
+        long id,
+        string threadId,
+        string? cwd,
+        string? sandbox,
+        string? approvalPolicy,
+        string model) =>
         Request(id, "thread/resume", Compact(new Dictionary<string, object?>
         {
             ["threadId"] = threadId,
             ["cwd"] = cwd,
             ["sandbox"] = sandbox,
             ["approvalPolicy"] = approvalPolicy,
+            ["model"] = model,
             ["excludeTurns"] = true
         }));
 
     /// <summary>Submits a turn to an existing thread. The prompt is the turn's text user input.</summary>
-    public static string TurnStart(long id, string threadId, string prompt, string? effort) =>
+    public static string TurnStart(long id, string threadId, string prompt, string model, string effort) =>
         Request(id, "turn/start", Compact(new Dictionary<string, object?>
         {
             ["threadId"] = threadId,
@@ -80,6 +93,7 @@ public static class CodexAppServerProtocol
                     ["text_elements"] = Array.Empty<object>()
                 }
             },
+            ["model"] = model,
             ["effort"] = effort
         }));
 

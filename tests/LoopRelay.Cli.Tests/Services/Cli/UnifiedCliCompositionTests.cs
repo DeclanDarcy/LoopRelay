@@ -13,6 +13,7 @@ using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Workflows;
 using LoopRelay.Projections.Models.ProjectionArtifacts;
+using LoopRelay.Permissions.Models.Configuration;
 using Xunit;
 
 namespace LoopRelay.Cli.Tests.Services.Cli;
@@ -1051,8 +1052,16 @@ public sealed class UnifiedCliCompositionTests
         await composition.DisposeAsync();
         Assert.Equal(2, runtime.OpenSessions);
         Assert.Equal(2, runtime.ClosedSessions);
-        Assert.Equal(3, runtime.SessionCalls.Count);
+        Assert.Equal(4, runtime.SessionCalls.Count);
         Assert.Equal(5, runtime.OneShotCalls.Count);
+        AgentSessionSpec decisionSpec = runtime.OpenedSpecs.Single(spec => spec.Role == SessionRole.Decision);
+        Assert.Equal(AgentModel.Gpt56Sol, decisionSpec.Model);
+        Assert.Equal(AgentEffort.XHigh, decisionSpec.Effort);
+        Assert.Equal(AgentConfigurationAuthority.Brain, decisionSpec.ConfigurationAuthority);
+        AgentSessionSpec executionSpec = runtime.OpenedSpecs.Single(
+            spec => spec.ConfigurationAuthority == AgentConfigurationAuthority.Execution);
+        Assert.Equal(AgentModel.Gpt56Terra, executionSpec.Model);
+        Assert.Equal(AgentEffort.High, executionSpec.Effort);
         Assert.True(File.Exists(Path.Combine(repo, ".agents", "archive", "epics", "1.md")));
         Assert.True(File.Exists(Path.Combine(repo, ".agents", "archive", "epics", "1", "handoffs", "handoff.0001.md")));
         Assert.True(File.Exists(Path.Combine(repo, ".agents", "archive", "epics", "1", "handoffs", "handoff.md")));

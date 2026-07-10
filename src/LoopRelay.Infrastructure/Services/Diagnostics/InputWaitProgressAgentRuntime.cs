@@ -10,6 +10,7 @@ using LoopRelay.Agents.Services;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Infrastructure.Abstractions.Diagnostics;
 using LoopRelay.Infrastructure.Models.Diagnostics;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
@@ -27,7 +28,7 @@ public sealed class InputWaitProgressAgentRuntime(
         CancellationToken cancellationToken = default)
     {
         IAgentSession session = await _inner.OpenSessionAsync(spec, cancellationToken);
-        return new InputWaitProgressAgentSession(this, session);
+        return new InputWaitProgressAgentSession(this, session, AgentConfigurationCatalog.Format(spec.Model));
     }
 
     public Task<AgentTurnResult> RunOneShotAsync(
@@ -140,16 +141,15 @@ public sealed class InputWaitProgressAgentRuntime(
         }
     }
 
-    private static string? ModelFrom(AgentSessionSpec spec) =>
-        spec.StartupOptions.TryGetValue("model", out string? model) && !string.IsNullOrWhiteSpace(model)
-            ? model
-            : null;
+    private static string ModelFrom(AgentSessionSpec spec) =>
+        AgentConfigurationCatalog.Format(spec.Model);
 
     private readonly record struct Estimate(int Tokens, string Source, string Version);
 
     private sealed class InputWaitProgressAgentSession(
         InputWaitProgressAgentRuntime _owner,
-        IAgentSession _inner) : IAgentSession
+        IAgentSession _inner,
+        string _model) : IAgentSession
     {
         public IAgentSession Inner => _inner;
 
@@ -171,7 +171,7 @@ public sealed class InputWaitProgressAgentRuntime(
                 _inner.SessionId,
                 _inner.Role,
                 TransportName(_inner.Mode),
-                model: null,
+                _model,
                 prompt,
                 onChunk,
                 (wrapped, token) => _inner.RunTurnAsync(prompt, wrapped, token),

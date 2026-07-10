@@ -1,9 +1,20 @@
 # Execution Model and Effort Implementation Plan
 
-**Status:** Planning only  
+**Status:** Implemented
 **Plan date:** 2026-07-10  
 **Repository revision verified:** `777d30cb07bbd65c968e13a0a0b4ac488bdee765`  
 **Primary evidence:** `execution-model-and-effort-audit.md`, verified against the current source tree
+
+## Implementation Outcome
+
+Implemented on 2026-07-10 against the active unified CLI path.
+
+- `config/settings.default.json` is the default Brain authority (`gpt-5.6-sol`, `xhigh`); settings loading validates the closed model and effort vocabularies and supplies one immutable `BrainConfiguration` per unified composition.
+- `AgentSessionSpec` requires explicit typed model, effort, and configuration authority. Generic startup options cannot supply `model`, `effort`, or `model_reasoning_effort`.
+- Codex one-shot and persistent launches project the canonical values. The installed Codex 0.142.5 schema was verified to accept `model` on `thread/start`, `thread/resume`, and `turn/start`, and `effort` on `turn/start`.
+- First and Next decision proposals are followed immediately by a recommendation turn in the same Brain-configured session. Strict parsing accepts exactly `Model` and `Effort` and persists `.agents/decisions/decisions.recommendation.json` with the exact prompt hash.
+- `DecisionSet` validation and repository observation require a valid matching live pair. Active implementation opens only from a `ValidatedExecutionRecommendation`; the held-open session remains unchanged through handoff.
+- Restart-safe execution attempts, recommendation lifecycle infrastructure, transaction redesign, settings relocation, and legacy executor removal remain deferred as planned.
 
 ## Executive Summary
 
@@ -78,7 +89,6 @@ These items should be recorded as follow-up work. A deferred item may enter the 
 
 ## Non-Goals
 
-- Implementing the changes in this planning task.
 - Defining the policy used to choose among allowed execution models and efforts beyond the structured prompt contract.
 - Redesigning execution restart, resume, retry, cancellation, or recovery.
 - Making the current implementation-to-handoff flow restart-safe.

@@ -11,6 +11,7 @@ using LoopRelay.Agents.Services.Codex;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Agents.Services.Usage;
 using LoopRelay.Agents.Tests.Services.Codex;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Agents.Tests.Services.Sessions;
 
@@ -22,7 +23,9 @@ public sealed class AgentSessionTests
             "repo-1",
             SessionRole.Planning,
             new SandboxProfile("workspace-write", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.High),
+            AgentModel.Gpt56Sol,
+            AgentEffort.High,
+            AgentConfigurationAuthority.Brain,
             workingDirectory: "/repo");
 
     [Fact]

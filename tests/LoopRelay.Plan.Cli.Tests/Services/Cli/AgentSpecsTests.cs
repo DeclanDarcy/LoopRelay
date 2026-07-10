@@ -2,6 +2,7 @@ using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Permissions.Models.Policy;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Plan.Cli.Services.Cli;
 using Xunit;
 
@@ -22,8 +23,7 @@ public class AgentSpecsTests
         Assert.True(spec.Sandbox.CanWriteWorkspace);
         Assert.True(spec.Sandbox.CanAccessNetwork);
         Assert.False(spec.Sandbox.RequiresApproval);
-        Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
-        Assert.Equal("xhigh", spec.Effort.Identifier);
+        Assert.Equal(AgentEffort.XHigh, spec.Effort);
         Assert.Equal(Repo.Path, spec.WorkingDirectory);
     }
 
@@ -37,8 +37,7 @@ public class AgentSpecsTests
         Assert.False(spec.Sandbox.CanWriteWorkspace);
         Assert.False(spec.Sandbox.CanAccessNetwork);
         Assert.False(spec.Sandbox.RequiresApproval);
-        Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
-        Assert.Equal("xhigh", spec.Effort.Identifier);
+        Assert.Equal(AgentEffort.XHigh, spec.Effort);
         Assert.Equal(Repo.Path, spec.WorkingDirectory);
     }
 
@@ -60,8 +59,7 @@ public class AgentSpecsTests
         Assert.False(spec.Sandbox.CanWriteWorkspace);
         Assert.False(spec.Sandbox.CanAccessNetwork);
         Assert.True(spec.Sandbox.RequiresApproval);
-        Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
-        Assert.Equal("xhigh", spec.Effort.Identifier);
+        Assert.Equal(AgentEffort.XHigh, spec.Effort);
         Assert.Equal(Repo.Path, spec.WorkingDirectory);
         Assert.Same(profile, spec.OperationPermissionProfile);
     }

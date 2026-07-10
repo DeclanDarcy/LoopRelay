@@ -69,17 +69,28 @@ public static class CliSettingsLoader
                 throw new PermissionPolicyValidationException("permissions section is required.");
             }
 
+            BrainConfiguration brain = new(
+                AgentConfigurationCatalog.ParseModel(
+                    RequiredRootScalar("BrainModel", document.BrainModel),
+                    "BrainModel"),
+                AgentConfigurationCatalog.ParseEffort(
+                    RequiredRootScalar("BrainEffort", document.BrainEffort),
+                    "BrainEffort"));
             PermissionPolicyOptions policy = PermissionPolicyDocumentMapper.ToPolicy(document.Permissions);
             PermissionPolicyOptions merged = PermissionPolicyFactory.MergeWithMinimum(policy);
             NonImplementationArtifactPolicyOptions artifactPolicy =
                 ArtifactPolicyDocumentMapper.ToOptions(document.ArtifactPolicy);
-            return new CliSettingsLoadResult(merged, artifactPolicy, fullPath, isDefaultTemplate);
+            return new CliSettingsLoadResult(brain, merged, artifactPolicy, fullPath, isDefaultTemplate);
         }
         catch (JsonException ex)
         {
             throw new CliSettingsException($"Invalid settings file '{fullPath}': {ex.Message}", ex);
         }
         catch (PermissionPolicyValidationException ex)
+        {
+            throw new CliSettingsException($"Invalid settings file '{fullPath}': {ex.Message}", ex);
+        }
+        catch (ArgumentException ex)
         {
             throw new CliSettingsException($"Invalid settings file '{fullPath}': {ex.Message}", ex);
         }
@@ -91,9 +102,23 @@ public static class CliSettingsLoader
 
     private sealed class SettingsDocument
     {
+        public string? BrainModel { get; set; }
+
+        public string? BrainEffort { get; set; }
+
         public PermissionPolicyDocument? Permissions { get; set; }
 
         public ArtifactPolicyDocument? ArtifactPolicy { get; set; }
+    }
+
+    private static string RequiredRootScalar(string path, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException($"{path} must not be empty.", path);
+        }
+
+        return value.Trim();
     }
 
     private sealed class ArtifactPolicyDocument

@@ -25,6 +25,7 @@ using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Models.NonImplementationCompletion;
+using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.RepositorySlices;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Primitives;
@@ -38,6 +39,7 @@ using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
 using LoopRelay.Orchestration.Services.RepositorySlices;
 using LoopRelay.Orchestration.Workflows;
 using LoopRelay.Permissions.Models.Policy;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Services.Configuration;
 using LoopRelay.Projections.Models.Context;
 using LoopRelay.Projections.Models.Definitions;
@@ -104,7 +106,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     public IReadOnlyList<WorkflowChainDefinition> WorkflowChains { get; }
 
     public static UnifiedCliComposition Create(Repository repository) =>
-        CreateCore(repository, agentRuntime: null, processRunner: new ProcessRunner(), provider: null);
+        CreateCore(
+            repository,
+            agentRuntime: null,
+            processRunner: new ProcessRunner(),
+            CliSettingsLoader.Load().Brain,
+            provider: null);
 
     public static UnifiedCliComposition CreateProduction(Repository repository)
     {
@@ -116,24 +123,31 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             repository,
             provider.GetRequiredService<IAgentRuntime>(),
             provider.GetRequiredService<IProcessRunner>(),
+            settings.Brain,
             provider);
     }
 
     internal static UnifiedCliComposition Create(
         Repository repository,
         IAgentRuntime agentRuntime) =>
-        CreateCore(repository, agentRuntime, processRunner: new ProcessRunner(), provider: null);
+        CreateCore(
+            repository,
+            agentRuntime,
+            processRunner: new ProcessRunner(),
+            CliSettingsLoader.Load().Brain,
+            provider: null);
 
     internal static UnifiedCliComposition Create(
         Repository repository,
         IAgentRuntime agentRuntime,
         IProcessRunner processRunner) =>
-        CreateCore(repository, agentRuntime, processRunner, provider: null);
+        CreateCore(repository, agentRuntime, processRunner, CliSettingsLoader.Load().Brain, provider: null);
 
     private static UnifiedCliComposition CreateCore(
         Repository repository,
         IAgentRuntime? agentRuntime,
         IProcessRunner processRunner,
+        BrainConfiguration brainConfiguration,
         ServiceProvider? provider)
     {
         IStorageVerifier storageVerifier = new FileSystemStorageVerifier();
@@ -142,7 +156,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IReadOnlyList<WorkflowDefinition> workflowDefinitions = CanonicalWorkflowDefinitionSketches.CreateAll();
         IReadOnlyList<WorkflowChainDefinition> workflowChains = CanonicalWorkflowDefinitionSketches.CreateChains();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var promptExecutor = new UnifiedPromptExecutor(repository, agentRuntime, processRunner);
+        var promptExecutor = new UnifiedPromptExecutor(repository, agentRuntime, processRunner, brainConfiguration);
         ITransitionRuntime transitionRuntime = new TransitionRuntime(
             new UnifiedTransitionDefinitionResolver(workflowDefinitions),
             new RepositoryObservationProductResolver(repositoryObserver, repository),
@@ -811,7 +825,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     private sealed class UnifiedPromptExecutor(
         Repository _repository,
         IAgentRuntime? _agentRuntime,
-        IProcessRunner _processRunner) : IPromptExecutor, IAsyncDisposable
+        IProcessRunner _processRunner,
+        BrainConfiguration _brainConfiguration) : IPromptExecutor, IAsyncDisposable
     {
         private readonly IArtifactStore artifactStore = new FileSystemArtifactStore();
         private readonly ILoopConsole console = new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null);
@@ -951,7 +966,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             try
             {
                 AgentTurnResult result = await _agentRuntime.RunOneShotAsync(
-                    AgentSpecs.Operational(_repository, AgentEffortLevel.High, "xhigh"),
+                    AgentSpecs.BrainOperational(_repository, _brainConfiguration),
                     prompt.Text,
                     onChunk: null,
                     cancellationToken);
@@ -1054,7 +1069,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             IAgentSession? session = null;
             try
             {
-                session = await _agentRuntime.OpenSessionAsync(AgentSpecs.Review(_repository), cancellationToken);
+                session = await _agentRuntime.OpenSessionAsync(
+                    AgentSpecs.Review(_repository, _brainConfiguration),
+                    cancellationToken);
                 AgentTurnResult result = await session.RunTurnAsync(
                     prompt.Text,
                     onChunk: null,
@@ -1119,7 +1136,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 new ProjectionPromptRunner(
                     _agentRuntime ?? throw new InvalidOperationException("Projection prompt runner requires an agent runtime."),
                     _repository,
-                    new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null)));
+                    new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null),
+                    _brainConfiguration));
         }
 
         private async Task<PromptExecutionResult> ExecutePlanScopedArtifactOperationAsync(
@@ -1160,7 +1178,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             try
             {
                 session = await _agentRuntime.OpenSessionAsync(
-                    AgentSpecs.ScopedArtifactOperation(_repository, AgentEffortLevel.High, "xhigh", profile),
+                    AgentSpecs.ScopedArtifactOperation(_repository, _brainConfiguration, profile),
                     cancellationToken);
                 AgentTurnResult result = await session.RunTurnAsync(
                     prompt.Text,
@@ -1373,7 +1391,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     }
 
                     planAuthoringSession = await _agentRuntime.OpenSessionAsync(
-                        AgentSpecs.PlanAuthoring(_repository),
+                        AgentSpecs.PlanAuthoring(_repository, _brainConfiguration),
                         cancellationToken);
                 }
                 else if (planAuthoringSession is null)
@@ -1447,6 +1465,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     CreateLoopArtifacts(),
                     console,
                     _repository,
+                    _brainConfiguration,
                     _costModel: null,
                     _resumeStore: new SqliteDecisionSessionResumeStore(_repository),
                     _projectionService: null,
@@ -1506,11 +1525,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 LoopArtifacts artifacts = CreateLoopArtifacts();
                 string? plan = await artifacts.ReadPlanAsync();
                 string? details = await artifacts.ReadDetailsAsync();
-                (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
-                if (string.IsNullOrWhiteSpace(decisions))
-                {
-                    return Failed($"{OrchestrationArtifactPaths.Decisions} was not available for execution.");
-                }
+                ValidatedExecutionRecommendation recommendation =
+                    await artifacts.ReadValidatedExecutionRecommendationAsync();
+                string decisions = recommendation.Prompt;
 
                 MilestoneGate milestones = CreateMilestoneGate();
                 uncheckedMilestonesBeforeExecution = (await milestones.GetUntickedItemsAsync()).Count;
@@ -1520,11 +1537,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     ContinueExecution.Render(plan, details, decisions, "TODO"),
                     ImplementationFirstPromptPolicyComposer.ComposeDefault());
                 executionSession = await _agentRuntime!.OpenSessionAsync(
-                    AgentSpecs.Operational(
-                        _repository,
-                        AgentEffortLevel.Medium,
-                        identifier: null,
-                        sandboxIdentifier: "danger-full-access"),
+                    AgentSpecs.Execution(_repository, recommendation),
                     cancellationToken);
 
                 AgentTurnResult work = await executionSession.RunTurnAsync(
@@ -1900,7 +1913,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
-            var promptRunner = new AgentCompletionPromptRunner(_agentRuntime!, _repository);
+            var promptRunner = new AgentCompletionPromptRunner(
+                _agentRuntime!,
+                _repository,
+                _brainConfiguration);
             var archiveService = new CompletedEpicArchiveService(artifactStore, promptRunner, completionObserver);
             var service = new CompletionCertificationService(
                 artifactStore,
@@ -2084,7 +2100,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private INonImplementationPostExecutionReviewService CreateNonImplementationPostExecutionReviewService()
         {
             var ledger = new NonImplementationReviewLedgerStore(artifactStore);
-            var runner = new AgentNonImplementationReviewRunner(_agentRuntime!, _repository);
+            var runner = new AgentNonImplementationReviewRunner(
+                _agentRuntime!,
+                _repository,
+                _brainConfiguration);
             return new NonImplementationPostExecutionReviewService(
                 CreateBaselineStore(),
                 new NonImplementationArtifactClassifier(),
@@ -2095,7 +2114,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private INonImplementationCompletionReviewService CreateNonImplementationCompletionReviewService()
         {
             var ledger = new NonImplementationReviewLedgerStore(artifactStore);
-            var runner = new AgentNonImplementationReviewRunner(_agentRuntime!, _repository);
+            var runner = new AgentNonImplementationReviewRunner(
+                _agentRuntime!,
+                _repository,
+                _brainConfiguration);
             return new NonImplementationCompletionReviewService(
                 new RepositoryChangeSetDetector(_processRunner, _repository),
                 new NonImplementationArtifactClassifier(),
@@ -2998,6 +3020,31 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 }
 
                 artifactPaths.Add(evidencePath);
+            }
+
+            if (ExecuteDecisionSessionTransitions.Supports(definition))
+            {
+                string prompt = await File.ReadAllTextAsync(
+                    ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.Decisions));
+                string recommendation = await File.ReadAllTextAsync(
+                    ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.ExecutionRecommendation));
+                try
+                {
+                    ExecutionRecommendationContract.ValidatePair(prompt, recommendation);
+                }
+                catch (InvalidDataException exception)
+                {
+                    invalid.AddRange(definition.ProducedProducts.Select(product => product.Identity));
+                    return new ProductValidationResult(
+                        ProductValidationStatus.Invalid,
+                        [],
+                        [],
+                        invalid.Distinct().ToArray(),
+                        [],
+                        [],
+                        exception.Message,
+                        evidence.Concat(artifactPaths).Distinct(StringComparer.Ordinal).ToArray());
+                }
             }
 
             string causalIdentity = await HashArtifactsAsync(artifactPaths);
@@ -3944,7 +3991,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         definition.Identity.Value switch
         {
             "GenerateDecision" or "TransferDecisionSession" or "ContinueDecisionSession" =>
-                [OrchestrationArtifactPaths.Decisions],
+                [OrchestrationArtifactPaths.Decisions, OrchestrationArtifactPaths.ExecutionRecommendation],
             "GenerateHandoff" => [OrchestrationArtifactPaths.LiveHandoff],
             "UpdateOperationalContext" => [OrchestrationArtifactPaths.OperationalContext],
             "RunNonImplementationReview" =>
@@ -3956,7 +4003,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         definition.Identity.Value switch
         {
             "GenerateDecision" or "TransferDecisionSession" or "ContinueDecisionSession" =>
-                [OrchestrationArtifactPaths.Decisions],
+                [OrchestrationArtifactPaths.Decisions, OrchestrationArtifactPaths.ExecutionRecommendation],
             "GenerateHandoff" => [OrchestrationArtifactPaths.LiveHandoff],
             _ => [],
         };
@@ -3967,7 +4014,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IReadOnlyList<string> evidence) =>
         product.Identity.Value switch
         {
-            "DecisionSet" => [OrchestrationArtifactPaths.Decisions],
+            "DecisionSet" =>
+                [OrchestrationArtifactPaths.Decisions, OrchestrationArtifactPaths.ExecutionRecommendation],
             "ExecutionHandoff" => [OrchestrationArtifactPaths.LiveHandoff],
             "ImplementationSlice" => ExecuteEvidence(definition),
             "RepositoryChanges" => ExecuteEvidence(definition),
@@ -3987,7 +4035,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             "ExecutionDetails" => [OrchestrationArtifactPaths.Details],
             "ExecutionMilestoneSet" => [OrchestrationArtifactPaths.MilestonesDirectory],
             "ExecutionReadiness" => [".LoopRelay/evidence/local-verification/VerifyExecuteEntryContract.md"],
-            "DecisionSet" => [OrchestrationArtifactPaths.Decisions],
+            "DecisionSet" =>
+                [OrchestrationArtifactPaths.Decisions, OrchestrationArtifactPaths.ExecutionRecommendation],
             "ImplementationSlice" => [".LoopRelay/evidence/execute-implementation/ExecuteImplementationSlice.md"],
             "RepositoryChanges" => [".LoopRelay/evidence/execute-repository-state/PublishRepositoryState.md"],
             "ExecutionHandoff" => [OrchestrationArtifactPaths.LiveHandoff],

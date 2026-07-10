@@ -66,6 +66,9 @@ public static class OrchestrationArtifactPaths
     /// </summary>
     public const string Decisions = DecisionsDirectory + "/decisions.md";
 
+    /// <summary>Validated model, effort, and prompt correlation for the live execution decision.</summary>
+    public const string ExecutionRecommendation = DecisionsDirectory + "/decisions.recommendation.json";
+
     /// <summary>
     /// Glob matching the rotated decision submissions (<c>decisions.0001.md</c>, ...) but NOT the live
     /// <c>decisions.md</c> (single-dot) — symmetric with <see cref="HistoricalHandoffSearchPattern"/>.

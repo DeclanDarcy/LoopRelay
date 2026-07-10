@@ -23,6 +23,7 @@ using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Projections.Abstractions;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Projections.Models;
 using LoopRelay.Projections.Models.Context;
 using LoopRelay.Projections.Models.Definitions;
@@ -599,7 +600,10 @@ public sealed class CompletionCertificationServiceTests
             "ok",
             AgentTokenUsage.Zero));
         var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" };
-        var runner = new AgentCompletionPromptRunner(runtime, repository);
+        var runner = new AgentCompletionPromptRunner(
+            runtime,
+            repository,
+            new BrainConfiguration(AgentModel.Gpt56Sol, AgentEffort.XHigh));
 
         string output = await runner.RunAsync(new CompletionRuntimePromptInvocation(
             CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift,

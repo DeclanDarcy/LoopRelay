@@ -1,4 +1,6 @@
 {
+  "brainModel": "gpt-5.6-sol",
+  "brainEffort": "xhigh",
   "artifactPolicy": {
     "allowHitlRequestedNonImplementationFiles": false,
     "allowAuxiliaryNonImplementationFiles": false

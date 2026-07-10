@@ -7,12 +7,14 @@ using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Models.Prompts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Completion.Services.Prompts;
 
 public sealed class AgentCompletionPromptRunner(
     IAgentRuntime _runtime,
     Repository _repository,
+    BrainConfiguration _brainConfiguration,
     string? _promptPolicy = null) : ICompletionPromptRunner
 {
 
@@ -27,8 +29,8 @@ public sealed class AgentCompletionPromptRunner(
             invocation.RuntimePromptName,
             CompletionRuntimePromptNames.SynthesizeCompletedEpic,
             StringComparison.Ordinal)
-            ? WritablePlanning(_repository)
-            : ReadOnlyPlanning(_repository);
+            ? WritablePlanning(_repository, _brainConfiguration)
+            : ReadOnlyPlanning(_repository, _brainConfiguration);
 
         AgentTurnResult result = await _runtime.RunOneShotAsync(
             spec,
@@ -45,22 +47,26 @@ public sealed class AgentCompletionPromptRunner(
         return result.Output;
     }
 
-    private static AgentSessionSpec ReadOnlyPlanning(Repository repository) =>
+    private static AgentSessionSpec ReadOnlyPlanning(Repository repository, BrainConfiguration brain) =>
         new(
             SessionIdentity.New(),
             repository.Id.ToString("N"),
             SessionRole.Planning,
             new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.High, "xhigh"),
+            brain.Model,
+            brain.Effort,
+            AgentConfigurationAuthority.Brain,
             repository.Path);
 
-    private static AgentSessionSpec WritablePlanning(Repository repository) =>
+    private static AgentSessionSpec WritablePlanning(Repository repository, BrainConfiguration brain) =>
         new(
             SessionIdentity.New(),
             repository.Id.ToString("N"),
             SessionRole.Planning,
             new SandboxProfile("workspace-write", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.High, "xhigh"),
+            brain.Model,
+            brain.Effort,
+            AgentConfigurationAuthority.Brain,
             repository.Path);
 
     private static string WithDiagnostics(string message, string? diagnostics) =>

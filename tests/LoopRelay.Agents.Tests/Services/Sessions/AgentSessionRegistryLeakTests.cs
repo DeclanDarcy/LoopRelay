@@ -7,6 +7,7 @@ using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Codex;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Agents.Services.Usage;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Agents.Tests.Services.Sessions;
 
@@ -84,7 +85,9 @@ public sealed class AgentSessionRegistryLeakTests
             Guid.NewGuid().ToString("D"),
             role,
             new SandboxProfile("workspace-write", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
+            AgentModel.Gpt56Sol,
+            AgentEffort.XHigh,
+            AgentConfigurationAuthority.Brain,
             System.IO.Path.GetTempPath());
 
     // A launcher that returns an idle held-open process: its stdout never emits a frame and its stdin writes are

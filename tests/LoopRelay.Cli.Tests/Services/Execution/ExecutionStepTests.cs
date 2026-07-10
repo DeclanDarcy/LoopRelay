@@ -27,7 +27,9 @@ public class ExecutionStepTests
         git ??= StatusRunner(" M src/Foo.cs");
         var detector = new WorkingTreeChangeDetector(git, repo);
         var milestones = new MilestoneGate(store, repo);
-        return (new ExecutionStep(rt, art, con, repo, detector, milestones), rt, store, art, repo, con);
+        return (new ExecutionStep(
+            rt, art, con, repo, detector, milestones, TestAgentConfiguration.ValidatedExecution),
+            rt, store, art, repo, con);
     }
 
     /// <summary>Scripts a runner whose `git status` always returns the given porcelain; everything else succeeds.</summary>

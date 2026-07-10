@@ -6,6 +6,7 @@ using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Agents.Services.Usage;
 using LoopRelay.Agents.Tests.Services.Process;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Agents.Tests.Services.Sessions;
 
@@ -29,7 +30,9 @@ public sealed class AgentRuntimeResumeTests
         "repo-1",
         SessionRole.Decision,
         new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
-        new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
+        AgentModel.Gpt56Sol,
+        AgentEffort.XHigh,
+        AgentConfigurationAuthority.Brain,
         workingDirectory: "/repo",
         resumeThreadId: "thread-old");
 
@@ -77,7 +80,9 @@ public sealed class AgentRuntimeResumeTests
             "repo-1",
             SessionRole.Decision,
             new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
-            new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
+            AgentModel.Gpt56Sol,
+            AgentEffort.XHigh,
+            AgentConfigurationAuthority.Brain,
             workingDirectory: "/repo");
 
         IAgentSession session = await runtime.OpenSessionAsync(spec);

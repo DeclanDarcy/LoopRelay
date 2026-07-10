@@ -15,6 +15,7 @@ using LoopRelay.Orchestration.Primitives;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models.Context;
@@ -44,6 +45,7 @@ internal sealed class DecisionSession(
     LoopArtifacts _artifacts,
     ILoopConsole _console,
     Repository _repository,
+    BrainConfiguration _brainConfiguration,
     IDecisionCostModel? _costModel = null,
     IDecisionSessionResumeStore? _resumeStore = null,
     IProjectContextProjectionService? _projectionService = null,
@@ -105,15 +107,52 @@ internal sealed class DecisionSession(
                 $"Decision turn ended in state {proposed.State}.", proposed.Diagnostics));
         }
 
+        // Any completed proposal supersedes the previous live recommendation. Invalidating first ensures an
+        // empty proposal cannot leave the previous pair launchable after this transition has failed.
+        await _artifacts.InvalidateExecutionRecommendationAsync();
+
+        if (string.IsNullOrWhiteSpace(proposed.Output))
+        {
+            await CloseAsync();
+            throw new LoopStepException("Decision turn returned no execution system prompt.");
+        }
+
         // The process now holds the operational context (delivered inline in this turn), so subsequent proposals
         // on it are cheap handoff-only deltas.
         seeded = true;
-        RecordProposalCost(proposed.Usage);
-        await PersistResumeStateAsync(cancellationToken);
         proposalRenderer.EchoIfSilent(proposed.Output);
 
-        // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
-        await _artifacts.PersistDecisionsAsync(proposed.Output);
+        _console.Phase("Decision: Recommend execution configuration");
+        var recommendationRenderer = new ConsoleTurnRenderer(_console);
+        AgentTurnResult recommended = await session.RunTurnAsync(
+            ExecutionRecommendationContract.RenderPrompt(proposed.Output),
+            recommendationRenderer.Stream,
+            cancellationToken);
+        if (recommended.State != AgentTurnState.Completed)
+        {
+            await CloseAsync();
+            throw new LoopStepException(WithDiagnostics(
+                $"Execution recommendation turn ended in state {recommended.State}.",
+                recommended.Diagnostics));
+        }
+
+        recommendationRenderer.EchoIfSilent(recommended.Output);
+        ExecutionRecommendation recommendation;
+        try
+        {
+            recommendation = ExecutionRecommendationContract.ParseAgentOutput(recommended.Output);
+        }
+        catch (InvalidDataException exception)
+        {
+            await CloseAsync();
+            throw new LoopStepException($"Execution recommendation was invalid: {exception.Message}", exception);
+        }
+
+        RecordProposalCost(proposed.Usage.Add(recommended.Usage));
+        await PersistResumeStateAsync(cancellationToken);
+
+        // Auto-submit: persist the exact prompt and its correlated, validated recommendation as the live pair.
+        await _artifacts.PersistDecisionsAsync(proposed.Output, recommendation);
         if (_hitlRequestCapture is not null)
         {
             await _hitlRequestCapture.CaptureFromSourceAsync(OrchestrationArtifactPaths.Decisions, proposed.Output);
@@ -187,13 +226,15 @@ internal sealed class DecisionSession(
 
         if (state is null)
         {
-            return await _runtime.OpenSessionAsync(AgentSpecs.Decision(_repository), cancellationToken);
+            return await _runtime.OpenSessionAsync(
+                AgentSpecs.Decision(_repository, _brainConfiguration),
+                cancellationToken);
         }
 
         try
         {
             IAgentSession resumed = await _runtime.OpenSessionAsync(
-                AgentSpecs.Decision(_repository, state.ThreadId), cancellationToken);
+                AgentSpecs.Decision(_repository, _brainConfiguration, state.ThreadId), cancellationToken);
 
             // The resumed thread already holds the operational context (its first proposal primed it), and
             // the router accounting it accrued — restore both so priming and transfer economics continue
@@ -215,7 +256,9 @@ internal sealed class DecisionSession(
         {
             _console.Warn($"Could not resume decision session (thread {state.ThreadId}): {ex.Message} Starting fresh.");
             await (_resumeStore ?? new NullDecisionSessionResumeStore()).ClearAsync(cancellationToken);
-            return await _runtime.OpenSessionAsync(AgentSpecs.Decision(_repository), cancellationToken);
+            return await _runtime.OpenSessionAsync(
+                AgentSpecs.Decision(_repository, _brainConfiguration),
+                cancellationToken);
         }
     }
 
@@ -405,8 +448,7 @@ internal sealed class DecisionSession(
             scopedSession = await _runtime.OpenSessionAsync(
                 AgentSpecs.ScopedArtifactOperation(
                     _repository,
-                    AgentEffortLevel.High,
-                    identifier: "xhigh",
+                    _brainConfiguration,
                     operation.Profile),
                 cancellationToken);
             AgentTurnResult result = await scopedSession.RunTurnAsync(

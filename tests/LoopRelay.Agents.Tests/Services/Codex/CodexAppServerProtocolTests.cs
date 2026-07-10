@@ -21,18 +21,21 @@ public sealed class CodexAppServerProtocolTests
     [Fact]
     public void ThreadStartFrameMapsCwdSandboxAndApproval()
     {
-        JsonElement p = Root(CodexAppServerProtocol.ThreadStart(2, "/repo", "workspace-write", "never"))
+        JsonElement p = Root(CodexAppServerProtocol.ThreadStart(
+                2, "/repo", "workspace-write", "never", "gpt-5.6-sol"))
             .GetProperty("params");
 
         Assert.Equal("/repo", p.GetProperty("cwd").GetString());
         Assert.Equal("workspace-write", p.GetProperty("sandbox").GetString());
         Assert.Equal("never", p.GetProperty("approvalPolicy").GetString());
+        Assert.Equal("gpt-5.6-sol", p.GetProperty("model").GetString());
     }
 
     [Fact]
     public void ThreadStartOmitsNullOptionalsSuchAsApprovalPolicy()
     {
-        JsonElement p = Root(CodexAppServerProtocol.ThreadStart(2, "/repo", "read-only", approvalPolicy: null))
+        JsonElement p = Root(CodexAppServerProtocol.ThreadStart(
+                2, "/repo", "read-only", approvalPolicy: null, model: "gpt-5.5"))
             .GetProperty("params");
 
         Assert.False(p.TryGetProperty("approvalPolicy", out _));
@@ -42,11 +45,13 @@ public sealed class CodexAppServerProtocolTests
     [Fact]
     public void TurnStartWrapsPromptAsTextUserInputWithEffort()
     {
-        JsonElement p = Root(CodexAppServerProtocol.TurnStart(3, "thread-1", "do the thing", "high"))
+        JsonElement p = Root(CodexAppServerProtocol.TurnStart(
+                3, "thread-1", "do the thing", "gpt-5.6-terra", "high"))
             .GetProperty("params");
 
         Assert.Equal("thread-1", p.GetProperty("threadId").GetString());
         Assert.Equal("high", p.GetProperty("effort").GetString());
+        Assert.Equal("gpt-5.6-terra", p.GetProperty("model").GetString());
 
         JsonElement input = p.GetProperty("input");
         Assert.Equal(1, input.GetArrayLength());
@@ -57,12 +62,14 @@ public sealed class CodexAppServerProtocolTests
     }
 
     [Fact]
-    public void TurnStartOmitsEffortWhenNull()
+    public void TurnStartAlwaysCarriesCanonicalModelAndEffort()
     {
-        JsonElement p = Root(CodexAppServerProtocol.TurnStart(3, "thread-1", "hi", effort: null))
+        JsonElement p = Root(CodexAppServerProtocol.TurnStart(
+                3, "thread-1", "hi", "gpt-5.6-luna", "xhigh"))
             .GetProperty("params");
 
-        Assert.False(p.TryGetProperty("effort", out _));
+        Assert.Equal("gpt-5.6-luna", p.GetProperty("model").GetString());
+        Assert.Equal("xhigh", p.GetProperty("effort").GetString());
     }
 
     [Fact]
@@ -86,7 +93,8 @@ public sealed class CodexAppServerProtocolTests
     [Fact]
     public void ThreadResumeFrameMapsThreadIdCwdSandboxApprovalAndExcludeTurns()
     {
-        JsonElement root = Root(CodexAppServerProtocol.ThreadResume(4, "thread-old", "/repo", "read-only", "never"));
+        JsonElement root = Root(CodexAppServerProtocol.ThreadResume(
+            4, "thread-old", "/repo", "read-only", "never", "gpt-5.6-sol"));
 
         Assert.Equal("thread/resume", root.GetProperty("method").GetString());
         JsonElement p = root.GetProperty("params");
@@ -94,6 +102,7 @@ public sealed class CodexAppServerProtocolTests
         Assert.Equal("/repo", p.GetProperty("cwd").GetString());
         Assert.Equal("read-only", p.GetProperty("sandbox").GetString());
         Assert.Equal("never", p.GetProperty("approvalPolicy").GetString());
+        Assert.Equal("gpt-5.6-sol", p.GetProperty("model").GetString());
         // History replay is never needed (the CLI streams no prior turns) and can be huge — always excluded.
         Assert.True(p.GetProperty("excludeTurns").GetBoolean());
     }
@@ -101,7 +110,8 @@ public sealed class CodexAppServerProtocolTests
     [Fact]
     public void ThreadResumeOmitsNullOptionals()
     {
-        JsonElement p = Root(CodexAppServerProtocol.ThreadResume(4, "thread-old", cwd: null, sandbox: null, approvalPolicy: null))
+        JsonElement p = Root(CodexAppServerProtocol.ThreadResume(
+                4, "thread-old", cwd: null, sandbox: null, approvalPolicy: null, model: "gpt-5.5"))
             .GetProperty("params");
 
         Assert.Equal("thread-old", p.GetProperty("threadId").GetString());

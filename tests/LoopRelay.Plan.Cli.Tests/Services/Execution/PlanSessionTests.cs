@@ -4,6 +4,7 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
@@ -97,8 +98,7 @@ public class PlanSessionTests
             Assert.True(spec.Sandbox.CanWriteWorkspace);
             Assert.True(spec.Sandbox.CanAccessNetwork);
             Assert.False(spec.Sandbox.RequiresApproval);
-            Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
-            Assert.Equal("xhigh", spec.Effort.Identifier);
+            Assert.Equal(AgentEffort.XHigh, spec.Effort);
             Assert.Equal(repo.Path, spec.WorkingDirectory);
             Assert.Equal(SessionRole.Planning, spec.Role);
             s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN").Wait();

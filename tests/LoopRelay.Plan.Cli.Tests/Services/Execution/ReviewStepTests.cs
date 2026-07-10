@@ -4,6 +4,7 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Plan.Cli.Models;
 using LoopRelay.Plan.Cli.Services.Execution;
 using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
@@ -76,8 +77,7 @@ public class ReviewStepTests
             Assert.False(spec.Sandbox.CanWriteWorkspace);
             Assert.False(spec.Sandbox.CanAccessNetwork);
             Assert.False(spec.Sandbox.RequiresApproval);
-            Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
-            Assert.Equal("xhigh", spec.Effort.Identifier);
+            Assert.Equal(AgentEffort.XHigh, spec.Effort);
             Assert.Equal(repo.Path, spec.WorkingDirectory);
             Assert.Equal(SessionRole.Planning, spec.Role);
             return Turns.Completed("REVIEW OUTPUT");

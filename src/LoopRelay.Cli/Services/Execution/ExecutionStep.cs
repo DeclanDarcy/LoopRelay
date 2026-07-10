@@ -8,6 +8,7 @@ using LoopRelay.Cli.Services.Console;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 
 namespace LoopRelay.Cli.Services.Execution;
@@ -33,6 +34,7 @@ internal sealed class ExecutionStep(
     Repository _repository,
     WorkingTreeChangeDetector _changeDetector,
     MilestoneGate _milestones,
+    ValidatedExecutionRecommendation _legacyExecutionConfiguration,
     string? _promptPolicy = null)
 {
 
@@ -73,8 +75,7 @@ internal sealed class ExecutionStep(
         // git, and reach outside the workspace to do real work. This is the ONE session granted danger-full-access
         // — the decision session stays read-only and the context-update evolution keeps its own posture.
         IAgentSession session = await _runtime.OpenSessionAsync(
-            AgentSpecs.Operational(
-                _repository, AgentEffortLevel.Medium, identifier: null, sandboxIdentifier: "danger-full-access"),
+            AgentSpecs.Execution(_repository, _legacyExecutionConfiguration),
             cancellationToken);
         try
         {

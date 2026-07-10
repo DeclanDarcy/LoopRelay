@@ -85,6 +85,7 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
                 GateUsable: product.ValidationState is ProductValidationState.Valid or ProductValidationState.Unknown,
                 product.EvidenceLocations));
         }
+        EnforceLiveDecisionRecommendation(products, root);
 
         IReadOnlyList<string> completionArchiveEvidence = AddCompletionArchiveProducts(products, root);
         IReadOnlyList<ObservedLifecycleRow> decisionResumeRows = ObserveDecisionSessionResume(repository, verification);
@@ -957,6 +958,69 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
             ProductLifecycle.Active,
             existing);
         products.Add(new ObservedProduct(record, GateUsable: gate.ReadinessSatisfied, gate.Evidence));
+    }
+
+    private static void EnforceLiveDecisionRecommendation(List<ObservedProduct> products, string root)
+    {
+        int index = products.FindIndex(product => product.Product.Identity == ProductIdentity.DecisionSet);
+        if (index < 0)
+        {
+            return;
+        }
+
+        string promptPath = Path.Combine(root, Normalize(OrchestrationArtifactPaths.Decisions));
+        string recommendationPath = Path.Combine(
+            root,
+            Normalize(OrchestrationArtifactPaths.ExecutionRecommendation));
+        if (!File.Exists(promptPath))
+        {
+            products.RemoveAt(index);
+            return;
+        }
+
+        ObservedProduct observed = products[index];
+        try
+        {
+            if (!File.Exists(recommendationPath))
+            {
+                throw new InvalidDataException("The live execution recommendation is missing.");
+            }
+
+            ExecutionRecommendationContract.ValidatePair(
+                File.ReadAllText(promptPath),
+                File.ReadAllText(recommendationPath));
+            IReadOnlyList<string> evidence = observed.Evidence
+                .Concat([OrchestrationArtifactPaths.Decisions, OrchestrationArtifactPaths.ExecutionRecommendation])
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            products[index] = new ObservedProduct(
+                observed.Product with
+                {
+                    ValidationState = ProductValidationState.Valid,
+                    StorageRepresentations =
+                        [OrchestrationArtifactPaths.Decisions, OrchestrationArtifactPaths.ExecutionRecommendation],
+                    EvidenceLocations = evidence,
+                },
+                GateUsable: true,
+                evidence);
+        }
+        catch (InvalidDataException)
+        {
+            IReadOnlyList<string> evidence = observed.Evidence
+                .Concat([OrchestrationArtifactPaths.Decisions])
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            products[index] = new ObservedProduct(
+                observed.Product with
+                {
+                    ValidationState = ProductValidationState.Invalid,
+                    StorageRepresentations =
+                        [OrchestrationArtifactPaths.Decisions, OrchestrationArtifactPaths.ExecutionRecommendation],
+                    EvidenceLocations = evidence,
+                },
+                GateUsable: false,
+                evidence);
+        }
     }
 
     private static IReadOnlyList<string> ExecuteDecisionPaths(string root, string agents) =>
