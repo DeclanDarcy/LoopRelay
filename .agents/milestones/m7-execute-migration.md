@@ -60,6 +60,119 @@ Objective: migrate the implementation loop into a first-class iterative Execute 
   - [ ] Final closed-state persistence.
 - [ ] Preserve stall semantics with durable evidence.
 
+## Detail Requirements
+
+### Execute Contract
+
+Workflow identity: `Execute`.
+
+Purpose: transform an execution-ready operational product set into a certified completed implementation.
+
+Consumes:
+
+- Execution Readiness
+- Executable Plan
+- Operational Context
+- Execution Details
+- Execution Milestone Set
+
+Produces:
+
+- Repository Changes
+- Decision History
+- Execution Handoff
+- Operational Delta
+- Completion Evidence
+- Certified Completion
+
+Entry gate validates Execution Readiness, storage authority, repository state, workflow ownership, and required products.
+
+Exit gate validates Certified Completion, completion evidence, repository consistency, and closure requirements.
+
+### Execute Stage Purposes
+
+Execution Readiness determines whether implementation may begin or continue.
+
+Implementation Planning determines the next implementation slice and includes decision proposal, decision transfer, and decision continuation.
+
+Implementation executes the planned implementation slice.
+
+Execution Continuity prepares the repository for the next execution iteration and includes handoff generation, operational context updates, decision retirement, publication, and commit evaluation.
+
+Completion determines whether execution should continue or close and includes milestone completion, non-implementation review, completion certification, and completion routing.
+
+Workflow Completion verifies the workflow exit contract.
+
+### Canonical Iteration Model
+
+Execute is not linear. Its loop is:
+
+```text
+Execution Readiness
+  -> Planning
+  -> Implementation
+  -> Continuity
+  -> Completion
+  -> Continue to Execution Readiness or attempt Workflow Completion
+```
+
+Completion outcomes are:
+
+- Continue
+- Blocked
+- Waiting
+- Cancelled
+- Failed
+- Certified Complete
+
+Iteration belongs to workflow progression, not the transition runtime.
+
+### Decision Session Contract
+
+Decision sessions become an execution posture. The runtime owns session lifecycle, resume, transfer, persistence, diagnostics, and recovery. The workflow declares decision transitions, decision products, and decision validators.
+
+### Execution Product Set
+
+Canonical execution products include:
+
+- Execution Readiness
+- Implementation Slice
+- Decision Set
+- Execution Handoff
+- Operational Context
+- Operational Delta
+- Repository Changes
+- Completion Evidence
+- Certified Completion
+
+Filesystem, SQLite, history, and live artifacts are serialization or compatibility forms.
+
+### Completion Components
+
+Completion becomes one explicit stage with:
+
+- milestone evaluation
+- completion review
+- completion certification
+- completion routing
+- workflow completion
+
+Execute becomes the single producer of completion claim, completion review, completion certification, completion route, and Certified Completion.
+
+### Execute State
+
+Execute state should include workflow, current stage, current transition, iteration count, completed stages, products, blockers, recovery, and outcome.
+
+It must explicitly represent ready, planning, executing, continuity, completion, completed, blocked, cancelled, failed, and waiting.
+
+### Repository Progress Semantics
+
+Repository progress is evaluated from repository state and must preserve rigor around real implementation changes, milestone advancement, decision progression, publication, and completion evidence. Progress must never be inferred solely from prompt completion.
+
+### Execute Validation Cases
+
+Validation should cover fresh execution, resume, decision continuation, decision transfer, execution slice, repository changes, no-change iteration, stall, cancellation, failure, handoff, operational context, publication, completion review, completion certification, and workflow completion.
+
 ## Acceptance
 
 - [ ] Execute runs through the canonical runtime and controller.
