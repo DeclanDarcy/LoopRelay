@@ -4,61 +4,65 @@ Objective: implement one workflow-agnostic lifecycle for executing a prompt-driv
 
 ## Work
 
-- [ ] Add runtime services under `src/LoopRelay.Orchestration.Primitives/Runtime`:
-  - [ ] `TransitionRuntime`
-  - [ ] `ITransitionDefinitionResolver`
-  - [ ] `IProductResolver`
-  - [ ] `IGateEvaluator`
-  - [ ] `IPromptContextBuilder`
-  - [ ] `IPromptRenderer`
-  - [ ] `IPromptExecutor`
-  - [ ] `IOutputInterpreter`
-  - [ ] `IProductValidator`
-  - [ ] `IEffectExecutor`
-  - [ ] `ITransitionRunStore`
-  - [ ] `ITransitionEvidenceStore`
-- [ ] Implement the lifecycle:
-  - [ ] Resolve transition definition.
-  - [ ] Resolve required inputs.
-  - [ ] Evaluate input gate.
-  - [ ] Construct prompt context.
-  - [ ] Render prompt.
-  - [ ] Persist transition start.
-  - [ ] Execute prompt.
-  - [ ] Capture raw output.
-  - [ ] Interpret output.
-  - [ ] Validate declared outputs.
-  - [ ] Apply effects.
-  - [ ] Persist completion.
-  - [ ] Resolve eligible successors.
-- [ ] Add durable transition states:
-  - [ ] Not started.
-  - [ ] Started.
-  - [ ] Prompt completed.
-  - [ ] Output interpreted.
-  - [ ] Output validated.
-  - [ ] Effects partially applied.
-  - [ ] Effects applied.
-  - [ ] Completed.
-  - [ ] Blocked.
-  - [ ] Failed.
-  - [ ] Cancelled.
-- [ ] Implement execution postures without workflow-specific runtime types:
-  - [ ] One-shot agent prompt.
-  - [ ] Persistent session.
-  - [ ] Warm session.
-  - [ ] Scoped artifact operation.
-  - [ ] Decision session.
-  - [ ] Read-only prompt.
-- [ ] Extract reusable pieces from `RoadmapPromptTransitionRunner`:
-  - [ ] Input snapshot hashing.
-  - [ ] Transition journal events.
-  - [ ] Raw prompt output capture.
-  - [ ] Failure persistence pattern.
-- [ ] Keep output validation after prompt execution and before completion.
-- [ ] Ensure a successful prompt response cannot complete a transition unless required products validate.
-- [ ] Add effect execution with deterministic ordering and durable partial-failure evidence.
-    - [ ] Add representative runtime harness coverage for one roadmap transition, preferably completion-context bootstrap, without migrating workflows yet.
+- [x] Add runtime services under `src/LoopRelay.Orchestration.Primitives/Runtime`:
+  - [x] `TransitionRuntime`
+  - [x] `ITransitionDefinitionResolver`
+  - [x] `IProductResolver`
+  - [x] `IGateEvaluator`
+  - [x] `IPromptContextBuilder`
+  - [x] `IPromptRenderer`
+  - [x] `IPromptExecutor`
+  - [x] `IOutputInterpreter`
+  - [x] `IProductValidator`
+  - [x] `IEffectExecutor`
+  - [x] `ITransitionRunStore`
+  - [x] `ITransitionEvidenceStore`
+- [x] Implement the lifecycle:
+  - [x] Resolve transition definition.
+  - [x] Resolve required inputs.
+  - [x] Evaluate input gate.
+  - [x] Construct prompt context.
+  - [x] Render prompt.
+  - [x] Persist transition start.
+  - [x] Execute prompt.
+  - [x] Capture raw output.
+  - [x] Interpret output.
+  - [x] Validate declared outputs.
+  - [x] Apply effects.
+  - [x] Persist completion.
+  - [x] Resolve eligible successors.
+- [x] Add durable transition states:
+  - [x] Not started.
+  - [x] Started.
+  - [x] Prompt completed.
+  - [x] Output interpreted.
+  - [x] Output validated.
+  - [x] Effects partially applied.
+  - [x] Effects applied.
+  - [x] Completed.
+  - [x] Blocked.
+  - [x] Failed.
+  - [x] Cancelled.
+- [x] Implement execution postures without workflow-specific runtime types:
+  - [x] One-shot agent prompt.
+  - [x] Persistent session.
+  - [x] Warm session.
+  - [x] Scoped artifact operation.
+  - [x] Decision session.
+  - [x] Read-only prompt.
+- [x] Extract reusable pieces from `RoadmapPromptTransitionRunner`:
+  - [x] Input snapshot hashing.
+  - [x] Transition journal events.
+  - [x] Raw prompt output capture.
+  - [x] Failure persistence pattern.
+- [x] Keep output validation after prompt execution and before completion.
+- [x] Ensure a successful prompt response cannot complete a transition unless required products validate.
+- [x] Add effect execution with deterministic ordering and durable partial-failure evidence.
+    - [x] Add representative runtime harness coverage for one roadmap transition, preferably completion-context bootstrap, without migrating workflows yet.
+- [x] Persist canonical effect records from the transition runtime with the actual transition run id.
+- [x] Persist canonical gate evaluation records for transition input and output gates.
+- [x] Persist recoverable canonical blocker records for blocked input gates and prompt-context blocks.
+- [x] Persist canonical recovery markers for blocked, failed, cancelled, and partially applied transition outcomes.
 
 ## Detail Requirements
 
@@ -176,6 +180,6 @@ M2 tests should stress missing inputs, invalid inputs, blocked gates, malformed 
 
 ## Acceptance
 
-- [ ] Transition runtime tests cover missing inputs, stale inputs, invalid inputs, malformed prompt output, missing output, invalid output, partial effect failure, cancellation, and persistence failure.
-- [ ] The representative transition executes fully through the runtime in tests.
-- [ ] No workflow migration has begun.
+- [x] Transition runtime tests cover missing inputs, stale inputs, invalid inputs, malformed prompt output, missing output, invalid output, partial effect failure, cancellation, and persistence failure.
+- [x] The representative transition executes fully through the runtime in tests.
+- [x] No workflow migration has begun.

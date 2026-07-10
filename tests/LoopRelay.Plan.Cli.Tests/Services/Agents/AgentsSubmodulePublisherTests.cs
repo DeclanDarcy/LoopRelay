@@ -306,6 +306,7 @@ public class AgentsSubmodulePublisherTests
     }
 
     [Fact]
+    [Trait("Baseline", "KnownRisk")]
     public async Task RecordParentGitlinkAsync_PushFailure_WhenUpstreamIsAtADifferentSha_Throws()
     {
         // Both shas resolve (non-empty) but DIFFER: the parent pointer commit did NOT land upstream, and

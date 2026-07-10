@@ -697,6 +697,7 @@ public sealed class WorkspaceSqliteStoreTests
     }
 
     [Fact]
+    [Trait("Baseline", "KnownRisk")]
     public async Task Workspace_sync_import_blocks_stale_export_when_database_changed()
     {
         using var repo = new TempRepo();
@@ -716,6 +717,7 @@ public sealed class WorkspaceSqliteStoreTests
     }
 
     [Fact]
+    [Trait("Baseline", "KnownRisk")]
     public async Task Workspace_sync_import_reports_conflict_when_database_and_export_changed()
     {
         using var repo = new TempRepo();

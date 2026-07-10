@@ -4,61 +4,65 @@ Objective: migrate the implementation loop into a first-class iterative Execute 
 
 ## Work
 
-- [ ] Add `ExecuteWorkflowDefinition` under `src/LoopRelay.Cli/Services/Workflows`.
-- [ ] Define stages:
-  - [ ] Execution Readiness.
-  - [ ] Implementation Planning.
-  - [ ] Implementation.
-  - [ ] Execution Continuity.
-  - [ ] Completion.
-  - [ ] Workflow Completion.
-- [ ] Define transitions:
-  - [ ] Verify Execution Readiness.
-  - [ ] Generate Decision.
-  - [ ] Transfer Decision Session.
-  - [ ] Continue Decision Session.
-  - [ ] Execute Implementation Slice.
-  - [ ] Generate Handoff.
-  - [ ] Update Operational Context.
-  - [ ] Publish Repository State.
-  - [ ] Evaluate Commit.
-  - [ ] Evaluate Milestone Completion.
-  - [ ] Run Non-Implementation Review.
-  - [ ] Run Completion Certification.
-  - [ ] Interpret Completion Route.
-  - [ ] Verify Workflow Exit Gate.
-- [ ] Model iteration explicitly:
-  - [ ] Readiness.
-  - [ ] Planning.
-  - [ ] Implementation.
-  - [ ] Continuity.
-  - [ ] Completion.
-  - [ ] Continue to readiness or close.
-- [ ] Adapt current components:
-  - [ ] `MilestoneGate` becomes readiness/completion gate support.
-  - [ ] `DecisionSession` becomes decision-session execution posture.
-  - [ ] `ExecutionStep` becomes implementation-slice transition execution.
-  - [ ] `LoopArtifacts` rotation methods become effects with evidence.
-  - [ ] `AgentsSubmodulePublisher` becomes publish effect.
-  - [ ] `CommitGate` becomes commit evaluation effect/gate support.
-  - [ ] Non-implementation post-execution review becomes a transition.
-  - [ ] Non-implementation completion review and completion certification become the canonical completion stage.
-- [ ] Establish a durable closed-state marker:
-  - [ ] `CertifiedCompletion` product.
-  - [ ] Completed Execute workflow state.
-  - [ ] Archive record.
-  - [ ] Completion evidence.
-  - [ ] Product references that remain resolvable after live Plan/milestone artifacts are archived.
-- [ ] Make completion authority singular.
-- [ ] Ensure Execute is the only active orchestration path that may own completion closure; old execution entry points are retired rather than delegated.
-- [ ] Add recovery for interruption during:
-  - [ ] Completion review.
-  - [ ] Completion evaluation.
-  - [ ] Archive materialization.
-  - [ ] Archive synthesis.
-  - [ ] Roadmap completion-context update.
-  - [ ] Final closed-state persistence.
-- [ ] Preserve stall semantics with durable evidence.
+- [x] Add `ExecuteWorkflowDefinition` under `src/LoopRelay.Cli/Services/Workflows`.
+- [x] Define stages:
+  - [x] Execution Readiness.
+  - [x] Implementation Planning.
+  - [x] Implementation.
+  - [x] Execution Continuity.
+  - [x] Completion.
+  - [x] Workflow Completion.
+- [x] Define transitions:
+  - [x] Verify Execution Readiness.
+  - [x] Generate Decision.
+  - [x] Transfer Decision Session.
+  - [x] Continue Decision Session.
+  - [x] Execute Implementation Slice.
+  - [x] Generate Handoff.
+  - [x] Update Operational Context.
+  - [x] Publish Repository State.
+  - [x] Evaluate Commit.
+  - [x] Evaluate Milestone Completion.
+  - [x] Run Non-Implementation Review.
+  - [x] Run Completion Certification.
+  - [x] Interpret Completion Route.
+  - [x] Verify Workflow Exit Gate.
+- [x] Model iteration explicitly:
+  - [x] Readiness.
+  - [x] Planning.
+  - [x] Implementation.
+  - [x] Continuity.
+  - [x] Completion.
+  - [x] Continue to readiness or close.
+- [x] Adapt current components:
+  - [x] `MilestoneGate` becomes readiness/completion gate support.
+  - [x] `DecisionSession` becomes decision-session execution posture.
+  - [x] `ExecutionStep` becomes implementation-slice transition execution.
+  - [x] `LoopArtifacts` rotation methods become effects with evidence.
+  - [x] `AgentsSubmodulePublisher` becomes publish effect.
+  - [x] `CommitGate` becomes commit evaluation effect/gate support.
+  - [x] Non-implementation post-execution review becomes a transition.
+  - [x] Non-implementation completion review and completion certification become the canonical completion stage.
+    - [x] Non-implementation completion review becomes a canonical completion-stage transition.
+    - [x] Completion certification becomes a canonical completion-stage transition.
+- [x] Generated Execute prompt templates render through the unified runtime prompt renderer with source-hash evidence where generated prompt assets exist.
+- [x] Establish a durable closed-state marker:
+  - [x] `CertifiedCompletion` product.
+  - [x] Completed Execute workflow state.
+  - [x] Archive record.
+  - [x] Completion evidence.
+  - [x] Product references that remain resolvable after live Plan/milestone artifacts are archived.
+  - [x] `VerifyWorkflowExitGate` closes Execute through the canonical runtime from canonical completion evidence and completion route products.
+- [x] Make completion authority singular.
+- [x] Ensure Execute is the only active orchestration path that may own completion closure; old execution entry points are retired rather than delegated.
+- [x] Add recovery for interruption during:
+  - [x] Completion review.
+  - [x] Completion evaluation.
+  - [x] Archive materialization.
+  - [x] Archive synthesis.
+  - [x] Roadmap completion-context update.
+  - [x] Final closed-state persistence.
+- [x] Preserve stall semantics with durable evidence.
 
 ## Detail Requirements
 
@@ -175,8 +179,8 @@ Validation should cover fresh execution, resume, decision continuation, decision
 
 ## Acceptance
 
-- [ ] Execute runs through the canonical runtime and controller.
-- [ ] Execution stage resolves correctly after process restart.
-- [ ] Already-closed execution is idempotently discoverable.
-- [ ] Completion closure is singular and durable.
-- [ ] Current execution tests pass or are intentionally updated to assert canonical state.
+- [x] Execute runs through the canonical runtime and controller.
+- [x] Execution stage resolves correctly after process restart.
+- [x] Already-closed execution is idempotently discoverable.
+- [x] Completion closure is singular and durable.
+- [x] Current execution tests pass or are intentionally updated to assert canonical state.

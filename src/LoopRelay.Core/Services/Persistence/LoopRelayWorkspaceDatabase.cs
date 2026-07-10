@@ -9,7 +9,7 @@ namespace LoopRelay.Core.Services.Persistence;
 /// </summary>
 public static class LoopRelayWorkspaceDatabase
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public static string Resolve(Repository repository)
@@ -32,13 +32,12 @@ public static class LoopRelayWorkspaceDatabase
         CancellationToken cancellationToken = default)
     {
         await ExecuteAsync(connection, "PRAGMA foreign_keys = ON;", cancellationToken);
-        string? existingSchemaVersion = await ReadExistingSchemaVersionAsync(connection, cancellationToken);
-        string currentSchemaVersion = CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture);
+        int? existingSchemaVersion = await ReadExistingSchemaVersionAsync(connection, cancellationToken);
         if (existingSchemaVersion is not null &&
-            !string.Equals(existingSchemaVersion, currentSchemaVersion, StringComparison.Ordinal))
+            (existingSchemaVersion < 1 || existingSchemaVersion > CurrentSchemaVersion))
         {
             throw new InvalidOperationException(
-                $"Unsupported SQLite schema version `{existingSchemaVersion}`; expected `{currentSchemaVersion}`.");
+                $"Unsupported SQLite schema version `{existingSchemaVersion}`; expected `1..{CurrentSchemaVersion}`.");
         }
 
         await ExecuteAsync(connection, SchemaSql, cancellationToken);
@@ -50,7 +49,7 @@ public static class LoopRelayWorkspaceDatabase
             ON CONFLICT(key) DO UPDATE SET value = excluded.value;
             """,
             cancellationToken,
-            ("$schema_version", currentSchemaVersion));
+            ("$schema_version", CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture)));
         await ExecuteAsync(
             connection,
             """
@@ -63,7 +62,7 @@ public static class LoopRelayWorkspaceDatabase
             cancellationToken);
     }
 
-    private static async Task<string?> ReadExistingSchemaVersionAsync(
+    private static async Task<int?> ReadExistingSchemaVersionAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
@@ -75,7 +74,18 @@ public static class LoopRelayWorkspaceDatabase
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT value FROM schema_metadata WHERE key = 'schema_version';";
         object? scalar = await command.ExecuteScalarAsync(cancellationToken);
-        return scalar is null or DBNull ? null : Convert.ToString(scalar, CultureInfo.InvariantCulture);
+        string? value = scalar is null or DBNull ? null : Convert.ToString(scalar, CultureInfo.InvariantCulture);
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed))
+        {
+            throw new InvalidOperationException($"Unsupported SQLite schema version `{value}`; expected `1..{CurrentSchemaVersion}`.");
+        }
+
+        return parsed;
     }
 
     private static async Task<bool> TableExistsAsync(
@@ -287,6 +297,128 @@ public static class LoopRelayWorkspaceDatabase
             marker_json text not null
         );
 
+        CREATE TABLE IF NOT EXISTS canonical_workflow_states(
+            workflow_identity text primary key,
+            state text not null,
+            current_stage text,
+            outcome text,
+            updated_at text not null,
+            evidence_json text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_stage_states(
+            workflow_identity text not null,
+            stage_identity text not null,
+            state text not null,
+            updated_at text not null,
+            evidence_json text not null,
+            primary key(workflow_identity, stage_identity)
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_transition_runs(
+            run_id text primary key,
+            workflow_identity text not null,
+            stage_identity text not null,
+            transition_identity text not null,
+            state text not null,
+            outcome text not null,
+            started_at text not null,
+            completed_at text,
+            input_snapshot_hash text,
+            explanation text not null,
+            evidence_json text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_transition_evidence(
+            evidence_id integer primary key autoincrement,
+            run_id text not null,
+            transition_identity text not null,
+            event_name text not null,
+            recorded_at text not null,
+            state text not null,
+            explanation text not null,
+            evidence_json text not null,
+            document_json text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_product_records(
+            product_identity text primary key,
+            producer_workflow text not null,
+            producer_transition text not null,
+            intended_consumers_json text not null,
+            repository_ownership text not null,
+            authority text not null,
+            storage_representations_json text not null,
+            causal_identity text not null,
+            freshness text not null,
+            validation_state text not null,
+            lifecycle text not null,
+            evidence_locations_json text not null,
+            updated_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_gate_evaluations(
+            evaluation_id integer primary key autoincrement,
+            workflow_identity text not null,
+            stage_identity text,
+            transition_identity text,
+            gate_identity text not null,
+            status text not null,
+            evaluated_at text not null,
+            requirements_json text not null,
+            explanation text not null,
+            evidence_json text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_effect_records(
+            record_id integer primary key autoincrement,
+            run_id text not null,
+            effect_identity text not null,
+            category text not null,
+            status text not null,
+            recorded_at text not null,
+            explanation text not null,
+            evidence_json text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_blockers(
+            blocker_id text primary key,
+            workflow_identity text not null,
+            stage_identity text,
+            transition_identity text,
+            category text not null,
+            reason text not null,
+            authority text not null,
+            required_action text not null,
+            recoverable integer not null,
+            evidence_json text not null,
+            created_at text not null,
+            resolved_at text
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_recovery_markers(
+            marker_id text primary key,
+            workflow_identity text not null,
+            stage_identity text,
+            transition_identity text,
+            semantics text not null,
+            supported_actions_json text not null,
+            unsupported_actions_json text not null,
+            evidence_json text not null,
+            recorded_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_workflow_chain_runs(
+            chain_run_id text primary key,
+            chain_identity text not null,
+            current_workflow text not null,
+            status text not null,
+            started_at text not null,
+            completed_at text,
+            explanation text not null,
+            evidence_json text not null
+        );
+
         CREATE TABLE IF NOT EXISTS decision_session_resume(
             id integer primary key check (id = 1),
             document_json text not null,
@@ -309,6 +441,15 @@ public static class LoopRelayWorkspaceDatabase
         CREATE INDEX IF NOT EXISTS idx_transition_journal_correlation_id ON transition_journal(correlation_id);
         CREATE INDEX IF NOT EXISTS idx_loop_history_kind_sequence_desc ON loop_history(kind, sequence desc);
         CREATE INDEX IF NOT EXISTS idx_execution_evidence_stem_sequence_desc ON execution_evidence(stem, sequence desc);
+        CREATE INDEX IF NOT EXISTS idx_canonical_stage_states_workflow ON canonical_stage_states(workflow_identity);
+        CREATE INDEX IF NOT EXISTS idx_canonical_transition_runs_workflow_stage
+            ON canonical_transition_runs(workflow_identity, stage_identity, transition_identity);
+        CREATE INDEX IF NOT EXISTS idx_canonical_transition_evidence_run ON canonical_transition_evidence(run_id);
+        CREATE INDEX IF NOT EXISTS idx_canonical_gate_evaluations_workflow
+            ON canonical_gate_evaluations(workflow_identity, stage_identity, transition_identity);
+        CREATE INDEX IF NOT EXISTS idx_canonical_effect_records_run ON canonical_effect_records(run_id);
+        CREATE INDEX IF NOT EXISTS idx_canonical_blockers_workflow ON canonical_blockers(workflow_identity, stage_identity, transition_identity);
+        CREATE INDEX IF NOT EXISTS idx_canonical_workflow_chain_runs_chain ON canonical_workflow_chain_runs(chain_identity, started_at);
         CREATE INDEX IF NOT EXISTS idx_session_telemetry_order
             ON session_telemetry_events(recorded_at, event_id);
         """;

@@ -39,15 +39,22 @@ public sealed partial class CompletionArtifacts(
                 .ToArray();
         }
 
+        IReadOnlyList<string> files = await _store.ListAsync(Resolve(relativeDirectory), searchPattern);
+        string[] filesystemPaths = files
+            .Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path))
+            .ToArray();
+
         if (TryLoopHistoryKind(relativeDirectory, out string? kind) &&
             kind is not null &&
             await ListSqliteLoopHistoryAsync(kind, searchPattern) is { } sqliteLoopHistory)
         {
-            return sqliteLoopHistory;
+            return sqliteLoopHistory
+                .Concat(filesystemPaths)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
         }
 
-        IReadOnlyList<string> files = await _store.ListAsync(Resolve(relativeDirectory), searchPattern);
-        return files.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToArray();
+        return filesystemPaths;
     }
 
     public async Task<IReadOnlyList<string>> ListDirectoriesAsync(string relativeDirectory)

@@ -4,62 +4,66 @@ Objective: make the unified CLI the authoritative orchestration surface.
 
 ## Work
 
-- [ ] Replace `src/LoopRelay.Cli/Services/Cli/CliArguments.cs` with unified parsing that supports:
-  - [ ] Current-directory default repository.
-  - [ ] `--repo <path>`.
-  - [ ] `--eval`.
-  - [ ] `--traditional`.
-  - [ ] Bounded workflow subcommands.
-  - [ ] Status, unblock, and storage subcommands.
-- [ ] Update `src/LoopRelay.Cli/Program.cs` to:
-  - [ ] Set UTF-8 output.
-  - [ ] Parse unified invocation.
-  - [ ] Run storage verification before mutating orchestration.
-  - [ ] Create unified composition.
-  - [ ] Execute `WorkflowChainRunner`.
-  - [ ] Map canonical outcomes to exit codes.
-- [ ] Add `UnifiedCliComposition` that wires:
-  - [ ] Repository observer.
-  - [ ] Storage verifier.
-  - [ ] Workflow resolver.
-  - [ ] Transition runtime.
-  - [ ] Workflow controller.
-  - [ ] Workflow definitions.
-  - [ ] Integrations for prompts, agents, permissions, projections, artifacts, completion, Git, and publication.
-- [ ] Retire old CLI entry points:
-  - [ ] `LoopRelay.Roadmap.Cli` no longer ships as a public executable.
-  - [ ] `LoopRelay.Plan.Cli` no longer ships as a public executable.
-  - [ ] The old Execute invocation no longer ships as a separate public executable.
-  - [ ] Reusable domain code may remain only as internal services invoked by `src/LoopRelay.Cli`.
-- [ ] Update publish scripts:
-  - [ ] `publish-cli.bat` publishes the unified executable.
-  - [ ] `publish-plan-cli.bat` and `publish-roadmap-cli.bat` are retired or changed to fail with migration guidance to `publish-cli.bat`.
-- [ ] Add unified status output that explains:
-  - [ ] Invocation mode.
-  - [ ] Selected chain.
-  - [ ] Selected workflow.
-  - [ ] Current stage.
-  - [ ] Next eligible transition.
-  - [ ] Satisfied gates.
-  - [ ] Unsatisfied gates.
-  - [ ] Blockers.
-  - [ ] Storage authority.
-  - [ ] User action required, if any.
-- [ ] Retire duplicate active authorities:
-  - [ ] Roadmap state-machine orchestration.
-  - [ ] Plan pipeline sequencing.
-  - [ ] Execution loop orchestration.
-  - [ ] Duplicate completion ownership.
-  - [ ] CLI-to-CLI chaining.
-- [ ] Keep universal-CLI migration readers for:
-  - [ ] Old roadmap state.
-  - [ ] Partial Plan artifacts.
-  - [ ] Old decision-session resume state.
-  - [ ] Filesystem exports.
-  - [ ] Imported/canonical SQLite states.
-  - [ ] Pre-unification transition journals.
-  - [ ] Pre-unification lifecycle rows.
-  - [ ] Completion archives.
+- [x] Replace `src/LoopRelay.Cli/Services/Cli/CliArguments.cs` with unified parsing that supports:
+  - [x] Current-directory default repository.
+  - [x] `--repo <path>`.
+  - [x] `--eval`.
+  - [x] `--traditional`.
+  - [x] Bounded workflow subcommands.
+  - [x] Status, unblock, and storage subcommands.
+- [x] Update `src/LoopRelay.Cli/Program.cs` to:
+  - [x] Set UTF-8 output.
+  - [x] Parse unified invocation.
+  - [x] Run storage verification before mutating orchestration.
+  - [x] Create unified composition.
+  - [x] Execute `WorkflowChainRunner`.
+  - [x] Map canonical outcomes to exit codes.
+- [x] Add `UnifiedCliComposition` that wires:
+  - [x] Repository observer.
+  - [x] Storage verifier.
+  - [x] Workflow resolver.
+  - [x] Transition runtime.
+  - [x] Workflow controller.
+  - [x] Workflow definitions.
+  - [x] Local verification effects materialize durable evidence files under `.LoopRelay/evidence/local-verification`.
+  - [x] Generated prompt templates render through the unified runtime prompt renderer with source-hash evidence for registered canonical prompt assets.
+  - [x] Integrations for prompts, agents, permissions, projections, artifacts, completion, Git, and publication.
+- [x] Retire old CLI entry points:
+  - [x] `LoopRelay.Roadmap.Cli` no longer ships as a public executable.
+  - [x] `LoopRelay.Plan.Cli` no longer ships as a public executable.
+  - [x] The old Execute invocation no longer ships as a separate public executable.
+  - [x] Reusable domain code may remain only as internal services invoked by `src/LoopRelay.Cli`.
+- [x] Update publish scripts:
+  - [x] `publish-cli.bat` publishes the unified executable.
+  - [x] `publish-plan-cli.bat` and `publish-roadmap-cli.bat` are retired or changed to fail with migration guidance to `publish-cli.bat`.
+- [x] Add unified status output that explains:
+  - [x] Invocation mode.
+  - [x] Selected chain.
+  - [x] Selected workflow.
+  - [x] Current stage.
+  - [x] Next eligible transition.
+  - [x] Satisfied gates.
+  - [x] Unsatisfied gates.
+  - [x] Blockers.
+  - [x] Storage authority.
+  - [x] User action required, if any.
+- [x] Add unified `unblock` execution that resolves recoverable canonical blockers and restores blocked canonical workflow state without invoking old CLI entry points.
+- [x] Wire unified `storage import`, `storage export`, and `storage sync` to the shared workspace database contract behind the unified CLI surface.
+- [x] Retire duplicate active authorities:
+  - [x] Roadmap state-machine orchestration.
+  - [x] Plan pipeline sequencing.
+  - [x] Execution loop orchestration.
+  - [x] Duplicate completion ownership.
+  - [x] CLI-to-CLI chaining.
+- [x] Keep universal-CLI migration readers for:
+  - [x] Old roadmap state.
+  - [x] Partial Plan artifacts.
+  - [x] Old decision-session resume state.
+  - [x] Filesystem exports.
+  - [x] Imported/canonical SQLite states.
+  - [x] Pre-unification transition journals.
+  - [x] Pre-unification lifecycle rows.
+  - [x] Completion archives.
 
 ## Detail Requirements
 
@@ -260,18 +264,18 @@ Final state:
 
 ## Acceptance
 
-- [ ] Required invocations work:
-  - [ ] `looprelay`
-  - [ ] `looprelay --eval`
-  - [ ] `looprelay --traditional`
-  - [ ] `looprelay eval`
-  - [ ] `looprelay traditional`
-  - [ ] `looprelay plan`
-  - [ ] `looprelay execute`
-- [ ] Default invocation selects EvalRoadmap when `.agents/evals/*.md` exists and TraditionalRoadmap otherwise.
-- [ ] Chained modes continue through Plan and Execute.
-- [ ] Bounded commands stop after one workflow.
-- [ ] Execute certified closure ends the chain.
-- [ ] Automatic storage verification is present and non-repairing.
-- [ ] Old CLI entry points are retired and no longer ship as public executable surfaces.
-- [ ] `dotnet test LoopRelay.slnx` passes.
+- [x] Required invocations work:
+  - [x] `looprelay`
+  - [x] `looprelay --eval`
+  - [x] `looprelay --traditional`
+  - [x] `looprelay eval`
+  - [x] `looprelay traditional`
+  - [x] `looprelay plan`
+  - [x] `looprelay execute`
+- [x] Default invocation selects EvalRoadmap when `.agents/evals/*.md` exists and TraditionalRoadmap otherwise.
+- [x] Chained modes continue through Plan and Execute.
+- [x] Bounded commands stop after one workflow.
+- [x] Execute certified closure ends the chain.
+- [x] Automatic storage verification is present and non-repairing.
+- [x] Old CLI entry points are retired and no longer ship as public executable surfaces.
+- [x] `dotnet test LoopRelay.slnx` passes.

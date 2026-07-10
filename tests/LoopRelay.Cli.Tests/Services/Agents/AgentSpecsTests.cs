@@ -79,6 +79,21 @@ public class AgentSpecsTests
     }
 
     [Fact]
+    public void Review_IsPlanningReadOnlyHighXhigh()
+    {
+        AgentSessionSpec spec = AgentSpecs.Review(Repo);
+
+        Assert.Equal(SessionRole.Planning, spec.Role);
+        Assert.Equal("read-only", spec.Sandbox.Identifier);
+        Assert.False(spec.Sandbox.CanWriteWorkspace);
+        Assert.False(spec.Sandbox.CanAccessNetwork);
+        Assert.False(spec.Sandbox.RequiresApproval);
+        Assert.Equal(AgentEffortLevel.High, spec.Effort.Level);
+        Assert.Equal("xhigh", spec.Effort.Identifier);
+        Assert.Equal(Repo.Path, spec.WorkingDirectory);
+    }
+
+    [Fact]
     public void ScopedArtifactOperation_IsReadOnlyApprovalGatedWithOperationProfile()
     {
         var profile = new OperationPermissionProfile(

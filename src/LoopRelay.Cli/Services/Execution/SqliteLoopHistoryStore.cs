@@ -41,10 +41,11 @@ internal static class LoopWorkspaceDatabase
             string? version = ScalarString(
                 connection,
                 "SELECT value FROM schema_metadata WHERE key = 'schema_version';");
-            if (!string.Equals(
-                version,
-                CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture),
-                StringComparison.Ordinal))
+            if (version is not "1" &&
+                !string.Equals(
+                    version,
+                    CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture),
+                    StringComparison.Ordinal))
             {
                 return false;
             }

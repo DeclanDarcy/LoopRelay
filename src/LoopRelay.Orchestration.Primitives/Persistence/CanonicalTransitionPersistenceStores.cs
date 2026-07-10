@@ -1,0 +1,242 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using LoopRelay.Orchestration.Resolution;
+using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Workflows;
+
+namespace LoopRelay.Orchestration.Persistence;
+
+public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStore _store) : ITransitionRunStore
+{
+    public Task PersistStartedAsync(
+        TransitionRunStarted started,
+        CancellationToken cancellationToken) =>
+        _store.UpsertTransitionRunAsync(
+            new CanonicalTransitionRunRecord(
+                started.RunId,
+                started.Request.Workflow,
+                started.Request.Stage,
+                started.Definition.Identity,
+                TransitionDurableState.Started,
+                RuntimeOutcomeKind.Waiting,
+                started.StartedAt,
+                null,
+                started.InputSnapshot.Hash,
+                "Transition started.",
+                [started.RenderedPrompt.EvidenceLocation, started.InputSnapshot.Hash]),
+            cancellationToken);
+
+    public async Task PersistStateAsync(
+        TransitionRunStateUpdate update,
+        CancellationToken cancellationToken)
+    {
+        CanonicalTransitionRunRecord existing = await ExistingOrFallbackAsync(update.RunId, update.Transition, cancellationToken);
+        await _store.UpsertTransitionRunAsync(
+            existing with
+            {
+                State = update.State,
+                Outcome = OutcomeFor(update.State),
+                CompletedAt = IsTerminal(update.State) ? update.RecordedAt : existing.CompletedAt,
+                Explanation = update.Explanation,
+                Evidence = update.Evidence,
+            },
+            cancellationToken);
+    }
+
+    public async Task PersistCompletedAsync(
+        TransitionRunCompleted completed,
+        CancellationToken cancellationToken)
+    {
+        CanonicalTransitionRunRecord existing = await ExistingOrFallbackAsync(
+            completed.RunId,
+            completed.Transition,
+            cancellationToken);
+        await _store.UpsertTransitionRunAsync(
+            existing with
+            {
+                State = completed.Result.DurableState,
+                Outcome = completed.Result.Outcome,
+                CompletedAt = completed.CompletedAt,
+                Explanation = completed.Result.Explanation,
+                Evidence = completed.Result.Evidence,
+            },
+            cancellationToken);
+    }
+
+    private async Task<CanonicalTransitionRunRecord> ExistingOrFallbackAsync(
+        string runId,
+        WorkflowTransitionIdentity transition,
+        CancellationToken cancellationToken)
+    {
+        CanonicalWorkflowPersistenceSnapshot snapshot = await _store.LoadSnapshotAsync(cancellationToken);
+        CanonicalTransitionRunRecord? existing = snapshot.TransitionRuns.FirstOrDefault(run => run.RunId == runId);
+        return existing ?? new CanonicalTransitionRunRecord(
+            runId,
+            new WorkflowIdentity("Unknown"),
+            new WorkflowStageIdentity("Unknown"),
+            transition,
+            TransitionDurableState.NotStarted,
+            RuntimeOutcomeKind.Waiting,
+            DateTimeOffset.UtcNow,
+            null,
+            null,
+            "Transition run state was recorded before a start record was found.",
+            []);
+    }
+
+    private static RuntimeOutcomeKind OutcomeFor(TransitionDurableState state) =>
+        state switch
+        {
+            TransitionDurableState.Completed => RuntimeOutcomeKind.Completed,
+            TransitionDurableState.Stalled => RuntimeOutcomeKind.Stalled,
+            TransitionDurableState.Blocked => RuntimeOutcomeKind.Blocked,
+            TransitionDurableState.Failed => RuntimeOutcomeKind.Failed,
+            TransitionDurableState.Cancelled => RuntimeOutcomeKind.Cancelled,
+            _ => RuntimeOutcomeKind.Waiting,
+        };
+
+    private static bool IsTerminal(TransitionDurableState state) =>
+        state is TransitionDurableState.Completed
+            or TransitionDurableState.Stalled
+            or TransitionDurableState.Blocked
+            or TransitionDurableState.Failed
+            or TransitionDurableState.Cancelled;
+}
+
+public sealed class CanonicalTransitionEvidenceStore(CanonicalWorkflowPersistenceStore _store) : ITransitionEvidenceStore
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    public Task RecordEventAsync(
+        TransitionEvidenceEvent evidence,
+        CancellationToken cancellationToken) =>
+        _store.AppendTransitionEvidenceAsync(
+            new CanonicalTransitionEvidenceRecord(
+                0,
+                evidence.RunId,
+                evidence.Transition,
+                evidence.EventName,
+                evidence.RecordedAt,
+                evidence.State,
+                evidence.Explanation,
+                evidence.Evidence,
+                JsonSerializer.Serialize(evidence, JsonOptions)),
+            cancellationToken);
+
+    public Task RecordRawOutputAsync(
+        string runId,
+        WorkflowTransitionIdentity transition,
+        PromptExecutionResult executionResult,
+        CancellationToken cancellationToken) =>
+        _store.AppendTransitionEvidenceAsync(
+            new CanonicalTransitionEvidenceRecord(
+                0,
+                runId,
+                transition,
+                "RawPromptOutputCaptured",
+                DateTimeOffset.UtcNow,
+                TransitionDurableState.PromptCompleted,
+                executionResult.FailureMessage ?? "Raw prompt output captured.",
+                ["raw-output"],
+                JsonSerializer.Serialize(executionResult, JsonOptions)),
+            cancellationToken);
+
+    public Task RecordFailureAsync(
+        string runId,
+        WorkflowTransitionIdentity transition,
+        string failure,
+        CancellationToken cancellationToken) =>
+        _store.AppendTransitionEvidenceAsync(
+            new CanonicalTransitionEvidenceRecord(
+                0,
+                runId,
+                transition,
+                "TransitionFailure",
+                DateTimeOffset.UtcNow,
+                TransitionDurableState.Failed,
+                failure,
+                ["failure"],
+                JsonSerializer.Serialize(new { failure }, JsonOptions)),
+            cancellationToken);
+}
+
+public sealed class CanonicalTransitionBlockerStore(CanonicalWorkflowPersistenceStore _store) : ITransitionBlockerStore
+{
+    public Task RecordBlockerAsync(
+        TransitionBlockerCapture blocker,
+        CancellationToken cancellationToken) =>
+        _store.UpsertBlockerAsync(
+            new CanonicalBlockerRecord(
+                $"{blocker.RunId}:{blocker.Transition.Value}",
+                blocker.Request.Workflow,
+                blocker.Request.Stage,
+                blocker.Transition,
+                new ResolutionBlocker(
+                    blocker.Category,
+                    blocker.Reason,
+                    "canonical transition runtime",
+                    blocker.RequiredAction,
+                    blocker.Recoverable,
+                    blocker.Evidence),
+                blocker.RecordedAt,
+                null),
+            cancellationToken);
+}
+
+public sealed class CanonicalTransitionRecoveryStore(CanonicalWorkflowPersistenceStore _store) : ITransitionRecoveryStore
+{
+    public Task RecordRecoveryMarkerAsync(
+        TransitionRecoveryMarkerCapture marker,
+        CancellationToken cancellationToken) =>
+        _store.UpsertRecoveryMarkerAsync(
+            new CanonicalRecoveryMarkerRecord(
+                $"{marker.RunId}:{marker.Transition.Value}:{marker.DurableState}",
+                marker.Request.Workflow,
+                marker.Request.Stage,
+                marker.Transition,
+                marker.Recovery,
+                marker.Evidence,
+                marker.RecordedAt),
+            cancellationToken);
+}
+
+public sealed class CanonicalTransitionGateEvaluationStore(CanonicalWorkflowPersistenceStore _store) : ITransitionGateEvaluationStore
+{
+    public Task RecordGateEvaluationAsync(
+        TransitionGateEvaluationCapture evaluation,
+        CancellationToken cancellationToken) =>
+        _store.AppendGateEvaluationAsync(
+            new CanonicalGateEvaluationRecord(
+                0,
+                evaluation.Request.Workflow,
+                evaluation.Request.Stage,
+                evaluation.Transition,
+                evaluation.Gate.Identity,
+                evaluation.Result.Status,
+                evaluation.EvaluatedAt,
+                evaluation.Result.Requirements,
+                evaluation.Result.Explanation,
+                evaluation.Result.Evidence),
+            cancellationToken);
+}
+
+public sealed class CanonicalTransitionEffectStore(CanonicalWorkflowPersistenceStore _store) : ITransitionEffectStore
+{
+    public Task RecordEffectAsync(
+        TransitionEffectRecordCapture effect,
+        CancellationToken cancellationToken) =>
+        _store.AppendEffectRecordAsync(
+            new CanonicalEffectRecord(
+                0,
+                effect.RunId,
+                effect.Effect,
+                effect.Category,
+                effect.Status,
+                effect.RecordedAt,
+                effect.Explanation,
+                effect.Evidence),
+            cancellationToken);
+}

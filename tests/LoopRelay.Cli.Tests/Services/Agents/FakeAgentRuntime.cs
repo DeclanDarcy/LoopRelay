@@ -13,6 +13,7 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
     public int OpenSessions { get; private set; }
     public int ClosedSessions { get; private set; }
     public List<(AgentSessionSpec Spec, string Prompt)> OneShotCalls { get; } = new();
+    public List<(AgentSessionSpec Spec, string Prompt)> SessionCalls { get; } = new();
     public List<AgentSessionSpec> OpenedSpecs { get; } = new();
 
     /// <summary>When true, any open that ASKS to resume throws the typed resume failure (scripting the
@@ -45,6 +46,9 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
         return ValueTask.CompletedTask;
     }
 
-    internal AgentTurnResult RunSessionTurn(AgentSessionSpec spec, string prompt) =>
-        SessionTurns.Dequeue().Handler(spec, prompt, store);
+    internal AgentTurnResult RunSessionTurn(AgentSessionSpec spec, string prompt)
+    {
+        SessionCalls.Add((spec, prompt));
+        return SessionTurns.Dequeue().Handler(spec, prompt, store);
+    }
 }

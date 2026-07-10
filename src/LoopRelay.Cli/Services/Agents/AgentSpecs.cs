@@ -12,6 +12,24 @@ namespace LoopRelay.Cli.Services.Agents;
 /// </summary>
 internal static class AgentSpecs
 {
+    public static AgentSessionSpec PlanAuthoring(Repository repository) =>
+        new(
+            SessionIdentity.New(),
+            repository.Id.ToString("N"),
+            SessionRole.Planning,
+            new SandboxProfile("danger-full-access", CanWriteWorkspace: true, CanAccessNetwork: true, RequiresApproval: false),
+            new EffortProfile(AgentEffortLevel.High, "xhigh"),
+            repository.Path);
+
+    public static AgentSessionSpec Review(Repository repository) =>
+        new(
+            SessionIdentity.New(),
+            repository.Id.ToString("N"),
+            SessionRole.Planning,
+            new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
+            new EffortProfile(AgentEffortLevel.High, "xhigh"),
+            repository.Path);
+
     // sandboxIdentifier is the codex sandbox mode. It defaults to "workspace-write" for ordinary operational
     // sessions; the execution session overrides it to "danger-full-access" so codex runs
     // unsandboxed — matching the legacy CodexExecutionProvider's deliberate policy. danger-full-access also

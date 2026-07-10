@@ -1,0 +1,369 @@
+using LoopRelay.Orchestration.Resolution;
+using LoopRelay.Orchestration.Workflows;
+
+namespace LoopRelay.Orchestration.Runtime;
+
+public enum TransitionDurableState
+{
+    NotStarted,
+    Started,
+    PromptCompleted,
+    OutputInterpreted,
+    OutputValidated,
+    EffectsPartiallyApplied,
+    EffectsApplied,
+    Completed,
+    Stalled,
+    Blocked,
+    Failed,
+    Cancelled,
+}
+
+public enum PromptExecutionStatus
+{
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+public enum OutputInterpretationStatus
+{
+    Valid,
+    Malformed,
+    Incomplete,
+    Unexpected,
+    Blocked,
+}
+
+public enum ProductValidationStatus
+{
+    Valid,
+    Missing,
+    Invalid,
+    Stale,
+    Ambiguous,
+}
+
+public enum EffectExecutionStatus
+{
+    Succeeded,
+    Stalled,
+    PartiallyFailed,
+    Failed,
+}
+
+public sealed record TransitionRuntimeRequest(
+    WorkflowIdentity Workflow,
+    WorkflowStageIdentity Stage,
+    WorkflowTransitionIdentity Transition,
+    IReadOnlyDictionary<string, string>? Metadata = null);
+
+public sealed record ProductResolutionResult(
+    IReadOnlyList<ProductRecord> Products,
+    IReadOnlyList<ProductRequirement> Missing,
+    IReadOnlyList<ProductRecord> Stale,
+    IReadOnlyList<ProductRecord> Invalid,
+    IReadOnlyList<ProductRecord> Ambiguous)
+{
+    public bool IsUsable => Missing.Count == 0 && Stale.Count == 0 && Invalid.Count == 0 && Ambiguous.Count == 0;
+}
+
+public sealed record PromptContext(
+    WorkflowTransitionDefinition Transition,
+    ProductResolutionResult Inputs,
+    TransitionInputSnapshot InputSnapshot,
+    IReadOnlyDictionary<string, string> Metadata,
+    IReadOnlyList<PromptContextSection> Sections);
+
+public sealed record PromptContextSection(
+    string Title,
+    string Content,
+    string SourcePath,
+    IReadOnlyList<string> Evidence);
+
+public sealed class PromptContextBlockedException(
+    string message,
+    IReadOnlyList<string> evidence) : Exception(message)
+{
+    public IReadOnlyList<string> Evidence { get; } = evidence;
+}
+
+public sealed record RenderedPrompt(
+    string PromptIdentity,
+    string Text,
+    string EvidenceLocation);
+
+public sealed record PromptExecutionResult(
+    PromptExecutionStatus Status,
+    string RawOutput,
+    TimeSpan Duration,
+    IReadOnlyDictionary<string, string> Metadata,
+    string? FailureMessage = null);
+
+public sealed record InterpretedTransitionOutput(
+    OutputInterpretationStatus Status,
+    IReadOnlyList<ProductRecord> CandidateProducts,
+    string Explanation,
+    IReadOnlyList<string> Evidence);
+
+public sealed record ProductValidationResult(
+    ProductValidationStatus Status,
+    IReadOnlyList<ProductRecord> Products,
+    IReadOnlyList<ProductIdentity> MissingProducts,
+    IReadOnlyList<ProductIdentity> InvalidProducts,
+    IReadOnlyList<ProductIdentity> StaleProducts,
+    IReadOnlyList<ProductIdentity> AmbiguousProducts,
+    string Explanation,
+    IReadOnlyList<string> Evidence)
+{
+    public bool IsValid => Status == ProductValidationStatus.Valid &&
+        MissingProducts.Count == 0 &&
+        InvalidProducts.Count == 0 &&
+        StaleProducts.Count == 0 &&
+        AmbiguousProducts.Count == 0;
+}
+
+public sealed record EffectExecutionRecord(
+    EffectIdentity Effect,
+    EffectExecutionStatus Status,
+    string Explanation,
+    IReadOnlyList<string> Evidence);
+
+public sealed record EffectExecutionResult(
+    EffectExecutionStatus Status,
+    IReadOnlyList<EffectExecutionRecord> Effects,
+    string Explanation,
+    IReadOnlyList<string> Evidence)
+{
+    public bool IsSuccess => Status == EffectExecutionStatus.Succeeded;
+}
+
+public sealed record TransitionRuntimeResult(
+    RuntimeOutcomeKind Outcome,
+    TransitionDurableState DurableState,
+    WorkflowTransitionIdentity Transition,
+    GateResult? InputGate,
+    GateResult? OutputGate,
+    ProductValidationResult? ProductValidation,
+    EffectExecutionResult? Effects,
+    IReadOnlyList<WorkflowTransitionIdentity> EligibleSuccessors,
+    string Explanation,
+    IReadOnlyList<string> Evidence);
+
+public sealed record TransitionInputSnapshot(
+    string Hash,
+    IReadOnlyList<ProductRecord> Products,
+    IReadOnlyDictionary<string, string> Metadata,
+    IReadOnlyList<PromptContextSection> Sections);
+
+public sealed record TransitionRunStarted(
+    string RunId,
+    DateTimeOffset StartedAt,
+    TransitionRuntimeRequest Request,
+    WorkflowTransitionDefinition Definition,
+    TransitionInputSnapshot InputSnapshot,
+    RenderedPrompt RenderedPrompt);
+
+public sealed record TransitionRunStateUpdate(
+    string RunId,
+    DateTimeOffset RecordedAt,
+    WorkflowTransitionIdentity Transition,
+    TransitionDurableState State,
+    string Explanation,
+    IReadOnlyList<string> Evidence);
+
+public sealed record TransitionRunCompleted(
+    string RunId,
+    DateTimeOffset CompletedAt,
+    WorkflowTransitionIdentity Transition,
+    TransitionRuntimeResult Result);
+
+public sealed record TransitionEvidenceEvent(
+    string RunId,
+    DateTimeOffset RecordedAt,
+    WorkflowTransitionIdentity Transition,
+    TransitionDurableState State,
+    string EventName,
+    string Explanation,
+    IReadOnlyList<string> Evidence);
+
+public sealed record TransitionBlockerCapture(
+    string RunId,
+    DateTimeOffset RecordedAt,
+    TransitionRuntimeRequest Request,
+    WorkflowTransitionIdentity Transition,
+    BlockerCategory Category,
+    string Reason,
+    string RequiredAction,
+    bool Recoverable,
+    IReadOnlyList<string> Evidence);
+
+public sealed record TransitionRecoveryMarkerCapture(
+    string RunId,
+    DateTimeOffset RecordedAt,
+    TransitionRuntimeRequest Request,
+    WorkflowTransitionIdentity Transition,
+    TransitionDurableState DurableState,
+    RuntimeOutcomeKind Outcome,
+    RecoveryDefinition Recovery,
+    string Explanation,
+    IReadOnlyList<string> Evidence);
+
+public sealed record TransitionGateEvaluationCapture(
+    string RunId,
+    DateTimeOffset EvaluatedAt,
+    TransitionRuntimeRequest Request,
+    WorkflowTransitionIdentity Transition,
+    GateDefinition Gate,
+    GateResult Result);
+
+public sealed record TransitionEffectRecordCapture(
+    string RunId,
+    DateTimeOffset RecordedAt,
+    TransitionRuntimeRequest Request,
+    WorkflowTransitionIdentity Transition,
+    EffectIdentity Effect,
+    EffectCategory Category,
+    EffectExecutionStatus Status,
+    string Explanation,
+    IReadOnlyList<string> Evidence);
+
+public interface ITransitionDefinitionResolver
+{
+    Task<WorkflowTransitionDefinition> ResolveAsync(TransitionRuntimeRequest request, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<WorkflowTransitionIdentity>> ResolveEligibleSuccessorsAsync(
+        WorkflowTransitionDefinition definition,
+        IReadOnlyList<ProductRecord> validatedProducts,
+        CancellationToken cancellationToken);
+}
+
+public interface ITransitionRuntime
+{
+    Task<TransitionRuntimeResult> RunAsync(
+        TransitionRuntimeRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IProductResolver
+{
+    Task<ProductResolutionResult> ResolveAsync(
+        IReadOnlyList<ProductRequirement> requirements,
+        CancellationToken cancellationToken);
+}
+
+public interface IGateEvaluator
+{
+    Task<GateResult> EvaluateInputGateAsync(
+        GateDefinition gate,
+        ProductResolutionResult inputs,
+        CancellationToken cancellationToken);
+
+    Task<GateResult> EvaluateOutputGateAsync(
+        GateDefinition gate,
+        ProductValidationResult validation,
+        CancellationToken cancellationToken);
+}
+
+public interface IPromptContextBuilder
+{
+    Task<PromptContext> BuildAsync(
+        TransitionRuntimeRequest request,
+        WorkflowTransitionDefinition definition,
+        ProductResolutionResult inputs,
+        CancellationToken cancellationToken);
+}
+
+public interface IPromptRenderer
+{
+    Task<RenderedPrompt> RenderAsync(
+        WorkflowTransitionDefinition definition,
+        PromptContext context,
+        CancellationToken cancellationToken);
+}
+
+public interface IPromptExecutor
+{
+    Task<PromptExecutionResult> ExecuteAsync(
+        WorkflowTransitionDefinition definition,
+        RenderedPrompt prompt,
+        CancellationToken cancellationToken);
+}
+
+public interface IOutputInterpreter
+{
+    Task<InterpretedTransitionOutput> InterpretAsync(
+        WorkflowTransitionDefinition definition,
+        PromptExecutionResult executionResult,
+        CancellationToken cancellationToken);
+}
+
+public interface IProductValidator
+{
+    Task<ProductValidationResult> ValidateAsync(
+        WorkflowTransitionDefinition definition,
+        InterpretedTransitionOutput output,
+        CancellationToken cancellationToken);
+}
+
+public interface IEffectExecutor
+{
+    Task<EffectExecutionResult> ExecuteAsync(
+        WorkflowTransitionDefinition definition,
+        ProductValidationResult validation,
+        CancellationToken cancellationToken);
+}
+
+public interface ITransitionRunStore
+{
+    Task PersistStartedAsync(TransitionRunStarted started, CancellationToken cancellationToken);
+
+    Task PersistStateAsync(TransitionRunStateUpdate update, CancellationToken cancellationToken);
+
+    Task PersistCompletedAsync(TransitionRunCompleted completed, CancellationToken cancellationToken);
+}
+
+public interface ITransitionEvidenceStore
+{
+    Task RecordEventAsync(TransitionEvidenceEvent evidence, CancellationToken cancellationToken);
+
+    Task RecordRawOutputAsync(
+        string runId,
+        WorkflowTransitionIdentity transition,
+        PromptExecutionResult executionResult,
+        CancellationToken cancellationToken);
+
+    Task RecordFailureAsync(
+        string runId,
+        WorkflowTransitionIdentity transition,
+        string failure,
+        CancellationToken cancellationToken);
+}
+
+public interface ITransitionBlockerStore
+{
+    Task RecordBlockerAsync(
+        TransitionBlockerCapture blocker,
+        CancellationToken cancellationToken);
+}
+
+public interface ITransitionRecoveryStore
+{
+    Task RecordRecoveryMarkerAsync(
+        TransitionRecoveryMarkerCapture marker,
+        CancellationToken cancellationToken);
+}
+
+public interface ITransitionGateEvaluationStore
+{
+    Task RecordGateEvaluationAsync(
+        TransitionGateEvaluationCapture evaluation,
+        CancellationToken cancellationToken);
+}
+
+public interface ITransitionEffectStore
+{
+    Task RecordEffectAsync(
+        TransitionEffectRecordCapture effect,
+        CancellationToken cancellationToken);
+}

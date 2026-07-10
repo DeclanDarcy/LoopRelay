@@ -4,65 +4,69 @@ Objective: implement EvalRoadmap as a first-class workflow that converges into t
 
 ## Work
 
-- [ ] Add `EvalRoadmapWorkflowDefinition`.
-- [ ] Add evaluation artifact path constants, preferably in a new `EvaluationArtifactPaths` class:
-  - [ ] Input directory `.agents/evals`.
-  - [ ] Selected evaluation.
-  - [ ] Dependency inventory: `.agents/eval-dependency-inventory.md`.
-  - [ ] Hypothesis inventory: `.agents/eval-hypothesis-inventory.md`.
-  - [ ] Architectural catalog: `.agents/eval-architectural-catalog.md`.
-  - [ ] Eval DAG: `.agents/eval-dag.md`.
-  - [ ] Next epic roadmap: `.agents/next-epic-roadmap.md`.
-  - [ ] Prepared epic: `.agents/epic.md`.
-  - [ ] Milestone specification set: `.agents/specs/*.md`.
-  - [ ] Evaluation evidence directory.
-- [ ] Register and use eval prompt assets from `src/LoopRelay.Core/Prompts/Eval`:
-  - [ ] `CreateEvalDependencyInventory.prompt` creates `.agents/eval-dependency-inventory.md` from `.agents/evals/`.
-  - [ ] `CreateEvalHypothesisInventory.prompt` creates `.agents/eval-hypothesis-inventory.md` from `.agents/eval-dependency-inventory.md`.
-  - [ ] `CreateArchitecturalCatalog.prompt` creates `.agents/eval-architectural-catalog.md` from the dependency and hypothesis inventories.
-  - [ ] `CreateEvalDag.prompt` creates `.agents/eval-dag.md` from the architectural catalog, dependency inventory, and hypothesis inventory.
-  - [ ] `CreateNextEpicRoadmap.prompt` creates `.agents/next-epic-roadmap.md` from the eval DAG and supporting eval artifacts.
-  - [ ] `CreateNextEpicImplementationSpec.prompt` creates `.agents/epic.md` from the next-epic roadmap and supporting eval artifacts.
-  - [ ] `UpdateDependencyInventory.prompt` refreshes `.agents/eval-dependency-inventory.md` against actual repository state when status assessment is required.
-  - [ ] `UpdateHypothesisInventory.prompt` refreshes `.agents/eval-hypothesis-inventory.md` against actual repository state when status assessment is required.
-  - [ ] `UpdateRoadmap.prompt` refreshes `.agents/next-epic-roadmap.md` against actual repository state when status assessment is required.
-- [ ] Reuse the existing `GenerateMilestoneDeepDivesForEpic` transition after active epic generation:
-  - [ ] Input: `.agents/epic.md`.
-  - [ ] Output: `.agents/specs/*.md`.
-  - [ ] Required prompt context section: `Active Epic`, loaded from `.agents/epic.md`.
-  - [ ] Prompt blocks rather than generating specs when `Active Epic` is missing, empty, malformed, or ambiguous.
-- [ ] Define stages:
-  - [ ] Evaluation Foundation.
-  - [ ] Dependency Inventory.
-  - [ ] Hypothesis Inventory.
-  - [ ] Architectural Catalog.
-  - [ ] Eval DAG.
-  - [ ] Next Epic Roadmap.
-  - [ ] Active Epic Preparation.
-  - [ ] Milestone Specification.
-  - [ ] Workflow Completion.
-- [ ] Define transitions:
-  - [ ] Select Evaluation Intent.
-  - [ ] Create Eval Dependency Inventory.
-  - [ ] Create Eval Hypothesis Inventory.
-  - [ ] Create Eval Architectural Catalog.
-  - [ ] Create Eval DAG.
-  - [ ] Create Next Epic Roadmap.
-  - [ ] Create Next Epic Active Epic.
-  - [ ] Refresh Eval Dependency Inventory Status.
-  - [ ] Refresh Eval Hypothesis Inventory Status.
-  - [ ] Refresh Next Epic Roadmap Status.
-  - [ ] Generate Milestone Deep Dives For Epic.
-  - [ ] Verify Plan Entry Contract.
-- [ ] Express dependencies declaratively.
-- [ ] Keep execution serial while ensuring the definition supports multiple eligible successors later.
-- [ ] Implement output gates for every evaluation knowledge product.
-- [ ] Ensure EvalRoadmap produces the exact same `PreparedEpic` and `MilestoneSpecificationSet` products as TraditionalRoadmap.
-- [ ] Ensure Plan does not branch on which roadmap workflow produced the products.
-- [ ] Add resolution support:
-  - [ ] Default invocation selects EvalRoadmap when `.agents/evals/*.md` exists.
-  - [ ] `--eval` forces EvalRoadmap chain.
-  - [ ] `looprelay eval` runs EvalRoadmap only.
+- [x] Add `EvalRoadmapWorkflowDefinition`.
+- [x] Add evaluation artifact path constants, preferably in a new `EvaluationArtifactPaths` class:
+  - [x] Input directory `.agents/evals`.
+  - [x] Selected evaluation.
+  - [x] Dependency inventory: `.agents/eval-dependency-inventory.md`.
+  - [x] Hypothesis inventory: `.agents/eval-hypothesis-inventory.md`.
+  - [x] Architectural catalog: `.agents/eval-architectural-catalog.md`.
+  - [x] Eval DAG: `.agents/eval-dag.md`.
+  - [x] Next epic roadmap: `.agents/next-epic-roadmap.md`.
+  - [x] Prepared epic: `.agents/epic.md`.
+  - [x] Milestone specification set: `.agents/specs/*.md`.
+  - [x] Evaluation evidence directory.
+- [x] Register and use eval prompt assets from `src/LoopRelay.Core/Prompts/Eval`:
+  - [x] `CreateEvalDependencyInventory.prompt` creates `.agents/eval-dependency-inventory.md` from `.agents/evals/`.
+  - [x] `CreateEvalHypothesisInventory.prompt` creates `.agents/eval-hypothesis-inventory.md` from `.agents/eval-dependency-inventory.md`.
+  - [x] `CreateArchitecturalCatalog.prompt` creates `.agents/eval-architectural-catalog.md` from the dependency and hypothesis inventories.
+  - [x] `CreateEvalDag.prompt` creates `.agents/eval-dag.md` from the architectural catalog, dependency inventory, and hypothesis inventory.
+  - [x] `CreateNextEpicRoadmap.prompt` creates `.agents/next-epic-roadmap.md` from the eval DAG and supporting eval artifacts.
+  - [x] `CreateNextEpicImplementationSpec.prompt` creates `.agents/epic.md` from the next-epic roadmap and supporting eval artifacts.
+  - [x] `UpdateDependencyInventory.prompt` refreshes `.agents/eval-dependency-inventory.md` against actual repository state when status assessment is required.
+  - [x] `UpdateHypothesisInventory.prompt` refreshes `.agents/eval-hypothesis-inventory.md` against actual repository state when status assessment is required.
+  - [x] `UpdateRoadmap.prompt` refreshes `.agents/next-epic-roadmap.md` against actual repository state when status assessment is required.
+  - [x] Generated Eval prompt templates render through the unified runtime prompt renderer with source-hash evidence.
+- [x] Reuse the existing `GenerateMilestoneDeepDivesForEpic` transition after active epic generation:
+  - [x] Input: `.agents/epic.md`.
+  - [x] Output: `.agents/specs/*.md`.
+  - [x] Required prompt context section: `Active Epic`, loaded from `.agents/epic.md`.
+  - [x] Prompt blocks rather than generating specs when `Active Epic` is missing, empty, malformed, or ambiguous.
+- [x] Define stages:
+  - [x] Evaluation Foundation.
+  - [x] Dependency Inventory.
+  - [x] Hypothesis Inventory.
+  - [x] Architectural Catalog.
+  - [x] Eval DAG.
+  - [x] Next Epic Roadmap.
+  - [x] Active Epic Preparation.
+  - [x] Milestone Specification.
+  - [x] Workflow Completion.
+- [x] Define transitions:
+  - [x] Select Evaluation Intent.
+  - [x] Create Eval Dependency Inventory.
+  - [x] Create Eval Hypothesis Inventory.
+  - [x] Create Eval Architectural Catalog.
+  - [x] Create Eval DAG.
+  - [x] Create Next Epic Roadmap.
+  - [x] Create Next Epic Active Epic.
+  - [x] Refresh Eval Dependency Inventory Status.
+  - [x] Refresh Eval Hypothesis Inventory Status.
+  - [x] Refresh Next Epic Roadmap Status.
+  - [x] Generate Milestone Deep Dives For Epic.
+  - [x] Verify Plan Entry Contract.
+- [x] Express dependencies declaratively.
+- [x] Keep execution serial while ensuring the definition supports multiple eligible successors later.
+- [x] Implement output gates for every evaluation knowledge product.
+- [x] Ensure EvalRoadmap produces the exact same `PreparedEpic` and `MilestoneSpecificationSet` products as TraditionalRoadmap.
+- [x] Ensure Plan does not branch on which roadmap workflow produced the products.
+- [x] Add resolution support:
+  - [x] Default invocation selects EvalRoadmap when `.agents/evals/*.md` exists.
+  - [x] `--eval` forces EvalRoadmap chain.
+  - [x] `looprelay eval` runs EvalRoadmap only.
+  - [x] `SelectEvaluationIntent` runs through the canonical transition runtime from observed `.agents/evals/*.md` intent and resumes at Dependency Inventory.
+  - [x] Existing eval dependency, hypothesis, architecture catalog, DAG, and next-roadmap artifacts resume at the correct EvalRoadmap stage without mutating the repository.
+  - [x] Downstream eval artifacts do not skip canonical stages when required prior eval products are missing.
 
 ## Detail Requirements
 
@@ -191,8 +195,8 @@ Validation should cover fresh evaluation, resume, dependency inventory generatio
 
 ## Acceptance
 
-- [ ] EvalRoadmap runs and resumes through the canonical runtime.
-- [ ] EvalRoadmap uses the `src/LoopRelay.Core/Prompts/Eval` prompt assets for the eval analysis and status-refresh transitions.
-- [ ] EvalRoadmap product validation blocks downstream progression on missing or invalid outputs.
-- [ ] Plan entry is identical for EvalRoadmap and TraditionalRoadmap.
-- [ ] No Plan or Execute code branches on roadmap producer identity.
+- [x] EvalRoadmap runs and resumes through the canonical runtime.
+- [x] EvalRoadmap uses the `src/LoopRelay.Core/Prompts/Eval` prompt assets for the eval analysis and status-refresh transitions.
+- [x] EvalRoadmap product validation blocks downstream progression on missing or invalid outputs.
+- [x] Plan entry is identical for EvalRoadmap and TraditionalRoadmap.
+- [x] No Plan or Execute code branches on roadmap producer identity.

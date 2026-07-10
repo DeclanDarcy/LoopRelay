@@ -326,6 +326,7 @@ public sealed class CompletionCertificationServiceTests
     }
 
     [Fact]
+    [Trait("Baseline", "KnownRisk")]
     public async Task ArchiveMaterialization_MissingRequiredMigratedRecordFailsBeforeRetainedMoves()
     {
         using var repo = new TempFileRepo();
@@ -347,6 +348,7 @@ public sealed class CompletionCertificationServiceTests
     }
 
     [Fact]
+    [Trait("Baseline", "KnownRisk")]
     public async Task ArchiveMaterialization_RetainedTargetCollisionFailsBeforeRetainedDeletes()
     {
         using var repo = new TempFileRepo();

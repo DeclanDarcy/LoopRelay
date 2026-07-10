@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
     <ProjectReference Include="..\LoopRelay.Agents\LoopRelay.Agents.csproj" />
     <ProjectReference Include="..\LoopRelay.Core\LoopRelay.Core.csproj" />
     <ProjectReference Include="..\LoopRelay.Permissions\LoopRelay.Permissions.csproj" />

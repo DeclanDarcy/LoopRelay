@@ -4,30 +4,30 @@ Objective: compose workflows through the same product/gate mechanism used by tra
 
 ## Work
 
-- [ ] Add chain definitions:
-  - [ ] `TraditionalRoadmapChain`: `TraditionalRoadmap -> Plan -> Execute`
-  - [ ] `EvalRoadmapChain`: `EvalRoadmap -> Plan -> Execute`
-- [ ] Add workflow boundary services:
-  - [ ] `WorkflowEntryGateEvaluator`
-  - [ ] `WorkflowExitGateEvaluator`
-  - [ ] `ProductTransferEvaluator`
-  - [ ] `WorkflowBoundaryEvidenceWriter`
-- [ ] Add `WorkflowController` and `WorkflowChainRunner`.
-- [ ] Ensure the controller owns workflow selection, stage selection, transition selection among eligible transitions, workflow completion checks, downstream eligibility, bounded stop conditions, and terminal outcome mapping.
-- [ ] Ensure the controller does not render prompts, execute prompts, validate products, apply effects, or write transition persistence directly. Those remain runtime responsibilities.
-- [ ] Add stopping conditions:
-  - [ ] Chain completed.
-  - [ ] Bounded workflow completed.
-  - [ ] Blocked.
-  - [ ] Waiting.
-  - [ ] Cancelled.
-  - [ ] Failed.
-  - [ ] Stalled.
-  - [ ] Ambiguous.
-  - [ ] No eligible transition.
-- [ ] Add explainability for why chaining occurred or stopped.
-- [ ] Use fake workflow definitions and test doubles for tests.
-- [ ] Do not migrate production workflows yet.
+- [x] Add chain definitions:
+  - [x] `TraditionalRoadmapChain`: `TraditionalRoadmap -> Plan -> Execute`
+  - [x] `EvalRoadmapChain`: `EvalRoadmap -> Plan -> Execute`
+- [x] Add workflow boundary services:
+  - [x] `WorkflowEntryGateEvaluator`
+  - [x] `WorkflowExitGateEvaluator`
+  - [x] `ProductTransferEvaluator`
+  - [x] `WorkflowBoundaryEvidenceWriter`
+- [x] Add `WorkflowController` and `WorkflowChainRunner`.
+- [x] Ensure the controller owns workflow selection, stage selection, transition selection among eligible transitions, workflow completion checks, downstream eligibility, bounded stop conditions, and terminal outcome mapping.
+- [x] Ensure the controller does not render prompts, execute prompts, validate products, apply effects, or write transition persistence directly. Those remain runtime responsibilities.
+- [x] Add stopping conditions:
+  - [x] Chain completed.
+  - [x] Bounded workflow completed.
+  - [x] Blocked.
+  - [x] Waiting.
+  - [x] Cancelled.
+  - [x] Failed.
+  - [x] Stalled.
+  - [x] Ambiguous.
+  - [x] No eligible transition.
+- [x] Add explainability for why chaining occurred or stopped.
+- [x] Use fake workflow definitions and test doubles for tests.
+- [x] Do not migrate production workflows yet.
 
 ## Detail Requirements
 
@@ -104,7 +104,7 @@ M4 supports serial execution, linear chains, and one active workflow now. It sho
 
 ## Acceptance
 
-- [ ] Chain progression tests prove workflow boundaries use validated products, not files.
-- [ ] Bounded commands stop after one workflow.
-- [ ] Default, forced eval, and forced traditional modes select the correct chain.
-- [ ] No production workflow has been migrated yet.
+- [x] Chain progression tests prove workflow boundaries use validated products, not files.
+- [x] Bounded commands stop after one workflow.
+- [x] Default, forced eval, and forced traditional modes select the correct chain.
+- [x] No production workflow has been migrated yet.

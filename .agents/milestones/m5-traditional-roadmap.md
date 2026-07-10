@@ -4,55 +4,56 @@ Objective: migrate the existing roadmap workflow onto the canonical runtime and 
 
 ## Work
 
-- [ ] Add `TraditionalRoadmapWorkflowDefinition` under `src/LoopRelay.Roadmap.Cli/Services/Workflows`.
-- [ ] Define stages:
-  - [ ] Roadmap Context.
-  - [ ] Strategic Initiative Selection.
-  - [ ] Epic Preparation.
-  - [ ] Milestone Specification.
-  - [ ] Workflow Completion.
-- [ ] Define transitions:
-  - [ ] Bootstrap Roadmap Completion Context.
-  - [ ] Update Roadmap Completion Context.
-  - [ ] Select Next Initiative.
-  - [ ] Audit Existing Epic.
-  - [ ] Create Epic.
-  - [ ] Split Epic.
-  - [ ] Realign Epic.
-  - [ ] Reimagine Epic.
-  - [ ] Retire Epic.
-  - [ ] Generate Milestone Deep Dives.
-  - [ ] Verify Workflow Exit Gate.
-- [ ] Convert existing transition classes into runtime transition definitions and components:
-  - [ ] Prompt identity.
-  - [ ] Product requirements.
-  - [ ] Parser.
-  - [ ] Output validator.
-  - [ ] Effects.
-  - [ ] Blocker and recovery metadata.
-- [ ] Move orchestration responsibilities out of `RoadmapStateMachine`:
-  - [ ] Transition ordering.
-  - [ ] Prompt execution sequencing.
-  - [ ] Transition persistence sequencing.
-  - [ ] Lifecycle advancement.
-  - [ ] Next-transition decisions.
-- [ ] Preserve current roadmap rigor:
-  - [ ] Projection freshness.
-  - [ ] Prompt contract snapshots.
-  - [ ] Input snapshots.
-  - [ ] Selection provenance.
-  - [ ] Artifact promotion validation.
-  - [ ] Lifecycle state.
-  - [ ] Decision ledger.
-  - [ ] Split lineage.
-  - [ ] Blocker evidence.
-  - [ ] Recovery intent.
-- [ ] Define the canonical downstream products:
-  - [ ] `PreparedEpic`
-  - [ ] `MilestoneSpecificationSet`
-- [ ] Treat pre-unification roadmap states related only to old execution handoff as migration-only states.
-- [ ] Recognize and report pre-unification execution handoff states safely, but do not let them define active orchestration.
-- [ ] Retire `LoopRelay.Roadmap.Cli` as a public entry point once `src/LoopRelay.Cli` runs `TraditionalRoadmap`; reusable roadmap services may remain only as internal/domain services.
+- [x] Add `TraditionalRoadmapWorkflowDefinition` under `src/LoopRelay.Roadmap.Cli/Services/Workflows`.
+- [x] Define stages:
+  - [x] Roadmap Context.
+  - [x] Strategic Initiative Selection.
+  - [x] Epic Preparation.
+  - [x] Milestone Specification.
+  - [x] Workflow Completion.
+- [x] Define transitions:
+  - [x] Bootstrap Roadmap Completion Context.
+  - [x] Update Roadmap Completion Context.
+  - [x] Select Next Initiative.
+  - [x] Audit Existing Epic.
+  - [x] Create Epic.
+  - [x] Split Epic.
+  - [x] Realign Epic.
+  - [x] Reimagine Epic.
+  - [x] Retire Epic.
+  - [x] Generate Milestone Deep Dives.
+  - [x] Verify Workflow Exit Gate.
+- [x] Convert existing transition classes into runtime transition definitions and components:
+  - [x] Prompt identity.
+  - [x] Generated TraditionalRoadmap prompt templates render through the unified runtime prompt renderer with source-hash evidence where generated prompt assets exist.
+  - [x] Product requirements.
+  - [x] Parser.
+  - [x] Output validator.
+  - [x] Effects.
+  - [x] Blocker and recovery metadata.
+- [x] Move orchestration responsibilities out of `RoadmapStateMachine`:
+  - [x] Transition ordering.
+  - [x] Prompt execution sequencing.
+  - [x] Transition persistence sequencing.
+  - [x] Lifecycle advancement.
+  - [x] Next-transition decisions.
+- [x] Preserve current roadmap rigor:
+  - [x] Projection freshness.
+  - [x] Prompt contract snapshots.
+  - [x] Input snapshots.
+  - [x] Selection provenance.
+  - [x] Artifact promotion validation.
+  - [x] Lifecycle state.
+  - [x] Decision ledger.
+  - [x] Split lineage.
+  - [x] Blocker evidence.
+  - [x] Recovery intent.
+- [x] Define the canonical downstream products:
+  - [x] `PreparedEpic`
+  - [x] `MilestoneSpecificationSet`
+- [x] Treat pre-unification roadmap states related only to old execution handoff as migration-only states.
+- [x] Recognize and report pre-unification execution handoff states safely, but do not let them define active orchestration.
+- [x] Retire `LoopRelay.Roadmap.Cli` as a public entry point once `src/LoopRelay.Cli` runs `TraditionalRoadmap`; reusable roadmap services may remain only as internal/domain services.
 
 ## Detail Requirements
 
@@ -123,7 +124,7 @@ TraditionalRoadmap certification should answer whether it executes through the r
 
 ## Acceptance
 
-- [ ] TraditionalRoadmap runs through the canonical transition runtime.
-- [ ] TraditionalRoadmap reaches a canonical workflow-complete state that satisfies Plan entry.
-- [ ] Existing roadmap characterization tests pass.
-- [ ] Old roadmap orchestration is no longer an active authority.
+- [x] TraditionalRoadmap runs through the canonical transition runtime.
+- [x] TraditionalRoadmap reaches a canonical workflow-complete state that satisfies Plan entry.
+- [x] Existing roadmap characterization tests pass.
+- [x] Old roadmap orchestration is no longer an active authority.

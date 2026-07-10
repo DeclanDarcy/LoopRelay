@@ -4,47 +4,47 @@ Objective: determine repository state, selected workflow, current stage, eligibl
 
 ## Work
 
-- [ ] Add repository observation under `src/LoopRelay.Orchestration.Primitives/Resolution`:
-  - [ ] `RepositoryObservation`
-  - [ ] `RepositoryObserver`
-  - [ ] `StorageAuthoritySnapshot`
-  - [ ] Observed workflow states.
-  - [ ] Observed products.
-  - [ ] Observed lifecycle rows.
-  - [ ] Observed evidence.
-  - [ ] Observed transition runs.
-  - [ ] Observed Git facts.
-  - [ ] Observed human interaction requirements.
-- [ ] Add `StorageVerificationResult` with authority, usable authority, stale exports, conflicts, corruption, unsupported schema, unresolved references, partial transactions, and blocking conditions.
-- [ ] Adapt current `WorkspaceVerificationService` into the resolution path.
-- [ ] Keep all verification non-mutating.
-- [ ] Add invocation-mode resolution:
-  - [ ] Default chained mode.
-  - [ ] Forced eval chain.
-  - [ ] Forced traditional chain.
-  - [ ] Bounded eval.
-  - [ ] Bounded traditional.
-  - [ ] Bounded plan.
-  - [ ] Bounded execute.
-- [ ] Implement default roadmap selection:
-  - [ ] If one or more `.agents/evals/*.md` files exist, select `EvalRoadmap`.
-  - [ ] Otherwise select `TraditionalRoadmap`.
-  - [ ] Explicit flags override this rule.
-- [ ] Implement workflow state resolution for each identity:
-  - [ ] Absent.
-  - [ ] Eligible to start.
-  - [ ] Active.
-  - [ ] Resumable.
-  - [ ] Completed.
-  - [ ] Blocked.
-  - [ ] Waiting.
-  - [ ] Cancelled.
-  - [ ] Failed.
-  - [ ] Invalid.
-  - [ ] Ambiguous.
-- [ ] Implement stage and transition eligibility from products, gate results, transition evidence, recovery state, and blockers.
-- [ ] Ensure artifact existence alone never implies completion.
-- [ ] Add an explanation model that records selected workflow, selected stage, eligible transitions, satisfied gates, unsatisfied gates, blockers, evidence, authority, ignored evidence, conflicts, and uncertainty.
+- [x] Add repository observation under `src/LoopRelay.Orchestration.Primitives/Resolution`:
+  - [x] `RepositoryObservation`
+  - [x] `RepositoryObserver`
+  - [x] `StorageAuthoritySnapshot`
+  - [x] Observed workflow states.
+  - [x] Observed products.
+  - [x] Observed lifecycle rows.
+  - [x] Observed evidence.
+  - [x] Observed transition runs.
+  - [x] Observed Git facts.
+  - [x] Observed human interaction requirements.
+- [x] Add `StorageVerificationResult` with authority, usable authority, stale exports, conflicts, corruption, unsupported schema, unresolved references, partial transactions, and blocking conditions.
+- [x] Adapt current `WorkspaceVerificationService` into the resolution path.
+- [x] Keep all verification non-mutating.
+- [x] Add invocation-mode resolution:
+  - [x] Default chained mode.
+  - [x] Forced eval chain.
+  - [x] Forced traditional chain.
+  - [x] Bounded eval.
+  - [x] Bounded traditional.
+  - [x] Bounded plan.
+  - [x] Bounded execute.
+- [x] Implement default roadmap selection:
+  - [x] If one or more `.agents/evals/*.md` files exist, select `EvalRoadmap`.
+  - [x] Otherwise select `TraditionalRoadmap`.
+  - [x] Explicit flags override this rule.
+- [x] Implement workflow state resolution for each identity:
+  - [x] Absent.
+  - [x] Eligible to start.
+  - [x] Active.
+  - [x] Resumable.
+  - [x] Completed.
+  - [x] Blocked.
+  - [x] Waiting.
+  - [x] Cancelled.
+  - [x] Failed.
+  - [x] Invalid.
+  - [x] Ambiguous.
+- [x] Implement stage and transition eligibility from products, gate results, transition evidence, recovery state, and blockers.
+- [x] Ensure artifact existence alone never implies completion.
+- [x] Add an explanation model that records selected workflow, selected stage, eligible transitions, satisfied gates, unsatisfied gates, blockers, evidence, authority, ignored evidence, conflicts, and uncertainty.
 
 ## Detail Requirements
 
@@ -129,6 +129,6 @@ Resolution should explicitly represent required human interaction with reason, a
 
 ## Acceptance
 
-- [ ] Resolution tests cover fresh, partial, blocked, cancelled, failed, completed, pre-unification, SQLite, filesystem, mixed, corrupt, and ambiguous repositories.
-- [ ] Resolution is deterministic and non-mutating.
-- [ ] Default eval/traditional selection is covered.
+- [x] Resolution tests cover fresh, partial, blocked, cancelled, failed, completed, pre-unification, SQLite, filesystem, mixed, corrupt, and ambiguous repositories.
+- [x] Resolution is deterministic and non-mutating.
+- [x] Default eval/traditional selection is covered.

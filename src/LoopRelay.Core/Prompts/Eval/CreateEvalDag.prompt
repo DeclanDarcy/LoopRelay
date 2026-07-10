@@ -1149,9 +1149,9 @@ If the graph is too large, provide a summarized group-level graph and state that
 Provide a DOT graph for the primary DAG.
 
 ```dot
-digraph EvalDAG {
+digraph EvalDAG {{
   {{dot_nodes_and_edges}}
-}
+}}
 ```
 
 If the graph is too large, provide a summarized group-level graph and state that the full edge index is authoritative.
