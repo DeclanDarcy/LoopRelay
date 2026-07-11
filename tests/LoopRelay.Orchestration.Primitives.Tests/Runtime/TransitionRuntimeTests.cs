@@ -761,6 +761,31 @@ public sealed class TransitionRuntimeTests
     }
 
     [Fact]
+    public async Task Attempt_records_the_runtimes_resolved_policy_identity()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create("pol_v1_0123456789abcdef0123456789abcdef");
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.Completed, result.Outcome);
+        AttemptRecord attempt = Assert.Single(harness.Attempts.Started);
+        Assert.Equal("pol_v1_0123456789abcdef0123456789abcdef", attempt.PolicyId);
+    }
+
+    [Fact]
+    public async Task Attempt_policy_identity_is_null_only_when_explicitly_constructed_without_one()
+    {
+        // The ctor parameter is required, so a policy-less runtime is a visible decision at the
+        // construction site; the attempt then honestly records no policy identity.
+        RuntimeHarness harness = RuntimeHarness.Create();
+
+        await harness.Runtime.RunAsync(harness.Request);
+
+        AttemptRecord attempt = Assert.Single(harness.Attempts.Started);
+        Assert.Null(attempt.PolicyId);
+    }
+
+    [Fact]
     public async Task Unsatisfied_input_records_no_attempt()
     {
         RuntimeHarness harness = RuntimeHarness.Create();
@@ -933,7 +958,7 @@ public sealed class TransitionRuntimeTests
             [new WorkflowTransitionIdentity("NextTransition")],
             new RecoveryDefinition("RuntimeHarness.Recovery", "Recover from evidence.", ["restart"], ["silent repair"]));
 
-        private RuntimeHarness()
+        private RuntimeHarness(string? policyIdentity = null)
         {
             Definitions = new FakeDefinitionResolver();
             Products = new FakeProductResolver();
@@ -964,6 +989,7 @@ public sealed class TransitionRuntimeTests
                 Effects,
                 RunStore,
                 Evidence,
+                policyIdentity,
                 Warnings,
                 RecoveryMarkers,
                 GateEvaluations,
@@ -1015,7 +1041,7 @@ public sealed class TransitionRuntimeTests
 
         public RecordingAttemptStore Attempts { get; }
 
-        public static RuntimeHarness Create() => new();
+        public static RuntimeHarness Create(string? policyIdentity = null) => new(policyIdentity);
 
         public static ProductRecord Product(
             ProductIdentity identity,

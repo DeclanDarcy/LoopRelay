@@ -577,6 +577,114 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Null(gate.TransitionRunId);
     }
 
+    [Fact]
+    public async Task Policy_resolutions_append_and_read_back_in_ledger_insertion_order()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        DateTimeOffset now = new(2026, 7, 11, 9, 0, 0, TimeSpan.Zero);
+        // The first-appended record carries a lexically LARGER id and a LATER wall-clock stamp
+        // than the second, so only ledger insertion order (rowid) can return them append-first.
+        var first = new CanonicalPolicyResolutionRecord(
+            "res_zzzz_appended_first",
+            "pol_v1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "policy-v1",
+            """{"schemaVersion":"policy-v1"}""",
+            """[{"field":"decisions.sessionResume","layer":"builtIn","origin":"built-in"}]""",
+            "settings:/workspace/settings.json",
+            now.AddMinutes(1));
+        var second = new CanonicalPolicyResolutionRecord(
+            "res_aaaa_appended_second",
+            "pol_v1_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "policy-v1",
+            """{"schemaVersion":"policy-v1","changed":true}""",
+            "[]",
+            "built-in",
+            now);
+
+        await store.AppendPolicyResolutionAsync(first);
+        await store.AppendPolicyResolutionAsync(second);
+
+        IReadOnlyList<CanonicalPolicyResolutionRecord> resolutions = await store.ReadPolicyResolutionsAsync();
+
+        Assert.Equal(2, resolutions.Count);
+        CanonicalPolicyResolutionRecord readFirst = resolutions[0];
+        Assert.Equal(first.ResolutionId, readFirst.ResolutionId);
+        Assert.Equal(first.PolicyId, readFirst.PolicyId);
+        Assert.Equal("policy-v1", readFirst.SchemaVersion);
+        Assert.Equal(first.ResolvedJson, readFirst.ResolvedJson);
+        Assert.Equal(first.ProvenanceJson, readFirst.ProvenanceJson);
+        Assert.Equal("settings:/workspace/settings.json", readFirst.SourceDescription);
+        Assert.Equal(now.AddMinutes(1), readFirst.RecordedAt);
+        Assert.Equal(second.ResolutionId, resolutions[1].ResolutionId);
+    }
+
+    [Fact]
+    public async Task Policy_resolution_reads_return_empty_when_database_predates_the_table()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '6');
+                """);
+        }
+
+        CanonicalWorkflowPersistenceStore store = new(repository);
+
+        Assert.Empty(await store.ReadPolicyResolutionsAsync());
+    }
+
+    [Fact]
+    public async Task Pre_v7_attempts_read_back_with_null_policy_identity_without_migrating()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '6');
+
+                CREATE TABLE attempts(
+                    attempt_id text primary key,
+                    transition_run_id text not null,
+                    workflow_instance_id text not null,
+                    run_id text not null,
+                    attempt_index integer not null,
+                    started_at text not null,
+                    completed_at text,
+                    outcome text,
+                    unique(transition_run_id, attempt_index)
+                );
+                INSERT INTO attempts (
+                    attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
+                    started_at, completed_at, outcome)
+                VALUES (
+                    'att_pre_v7', 'tr_pre_v7', 'wfi_pre_v7', 'run_pre_v7', 1,
+                    '2026-07-10T12:00:00.0000000Z', NULL, NULL);
+                """);
+        }
+
+        // Reads open the database read-only and never migrate, so the pre-v7 shape must read
+        // back intact with a null policy identity rather than crashing on the missing column.
+        CanonicalWorkflowPersistenceStore store = new(repository);
+
+        AttemptRecord attempt = Assert.Single(await store.ReadAttemptsAsync());
+        Assert.Equal("att_pre_v7", attempt.AttemptId);
+        Assert.Null(attempt.PolicyId);
+    }
+
     private static readonly string[] ExpectedTables =
     [
         "canonical_workflow_states",
@@ -589,6 +697,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         "evaluation_warnings",
         "canonical_recovery_markers",
         "canonical_chain_boundary_events",
+        "canonical_policy_resolutions",
         "workspace_identity",
         "runs",
         "workflow_instances",

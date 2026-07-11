@@ -133,7 +133,20 @@ public sealed record AttemptRecord(
     int AttemptIndex,
     DateTimeOffset StartedAt,
     DateTimeOffset? CompletedAt,
-    string? Outcome);
+    string? Outcome,
+    string? PolicyId = null);
+
+// The append-only fact behind an attempt's policy_id: the full resolved policy (the canonical
+// JSON the identity hash covers) plus per-field provenance. One row per invocation that starts
+// a canonical run; attempts reference PolicyId.
+public sealed record CanonicalPolicyResolutionRecord(
+    string ResolutionId,
+    string PolicyId,
+    string SchemaVersion,
+    string ResolvedJson,
+    string ProvenanceJson,
+    string SourceDescription,
+    DateTimeOffset RecordedAt);
 
 public sealed record AgentSessionRecord(
     string SessionId,

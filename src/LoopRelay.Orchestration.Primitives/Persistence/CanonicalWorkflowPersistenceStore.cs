@@ -400,6 +400,72 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         });
     }
 
+    public async Task AppendPolicyResolutionAsync(
+        CanonicalPolicyResolutionRecord resolution,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO canonical_policy_resolutions (
+                resolution_id, policy_id, schema_version, resolved_json, provenance_json,
+                source_description, recorded_at
+            )
+            VALUES (
+                $resolution_id, $policy_id, $schema_version, $resolved_json, $provenance_json,
+                $source_description, $recorded_at
+            );
+            """,
+            cancellationToken,
+            ("$resolution_id", resolution.ResolutionId),
+            ("$policy_id", resolution.PolicyId),
+            ("$schema_version", resolution.SchemaVersion),
+            ("$resolved_json", resolution.ResolvedJson),
+            ("$provenance_json", resolution.ProvenanceJson),
+            ("$source_description", resolution.SourceDescription),
+            ("$recorded_at", Format(resolution.RecordedAt)));
+    }
+
+    public async Task<IReadOnlyList<CanonicalPolicyResolutionRecord>> ReadPolicyResolutionsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            var rows = new List<CanonicalPolicyResolutionRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            // Ledger sequence (insertion order) is the ordering authority for appended facts.
+            command.CommandText = """
+                SELECT resolution_id, policy_id, schema_version, resolved_json, provenance_json,
+                       source_description, recorded_at
+                FROM canonical_policy_resolutions ORDER BY rowid;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new CanonicalPolicyResolutionRecord(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    reader.GetString(5),
+                    ParseDate(reader.GetString(6))));
+            }
+
+            return rows;
+        });
+    }
+
     public async Task UpsertRunAsync(
         RunRecord run,
         CancellationToken cancellationToken = default)
@@ -550,11 +616,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             """
             INSERT INTO attempts (
                 attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
-                started_at, completed_at, outcome
+                started_at, completed_at, outcome, policy_id
             )
             VALUES (
                 $attempt_id, $transition_run_id, $workflow_instance_id, $run_id, $attempt_index,
-                $started_at, $completed_at, $outcome
+                $started_at, $completed_at, $outcome, $policy_id
             )
             ON CONFLICT(attempt_id) DO UPDATE SET
                 transition_run_id = excluded.transition_run_id,
@@ -563,7 +629,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 attempt_index = excluded.attempt_index,
                 started_at = excluded.started_at,
                 completed_at = excluded.completed_at,
-                outcome = excluded.outcome;
+                outcome = excluded.outcome,
+                policy_id = excluded.policy_id;
             """,
             cancellationToken,
             ("$attempt_id", attempt.AttemptId),
@@ -573,7 +640,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$attempt_index", attempt.AttemptIndex),
             ("$started_at", Format(attempt.StartedAt)),
             ("$completed_at", attempt.CompletedAt is null ? null : Format(attempt.CompletedAt.Value)),
-            ("$outcome", attempt.Outcome));
+            ("$outcome", attempt.Outcome),
+            ("$policy_id", attempt.PolicyId));
     }
 
     public async Task CompleteAttemptAsync(
@@ -809,13 +877,24 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
 
+            // Pre-v7 databases opened read-only have no policy_id column; those attempts read
+            // back with a null policy identity without migrating the database.
+            bool hasPolicyId = await ColumnExistsAsync(
+                connection, "attempts", "policy_id", cancellationToken);
+
             var rows = new List<AttemptRecord>();
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
-                       started_at, completed_at, outcome
-                FROM attempts ORDER BY started_at, attempt_id;
-                """;
+            command.CommandText = hasPolicyId
+                ? """
+                  SELECT attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
+                         started_at, completed_at, outcome, policy_id
+                  FROM attempts ORDER BY started_at, attempt_id;
+                  """
+                : """
+                  SELECT attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
+                         started_at, completed_at, outcome, NULL AS policy_id
+                  FROM attempts ORDER BY started_at, attempt_id;
+                  """;
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -827,7 +906,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                     reader.GetInt32(4),
                     ParseDate(reader.GetString(5)),
                     reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
-                    reader.IsDBNull(7) ? null : reader.GetString(7)));
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.IsDBNull(8) ? null : reader.GetString(8)));
             }
 
             return rows;

@@ -19,6 +19,10 @@ public sealed class TransitionRuntime(
     IEffectExecutor _effectExecutor,
     ITransitionRunStore _runStore,
     ITransitionEvidenceStore _evidenceStore,
+    // Required, not defaulted: constructing a runtime without a resolved policy identity must
+    // be a visible decision at the call site, never a silent omission. Null is reserved for
+    // hosts that genuinely have no policy authority yet (converging at M17-M19).
+    string? _policyIdentity,
     ITransitionWarningStore? _warningStore = null,
     ITransitionRecoveryStore? _recoveryStore = null,
     ITransitionGateEvaluationStore? _gateEvaluationStore = null,
@@ -135,6 +139,7 @@ public sealed class TransitionRuntime(
                 cancellationToken);
 
             recordedAttemptId = attemptId;
+            // Every attempt records the invocation's single resolved policy identity.
             await TryPersistAttemptStartedAsync(
                 new AttemptRecord(
                     attemptId,
@@ -144,7 +149,8 @@ public sealed class TransitionRuntime(
                     1,
                     startedAt,
                     null,
-                    null),
+                    null,
+                    _policyIdentity),
                 cancellationToken);
 
             var stopwatch = Stopwatch.StartNew();

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Chaining;
@@ -13,7 +15,10 @@ internal sealed class UnifiedCliRunner(
     TextWriter _output,
     TextWriter _error)
 {
-    private const int MaxUnboundedContinuationSteps = 32;
+    private static readonly JsonSerializerOptions ProvenanceJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     public async Task<int> RunAsync(
         UnifiedCliInvocation invocation,
@@ -215,7 +220,7 @@ internal sealed class UnifiedCliRunner(
     {
         int guard = invocation.WorkflowInvocation.IsBounded
             ? 1
-            : MaxUnboundedContinuationSteps;
+            : _composition.Policy.MaxUnboundedContinuationSteps;
 
         RunIdentity run = RunIdentity.New();
         DateTimeOffset runStartedAt = DateTimeOffset.UtcNow;
@@ -252,6 +257,26 @@ internal sealed class UnifiedCliRunner(
                     null,
                     null,
                     string.Empty),
+                cancellationToken);
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            // The policy-resolution fact backs every attempt's policy_id for this run: the full
+            // resolved values (the canonical JSON the identity hash covers) plus per-field
+            // provenance. Same best-effort posture as the run record it accompanies.
+            await _composition.Persistence.AppendPolicyResolutionAsync(
+                new CanonicalPolicyResolutionRecord(
+                    CausalUlid.NewId("res"),
+                    _composition.Policy.PolicyId,
+                    _composition.Policy.SchemaVersion,
+                    _composition.Policy.ResolvedJson,
+                    JsonSerializer.Serialize(_composition.Policy.Provenance, ProvenanceJsonOptions),
+                    _composition.Policy.SourceDescription,
+                    runStartedAt),
                 cancellationToken);
         }
         catch

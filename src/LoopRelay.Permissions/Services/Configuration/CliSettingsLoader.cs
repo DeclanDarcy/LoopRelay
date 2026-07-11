@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Models.Policy;
@@ -71,9 +72,14 @@ public static class CliSettingsLoader
 
             PermissionPolicyOptions policy = PermissionPolicyDocumentMapper.ToPolicy(document.Permissions);
             PermissionPolicyOptions merged = PermissionPolicyFactory.MergeWithMinimum(policy);
-            NonImplementationArtifactPolicyOptions artifactPolicy =
-                ArtifactPolicyDocumentMapper.ToOptions(document.ArtifactPolicy);
-            return new CliSettingsLoadResult(merged, artifactPolicy, fullPath, isDefaultTemplate);
+            CliPolicyDocument policyDocument = new(
+                document.ArtifactPolicy?.AllowHitlRequestedNonImplementationFiles,
+                document.ArtifactPolicy?.AllowAuxiliaryNonImplementationFiles,
+                document.Policy?.Execution?.MaxUnboundedContinuationSteps,
+                document.Policy?.Execution?.MaxNoChangesCommits,
+                document.Policy?.Execution?.OperationalContextGrowthWarningStreak,
+                document.Policy?.Decisions?.SessionResume);
+            return new CliSettingsLoadResult(merged, policyDocument, fullPath, isDefaultTemplate);
         }
         catch (JsonException ex)
         {
@@ -89,13 +95,19 @@ public static class CliSettingsLoader
         }
     }
 
+    // Policy-owned sections reject unknown members: a typoed or unsupported key is a configured
+    // value with no production effect, which the policy authority rejects instead of ignoring.
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class SettingsDocument
     {
         public PermissionPolicyDocument? Permissions { get; set; }
 
         public ArtifactPolicyDocument? ArtifactPolicy { get; set; }
+
+        public PolicyDocument? Policy { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class ArtifactPolicyDocument
     {
         public bool? AllowHitlRequestedNonImplementationFiles { get; set; }
@@ -103,6 +115,31 @@ public static class CliSettingsLoader
         public bool? AllowAuxiliaryNonImplementationFiles { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class PolicyDocument
+    {
+        public PolicyExecutionDocument? Execution { get; set; }
+
+        public PolicyDecisionsDocument? Decisions { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class PolicyExecutionDocument
+    {
+        public int? MaxUnboundedContinuationSteps { get; set; }
+
+        public int? MaxNoChangesCommits { get; set; }
+
+        public int? OperationalContextGrowthWarningStreak { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class PolicyDecisionsDocument
+    {
+        public bool? SessionResume { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class PermissionPolicyDocument
     {
         public string? FingerprintVersion { get; set; }
@@ -120,6 +157,7 @@ public static class CliSettingsLoader
         public PermissionAllowDocument? Allow { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class PermissionHardDenyDocument
     {
         public string[]? PrivilegeEscalationCommands { get; set; }
@@ -135,6 +173,7 @@ public static class CliSettingsLoader
         public IndirectShellExecutionDocument? IndirectShellExecution { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class RecursiveForceDeleteDocument
     {
         public string? Command { get; set; }
@@ -142,6 +181,7 @@ public static class CliSettingsLoader
         public string[][]? FlagSets { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class IndirectShellExecutionDocument
     {
         public string[]? Commands { get; set; }
@@ -149,6 +189,7 @@ public static class CliSettingsLoader
         public string? Flag { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class PermissionReviewRequiredDocument
     {
         public bool? GitCommit { get; set; }
@@ -164,6 +205,7 @@ public static class CliSettingsLoader
         public string[]? InfrastructureCommands { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class PermissionAllowDocument
     {
         public string[]? AlwaysAllowedCommands { get; set; }
@@ -373,13 +415,4 @@ public static class CliSettingsLoader
             left.Count == right.Count && left.All(right.Contains);
     }
 
-    private static class ArtifactPolicyDocumentMapper
-    {
-        public static NonImplementationArtifactPolicyOptions ToOptions(ArtifactPolicyDocument? document) =>
-            new(
-                document?.AllowHitlRequestedNonImplementationFiles
-                    ?? NonImplementationArtifactPolicyOptions.Default.AllowHitlRequestedNonImplementationFiles,
-                document?.AllowAuxiliaryNonImplementationFiles
-                    ?? NonImplementationArtifactPolicyOptions.Default.AllowAuxiliaryNonImplementationFiles);
-    }
 }

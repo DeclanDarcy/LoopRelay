@@ -8,10 +8,13 @@ using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Workflows;
+using LoopRelay.Permissions.Models.Configuration;
+using LoopRelay.Permissions.Services.Evaluation;
 using LoopRelay.Projections.Models.ProjectionArtifacts;
 using Xunit;
 
@@ -51,6 +54,66 @@ public sealed class UnifiedCliCompositionTests
             [WorkflowIdentity.EvalRoadmap, WorkflowIdentity.Plan, WorkflowIdentity.Execute],
             chain.Workflows.Select(workflow => workflow.Identity));
         Assert.True(observation.StorageAuthority.UsableAuthority);
+    }
+
+    [Fact]
+    public void Composition_exposes_one_resolved_versioned_policy_for_the_invocation()
+    {
+        string repo = Directory.CreateTempSubdirectory("cc-cli-unified-policy").FullName;
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = Path.GetFileName(repo),
+            Path = repo,
+        };
+
+        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+
+        // Every consumer observes this single instance; without workspace or invocation input
+        // the built-in defaults resolve with a deterministic versioned identity. This proves
+        // same-process determinism only — cross-process stability (against .NET's per-process
+        // string-hash randomization) rests on the canonical sorting asserted by
+        // OperationalPolicyResolverTests.Canonical_serialization_sorts_permission_collections.
+        Assert.StartsWith("pol_v1_", composition.Policy.PolicyId, StringComparison.Ordinal);
+        Assert.Equal(32, composition.Policy.MaxUnboundedContinuationSteps);
+        Assert.Equal(2, composition.Policy.MaxNoChangesCommits);
+        Assert.Equal(2, composition.Policy.OperationalContextGrowthWarningStreak);
+        Assert.True(composition.Policy.DecisionSessionResume);
+        Assert.False(composition.Policy.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
+        Assert.Equal(
+            composition.Policy.PolicyId,
+            UnifiedCliComposition.Create(repository).Policy.PolicyId);
+    }
+
+    [Fact]
+    public void Decision_resume_kill_switch_flows_through_the_invocation_layer()
+    {
+        // Absent variable: no override at all — the workspace/built-in layers decide.
+        Assert.Empty(UnifiedCliComposition.CombineInvocationOverrides(null, _ => null));
+
+        PolicyOverride disabled = Assert.Single(
+            UnifiedCliComposition.CombineInvocationOverrides(
+                null,
+                name => name == "LoopRelay_DECISION_RESUME" ? "0" : null));
+        Assert.Equal(OperationalPolicyResolver.DecisionSessionResumeKey, disabled.Key);
+        Assert.Equal("0", disabled.Value);
+        Assert.Equal("env:LoopRelay_DECISION_RESUME", disabled.Origin);
+        Assert.False(disabled.IsExplicit);
+
+        // The raw value flows through resolver validation: "0"/"false" disable, "1"/"true"
+        // enable, and a garbage value is rejected loudly instead of silently enabling resume.
+        Assert.False(ResolveWithEnv("0").DecisionSessionResume);
+        Assert.False(ResolveWithEnv("FALSE").DecisionSessionResume);
+        Assert.True(ResolveWithEnv("1").DecisionSessionResume);
+        Assert.True(ResolveWithEnv("true").DecisionSessionResume);
+        Assert.Throws<PolicyResolutionException>(() => ResolveWithEnv("flase"));
+
+        static ResolvedOperationalPolicy ResolveWithEnv(string envValue) =>
+            OperationalPolicyResolver.Resolve(
+                CliPolicyDocument.Empty,
+                "settings:test",
+                UnifiedCliComposition.CombineInvocationOverrides(null, _ => envValue),
+                PermissionPolicyFactory.Minimum);
     }
 
     [Fact]

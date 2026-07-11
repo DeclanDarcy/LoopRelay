@@ -27,6 +27,23 @@ public sealed class CanonicalAttemptStoreTests
         Assert.Equal(now, attempt.StartedAt);
         Assert.Null(attempt.CompletedAt);
         Assert.Null(attempt.Outcome);
+        Assert.Null(attempt.PolicyId);
+    }
+
+    [Fact]
+    public async Task Attempt_round_trips_its_policy_identity()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var store = new CanonicalAttemptStore(persistence);
+        DateTimeOffset now = new(2026, 7, 10, 12, 0, 0, TimeSpan.Zero);
+
+        await store.PersistAttemptStartedAsync(
+            new AttemptRecord("att_001", "tr_001", "wfi_001", "run_001", 1, now, null, null, "pol_v1_0123456789abcdef0123456789abcdef"),
+            CancellationToken.None);
+
+        AttemptRecord attempt = Assert.Single(await persistence.ReadAttemptsAsync());
+        Assert.Equal("pol_v1_0123456789abcdef0123456789abcdef", attempt.PolicyId);
     }
 
     [Fact]

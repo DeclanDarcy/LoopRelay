@@ -1,5 +1,7 @@
 using System.Text;
 using LoopRelay.Cli.Services.Cli;
+using LoopRelay.Orchestration.Policy;
+using LoopRelay.Permissions.Models.Configuration;
 
 // Codex output and our own messages contain non-ASCII text (curly quotes, em dashes). Decode the codex
 // child process' stdout and render our console output as UTF-8 instead of the host's legacy OEM code
@@ -21,7 +23,20 @@ if (!CliArguments.TryParse(args, out UnifiedCliInvocation invocation, out string
     return 2;
 }
 
-await using UnifiedCliComposition unifiedComposition = UnifiedCliComposition.CreateProduction(invocation.Repository);
+UnifiedCliComposition composition;
+try
+{
+    composition = UnifiedCliComposition.CreateProduction(invocation.Repository, invocation.PolicyOverrides);
+}
+catch (Exception exception) when (exception is CliSettingsException or PolicyResolutionException)
+{
+    // A configured value is either demonstrably effective or explicitly rejected — rejection is
+    // a clean CLI error, not a crash dump.
+    Console.Error.WriteLine(exception.Message);
+    return 2;
+}
+
+await using UnifiedCliComposition unifiedComposition = composition;
 var runner = new UnifiedCliRunner(unifiedComposition, Console.Out, Console.Error);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---

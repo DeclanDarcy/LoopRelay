@@ -21,8 +21,8 @@ public sealed class PermissionSettingsTests
         PermissionPolicyOptions policy = result.Permissions;
 
         Assert.Equal("v1", policy.FingerprintVersion);
-        Assert.False(result.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
-        Assert.False(result.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+        Assert.False(result.Policy.AllowHitlRequestedNonImplementationFiles);
+        Assert.False(result.Policy.AllowAuxiliaryNonImplementationFiles);
         Assert.True(Object(DefaultSettings(), "artifactPolicy").ContainsKey("allowHitlRequestedNonImplementationFiles"));
         Assert.True(Object(DefaultSettings(), "artifactPolicy").ContainsKey("allowAuxiliaryNonImplementationFiles"));
 
@@ -107,27 +107,29 @@ public sealed class PermissionSettingsTests
     }
 
     [Fact]
-    public void Missing_artifact_policy_defaults_to_implementation_first_mode()
+    public void Missing_artifact_policy_section_loads_as_unconfigured()
     {
         JsonObject settings = DefaultSettings();
         settings.Remove("artifactPolicy");
 
         CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
 
-        Assert.False(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
-        Assert.False(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+        Assert.Null(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
+        Assert.Null(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
     }
 
     [Fact]
-    public void Missing_artifact_policy_flags_default_to_implementation_first_mode()
+    public void Missing_artifact_policy_flags_load_as_unconfigured()
     {
+        // Defaults are owned by the policy resolver, not the loader: an unconfigured flag loads
+        // as null so provenance can distinguish workspace config from built-in defaults.
         JsonObject settings = DefaultSettings();
         settings["artifactPolicy"] = new JsonObject();
 
         CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
 
-        Assert.False(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
-        Assert.False(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+        Assert.Null(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
+        Assert.Null(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
     }
 
     [Fact]
@@ -138,8 +140,8 @@ public sealed class PermissionSettingsTests
 
         CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
 
-        Assert.True(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
-        Assert.False(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+        Assert.True(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
+        Assert.False(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
     }
 
     [Fact]
@@ -150,8 +152,8 @@ public sealed class PermissionSettingsTests
 
         CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
 
-        Assert.False(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
-        Assert.True(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+        Assert.False(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
+        Assert.True(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
     }
 
     [Fact]
@@ -163,8 +165,95 @@ public sealed class PermissionSettingsTests
 
         CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
 
-        Assert.True(loaded.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
-        Assert.True(loaded.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+        Assert.True(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
+        Assert.True(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
+    }
+
+    [Fact]
+    public void Loader_reads_the_policy_section()
+    {
+        JsonObject settings = DefaultSettings();
+        settings["policy"] = new JsonObject
+        {
+            ["execution"] = new JsonObject
+            {
+                ["maxUnboundedContinuationSteps"] = 64,
+                ["maxNoChangesCommits"] = 3,
+                ["operationalContextGrowthWarningStreak"] = 5,
+            },
+            ["decisions"] = new JsonObject
+            {
+                ["sessionResume"] = false,
+            },
+        };
+
+        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
+
+        Assert.Equal(64, loaded.Policy.MaxUnboundedContinuationSteps);
+        Assert.Equal(3, loaded.Policy.MaxNoChangesCommits);
+        Assert.Equal(5, loaded.Policy.OperationalContextGrowthWarningStreak);
+        Assert.False(loaded.Policy.DecisionSessionResume);
+    }
+
+    [Fact]
+    public void Missing_policy_section_loads_as_unconfigured()
+    {
+        JsonObject settings = DefaultSettings();
+        settings.Remove("policy");
+
+        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
+
+        Assert.Null(loaded.Policy.MaxUnboundedContinuationSteps);
+        Assert.Null(loaded.Policy.MaxNoChangesCommits);
+        Assert.Null(loaded.Policy.OperationalContextGrowthWarningStreak);
+        Assert.Null(loaded.Policy.DecisionSessionResume);
+    }
+
+    [Fact]
+    public void Unknown_key_inside_the_policy_section_is_rejected()
+    {
+        JsonObject settings = DefaultSettings();
+        Object(Object(settings, "policy"), "execution")["maxUnboundedContinuatoinSteps"] = 64;
+
+        Assert.Throws<CliSettingsException>(() => CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
+    }
+
+    [Fact]
+    public void Unknown_top_level_settings_key_is_rejected()
+    {
+        JsonObject settings = DefaultSettings();
+        settings["polcy"] = new JsonObject();
+
+        Assert.Throws<CliSettingsException>(() => CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
+    }
+
+    [Fact]
+    public void Unknown_key_inside_the_permissions_section_is_rejected()
+    {
+        // The permissions snapshot is part of the versioned policy identity, so a typoed key
+        // that silently does nothing would be a configured value with no production effect.
+        JsonObject settings = DefaultSettings();
+        Object(settings, "permissions")["safeBashCommandss"] = new JsonArray("rg");
+
+        Assert.Throws<CliSettingsException>(() => CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
+    }
+
+    [Fact]
+    public void Unknown_key_inside_a_nested_permissions_section_is_rejected()
+    {
+        JsonObject settings = DefaultSettings();
+        Object(Object(settings, "permissions"), "allow")["alwaysAllowedCommandss"] = new JsonArray("pwd");
+
+        Assert.Throws<CliSettingsException>(() => CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
+    }
+
+    [Fact]
+    public void Wrongly_typed_policy_value_is_rejected()
+    {
+        JsonObject settings = DefaultSettings();
+        Object(Object(settings, "policy"), "decisions")["sessionResume"] = "sometimes";
+
+        Assert.Throws<CliSettingsException>(() => CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
     }
 
     private static void AssertAllowed(PermissionPolicyOptions policy, string rawCommand)

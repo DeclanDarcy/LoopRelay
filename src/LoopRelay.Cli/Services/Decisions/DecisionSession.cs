@@ -12,6 +12,7 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
+using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Primitives;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
@@ -50,14 +51,15 @@ internal sealed class DecisionSession(
     IProjectContextProjectionService? _projectionService = null,
     bool _resumeEnabled = true,
     string? _promptPolicy = null,
-    ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = null) : IAsyncDisposable
+    ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = null,
+    int _operationalContextGrowthStreakWarningThreshold =
+        OperationalPolicyResolver.DefaultOperationalContextGrowthWarningStreak) : IAsyncDisposable
 {
     private IAgentSession? session;
     private bool seeded;
     private bool resumeAttempted;
 
     // Operational-context size-health state (Stage 2, mirrors RepositoryOrchestrator). Single-threaded, no lock.
-    private const int OperationalContextGrowthStreakWarningThreshold = 2;
     private int? previousOperationalContextSize;
     private int operationalContextGrowthStreak;
 
@@ -489,7 +491,7 @@ internal sealed class DecisionSession(
             ? operationalContextGrowthStreak + 1
             : 0;
         previousOperationalContextSize = newSize;
-        if (operationalContextGrowthStreak >= OperationalContextGrowthStreakWarningThreshold)
+        if (operationalContextGrowthStreak >= _operationalContextGrowthStreakWarningThreshold)
         {
             _console.Warn($"Operational context has grown for {operationalContextGrowthStreak} consecutive transfers (now {newSize} chars) — check for bloat.");
         }

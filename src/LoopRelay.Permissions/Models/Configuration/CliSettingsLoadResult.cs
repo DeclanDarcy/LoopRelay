@@ -4,6 +4,6 @@ namespace LoopRelay.Permissions.Models.Configuration;
 
 public sealed record CliSettingsLoadResult(
     PermissionPolicyOptions Permissions,
-    NonImplementationArtifactPolicyOptions ArtifactPolicy,
+    CliPolicyDocument Policy,
     string Path,
     bool IsDefaultTemplate);

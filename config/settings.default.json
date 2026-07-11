@@ -3,6 +3,16 @@
     "allowHitlRequestedNonImplementationFiles": false,
     "allowAuxiliaryNonImplementationFiles": false
   },
+  "policy": {
+    "execution": {
+      "maxUnboundedContinuationSteps": 32,
+      "maxNoChangesCommits": 2,
+      "operationalContextGrowthWarningStreak": 2
+    },
+    "decisions": {
+      "sessionResume": true
+    }
+  },
   "permissions": {
     "fingerprintVersion": "v1",
     "commandsWithSubcommands": [

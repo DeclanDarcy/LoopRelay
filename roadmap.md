@@ -578,6 +578,61 @@ wait/retry, input-wait reporting, and runtime prerequisite diagnostics are all
 reconnected through this authority and the Runtime Authority — none are
 retired.
 
+**Encoded decisions (within-doctrine, at implementation):** The policy schema
+(v1, `OperationalPolicyResolver`) contains only fields with demonstrable
+canonical effect at M5: the two artifact-policy toggles, the unbounded-chain
+continuation cap, the no-changes commit cap, the operational-context growth
+warning streak, and decision-session resume — each a previously severed
+settings field or an ambient call-site constant, now consumed from the single
+resolved policy. The D3 decorator knobs stay out of the schema until M7
+reconnects the wrappers (a schema field nothing consumes would itself be a
+configured value with no production effect); M7 adds them to this authority.
+The severed `settings.artifactPolicy` wire is reconnected: the HITL toggle
+composes the implementation-first prompt policy at every canonical consumer
+(decision session, implementation slice, completion prompt runner), while
+`allowAuxiliaryNonImplementationFiles=true` is **explicitly rejected** — it has
+no consumer reachable from the nucleus (its only conceptual consumer is the
+unmerged Plan CLI's review step) — until that surface converges (M17–M19);
+configuring the default `false` stays accepted. The three layers are strict:
+built-in defaults → the existing settings.json surface (env-redirectable via
+`LOOPRELAY_SETTINGS_PATH`; no per-repo policy file is introduced at M5) →
+invocation overrides, where recognized environment variables are ambient
+inputs and repeatable `--policy key=value` flags are explicit ones, an
+explicit flag beating an ambient variable for the same key. The
+`LoopRelay_DECISION_RESUME` kill switch stays functional but its raw value now
+flows through resolver validation — a garbage value rejects loudly instead of
+silently enabling resume — and `DecisionResumeComposition` is retired.
+Validation rejects unknown keys at every policy-owned settings level,
+including inside the `permissions` section (the permissions snapshot is part
+of the versioned identity, so a typoed permission key silently doing nothing
+would be a configured lie), wrongly typed or non-positive values, and
+duplicate same-source overrides; rejection is a clean CLI error before any
+verb executes. Policy identity is `pol_v1_` plus the truncated sha256 of the
+canonical JSON of (schema version, effective values, permissions snapshot) —
+collections are sorted in the canonical form because .NET randomizes string
+hashing per process, so hash-ordered sets would give identical configuration
+a different identity on every invocation. Provenance is evidence, not
+identity: the same effective values yield the same identity regardless of
+which layer supplied them. Persistence is schema v7: `attempts.policy_id`
+(additive, nullable; migration rewrites no fact rows — tested per column) and
+the append-only `canonical_policy_resolutions` fact (resolved values plus
+per-field provenance, read in ledger insertion order), appended at run start
+under the same best-effort posture as the run record it accompanies.
+Resolution happens once per invocation in the composition root; the
+`TransitionRuntime` policy identity is a **required** constructor parameter,
+so a policy-less runtime is a visible decision at the call site, and every
+attempt stamps the invocation's policy identity. Non-production compositions
+resolve the built-in defaults over the minimal permission set so their
+attempts still record one identity. The shipped default template writes the
+policy defaults out explicitly and a test pins it to the resolver's built-ins
+so a changed default cannot silently diverge from default installs. Deferred
+with owners: D3 knobs, `LoopRelay_SESSION_LOG`, `CODEX_EXECUTABLE`/
+`CODEX_HOME`, the sandbox and provider literals, agent-process internals, and
+the stale prerequisite-doctor text to M7; agent effort profiles to M6 (prompt
+identity); a production reader for the policy-resolution ledger to M16;
+legacy Roadmap.Cli config readers and the legacy loop bodies'
+prompt-policy fallbacks to M17–M19.
+
 **Verification brief:** a configured value is either demonstrably effective or
 explicitly rejected; every attempt records one policy identity.
 

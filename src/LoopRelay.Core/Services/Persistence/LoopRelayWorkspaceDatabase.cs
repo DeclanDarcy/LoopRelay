@@ -10,7 +10,7 @@ namespace LoopRelay.Core.Services.Persistence;
 /// </summary>
 public static class LoopRelayWorkspaceDatabase
 {
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public static string Resolve(Repository repository)
@@ -61,6 +61,16 @@ public static class LoopRelayWorkspaceDatabase
                     $"ALTER TABLE {table} ADD COLUMN {column} text;",
                     cancellationToken);
             }
+        }
+
+        // The v7 policy column is additive and nullable: pre-v7 attempts keep a null policy
+        // identity, and the ALTER never rewrites existing fact rows.
+        if (!await ColumnExistsAsync(connection, "attempts", "policy_id", cancellationToken))
+        {
+            await ExecuteAsync(
+                connection,
+                "ALTER TABLE attempts ADD COLUMN policy_id text;",
+                cancellationToken);
         }
 
         await ExecuteAsync(
@@ -578,6 +588,7 @@ public static class LoopRelayWorkspaceDatabase
             started_at text not null,
             completed_at text,
             outcome text,
+            policy_id text,
             unique(transition_run_id, attempt_index)
         );
 
@@ -622,6 +633,18 @@ public static class LoopRelayWorkspaceDatabase
             consumed_at text not null,
             transition_run_id text
         );
+
+        CREATE TABLE IF NOT EXISTS canonical_policy_resolutions(
+            resolution_id text primary key,
+            policy_id text not null,
+            schema_version text not null,
+            resolved_json text not null,
+            provenance_json text not null,
+            source_description text not null,
+            recorded_at text not null
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_canonical_policy_resolutions_policy ON canonical_policy_resolutions(policy_id);
 
         UPDATE canonical_workflow_states SET state = 'Resumable' WHERE state = 'Blocked';
         UPDATE canonical_workflow_states SET outcome = 'MissingRequiredInput' WHERE outcome = 'Blocked';

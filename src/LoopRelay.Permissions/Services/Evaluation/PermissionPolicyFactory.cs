@@ -4,7 +4,7 @@ using LoopRelay.Permissions.Models.Shell;
 
 namespace LoopRelay.Permissions.Services.Evaluation;
 
-internal static class PermissionPolicyFactory
+public static class PermissionPolicyFactory
 {
     public static readonly PermissionPolicyOptions Default = CreateDefault();
 

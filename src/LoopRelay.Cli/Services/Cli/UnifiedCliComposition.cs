@@ -33,6 +33,7 @@ using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Models.NonImplementationCompletion;
 using LoopRelay.Orchestration.Models.RepositorySlices;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Primitives;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
@@ -43,8 +44,10 @@ using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
 using LoopRelay.Orchestration.Services.RepositorySlices;
 using LoopRelay.Orchestration.Workflows;
+using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Permissions.Services.Configuration;
+using LoopRelay.Permissions.Services.Evaluation;
 using LoopRelay.Projections.Models.Context;
 using LoopRelay.Projections.Models.Definitions;
 using LoopRelay.Projections.Models.ProjectionArtifacts;
@@ -73,10 +76,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IReadOnlyList<WorkflowDefinition> workflowDefinitions,
         IReadOnlyList<WorkflowChainDefinition> workflowChains,
         CanonicalWorkflowPersistenceStore persistence,
+        ResolvedOperationalPolicy policy,
         ServiceProvider? provider = null,
         IAsyncDisposable? promptExecutorLifetime = null)
     {
         Repository = repository;
+        Policy = policy;
         StorageVerifier = storageVerifier;
         RepositoryObserver = repositoryObserver;
         WorkflowResolver = workflowResolver;
@@ -92,6 +97,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     }
 
     public Repository Repository { get; }
+
+    /// <summary>
+    /// The single resolved operational policy this invocation executes under. Every consumer
+    /// observes this one instance; no production code re-reads settings or environment ad hoc.
+    /// </summary>
+    public ResolvedOperationalPolicy Policy { get; }
 
     public IStorageVerifier StorageVerifier { get; }
 
@@ -116,9 +127,18 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     public static UnifiedCliComposition Create(Repository repository) =>
         CreateCore(repository, agentRuntime: null, processRunner: new ProcessRunner(), provider: null);
 
-    public static UnifiedCliComposition CreateProduction(Repository repository)
+    public static UnifiedCliComposition CreateProduction(
+        Repository repository,
+        IReadOnlyList<PolicyOverride>? policyOverrides = null)
     {
         var settings = CliSettingsLoader.Load();
+        ResolvedOperationalPolicy policy = OperationalPolicyResolver.Resolve(
+            settings.Policy,
+            settings.IsDefaultTemplate
+                ? $"settings:{settings.Path} (default template)"
+                : $"settings:{settings.Path}",
+            CombineInvocationOverrides(policyOverrides),
+            settings.Permissions);
         var services = new ServiceCollection();
         services.AddAgents(settings.Permissions);
         ServiceProvider provider = services.BuildServiceProvider();
@@ -126,33 +146,73 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             repository,
             provider.GetRequiredService<IAgentRuntime>(),
             provider.GetRequiredService<IProcessRunner>(),
-            provider);
+            provider,
+            policy);
+    }
+
+    // Recognized environment variables are ambient invocation-layer inputs; explicit --policy
+    // flags beat them for the same key. The decision-resume kill switch stays functional
+    // (LoopRelay_DECISION_RESUME=0 or =false disables resume) but its value now flows through
+    // the resolver's validation like any other policy input: a garbage value is rejected
+    // loudly instead of silently enabling resume.
+    internal static IReadOnlyList<PolicyOverride> CombineInvocationOverrides(
+        IReadOnlyList<PolicyOverride>? flagOverrides,
+        Func<string, string?>? getEnvironmentVariable = null)
+    {
+        getEnvironmentVariable ??= Environment.GetEnvironmentVariable;
+        List<PolicyOverride> overrides = [];
+        string? decisionResume = getEnvironmentVariable("LoopRelay_DECISION_RESUME");
+        if (decisionResume is not null)
+        {
+            overrides.Add(new PolicyOverride(
+                OperationalPolicyResolver.DecisionSessionResumeKey,
+                decisionResume,
+                "env:LoopRelay_DECISION_RESUME",
+                IsExplicit: false));
+        }
+
+        if (flagOverrides is not null)
+        {
+            overrides.AddRange(flagOverrides);
+        }
+
+        return overrides;
     }
 
     internal static UnifiedCliComposition Create(
         Repository repository,
-        IAgentRuntime agentRuntime) =>
-        CreateCore(repository, agentRuntime, processRunner: new ProcessRunner(), provider: null);
+        IAgentRuntime agentRuntime,
+        ResolvedOperationalPolicy? policy = null) =>
+        CreateCore(repository, agentRuntime, processRunner: new ProcessRunner(), provider: null, policy);
 
     internal static UnifiedCliComposition Create(
         Repository repository,
         IAgentRuntime agentRuntime,
-        IProcessRunner processRunner) =>
-        CreateCore(repository, agentRuntime, processRunner, provider: null);
+        IProcessRunner processRunner,
+        ResolvedOperationalPolicy? policy = null) =>
+        CreateCore(repository, agentRuntime, processRunner, provider: null, policy);
 
     private static UnifiedCliComposition CreateCore(
         Repository repository,
         IAgentRuntime? agentRuntime,
         IProcessRunner processRunner,
-        ServiceProvider? provider)
+        ServiceProvider? provider,
+        ResolvedOperationalPolicy? policy = null)
     {
+        // Non-production compositions execute under the built-in defaults so every attempt
+        // still records one resolved policy identity.
+        policy ??= OperationalPolicyResolver.Resolve(
+            CliPolicyDocument.Empty,
+            "built-in",
+            [],
+            PermissionPolicyFactory.Minimum);
         IStorageVerifier storageVerifier = new FileSystemStorageVerifier();
         var repositoryObserver = new RepositoryObserver(storageVerifier);
         var workflowResolver = new WorkflowResolver();
         IReadOnlyList<WorkflowDefinition> workflowDefinitions = CanonicalWorkflowDefinitionSketches.CreateAll();
         IReadOnlyList<WorkflowChainDefinition> workflowChains = CanonicalWorkflowDefinitionSketches.CreateChains();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var promptExecutor = new UnifiedPromptExecutor(repository, agentRuntime, processRunner, persistence);
+        var promptExecutor = new UnifiedPromptExecutor(repository, agentRuntime, processRunner, persistence, policy);
         ITransitionRuntime transitionRuntime = new TransitionRuntime(
             new UnifiedTransitionDefinitionResolver(workflowDefinitions),
             new RepositoryObservationProductResolver(repositoryObserver, repository),
@@ -165,6 +225,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             new UnifiedEffectExecutor(repository, persistence, workflowDefinitions),
             new CanonicalTransitionRunStore(persistence),
             new CanonicalTransitionEvidenceStore(persistence),
+            policy.PolicyId,
             new CanonicalTransitionWarningStore(persistence),
             new CanonicalTransitionRecoveryStore(persistence),
             new CanonicalTransitionGateEvaluationStore(persistence),
@@ -194,6 +255,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             workflowDefinitions,
             workflowChains,
             persistence,
+            policy,
             provider,
             promptExecutor);
     }
@@ -1203,7 +1265,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         Repository _repository,
         IAgentRuntime? _agentRuntime,
         IProcessRunner _processRunner,
-        CanonicalWorkflowPersistenceStore _persistence) : IPromptExecutor, IAsyncDisposable
+        CanonicalWorkflowPersistenceStore _persistence,
+        ResolvedOperationalPolicy _policy) : IPromptExecutor, IAsyncDisposable
     {
         private readonly IArtifactStore artifactStore = new FileSystemArtifactStore();
         private readonly ILoopConsole console = new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null);
@@ -1857,7 +1920,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     _costModel: null,
                     _resumeStore: new SqliteDecisionSessionResumeStore(_repository),
                     _projectionService: null,
-                    _resumeEnabled: DecisionResumeComposition.IsEnabled());
+                    _resumeEnabled: _policy.DecisionSessionResume,
+                    _promptPolicy: ImplementationFirstPromptPolicyComposer.Compose(_policy.ArtifactPolicy),
+                    _operationalContextGrowthStreakWarningThreshold: _policy.OperationalContextGrowthWarningStreak);
                 await executeDecisionSession.RunAsync(
                     cancellationToken,
                     new LoopHistoryLineage(
@@ -1930,7 +1995,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
                 string executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
                     ContinueExecution.Render(plan, details, decisions, "TODO"),
-                    ImplementationFirstPromptPolicyComposer.ComposeDefault());
+                    ImplementationFirstPromptPolicyComposer.Compose(_policy.ArtifactPolicy));
                 executionSession = await Runtime!.OpenSessionAsync(
                     AgentSpecs.Operational(
                         _repository,
@@ -2112,7 +2177,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 CreateChangeDetector(),
                 _processRunner,
                 _repository,
-                console);
+                console,
+                _policy.MaxNoChangesCommits);
             bool stalled = await commitGate.CommitPushAndEvaluateAsync(
                 uncheckedMilestonesBeforeExecution,
                 uncheckedMilestonesAfterExecution,
@@ -2121,7 +2187,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 uncheckedMilestonesAfterExecution < uncheckedMilestonesBeforeExecution;
             int previousNoProgressCount = await ReadExecuteNoProgressCountAsync(cancellationToken);
             int noProgressCount = substantiveProgress ? 0 : previousNoProgressCount + 1;
-            stalled = stalled || noProgressCount > CommitGate.MaxNoChangesCount;
+            stalled = stalled || noProgressCount > _policy.MaxNoChangesCommits;
             string stallEvidence = await WriteExecuteStallEvidenceAsync(
                 previousNoProgressCount,
                 noProgressCount,
@@ -2193,7 +2259,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 |---|---|
                 | Previous No-Progress Count | {previousNoProgressCount} |
                 | Consecutive No-Progress Count | {noProgressCount} |
-                | Max No-Progress Count | {CommitGate.MaxNoChangesCount} |
+                | Max No-Progress Count | {_policy.MaxNoChangesCommits} |
                 | Substantive Progress | {substantiveProgress} |
                 | Stalled | {stalled} |
                 | Updated At | {DateTimeOffset.UtcNow:O} |
@@ -2303,7 +2369,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     CreateChangeDetector(),
                     _processRunner,
                     _repository,
-                    console);
+                    console,
+                    _policy.MaxNoChangesCommits);
                 await commitGate.CommitPushIfChangedAsync(cancellationToken);
             }
 
@@ -2312,7 +2379,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
-            var promptRunner = new AgentCompletionPromptRunner(Runtime!, _repository);
+            var promptRunner = new AgentCompletionPromptRunner(
+                Runtime!,
+                _repository,
+                ImplementationFirstPromptPolicyComposer.Compose(_policy.ArtifactPolicy));
             var archiveService = new CompletedEpicArchiveService(artifactStore, promptRunner, completionObserver);
             var service = new CompletionCertificationService(
                 artifactStore,
