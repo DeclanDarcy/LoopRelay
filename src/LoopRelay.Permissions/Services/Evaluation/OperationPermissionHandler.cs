@@ -53,6 +53,14 @@ public sealed class OperationPermissionHandler
             return Deny("Operation-scoped sessions cannot delete files.");
         }
 
+        IReadOnlyList<string> targets = details.PathArguments ?? [];
+        if (targets.Count > 0)
+        {
+            return targets.All(target => IsAllowedPath(profile, target, PermissionPathAccess.Write))
+                ? Allow("Operation writes allowed.")
+                : Deny("One or more file-change targets are outside the operation write profile.");
+        }
+
         string? target = details.FilePath ?? ExactGrantRoot(details.GrantRoot, profile);
         if (string.IsNullOrWhiteSpace(target))
         {

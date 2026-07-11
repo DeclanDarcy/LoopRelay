@@ -64,6 +64,30 @@ public sealed class PermissionGatewayTests
     }
 
     [Fact]
+    public void Scoped_file_change_accepts_only_when_every_aggregate_target_is_allowed()
+    {
+        using TempRepo repo = TempRepo.Create();
+        var profile = new OperationPermissionProfile(
+            "extract-milestones",
+            repo.Root,
+            [],
+            [],
+            [".agents/plan.md"],
+            [new OperationPathGlob(".agents/milestones", "m*.md")]);
+        byte[] accepted = Gateway().Evaluate(
+            Encoding.UTF8.GetBytes(
+                """{"jsonrpc":"2.0","id":"file-1","method":"item/fileChange/requestApproval","params":{"itemId":"i","operation":"write","targetPaths":[".agents/plan.md",".agents/milestones/m1.md"]}}"""),
+            new PermissionGatewayContext("repo", repo.Root, profile));
+        byte[] declined = Gateway().Evaluate(
+            Encoding.UTF8.GetBytes(
+                """{"jsonrpc":"2.0","id":"file-2","method":"item/fileChange/requestApproval","params":{"itemId":"i","operation":"write","targetPaths":[".agents/plan.md","README.md"]}}"""),
+            new PermissionGatewayContext("repo", repo.Root, profile));
+
+        Assert.Equal(CodexPermissionAdapter.AcceptDecision, Decision(accepted));
+        Assert.Equal(CodexPermissionAdapter.DenialDecision, Decision(declined));
+    }
+
+    [Fact]
     public void Scoped_safe_command_is_declined_despite_global_allow_list()
     {
         using TempRepo repo = TempRepo.Create();

@@ -46,7 +46,7 @@ public sealed class CompletedEpicArchiveService(
             request.Repository,
             archiveDirectory,
             cancellationToken);
-        await ValidateArchiveTargetsAsync(artifacts, retainedOperations);
+        await ValidateArchiveTargetsAsync(artifacts, retainedOperations, allowIdenticalExisting: true);
         await ExecuteRetainedArchivePlanAsync(artifacts, retainedOperations);
 
         (_observer ?? NullCompletionObserver.Instance).Phase("Synthesize completed epic");
@@ -123,7 +123,8 @@ public sealed class CompletedEpicArchiveService(
 
     private static async Task ValidateArchiveTargetsAsync(
         CompletionArtifacts artifacts,
-        IReadOnlyList<ArchiveFileOperation> operations)
+        IReadOnlyList<ArchiveFileOperation> operations,
+        bool allowIdenticalExisting = false)
     {
         foreach (string duplicate in operations
             .GroupBy(operation => operation.TargetPath, StringComparer.Ordinal)
@@ -137,6 +138,14 @@ public sealed class CompletedEpicArchiveService(
         {
             if (await artifacts.ExistsAsync(operation.TargetPath))
             {
+                if (allowIdenticalExisting &&
+                    string.Equals(
+                        await artifacts.ReadAsync(operation.TargetPath),
+                        operation.Content,
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
                 throw new CompletionCertificationException($"Archive target already exists: {operation.TargetPath}");
             }
         }

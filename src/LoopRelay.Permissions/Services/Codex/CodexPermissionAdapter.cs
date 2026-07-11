@@ -135,6 +135,7 @@ public sealed class CodexPermissionAdapter : IPermissionAdapter
             FileOperation: operation,
             FilePath: filePath,
             GrantRoot: request.GrantRoot,
+            PathArguments: request.TargetPaths ?? [],
             PathAccess: access));
     }
 
@@ -391,6 +392,8 @@ public sealed class CodexPermissionAdapter : IPermissionAdapter
         public string? Type { get; init; }
 
         public string? TargetPath { get; init; }
+
+        public IReadOnlyList<string>? TargetPaths { get; init; }
 
         public string? Path { get; init; }
 

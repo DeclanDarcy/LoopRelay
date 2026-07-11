@@ -44,6 +44,18 @@ internal sealed class CompletionPromptContextBuilder(
 
         sections.Add(Section($"Execution Completion Claim: {executionEvidencePath}", await ReadRequiredLogicalAsync(executionEvidencePath)));
 
+        IReadOnlyList<string> executionEvidence = await _artifacts.ListAsync(
+            CompletionArtifactPaths.ExecutionEvidenceDirectory,
+            "*.md");
+        foreach (string path in executionEvidence
+            .Where(path => !string.Equals(path, executionEvidencePath, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal))
+        {
+            sections.Add(Section(
+                $"Independent Execution Evidence: {path}",
+                await ReadRequiredLogicalAsync(path)));
+        }
+
         foreach (ContextSection handoff in await BuildHandoffSectionsAsync())
         {
             sections.Add(handoff);

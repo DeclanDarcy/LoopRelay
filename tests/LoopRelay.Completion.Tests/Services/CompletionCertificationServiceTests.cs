@@ -615,6 +615,36 @@ public sealed class CompletionCertificationServiceTests
         Assert.Contains("The HITL-requested exception is disabled", prompt, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AgentCompletionPromptRunner_MaterializesReturnedSynthesisWhenAgentDidNotWriteFile()
+    {
+        string root = Directory.CreateTempSubdirectory("looprelay-completion-synthesis-fallback").FullName;
+        var runtime = new RecordingAgentRuntime(new AgentTurnResult(
+            0,
+            AgentTurnState.Completed,
+            """
+            # Completed Greeting Epic
+
+            ## 1. Epic Purpose
+
+            Preserve the deterministic greeting capability.
+            """,
+            AgentTokenUsage.Zero));
+        var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = root };
+        var runner = new AgentCompletionPromptRunner(
+            runtime,
+            repository,
+            new BrainConfiguration(AgentModel.Gpt56Sol, AgentEffort.High));
+
+        await runner.RunAsync(new CompletionRuntimePromptInvocation(
+            CompletionRuntimePromptNames.SynthesizeCompletedEpic,
+            Label: "1"));
+
+        string path = Path.Combine(root, ".agents", "archive", "epics", "1.md");
+        Assert.True(File.Exists(path));
+        Assert.Contains("## 1. Epic Purpose", await File.ReadAllTextAsync(path), StringComparison.Ordinal);
+    }
+
     private static string Evaluation(string completionStatus, string drift, string recommendation) => $$"""
         # Epic Completion and Drift Evaluation
 

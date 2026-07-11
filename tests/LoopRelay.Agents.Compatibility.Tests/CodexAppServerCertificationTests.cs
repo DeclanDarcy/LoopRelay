@@ -25,7 +25,8 @@ public sealed class CodexAppServerCertificationTests
         try
         {
             string versionOutput = await RunAsync(binary, ["--version"], repository, codexHome);
-            Assert.Contains("0.142.5", versionOutput, StringComparison.Ordinal);
+            CertificationFixture expected = CertificationFixture.LoadAll()
+                .Single(fixture => versionOutput.Contains(fixture.ServerVersion, StringComparison.Ordinal));
             await RunAsync(
                 binary,
                 ["app-server", "generate-json-schema", "--experimental", "--out", schemas],
@@ -88,8 +89,6 @@ public sealed class CodexAppServerCertificationTests
             Assert.Equal(originalId, resumed.GetProperty("thread").GetProperty("id").GetString());
             Assert.NotEqual(originalId, childId);
 
-            CertificationFixture expected = CertificationFixture.Load();
-            Assert.Equal("0.142.5", expected.ServerVersion);
             Assert.True(string.Equals(expected.SchemaDigest, schemaDigest, StringComparison.Ordinal),
                 $"Canonical schema digest mismatch. Actual: {schemaDigest}");
             Assert.Equal(expected.InitializeReportsExperimentalApi, HasExperimentalApi(initialize));
@@ -108,29 +107,34 @@ public sealed class CodexAppServerCertificationTests
     [Fact]
     public void CheckedInEvidenceDigestIsCanonicalAndContainsNoSessionContent()
     {
-        CertificationFixture fixture = CertificationFixture.Load();
-        string json = File.ReadAllText(CertificationFixture.Path);
-        Assert.Equal(fixture.EvidenceDigest, Sha256(Encoding.UTF8.GetBytes(fixture.CanonicalEvidence())));
-        Assert.DoesNotContain("thread-", json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("auth", json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("token", json, StringComparison.OrdinalIgnoreCase);
+        foreach (CertificationFixture fixture in CertificationFixture.LoadAll())
+        {
+            string json = File.ReadAllText(fixture.Path);
+            Assert.Equal(fixture.EvidenceDigest, Sha256(Encoding.UTF8.GetBytes(fixture.CanonicalEvidence())));
+            Assert.DoesNotContain("thread-", json, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("auth", json, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("token", json, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
     public void EmbeddedManifestPromotesOnlyTheOperationsCertifiedByTheFixture()
     {
-        CertificationFixture fixture = CertificationFixture.Load();
-        CodexCompatibilityManifestEntry entry = Assert.Single(CodexCompatibilityManifest.LoadEmbedded().Entries);
-
-        Assert.Equal(fixture.ServerVersion, entry.ServerVersion);
-        Assert.Equal(fixture.SchemaDigest, entry.SchemaDigest);
-        Assert.Equal(fixture.EvidenceDigest, entry.EvidenceDigest);
-        Assert.Equal(SessionOperationSupport.Supported, entry.ResumeSupport);
-        Assert.Equal(SessionOperationSupport.Supported, entry.ExcludeTurnsSupport);
-        Assert.Equal(SessionOperationSupport.Supported, entry.ReadSupport);
-        Assert.Equal(SessionOperationSupport.Unknown, entry.WriteSupport);
-        Assert.Equal(SessionOperationSupport.Unknown, entry.ForkSupport);
-        Assert.Null(entry.MaximumRecoverableContext);
+        IReadOnlyList<CertificationFixture> fixtures = CertificationFixture.LoadAll();
+        IReadOnlyList<CodexCompatibilityManifestEntry> entries = CodexCompatibilityManifest.LoadEmbedded().Entries;
+        Assert.Equal(fixtures.Count, entries.Count);
+        foreach (CertificationFixture fixture in fixtures)
+        {
+            CodexCompatibilityManifestEntry entry = Assert.Single(entries, item => item.ServerVersion == fixture.ServerVersion);
+            Assert.Equal(fixture.SchemaDigest, entry.SchemaDigest);
+            Assert.Equal(fixture.EvidenceDigest, entry.EvidenceDigest);
+            Assert.Equal(SessionOperationSupport.Supported, entry.ResumeSupport);
+            Assert.Equal(SessionOperationSupport.Supported, entry.ExcludeTurnsSupport);
+            Assert.Equal(SessionOperationSupport.Supported, entry.ReadSupport);
+            Assert.Equal(SessionOperationSupport.Unknown, entry.WriteSupport);
+            Assert.Equal(SessionOperationSupport.Unknown, entry.ForkSupport);
+            Assert.Null(entry.MaximumRecoverableContext);
+        }
     }
 
     [Fact]
@@ -141,8 +145,9 @@ public sealed class CodexAppServerCertificationTests
             return;
         }
 
-        CertificationFixture fixture = CertificationFixture.Load();
         CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
+        CertificationFixture fixture = CertificationFixture.LoadAll()
+            .Single(item => item.ServerVersion == identity.ServerVersion);
         Assert.Equal(fixture.ServerVersion, identity.ServerVersion);
         Assert.Equal(fixture.SchemaDigest, identity.SchemaDigest);
         Assert.DoesNotContain("session", identity.Evidence, StringComparison.OrdinalIgnoreCase);
@@ -341,9 +346,13 @@ public sealed class CodexAppServerCertificationTests
         bool ForkProducesDistinctChild,
         string EvidenceDigest)
     {
-        public static string Path => System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures", "codex-0.142.5-certification.json");
-        public static CertificationFixture Load() => JsonSerializer.Deserialize<CertificationFixture>(
-            File.ReadAllText(Path), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        public string Path => System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures", $"codex-{ServerVersion}-certification.json");
+        public static IReadOnlyList<CertificationFixture> LoadAll() => Directory
+            .EnumerateFiles(System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures"), "codex-*-certification.json")
+            .Order(StringComparer.Ordinal)
+            .Select(path => JsonSerializer.Deserialize<CertificationFixture>(
+                File.ReadAllText(path), new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
+            .ToArray();
         public string CanonicalEvidence() => string.Join('|',
             ServerVersion, SchemaDigest, InitializeReportsExperimentalApi, InjectMaterializesThread, ReadPreservesIdentity,
             ResumePreservesIdentity, ForkProducesDistinctChild);

@@ -177,6 +177,52 @@ public sealed class CodexAppServerSessionTests
     }
 
     [Fact]
+    public async Task ScopedFileChangeApprovalCorrelatesExactItemStartedPath()
+    {
+        var process = new ScriptedAppServerProcess
+        {
+            EmitApprovalRequest = true,
+            EmitFileChangeApproval = true,
+            FileChangePathOnlyInItemStarted = true,
+            ApprovalTargetPath = ".agents/details.md",
+        };
+        await using var session = new CodexAppServerSession(
+            OperationSpec(".agents/details.md"),
+            process,
+            new DeterministicAgentTokenEstimator(),
+            PermissionGateway());
+
+        AgentTurnResult result = await session.RunTurnAsync("hello");
+        await process.ApprovalAccepted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Contains(process.Writes, write => write.Contains("\"accept\""));
+    }
+
+    [Fact]
+    public async Task ScopedFileChangeApprovalCorrelatesAndAcceptsMultipleAllowedItemStartedPaths()
+    {
+        var process = new ScriptedAppServerProcess
+        {
+            EmitApprovalRequest = true,
+            EmitFileChangeApproval = true,
+            FileChangePathOnlyInItemStarted = true,
+            ApprovalTargetPaths = [".agents/plan.md", ".agents/milestones/m1.md"],
+        };
+        await using var session = new CodexAppServerSession(
+            OperationSpec([".agents/plan.md", ".agents/milestones/m1.md"]),
+            process,
+            new DeterministicAgentTokenEstimator(),
+            PermissionGateway());
+
+        AgentTurnResult result = await session.RunTurnAsync("hello");
+        await process.ApprovalAccepted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Contains(process.Writes, write => write.Contains("\"accept\""));
+    }
+
+    [Fact]
     public async Task ScopedFileChangeApprovalOutsideOperationProfileIsDeclined()
     {
         var process = new ScriptedAppServerProcess
@@ -490,7 +536,9 @@ public sealed class CodexAppServerSessionTests
                 new InvariantGuard()),
             new OperationPermissionHandler());
 
-    private static AgentSessionSpec OperationSpec(string allowedWrite) => new(
+    private static AgentSessionSpec OperationSpec(string allowedWrite) => OperationSpec([allowedWrite]);
+
+    private static AgentSessionSpec OperationSpec(IReadOnlyList<string> allowedWrites) => new(
         SessionIdentity.New(),
         "repo-1",
         SessionRole.OperationalExecution,
@@ -504,7 +552,7 @@ public sealed class CodexAppServerSessionTests
             "/repo",
             [".agents/plan.md"],
             [],
-            [allowedWrite],
+            allowedWrites,
             []));
 
     private sealed class ThrowingPermissionGateway : IPermissionGateway

@@ -38,7 +38,8 @@ public sealed class CodexAgentArgumentBuilderTests
         Assert.Contains("/repo", args);
         Assert.Equal("-", args[^1]); // stdin prompt is the trailing positional
         Assert.Contains("gpt-5.6-terra", args);
-        Assert.DoesNotContain("--sandbox", args); // exec path intentionally omits the sandbox flag
+        Assert.Contains("--sandbox", args);
+        Assert.Contains("workspace-write", args);
     }
 
     // One-shot turns may run with --cd pointed at a temp sandbox workspace outside any trusted git
@@ -87,18 +88,22 @@ public sealed class CodexAgentArgumentBuilderTests
         Assert.Contains("model_reasoning_effort=\"high\"", args);
     }
 
-    // The exec/one-shot path intentionally omits the --sandbox flag (the sandbox posture is left to codex's
-    // own configuration), so no sandbox value is emitted regardless of the spec's write posture.
+    // The exec/one-shot path must project the requested sandbox posture explicitly. Otherwise Codex's
+    // ambient default can silently reduce a write-bearing one-shot to read-only.
     [Fact]
-    public void OneShotDoesNotPassSandboxFlag()
+    public void OneShotSandboxMapsPosture()
     {
-        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
+        IReadOnlyList<string> readOnly = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: false, requiresApproval: true, AgentEffort.Low),
             AgentSessionMode.OneShot);
+        Assert.Contains("--sandbox", readOnly);
+        Assert.Contains("read-only", readOnly);
 
-        Assert.DoesNotContain("--sandbox", args);
-        Assert.DoesNotContain("read-only", args);
-        Assert.DoesNotContain("workspace-write", args);
+        IReadOnlyList<string> writable = CodexAgentArgumentBuilder.Build(
+            Spec(canWrite: true, requiresApproval: false, AgentEffort.Low),
+            AgentSessionMode.OneShot);
+        Assert.Contains("--sandbox", writable);
+        Assert.Contains("workspace-write", writable);
     }
 
     // The persistent/app-server path still maps the sandbox posture onto an explicit --sandbox flag.

@@ -13,8 +13,7 @@ namespace LoopRelay.Plan.Cli.Services.Execution;
 
 /// <summary>
 /// Pipeline step 4: the zero-permission adversarial review. A single turn on a fresh, read-only, persistent
-/// session (the one-shot codex path never emits `--sandbox`, so read-only enforcement requires the persistent
-/// app-server path — see the plan's Process Model notes) reviews the plan content inlined via
+/// session reviews the plan content inlined via
 /// <see cref="AdversarialPlanReview"/>. The session is opened and closed exactly once, on every path, via a
 /// try/finally around the single turn (mirroring ExecutionStep's session lifetime, collapsed to one turn). The
 /// captured review text becomes `{output1}`, fed into <c>PlanSession.ReviseAsync</c> by the pipeline.

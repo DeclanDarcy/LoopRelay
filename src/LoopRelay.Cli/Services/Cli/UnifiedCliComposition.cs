@@ -7,6 +7,7 @@ using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Process;
 using LoopRelay.Agents.Services.Codex;
+using LoopRelay.Agents.Services.Codex.Compatibility;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Services.Agents;
@@ -14,6 +15,7 @@ using LoopRelay.Cli.Services.Console;
 using LoopRelay.Cli.Services.Decisions;
 using LoopRelay.Cli.Services.Decisions.Recovery;
 using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Services.Planning;
 using LoopRelay.Cli.Services.Telemetry;
 using LoopRelay.Completion.Abstractions;
 using LoopRelay.Completion.Models.Certification;
@@ -25,6 +27,7 @@ using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Models.NonImplementationCompletion;
@@ -195,24 +198,27 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             new ConsoleLoopConsole(output ?? TextWriter.Null, error ?? TextWriter.Null),
             continuityRuntime ?? agentRuntime as IAgentSessionContinuityRuntime,
             brainConfiguration);
+        var transitionEvidenceStore = new CanonicalTransitionEvidenceStore(persistence);
+        var transitionBoundaryJournal = new CanonicalTransitionBoundaryJournal(persistence);
         ITransitionRuntime transitionRuntime = new TransitionRuntime(
             new UnifiedTransitionDefinitionResolver(workflowDefinitions),
             new RepositoryObservationProductResolver(repositoryObserver, repository),
             new UnifiedGateEvaluator(),
             new UnifiedPromptContextBuilder(repository),
             new UnifiedPromptRenderer(),
-            promptExecutor,
+            new FaultInjectingPromptExecutor(promptExecutor, transitionEvidenceStore, transitionBoundaryJournal),
             new UnifiedOutputInterpreter(repository),
             new UnifiedProductValidator(repository),
             new UnifiedEffectExecutor(repository, persistence, workflowDefinitions),
             new CanonicalTransitionRunStore(persistence),
-            new CanonicalTransitionEvidenceStore(persistence),
+            transitionEvidenceStore,
             new CanonicalTransitionBlockerStore(persistence),
             new CanonicalTransitionRecoveryStore(persistence),
             new CanonicalTransitionGateEvaluationStore(persistence),
-            new CanonicalTransitionEffectStore(persistence));
+            new CanonicalTransitionEffectStore(persistence),
+            transitionBoundaryJournal);
         var workflowController = new WorkflowController(workflowResolver, transitionRuntime);
-        var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter();
+        var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter(persistence);
         var workflowChainRunner = new WorkflowChainRunner(
             workflowResolver,
             workflowController,
@@ -393,7 +399,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
     private sealed class UnifiedPromptContextBuilder(Repository _repository) : IPromptContextBuilder
     {
-        public Task<PromptContext> BuildAsync(
+        public async Task<PromptContext> BuildAsync(
             TransitionRuntimeRequest request,
             WorkflowTransitionDefinition definition,
             ProductResolutionResult inputs,
@@ -440,13 +446,47 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
                 sections.AddRange(result.Sections);
             }
+            else if (request.Workflow == WorkflowIdentity.TraditionalRoadmap)
+            {
+                var artifacts = new ProjectionArtifacts(new FileSystemArtifactStore(), _repository);
+                ProjectContext projectContext = await new ProjectContextLoader(artifacts)
+                    .LoadAsync(cancellationToken);
+                sections.Add(new PromptContextSection(
+                    "Project Context",
+                    projectContext.Content,
+                    "ProjectContext",
+                    projectContext.SourceFiles));
 
-            return Task.FromResult(new PromptContext(
+                foreach (ProductRecord product in inputs.Products)
+                {
+                    string? path = product.StorageRepresentations.FirstOrDefault(candidate =>
+                        File.Exists(ResolveRepositoryPath(_repository, candidate)));
+                    if (path is null)
+                    {
+                        continue;
+                    }
+
+                    string content = await File.ReadAllTextAsync(
+                        ResolveRepositoryPath(_repository, path),
+                        cancellationToken);
+                    string title = definition.Identity.Value == "GenerateMilestoneDeepDivesForEpic" &&
+                        product.Identity == ProductIdentity.PreparedEpic
+                            ? "Active Epic"
+                            : $"Input Product: {product.Identity.Value}";
+                    sections.Add(new PromptContextSection(
+                        title,
+                        content,
+                        path,
+                        product.EvidenceLocations));
+                }
+            }
+
+            return new PromptContext(
                 definition,
                 inputs,
                 TransitionInputSnapshotHasher.Create(definition, inputs.Products, metadata, sections),
                 metadata,
-                sections));
+                sections);
         }
     }
 
@@ -500,6 +540,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private const string RoadmapCompletionContext = ".agents/core/roadmap-completion-context.md";
         private const string Selection = ".agents/selection.md";
         private const string ActiveEpic = ".agents/epic.md";
+        private const string EpicAudit = ".LoopRelay/evidence/traditional-roadmap-prompt/AuditExistingEpic-output.md";
 
         private static readonly IReadOnlyDictionary<string, string> PrimaryOutputs =
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -507,7 +548,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 ["BootstrapRoadmapCompletionContext"] = RoadmapCompletionContext,
                 ["UpdateRoadmapCompletionContext"] = RoadmapCompletionContext,
                 ["SelectStrategicInitiative"] = Selection,
-                ["AuditExistingEpic"] = ActiveEpic,
+                ["AuditExistingEpic"] = EpicAudit,
                 ["CreateEpic"] = ActiveEpic,
                 ["SplitEpic"] = ActiveEpic,
                 ["RealignEpic"] = ActiveEpic,
@@ -542,7 +583,13 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         "# Next Strategic Initiative Selection")
                         ? []
                         : ["strategic initiative selection output is missing a recognized selection heading."],
-                "AuditExistingEpic" or "CreateEpic" or "SplitEpic" or "RealignEpic" or "ReimagineEpic" =>
+                "AuditExistingEpic" =>
+                    ContainsHeading(content, "# Epic Preparation Audit") &&
+                    ContainsHeading(content, "## Audit Disposition") &&
+                    ContainsHeading(content, "## Final Disposition Statement")
+                        ? []
+                        : ["epic preparation audit output is missing its required audit structure."],
+                "CreateEpic" or "SplitEpic" or "RealignEpic" or "ReimagineEpic" =>
                     ValidatePreparedEpic(content),
                 _ => [],
             };
@@ -683,6 +730,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
     private static class ExecuteReviewTransitions
     {
+        public const string CompletionRouteOutputPath =
+            ".LoopRelay/evidence/execute-review/InterpretCompletionRoute-output.md";
+
         public static bool Supports(WorkflowTransitionDefinition definition) =>
             definition.Identity.Value is "RunNonImplementationReview" or "RunCompletionCertification" or
                 "InterpretCompletionRoute";
@@ -768,6 +818,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             CanonicalPromptAsset asset,
             PromptContext context)
         {
+            string promptTemplate = RenderTraditionalRoadmapPrompt(asset, context);
             string products = context.Inputs.Products.Count == 0
                 ? "No input products were resolved."
                 : string.Join(
@@ -788,7 +839,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         {section.Content}
                         """));
             return $"""
-            {asset.PromptTemplate}
+            {promptTemplate}
 
             ---
 
@@ -807,6 +858,65 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             {sections}
             """;
         }
+
+        private static string RenderTraditionalRoadmapPrompt(
+            CanonicalPromptAsset asset,
+            PromptContext context)
+        {
+            string projectContext = Section(context, "Project Context");
+            string roadmapContext = ProductSection(context, ProductIdentity.RoadmapCompletionContext);
+            string selection = ProductSection(context, ProductIdentity.StrategicInitiativeSelection);
+            string epic = ProductSection(context, ProductIdentity.PreparedEpic);
+
+            return asset.PromptIdentity switch
+            {
+                "BootstrapRoadmapCompletionContext" =>
+                    Core.Prompts.Planning.CreateRoadmapCompletionContext.Render(projectContext, string.Empty),
+                "UpdateRoadmapCompletionContext" =>
+                    Core.Prompts.Planning.UpdateRoadmapCompletionContext.Render(projectContext, roadmapContext),
+                "SelectStrategicInitiative" =>
+                    Core.Prompts.Planning.SelectNextEpic.Render(projectContext),
+                "AuditExistingEpic" =>
+                    Core.Prompts.Planning.EpicPreparationAudit.Render(projectContext, selection),
+                "CreateNewEpic" =>
+                    Core.Prompts.Planning.CreateNewEpic.Render(
+                        projectContext,
+                        selection,
+                        Core.Prompts.NonImplementation.CreateNewEpicImplementationFirstGuidance.Text,
+                        Core.Prompts.NonImplementation.CreateNewEpicAuxiliaryArtifactLimits.Text),
+                "SplitEpic" =>
+                    Core.Prompts.Planning.SplitEpic.Render(
+                        projectContext,
+                        epic,
+                        Core.Prompts.NonImplementation.SplitEpicImplementationFirstGuidance.Text,
+                        Core.Prompts.NonImplementation.SplitEpicAuxiliaryArtifactLimits.Text),
+                "RealignEpic" =>
+                    Core.Prompts.Planning.RealignEpic.Render(
+                        projectContext,
+                        epic,
+                        Core.Prompts.NonImplementation.RealignEpicImplementationFirstGuidance.Text,
+                        Core.Prompts.NonImplementation.RealignEpicAuxiliaryArtifactLimits.Text),
+                "ReimagineEpic" =>
+                    Core.Prompts.Planning.ReimagineEpic.Render(
+                        projectContext,
+                        epic,
+                        Core.Prompts.NonImplementation.ReimagineEpicImplementationFirstGuidance.Text,
+                        Core.Prompts.NonImplementation.ReimagineEpicAuxiliaryArtifactLimits.Text),
+                "GenerateMilestoneDeepDivesForEpic" =>
+                    Core.Prompts.Planning.GenerateMilestoneDeepDivesForEpic.Render(
+                        projectContext,
+                        Core.Prompts.NonImplementation.GenerateMilestoneDeepDivesForEpicImplementationFirstGuidance.Text,
+                        Core.Prompts.NonImplementation.GenerateMilestoneDeepDivesForEpicAuxiliaryArtifactLimits.Text),
+                _ => asset.PromptTemplate,
+            };
+        }
+
+        private static string ProductSection(PromptContext context, ProductIdentity product) =>
+            Section(context, $"Input Product: {product.Value}");
+
+        private static string Section(PromptContext context, string title) =>
+            context.Sections.FirstOrDefault(section =>
+                string.Equals(section.Title, title, StringComparison.Ordinal))?.Content ?? string.Empty;
 
         private static string RenderAdversarialPlanReviewPrompt(PromptContext context)
         {
@@ -957,7 +1067,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             if (PlanWarmSessionTransitions.Supports(definition))
             {
-                return await ExecutePlanWarmSessionAsync(definition, prompt, cancellationToken);
+                return await ExecutePlanWarmSessionAsync(request, cancellationToken);
             }
 
             if (ExecuteDecisionSessionTransitions.Supports(definition))
@@ -967,7 +1077,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             if (ExecuteImplementationTransitions.Supports(definition))
             {
-                return await ExecuteImplementationTransitionAsync(definition, prompt, cancellationToken);
+                return await ExecuteImplementationTransitionAsync(request, cancellationToken);
             }
 
             if (ExecuteRepositoryStateTransitions.Supports(definition))
@@ -1006,6 +1116,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             try
             {
+                string? primaryOutput = PrimaryOutputPath(definition);
+                string? primaryOutputBefore = primaryOutput is null
+                    ? null
+                    : HashFileIfPresent(ResolveRepositoryPath(_repository, primaryOutput));
                 AgentTurnResult result = await _agentRuntime.RunOneShotAsync(
                     AgentSpecs.BrainOperational(_repository, _brainConfiguration),
                     prompt.Text,
@@ -1021,15 +1135,23 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         WithDiagnostics($"{definition.Identity} turn ended in state {result.State}.", result.Diagnostics));
                 }
 
+                var metadata = new Dictionary<string, string>
+                {
+                    [metadataKey] = definition.Identity.Value,
+                    ["evidence"] = prompt.EvidenceLocation,
+                };
+                if (primaryOutput is not null)
+                {
+                    string? after = HashFileIfPresent(ResolveRepositoryPath(_repository, primaryOutput));
+                    metadata["primary-output-path"] = primaryOutput;
+                    metadata["primary-output-mutated"] =
+                        (after is not null && !string.Equals(after, primaryOutputBefore, StringComparison.Ordinal)).ToString();
+                }
                 return new PromptExecutionResult(
                     PromptExecutionStatus.Completed,
                     result.Output,
                     TimeSpan.Zero,
-                    new Dictionary<string, string>
-                    {
-                        [metadataKey] = definition.Identity.Value,
-                        ["evidence"] = prompt.EvidenceLocation,
-                    });
+                    metadata);
             }
             catch (OperationCanceledException)
             {
@@ -1408,10 +1530,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 operation.AllowedWriteGlobs);
 
         private async Task<PromptExecutionResult> ExecutePlanWarmSessionAsync(
-            WorkflowTransitionDefinition definition,
-            RenderedPrompt prompt,
+            PromptExecutionRequest executionRequest,
             CancellationToken cancellationToken)
         {
+            WorkflowTransitionDefinition definition = executionRequest.Definition;
+            RenderedPrompt prompt = executionRequest.RenderedPrompt;
             if (_agentRuntime is null)
             {
                 return new PromptExecutionResult(
@@ -1424,6 +1547,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             try
             {
+                var continuityStore = new PlanWarmSessionContinuityStore(_repository);
+                bool resumedAfterRestart = false;
                 if (definition.Identity.Value == "WriteExecutablePlan")
                 {
                     if (planAuthoringSession is not null)
@@ -1437,12 +1562,71 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 }
                 else if (planAuthoringSession is null)
                 {
-                    return new PromptExecutionResult(
-                        PromptExecutionStatus.Failed,
-                        string.Empty,
-                        TimeSpan.Zero,
-                        new Dictionary<string, string>(),
-                        "RevisePlan requires the warm planning session opened by WriteExecutablePlan.");
+                    PlanWarmSessionContinuity continuity = await continuityStore.ReadAsync(cancellationToken)
+                        ?? throw new PromptContextBlockedException(
+                            "RevisePlan cannot recover the authoring session because no durable WriteExecutablePlan continuity record exists.",
+                            ["plan-warm-session:missing"]);
+                    string planPath = ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.Plan);
+                    if (!File.Exists(planPath) || !string.Equals(HashFile(planPath), continuity.PlanHash, StringComparison.Ordinal))
+                    {
+                        throw new PromptContextBlockedException(
+                            "RevisePlan cannot resume because the executable plan changed after the warm-session checkpoint.",
+                            ["plan-warm-session:plan-hash-mismatch"]);
+                    }
+
+                    IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
+                        ?? _agentRuntime as IAgentSessionContinuityRuntime
+                        ?? throw new PromptContextBlockedException(
+                            "RevisePlan requires a continuity-capable agent runtime after restart.",
+                            ["plan-warm-session:runtime-incompatible"]);
+                    CodexInstalledCompatibilityIdentity installed = CodexCompatibilityIdentityProbe.Resolve();
+                    SessionContinuityNegotiationResult negotiation = await continuityRuntime.NegotiateAsync(
+                        new SessionContinuityNegotiationRequest(
+                            "codex",
+                            CodexAppServerProtocol.ClientVersion,
+                            installed.ServerVersion,
+                            installed.ExecutableIdentity,
+                            "app-server-v2",
+                            installed.SchemaDigest,
+                            default,
+                            OfferExperimentalApi: true),
+                        cancellationToken);
+                    if (!negotiation.FromCertifiedManifest)
+                    {
+                        throw new PromptContextBlockedException(
+                            "RevisePlan recovery is blocked because the installed provider profile is not exactly certified.",
+                            ["plan-warm-session:profile-incompatible"]);
+                    }
+
+                    AgentSessionSpec fresh = AgentSpecs.PlanAuthoring(_repository, _brainConfiguration);
+                    var resumeSpec = new AgentSessionSpec(
+                        fresh.SessionId,
+                        fresh.RepositoryId,
+                        fresh.Role,
+                        fresh.Sandbox,
+                        fresh.Model,
+                        fresh.Effort,
+                        fresh.ConfigurationAuthority,
+                        fresh.WorkingDirectory,
+                        fresh.StartupOptions,
+                        continuity.ProviderThreadId,
+                        fresh.OperationPermissionProfile);
+                    SessionResumeResult resumed = await continuityRuntime.ResumeSessionAsync(
+                        new SessionResumeRequest(
+                            resumeSpec,
+                            new ProviderSessionReference("codex", continuity.ProviderThreadId),
+                            negotiation.Profile,
+                            Timeout: TimeSpan.FromSeconds(30)),
+                        cancellationToken);
+                    if (resumed.Outcome != SessionResumeOutcome.SuccessfulResume || resumed.Session is null)
+                    {
+                        throw new PromptContextBlockedException(
+                            $"RevisePlan could not resume the exact authoring thread ({resumed.Outcome}); repair or restart Plan authoring explicitly.",
+                            ["plan-warm-session:resume-failed", $"resume-outcome:{resumed.Outcome}"]);
+                    }
+
+                    planAuthoringSession = resumed.Session;
+                    resumedAfterRestart = true;
                 }
 
                 AgentTurnResult result = await planAuthoringSession.RunTurnAsync(
@@ -1460,10 +1644,54 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         WithDiagnostics($"{definition.Identity} turn ended in state {result.State}.", result.Diagnostics));
                 }
 
+                bool materializedPlanFromOutput = false;
+                if (definition.Identity.Value == "WriteExecutablePlan")
+                {
+                    materializedPlanFromOutput = await TryMaterializePlanFromOutputAsync(
+                        result.Output,
+                        cancellationToken);
+                    string planPath = ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.Plan);
+                    if (!File.Exists(planPath))
+                    {
+                        string headings = string.Join(
+                            '|',
+                            result.Output.Replace("\r\n", "\n", StringComparison.Ordinal)
+                                .Split('\n')
+                                .Select(line => line.Trim())
+                                .Where(line => line.StartsWith('#'))
+                                .Take(8));
+                        await ClosePlanSessionAsync();
+                        return new PromptExecutionResult(
+                            PromptExecutionStatus.Failed,
+                            result.Output,
+                            TimeSpan.Zero,
+                            new Dictionary<string, string>(),
+                            $"WriteExecutablePlan completed without `.agents/plan.md`; returned-output-length={result.Output.Length}; " +
+                            $"returned-headings={(headings.Length == 0 ? "none" : headings)}.");
+                    }
+                }
+
                 string? threadId = planAuthoringSession.ThreadId;
+                if (definition.Identity.Value == "WriteExecutablePlan" &&
+                    threadId is { Length: > 0 })
+                {
+                    string planPath = ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.Plan);
+                    if (File.Exists(planPath))
+                    {
+                        await continuityStore.WriteAsync(
+                            new PlanWarmSessionContinuity(
+                                threadId,
+                                executionRequest.InputSnapshotHash,
+                                HashFile(planPath),
+                                definition.PromptIdentity,
+                                DateTimeOffset.UtcNow),
+                            cancellationToken);
+                    }
+                }
                 if (definition.Identity.Value == "RevisePlan")
                 {
                     await ClosePlanSessionAsync();
+                    await continuityStore.RetireAsync(cancellationToken);
                 }
 
                 return new PromptExecutionResult(
@@ -1474,6 +1702,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     {
                         ["plan-warm-session"] = definition.Identity.Value,
                         ["thread-id"] = threadId ?? string.Empty,
+                        ["continuity"] = resumedAfterRestart ? "resumed-after-restart" : "warm-in-process",
+                        ["plan-output-fallback"] = materializedPlanFromOutput ? "materialized" : "not-needed-or-invalid",
                         ["evidence"] = prompt.EvidenceLocation,
                     });
             }
@@ -1486,6 +1716,61 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     TimeSpan.Zero,
                     new Dictionary<string, string>());
             }
+        }
+
+        private async Task<bool> TryMaterializePlanFromOutputAsync(
+            string output,
+            CancellationToken cancellationToken)
+        {
+            string planPath = ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.Plan);
+            if (File.Exists(planPath)) return false;
+
+            string content = output.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+            if (content.StartsWith("```", StringComparison.Ordinal) &&
+                content.EndsWith("```", StringComparison.Ordinal))
+            {
+                int firstNewline = content.IndexOf('\n');
+                content = firstNewline >= 0 ? content[(firstNewline + 1)..^3].Trim() : string.Empty;
+            }
+            int heading = content.IndexOf("# ", StringComparison.Ordinal);
+            if (heading > 0) content = content[heading..];
+            bool structural = content.Length >= 100 &&
+                content.StartsWith("# ", StringComparison.Ordinal) &&
+                content.Contains("Milestone", StringComparison.OrdinalIgnoreCase) &&
+                content.Contains("##", StringComparison.Ordinal);
+            if (!structural) return false;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(planPath)!);
+            await File.WriteAllTextAsync(
+                planPath,
+                content.TrimEnd() + Environment.NewLine,
+                cancellationToken);
+            return true;
+        }
+
+        private static string? PrimaryOutputPath(WorkflowTransitionDefinition definition)
+        {
+            if (EvalPromptAssetCatalog.TryGetByTransition(definition.Identity, out EvalPromptAsset asset))
+            {
+                return asset.PrimaryOutputPath;
+            }
+
+            return TraditionalRoadmapPromptTransitions.TryGetPrimaryOutput(definition, out string output)
+                ? output
+                : null;
+        }
+
+        private static string? HashFileIfPresent(string path)
+        {
+            if (!File.Exists(path)) return null;
+            using FileStream stream = File.OpenRead(path);
+            return Convert.ToHexStringLower(SHA256.HashData(stream));
+        }
+
+        private static string HashFile(string path)
+        {
+            using FileStream stream = File.OpenRead(path);
+            return Convert.ToHexStringLower(SHA256.HashData(stream));
         }
 
         private async Task<PromptExecutionResult> ExecuteDecisionSessionAsync(
@@ -1617,10 +1902,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         }
 
         private async Task<PromptExecutionResult> ExecuteImplementationTransitionAsync(
-            WorkflowTransitionDefinition definition,
-            RenderedPrompt prompt,
+            PromptExecutionRequest executionRequest,
             CancellationToken cancellationToken)
         {
+            WorkflowTransitionDefinition definition = executionRequest.Definition;
+            RenderedPrompt prompt = executionRequest.RenderedPrompt;
             if (_agentRuntime is null)
             {
                 return NotWired(definition);
@@ -1628,17 +1914,18 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             return definition.Identity.Value switch
             {
-                "ExecuteImplementationSlice" => await ExecuteImplementationSliceAsync(definition, prompt, cancellationToken),
+                "ExecuteImplementationSlice" => await ExecuteImplementationSliceAsync(executionRequest, cancellationToken),
                 "GenerateHandoff" => await ExecuteHandoffAsync(definition, prompt, cancellationToken),
                 _ => NotWired(definition),
             };
         }
 
         private async Task<PromptExecutionResult> ExecuteImplementationSliceAsync(
-            WorkflowTransitionDefinition definition,
-            RenderedPrompt prompt,
+            PromptExecutionRequest executionRequest,
             CancellationToken cancellationToken)
         {
+            WorkflowTransitionDefinition definition = executionRequest.Definition;
+            RenderedPrompt prompt = executionRequest.RenderedPrompt;
             try
             {
                 if (executionSession is not null)
@@ -1681,6 +1968,21 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
                 changedPathsAfterExecution = await CreateChangeDetector().GetRealChangedPathsAsync();
                 uncheckedMilestonesAfterExecution = (await milestones.GetUntickedItemsAsync()).Count;
+                string? threadId = executionSession.ThreadId;
+                if (threadId is { Length: > 0 } && executionSliceBaseline is not null)
+                {
+                    await new ExecutionWarmSessionContinuityStore(_repository).WriteAsync(
+                        new ExecutionWarmSessionContinuity(
+                            threadId,
+                            executionRequest.InputSnapshotHash,
+                            changedPathsAfterExecution,
+                            uncheckedMilestonesBeforeExecution,
+                            uncheckedMilestonesAfterExecution,
+                            executionSliceBaseline,
+                            HandoffCompleted: false,
+                            DateTimeOffset.UtcNow),
+                        cancellationToken);
+                }
                 return new PromptExecutionResult(
                     PromptExecutionStatus.Completed,
                     work.Output,
@@ -1689,6 +1991,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     {
                         ["execute-implementation"] = definition.Identity.Value,
                         ["changed-paths"] = string.Join("|", changedPathsAfterExecution),
+                        ["thread-id"] = threadId ?? string.Empty,
+                        ["continuity"] = "warm-in-process",
                         ["evidence"] = prompt.EvidenceLocation,
                     });
             }
@@ -1709,9 +2013,23 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             RenderedPrompt prompt,
             CancellationToken cancellationToken)
         {
+            bool resumedAfterRestart = false;
+            ExecutionWarmSessionContinuity? continuity = null;
             if (executionSession is null)
             {
-                return Failed("GenerateHandoff requires the held-open execution session created by ExecuteImplementationSlice.");
+                continuity = await RestoreExecutionCheckpointAsync(cancellationToken)
+                    ?? throw new PromptContextBlockedException(
+                        "GenerateHandoff cannot recover because no durable ExecuteImplementationSlice checkpoint exists.",
+                        ["execution-warm-session:missing"]);
+                if (continuity.HandoffCompleted)
+                {
+                    throw new PromptContextBlockedException(
+                        "GenerateHandoff checkpoint is already retired after a completed handoff.",
+                        ["execution-warm-session:handoff-completed"]);
+                }
+
+                executionSession = await ResumeExecutionSessionAsync(continuity, cancellationToken);
+                resumedAfterRestart = true;
             }
 
             try
@@ -1748,7 +2066,15 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     return Failed($"Execution completed but {OrchestrationArtifactPaths.LiveHandoff} was not written.");
                 }
 
+                string? threadId = executionSession.ThreadId;
                 await CloseExecutionSessionAsync();
+                continuity ??= await new ExecutionWarmSessionContinuityStore(_repository).ReadAsync(cancellationToken);
+                if (continuity is not null)
+                {
+                    await new ExecutionWarmSessionContinuityStore(_repository).WriteAsync(
+                        continuity with { HandoffCompleted = true, RecordedAt = DateTimeOffset.UtcNow },
+                        cancellationToken);
+                }
                 return new PromptExecutionResult(
                     PromptExecutionStatus.Completed,
                     handoff.Output,
@@ -1756,6 +2082,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     new Dictionary<string, string>
                     {
                         ["execute-implementation"] = definition.Identity.Value,
+                        ["thread-id"] = threadId ?? string.Empty,
+                        ["continuity"] = resumedAfterRestart ? "resumed-after-restart" : "warm-in-process",
                         ["evidence"] = prompt.EvidenceLocation,
                     });
             }
@@ -1764,11 +2092,89 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 await CloseExecutionSessionAsync();
                 return Cancelled();
             }
+            catch (PromptContextBlockedException)
+            {
+                await CloseExecutionSessionAsync();
+                throw;
+            }
             catch (Exception exception)
             {
                 await CloseExecutionSessionAsync();
                 return Failed(exception.Message);
             }
+        }
+
+        private async Task<IAgentSession> ResumeExecutionSessionAsync(
+            ExecutionWarmSessionContinuity continuity,
+            CancellationToken cancellationToken)
+        {
+            IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
+                ?? _agentRuntime as IAgentSessionContinuityRuntime
+                ?? throw new PromptContextBlockedException(
+                    "GenerateHandoff requires a continuity-capable agent runtime after restart.",
+                    ["execution-warm-session:runtime-incompatible"]);
+            CodexInstalledCompatibilityIdentity installed = CodexCompatibilityIdentityProbe.Resolve();
+            SessionContinuityNegotiationResult negotiation = await continuityRuntime.NegotiateAsync(
+                new SessionContinuityNegotiationRequest(
+                    "codex",
+                    CodexAppServerProtocol.ClientVersion,
+                    installed.ServerVersion,
+                    installed.ExecutableIdentity,
+                    "app-server-v2",
+                    installed.SchemaDigest,
+                    default,
+                    OfferExperimentalApi: true),
+                cancellationToken);
+            if (!negotiation.FromCertifiedManifest)
+            {
+                throw new PromptContextBlockedException(
+                    "GenerateHandoff recovery is blocked because the installed provider profile is not exactly certified.",
+                    ["execution-warm-session:profile-incompatible"]);
+            }
+
+            ValidatedExecutionRecommendation recommendation =
+                await CreateLoopArtifacts().ReadValidatedExecutionRecommendationAsync();
+            AgentSessionSpec fresh = AgentSpecs.Execution(_repository, recommendation);
+            var resumeSpec = new AgentSessionSpec(
+                fresh.SessionId,
+                fresh.RepositoryId,
+                fresh.Role,
+                fresh.Sandbox,
+                fresh.Model,
+                fresh.Effort,
+                fresh.ConfigurationAuthority,
+                fresh.WorkingDirectory,
+                fresh.StartupOptions,
+                continuity.ProviderThreadId,
+                fresh.OperationPermissionProfile);
+            SessionResumeResult resumed = await continuityRuntime.ResumeSessionAsync(
+                new SessionResumeRequest(
+                    resumeSpec,
+                    new ProviderSessionReference("codex", continuity.ProviderThreadId),
+                    negotiation.Profile,
+                    Timeout: TimeSpan.FromSeconds(30)),
+                cancellationToken);
+            if (resumed.Outcome != SessionResumeOutcome.SuccessfulResume || resumed.Session is null)
+            {
+                throw new PromptContextBlockedException(
+                    $"GenerateHandoff could not resume the exact execution thread ({resumed.Outcome}); inspect the durable slice checkpoint before retrying.",
+                    ["execution-warm-session:resume-failed", $"resume-outcome:{resumed.Outcome}"]);
+            }
+
+            return resumed.Session;
+        }
+
+        private async Task<ExecutionWarmSessionContinuity?> RestoreExecutionCheckpointAsync(
+            CancellationToken cancellationToken)
+        {
+            ExecutionWarmSessionContinuity? continuity =
+                await new ExecutionWarmSessionContinuityStore(_repository).ReadAsync(cancellationToken);
+            if (continuity is null) return null;
+            changedPathsAfterExecution = continuity.ChangedPaths;
+            uncheckedMilestonesBeforeExecution = continuity.UncheckedMilestonesBefore;
+            uncheckedMilestonesAfterExecution = continuity.UncheckedMilestonesAfter;
+            executionSliceBaseline = continuity.SliceBaseline;
+            return continuity;
         }
 
         private async Task<PromptExecutionResult> ExecuteRepositoryStateTransitionAsync(
@@ -1778,6 +2184,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         {
             try
             {
+                await RestoreExecutionCheckpointAsync(cancellationToken);
                 string output = definition.Identity.Value switch
                 {
                     "UpdateOperationalContext" => await ExecuteOperationalContextUpdateAsync(cancellationToken),
@@ -1957,11 +2364,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             try
             {
+                await RestoreExecutionCheckpointAsync(cancellationToken);
                 string output = definition.Identity.Value switch
                 {
                     "RunNonImplementationReview" => await ExecuteNonImplementationReviewAsync(cancellationToken),
                     "RunCompletionCertification" => await ExecuteCompletionCertificationAsync(cancellationToken),
-                    "InterpretCompletionRoute" => ExecuteCompletionRouteInterpretation(),
+                    "InterpretCompletionRoute" => await ExecuteCompletionRouteInterpretationAsync(cancellationToken),
                     _ => throw new InvalidOperationException($"Unsupported Execute review transition `{definition.Identity}`."),
                 };
                 return new PromptExecutionResult(
@@ -2041,19 +2449,31 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 _agentRuntime!,
                 _repository,
                 _brainConfiguration);
-            var archiveService = new CompletedEpicArchiveService(artifactStore, promptRunner, completionObserver);
+            var executionEvidenceStore = new SqliteExecutionEvidenceStore(_repository);
+            var archiveService = new CompletedEpicArchiveService(
+                artifactStore,
+                promptRunner,
+                completionObserver,
+                new SqliteCompletedEpicArchiveMaterializer());
             var service = new CompletionCertificationService(
                 artifactStore,
                 CreateProjectionService(),
                 promptRunner,
                 archiveService,
-                _observer: completionObserver);
+                _observer: completionObserver,
+                _executionEvidenceStore: executionEvidenceStore);
             completionCertificationResult = await service.CertifyPlanCompletionAsync(
                 new CompletionCertificationRequest(
                     _repository,
                     NonImplementationReviewEvidencePaths: nonImplementationReviewEvidencePaths),
                 cancellationToken);
             completionRecoveryEvidencePaths = completionObserver.EvidencePaths;
+            await new CompletionCertificationCheckpointStore(_repository).WriteAsync(
+                new CompletionCertificationCheckpoint(
+                    completionCertificationResult,
+                    completionRecoveryEvidencePaths,
+                    DateTimeOffset.UtcNow),
+                cancellationToken);
             if (completionCertificationResult.Outcome != CompletionCertificationServiceOutcome.Completed)
             {
                 throw new InvalidOperationException(
@@ -2063,11 +2483,19 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             return RenderCompletionCertificationResult(completionCertificationResult, completionRecoveryEvidencePaths);
         }
 
-        private string ExecuteCompletionRouteInterpretation()
+        private async Task<string> ExecuteCompletionRouteInterpretationAsync(CancellationToken cancellationToken)
         {
             if (completionCertificationResult is null)
             {
-                throw new InvalidOperationException("InterpretCompletionRoute requires RunCompletionCertification evidence.");
+                CompletionCertificationCheckpoint? checkpoint =
+                    await new CompletionCertificationCheckpointStore(_repository).ReadAsync(cancellationToken);
+                if (checkpoint is null)
+                {
+                    throw new InvalidOperationException(
+                        "InterpretCompletionRoute requires durable RunCompletionCertification evidence.");
+                }
+                completionCertificationResult = checkpoint.Result;
+                completionRecoveryEvidencePaths = checkpoint.RecoveryEvidencePaths;
             }
 
             return $"""
@@ -2382,7 +2810,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
                 string path = ResolveRepositoryPath(_repository, evalAsset.PrimaryOutputPath);
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await File.WriteAllTextAsync(path, executionResult.RawOutput, cancellationToken);
+                if (!AgentAuthoredPrimaryOutput(executionResult, evalAsset.PrimaryOutputPath) || !File.Exists(path))
+                {
+                    await File.WriteAllTextAsync(path, executionResult.RawOutput, cancellationToken);
+                }
                 IReadOnlyList<string> evidence = EvalPromptTransitions.Evidence(definition)
                     .Concat([evalAsset.PrimaryOutputPath])
                     .ToArray();
@@ -2408,7 +2839,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
                 string path = ResolveRepositoryPath(_repository, roadmapOutput);
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await File.WriteAllTextAsync(path, executionResult.RawOutput, cancellationToken);
+                if (!AgentAuthoredPrimaryOutput(executionResult, roadmapOutput) || !File.Exists(path))
+                {
+                    await File.WriteAllTextAsync(path, executionResult.RawOutput, cancellationToken);
+                }
                 IReadOnlyList<string> evidence = TraditionalRoadmapPromptTransitions.Evidence(definition)
                     .Concat([roadmapOutput])
                     .ToArray();
@@ -2423,8 +2857,29 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             if (MilestoneDeepDiveTransitions.Supports(definition))
             {
+                string specsDirectory = ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.SpecsDirectory);
+                string[] existing = Directory.Exists(specsDirectory)
+                    ? Directory.GetFiles(specsDirectory, "*.md")
+                    : [];
+                IReadOnlyList<string> materialized = existing.Length == 0
+                    ? await MaterializeMilestoneBundleAsync(executionResult.RawOutput, cancellationToken)
+                    : existing.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToArray();
+                if (materialized.Count == 0)
+                {
+                    string normalized = executionResult.RawOutput.Replace("\r\n", "\n", StringComparison.Ordinal);
+                    int fileMarkers = normalized.Split('\n').Count(line =>
+                        line.Trim().StartsWith("# FILE:", StringComparison.OrdinalIgnoreCase));
+                    int specHeadings = normalized.Split("# Milestone Spec:", StringSplitOptions.None).Length - 1;
+                    return new InterpretedTransitionOutput(
+                        OutputInterpretationStatus.Blocked,
+                        [],
+                        $"Milestone deep-dive output contained no valid `.agents/specs/*.md` file bundle " +
+                        $"(length={executionResult.RawOutput.Length}, file-markers={fileMarkers}, spec-headings={specHeadings}).",
+                        MilestoneDeepDiveTransitions.Evidence(definition));
+                }
+
                 IReadOnlyList<string> evidence = MilestoneDeepDiveTransitions.Evidence(definition)
-                    .Concat([$"{OrchestrationArtifactPaths.SpecsDirectory}/*.md"])
+                    .Concat(materialized)
                     .ToArray();
                 return new InterpretedTransitionOutput(
                     OutputInterpretationStatus.Valid,
@@ -2511,6 +2966,104 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 localEvidence);
         }
 
+        private static bool AgentAuthoredPrimaryOutput(PromptExecutionResult result, string expectedPath) =>
+            result.Metadata.TryGetValue("primary-output-mutated", out string? mutated) &&
+            bool.TryParse(mutated, out bool parsed) && parsed &&
+            result.Metadata.TryGetValue("primary-output-path", out string? path) &&
+            string.Equals(path, expectedPath, StringComparison.Ordinal);
+
+        private async Task<IReadOnlyList<string>> MaterializeMilestoneBundleAsync(
+            string output,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(output)) return [];
+            string[] lines = output
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Split('\n');
+            var files = new List<(string RelativePath, string Content)>();
+            string? currentPath = null;
+            var content = new StringBuilder();
+
+            void CompleteCurrent()
+            {
+                if (currentPath is null) return;
+                string value = content.ToString().Trim();
+                if (value.Length > 0) files.Add((currentPath, value + Environment.NewLine));
+                content.Clear();
+            }
+
+            foreach (string line in lines)
+            {
+                string trimmed = line.Trim();
+                if (trimmed.StartsWith("# FILE:", StringComparison.OrdinalIgnoreCase))
+                {
+                    CompleteCurrent();
+                    currentPath = ValidateMilestoneBundlePath(trimmed["# FILE:".Length..].Trim());
+                    continue;
+                }
+
+                if (currentPath is not null) content.AppendLine(line);
+            }
+            CompleteCurrent();
+
+            if (files.Count == 0)
+            {
+                string normalized = output.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+                if (normalized.StartsWith("```", StringComparison.Ordinal) &&
+                    normalized.EndsWith("```", StringComparison.Ordinal))
+                {
+                    int firstNewline = normalized.IndexOf('\n');
+                    normalized = firstNewline >= 0 ? normalized[(firstNewline + 1)..^3].Trim() : string.Empty;
+                }
+                const string heading = "# Milestone Spec:";
+                int firstHeading = normalized.IndexOf(heading, StringComparison.Ordinal);
+                int secondHeading = firstHeading < 0
+                    ? -1
+                    : normalized.IndexOf(heading, firstHeading + heading.Length, StringComparison.Ordinal);
+                if (firstHeading >= 0 && secondHeading < 0)
+                {
+                    files.Add((
+                        ".agents/specs/m1.md",
+                        normalized[firstHeading..].Trim() + Environment.NewLine));
+                }
+            }
+
+            if (files.Count == 0 ||
+                files.Select(file => file.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).Count() != files.Count ||
+                files.Any(file => !file.Content.Contains("# Milestone Spec:", StringComparison.Ordinal)))
+            {
+                return [];
+            }
+
+            foreach ((string relativePath, string fileContent) in files)
+            {
+                string path = ResolveRepositoryPath(_repository, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await File.WriteAllTextAsync(path, fileContent, cancellationToken);
+            }
+            return files.Select(file => file.RelativePath).ToArray();
+        }
+
+        private static string ValidateMilestoneBundlePath(string candidate)
+        {
+            string normalized = candidate.Replace('\\', '/');
+            const string prefix = ".agents/specs/";
+            string fileName = normalized.StartsWith(prefix, StringComparison.Ordinal)
+                ? normalized[prefix.Length..]
+                : string.Empty;
+            if (fileName.Length == 0 ||
+                fileName.Contains('/') ||
+                !fileName.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ||
+                fileName is ".md" or "..md" ||
+                fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            {
+                throw new InvalidOperationException(
+                    $"Milestone bundle path `{candidate}` is outside the canonical `.agents/specs/*.md` scope.");
+            }
+            return prefix + fileName;
+        }
+
         private async Task<InterpretedTransitionOutput> InterpretExecuteOutputAsync(
             WorkflowTransitionDefinition definition,
             PromptExecutionResult executionResult,
@@ -2526,6 +3079,14 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             }
 
             IReadOnlyList<string> evidence = ExecuteEvidence(definition);
+            if (definition.Identity.Value == "InterpretCompletionRoute")
+            {
+                string routeOutput = ResolveRepositoryPath(
+                    _repository,
+                    ExecuteReviewTransitions.CompletionRouteOutputPath);
+                Directory.CreateDirectory(Path.GetDirectoryName(routeOutput)!);
+                await File.WriteAllTextAsync(routeOutput, executionResult.RawOutput, cancellationToken);
+            }
             foreach (string evidencePath in evidence)
             {
                 string path = ResolveRepositoryPath(_repository, evidencePath);
@@ -3473,16 +4034,29 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     effectEvidence);
             }
 
+            bool completesStage = TransitionCompletesStage(workflow, stage, definition);
             await _store.UpsertStageStateAsync(
                 new CanonicalStageStateRecord(
                     workflow.Identity,
                     stage.Identity,
-                    WorkflowResolutionState.Completed,
+                    completesStage ? WorkflowResolutionState.Completed : WorkflowResolutionState.Active,
                     now,
                     effectEvidence),
                 cancellationToken);
 
-            if (stage.AllowedSuccessors.Count == 0)
+            if (!completesStage)
+            {
+                await _store.UpsertWorkflowStateAsync(
+                    new CanonicalWorkflowStateRecord(
+                        workflow.Identity,
+                        WorkflowResolutionState.Resumable,
+                        stage.Identity,
+                        RuntimeOutcomeKind.Waiting,
+                        now,
+                        effectEvidence),
+                    cancellationToken);
+            }
+            else if (stage.AllowedSuccessors.Count == 0)
             {
                 await _store.UpsertWorkflowStateAsync(
                     new CanonicalWorkflowStateRecord(
@@ -3496,7 +4070,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             }
             else
             {
-                WorkflowStageIdentity nextStage = stage.AllowedSuccessors[0];
+                WorkflowStageIdentity nextStage = await ResolveNextStageAsync(
+                    workflow,
+                    stage,
+                    definition,
+                    cancellationToken);
                 await _store.UpsertStageStateAsync(
                     new CanonicalStageStateRecord(
                         workflow.Identity,
@@ -3516,6 +4094,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     cancellationToken);
             }
 
+            if (definition.Identity.Value == "VerifyWorkflowExitGate")
+            {
+                await new ExecutionWarmSessionContinuityStore(_repository).RetireAsync(cancellationToken);
+                await new CompletionCertificationCheckpointStore(_repository).RetireAsync(cancellationToken);
+            }
+
             var records = new List<EffectExecutionRecord>();
             foreach (EffectDefinition effect in definition.Effects)
             {
@@ -3531,6 +4115,78 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 records,
                 $"{evidenceTitle} effects applied for `{definition.Identity}`.",
                 effectEvidence);
+        }
+
+        private async Task<WorkflowStageIdentity> ResolveNextStageAsync(
+            WorkflowDefinition workflow,
+            WorkflowStageDefinition stage,
+            WorkflowTransitionDefinition definition,
+            CancellationToken cancellationToken)
+        {
+            if (workflow.Identity == WorkflowIdentity.Execute &&
+                stage.Identity.Value == "Completion" &&
+                definition.Identity.Value == "InterpretCompletionRoute")
+            {
+                string routePath = ResolveRepositoryPath(
+                    ExecuteReviewTransitions.CompletionRouteOutputPath);
+                if (!File.Exists(routePath))
+                {
+                    throw new InvalidOperationException(
+                        "Execute completion route evidence is missing; successor selection cannot proceed.");
+                }
+
+                string route = await File.ReadAllTextAsync(routePath, cancellationToken);
+                string? raw = route
+                    .Replace("\r\n", "\n", StringComparison.Ordinal)
+                    .Split('\n')
+                    .Select(line => line.Trim())
+                    .Where(line => line.StartsWith("| Should Close Epic |", StringComparison.OrdinalIgnoreCase))
+                    .Select(line => line.Trim('|').Split('|')[1].Trim())
+                    .SingleOrDefault();
+                if (!bool.TryParse(raw, out bool shouldClose))
+                {
+                    throw new InvalidOperationException(
+                        "Execute completion route does not contain an unambiguous `Should Close Epic` boolean.");
+                }
+
+                string successor = shouldClose ? "Workflow Completion" : "Execution Readiness";
+                WorkflowStageIdentity selected = stage.AllowedSuccessors.SingleOrDefault(candidate =>
+                    string.Equals(candidate.Value, successor, StringComparison.Ordinal));
+                if (selected.IsEmpty)
+                {
+                    throw new InvalidOperationException(
+                        $"Execute completion route selected undeclared successor `{successor}`.");
+                }
+                return selected;
+            }
+
+            return stage.AllowedSuccessors[0];
+        }
+
+        private static bool TransitionCompletesStage(
+            WorkflowDefinition workflow,
+            WorkflowStageDefinition stage,
+            WorkflowTransitionDefinition definition)
+        {
+            if (workflow.Identity == WorkflowIdentity.Plan)
+            {
+                return stage.Transitions[^1] == definition.Identity;
+            }
+
+            if (workflow.Identity == WorkflowIdentity.Execute &&
+                stage.Identity.Value is "Execution Continuity" or "Completion")
+            {
+                return stage.Transitions[^1] == definition.Identity;
+            }
+
+            if (workflow.Identity == WorkflowIdentity.TraditionalRoadmap &&
+                stage.Identity.Value == "Epic Preparation" &&
+                definition.Identity.Value == "AuditExistingEpic")
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private async Task<bool> IsExecuteCommitStalledAsync(
@@ -4120,6 +4776,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             "UpdateOperationalContext" => [OrchestrationArtifactPaths.OperationalContext],
             "RunNonImplementationReview" =>
                 [OrchestrationArtifactPaths.NonImplementationReview, OrchestrationArtifactPaths.NonImplementationLedger],
+            "InterpretCompletionRoute" => [ExecuteReviewTransitions.CompletionRouteOutputPath],
             _ => [],
         };
 
@@ -4145,13 +4802,14 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             "RepositoryChanges" => ExecuteEvidence(definition),
             "OperationalDelta" => ExecuteEvidence(definition),
             "CompletionEvidence" => evidence.Count == 0 ? ExecuteEvidence(definition) : evidence,
-            "CompletionRoute" => ExecuteEvidence(definition),
+            "CompletionRoute" => ExecuteArtifactEvidence(definition),
             _ => StorageRepresentations(product),
         };
 
     private static IReadOnlyList<string> StorageRepresentations(ProductDefinition product) =>
         product.Identity.Value switch
         {
+            "EpicPreparationAudit" => [".LoopRelay/evidence/traditional-roadmap-prompt/AuditExistingEpic-output.md"],
             "PreparedEpic" => [OrchestrationArtifactPaths.AgentsDirectory + "/epic.md"],
             "MilestoneSpecificationSet" => [OrchestrationArtifactPaths.SpecsDirectory],
             "ExecutablePlan" => [OrchestrationArtifactPaths.Plan],

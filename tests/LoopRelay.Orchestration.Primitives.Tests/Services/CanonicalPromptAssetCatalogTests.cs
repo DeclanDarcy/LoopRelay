@@ -58,6 +58,26 @@ public sealed class CanonicalPromptAssetCatalogTests
         AssertRegistered(execute, "UpdateOperationalContext");
     }
 
+    [Fact]
+    public void Planning_and_execution_prompts_keep_publication_downstream_of_implementation()
+    {
+        string[] prompts =
+        [
+            global::LoopRelay.Core.Prompts.WritePlan.Text,
+            global::LoopRelay.Core.Prompts.RevisePlan.Template,
+            global::LoopRelay.Core.Prompts.ExtractMilestones.Text,
+            global::LoopRelay.Core.Prompts.ContinueExecution.Template,
+            global::LoopRelay.Core.Prompts.StartExecution.Template,
+        ];
+
+        Assert.All(prompts, prompt =>
+        {
+            string normalized = prompt.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ');
+            Assert.Contains("PublishRepositoryState", normalized, StringComparison.Ordinal);
+            Assert.Contains("not an implementation blocker", normalized, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
     private static void AssertRegistered(
         WorkflowDefinition workflow,
         string transitionIdentity)

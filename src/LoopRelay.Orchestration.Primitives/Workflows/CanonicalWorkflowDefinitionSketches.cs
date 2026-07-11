@@ -73,11 +73,11 @@ public static class CanonicalWorkflowDefinitionSketches
             downstream,
             "prepared epic representation");
         ProductDefinition auditedEpic = Product(
-            ProductIdentity.PreparedEpic,
+            ProductIdentity.EpicPreparationAudit,
             workflow,
             auditEpic,
-            downstream,
-            "audited epic representation");
+            workflow,
+            "epic preparation audit representation");
         ProductDefinition splitPreparedEpic = Product(
             ProductIdentity.PreparedEpic,
             workflow,
@@ -135,7 +135,7 @@ public static class CanonicalWorkflowDefinitionSketches
                     "Epic Preparation",
                     "Prepare the selected initiative through audit, create, split, realign, reimagine, or retire decisions.",
                     [Requirement(ProductIdentity.StrategicInitiativeSelection)],
-                    [ProductIdentity.PreparedEpic, ProductIdentity.RoadmapCompletionContext],
+                    [ProductIdentity.EpicPreparationAudit, ProductIdentity.PreparedEpic, ProductIdentity.RoadmapCompletionContext],
                     [ProductDependency(ProductIdentity.StrategicInitiativeSelection, selectStrategicInitiative, createEpic)],
                     [auditEpic, createEpic, splitEpic, realignEpic, reimagineEpic, retireEpic],
                     ["Milestone Specification"]),

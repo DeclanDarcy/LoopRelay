@@ -63,6 +63,8 @@ public static class CodexAgentArgumentBuilder
             "--skip-git-repo-check",
             "--cd",
             workingDirectory,
+            "--sandbox",
+            sandbox,
             "--model",
             AgentConfigurationCatalog.Format(spec.Model),
             "-c",

@@ -33,6 +33,11 @@ internal static class UnifiedCliStatusFormatter
             $"Storage authority: {observation.StorageAuthority.Authority} ({observation.StorageAuthority.ConfidenceQualifier})",
             $"User action required: {userAction}",
         };
+        ObservedLifecycleRow[] transitionRecovery = observation.LifecycleRows
+            .Where(row => row.Identity.StartsWith("TransitionRecovery:", StringComparison.Ordinal))
+            .ToArray();
+        lines.Add($"Transition recovery markers: {(transitionRecovery.Length == 0 ? "(none)" : transitionRecovery.Length)}");
+        lines.Add($"Transition recovery actions: {(transitionRecovery.Length == 0 ? "(none)" : string.Join("; ", transitionRecovery.Select(row => row.State).Distinct(StringComparer.Ordinal)))}");
         if (continuity is not null)
         {
             string ancestry = continuity.Ancestry.Count == 0

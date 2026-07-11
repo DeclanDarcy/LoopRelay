@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Diagnostics;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Models;
@@ -117,6 +118,11 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
                 location,
                 "canonical workflow persistence",
                 Ignored: false))))
+            .Concat(canonicalSnapshot.RecoveryMarkers.SelectMany(item => item.Evidence.Select(location => new ObservedEvidence(
+                item.MarkerId,
+                location,
+                "canonical transition recovery",
+                Ignored: false))))
             .Concat(decisionResumeRows.SelectMany(row => row.Evidence.Select(location => new ObservedEvidence(
                 row.Identity,
                 location,
@@ -162,7 +168,10 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
                 stageState.Evidence)).Concat(canonicalSnapshot.Products.Select(product => new ObservedLifecycleRow(
                 product.Identity.Value,
                 product.Lifecycle.ToString(),
-                product.EvidenceLocations))).Concat(decisionResumeRows).Concat(preUnificationRows).ToArray(),
+                product.EvidenceLocations))).Concat(canonicalSnapshot.RecoveryMarkers.Select(marker => new ObservedLifecycleRow(
+                    $"TransitionRecovery:{marker.MarkerId}",
+                    string.Join(",", marker.Recovery.SupportedActions),
+                    marker.Evidence))).Concat(decisionResumeRows).Concat(preUnificationRows).ToArray(),
             Evidence: evidence,
             TransitionRuns: canonicalSnapshot.TransitionRuns.Select(run => new ObservedTransitionRun(
                 run.Workflow,
@@ -1141,22 +1150,67 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
     {
         string git = Path.Combine(root, ".git");
         bool isRepository = Directory.Exists(git) || File.Exists(git);
-        string branch = "unknown";
-        string head = Path.Combine(git, "HEAD");
-        if (File.Exists(head))
+        string agents = Path.Combine(root, ".agents");
+        string agentsTopology = !Directory.Exists(agents)
+            ? "missing"
+            : Directory.Exists(Path.Combine(agents, ".git")) || File.Exists(Path.Combine(agents, ".git"))
+                ? "nested-repository"
+                : "ordinary-directory";
+        if (!isRepository)
         {
-            string text = File.ReadAllText(head).Trim();
-            const string prefix = "ref: refs/heads/";
-            branch = text.StartsWith(prefix, StringComparison.Ordinal)
-                ? text[prefix.Length..]
-                : text;
+            return new ObservedGitFacts(false, false, "unknown", [], false, agentsTopology);
         }
 
-        return new ObservedGitFacts(
-            isRepository,
-            HasWorkingTreeChanges: false,
-            branch,
-            isRepository ? [".git"] : []);
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = root,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            startInfo.ArgumentList.Add("status");
+            startInfo.ArgumentList.Add("--porcelain=v1");
+            startInfo.ArgumentList.Add("--branch");
+            startInfo.ArgumentList.Add("--untracked-files=normal");
+            using Process? process = Process.Start(startInfo);
+            if (process is null)
+            {
+                return new ObservedGitFacts(true, false, "unknown", [".git", "git-status:start-failed"], false, agentsTopology);
+            }
+
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+            if (!process.WaitForExit(5000) || process.ExitCode != 0)
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+
+                string diagnostic = string.IsNullOrWhiteSpace(error) ? "failed" : error.Trim();
+                return new ObservedGitFacts(true, false, "unknown", [".git", $"git-status:{diagnostic}"], false, agentsTopology);
+            }
+
+            string[] lines = output.Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            string heading = lines.FirstOrDefault(line => line.StartsWith("## ", StringComparison.Ordinal)) ?? "## unknown";
+            bool detached = heading.Contains("HEAD (no branch)", StringComparison.Ordinal) ||
+                heading.StartsWith("## HEAD (detached", StringComparison.Ordinal);
+            string branch = detached
+                ? "detached"
+                : heading[3..].Split(new[] { "...", " " }, StringSplitOptions.RemoveEmptyEntries)[0];
+            bool dirty = lines.Any(line => !line.StartsWith("## ", StringComparison.Ordinal));
+            string[] evidence = [".git", $"git:branch={branch}", $"git:dirty={dirty}", $"git:agents={agentsTopology}"];
+            return new ObservedGitFacts(true, dirty, branch, evidence, detached, agentsTopology);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            return new ObservedGitFacts(true, false, "unknown", [".git", $"git-status:{exception.GetType().Name}"], false, agentsTopology);
+        }
     }
 
     private static string HashExistingFiles(string root, IReadOnlyList<string> relativePaths)

@@ -4,3 +4,8 @@ revise .agents/plan.md:
 Apply the implementation-first prompt policy included below while revising. Preserve, remove, or update `## HITL-Requested Non-Implementation Deliverables` entries only when each entry remains grounded in explicit HITL request evidence.
 
 Do not add autonomous non-implementation deliverables, documentation-centric milestones, or unsupported theory-protection artifacts while resolving the review feedback.
+
+Preserve the LoopRelay orchestration boundary: capability implementation and local verification occur before the
+orchestrator runs `GenerateHandoff` and `PublishRepositoryState`. Remove any plan rule that asks the execution agent to
+discover, invoke, preview, or preflight a downstream publisher before implementation. Publication is not an implementation
+entry gate or an execution-agent responsibility, and the absence of a callable publisher is not an implementation blocker.

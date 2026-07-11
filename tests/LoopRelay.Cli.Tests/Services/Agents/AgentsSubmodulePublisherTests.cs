@@ -35,6 +35,24 @@ public class AgentsSubmodulePublisherTests
     };
 
     [Fact]
+    public async Task Production_runner_blocks_ordinary_agents_directory_before_any_git_mutation()
+    {
+        string root = Directory.CreateTempSubdirectory("looprelay-agents-ordinary-topology").FullName;
+        Directory.CreateDirectory(Path.Combine(root, ".agents"));
+        await File.WriteAllTextAsync(Path.Combine(root, ".agents", "handoff.md"), "changed");
+        var repository = new Repository { Id = Guid.NewGuid(), Name = "ordinary", Path = root };
+        var publisher = new AgentsSubmodulePublisher(
+            new LoopRelay.Agents.Services.Process.ProcessRunner(),
+            repository,
+            new RecordingLoopConsole());
+
+        LoopStepException exception = await Assert.ThrowsAsync<LoopStepException>(() =>
+            publisher.PublishAsync(Message, CancellationToken.None));
+
+        Assert.Contains("ordinary parent-repository directory", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CleanAndUpToDate_ReturnsFalse_AndCommitsNothing()
     {
         var fake = Runner(status: string.Empty); // rev-list falls through to Ok("") -> not ahead of upstream

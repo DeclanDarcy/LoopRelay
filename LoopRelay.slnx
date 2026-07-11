@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/LoopRelay.Agents/LoopRelay.Agents.csproj" />
+    <Project Path="src/LoopRelay.Certification/LoopRelay.Certification.csproj" />
     <Project Path="src/LoopRelay.Cli/LoopRelay.Cli.csproj" />
     <Project Path="src/LoopRelay.Completion/LoopRelay.Completion.csproj" />
     <Project Path="src/LoopRelay.Core/LoopRelay.Core.csproj" />
@@ -15,6 +16,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/LoopRelay.Agents.Compatibility.Tests/LoopRelay.Agents.Compatibility.Tests.csproj" />
     <Project Path="tests/LoopRelay.Agents.Tests/LoopRelay.Agents.Tests.csproj" />
+    <Project Path="tests/LoopRelay.Certification.Tests/LoopRelay.Certification.Tests.csproj" />
     <Project Path="tests/LoopRelay.Cli.Tests/LoopRelay.Cli.Tests.csproj" />
     <Project Path="tests/LoopRelay.Completion.Tests/LoopRelay.Completion.Tests.csproj" />
     <Project Path="tests/LoopRelay.Core.Tests/LoopRelay.Core.Tests.csproj" />

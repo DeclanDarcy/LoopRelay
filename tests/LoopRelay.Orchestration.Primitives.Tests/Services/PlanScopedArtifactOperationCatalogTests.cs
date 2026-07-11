@@ -32,7 +32,7 @@ public sealed class PlanScopedArtifactOperationCatalogTests
         PlanScopedArtifactOperationSpec milestones = Get("GenerateExecutionMilestones");
         Assert.Equal("ExtractMilestones", milestones.PromptIdentity);
         Assert.Equal("extract-milestones", milestones.Label);
-        Assert.Equal([OrchestrationArtifactPaths.Plan], milestones.AllowedReads);
+        Assert.Equal([OrchestrationArtifactPaths.Plan, OrchestrationArtifactPaths.Details], milestones.AllowedReads);
         Assert.Empty(milestones.AllowedReadGlobs);
         Assert.Equal([OrchestrationArtifactPaths.Plan], milestones.AllowedWrites);
         AssertGlob(

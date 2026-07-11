@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Codex;
@@ -45,6 +46,7 @@ public sealed class CodexAppServerSession : IAgentSession
     private readonly Channel<string> outbound = Channel.CreateUnbounded<string>(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
     private readonly ConcurrentDictionary<long, TaskCompletionSource<CodexAppServerMessage>> pending = new();
+    private readonly ConcurrentDictionary<string, IReadOnlyList<string>> fileChangeTargets = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource sessionCts = new();
     private readonly Task pumpTask;
     private readonly Task writerTask;
@@ -511,6 +513,7 @@ public sealed class CodexAppServerSession : IAgentSession
                 break;
 
             case CodexAppServerMessageKind.Notification:
+                ObserveFileChangeTargets(message);
                 ActiveTurn? turn = activeTurn;
                 if (turn is null)
                 {
@@ -584,6 +587,7 @@ public sealed class CodexAppServerSession : IAgentSession
 
         try
         {
+            rawLine = EnrichFileChangeApproval(rawLine, message);
             byte[] response = _permissionGateway.Evaluate(
                 Encoding.UTF8.GetBytes(rawLine),
                 new PermissionGatewayContext(
@@ -596,6 +600,72 @@ public sealed class CodexAppServerSession : IAgentSession
         {
             Enqueue(CodexAppServerProtocol.ApprovalResponse(message.Id!, CodexAppServerProtocol.DeclineDecision));
         }
+    }
+
+    private void ObserveFileChangeTargets(CodexAppServerMessage message)
+    {
+        if (!string.Equals(message.Method, "item/started", StringComparison.Ordinal) ||
+            message.Params.ValueKind != JsonValueKind.Object ||
+            !message.Params.TryGetProperty("item", out JsonElement item) ||
+            item.ValueKind != JsonValueKind.Object ||
+            !item.TryGetProperty("type", out JsonElement type) ||
+            type.GetString() != "fileChange" ||
+            !item.TryGetProperty("id", out JsonElement id) ||
+            id.ValueKind != JsonValueKind.String ||
+            !item.TryGetProperty("changes", out JsonElement changes) ||
+            changes.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        string[] targets = changes.EnumerateArray()
+            .Where(change => change.ValueKind == JsonValueKind.Object &&
+                change.TryGetProperty("path", out JsonElement path) &&
+                path.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(path.GetString()))
+            .Select(change => change.GetProperty("path").GetString()!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (targets.Length > 0)
+        {
+            fileChangeTargets[id.GetString()!] = targets;
+        }
+    }
+
+    private string EnrichFileChangeApproval(string rawLine, CodexAppServerMessage message)
+    {
+        if (!string.Equals(message.Method, "item/fileChange/requestApproval", StringComparison.Ordinal) ||
+            message.Params.ValueKind != JsonValueKind.Object ||
+            !message.Params.TryGetProperty("itemId", out JsonElement itemId) ||
+            itemId.ValueKind != JsonValueKind.String ||
+            !fileChangeTargets.TryGetValue(itemId.GetString()!, out IReadOnlyList<string>? targets) ||
+            targets.Count == 0)
+        {
+            return rawLine;
+        }
+
+        JsonNode? root = JsonNode.Parse(rawLine);
+        JsonObject? parameters = root?["params"] as JsonObject;
+        if (parameters is null)
+        {
+            return rawLine;
+        }
+
+        if (targets.Count == 1)
+        {
+            if (parameters["targetPath"] is not JsonValue existing ||
+                !existing.TryGetValue(out string? existingPath) ||
+                string.IsNullOrWhiteSpace(existingPath))
+            {
+                parameters["targetPath"] = targets[0];
+            }
+        }
+        else
+        {
+            parameters["targetPaths"] = new JsonArray(
+                targets.Select(target => JsonValue.Create(target)).ToArray());
+        }
+        return root!.ToJsonString();
     }
 
     private long NextId() => Interlocked.Increment(ref nextId);

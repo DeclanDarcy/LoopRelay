@@ -10,7 +10,7 @@ Your task is to read:
 .agents/archive/epics/{label}/*
 ```
 
-And write:
+And produce the final content for:
 
 ```text
 .agents/archive/epics/{label}.md
@@ -91,7 +91,7 @@ The output must:
 
 ## Required Output Structure
 
-Write `.agents/archive/epics/{label}.md` with the following structure:
+Produce `.agents/archive/epics/{label}.md` with the following structure:
 
 ```markdown
 # {{Epic Title}}
@@ -178,3 +178,17 @@ The document must be:
 * free of redundant planning prose
 * explicit about uncertainty
 * optimized for execution continuity
+
+---
+
+## Final Response Contract
+
+Return the complete Markdown content of `.agents/archive/epics/{label}.md` as the final response.
+
+Do not modify the repository directly. The trusted runtime owns persistence of the returned document.
+
+Output only the Markdown document.
+
+Do not return a status message, summary, preface, diff, or tool transcript.
+
+Do not wrap the document in a code fence.

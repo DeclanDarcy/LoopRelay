@@ -8,6 +8,10 @@ namespace LoopRelay.Orchestration.Persistence;
 
 public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStore _store) : ITransitionRunStore
 {
+    private static readonly JsonSerializerOptions RecoveryJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
     public Task PersistStartedAsync(
         TransitionRunStarted started,
         CancellationToken cancellationToken) =>
@@ -63,6 +67,59 @@ public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStor
             cancellationToken);
     }
 
+    public async Task<TransitionRunRecoverySnapshot?> LoadRecoveryAsync(
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        CanonicalWorkflowPersistenceSnapshot snapshot = await _store.LoadSnapshotAsync(cancellationToken);
+        CanonicalTransitionRunRecord? run = snapshot.TransitionRuns.SingleOrDefault(item => item.RunId == runId);
+        if (run is null)
+        {
+            return null;
+        }
+
+        PromptExecutionResult? rawOutput = snapshot.TransitionEvidence
+            .Where(item => item.RunId == runId && item.EventName == "RawPromptOutputCaptured")
+            .OrderByDescending(item => item.EvidenceId)
+            .Select(item => Deserialize<PromptExecutionResult>(item.DocumentJson))
+            .FirstOrDefault(item => item is not null);
+        TransitionBoundaryObservation[] boundaries = snapshot.TransitionEvidence
+            .Where(item => item.RunId == runId && item.EventName == "TransitionBoundaryObserved")
+            .OrderBy(item => item.EvidenceId)
+            .Select(item => Deserialize<TransitionBoundaryObservation>(item.DocumentJson))
+            .Where(item => item is not null)
+            .Cast<TransitionBoundaryObservation>()
+            .ToArray();
+        EffectExecutionRecord[] effects = snapshot.EffectRecords
+            .Where(item => item.RunId == runId)
+            .OrderBy(item => item.RecordId)
+            .Select(item => new EffectExecutionRecord(item.Effect, item.Status, item.Explanation, item.Evidence))
+            .ToArray();
+        return new TransitionRunRecoverySnapshot(
+            run.RunId,
+            run.Transition,
+            run.State,
+            run.Outcome,
+            run.InputSnapshotHash,
+            rawOutput,
+            effects,
+            boundaries,
+            run.Explanation,
+            run.Evidence);
+    }
+
+    private static T? Deserialize<T>(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, RecoveryJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return default;
+        }
+    }
+
     private async Task<CanonicalTransitionRunRecord> ExistingOrFallbackAsync(
         string runId,
         WorkflowTransitionIdentity transition,
@@ -101,6 +158,44 @@ public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStor
             or TransitionDurableState.Blocked
             or TransitionDurableState.Failed
             or TransitionDurableState.Cancelled;
+}
+
+public sealed class CanonicalTransitionBoundaryJournal(
+    CanonicalWorkflowPersistenceStore _store,
+    TransitionBoundaryKind? _interruptAt = null) : ITransitionBoundaryJournal
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    public Task RecordAsync(TransitionBoundaryObservation observation, CancellationToken cancellationToken) =>
+        _store.AppendTransitionEvidenceAsync(
+            new CanonicalTransitionEvidenceRecord(
+                0,
+                observation.RunId,
+                observation.Transition,
+                "TransitionBoundaryObserved",
+                observation.ObservedAt,
+                StateFor(observation.Boundary),
+                $"Observed transition boundary {observation.Boundary}.",
+                observation.Evidence.Append($"boundary:{observation.Boundary}").ToArray(),
+                JsonSerializer.Serialize(observation, JsonOptions)),
+            cancellationToken);
+
+    public bool ShouldInterrupt(TransitionBoundaryObservation observation) =>
+        _interruptAt == observation.Boundary;
+
+    private static TransitionDurableState StateFor(TransitionBoundaryKind boundary) => boundary switch
+    {
+        TransitionBoundaryKind.ProviderCompleted or TransitionBoundaryKind.RawOutputPersisted => TransitionDurableState.PromptCompleted,
+        TransitionBoundaryKind.OutputInterpreted => TransitionDurableState.OutputInterpreted,
+        TransitionBoundaryKind.OutputValidated => TransitionDurableState.OutputValidated,
+        TransitionBoundaryKind.DuringEffects => TransitionDurableState.EffectsPartiallyApplied,
+        TransitionBoundaryKind.EffectsApplied => TransitionDurableState.EffectsApplied,
+        TransitionBoundaryKind.CompletionPersisted => TransitionDurableState.Completed,
+        _ => TransitionDurableState.Started,
+    };
 }
 
 public sealed class CanonicalTransitionEvidenceStore(CanonicalWorkflowPersistenceStore _store) : ITransitionEvidenceStore

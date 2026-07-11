@@ -39,6 +39,10 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
 
     public string ApprovalTargetPath { get; init; } = ".agents/details.md";
 
+    public IReadOnlyList<string>? ApprovalTargetPaths { get; init; }
+
+    public bool FileChangePathOnlyInItemStarted { get; init; }
+
     /// <summary>m10 (B): how many item/agentMessage/delta notifications each turn emits (long-output stress).</summary>
     public int DeltaCount { get; init; } = 1;
 
@@ -272,6 +276,23 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
                 {
                     if (EmitFileChangeApproval)
                     {
+                        if (FileChangePathOnlyInItemStarted)
+                        {
+                            EmitNotification("item/started", new
+                            {
+                                threadId = "thread-xyz",
+                                turnId = $"u{index}",
+                                item = new
+                                {
+                                    type = "fileChange",
+                                    id = "i1",
+                                    status = "inProgress",
+                                    changes = (ApprovalTargetPaths ?? [ApprovalTargetPath])
+                                        .Select(path => new { path, kind = new { type = "add" }, diff = "" })
+                                        .ToArray(),
+                                },
+                            });
+                        }
                         EmitServerRequest(
                             "appr-1",
                             "item/fileChange/requestApproval",
@@ -279,8 +300,8 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
                             {
                                 itemId = "i1",
                                 operation = "write",
-                                targetPath = ApprovalTargetPath,
-                                grantRoot = ApprovalTargetPath
+                                targetPath = FileChangePathOnlyInItemStarted ? null : ApprovalTargetPath,
+                                grantRoot = FileChangePathOnlyInItemStarted ? null : ApprovalTargetPath
                             });
                     }
                     else

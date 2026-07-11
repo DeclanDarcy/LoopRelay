@@ -36,7 +36,7 @@ public static class PlanScopedArtifactOperationCatalog
             new WorkflowTransitionIdentity("GenerateExecutionMilestones"),
             "ExtractMilestones",
             "extract-milestones",
-            [OrchestrationArtifactPaths.Plan],
+            [OrchestrationArtifactPaths.Plan, OrchestrationArtifactPaths.Details],
             [],
             [OrchestrationArtifactPaths.Plan],
             [new OperationPathGlob(OrchestrationArtifactPaths.MilestonesDirectory, OrchestrationArtifactPaths.MilestoneSearchPattern)],

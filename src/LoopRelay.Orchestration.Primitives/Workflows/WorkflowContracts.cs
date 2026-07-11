@@ -31,6 +31,7 @@ public readonly record struct ProductIdentity(string Value)
     public static ProductIdentity EvaluationIntent { get; } = new("EvaluationIntent");
     public static ProductIdentity RoadmapCompletionContext { get; } = new("RoadmapCompletionContext");
     public static ProductIdentity StrategicInitiativeSelection { get; } = new("StrategicInitiativeSelection");
+    public static ProductIdentity EpicPreparationAudit { get; } = new("EpicPreparationAudit");
     public static ProductIdentity DependencyInventory { get; } = new("DependencyInventory");
     public static ProductIdentity HypothesisInventory { get; } = new("HypothesisInventory");
     public static ProductIdentity ArchitecturalCatalog { get; } = new("ArchitecturalCatalog");

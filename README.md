@@ -23,3 +23,31 @@ Runtime switches remain unchanged:
 - `LoopRelay_SESSION_LOG=0` or `false` disables telemetry recording.
 
 Roadmap storage verification validates the SQLite runtime rows when present and reports corrupt telemetry/resume rows or legacy resume files that conflict with canonical SQLite state.
+
+## Unified CLI contract
+
+The supported public executable is `LoopRelay.Cli`. It accepts `--repo <path>`, optional `--eval` or `--traditional` chain selection, and these commands:
+
+- no command runs the selected chain; `eval`, `traditional`, `plan`, and `execute` run one bounded workflow;
+- `status` observes selection, gates, blockers, storage authority, and continuity without mutation;
+- `unblock` resolves only recoverable canonical blockers and returns exit code `4` while non-recoverable or stage-less blockers remain;
+- `storage init` creates the canonical SQLite schema;
+- `storage import` creates canonical storage and records imported authority, but does not claim a full retained-service migration;
+- `storage export` verifies an existing canonical database and intentionally performs no filesystem export mutation;
+- `storage sync` ensures the shared canonical schema is usable; it does not claim bidirectional reconciliation with every retained representation;
+- `storage verify` is byte-for-byte non-mutating and reports missing, stale, conflicting, corrupt, unsupported, unresolved, and partial-transaction conditions.
+
+Exit codes are `0` for successful/completed/waiting observations, `1` for failure, `2` for command-line errors, `3` for a stall, `4` for blocked/ambiguous/no-eligible work, and `130` for cancellation.
+
+## Production certification
+
+`LoopRelay.Certification` is a separate authority around the production CLI. It owns disposable cases, independent snapshots and oracles, privacy checks, retained evidence, cleanup, and production-derived coverage accounting. Component tests remain evidence level 1 and are never promoted to live certification.
+
+Run the deterministic trust-root and public-control-surface certifications with:
+
+```powershell
+dotnet run --project src/LoopRelay.Certification -- canary --workspace . --cli src/LoopRelay.Cli/bin/Debug/net10.0/LoopRelay.Cli.dll
+dotnet run --project src/LoopRelay.Certification -- milestone2 --workspace . --cli src/LoopRelay.Cli/bin/Debug/net10.0/LoopRelay.Cli.dll
+```
+
+Evidence is retained under `.tmp/certification/evidence`; disposable case directories are removed unless `--retain-case` is supplied.

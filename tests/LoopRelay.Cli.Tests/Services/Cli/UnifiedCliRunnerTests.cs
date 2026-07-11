@@ -1,5 +1,6 @@
 using LoopRelay.Cli.Services.Cli;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Core.Services.ProjectContext;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Persistence;
@@ -339,7 +340,7 @@ public sealed class UnifiedCliRunnerTests
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
-        Assert.Equal(0, exitCode);
+        Assert.True(exitCode == 0, $"Output:\n{output}\nError:\n{error}");
         Assert.Contains("Workflow: TraditionalRoadmap", output.ToString(), StringComparison.Ordinal);
         Assert.Contains("Stop reason: TransitionCompleted", output.ToString(), StringComparison.Ordinal);
         Assert.Contains("Transition: VerifyPlanEntryContract", output.ToString(), StringComparison.Ordinal);
@@ -550,7 +551,7 @@ public sealed class UnifiedCliRunnerTests
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
-        Assert.Equal(0, exitCode);
+        Assert.True(exitCode == 0, $"Output:\n{output}\nError:\n{error}");
         string text = output.ToString();
         Assert.Contains("Workflow: TraditionalRoadmap", text, StringComparison.Ordinal);
         Assert.Contains("Transition: VerifyPlanEntryContract", text, StringComparison.Ordinal);
@@ -578,7 +579,7 @@ public sealed class UnifiedCliRunnerTests
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
-        Assert.Equal(0, exitCode);
+        Assert.True(exitCode == 0, $"Output:\n{output}\nError:\n{error}");
         string text = output.ToString();
         Assert.Contains("Transition: VerifyPlanEntryContract", text, StringComparison.Ordinal);
         Assert.Contains("Transition: VerifyExecuteEntryContract", text, StringComparison.Ordinal);
@@ -750,6 +751,10 @@ public sealed class UnifiedCliRunnerTests
 
     private static async Task SeedRoadmapArtifactsAsync(Repository repository)
     {
+        foreach (string path in ProjectContextSourceContract.SourceFiles)
+        {
+            await WriteAsync(repository.Path, path, $"# {Path.GetFileNameWithoutExtension(path)}\n\nCanonical test project context.");
+        }
         await WriteAsync(repository.Path, ".agents/epic.md", "# Epic");
         await WriteAsync(repository.Path, ".agents/specs/s1.md", "# Spec");
     }

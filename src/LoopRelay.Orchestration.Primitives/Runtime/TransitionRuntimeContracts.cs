@@ -191,6 +191,18 @@ public sealed record TransitionRunCompleted(
     WorkflowTransitionIdentity Transition,
     TransitionRuntimeResult Result);
 
+public sealed record TransitionRunRecoverySnapshot(
+    string RunId,
+    WorkflowTransitionIdentity Transition,
+    TransitionDurableState State,
+    RuntimeOutcomeKind Outcome,
+    string? InputSnapshotHash,
+    PromptExecutionResult? RawOutput,
+    IReadOnlyList<EffectExecutionRecord> Effects,
+    IReadOnlyList<TransitionBoundaryObservation> Boundaries,
+    string Explanation,
+    IReadOnlyList<string> Evidence);
+
 public sealed record TransitionEvidenceEvent(
     string RunId,
     DateTimeOffset RecordedAt,
@@ -333,6 +345,11 @@ public interface ITransitionRunStore
     Task PersistStateAsync(TransitionRunStateUpdate update, CancellationToken cancellationToken);
 
     Task PersistCompletedAsync(TransitionRunCompleted completed, CancellationToken cancellationToken);
+
+    Task<TransitionRunRecoverySnapshot?> LoadRecoveryAsync(
+        string runId,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<TransitionRunRecoverySnapshot?>(null);
 }
 
 public interface ITransitionEvidenceStore

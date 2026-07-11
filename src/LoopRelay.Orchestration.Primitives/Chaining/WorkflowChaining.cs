@@ -1,6 +1,7 @@
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
+using LoopRelay.Orchestration.Persistence;
 
 namespace LoopRelay.Orchestration.Chaining;
 
@@ -236,7 +237,8 @@ public sealed class ProductTransferEvaluator
     }
 }
 
-public sealed class WorkflowBoundaryEvidenceWriter
+public sealed class WorkflowBoundaryEvidenceWriter(
+    CanonicalWorkflowPersistenceStore? _persistence = null)
 {
     private readonly List<WorkflowBoundaryEvidenceRecord> _records = [];
 
@@ -244,17 +246,64 @@ public sealed class WorkflowBoundaryEvidenceWriter
 
     public Task WriteAsync(
         WorkflowBoundaryEvaluation evaluation,
+        CancellationToken cancellationToken) =>
+        WriteAsync(evaluation, null, cancellationToken);
+
+    public async Task WriteAsync(
+        WorkflowBoundaryEvaluation evaluation,
+        string? chainIdentity = null,
         CancellationToken cancellationToken = default)
     {
+        string[] evidence = evaluation.ExitGate.Evidence
+            .Concat(evaluation.EntryGate?.Evidence ?? [])
+            .Concat(evaluation.ProductTransfer?.Gate.Evidence ?? [])
+            .Append($"boundary:{evaluation.SourceWorkflow}->{evaluation.TargetWorkflow}")
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         _records.Add(new WorkflowBoundaryEvidenceRecord(
             evaluation.SourceWorkflow,
             evaluation.TargetWorkflow,
             evaluation.Explanation,
-            evaluation.ExitGate.Evidence
-                .Concat(evaluation.EntryGate?.Evidence ?? [])
-                .Concat(evaluation.ProductTransfer?.Gate.Evidence ?? [])
-                .ToArray()));
-        return Task.CompletedTask;
+            evidence));
+        if (_persistence is null)
+        {
+            return;
+        }
+
+        string resolvedChain = string.IsNullOrWhiteSpace(chainIdentity)
+            ? $"{evaluation.SourceWorkflow}To{evaluation.TargetWorkflow}"
+            : chainIdentity;
+        string runId = BoundaryRunId(resolvedChain, evaluation, evidence);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        WorkflowIdentity targetWorkflow = evaluation.TargetWorkflow ?? evaluation.SourceWorkflow;
+        await _persistence.UpsertWorkflowChainRunAsync(
+            new CanonicalWorkflowChainRunRecord(
+                runId,
+                resolvedChain,
+                evaluation.CanAdvance ? targetWorkflow : evaluation.SourceWorkflow,
+                evaluation.CanAdvance ? RuntimeOutcomeKind.Completed : RuntimeOutcomeKind.Blocked,
+                now,
+                now,
+                evaluation.Explanation,
+                evidence),
+            cancellationToken);
+    }
+
+    private static string BoundaryRunId(
+        string chainIdentity,
+        WorkflowBoundaryEvaluation evaluation,
+        IReadOnlyList<string> evidence)
+    {
+        string material = string.Join("\n", new string[]
+        {
+            chainIdentity,
+            evaluation.SourceWorkflow.Value,
+            evaluation.TargetWorkflow?.Value ?? "(terminal)",
+            evaluation.CanAdvance.ToString(),
+            string.Join("\n", evidence.Order(StringComparer.Ordinal)),
+        });
+        return "boundary-" + Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(material)));
     }
 }
 
@@ -411,7 +460,7 @@ public sealed class WorkflowChainRunner(
                     ? $"Advanced from {definition.Identity} to {downstream}."
                     : $"Stopped before {downstream} because a workflow boundary gate was unsatisfied.");
             boundaries.Add(boundary);
-            await _evidenceWriter.WriteAsync(boundary, cancellationToken);
+            await _evidenceWriter.WriteAsync(boundary, request.Chain.Identity, cancellationToken);
 
             if (!canAdvance)
             {

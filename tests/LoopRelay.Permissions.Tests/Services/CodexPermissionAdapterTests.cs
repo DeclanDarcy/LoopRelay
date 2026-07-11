@@ -56,6 +56,20 @@ public sealed class CodexPermissionAdapterTests
     }
 
     [Fact]
+    public void Parses_multiple_file_change_target_paths_for_scoped_operation_decisions()
+    {
+        PermissionRequest request = adapter.Parse(
+            Encoding.UTF8.GetBytes(
+                """{"jsonrpc":"2.0","id":"file-1","method":"item/fileChange/requestApproval","params":{"itemId":"item-2","operation":"write","targetPaths":[".agents/plan.md",".agents/milestones/m1.md"]}}"""),
+            "repo",
+            "C:\\repo");
+
+        Assert.Equal(
+            [".agents/plan.md", ".agents/milestones/m1.md"],
+            request.Details?.PathArguments);
+    }
+
+    [Fact]
     public void Parses_tool_call_path_arguments_for_scoped_operation_decisions()
     {
         PermissionRequest request = adapter.Parse(

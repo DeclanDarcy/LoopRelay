@@ -175,7 +175,9 @@ public sealed record ObservedGitFacts(
     bool IsRepository,
     bool HasWorkingTreeChanges,
     string CurrentBranch,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    bool IsDetached = false,
+    string AgentsTopology = "missing");
 
 public sealed record HumanInteractionRequirement(
     HumanInteractionCategory Category,

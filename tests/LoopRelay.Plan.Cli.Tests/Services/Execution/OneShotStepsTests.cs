@@ -54,7 +54,7 @@ public class OneShotStepsTests
 
         Assert.Equal("extract-milestones", plan.Label);
         Assert.Equal(ExtractMilestones.Text, plan.Prompt);
-        Assert.Equal([OrchestrationArtifactPaths.Plan], plan.AllowedReads);
+        Assert.Equal([OrchestrationArtifactPaths.Plan, OrchestrationArtifactPaths.Details], plan.AllowedReads);
         Assert.Equal([OrchestrationArtifactPaths.Plan], plan.AllowedWrites);
         Assert.Contains(
             plan.AllowedWriteGlobs,

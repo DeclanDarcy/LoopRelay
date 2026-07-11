@@ -34,7 +34,7 @@ internal static class OneShotSteps
     }
 
     /// <summary>
-    /// Pipeline step 8: allows only <c>.agents/plan.md</c>, runs <see cref="ExtractMilestones"/>, requires the
+    /// Pipeline step 8: allows <c>.agents/plan.md</c> and read-only <c>.agents/details.md</c>, runs <see cref="ExtractMilestones"/>, requires the
     /// <c>.agents/milestones/m*.md</c> glob to be non-empty AND contain at least one strict checkbox across all
     /// matches (the false-closure guard — milestone files without trackable checkboxes would strand the main
     /// loop's epic-complete gate forever), and requires <c>plan.md</c> to have been rewritten (its milestone
@@ -45,7 +45,7 @@ internal static class OneShotSteps
         Task.FromResult(new ArtifactOperationPlan(
             Label: "extract-milestones",
             Prompt: ExtractMilestones.Text,
-            AllowedReads: [OrchestrationArtifactPaths.Plan],
+            AllowedReads: [OrchestrationArtifactPaths.Plan, OrchestrationArtifactPaths.Details],
             AllowedReadGlobs: [],
             AllowedWrites: [OrchestrationArtifactPaths.Plan],
             AllowedWriteGlobs: [new OperationPathGlob(OrchestrationArtifactPaths.MilestonesDirectory, OrchestrationArtifactPaths.MilestoneSearchPattern)],

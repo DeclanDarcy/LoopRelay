@@ -96,6 +96,8 @@ internal sealed class AgentsSubmodulePublisher
 
     private readonly Infrastructure.Services.Git.AgentsSubmodulePublisher _publisher;
     private readonly IAgentsSubmodulePublishPreflight _preflight;
+    private readonly IProcessRunner _processRunner;
+    private readonly Repository _repository;
 
     public AgentsSubmodulePublisher(
         IProcessRunner processRunner,
@@ -103,6 +105,8 @@ internal sealed class AgentsSubmodulePublisher
         ILoopConsole console,
         IAgentsSubmodulePublishPreflight? preflight = null)
     {
+        _processRunner = processRunner;
+        _repository = repository;
         _publisher = new Infrastructure.Services.Git.AgentsSubmodulePublisher(
             processRunner,
             repository,
@@ -115,6 +119,7 @@ internal sealed class AgentsSubmodulePublisher
     {
         try
         {
+            EnsureSupportedTopology();
             await _preflight.EnsureFreshExportAsync(cancellationToken);
             bool committed = await _publisher.PublishAgentsAsync(commitMessage, cancellationToken);
             if (committed)
@@ -127,6 +132,31 @@ internal sealed class AgentsSubmodulePublisher
         catch (AgentsSubmodulePublisherException ex)
         {
             throw new LoopStepException(ex.Message, ex);
+        }
+    }
+
+    private void EnsureSupportedTopology()
+    {
+        // Scripted runners have their own topology assertions. The active production runner must prove that
+        // `.agents` is an independent Git worktree before any `git add -A` can execute there; otherwise Git
+        // would walk up to the parent repository and could stage unrelated source changes.
+        if (_processRunner is not LoopRelay.Agents.Services.Process.ProcessRunner)
+        {
+            return;
+        }
+
+        string agents = Path.Combine(_repository.Path, ".agents");
+        string gitAuthority = Path.Combine(agents, ".git");
+        if (!Directory.Exists(agents))
+        {
+            throw new LoopStepException(
+                "Repository publication requires a repository-owned .agents directory; none was found.");
+        }
+
+        if (!Directory.Exists(gitAuthority) && !File.Exists(gitAuthority))
+        {
+            throw new LoopStepException(
+                "Repository publication blocked before mutation: .agents is an ordinary parent-repository directory, not an independent Git repository or submodule.");
         }
     }
 }
