@@ -29,9 +29,9 @@ public class AgentSpecsTests
         AgentSessionSpec spec = AgentSpecs.BrainOperational(Repo, Brain);
 
         Assert.Equal(SessionRole.OperationalExecution, spec.Role);
-        Assert.Equal("workspace-write", spec.Sandbox.Identifier);
+        Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
         Assert.True(spec.Sandbox.CanWriteWorkspace);
-        Assert.False(spec.Sandbox.CanAccessNetwork);
+        Assert.True(spec.Sandbox.CanAccessNetwork);
         Assert.False(spec.Sandbox.RequiresApproval);
         Assert.Equal(AgentModel.Gpt56Luna, spec.Model);
         Assert.Equal(AgentEffort.Low, spec.Effort);
@@ -100,7 +100,7 @@ public class AgentSpecsTests
     }
 
     [Fact]
-    public void ScopedArtifactOperation_IsReadOnlyApprovalGatedWithOperationProfile()
+    public void ScopedArtifactOperation_IsDangerFullAccessWithoutApprovalWithOperationProfile()
     {
         var profile = new OperationPermissionProfile(
             "operational-context-evolution",
@@ -113,10 +113,10 @@ public class AgentSpecsTests
         AgentSessionSpec spec = AgentSpecs.ScopedArtifactOperation(Repo, Brain, profile);
 
         Assert.Equal(SessionRole.OperationalExecution, spec.Role);
-        Assert.Equal("read-only", spec.Sandbox.Identifier);
-        Assert.False(spec.Sandbox.CanWriteWorkspace);
-        Assert.False(spec.Sandbox.CanAccessNetwork);
-        Assert.True(spec.Sandbox.RequiresApproval);
+        Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
+        Assert.True(spec.Sandbox.CanWriteWorkspace);
+        Assert.True(spec.Sandbox.CanAccessNetwork);
+        Assert.False(spec.Sandbox.RequiresApproval);
         Assert.Equal(AgentModel.Gpt56Luna, spec.Model);
         Assert.Equal(AgentEffort.Low, spec.Effort);
         Assert.Same(profile, spec.OperationPermissionProfile);

@@ -65,7 +65,12 @@ internal sealed class CompletionPromptContextBuilder(
 
         sections.Add(Section(
             "Repository Inspection Instructions",
-            "Inspect the repository in read-only mode and verify implementation reality before certifying completion. Treat checked milestone boxes as a completion claim, not as proof of closure."));
+            "Inspect repository reality and run non-mutating verifier/hash commands as needed before certifying completion. " +
+            "Do not modify repository files. Treat checked milestone boxes as a completion claim, not as proof of closure. " +
+            "Execution Completion Claim and Independent Execution Evidence sections are authoritative logical artifacts loaded from canonical SQLite persistence; " +
+            "their content is supplied above and their logical paths are not required to exist as filesystem files. " +
+            "The roadmap completion context is intentionally updated only after this certification succeeds, and the active epic/selection remain historical planning inputs; " +
+            "their pre-certification wording is expected workflow ordering, not strategic drift or residual work."));
 
         return Build(sections);
     }

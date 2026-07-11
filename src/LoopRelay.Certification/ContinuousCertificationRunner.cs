@@ -48,7 +48,9 @@ public sealed class ContinuousCertificationRunner
             string path = Path.Combine(evidenceRoot, spec.File);
             (bool evidencePassed, string evidenceClassification) = await EvidencePassedAsync(path, cancellationToken);
             bool ageCurrent = File.Exists(path) && DateTimeOffset.UtcNow - File.GetLastWriteTimeUtc(path) <= TimeSpan.FromDays(7);
-            bool current = surfaceCurrent && ageCurrent;
+            bool profileCurrent = !RequiresFixtureProfile(spec.Identity) ||
+                await EvidenceUsesFixtureProfileAsync(path, cancellationToken);
+            bool current = surfaceCurrent && ageCurrent && profileCurrent;
             EvidenceLevel actual = evidencePassed && current ? spec.Required : EvidenceLevel.Uncovered;
             dimensions.Add(new ReleaseDimensionResult(
                 spec.Identity,
@@ -61,6 +63,7 @@ public sealed class ContinuousCertificationRunner
                     $"classification:{evidenceClassification}",
                     $"age-current:{ageCurrent}",
                     $"surface-current:{surfaceCurrent}",
+                    $"fixture-profile-current:{profileCurrent}",
                 ]));
         }
 
@@ -244,6 +247,58 @@ public sealed class ContinuousCertificationRunner
         catch (Exception exception) when (exception is IOException or JsonException or KeyNotFoundException)
         {
             return (false, "invalid-evidence");
+        }
+    }
+
+    private static bool RequiresFixtureProfile(string dimension) => dimension is
+        "plan" or
+        "execute" or
+        "traditional-roadmap" or
+        "eval-roadmap" or
+        "completion-closure" or
+        "traditional-full-chain" or
+        "eval-full-chain";
+
+    private static async Task<bool> EvidenceUsesFixtureProfileAsync(
+        string path,
+        CancellationToken token)
+    {
+        if (!File.Exists(path)) return false;
+        try
+        {
+            await using FileStream stream = File.OpenRead(path);
+            using JsonDocument document = await JsonDocument.ParseAsync(stream, cancellationToken: token);
+            return EvidenceUsesFixtureProfile(document.RootElement);
+        }
+        catch (Exception exception) when (exception is IOException or JsonException)
+        {
+            return false;
+        }
+    }
+
+    internal static bool EvidenceUsesFixtureProfile(JsonElement root)
+    {
+        bool model = false;
+        bool effort = false;
+        Visit(root);
+        return model && effort;
+
+        void Visit(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.String:
+                    string value = element.GetString() ?? string.Empty;
+                    model |= value.StartsWith("model:", StringComparison.Ordinal) && value.Length > "model:".Length;
+                    effort |= value.StartsWith("effort:", StringComparison.Ordinal) && value.Length > "effort:".Length;
+                    break;
+                case JsonValueKind.Array:
+                    foreach (JsonElement item in element.EnumerateArray()) Visit(item);
+                    break;
+                case JsonValueKind.Object:
+                    foreach (JsonProperty property in element.EnumerateObject()) Visit(property.Value);
+                    break;
+            }
         }
     }
 

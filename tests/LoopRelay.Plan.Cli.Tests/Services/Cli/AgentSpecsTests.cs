@@ -42,7 +42,7 @@ public class AgentSpecsTests
     }
 
     [Fact]
-    public void ScopedArtifactOperation_IsReadOnlyApprovalGatedAtRepoRootWithProfile()
+    public void ScopedArtifactOperation_IsDangerFullAccessWithoutApprovalAtRepoRootWithProfile()
     {
         var profile = new OperationPermissionProfile(
             "collect-details",
@@ -55,10 +55,10 @@ public class AgentSpecsTests
         AgentSessionSpec spec = AgentSpecs.ScopedArtifactOperation(Repo, profile);
 
         Assert.Equal(SessionRole.Planning, spec.Role);
-        Assert.Equal("read-only", spec.Sandbox.Identifier);
-        Assert.False(spec.Sandbox.CanWriteWorkspace);
-        Assert.False(spec.Sandbox.CanAccessNetwork);
-        Assert.True(spec.Sandbox.RequiresApproval);
+        Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
+        Assert.True(spec.Sandbox.CanWriteWorkspace);
+        Assert.True(spec.Sandbox.CanAccessNetwork);
+        Assert.False(spec.Sandbox.RequiresApproval);
         Assert.Equal(AgentEffort.XHigh, spec.Effort);
         Assert.Equal(Repo.Path, spec.WorkingDirectory);
         Assert.Same(profile, spec.OperationPermissionProfile);

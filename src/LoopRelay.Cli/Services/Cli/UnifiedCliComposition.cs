@@ -429,6 +429,72 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
                 sections.AddRange(result.Sections);
             }
+            else if (request.Workflow == WorkflowIdentity.EvalRoadmap)
+            {
+                foreach (ProductRecord product in inputs.Products)
+                {
+                    foreach (string candidate in product.StorageRepresentations)
+                    {
+                        string fullPath = ResolveRepositoryPath(_repository, candidate);
+                        string? content = null;
+                        if (File.Exists(fullPath))
+                        {
+                            content = await File.ReadAllTextAsync(fullPath, cancellationToken);
+                        }
+                        else if (Directory.Exists(fullPath))
+                        {
+                            string[] files = Directory.GetFiles(fullPath, "*.md", SearchOption.TopDirectoryOnly)
+                                .Order(StringComparer.Ordinal)
+                                .ToArray();
+                            if (files.Length > 0)
+                            {
+                                content = string.Join(
+                                    Environment.NewLine + Environment.NewLine,
+                                    await Task.WhenAll(files.Select(async file =>
+                                        $"# FILE: {ArtifactPath.ToRepositoryRelativePath(_repository, file)}{Environment.NewLine}{Environment.NewLine}" +
+                                        await File.ReadAllTextAsync(file, cancellationToken))));
+                            }
+                        }
+
+                        if (content is null)
+                        {
+                            continue;
+                        }
+
+                        sections.Add(new PromptContextSection(
+                            $"Input Product: {product.Identity.Value}",
+                            content,
+                            candidate,
+                            product.EvidenceLocations));
+                        break;
+                    }
+                }
+
+                if (sections.Count == 0 && inputs.Products.Any(product =>
+                    product.Identity == ProductIdentity.EvaluationIntent))
+                {
+                    string inputDirectory = ResolveRepositoryPath(
+                        _repository,
+                        EvaluationArtifactPaths.InputDirectory);
+                    string[] files = Directory.Exists(inputDirectory)
+                        ? Directory.GetFiles(inputDirectory, "*.md", SearchOption.TopDirectoryOnly)
+                            .Order(StringComparer.Ordinal)
+                            .ToArray()
+                        : [];
+                    if (files.Length > 0)
+                    {
+                        sections.Add(new PromptContextSection(
+                            $"Input Product: {ProductIdentity.EvaluationIntent.Value}",
+                            string.Join(
+                                Environment.NewLine + Environment.NewLine,
+                                await Task.WhenAll(files.Select(async file =>
+                                    $"# FILE: {ArtifactPath.ToRepositoryRelativePath(_repository, file)}{Environment.NewLine}{Environment.NewLine}" +
+                                    await File.ReadAllTextAsync(file, cancellationToken)))),
+                            EvaluationArtifactPaths.InputDirectory,
+                            files.Select(file => ArtifactPath.ToRepositoryRelativePath(_repository, file)).ToArray()));
+                    }
+                }
+            }
             else if (request.Workflow == WorkflowIdentity.Plan &&
                 PlanPromptContext.Supports(definition.Identity))
             {
@@ -584,7 +650,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? []
                         : ["strategic initiative selection output is missing a recognized selection heading."],
                 "AuditExistingEpic" =>
-                    ContainsHeading(content, "# Epic Preparation Audit") &&
+                    ContainsHeading(content, "## Selected Epic") &&
                     ContainsHeading(content, "## Audit Disposition") &&
                     ContainsHeading(content, "## Final Disposition Statement")
                         ? []
@@ -810,6 +876,16 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             Primary output: {asset.PrimaryOutput}
             Primary output path: {asset.PrimaryOutputPath}
 
+            ## Runtime Source Boundary
+
+            The canonical input products required for this transition are embedded below. Use them directly as authoritative source content.
+            Do not inspect the repository, invoke shell or filesystem tools, create an internal plan, or call planning tools.
+            Return only the final Markdown for the primary output now; the runtime materializes it at the declared path.
+            Keep the artifact compact while preserving every source-required semantic field, relationship, negative control, and traceability obligation.
+            Represent the supplied scope exactly once: do not create multiple IDs for the same source obligation merely to restate its lifecycle phase, evidence view, negative-control variant, or implementation alternative.
+            For a single-capability or single-milestone source, emit the smallest schema-complete set of items and groups. Keep acceptance evidence and negative controls inside the owning item unless the source or required schema explicitly makes them distinct nodes.
+            Do not invent speculative dependencies, hypotheses, catalog items, or milestones beyond the embedded canonical inputs.
+
             {sections}
             """;
         }
@@ -819,6 +895,18 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             PromptContext context)
         {
             string promptTemplate = RenderTraditionalRoadmapPrompt(asset, context);
+            if (asset.PromptIdentity == "GenerateMilestoneDeepDivesForEpic")
+            {
+                promptTemplate += """
+
+                    ## Runtime Source Boundary
+
+                    The authoritative selected epic is already resolved and embedded below as the `PreparedEpic` input product from `.agents/epic.md`.
+                    Use that embedded product directly. A redundant filesystem lookup is not required.
+                    If you do inspect the repository, the exact path is `.agents/epic.md` (including the leading dot), never `agents/epic.md`.
+                    Do not block milestone-spec generation because a redundant lookup fails; emit the required `.agents/specs/*.md` file bundle from the embedded authoritative epic.
+                    """;
+            }
             string products = context.Inputs.Products.Count == 0
                 ? "No input products were resolved."
                 : string.Join(
@@ -1936,6 +2024,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 LoopArtifacts artifacts = CreateLoopArtifacts();
                 string? plan = await artifacts.ReadPlanAsync();
                 string? details = await artifacts.ReadDetailsAsync();
+                string? repositoryReadme = await artifactStore.ReadAsync(
+                    ResolveRepositoryPath(_repository, "README.md"));
                 ValidatedExecutionRecommendation recommendation =
                     await artifacts.ReadValidatedExecutionRecommendationAsync();
                 string decisions = recommendation.Prompt;
@@ -1945,7 +2035,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 executionSliceBaseline = await CreateBaselineStore().CapturePreSliceAsync();
 
                 string executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-                    ContinueExecution.Render(plan, details, decisions, "TODO"),
+                    ContinueExecution.Render(
+                        plan,
+                        AppendRepositoryReadmeContext(details, repositoryReadme),
+                        decisions,
+                        "TODO"),
                     ImplementationFirstPromptPolicyComposer.ComposeDefault());
                 executionSession = await _agentRuntime!.OpenSessionAsync(
                     AgentSpecs.Execution(_repository, recommendation),
@@ -2006,6 +2100,27 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 await CloseExecutionSessionAsync();
                 return Failed(exception.Message);
             }
+        }
+
+        private static string? AppendRepositoryReadmeContext(string? details, string? repositoryReadme)
+        {
+            if (string.IsNullOrWhiteSpace(repositoryReadme))
+            {
+                return details;
+            }
+
+            return $"""
+                {details}
+
+                # Repository README Context
+
+                The following repository-owned README content is authoritative execution context. Use it directly when the plan or verifier refers to README-defined values; do not attempt to infer those values from hashes.
+                When the README specifies exact required content and the verifier accepts multiple values, the README resolves the canonical target. A broader verifier allowlist is not ambiguity and must not block implementation solely because it contains multiple accepted values.
+
+                <REPOSITORY_README>
+                {repositoryReadme.Trim()}
+                </REPOSITORY_README>
+                """;
         }
 
         private async Task<PromptExecutionResult> ExecuteHandoffAsync(

@@ -376,6 +376,8 @@ public sealed class UnifiedCliCompositionTests
             Assert.Contains("Generate Milestone Deep Dives For Epic", prompt, StringComparison.Ordinal);
             Assert.Contains("## Active Epic", prompt, StringComparison.Ordinal);
             Assert.Contains("Source: .agents/epic.md", prompt, StringComparison.Ordinal);
+            Assert.Contains("including the leading dot", prompt, StringComparison.Ordinal);
+            Assert.Contains("never `agents/epic.md`", prompt, StringComparison.Ordinal);
             Assert.Contains("# Epic:", prompt, StringComparison.Ordinal);
             return new AgentTurnResult(3, AgentTurnState.Completed, """
                 # Milestone Deep Dive Bundle
@@ -873,11 +875,15 @@ public sealed class UnifiedCliCompositionTests
     {
         (string repo, Repository repository, FakeAgentRuntime runtime, FakeProcessRunner process) = await PrepareExecuteContinuityCaseAsync(
             "cc-cli-unified-execute-warm-restart");
+        await WriteAsync(repo, "README.md", "# Canonical Capability\n\nUse exact repository bytes.");
         runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             new AgentTurnResult(0, AgentTurnState.Completed, "# Decisions\n\nCreate src/feature.cs.", AgentTokenUsage.Zero)));
-        runtime.SessionTurns.Enqueue(new ScriptedTurn((spec, _, _) =>
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
             Assert.Null(spec.ResumeThreadId);
+            Assert.Contains("# Repository README Context", prompt, StringComparison.Ordinal);
+            Assert.Contains("Use exact repository bytes.", prompt, StringComparison.Ordinal);
+            Assert.Contains("the README resolves the canonical target", prompt, StringComparison.Ordinal);
             Directory.CreateDirectory(Path.Combine(repo, "src"));
             File.WriteAllText(Path.Combine(repo, "src", "feature.cs"), "feature\n");
             return new AgentTurnResult(1, AgentTurnState.Completed, "implemented", AgentTokenUsage.Zero);
@@ -1208,14 +1214,14 @@ public sealed class UnifiedCliCompositionTests
         runtime.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
             Assert.Equal(SessionRole.Planning, spec.Role);
-            Assert.Equal("read-only", spec.Sandbox.Identifier);
+            Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
             Assert.Contains("Evaluate Epic Completion And Drift", prompt, StringComparison.Ordinal);
             return new AgentTurnResult(4, AgentTurnState.Completed, Evaluation("Fully Complete", "None", "Close Epic"), AgentTokenUsage.Zero);
         }));
         runtime.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
             Assert.Equal(SessionRole.Planning, spec.Role);
-            Assert.Equal("read-only", spec.Sandbox.Identifier);
+            Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
             Assert.Contains("Epic Synthesis Prompt", prompt, StringComparison.Ordinal);
             Assert.Contains("trusted runtime owns persistence", prompt, StringComparison.OrdinalIgnoreCase);
             return new AgentTurnResult(5, AgentTurnState.Completed, """
@@ -1239,7 +1245,7 @@ public sealed class UnifiedCliCompositionTests
         runtime.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
             Assert.Equal(SessionRole.Planning, spec.Role);
-            Assert.Equal("read-only", spec.Sandbox.Identifier);
+            Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
             Assert.Contains("Update Roadmap Completion Context", prompt, StringComparison.Ordinal);
             return new AgentTurnResult(7, AgentTurnState.Completed, "# Roadmap Completion Context\n\nUpdated.", AgentTokenUsage.Zero);
         }));
@@ -1536,6 +1542,9 @@ public sealed class UnifiedCliCompositionTests
         {
             Assert.Equal(SessionRole.OperationalExecution, spec.Role);
             Assert.Contains("Canonical Runtime Context", prompt, StringComparison.Ordinal);
+            Assert.Contains("Runtime Source Boundary", prompt, StringComparison.Ordinal);
+            Assert.Contains("Input Product:", prompt, StringComparison.Ordinal);
+            Assert.Contains("Do not inspect the repository", prompt, StringComparison.Ordinal);
             Assert.Contains(promptIdentity, prompt.Replace(" ", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
             Assert.DoesNotContain("{projectContext}", prompt, StringComparison.Ordinal);
             if (promptIdentity == "CreateNewEpic")

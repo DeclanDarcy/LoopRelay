@@ -96,8 +96,8 @@ public sealed class FullChainLiveRunner
         Environment.SetEnvironmentVariable("CODEX_HOME", codexHome);
         Environment.SetEnvironmentVariable("CODEX_EXECUTABLE", codexExecutable);
         Environment.SetEnvironmentVariable("CODEX_ANALYTICS_ENABLED", "false");
-        string effort = traditional ? "xhigh" : "high";
-        string settingsPath = await WriteEffortSettingsAsync(root, cliPath, effort, cancellationToken);
+        string effort = CertificationFixtureSettings.BrainEffort;
+        string settingsPath = await CertificationFixtureSettings.WriteAsync(root, cliPath, cancellationToken);
         Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", settingsPath);
         HashSet<int> initialCodex = CodexProcessIds();
         var transitions = new List<FullChainTransitionResult>();
@@ -246,7 +246,7 @@ public sealed class FullChainLiveRunner
             string budgetDecision = "provisional-release-budget:one-full-chain-per-profile-platform;repeat-targeted-postures-three-times;recertify-on-denominator-drift";
             evidence.AddRange(
             [
-                $"model:gpt-5.6-sol",
+                $"model:{CertificationFixtureSettings.BrainModel}",
                 $"effort:{effort}",
                 $"transitions:{transitions.Count}/{expected.Length}",
                 $"default-selection:{defaultSelection}",
@@ -269,7 +269,7 @@ public sealed class FullChainLiveRunner
                 defaultSelection && forcedSelection && boundaries && convergence && acceptance &&
                 gitPublished && archive && traceability && idempotent && processesClean;
             return await Finish(
-                passed ? CertificationClassification.Passed : CertificationClassification.ProductRegression,
+                LiveProviderFailureClassifier.Classify(passed, codexHome),
                 defaultSelection,
                 forcedSelection,
                 boundaries,
@@ -424,7 +424,7 @@ public sealed class FullChainLiveRunner
             "# Purpose\n\nDeliver the missing deterministic greeting as real repository capability.",
             "# Capability Model\n\n`GREETING.md` is absent. The desired capability is its exact repository-owned content plus executable verification.",
             "# Invariants\n\nDo not modify `verify.ps1`. The greeting must be exact and the verifier must exit zero.",
-            "# Strategic Structure\n\nCreate one bounded intermediary epic with exactly one implementation milestone: M1 implements the exact `GREETING.md` bytes and proves them with the immutable `verify.ps1`; do not split, investigate, or add planning-only milestones.",
+            "# Strategic Structure\n\nCreate one bounded intermediary epic with exactly one implementation milestone: M1 implements the exact `GREETING.md` bytes and proves them with the immutable `verify.ps1`. This cardinality is authoritative for every generated roadmap, epic, specification set, plan, and execution milestone set: exactly one epic containing exactly one milestone. Do not split the work into run, oracle, comparison, negative-control, evidence, investigation, or planning-only milestones; those are acceptance obligations within M1, not separate milestones.",
             "# Authority Model\n\nRepository bytes and the independent verifier are authoritative over model-authored claims. After `ExecuteImplementationSlice` implements and locally verifies the capability and `GenerateHandoff` records it, the orchestrator-owned `PublishRepositoryState` transition commits and pushes the independent `.agents` repository, then commits its updated gitlink and pushes the parent repository. Execution agents never discover, invoke, preview, or preflight that downstream transition.",
             "# Evaluation Model\n\nThe implementation slice must first create the exact greeting bytes and prove them with the immutable verifier; absence of a callable publisher is not an implementation blocker. After handoff, orchestration runs `PublishRepositoryState`. Completion then requires its success and checked completion state in `.agents/milestones/*.md`; that checklist state and the immutable verifier are the authoritative milestone evidence, with no additional evidence mechanism or follow-up required.",
             "# Drift And False Success\n\nProse-only output, altered verification, or unchecked milestones are false success.",
@@ -444,7 +444,12 @@ public sealed class FullChainLiveRunner
                 Determine and implement the smallest path to a deterministic `GREETING.md` capability.
                 Required verdict: `verify.ps1` exits zero without modification and exact greeting content exists.
                 Negative control: missing, altered, or prose-only output fails.
-                Produce one implementation-first epic with one bounded milestone.
+                Required output shape: exactly one implementation-first epic containing exactly one bounded milestone.
+                That single milestone directly creates `GREETING.md` with the README-defined exact bytes, runs the immutable
+                verifier, and includes the missing/altered negative controls and evidence as acceptance obligations within
+                the same milestone. Do not split invocation, oracle binding, comparison, negative controls, evidence,
+                replay, investigation, or planning into separate milestones. Any roadmap, epic, or specification set with
+                more than one milestone violates this evaluation intent.
                 """, token);
         }
     }
@@ -525,21 +530,6 @@ public sealed class FullChainLiveRunner
         return Digest(material.ToString());
     }
 
-    private static async Task<string> WriteEffortSettingsAsync(
-        string root,
-        string cliPath,
-        string effort,
-        CancellationToken token)
-    {
-        string source = Path.Combine(Path.GetDirectoryName(cliPath)!, "settings.default.json");
-        JsonNode settings = JsonNode.Parse(await File.ReadAllTextAsync(source, token))
-            ?? throw new InvalidOperationException("CLI settings template was empty.");
-        settings["brainEffort"] = effort;
-        string path = Path.Combine(root, "settings.json");
-        await File.WriteAllTextAsync(path, settings.ToJsonString(JsonOptions), token);
-        return path;
-    }
-
     private static IReadOnlyList<string> Diagnostics(ProcessResult result) => result.ExitCode == 0
         ? []
         :
@@ -571,7 +561,7 @@ public sealed class FullChainLiveRunner
         }
         all.AddRange(["--repo", repository]);
         all.AddRange(arguments);
-        return await RunProcessAsync(file, all, repository, TimeSpan.FromMinutes(30), token);
+        return await RunProcessAsync(file, all, repository, CertificationFixtureSettings.ProviderTurnTimeout, token);
     }
 
     private static async Task<ProcessResult> RunDefaultUntilFirstTransitionAsync(
@@ -596,7 +586,7 @@ public sealed class FullChainLiveRunner
         Task<string> stderrTask = process.StandardError.ReadToEndAsync(token);
         var stdout = new StringBuilder();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(TimeSpan.FromMinutes(30));
+        timeout.CancelAfter(CertificationFixtureSettings.ProviderTurnTimeout);
         bool observed = false;
         try
         {

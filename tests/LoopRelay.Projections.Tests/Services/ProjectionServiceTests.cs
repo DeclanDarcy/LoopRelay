@@ -164,6 +164,10 @@ public sealed class ProjectionServiceTests
         Assert.True(validator.Validate(
             ProjectionRuntimePromptNames.DecisionSession,
             ValidProjection("# Execution Agent System Prompt Projection", "DecisionSession")).IsValid);
+        Assert.True(validator.Validate(
+            "EvaluateEpicCompletionAndDrift",
+            ValidProjection("# Epic Completion Evaluation Projection", "`EvaluateEpicCompletionAndDrift`")
+                .Replace("## Projection Integrity Checklist\n\n- Valid.\n", string.Empty, StringComparison.Ordinal)).IsValid);
 
         ProjectionValidationResult invalid = validator.Validate(
             ProjectionRuntimePromptNames.DecisionSession,

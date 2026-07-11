@@ -14,6 +14,28 @@ public sealed class ProjectionValidatorTests
     }
 
     [Fact]
+    public void Validate_accepts_inline_code_formatting_in_intended_consumer_value()
+    {
+        string projection = ProjectionSamples.Valid("SelectNextEpic")
+            .Replace("| Intended Consumer | SelectNextEpic |", "| `Intended Consumer` | `SelectNextEpic` |", StringComparison.Ordinal);
+
+        ProjectionValidationResult result = new ProjectionValidator().Validate("SelectNextEpic", projection);
+
+        Assert.True(result.IsValid, result.Error);
+    }
+
+    [Fact]
+    public void Validate_accepts_projection_without_nonsemantic_integrity_checklist()
+    {
+        string projection = ProjectionSamples.Valid("SelectNextEpic")
+            .Replace("## Projection Integrity Checklist\n\n- Valid.\n", string.Empty, StringComparison.Ordinal);
+
+        ProjectionValidationResult result = new ProjectionValidator().Validate("SelectNextEpic", projection);
+
+        Assert.True(result.IsValid, result.Error);
+    }
+
+    [Fact]
     public void Validate_rejects_missing_required_section()
     {
         string projection = ProjectionSamples.Valid("SelectNextEpic").Replace("## Canonical Vocabulary", "## Vocabulary", StringComparison.Ordinal);

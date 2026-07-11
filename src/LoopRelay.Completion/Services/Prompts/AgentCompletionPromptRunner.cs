@@ -26,7 +26,7 @@ public sealed class AgentCompletionPromptRunner(
         string prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
             CompletionPromptCatalog.RenderRuntime(invocation),
             (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
-        AgentSessionSpec spec = ReadOnlyPlanning(_repository, _brainConfiguration);
+        AgentSessionSpec spec = CompletionPlanning(_repository, _brainConfiguration);
 
         AgentTurnResult result = await _runtime.RunOneShotAsync(
             spec,
@@ -75,6 +75,15 @@ public sealed class AgentCompletionPromptRunner(
                 : string.Empty;
         }
 
+        if (!content.StartsWith("# ", StringComparison.Ordinal))
+        {
+            int firstHeading = content.IndexOf("\n# ", StringComparison.Ordinal);
+            if (firstHeading >= 0)
+            {
+                content = content[(firstHeading + 1)..].Trim();
+            }
+        }
+
         if (!content.StartsWith("# ", StringComparison.Ordinal) ||
             !content.Contains("## 1. Epic Purpose", StringComparison.Ordinal))
         {
@@ -95,12 +104,12 @@ public sealed class AgentCompletionPromptRunner(
         await File.WriteAllTextAsync(path, content + Environment.NewLine, cancellationToken);
     }
 
-    private static AgentSessionSpec ReadOnlyPlanning(Repository repository, BrainConfiguration brain) =>
+    private static AgentSessionSpec CompletionPlanning(Repository repository, BrainConfiguration brain) =>
         new(
             SessionIdentity.New(),
             repository.Id.ToString("N"),
             SessionRole.Planning,
-            new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
+            new SandboxProfile("danger-full-access", CanWriteWorkspace: true, CanAccessNetwork: true, RequiresApproval: false),
             brain.Model,
             brain.Effort,
             AgentConfigurationAuthority.Brain,

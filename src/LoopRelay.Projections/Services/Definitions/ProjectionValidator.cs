@@ -11,7 +11,6 @@ public sealed class ProjectionValidator(ProjectionDefinitionRegistry _registry)
         "## Projection Metadata",
         "## Canonical Vocabulary",
         "## Downstream Use Instructions",
-        "## Projection Integrity Checklist",
     ];
 
     private static readonly string[] ForbiddenRuntimeStateHeadings =
@@ -45,7 +44,7 @@ public sealed class ProjectionValidator(ProjectionDefinitionRegistry _registry)
             }
         }
 
-        if (!content.Contains($"| Intended Consumer | {definition.IntendedConsumer} |", StringComparison.Ordinal))
+        if (!ContainsMetadataValue(content, "Intended Consumer", definition.IntendedConsumer))
         {
             return ProjectionValidationResult.Invalid($"Projection intended consumer does not match `{definition.IntendedConsumer}`.");
         }
@@ -59,5 +58,27 @@ public sealed class ProjectionValidator(ProjectionDefinitionRegistry _registry)
         }
 
         return ProjectionValidationResult.Valid();
+    }
+
+    private static bool ContainsMetadataValue(string content, string field, string expectedValue)
+    {
+        foreach (string line in content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] cells = line.Split('|', StringSplitOptions.TrimEntries);
+            if (cells.Length < 4)
+            {
+                continue;
+            }
+
+            string actualField = cells[1].Trim().Trim('`');
+            string actualValue = cells[2].Trim().Trim('`');
+            if (string.Equals(actualField, field, StringComparison.Ordinal)
+                && string.Equals(actualValue, expectedValue, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

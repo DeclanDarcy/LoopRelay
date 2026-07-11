@@ -528,6 +528,9 @@ public sealed class CompletionCertificationServiceTests
                     invocation.ProjectContext,
                     StringComparison.Ordinal);
                 Assert.Contains("# Main CLI Completion Claim", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("authoritative logical artifacts", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("not required to exist as filesystem files", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("expected workflow ordering, not strategic drift", invocation.ProjectContext, StringComparison.Ordinal);
                 Assert.Null(await h.ReadAsync(".agents/evidence/execution/main-cli-completion-claim.0001.md"));
                 return Evaluation("Partially Complete", "None", "Continue Epic");
             }
@@ -613,6 +616,11 @@ public sealed class CompletionCertificationServiceTests
         string prompt = Assert.Single(runtime.Prompts);
         Assert.Contains("Repository growth is implementation-first", prompt, StringComparison.Ordinal);
         Assert.Contains("The HITL-requested exception is disabled", prompt, StringComparison.Ordinal);
+        AgentSessionSpec spec = Assert.Single(runtime.Specs);
+        Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
+        Assert.True(spec.Sandbox.CanWriteWorkspace);
+        Assert.True(spec.Sandbox.CanAccessNetwork);
+        Assert.False(spec.Sandbox.RequiresApproval);
     }
 
     [Fact]
@@ -623,6 +631,10 @@ public sealed class CompletionCertificationServiceTests
             0,
             AgentTurnState.Completed,
             """
+            I’ll inspect the archived source set first.
+
+            I found the source files and will now synthesize them.
+
             # Completed Greeting Epic
 
             ## 1. Epic Purpose
@@ -642,7 +654,10 @@ public sealed class CompletionCertificationServiceTests
 
         string path = Path.Combine(root, ".agents", "archive", "epics", "1.md");
         Assert.True(File.Exists(path));
-        Assert.Contains("## 1. Epic Purpose", await File.ReadAllTextAsync(path), StringComparison.Ordinal);
+        string synthesis = await File.ReadAllTextAsync(path);
+        Assert.StartsWith("# Completed Greeting Epic", synthesis, StringComparison.Ordinal);
+        Assert.DoesNotContain("inspect the archived source", synthesis, StringComparison.Ordinal);
+        Assert.Contains("## 1. Epic Purpose", synthesis, StringComparison.Ordinal);
     }
 
     private static string Evaluation(string completionStatus, string drift, string recommendation) => $$"""
@@ -901,6 +916,7 @@ public sealed class CompletionCertificationServiceTests
     private sealed class RecordingAgentRuntime(AgentTurnResult result) : IAgentRuntime
     {
         public List<string> Prompts { get; } = [];
+        public List<AgentSessionSpec> Specs { get; } = [];
 
         public Task<IAgentSession> OpenSessionAsync(
             AgentSessionSpec spec,
@@ -913,6 +929,7 @@ public sealed class CompletionCertificationServiceTests
             Func<AgentStreamChunk, Task>? onChunk = null,
             CancellationToken cancellationToken = default)
         {
+            Specs.Add(spec);
             Prompts.Add(prompt);
             return Task.FromResult(result);
         }

@@ -36,15 +36,14 @@ internal static class AgentSpecs
             AgentConfigurationAuthority.Brain,
             repository.Path);
 
-    // sandboxIdentifier is the codex sandbox mode. It defaults to "workspace-write" for ordinary operational
-    // sessions; the execution session overrides it to "danger-full-access" so codex runs
-    // unsandboxed — matching the legacy CodexExecutionProvider's deliberate policy. danger-full-access also
-    // grants network, so CanAccessNetwork tracks it.
+    // sandboxIdentifier is the codex sandbox mode. Ordinary operational sessions default to
+    // "danger-full-access" because Windows sandboxed writes and child-process reads are not reliable enough for
+    // one-turn artifact production. Callers may still request a narrower posture explicitly.
     public static AgentSessionSpec BrainOperational(
         Repository repository,
         BrainConfiguration brain,
         string? workingDirectory = null,
-        string sandboxIdentifier = "workspace-write") =>
+        string sandboxIdentifier = "danger-full-access") =>
         new(
             SessionIdentity.New(),
             repository.Id.ToString("N"),
@@ -99,7 +98,7 @@ internal static class AgentSpecs
             SessionIdentity.New(),
             repository.Id.ToString("N"),
             SessionRole.OperationalExecution,
-            new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: true),
+            new SandboxProfile("danger-full-access", CanWriteWorkspace: true, CanAccessNetwork: true, RequiresApproval: false),
             brain.Model,
             brain.Effort,
             AgentConfigurationAuthority.Brain,

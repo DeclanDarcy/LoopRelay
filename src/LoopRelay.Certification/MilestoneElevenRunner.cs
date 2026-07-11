@@ -48,7 +48,7 @@ public sealed class MilestoneElevenRunner
         Environment.SetEnvironmentVariable("CODEX_HOME", codexHome);
         Environment.SetEnvironmentVariable("CODEX_EXECUTABLE", codexExecutable);
         Environment.SetEnvironmentVariable("CODEX_ANALYTICS_ENABLED", "false");
-        string settingsPath = await WriteHighEffortSettingsAsync(root, cliPath, cancellationToken);
+        string settingsPath = await CertificationFixtureSettings.WriteAsync(root, cliPath, cancellationToken);
         Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", settingsPath);
         HashSet<int> initialCodex = CodexProcessIds();
         var transitions = new List<ExecuteTransitionCaseResult>();
@@ -175,8 +175,8 @@ public sealed class MilestoneElevenRunner
                 transitions.Count > 1 && transitions[1].Completed;
             evidence.AddRange(
             [
-                "model:gpt-5.6-sol",
-                "effort:high",
+                $"model:{CertificationFixtureSettings.BrainModel}",
+                $"effort:{CertificationFixtureSettings.BrainEffort}",
                 $"completion-checkpoint-after-certification:{checkpointAfterCertification}",
                 $"archive-complete:{archiveComplete}",
                 $"roadmap-context-updated:{roadmapUpdated}",
@@ -194,7 +194,7 @@ public sealed class MilestoneElevenRunner
                 restartRoute && archiveComplete && roadmapUpdated && canonicalClosure && continuityRetired &&
                 idempotent && independentAcceptance && processesClean;
             return await Finish(
-                passed ? CertificationClassification.Passed : CertificationClassification.ProductRegression,
+                LiveProviderFailureClassifier.Classify(passed, codexHome),
                 restartRoute,
                 archiveComplete,
                 roadmapUpdated,
@@ -471,20 +471,6 @@ public sealed class MilestoneElevenRunner
         return await command.ExecuteScalarAsync(token) is not null;
     }
 
-    private static async Task<string> WriteHighEffortSettingsAsync(
-        string root,
-        string cliPath,
-        CancellationToken token)
-    {
-        string source = Path.Combine(Path.GetDirectoryName(cliPath)!, "settings.default.json");
-        JsonNode settings = JsonNode.Parse(await File.ReadAllTextAsync(source, token))
-            ?? throw new InvalidOperationException("CLI settings template was empty.");
-        settings["brainEffort"] = "high";
-        string path = Path.Combine(root, "settings.json");
-        await File.WriteAllTextAsync(path, settings.ToJsonString(JsonOptions), token);
-        return path;
-    }
-
     private static async Task InitializeGitAsync(string root, CancellationToken token)
     {
         foreach (string[] arguments in new[]
@@ -591,7 +577,7 @@ public sealed class MilestoneElevenRunner
         }
         all.AddRange(["--repo", repository]);
         all.AddRange(arguments);
-        return await RunProcessAsync(file, all, repository, TimeSpan.FromMinutes(30), token);
+        return await RunProcessAsync(file, all, repository, CertificationFixtureSettings.ProviderTurnTimeout, token);
     }
 
     private static async Task<ProcessResult> RunProcessAsync(

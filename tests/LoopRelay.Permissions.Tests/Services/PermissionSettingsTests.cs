@@ -63,6 +63,19 @@ public sealed class PermissionSettingsTests
     }
 
     [Fact]
+    public void Loader_accepts_the_certification_fixture_brain_profile()
+    {
+        JsonObject settings = DefaultSettings();
+        settings["brainModel"] = "gpt-5.4-mini";
+        settings["brainEffort"] = "medium";
+
+        CliSettingsLoadResult result = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
+
+        Assert.Equal(AgentModel.Gpt54Mini, result.Brain.Model);
+        Assert.Equal(AgentEffort.Medium, result.Brain.Effort);
+    }
+
+    [Fact]
     public void Loader_rejects_missing_required_sections()
     {
         JsonObject settings = DefaultSettings();

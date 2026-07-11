@@ -38,17 +38,10 @@ public sealed class RoadmapLiveRunner
         Environment.SetEnvironmentVariable("CODEX_HOME", codexHome);
         Environment.SetEnvironmentVariable("CODEX_EXECUTABLE", codexExecutable);
         Environment.SetEnvironmentVariable("CODEX_ANALYTICS_ENABLED", "false");
-        string effort = traditional ? "xhigh" : "high";
-        if (!traditional)
-        {
-            string sourceSettings = Path.Combine(Path.GetDirectoryName(cliPath)!, "settings.default.json");
-            JsonNode settings = JsonNode.Parse(await File.ReadAllTextAsync(sourceSettings, cancellationToken))
-                ?? throw new InvalidOperationException("CLI settings template was empty.");
-            settings["brainEffort"] = effort;
-            string settingsPath = Path.Combine(root, "settings.json");
-            await File.WriteAllTextAsync(settingsPath, settings.ToJsonString(JsonOptions), cancellationToken);
-            Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", settingsPath);
-        }
+        string effort = CertificationFixtureSettings.BrainEffort;
+        string settingsPath = await CertificationFixtureSettings.WriteAsync(
+            root, cliPath, cancellationToken);
+        Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", settingsPath);
         HashSet<int> initialCodex = CodexProcessIds();
         var transitions = new List<ExecuteTransitionCaseResult>();
         var evidence = new List<string>();
@@ -185,7 +178,7 @@ public sealed class RoadmapLiveRunner
             evidence.AddRange(
             [
                 $"workflow:{workflow.Value}",
-                "model:gpt-5.6-sol",
+                $"model:{CertificationFixtureSettings.BrainModel}",
                 $"effort:{effort}",
                 $"transitions:{transitions.Count}/{expected.Length}",
                 $"prepared-epic:{universal}",
@@ -196,9 +189,7 @@ public sealed class RoadmapLiveRunner
             ]);
             bool passed = transitions.Count == expected.Length && transitions.All(item => item.Completed) &&
                 universal && producer && structural && bounded && traceability && processesClean;
-            return await Finish(passed
-                ? CertificationClassification.Passed
-                : CertificationClassification.ProductRegression,
+            return await Finish(LiveProviderFailureClassifier.Classify(passed, codexHome),
                 universal, structural, bounded, producer, processesClean);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -386,7 +377,7 @@ public sealed class RoadmapLiveRunner
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(token);
         Task<string> stderr = process.StandardError.ReadToEndAsync(token);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(TimeSpan.FromMinutes(12));
+        timeout.CancelAfter(CertificationFixtureSettings.ProviderTurnTimeout);
         try
         {
             await process.WaitForExitAsync(timeout.Token);

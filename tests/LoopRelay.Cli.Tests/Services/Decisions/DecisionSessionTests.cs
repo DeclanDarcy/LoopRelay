@@ -512,8 +512,10 @@ public class DecisionSessionTests
         Assert.All(scopedSpecs, spec =>
         {
             Assert.Equal(repo.Path, spec.WorkingDirectory);
-            Assert.Equal("read-only", spec.Sandbox.Identifier);
-            Assert.True(spec.Sandbox.RequiresApproval);
+            Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
+            Assert.True(spec.Sandbox.CanWriteWorkspace);
+            Assert.True(spec.Sandbox.CanAccessNetwork);
+            Assert.False(spec.Sandbox.RequiresApproval);
         });
         Assert.Contains(scopedSpecs, spec => spec.OperationPermissionProfile!.Label == "operational-context-evolution");
         Assert.Contains(scopedSpecs, spec => spec.OperationPermissionProfile!.Label == "operational-documents-optimization");

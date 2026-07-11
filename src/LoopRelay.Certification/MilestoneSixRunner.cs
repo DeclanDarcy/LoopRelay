@@ -47,11 +47,19 @@ public sealed class MilestoneSixRunner
         string? priorHome = Environment.GetEnvironmentVariable("CODEX_HOME");
         string? priorExecutable = Environment.GetEnvironmentVariable("CODEX_EXECUTABLE");
         string? priorAnalytics = Environment.GetEnvironmentVariable("CODEX_ANALYTICS_ENABLED");
+        string? priorSettings = Environment.GetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH");
         Environment.SetEnvironmentVariable("CODEX_HOME", codexHome);
         Environment.SetEnvironmentVariable("CODEX_EXECUTABLE", codexExecutable);
         Environment.SetEnvironmentVariable("CODEX_ANALYTICS_ENABLED", "false");
+        string settingsPath = await CertificationFixtureSettings.WriteAsync(
+            root, cliPath, cancellationToken);
+        Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", settingsPath);
         var transitions = new List<ExecuteTransitionCaseResult>();
-        var evidence = new List<string>();
+        var evidence = new List<string>
+        {
+            $"model:{CertificationFixtureSettings.BrainModel}",
+            $"effort:{CertificationFixtureSettings.BrainEffort}",
+        };
         string version = "unknown";
         string schema = "unknown";
         HashSet<int> initialCodex = CodexProcessIds();
@@ -143,9 +151,7 @@ public sealed class MilestoneSixRunner
             bool passed = transitions.Count == Transitions.Length && transitions.All(item => item.Completed) &&
                 acceptance && verifierUnchanged && sameThread && restarted && durableFacts &&
                 decisionContinuity && stoppedBeforePublication && processesClean;
-            return await Finish(passed
-                ? CertificationClassification.Passed
-                : CertificationClassification.ProductRegression,
+            return await Finish(LiveProviderFailureClassifier.Classify(passed, codexHome),
                 acceptance, verifierUnchanged, sameThread, restarted, durableFacts,
                 decisionContinuity, stoppedBeforePublication, processesClean);
         }
@@ -159,6 +165,7 @@ public sealed class MilestoneSixRunner
             Environment.SetEnvironmentVariable("CODEX_HOME", priorHome);
             Environment.SetEnvironmentVariable("CODEX_EXECUTABLE", priorExecutable);
             Environment.SetEnvironmentVariable("CODEX_ANALYTICS_ENABLED", priorAnalytics);
+            Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", priorSettings);
             string authCopy = Path.Combine(codexHome, "auth.json");
             if (File.Exists(authCopy)) File.Delete(authCopy);
             if (Directory.Exists(root))
@@ -417,7 +424,7 @@ public sealed class MilestoneSixRunner
         }
         all.AddRange(["--repo", repository]);
         all.AddRange(arguments);
-        return await RunProcessAsync(file, all, repository, token, TimeSpan.FromMinutes(12));
+        return await RunProcessAsync(file, all, repository, token, CertificationFixtureSettings.ProviderTurnTimeout);
     }
 
     private static async Task<ProcessResult> RunProcessAsync(

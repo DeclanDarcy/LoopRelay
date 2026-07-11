@@ -59,9 +59,13 @@ public sealed class MilestoneFiveRunner
         string? priorHome = Environment.GetEnvironmentVariable("CODEX_HOME");
         string? priorExecutable = Environment.GetEnvironmentVariable("CODEX_EXECUTABLE");
         string? priorAnalytics = Environment.GetEnvironmentVariable("CODEX_ANALYTICS_ENABLED");
+        string? priorSettings = Environment.GetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH");
         Environment.SetEnvironmentVariable("CODEX_HOME", codexHome);
         Environment.SetEnvironmentVariable("CODEX_EXECUTABLE", codexExecutable);
         Environment.SetEnvironmentVariable("CODEX_ANALYTICS_ENABLED", "false");
+        string settingsPath = await CertificationFixtureSettings.WriteAsync(
+            root, cliPath, cancellationToken);
+        Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", settingsPath);
         var cases = new List<PlanProducerCaseResult>();
         string version = "unknown";
         string schema = "unknown";
@@ -84,9 +88,8 @@ public sealed class MilestoneFiveRunner
             cases.Add(reusable.TryGetValue(WorkflowIdentity.EvalRoadmap.Value, out PlanProducerCaseResult? eval)
                 ? Reused(eval)
                 : await RunProducerCaseAsync(WorkflowIdentity.EvalRoadmap));
-            return await Finish(cases.All(item => item.Passed)
-                ? CertificationClassification.Passed
-                : CertificationClassification.ProductRegression);
+            return await Finish(LiveProviderFailureClassifier.Classify(
+                cases.All(item => item.Passed), codexHome));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -100,6 +103,7 @@ public sealed class MilestoneFiveRunner
             Environment.SetEnvironmentVariable("CODEX_HOME", priorHome);
             Environment.SetEnvironmentVariable("CODEX_EXECUTABLE", priorExecutable);
             Environment.SetEnvironmentVariable("CODEX_ANALYTICS_ENABLED", priorAnalytics);
+            Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", priorSettings);
             string authCopy = Path.Combine(codexHome, "auth.json");
             if (File.Exists(authCopy)) File.Delete(authCopy);
             if (Directory.Exists(root))
@@ -193,6 +197,8 @@ public sealed class MilestoneFiveRunner
                 passed,
                 [
                     $"producer:{producer.Value}",
+                    $"model:{CertificationFixtureSettings.BrainModel}",
+                    $"effort:{CertificationFixtureSettings.BrainEffort}",
                     $"authoring-thread-digest:{Digest(writeThread ?? string.Empty)}",
                     $"revision-continuity:{reviseContinuity ?? "missing"}",
                     $"execute-entry-products:{string.Join(',', actualEntryProducts.Select(product => product.Value))}",
@@ -478,7 +484,7 @@ public sealed class MilestoneFiveRunner
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
         Task<string> stderr = process.StandardError.ReadToEndAsync(cancellationToken);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromMinutes(12));
+        timeout.CancelAfter(CertificationFixtureSettings.ProviderTurnTimeout);
         try
         {
             await process.WaitForExitAsync(timeout.Token);
@@ -491,7 +497,7 @@ public sealed class MilestoneFiveRunner
             return new ProcessResult(
                 124,
                 await ReadCompletedOrEmptyAsync(stdout),
-                "Milestone 5 transition exceeded the 12-minute live-provider timeout.");
+                $"Milestone 5 transition exceeded the {CertificationFixtureSettings.ProviderTurnTimeout.TotalMinutes:0}-minute live-provider timeout.");
         }
         catch
         {
