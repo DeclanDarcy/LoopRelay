@@ -574,6 +574,30 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             [$".LoopRelay/evidence/local-verification/{definition.Identity}.md"];
     }
 
+    internal static bool ExplicitSingleMilestoneInvariantViolated(
+        string repositoryPath,
+        out int actualMilestoneCount)
+    {
+        string strategicStructure = Path.Combine(
+            repositoryPath,
+            ".agents",
+            "ctx",
+            "04-strategic-structure.md");
+        actualMilestoneCount = 0;
+        if (!File.Exists(strategicStructure)) return false;
+
+        string content = File.ReadAllText(strategicStructure);
+        bool requiresExactlyOne = content.Contains("exactly one", StringComparison.OrdinalIgnoreCase) &&
+            content.Contains("milestone", StringComparison.OrdinalIgnoreCase);
+        if (!requiresExactlyOne) return false;
+
+        string milestones = Path.Combine(repositoryPath, ".agents", "milestones");
+        actualMilestoneCount = Directory.Exists(milestones)
+            ? Directory.GetFiles(milestones, "*.md", SearchOption.TopDirectoryOnly).Length
+            : 0;
+        return actualMilestoneCount != 1;
+    }
+
     private static class LocalArtifactTransitions
     {
         public static bool Supports(WorkflowTransitionDefinition definition) =>
@@ -1066,7 +1090,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IAgentSessionContinuityRuntime? _continuityRuntime,
         BrainConfiguration _brainConfiguration) : IPromptExecutor, IAsyncDisposable
     {
-        private readonly IArtifactStore artifactStore = new FileSystemArtifactStore();
+        private readonly IArtifactStore artifactStore = new RepositoryScopedArtifactStore(
+            new FileSystemArtifactStore(),
+            _repository.Path);
         private IAgentSession? planAuthoringSession;
         private DecisionSession? executeDecisionSession;
         private IRecoveryStore? executeRecoveryStore;
@@ -3321,6 +3347,20 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     [],
                     "Product validation is not wired because prompt execution did not run.",
                     []);
+            }
+
+            if (definition.Identity.Value == "VerifyExecuteEntryContract" &&
+                ExplicitSingleMilestoneInvariantViolated(_repository.Path, out int milestoneCount))
+            {
+                return new ProductValidationResult(
+                    ProductValidationStatus.Invalid,
+                    output.CandidateProducts,
+                    [],
+                    [ProductIdentity.ExecutionMilestoneSet],
+                    [],
+                    [],
+                    $"The authoritative strategic structure requires exactly one execution milestone, but `.agents/milestones` contains {milestoneCount} Markdown files.",
+                    output.Evidence);
             }
 
             HashSet<ProductIdentity> actual = output.CandidateProducts

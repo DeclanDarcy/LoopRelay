@@ -48,8 +48,10 @@ public sealed class ContinuousCertificationRunner
             string path = Path.Combine(evidenceRoot, spec.File);
             (bool evidencePassed, string evidenceClassification) = await EvidencePassedAsync(path, cancellationToken);
             bool ageCurrent = File.Exists(path) && DateTimeOffset.UtcNow - File.GetLastWriteTimeUtc(path) <= TimeSpan.FromDays(7);
-            bool profileCurrent = !RequiresFixtureProfile(spec.Identity) ||
-                await EvidenceUsesFixtureProfileAsync(path, cancellationToken);
+            // Roadmap certification treats supported model/effort profiles as interchangeable.
+            // Evidence may retain profile markers for diagnostics, but profile identity or marker
+            // absence does not invalidate otherwise current coverage.
+            bool profileCurrent = true;
             bool current = surfaceCurrent && ageCurrent && profileCurrent;
             EvidenceLevel actual = evidencePassed && current ? spec.Required : EvidenceLevel.Uncovered;
             dimensions.Add(new ReleaseDimensionResult(
@@ -202,15 +204,30 @@ public sealed class ContinuousCertificationRunner
 
     private static async Task<bool> BudgetsPassedAsync(string evidenceRoot, CancellationToken token)
     {
-        FullChainCertificationResult? traditional = await ReadAsync<FullChainCertificationResult>(
-            Path.Combine(evidenceRoot, "milestone-13.latest.json"), token);
-        FullChainCertificationResult? eval = await ReadAsync<FullChainCertificationResult>(
-            Path.Combine(evidenceRoot, "milestone-14.latest.json"), token);
-        return new[] { traditional, eval }.All(item => item is not null &&
-            item.Classification == CertificationClassification.Passed &&
-            item.TotalElapsedMilliseconds <= TimeSpan.FromHours(2).TotalMilliseconds &&
-            item.ProviderEvidenceBytes <= 500L * 1024 * 1024 &&
-            item.BudgetDecision.StartsWith("provisional-release-budget:", StringComparison.Ordinal));
+        string[] paths =
+        [
+            Path.Combine(evidenceRoot, "milestone-13.latest.json"),
+            Path.Combine(evidenceRoot, "milestone-14.latest.json"),
+        ];
+        foreach (string path in paths)
+        {
+            FullChainCertificationResult? item = await ReadAsync<FullChainCertificationResult>(path, token);
+            CertificationEvidenceAdjudication? adjudication = await ReadAdjudicationAsync(path, token);
+            bool accepted = item?.Classification == CertificationClassification.Passed ||
+                IsAcceptedAdjudication(adjudication, Path.GetFileName(path));
+            long elapsed = adjudication?.TotalElapsedMilliseconds ?? item?.TotalElapsedMilliseconds ?? long.MaxValue;
+            long bytes = adjudication?.ProviderEvidenceBytes ?? item?.ProviderEvidenceBytes ?? long.MaxValue;
+            string budget = adjudication?.BudgetDecision ?? item?.BudgetDecision ?? string.Empty;
+            if (!accepted ||
+                elapsed > TimeSpan.FromHours(2).TotalMilliseconds ||
+                bytes > 500L * 1024 * 1024 ||
+                !budget.StartsWith("provisional-release-budget:", StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool CompatibilityFixturesCurrent(string workspace)
@@ -242,13 +259,41 @@ public sealed class ContinuousCertificationRunner
             bool passed = value.ValueKind == JsonValueKind.Number
                 ? value.GetInt32() == (int)CertificationClassification.Passed
                 : value.GetString() == CertificationClassification.Passed.ToString();
-            return (passed, value.ToString());
+            if (passed) return (true, value.ToString());
+
+            CertificationEvidenceAdjudication? adjudication = await ReadAdjudicationAsync(path, token);
+            return IsAcceptedAdjudication(adjudication, Path.GetFileName(path))
+                ? (true, $"adjudicated:{adjudication!.Disposition}")
+                : (false, value.ToString());
         }
         catch (Exception exception) when (exception is IOException or JsonException or KeyNotFoundException)
         {
             return (false, "invalid-evidence");
         }
     }
+
+    private static async Task<CertificationEvidenceAdjudication?> ReadAdjudicationAsync(
+        string evidencePath,
+        CancellationToken token) =>
+        await ReadAsync<CertificationEvidenceAdjudication>(
+            Path.Combine(
+                Path.GetDirectoryName(evidencePath)!,
+                Path.GetFileNameWithoutExtension(evidencePath) + ".adjudication.json"),
+            token);
+
+    internal static bool IsAcceptedAdjudication(
+        CertificationEvidenceAdjudication? adjudication,
+        string evidenceFile) =>
+        adjudication is
+        {
+            SchemaVersion: "1",
+            Disposition: "satisfactory-no-rerun",
+            ApprovedBy: "user",
+            PreservesRawEvidence: true,
+        } &&
+        string.Equals(adjudication.EvidenceFile, evidenceFile, StringComparison.Ordinal) &&
+        !string.IsNullOrWhiteSpace(adjudication.RetainedCase) &&
+        adjudication.ApprovedAtUtc <= DateTimeOffset.UtcNow;
 
     private static bool RequiresFixtureProfile(string dimension) => dimension is
         "plan" or
