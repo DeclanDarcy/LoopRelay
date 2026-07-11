@@ -13,6 +13,7 @@ public enum WorkflowStopReason
     DirtyInputSurface,
     UnversionedInputSurface,
     StorageUnusable,
+    MissingRuntimePrerequisite,
     Waiting,
     Cancelled,
     Failed,

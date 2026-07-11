@@ -1018,6 +1018,8 @@ public sealed class RoadmapFailurePersistenceTests
 
     private sealed class ThrowingAgentRuntime(Exception exception) : IAgentRuntime
     {
+        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
         public Task<IAgentSession> OpenSessionAsync(AgentSessionSpec spec, CancellationToken cancellationToken = default) =>
             throw exception;
 

@@ -440,6 +440,8 @@ public sealed class RoadmapStateMachineSelectionTests
         int mutateAfterOneShotCall,
         Action mutate) : IAgentRuntime
     {
+        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
         private bool mutated;
 
         public int OneShotCalls => inner.OneShotCalls;

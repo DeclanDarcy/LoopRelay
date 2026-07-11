@@ -22,7 +22,8 @@ internal sealed class GatedAgentSession(
     string repoName,
     string workingDirectory,
     DateTimeOffset _openedAtUtc,
-    InputWaitObservationStore? _inputWaitObservations = null) : IAgentSession
+    InputWaitObservationStore? _inputWaitObservations = null,
+    bool _retryOnUsageLimit = true) : IAgentSession
 {
     /// <summary>Wait-and-retry attempts per logical turn before the failure propagates. Covers cascading
     /// windows (a 5h reset followed by a weekly limit) without masking a persistently broken codex. Lives
@@ -57,7 +58,9 @@ internal sealed class GatedAgentSession(
                 _inputWaitObservations?.Take(_inner.SessionId, result.TurnIndex),
                 cancellationToken);
 
-            UsageLimitHit? hit = _usageLimit.Detect(result);
+            // Policy runtime.usageLimitWaitRetry=false keeps telemetry recording but surfaces
+            // the usage-limit failure immediately instead of waiting out the advertised reset.
+            UsageLimitHit? hit = _retryOnUsageLimit ? _usageLimit.Detect(result) : null;
             if (hit is null)
             {
                 break;

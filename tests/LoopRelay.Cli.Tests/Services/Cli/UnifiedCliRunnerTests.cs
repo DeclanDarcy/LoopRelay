@@ -3,6 +3,7 @@ using LoopRelay.Agents.Services.Process;
 using LoopRelay.Cli.Services.Cli;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Infrastructure.Services.Diagnostics;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
@@ -26,6 +27,7 @@ public sealed class UnifiedCliRunnerTests
     [InlineData(WorkflowStopReason.DirtyInputSurface, 4)]
     [InlineData(WorkflowStopReason.UnversionedInputSurface, 4)]
     [InlineData(WorkflowStopReason.StorageUnusable, 4)]
+    [InlineData(WorkflowStopReason.MissingRuntimePrerequisite, 4)]
     [InlineData(WorkflowStopReason.Ambiguous, 4)]
     [InlineData(WorkflowStopReason.NoEligibleTransition, 4)]
     [InlineData(WorkflowStopReason.Cancelled, 130)]
@@ -34,6 +36,51 @@ public sealed class UnifiedCliRunnerTests
         int expected)
     {
         Assert.Equal(expected, UnifiedCliRunner.ExitCodeFor(stopReason));
+    }
+
+    [Fact]
+    public async Task RunAsync_aborts_with_typed_outcome_when_a_runtime_prerequisite_is_missing()
+    {
+        // M7: a production run inspects the provider's runtime prerequisites before any agent
+        // launches; an Error diagnostic aborts with the specific MissingRuntimePrerequisite
+        // outcome (exit 4) instead of the raw resolver exception at the first send, and the
+        // inspection is appended as an append-only fact.
+        Repository repository = CreateRepository();
+        var invocation = new UnifiedCliInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        composition.ProductionRuntime = true;
+        composition.RuntimePrerequisiteDoctor = new RuntimePrerequisiteDoctor(_ => null, _ => false);
+        var runner = new UnifiedCliRunner(composition, output, error);
+
+        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(4, exitCode);
+        Assert.Contains("Stop reason: MissingRuntimePrerequisite", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("CODEX_EXECUTABLE is not set.", error.ToString(), StringComparison.Ordinal);
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        CanonicalRuntimePrerequisiteRecord check = Assert.Single(await store.ReadRuntimePrerequisitesAsync());
+        Assert.StartsWith("pre_", check.PrerequisiteCheckId, StringComparison.Ordinal);
+        Assert.Null(check.RunId);
+        Assert.Contains("runtime.codex_executable.missing", check.DiagnosticsJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Non_production_compositions_have_no_runtime_prerequisites_to_inspect()
+    {
+        // Injected runtimes have no provider prerequisites: the inspection returns nothing and
+        // appends no fact, so unit-test compositions never gate on the machine's environment.
+        Repository repository = CreateRepository();
+        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        composition.RuntimePrerequisiteDoctor = new RuntimePrerequisiteDoctor(_ => null, _ => false);
+
+        Assert.Empty(await composition.InspectRuntimePrerequisitesAsync(CancellationToken.None));
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        Assert.Empty(await store.ReadRuntimePrerequisitesAsync());
     }
 
     [Fact]

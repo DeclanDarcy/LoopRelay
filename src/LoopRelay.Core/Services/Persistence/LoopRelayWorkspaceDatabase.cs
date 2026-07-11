@@ -10,7 +10,7 @@ namespace LoopRelay.Core.Services.Persistence;
 /// </summary>
 public static class LoopRelayWorkspaceDatabase
 {
-    public const int CurrentSchemaVersion = 8;
+    public const int CurrentSchemaVersion = 9;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public static string Resolve(Repository repository)
@@ -82,6 +82,19 @@ public static class LoopRelayWorkspaceDatabase
                 await ExecuteAsync(
                     connection,
                     $"ALTER TABLE agent_sessions ADD COLUMN {column} text;",
+                    cancellationToken);
+            }
+        }
+
+        // The v9 turn evidence columns are additive and nullable: pre-v9 turns keep null
+        // state/usage/diagnosis evidence, and the ALTERs never rewrite existing fact rows.
+        foreach ((string column, string type) in V9TurnEvidenceColumns)
+        {
+            if (!await ColumnExistsAsync(connection, "agent_turns", column, cancellationToken))
+            {
+                await ExecuteAsync(
+                    connection,
+                    $"ALTER TABLE agent_turns ADD COLUMN {column} {type};",
                     cancellationToken);
             }
         }
@@ -182,6 +195,17 @@ public static class LoopRelayWorkspaceDatabase
         ("read_receipts", "transition_run_id"),
         ("evaluation_warnings", "transition_run_id"),
         ("canonical_gate_evaluations", "transition_run_id"),
+    ];
+
+    private static readonly (string Column, string Type)[] V9TurnEvidenceColumns =
+    [
+        ("state", "text"),
+        ("prompt_sha256", "text"),
+        ("prompt_tokens", "integer"),
+        ("output_tokens", "integer"),
+        ("cached_input_tokens", "integer"),
+        ("diagnostics_kind", "text"),
+        ("diagnostics", "text"),
     ];
 
     private static async Task<bool> ColumnExistsAsync(
@@ -624,6 +648,13 @@ public static class LoopRelayWorkspaceDatabase
             session_id text not null,
             turn_index integer not null,
             recorded_at text not null,
+            state text,
+            prompt_sha256 text,
+            prompt_tokens integer,
+            output_tokens integer,
+            cached_input_tokens integer,
+            diagnostics_kind text,
+            diagnostics text,
             unique(session_id, turn_index)
         );
 
@@ -677,6 +708,15 @@ public static class LoopRelayWorkspaceDatabase
         );
 
         CREATE INDEX IF NOT EXISTS idx_canonical_rendered_prompts_transition ON canonical_rendered_prompts(transition_run_id);
+
+        CREATE TABLE IF NOT EXISTS canonical_runtime_prerequisites(
+            prerequisite_check_id text primary key,
+            run_id text,
+            checked_at text not null,
+            diagnostics_json text not null
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_canonical_runtime_prerequisites_run ON canonical_runtime_prerequisites(run_id);
 
         UPDATE canonical_workflow_states SET state = 'Resumable' WHERE state = 'Blocked';
         UPDATE canonical_workflow_states SET outcome = 'MissingRequiredInput' WHERE outcome = 'Blocked';

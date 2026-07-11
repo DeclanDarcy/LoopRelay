@@ -7,6 +7,11 @@
     },
     "decisions": {
       "sessionResume": true
+    },
+    "runtime": {
+      "sessionTelemetry": true,
+      "usageLimitWaitRetry": true,
+      "inputWaitReporting": true
     }
   },
   "permissions": {

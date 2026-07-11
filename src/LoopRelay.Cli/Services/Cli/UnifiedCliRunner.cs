@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Infrastructure.Models.Diagnostics;
+using LoopRelay.Infrastructure.Primitives.Diagnostics;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
@@ -66,6 +68,24 @@ internal sealed class UnifiedCliRunner(
             return 2;
         }
 
+        // M7: runtime prerequisites are inspected before any agent launches — an Error aborts
+        // with the typed MissingRuntimePrerequisite outcome instead of the raw resolver
+        // exception the first send would otherwise throw. Only the production composition
+        // inspects: injected runtimes have no provider prerequisites.
+        IReadOnlyList<RuntimeDiagnostic> runtimeDiagnostics =
+            await _composition.InspectRuntimePrerequisitesAsync(cancellationToken);
+        foreach (RuntimeDiagnostic diagnostic in runtimeDiagnostics)
+        {
+            TextWriter target = diagnostic.Severity == RuntimeDiagnosticSeverity.Error ? _error : _output;
+            target.WriteLine($"Runtime prerequisite [{diagnostic.Severity}] {diagnostic.Id}: {diagnostic.Message}");
+        }
+
+        if (runtimeDiagnostics.Any(diagnostic => diagnostic.Severity == RuntimeDiagnosticSeverity.Error))
+        {
+            _output.WriteLine($"Stop reason: {WorkflowStopReason.MissingRuntimePrerequisite}");
+            return ExitCodeFor(WorkflowStopReason.MissingRuntimePrerequisite);
+        }
+
         return await RunWorkflowAsync(invocation, observation, cancellationToken);
     }
 
@@ -107,6 +127,7 @@ internal sealed class UnifiedCliRunner(
             WorkflowStopReason.DirtyInputSurface => 4,
             WorkflowStopReason.UnversionedInputSurface => 4,
             WorkflowStopReason.StorageUnusable => 4,
+            WorkflowStopReason.MissingRuntimePrerequisite => 4,
             WorkflowStopReason.Ambiguous => 4,
             WorkflowStopReason.NoEligibleTransition => 4,
             WorkflowStopReason.Cancelled => 130,

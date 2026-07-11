@@ -53,15 +53,21 @@ internal sealed class UsageLimitDetector(
     private static readonly string[] FullFormats = ["MMM d, yyyy h:mm tt", "MMMM d, yyyy h:mm tt"];
     private static readonly string[] TimeOnlyFormats = ["h:mm tt", "h tt"];
 
+    /// <summary>The single usage-limit failure predicate — shared with the gateway's turn-evidence
+    /// diagnosis so the retry seam and the recorded diagnostics_kind cannot drift apart.</summary>
+    internal static bool IsUsageLimitFailure(AgentTurnResult result) =>
+        result.State == AgentTurnState.Failed
+        && result.Diagnostics is { } diagnostics
+        && diagnostics.Contains("hit your usage limit", StringComparison.OrdinalIgnoreCase);
+
     public UsageLimitHit? Detect(AgentTurnResult result)
     {
-        if (result.State != AgentTurnState.Failed
-            || result.Diagnostics is not { } diagnostics
-            || !diagnostics.Contains("hit your usage limit", StringComparison.OrdinalIgnoreCase))
+        if (!IsUsageLimitFailure(result))
         {
             return null;
         }
 
+        string diagnostics = result.Diagnostics!;
         if (!TryParseRetryAt(diagnostics, out DateTimeOffset retryAt))
         {
             return new UsageLimitHit(FallbackWait, RetryAt: null);

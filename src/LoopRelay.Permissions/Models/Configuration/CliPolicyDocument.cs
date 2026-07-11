@@ -10,7 +10,10 @@ public sealed record CliPolicyDocument(
     int? MaxUnboundedContinuationSteps,
     int? MaxNoChangesCommits,
     int? OperationalContextGrowthWarningStreak,
-    bool? DecisionSessionResume)
+    bool? DecisionSessionResume,
+    bool? SessionTelemetry,
+    bool? UsageLimitWaitRetry,
+    bool? InputWaitReporting)
 {
-    public static CliPolicyDocument Empty { get; } = new(null, null, null, null);
+    public static CliPolicyDocument Empty { get; } = new(null, null, null, null, null, null, null);
 }

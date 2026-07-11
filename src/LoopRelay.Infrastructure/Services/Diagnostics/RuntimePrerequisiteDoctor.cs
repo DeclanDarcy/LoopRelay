@@ -3,18 +3,33 @@ using LoopRelay.Infrastructure.Primitives.Diagnostics;
 
 namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
+/// <summary>
+/// Inspects the runtime prerequisites of the sole supported provider (D5: Codex) before any
+/// agent launches: the executable the launcher will resolve, and the CODEX_HOME the rollout and
+/// resume surfaces read. Wired at the unified run entry (M7): Error diagnostics abort the run
+/// with the typed MissingRuntimePrerequisite outcome before any transition executes, replacing
+/// the late raw exception the executable resolver would otherwise throw at the first send.
+/// Policy-owned environment variables (LoopRelay_DECISION_RESUME, LoopRelay_SESSION_LOG) are
+/// deliberately NOT inspected here — the policy resolver validates them and rejects garbage, so
+/// a second validator would only drift.
+/// </summary>
 public sealed class RuntimePrerequisiteDoctor(
-    Func<string, string?>? _getEnvironmentVariable = null,
-    Func<string, bool>? _fileExists = null)
+    Func<string, string?>? getEnvironmentVariable = null,
+    Func<string, bool>? fileExists = null)
 {
     public const string CodexExecutableVariable = "CODEX_EXECUTABLE";
-    public const string DecisionResumeVariable = "LoopRelay_DECISION_RESUME";
+    public const string CodexHomeVariable = "CODEX_HOME";
+
+    private readonly Func<string, string?> _getEnvironmentVariable =
+        getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
+
+    private readonly Func<string, bool> _fileExists = fileExists ?? File.Exists;
 
     public IReadOnlyList<RuntimeDiagnostic> Inspect()
     {
         var diagnostics = new List<RuntimeDiagnostic>();
         InspectCodexExecutable(diagnostics);
-        InspectDecisionResume(diagnostics);
+        InspectCodexHome(diagnostics);
         return diagnostics;
     }
 
@@ -39,34 +54,18 @@ public sealed class RuntimePrerequisiteDoctor(
         }
     }
 
-    private void InspectDecisionResume(List<RuntimeDiagnostic> diagnostics)
+    private void InspectCodexHome(List<RuntimeDiagnostic> diagnostics)
     {
-        string? value = _getEnvironmentVariable(DecisionResumeVariable);
-        if (string.IsNullOrWhiteSpace(value))
+        // Informational only: sessions run without it (codex falls back to ~/.codex), but the
+        // rollout-log telemetry surface reads it, so an unset value is worth surfacing.
+        if (string.IsNullOrWhiteSpace(_getEnvironmentVariable(CodexHomeVariable)))
         {
             diagnostics.Add(new RuntimeDiagnostic(
-                "runtime.decision_resume.default",
+                "runtime.codex_home.default",
                 RuntimeDiagnosticSeverity.Info,
-                $"{DecisionResumeVariable} is not set; decision resume remains enabled by default."));
-            return;
+                $"{CodexHomeVariable} is not set; codex session rollouts resolve under the user profile default."));
         }
-
-        if (IsBooleanFlag(value))
-        {
-            return;
-        }
-
-        diagnostics.Add(new RuntimeDiagnostic(
-            "runtime.decision_resume.invalid",
-            RuntimeDiagnosticSeverity.Warning,
-            $"{DecisionResumeVariable} should be 0, 1, false, or true."));
     }
-
-    private static bool IsBooleanFlag(string value) =>
-        string.Equals(value, "0", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
     private static bool LooksLikePath(string value) =>
         value.Contains(Path.DirectorySeparatorChar)

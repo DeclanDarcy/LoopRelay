@@ -170,13 +170,12 @@ public sealed class NonImplementationInsightSynthesizer
             uncertainPayload.Add(await EntryPayloadAsync(entry));
         }
 
+        // The payload is pure data (M7/B4): the review-support and output instructions live in
+        // the SynthesizeNonImplementationInsights template, so the template source hash covers
+        // every instruction the agent receives.
         var payload = new NonImplementationInsightSynthesisPromptPayload(
-            ReviewSupportOnly:
-                "This synthesis supports human review only. It must not authorize keeping, deleting, retaining, promoting, committing, pushing, or otherwise mutating any source file.",
             ConfirmedNonImplementationEntries: confirmedPayload,
-            SemanticUncertaintyEntries: uncertainPayload,
-            RequiredOutput:
-                "Return compact free-form Markdown only. Cite every factual point with source path and ledger entry ID. Put uncertain entries only under a separate 'Uncertain, Not Synthesized As Fact' section if they are useful.");
+            SemanticUncertaintyEntries: uncertainPayload);
 
         return JsonSerializer.Serialize(payload, JsonOptions);
     }
@@ -324,10 +323,8 @@ public sealed class NonImplementationInsightSynthesizer
         IReadOnlyList<NonImplementationInsightSynthesisSource> SourceEntries);
 
     private sealed record NonImplementationInsightSynthesisPromptPayload(
-        string ReviewSupportOnly,
         IReadOnlyList<NonImplementationInsightSynthesisEntryPayload> ConfirmedNonImplementationEntries,
-        IReadOnlyList<NonImplementationInsightSynthesisEntryPayload> SemanticUncertaintyEntries,
-        string RequiredOutput);
+        IReadOnlyList<NonImplementationInsightSynthesisEntryPayload> SemanticUncertaintyEntries);
 
     private sealed record NonImplementationInsightSynthesisEntryPayload(
         string EntryId,

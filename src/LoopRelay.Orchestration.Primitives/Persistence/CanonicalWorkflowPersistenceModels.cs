@@ -168,8 +168,9 @@ public sealed record CanonicalRenderedPromptRecord(
     string? TurnId = null);
 
 // Effort and Sandbox record the session spec's declared profiles (identifier when one is set,
-// otherwise the level name) so every session's evidence carries the effort it ran with. The
-// provider wire format and full effective specification are M7 Runtime Authority scope.
+// otherwise the level name) so every session's evidence carries the effort it ran with.
+// Provider comes from the runtime's capability declaration (M7), recorded before the first turn
+// so every session's effective specification is evidence ahead of launch.
 public sealed record AgentSessionRecord(
     string SessionId,
     string? AttemptId,
@@ -183,11 +184,31 @@ public sealed record AgentSessionRecord(
     string? Effort = null,
     string? Sandbox = null);
 
+// The v9 (M7) trailing fields carry the turn's normalized evidence: terminal state, the sha256
+// of the exact transport text sent (joins the rendered-prompt fact), token usage, and the typed
+// diagnosis — provider diagnostic strings are retained verbatim as evidence, never as a domain
+// classifier. Pre-v9 turns read back with nulls.
 public sealed record AgentTurnRecord(
     string TurnId,
     string SessionId,
     int TurnIndex,
-    DateTimeOffset RecordedAt);
+    DateTimeOffset RecordedAt,
+    string? State = null,
+    string? PromptSha256 = null,
+    long? PromptTokens = null,
+    long? OutputTokens = null,
+    long? CachedInputTokens = null,
+    string? DiagnosticsKind = null,
+    string? Diagnostics = null);
+
+// One runtime prerequisite inspection (M7): the doctor's typed diagnostics serialized as
+// evidence at run start, before any transition executes. RunId is null when the inspection ran
+// outside a recorded run.
+public sealed record CanonicalRuntimePrerequisiteRecord(
+    string PrerequisiteCheckId,
+    string? RunId,
+    DateTimeOffset CheckedAt,
+    string DiagnosticsJson);
 
 public sealed record CanonicalReadReceiptFile(
     string Path,

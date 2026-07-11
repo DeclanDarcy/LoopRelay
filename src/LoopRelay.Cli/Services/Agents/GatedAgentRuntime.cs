@@ -22,15 +22,18 @@ internal sealed class GatedAgentRuntime(
     ISessionTelemetryRecorder _recorder,
     IClock _clock,
     string repoName,
-    InputWaitObservationStore? _inputWaitObservations = null) : IAgentRuntime
+    InputWaitObservationStore? _inputWaitObservations = null,
+    bool _retryOnUsageLimit = true) : IAgentRuntime
 {
+    public AgentRuntimeCapabilities Capabilities => _inner.Capabilities;
+
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec, CancellationToken cancellationToken = default)
     {
         IAgentSession session = await _inner.OpenSessionAsync(spec, cancellationToken);
         return new GatedAgentSession(
             session, _usageLimit, _recorder, repoName, spec.WorkingDirectory ?? string.Empty, _clock.UtcNow,
-            _inputWaitObservations);
+            _inputWaitObservations, _retryOnUsageLimit);
     }
 
     public async Task<AgentTurnResult> RunOneShotAsync(

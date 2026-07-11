@@ -1,3 +1,4 @@
+using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Sessions;
@@ -112,6 +113,36 @@ public sealed class UnifiedCliCompositionTests
                 CliPolicyDocument.Empty,
                 "settings:test",
                 UnifiedCliComposition.CombineInvocationOverrides(null, _ => envValue),
+                PermissionPolicyFactory.Minimum);
+    }
+
+    [Fact]
+    public void Session_log_environment_variable_flows_through_the_invocation_layer()
+    {
+        // M7: LoopRelay_SESSION_LOG becomes an ambient invocation-layer input for
+        // runtime.sessionTelemetry. Its old semantics were "anything but 0/false enables";
+        // the raw value now flows through resolver validation, so a garbage value rejects
+        // loudly instead of silently enabling telemetry.
+        PolicyOverride telemetry = Assert.Single(
+            UnifiedCliComposition.CombineInvocationOverrides(
+                null,
+                name => name == "LoopRelay_SESSION_LOG" ? "0" : null));
+        Assert.Equal(OperationalPolicyResolver.SessionTelemetryKey, telemetry.Key);
+        Assert.Equal("env:LoopRelay_SESSION_LOG", telemetry.Origin);
+        Assert.False(telemetry.IsExplicit);
+
+        Assert.False(ResolveWithSessionLog("0").SessionTelemetry);
+        Assert.False(ResolveWithSessionLog("false").SessionTelemetry);
+        Assert.True(ResolveWithSessionLog("1").SessionTelemetry);
+        Assert.Throws<PolicyResolutionException>(() => ResolveWithSessionLog("verbose"));
+
+        static ResolvedOperationalPolicy ResolveWithSessionLog(string envValue) =>
+            OperationalPolicyResolver.Resolve(
+                CliPolicyDocument.Empty,
+                "settings:test",
+                UnifiedCliComposition.CombineInvocationOverrides(
+                    null,
+                    name => name == "LoopRelay_SESSION_LOG" ? envValue : null),
                 PermissionPolicyFactory.Minimum);
     }
 
@@ -1406,7 +1437,9 @@ public sealed class UnifiedCliCompositionTests
         var store = new CanonicalWorkflowPersistenceStore(repository);
         AgentSessionRecord session = Assert.Single(await store.ReadAgentSessionsAsync());
         Assert.StartsWith("ses_", session.SessionId, StringComparison.Ordinal);
-        Assert.Equal("codex", session.Provider);
+        // Provider identity comes from the runtime's capability declaration (M7): for the
+        // injected fake, the fake IS the provider this evidence describes.
+        Assert.Equal("test", session.Provider);
         Assert.Equal(SessionRole.OperationalExecution.ToString(), session.Role);
         Assert.Null(session.ProviderThreadId);
         Assert.True(Guid.TryParse(session.LegacySessionGuid, out Guid legacyGuid));
@@ -1424,6 +1457,80 @@ public sealed class UnifiedCliCompositionTests
         Assert.StartsWith("turn_", turn.TurnId, StringComparison.Ordinal);
         Assert.Equal(session.SessionId, turn.SessionId);
         Assert.Equal(1, turn.TurnIndex);
+        // M7 turn evidence: terminal state, usage, and the sha of the exact transport text.
+        Assert.Equal(AgentTurnState.Completed.ToString(), turn.State);
+        Assert.NotNull(turn.PromptSha256);
+        Assert.NotNull(turn.PromptTokens);
+        Assert.NotNull(turn.OutputTokens);
+        Assert.Null(turn.DiagnosticsKind);
+        Assert.Null(turn.Diagnostics);
+
+        // M7 gateway capture: the rendered-prompt fact is appended at the transport moment —
+        // session/turn linked, and the recorded text is exactly what went on the wire (the
+        // one-shot transport normalization appends the trailing newline before recording).
+        CanonicalRenderedPromptRecord fact = Assert.Single(await store.ReadRenderedPromptsAsync());
+        Assert.Equal(session.SessionId, fact.SessionId);
+        Assert.Equal(turn.TurnId, fact.TurnId);
+        Assert.EndsWith("\n", fact.RenderedText, StringComparison.Ordinal);
+        Assert.Equal(turn.PromptSha256, fact.RenderedSha256);
+        Assert.Equal(inventoryRun.RunId, fact.TransitionRunId);
+    }
+
+    [Fact]
+    public async Task Cancelled_turns_leave_terminal_turn_evidence_instead_of_vanishing_from_the_spine()
+    {
+        // M7: a turn that ends by exception (caller cancellation, transport failure) still
+        // records a terminal turn row — otherwise its rendered fact would claim a send happened
+        // while the turn spine showed nothing.
+        string repo = Directory.CreateTempSubdirectory("cc-cli-unified-cancelled-turn").FullName;
+        await WriteAsync(repo, ".agents/evals/e1.md", "# Eval Intent\n\nEvaluate the capability.");
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = Path.GetFileName(repo),
+            Path = repo,
+        };
+        UnifiedCliComposition composition = UnifiedCliComposition.Create(
+            repository, new CancellingOneShotRuntime());
+
+        TransitionRuntimeResult select = await RunEvalAsync(composition, "Evaluation Foundation", "SelectEvaluationIntent");
+        Assert.Equal(RuntimeOutcomeKind.Completed, select.Outcome);
+        // The executor converts the send's OperationCanceledException into the typed Cancelled
+        // execution result — cancellation never collapses into generic failure.
+        TransitionRuntimeResult cancelled = await RunEvalAsync(
+            composition, "Dependency Inventory", "CreateEvalDependencyInventory");
+        Assert.Equal(RuntimeOutcomeKind.Cancelled, cancelled.Outcome);
+
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        AgentSessionRecord session = Assert.Single(await store.ReadAgentSessionsAsync());
+        Assert.NotNull(session.CompletedAt);
+        AgentTurnRecord turn = Assert.Single(await store.ReadAgentTurnsAsync());
+        Assert.Equal(session.SessionId, turn.SessionId);
+        Assert.Equal("Canceled", turn.State);
+        Assert.Equal("Cancelled", turn.DiagnosticsKind);
+        Assert.Equal("cancelled mid-send", turn.Diagnostics);
+        CanonicalRenderedPromptRecord fact = Assert.Single(await store.ReadRenderedPromptsAsync());
+        Assert.Equal(turn.TurnId, fact.TurnId);
+        Assert.Equal(turn.PromptSha256, fact.RenderedSha256);
+    }
+
+    private sealed class CancellingOneShotRuntime : IAgentRuntime
+    {
+        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
+        public Task<IAgentSession> OpenSessionAsync(
+            AgentSessionSpec spec,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This fake only runs one-shots.");
+
+        public Task<AgentTurnResult> RunOneShotAsync(
+            AgentSessionSpec spec,
+            string prompt,
+            Func<AgentStreamChunk, Task>? onChunk = null,
+            CancellationToken cancellationToken = default) =>
+            throw new OperationCanceledException("cancelled mid-send");
+
+        public ValueTask CloseSessionAsync(IAgentSession session) => ValueTask.CompletedTask;
     }
 
     private static Task<TransitionRuntimeResult> RunEvalAsync(

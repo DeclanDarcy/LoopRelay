@@ -183,6 +183,8 @@ public sealed class TransitionJournalTests
 
     private sealed class MutatingRuntime(Action onRuntimePrompt, params AgentTurnResult[] results) : IAgentRuntime
     {
+        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
         private readonly Queue<AgentTurnResult> results = new(results);
 
         public Task<IAgentSession> OpenSessionAsync(AgentSessionSpec spec, CancellationToken cancellationToken = default) =>

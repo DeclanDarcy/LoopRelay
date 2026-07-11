@@ -683,6 +683,151 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
     }
 
     [Fact]
+    public async Task Agent_turns_append_and_read_back_with_v9_evidence_fields()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        DateTimeOffset now = new(2026, 7, 11, 11, 0, 0, TimeSpan.Zero);
+        var completed = new AgentTurnRecord(
+            "turn_evidence_1",
+            "ses_evidence_1",
+            0,
+            now,
+            "Completed",
+            "sha-of-transport-text",
+            1200,
+            340,
+            800,
+            null,
+            null);
+        var failed = new AgentTurnRecord(
+            "turn_evidence_2",
+            "ses_evidence_1",
+            1,
+            now.AddMinutes(1),
+            "Failed",
+            "sha-of-second-send",
+            10,
+            0,
+            0,
+            "UsageLimit",
+            "You've hit your usage limit. Try again at Jul 12, 2026 9:13 AM.");
+
+        await store.AppendAgentTurnAsync(completed);
+        await store.AppendAgentTurnAsync(failed);
+
+        IReadOnlyList<AgentTurnRecord> turns = await store.ReadAgentTurnsAsync();
+
+        Assert.Equal(2, turns.Count);
+        AgentTurnRecord readCompleted = turns[0];
+        Assert.Equal("turn_evidence_1", readCompleted.TurnId);
+        Assert.Equal("Completed", readCompleted.State);
+        Assert.Equal("sha-of-transport-text", readCompleted.PromptSha256);
+        Assert.Equal(1200L, readCompleted.PromptTokens);
+        Assert.Equal(340L, readCompleted.OutputTokens);
+        Assert.Equal(800L, readCompleted.CachedInputTokens);
+        Assert.Null(readCompleted.DiagnosticsKind);
+        Assert.Null(readCompleted.Diagnostics);
+        AgentTurnRecord readFailed = turns[1];
+        Assert.Equal("Failed", readFailed.State);
+        Assert.Equal("UsageLimit", readFailed.DiagnosticsKind);
+        Assert.Equal(failed.Diagnostics, readFailed.Diagnostics);
+    }
+
+    [Fact]
+    public async Task Pre_v9_agent_turns_read_back_with_null_evidence_without_migrating()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '8');
+
+                CREATE TABLE agent_turns(
+                    turn_id text primary key,
+                    session_id text not null,
+                    turn_index integer not null,
+                    recorded_at text not null,
+                    unique(session_id, turn_index)
+                );
+                INSERT INTO agent_turns (turn_id, session_id, turn_index, recorded_at)
+                VALUES ('turn_pre_v9', 'ses_pre_v9', 0, '2026-07-11T10:00:00.0000000Z');
+                """);
+        }
+
+        // Reads open the database read-only and never migrate, so the pre-v9 shape must read
+        // back intact with null evidence rather than crashing on the missing columns.
+        CanonicalWorkflowPersistenceStore store = new(repository);
+
+        AgentTurnRecord turn = Assert.Single(await store.ReadAgentTurnsAsync());
+        Assert.Equal("turn_pre_v9", turn.TurnId);
+        Assert.Null(turn.State);
+        Assert.Null(turn.PromptSha256);
+        Assert.Null(turn.PromptTokens);
+        Assert.Null(turn.DiagnosticsKind);
+    }
+
+    [Fact]
+    public async Task Runtime_prerequisites_append_and_read_back_in_ledger_insertion_order()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        DateTimeOffset now = new(2026, 7, 11, 12, 0, 0, TimeSpan.Zero);
+        // The first-appended record carries a lexically LARGER id and a LATER wall-clock stamp
+        // than the second, so only ledger insertion order (rowid) can return them append-first.
+        var first = new CanonicalRuntimePrerequisiteRecord(
+            "pre_zzzz_appended_first",
+            null,
+            now.AddMinutes(1),
+            """[{"id":"runtime.codex_executable.missing","severity":"Error","message":"CODEX_EXECUTABLE is not set."}]""");
+        var second = new CanonicalRuntimePrerequisiteRecord(
+            "pre_aaaa_appended_second",
+            "run_001",
+            now,
+            "[]");
+
+        await store.AppendRuntimePrerequisiteAsync(first);
+        await store.AppendRuntimePrerequisiteAsync(second);
+
+        IReadOnlyList<CanonicalRuntimePrerequisiteRecord> checks = await store.ReadRuntimePrerequisitesAsync();
+
+        Assert.Equal(2, checks.Count);
+        Assert.Equal(first.PrerequisiteCheckId, checks[0].PrerequisiteCheckId);
+        Assert.Null(checks[0].RunId);
+        Assert.Equal(now.AddMinutes(1), checks[0].CheckedAt);
+        Assert.Equal(first.DiagnosticsJson, checks[0].DiagnosticsJson);
+        Assert.Equal("run_001", checks[1].RunId);
+    }
+
+    [Fact]
+    public async Task Runtime_prerequisite_reads_return_empty_when_database_predates_the_table()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '8');
+                """);
+        }
+
+        CanonicalWorkflowPersistenceStore store = new(repository);
+
+        Assert.Empty(await store.ReadRuntimePrerequisitesAsync());
+    }
+
+    [Fact]
     public async Task Rendered_prompt_reads_return_empty_when_database_predates_the_table()
     {
         Repository repository = CreateRepository();
@@ -784,6 +929,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         "canonical_chain_boundary_events",
         "canonical_policy_resolutions",
         "canonical_rendered_prompts",
+        "canonical_runtime_prerequisites",
         "workspace_identity",
         "runs",
         "workflow_instances",

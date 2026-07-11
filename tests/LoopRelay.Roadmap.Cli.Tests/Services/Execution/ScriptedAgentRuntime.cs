@@ -8,6 +8,8 @@ namespace LoopRelay.Roadmap.Cli.Tests.Services.Execution;
 
 internal sealed class ScriptedAgentRuntime(params AgentTurnResult[] results) : IAgentRuntime
 {
+    public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
     private readonly Queue<AgentTurnResult> results = new(results);
 
     public int OneShotCalls { get; private set; }

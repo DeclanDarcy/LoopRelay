@@ -17,6 +17,9 @@ using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
 using LoopRelay.Cli.Services.Decisions;
 using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Services.Telemetry;
+using LoopRelay.Infrastructure.Models.Diagnostics;
+using LoopRelay.Infrastructure.Services.Diagnostics;
 using LoopRelay.Completion.Abstractions;
 using LoopRelay.Completion.Models.Certification;
 using LoopRelay.Completion.Primitives;
@@ -124,6 +127,15 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
     internal CanonicalWorkflowPersistenceStore Persistence { get; }
 
+    /// <summary>True only for the production composition, which launches the real provider and
+    /// therefore has runtime prerequisites to inspect; injected runtimes have none. Settable
+    /// only by <see cref="CreateProduction"/> and tests exercising the prerequisite gate.</summary>
+    internal bool ProductionRuntime { get; set; }
+
+    /// <summary>The prerequisite inspector, replaceable by tests with one reading a fake
+    /// environment — the default reads the real environment and filesystem.</summary>
+    internal RuntimePrerequisiteDoctor RuntimePrerequisiteDoctor { get; set; } = new();
+
     public static UnifiedCliComposition Create(Repository repository) =>
         CreateCore(repository, agentRuntime: null, processRunner: new ProcessRunner(), provider: null);
 
@@ -147,14 +159,59 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             provider.GetRequiredService<IAgentRuntime>(),
             provider.GetRequiredService<IProcessRunner>(),
             provider,
-            policy);
+            policy,
+            productionRuntime: true);
     }
+
+    /// <summary>M7: inspect the production provider's runtime prerequisites and append the
+    /// inspection as an append-only fact (run identity does not exist yet at this point; the
+    /// fact is ordered against runs by its ledger position). Non-production compositions have
+    /// no provider prerequisites and return no diagnostics.</summary>
+    internal async Task<IReadOnlyList<RuntimeDiagnostic>> InspectRuntimePrerequisitesAsync(
+        CancellationToken cancellationToken)
+    {
+        if (!ProductionRuntime)
+        {
+            return [];
+        }
+
+        IReadOnlyList<RuntimeDiagnostic> diagnostics = RuntimePrerequisiteDoctor.Inspect();
+        try
+        {
+            await Persistence.AppendRuntimePrerequisiteAsync(
+                new CanonicalRuntimePrerequisiteRecord(
+                    CausalUlid.NewId("pre"),
+                    RunId: null,
+                    DateTimeOffset.UtcNow,
+                    JsonSerializer.Serialize(
+                        diagnostics
+                            .Select(diagnostic => new RuntimePrerequisiteDiagnosticJson(
+                                diagnostic.Id,
+                                diagnostic.Severity.ToString(),
+                                diagnostic.Message))
+                            .ToArray(),
+                        PrerequisiteJsonOptions)),
+                CancellationToken.None);
+        }
+        catch
+        {
+            // Prerequisite evidence is best-effort; the console rendering still happens.
+        }
+
+        return diagnostics;
+    }
+
+    private static readonly JsonSerializerOptions PrerequisiteJsonOptions = new(JsonSerializerDefaults.Web);
+
+    private sealed record RuntimePrerequisiteDiagnosticJson(string Id, string Severity, string Message);
 
     // Recognized environment variables are ambient invocation-layer inputs; explicit --policy
     // flags beat them for the same key. The decision-resume kill switch stays functional
     // (LoopRelay_DECISION_RESUME=0 or =false disables resume) but its value now flows through
     // the resolver's validation like any other policy input: a garbage value is rejected
-    // loudly instead of silently enabling resume.
+    // loudly instead of silently enabling resume. LoopRelay_SESSION_LOG gets the same M7
+    // treatment for the reconnected telemetry wrapper: it was previously "anything but 0/false
+    // enables", and now a non-boolean value rejects resolution instead of silently enabling.
     internal static IReadOnlyList<PolicyOverride> CombineInvocationOverrides(
         IReadOnlyList<PolicyOverride>? flagOverrides,
         Func<string, string?>? getEnvironmentVariable = null)
@@ -168,6 +225,16 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 OperationalPolicyResolver.DecisionSessionResumeKey,
                 decisionResume,
                 "env:LoopRelay_DECISION_RESUME",
+                IsExplicit: false));
+        }
+
+        string? sessionTelemetry = getEnvironmentVariable("LoopRelay_SESSION_LOG");
+        if (sessionTelemetry is not null)
+        {
+            overrides.Add(new PolicyOverride(
+                OperationalPolicyResolver.SessionTelemetryKey,
+                sessionTelemetry,
+                "env:LoopRelay_SESSION_LOG",
                 IsExplicit: false));
         }
 
@@ -197,7 +264,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IAgentRuntime? agentRuntime,
         IProcessRunner processRunner,
         ServiceProvider? provider,
-        ResolvedOperationalPolicy? policy = null)
+        ResolvedOperationalPolicy? policy = null,
+        bool productionRuntime = false)
     {
         // Non-production compositions execute under the built-in defaults so every attempt
         // still records one resolved policy identity.
@@ -212,7 +280,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IReadOnlyList<WorkflowDefinition> workflowDefinitions = CanonicalWorkflowDefinitionSketches.CreateAll();
         IReadOnlyList<WorkflowChainDefinition> workflowChains = CanonicalWorkflowDefinitionSketches.CreateChains();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var promptExecutor = new UnifiedPromptExecutor(repository, agentRuntime, processRunner, persistence, policy);
+        var promptExecutor = new UnifiedPromptExecutor(
+            repository, agentRuntime, processRunner, persistence, policy, productionRuntime);
         ITransitionRuntime transitionRuntime = new TransitionRuntime(
             new UnifiedTransitionDefinitionResolver(workflowDefinitions),
             new RepositoryObservationProductResolver(repositoryObserver, repository),
@@ -243,7 +312,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             new ProductTransferEvaluator(),
             boundaryEvidenceWriter,
             new CanonicalWorkflowInstanceRecorder(persistence));
-        return new UnifiedCliComposition(
+        var composition = new UnifiedCliComposition(
             repository,
             storageVerifier,
             repositoryObserver,
@@ -258,6 +327,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             policy,
             provider,
             promptExecutor);
+        composition.ProductionRuntime = productionRuntime;
+        return composition;
     }
 
     public async ValueTask DisposeAsync()
@@ -1260,12 +1331,19 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IAgentRuntime? _agentRuntime,
         IProcessRunner _processRunner,
         CanonicalWorkflowPersistenceStore _persistence,
-        ResolvedOperationalPolicy _policy) : IPromptExecutor, IAsyncDisposable
+        ResolvedOperationalPolicy _policy,
+        bool _productionRuntime = false) : IPromptExecutor, IAsyncDisposable
     {
         private readonly IArtifactStore artifactStore = new FileSystemArtifactStore();
         private readonly ILoopConsole console = new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null);
+        // Real console for the D3 operational wrappers: usage-limit waits and input-wait progress
+        // are user-facing reporting, unlike this class's silent internal console.
+        private readonly ILoopConsole operationalConsole = new ConsoleLoopConsole();
         private readonly SessionSpineRecorder sessionRecorder = new(_persistence);
         private IAgentRuntime? recordingRuntime;
+        // The gateway's deposit slot: the semantic capture for the NEXT transport send. Sends are
+        // sequential within a run (concurrency is a deferred program stance), so one slot suffices.
+        private RenderedPromptCapture? pendingRenderedPrompt;
         private IAgentSession? planAuthoringSession;
         private DecisionSession? executeDecisionSession;
         private IAgentSession? executionSession;
@@ -1280,35 +1358,64 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private PromptExecutionContext CurrentExecutionContext { get; set; } = PromptExecutionContext.Empty;
 
         // Rendered-prompt facts are minted at the SEND site — the point where text actually goes
-        // to an agent — never at the render seam, so a canonical render an executor branch
-        // discards and re-composes is never recorded as an agent-bound prompt. This overload
-        // covers sends of the runtime-rendered text verbatim; the manifest comes from the
-        // execution context the runtime handed over.
-        private async Task TryAppendRenderedPromptAsync(RenderedPrompt prompt) =>
-            await TryAppendRenderedPromptAsync(
+        // to an agent — never at the render seam. Since M7 the send sites DEPOSIT the semantic
+        // capture (identity, template hash, consumed inputs) with the gateway, and the recording
+        // gateway appends the one fact at the actual transport moment, enriched with session/turn
+        // identity and the transport-normalized text. A deposit whose send never happens mints no
+        // fact; a deposit displaced by a later one was never sent and is dropped for the same
+        // reason. This overload covers sends of the runtime-rendered text verbatim; the manifest
+        // comes from the execution context the runtime handed over.
+        private void DepositRenderedPrompt(RenderedPrompt prompt) =>
+            DepositRenderedPrompt(
                 prompt.PromptIdentity,
                 prompt.TemplateSourceHash,
-                prompt.Text,
                 CurrentExecutionContext.ConsumedFiles ?? []);
 
-        private async Task TryAppendRenderedPromptAsync(
+        private void DepositRenderedPrompt(
             string promptIdentity,
             string? templateSourceHash,
-            string renderedText,
-            IReadOnlyList<ConsumedInputFile> consumedInputs)
+            IReadOnlyList<ConsumedInputFile> consumedInputs) =>
+            pendingRenderedPrompt = new RenderedPromptCapture(
+                CurrentExecutionContext.TransitionRunId ?? string.Empty,
+                CurrentExecutionContext.AttemptId,
+                promptIdentity,
+                templateSourceHash,
+                string.Empty,
+                consumedInputs,
+                _policy.PolicyId,
+                DateTimeOffset.UtcNow);
+
+        // Called by the recording gateway at the transport moment: consume the deposited semantic
+        // capture (or synthesize an honest unattributed one) and append the ONE rendered-prompt
+        // fact carrying session/turn identity and the exact transport text. Best-effort: rendered
+        // evidence must never fail execution.
+        private async Task TryAppendGatewayRenderedPromptAsync(
+            string transportText,
+            string role,
+            string? sessionId,
+            string turnId)
         {
+            RenderedPromptCapture? deposit = pendingRenderedPrompt;
+            pendingRenderedPrompt = null;
+            RenderedPromptCapture capture = deposit ?? new RenderedPromptCapture(
+                CurrentExecutionContext.TransitionRunId ?? string.Empty,
+                CurrentExecutionContext.AttemptId,
+                $"gateway/unattributed:{role}",
+                null,
+                string.Empty,
+                [],
+                _policy.PolicyId,
+                DateTimeOffset.UtcNow);
             try
             {
                 await new CanonicalRenderedPromptStore(_persistence).AppendAsync(
-                    new RenderedPromptCapture(
-                        CurrentExecutionContext.TransitionRunId ?? string.Empty,
-                        CurrentExecutionContext.AttemptId,
-                        promptIdentity,
-                        templateSourceHash,
-                        renderedText,
-                        consumedInputs,
-                        _policy.PolicyId,
-                        DateTimeOffset.UtcNow),
+                    capture with
+                    {
+                        RenderedText = transportText,
+                        RenderedAt = DateTimeOffset.UtcNow,
+                        SessionId = sessionId,
+                        TurnId = turnId,
+                    },
                     CancellationToken.None);
             }
             catch
@@ -1324,13 +1431,39 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 .Select(file => ConsumedInputFile.FromContent(file.Path, file.Content!))
                 .ToArray();
 
-        /// <summary>The agent runtime wrapped with best-effort causal-spine recording: one agent_sessions row
-        /// per underlying session open (one-shot or persistent, including sessions opened inside DecisionSession
-        /// and the helper prompt runners), one agent_turns row per completed AgentTurnResult.</summary>
+        // The runner-facing IRenderedPromptStore handed to DecisionSession and the helper prompt
+        // runners: an append is a DEPOSIT the recording gateway consumes at the actual send it
+        // precedes, enriching it with session/turn identity and the transport text. Depositors and
+        // the gateway share one executor, and their sends are sequential within a run.
+        private sealed class GatewayRenderedPromptDeposit(
+            UnifiedPromptExecutor _executor) : IRenderedPromptStore
+        {
+            public Task AppendAsync(RenderedPromptCapture capture, CancellationToken cancellationToken)
+            {
+                _executor.pendingRenderedPrompt = capture;
+                return Task.CompletedTask;
+            }
+        }
+
+        /// <summary>The agent runtime gateway (M7): the D3 operational wrappers composed once at the
+        /// runtime boundary under policy, with best-effort causal-spine recording outermost — one
+        /// agent_sessions row per underlying session open (one-shot or persistent, including opens
+        /// made inside DecisionSession and the helper prompt runners), one agent_turns row per
+        /// completed AgentTurnResult, and one rendered-prompt fact per transport send.</summary>
         private IAgentRuntime? Runtime =>
             _agentRuntime is null
                 ? null
-                : recordingRuntime ??= new RecordingAgentRuntime(_agentRuntime, this);
+                : recordingRuntime ??= new RecordingAgentRuntime(ComposeOperationalRuntime(_agentRuntime), this);
+
+        // D3 (M7): telemetry, usage-limit wait/retry, and input-wait reporting are product
+        // intent, reconnected once at the runtime boundary under the resolved policy — but only
+        // around the real provider: injected runtimes have no provider to operate, so wrapping
+        // them would record telemetry about nothing and render progress no one asked for.
+        private IAgentRuntime ComposeOperationalRuntime(IAgentRuntime runtime) =>
+            _productionRuntime
+                ? OperationalRuntimeComposition.Compose(
+                    runtime, _policy, _repository, _processRunner, operationalConsole)
+                : runtime;
 
         public async Task<PromptExecutionResult> ExecuteAsync(
             WorkflowTransitionDefinition definition,
@@ -1339,6 +1472,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             CurrentExecutionContext = context;
+            // A deposit stranded by an exception between deposit and send must not survive into
+            // the next transition and mis-attribute its first send's fact.
+            pendingRenderedPrompt = null;
 
             if (LocalVerificationTransitions.Supports(definition))
             {
@@ -1459,7 +1595,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             try
             {
-                await TryAppendRenderedPromptAsync(prompt);
+                DepositRenderedPrompt(prompt);
                 AgentTurnResult result = await Runtime!.RunOneShotAsync(
                     AgentSpecs.Operational(_repository, AgentEffortLevel.High, "xhigh"),
                     prompt.Text,
@@ -1565,7 +1701,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             try
             {
                 session = await Runtime!.OpenSessionAsync(AgentSpecs.Review(_repository), cancellationToken);
-                await TryAppendRenderedPromptAsync(prompt);
+                DepositRenderedPrompt(prompt);
                 AgentTurnResult result = await session.RunTurnAsync(
                     prompt.Text,
                     onChunk: null,
@@ -1631,7 +1767,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     Runtime ?? throw new InvalidOperationException("Projection prompt runner requires an agent runtime."),
                     _repository,
                     new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null),
-                    new CanonicalRenderedPromptStore(_persistence),
+                    new GatewayRenderedPromptDeposit(this),
                     _policy.PolicyId,
                     CurrentExecutionContext));
         }
@@ -1676,7 +1812,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 session = await Runtime!.OpenSessionAsync(
                     AgentSpecs.ScopedArtifactOperation(_repository, AgentEffortLevel.High, "xhigh", profile),
                     cancellationToken);
-                await TryAppendRenderedPromptAsync(prompt);
+                DepositRenderedPrompt(prompt);
                 AgentTurnResult result = await session.RunTurnAsync(
                     prompt.Text,
                     onChunk: null,
@@ -1901,7 +2037,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         "RevisePlan requires the warm planning session opened by WriteExecutablePlan.");
                 }
 
-                await TryAppendRenderedPromptAsync(prompt);
+                DepositRenderedPrompt(prompt);
                 AgentTurnResult result = await planAuthoringSession.RunTurnAsync(
                     prompt.Text,
                     onChunk: null,
@@ -1968,7 +2104,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     _projectionService: null,
                     _resumeEnabled: _policy.DecisionSessionResume,
                     _operationalContextGrowthStreakWarningThreshold: _policy.OperationalContextGrowthWarningStreak,
-                    _renderedPromptStore: new CanonicalRenderedPromptStore(_persistence),
+                    _renderedPromptStore: new GatewayRenderedPromptDeposit(this),
                     _policyIdentity: _policy.PolicyId);
                 await executeDecisionSession.RunAsync(
                     cancellationToken,
@@ -2041,10 +2177,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 executionSliceBaseline = await CreateBaselineStore().CapturePreSliceAsync();
 
                 string executionPrompt = ContinueExecution.Render(plan, details, decisions);
-                await TryAppendRenderedPromptAsync(
+                DepositRenderedPrompt(
                     "ContinueExecution",
                     ContinueExecution.SourceHash,
-                    executionPrompt,
                     ConsumedFiles(
                         (OrchestrationArtifactPaths.Plan, plan),
                         (OrchestrationArtifactPaths.Details, details),
@@ -2113,15 +2248,13 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 if (changedPathsAfterExecution.Count > 0)
                 {
                     handoffPrompt = GenerateHandoff.Text;
-                    await TryAppendRenderedPromptAsync(
-                        "GenerateHandoff", GenerateHandoff.SourceHash, handoffPrompt, []);
+                    DepositRenderedPrompt("GenerateHandoff", GenerateHandoff.SourceHash, []);
                 }
                 else
                 {
                     IReadOnlyList<string> unticked = await CreateMilestoneGate().GetUntickedItemsAsync();
                     handoffPrompt = GenerateNoChangesHandoff.Render(string.Join("\n", unticked));
-                    await TryAppendRenderedPromptAsync(
-                        "GenerateNoChangesHandoff", GenerateNoChangesHandoff.SourceHash, handoffPrompt, []);
+                    DepositRenderedPrompt("GenerateNoChangesHandoff", GenerateNoChangesHandoff.SourceHash, []);
                 }
 
                 AgentTurnResult handoff = await executionSession.RunTurnAsync(
@@ -2439,7 +2572,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             var promptRunner = new AgentCompletionPromptRunner(
                 Runtime!,
                 _repository,
-                new CanonicalRenderedPromptStore(_persistence),
+                new GatewayRenderedPromptDeposit(this),
                 _policy.PolicyId,
                 CurrentExecutionContext);
             var archiveService = new CompletedEpicArchiveService(artifactStore, promptRunner, completionObserver);
@@ -2630,7 +2763,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             var runner = new AgentNonImplementationReviewRunner(
                 Runtime!,
                 _repository,
-                new CanonicalRenderedPromptStore(_persistence),
+                new GatewayRenderedPromptDeposit(this),
                 _policy.PolicyId,
                 CurrentExecutionContext);
             return new NonImplementationPostExecutionReviewService(
@@ -2646,7 +2779,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             var runner = new AgentNonImplementationReviewRunner(
                 Runtime!,
                 _repository,
-                new CanonicalRenderedPromptStore(_persistence),
+                new GatewayRenderedPromptDeposit(this),
                 _policy.PolicyId,
                 CurrentExecutionContext);
             return new NonImplementationCompletionReviewService(
@@ -2746,6 +2879,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         {
             public async Task<AgentSessionRecord?> TryBeginSessionAsync(
                 AgentSessionSpec spec,
+                string provider,
                 PromptExecutionContext context,
                 CancellationToken cancellationToken)
             {
@@ -2755,7 +2889,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         AgentSessionIdentity.New().Value,
                         context.AttemptId,
                         null,
-                        "codex",
+                        provider,
                         spec.ResumeThreadId,
                         spec.Role.ToString(),
                         spec.SessionId.Value.ToString("D"),
@@ -2774,8 +2908,52 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             public async Task TryRecordTurnAsync(
                 AgentSessionRecord? session,
+                string turnId,
                 AgentTurnResult result,
+                string promptSha256,
                 CancellationToken cancellationToken)
+            {
+                if (session is null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    // Terminal turn evidence is written even when the caller's token has fired.
+                    await _store.AppendAgentTurnAsync(
+                        new AgentTurnRecord(
+                            turnId,
+                            session.SessionId,
+                            result.TurnIndex,
+                            DateTimeOffset.UtcNow,
+                            result.State.ToString(),
+                            promptSha256,
+                            result.Usage.PromptTokens,
+                            result.Usage.OutputTokens,
+                            result.Usage.CachedInputTokens,
+                            DiagnosisKind(result),
+                            result.Diagnostics),
+                        CancellationToken.None);
+                }
+                catch
+                {
+                    // Duplicate turn indexes (resume edge) and store failures are tolerated silently.
+                }
+            }
+
+            // A turn that ended by exception instead of a provider result (caller cancellation,
+            // transport failure) still records terminal evidence — with CancellationToken.None,
+            // because the caller's token has typically already fired. Index collisions with a
+            // later retry of the same logical turn fall into the same tolerated-duplicate posture
+            // as the resume edge.
+            public async Task TryRecordThrownTurnAsync(
+                AgentSessionRecord? session,
+                string turnId,
+                int turnIndex,
+                bool cancelled,
+                string promptSha256,
+                string exceptionMessage)
             {
                 if (session is null)
                 {
@@ -2786,17 +2964,38 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 {
                     await _store.AppendAgentTurnAsync(
                         new AgentTurnRecord(
-                            TurnIdentity.New().Value,
+                            turnId,
                             session.SessionId,
-                            result.TurnIndex,
-                            DateTimeOffset.UtcNow),
-                        cancellationToken);
+                            turnIndex,
+                            DateTimeOffset.UtcNow,
+                            cancelled ? nameof(AgentTurnState.Canceled) : nameof(AgentTurnState.Failed),
+                            promptSha256,
+                            null,
+                            null,
+                            null,
+                            cancelled ? "Cancelled" : "ProviderFailure",
+                            exceptionMessage),
+                        CancellationToken.None);
                 }
                 catch
                 {
-                    // Duplicate turn indexes (resume edge) and store failures are tolerated silently.
+                    // Duplicate turn indexes and store failures are tolerated silently.
                 }
             }
+
+            // The typed diagnosis the domain may consume (M7): provider diagnostic strings are
+            // retained verbatim in the diagnostics column as evidence, never as the classifier.
+            // The usage-limit predicate is shared with the retry seam so the recorded kind and
+            // the wait/retry behavior cannot drift apart.
+            private static string? DiagnosisKind(AgentTurnResult result) =>
+                result.State switch
+                {
+                    AgentTurnState.Canceled => "Cancelled",
+                    AgentTurnState.Failed => UsageLimitDetector.IsUsageLimitFailure(result)
+                        ? "UsageLimit"
+                        : "ProviderFailure",
+                    _ => null,
+                };
 
             public async Task TryCompleteSessionAsync(
                 AgentSessionRecord? session,
@@ -2832,16 +3031,34 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             IAgentRuntime _inner,
             UnifiedPromptExecutor _executor) : IAgentRuntime
         {
+            public AgentRuntimeCapabilities Capabilities => _inner.Capabilities;
+
             public async Task<IAgentSession> OpenSessionAsync(
                 AgentSessionSpec spec,
                 CancellationToken cancellationToken = default)
             {
-                IAgentSession session = await _inner.OpenSessionAsync(spec, cancellationToken);
+                // Capability negotiation happens at the gateway, before launch (D5/M7): a spec
+                // requiring an undeclared capability is a typed outcome, never a silent fallback.
+                AgentCapabilityNegotiation.EnsureCanOpenSession(_inner.Capabilities, spec);
+
+                // The effective specification is recorded BEFORE the provider launches (the M7
+                // verification brief) — a spawn failure still leaves the attempted launch as
+                // evidence, completed immediately so the record does not read as live.
                 AgentSessionRecord? record = await _executor.sessionRecorder.TryBeginSessionAsync(
                     spec,
+                    _inner.Capabilities.Provider,
                     _executor.CurrentExecutionContext,
                     cancellationToken);
-                return new RecordingAgentSession(session, _executor.sessionRecorder, record);
+                try
+                {
+                    IAgentSession session = await _inner.OpenSessionAsync(spec, cancellationToken);
+                    return new RecordingAgentSession(session, _executor, record);
+                }
+                catch
+                {
+                    await _executor.sessionRecorder.TryCompleteSessionAsync(record, providerThreadId: null);
+                    throw;
+                }
             }
 
             public async Task<AgentTurnResult> RunOneShotAsync(
@@ -2850,15 +3067,48 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 Func<AgentStreamChunk, Task>? onChunk = null,
                 CancellationToken cancellationToken = default)
             {
+                AgentCapabilityNegotiation.EnsureCanRunOneShot(_inner.Capabilities);
+
+                // One-shot transport normalization happens HERE, before the fact is recorded, so
+                // the rendered-prompt fact holds exactly the bytes that go on the wire (the
+                // session's own normalization is then an idempotent no-op).
+                string transportPrompt = AgentPromptTransport.EnsureTrailingNewline(prompt);
                 AgentSessionRecord? record = await _executor.sessionRecorder.TryBeginSessionAsync(
                     spec,
+                    _inner.Capabilities.Provider,
                     _executor.CurrentExecutionContext,
                     cancellationToken);
+                string turnId = TurnIdentity.New().Value;
+                await _executor.TryAppendGatewayRenderedPromptAsync(
+                    transportPrompt,
+                    spec.Role.ToString(),
+                    record?.SessionId,
+                    turnId);
                 try
                 {
-                    AgentTurnResult result = await _inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
-                    await _executor.sessionRecorder.TryRecordTurnAsync(record, result, cancellationToken);
+                    AgentTurnResult result = await _inner.RunOneShotAsync(
+                        spec, transportPrompt, onChunk, cancellationToken);
+                    await _executor.sessionRecorder.TryRecordTurnAsync(
+                        record,
+                        turnId,
+                        result,
+                        ConsumedInputFile.HashContent(transportPrompt),
+                        cancellationToken);
                     return result;
+                }
+                catch (Exception exception)
+                {
+                    // A thrown turn (caller cancellation, transport failure) still leaves turn
+                    // evidence — otherwise cancelled work vanishes from the spine while its
+                    // rendered fact claims a send happened.
+                    await _executor.sessionRecorder.TryRecordThrownTurnAsync(
+                        record,
+                        turnId,
+                        turnIndex: 0,
+                        cancelled: exception is OperationCanceledException,
+                        ConsumedInputFile.HashContent(transportPrompt),
+                        exception.Message);
+                    throw;
                 }
                 finally
                 {
@@ -2881,7 +3131,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
         private sealed class RecordingAgentSession(
             IAgentSession _inner,
-            SessionSpineRecorder _recorder,
+            UnifiedPromptExecutor _executor,
             AgentSessionRecord? _record) : IAgentSession
         {
             public IAgentSession Inner => _inner;
@@ -2907,16 +3157,50 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 Func<AgentStreamChunk, Task>? onChunk = null,
                 CancellationToken cancellationToken = default)
             {
-                AgentTurnResult result = await _inner.RunTurnAsync(prompt, onChunk, cancellationToken);
-                await _recorder.TryRecordTurnAsync(_record, result, cancellationToken);
-                return result;
+                // Persistent turns are framed as JSON-RPC — the prompt is never mutated in
+                // transport, so the fact records it verbatim. The turn id is minted before the
+                // send so the rendered fact and the turn row share identity even when the turn
+                // ends by exception.
+                string turnId = TurnIdentity.New().Value;
+                // The in-flight turn's index: CompletedTurns only increments after completion.
+                int turnIndex = _inner.CompletedTurns;
+                await _executor.TryAppendGatewayRenderedPromptAsync(
+                    prompt,
+                    _inner.Role.ToString(),
+                    _record?.SessionId,
+                    turnId);
+                try
+                {
+                    AgentTurnResult result = await _inner.RunTurnAsync(prompt, onChunk, cancellationToken);
+                    await _executor.sessionRecorder.TryRecordTurnAsync(
+                        _record,
+                        turnId,
+                        result,
+                        ConsumedInputFile.HashContent(prompt),
+                        cancellationToken);
+                    return result;
+                }
+                catch (Exception exception)
+                {
+                    // A thrown turn (caller cancellation, transport failure) still leaves turn
+                    // evidence — otherwise cancelled work vanishes from the spine while its
+                    // rendered fact claims a send happened.
+                    await _executor.sessionRecorder.TryRecordThrownTurnAsync(
+                        _record,
+                        turnId,
+                        turnIndex,
+                        cancelled: exception is OperationCanceledException,
+                        ConsumedInputFile.HashContent(prompt),
+                        exception.Message);
+                    throw;
+                }
             }
 
             public Task CancelAsync(CancellationToken cancellationToken = default) =>
                 _inner.CancelAsync(cancellationToken);
 
             public Task CompleteAsync() =>
-                _recorder.TryCompleteSessionAsync(_record, _inner.ThreadId);
+                _executor.sessionRecorder.TryCompleteSessionAsync(_record, _inner.ThreadId);
 
             public async ValueTask DisposeAsync()
             {

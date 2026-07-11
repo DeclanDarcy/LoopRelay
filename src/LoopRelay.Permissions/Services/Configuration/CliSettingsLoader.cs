@@ -76,7 +76,10 @@ public static class CliSettingsLoader
                 document.Policy?.Execution?.MaxUnboundedContinuationSteps,
                 document.Policy?.Execution?.MaxNoChangesCommits,
                 document.Policy?.Execution?.OperationalContextGrowthWarningStreak,
-                document.Policy?.Decisions?.SessionResume);
+                document.Policy?.Decisions?.SessionResume,
+                document.Policy?.Runtime?.SessionTelemetry,
+                document.Policy?.Runtime?.UsageLimitWaitRetry,
+                document.Policy?.Runtime?.InputWaitReporting);
             return new CliSettingsLoadResult(merged, policyDocument, fullPath, isDefaultTemplate);
         }
         catch (JsonException ex)
@@ -109,6 +112,8 @@ public static class CliSettingsLoader
         public PolicyExecutionDocument? Execution { get; set; }
 
         public PolicyDecisionsDocument? Decisions { get; set; }
+
+        public PolicyRuntimeDocument? Runtime { get; set; }
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -125,6 +130,16 @@ public static class CliSettingsLoader
     private sealed class PolicyDecisionsDocument
     {
         public bool? SessionResume { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class PolicyRuntimeDocument
+    {
+        public bool? SessionTelemetry { get; set; }
+
+        public bool? UsageLimitWaitRetry { get; set; }
+
+        public bool? InputWaitReporting { get; set; }
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

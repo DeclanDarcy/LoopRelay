@@ -492,6 +492,8 @@ public sealed class NonImplementationSemanticConfirmationTests
 
     private sealed class RecordingAgentRuntime(string output) : IAgentRuntime
     {
+        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
         public List<AgentSessionSpec> OneShotSpecs { get; } = [];
 
         public List<AgentSessionSpec> OpenedSpecs { get; } = [];

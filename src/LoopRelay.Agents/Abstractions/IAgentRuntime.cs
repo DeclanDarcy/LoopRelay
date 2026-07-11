@@ -6,6 +6,13 @@ namespace LoopRelay.Agents.Abstractions;
 
 public interface IAgentRuntime
 {
+    /// <summary>
+    /// The runtime's provider identity and declared capabilities (M7). Decorators forward the
+    /// inner runtime's declaration; the gateway negotiates session specs against it before
+    /// launch and records the provider as session evidence.
+    /// </summary>
+    AgentRuntimeCapabilities Capabilities { get; }
+
     Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec,
         CancellationToken cancellationToken = default);

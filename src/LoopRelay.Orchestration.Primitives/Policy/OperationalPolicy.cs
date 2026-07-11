@@ -42,6 +42,9 @@ public sealed record ResolvedOperationalPolicy(
     int MaxNoChangesCommits,
     int OperationalContextGrowthWarningStreak,
     bool DecisionSessionResume,
+    bool SessionTelemetry,
+    bool UsageLimitWaitRetry,
+    bool InputWaitReporting,
     PermissionPolicyOptions Permissions,
     IReadOnlyList<PolicyFieldProvenance> Provenance,
     string ResolvedJson,
@@ -64,20 +67,30 @@ public sealed class PolicyResolutionException : Exception
 /// implementation-first prompt policy is template-owned and unconditional, so there is no
 /// artifact-policy field to configure; a settings file or override that still names one is
 /// rejected as an unknown key.
+/// Schema policy-v3 (M7): the runtime section joins the schema as the D3 operational wrappers
+/// reconnect — session telemetry, usage-limit wait/retry, and input-wait reporting are product
+/// intent (active by default); each toggle gates a wrapper the unified composition actually
+/// applies, so every field keeps a demonstrable canonical effect.
 /// </summary>
 public static class OperationalPolicyResolver
 {
-    public const string SchemaVersion = "policy-v2";
+    public const string SchemaVersion = "policy-v3";
 
     public const string MaxUnboundedContinuationStepsKey = "execution.maxUnboundedContinuationSteps";
     public const string MaxNoChangesCommitsKey = "execution.maxNoChangesCommits";
     public const string OperationalContextGrowthWarningStreakKey = "execution.operationalContextGrowthWarningStreak";
     public const string DecisionSessionResumeKey = "decisions.sessionResume";
+    public const string SessionTelemetryKey = "runtime.sessionTelemetry";
+    public const string UsageLimitWaitRetryKey = "runtime.usageLimitWaitRetry";
+    public const string InputWaitReportingKey = "runtime.inputWaitReporting";
 
     public const int DefaultMaxUnboundedContinuationSteps = 32;
     public const int DefaultMaxNoChangesCommits = 2;
     public const int DefaultOperationalContextGrowthWarningStreak = 2;
     public const bool DefaultDecisionSessionResume = true;
+    public const bool DefaultSessionTelemetry = true;
+    public const bool DefaultUsageLimitWaitRetry = true;
+    public const bool DefaultInputWaitReporting = true;
 
     private const string BuiltInOrigin = "built-in";
 
@@ -125,6 +138,27 @@ public static class OperationalPolicyResolver
             workspaceSource,
             overrides,
             provenance);
+        bool sessionTelemetry = ResolveBool(
+            SessionTelemetryKey,
+            DefaultSessionTelemetry,
+            workspacePolicy.SessionTelemetry,
+            workspaceSource,
+            overrides,
+            provenance);
+        bool usageLimitWaitRetry = ResolveBool(
+            UsageLimitWaitRetryKey,
+            DefaultUsageLimitWaitRetry,
+            workspacePolicy.UsageLimitWaitRetry,
+            workspaceSource,
+            overrides,
+            provenance);
+        bool inputWaitReporting = ResolveBool(
+            InputWaitReportingKey,
+            DefaultInputWaitReporting,
+            workspacePolicy.InputWaitReporting,
+            workspaceSource,
+            overrides,
+            provenance);
 
         foreach (string key in overrides.Keys)
         {
@@ -143,6 +177,7 @@ public static class OperationalPolicyResolver
                     maxNoChangesCommits,
                     operationalContextGrowthWarningStreak),
                 new CanonicalDecisionsPolicy(decisionSessionResume),
+                new CanonicalRuntimePolicy(sessionTelemetry, usageLimitWaitRetry, inputWaitReporting),
                 CanonicalPermissions.From(permissions)),
             CanonicalJsonOptions);
         string policyId = ComputePolicyId(resolvedJson);
@@ -154,6 +189,9 @@ public static class OperationalPolicyResolver
             maxNoChangesCommits,
             operationalContextGrowthWarningStreak,
             decisionSessionResume,
+            sessionTelemetry,
+            usageLimitWaitRetry,
+            inputWaitReporting,
             permissions,
             provenance,
             resolvedJson,
@@ -166,6 +204,9 @@ public static class OperationalPolicyResolver
         MaxNoChangesCommitsKey,
         OperationalContextGrowthWarningStreakKey,
         DecisionSessionResumeKey,
+        SessionTelemetryKey,
+        UsageLimitWaitRetryKey,
+        InputWaitReportingKey,
     ];
 
     private static IReadOnlyDictionary<string, PolicyOverride> IndexOverrides(
@@ -281,6 +322,7 @@ public static class OperationalPolicyResolver
         string SchemaVersion,
         CanonicalExecutionPolicy Execution,
         CanonicalDecisionsPolicy Decisions,
+        CanonicalRuntimePolicy Runtime,
         CanonicalPermissions Permissions);
 
     private sealed record CanonicalExecutionPolicy(
@@ -289,6 +331,11 @@ public static class OperationalPolicyResolver
         int OperationalContextGrowthWarningStreak);
 
     private sealed record CanonicalDecisionsPolicy(bool SessionResume);
+
+    private sealed record CanonicalRuntimePolicy(
+        bool SessionTelemetry,
+        bool UsageLimitWaitRetry,
+        bool InputWaitReporting);
 
     // The permission options hold hash-ordered sets, and .NET randomizes string hashing per
     // process — serializing them directly would give the same configuration a different policy

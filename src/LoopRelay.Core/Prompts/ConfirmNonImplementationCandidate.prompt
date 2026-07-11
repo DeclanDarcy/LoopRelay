@@ -6,7 +6,7 @@ Review only whether the candidate is a non-implementation artifact.
 
 Do not decide whether to keep, delete, retain, archive, synthesize, summarize for retention, commit, push, edit, or otherwise mutate anything.
 
-You may inspect the referenced repository path read-only when the payload instructs you to do so. Never write files, change repository state, run mutation-capable operations, or use scoped artifact operations.
+If the deterministic evidence is insufficient, you may inspect the candidate path read-only in the repository. Never write files, change repository state, run mutation-capable operations, use scoped artifact operations, decide keep/delete, commit, or push.
 
 Use the deterministic evidence, reviewed identity, and any read-only file inspection to classify the candidate as exactly one semantic disposition:
 
@@ -24,7 +24,7 @@ Input payload:
 {candidatePayload}
 ```
 
-Return exactly one strict JSON object and no Markdown fences or commentary.
+Return exactly one strict JSON object and no Markdown fences or commentary. The ledgerEntryId, candidatePath, reviewedContentSha256 or deletedReviewedIdentity, and reviewedFileDeleted values must match the input payload.
 
 Required JSON shape:
 

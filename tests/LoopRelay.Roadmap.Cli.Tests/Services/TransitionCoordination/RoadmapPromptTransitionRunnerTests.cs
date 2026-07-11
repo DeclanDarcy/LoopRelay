@@ -113,6 +113,8 @@ public sealed class RoadmapPromptTransitionRunnerTests
 
     private sealed class CancellingAgentRuntime : IAgentRuntime
     {
+        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
         public int OneShotCalls { get; private set; }
 
         public Task<IAgentSession> OpenSessionAsync(

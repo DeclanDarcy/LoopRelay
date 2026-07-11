@@ -733,8 +733,86 @@ usage evidence; cancellation.
 **Encoded decisions (D5 — resolved):** **Codex is the sole supported provider
 at this stage.** The gateway contract remains provider-neutral so future
 providers are additive, but no multi-provider fallback policy exists: a missing
-capability yields a typed blocked outcome. Operational behaviors selected in D3
+capability yields a typed outcome carrying a specific label (per the M2
+vocabulary rule), never a silent fallback. Operational behaviors selected in D3
 compose here.
+
+**Encoded decisions (within-doctrine, at implementation):** Policy schema v3
+adds the `runtime` section as the D3 wrappers reconnect —
+`runtime.sessionTelemetry`, `runtime.usageLimitWaitRetry`, and
+`runtime.inputWaitReporting`, each defaulting to true (D3: active product
+intent) and each gating a wrapper the composition demonstrably applies.
+`LoopRelay_SESSION_LOG` became a resolver-validated ambient policy input — a
+garbage value now rejects loudly instead of silently enabling — and the
+telemetry composition's ad-hoc environment read retired with it; the
+usage-limit detector's wait constants stay built-in (no settings surface ever
+existed for them, and an unconsumed schema field would be a configured lie).
+The **gateway is the decorator chain composed once at the runtime boundary** of
+the unified composition, and only around the real provider — injected runtimes
+stay bare, because telemetry, quota waits, and input-wait progress describe
+operating the real provider. Order: input-wait progress closest to the provider
+(it measures actual provider latency per attempt), the telemetry/usage-limit
+gate above it, and causal-spine recording outermost so the spine records
+caller-visible logical turns; usage-limit retries are telemetry-level evidence
+(with telemetry off and retry on, per-attempt evidence is deliberately absent).
+**Capability negotiation**: `IAgentRuntime` declares
+`AgentRuntimeCapabilities` (provider identity plus one-shot / persistent /
+resume bits); the gateway negotiates every spec before launch, and a gap
+throws the typed `AgentCapabilityException` whose message leads with
+**MissingRuntimeCapability**. No stop-reason enum member exists for it — under
+Codex-only no producer can reach one, and dead vocabulary is itself debris; it
+is added when a second provider or a fork request makes a gap reachable. Fork
+and read capability bits are likewise absent because the session spec cannot
+express those requests yet (fork arrives with M9 recovery plans). Provider
+identity is session evidence read from the capability declaration (the
+hardcoded literal retired), never a domain classifier. **Schema v9** adds turn
+evidence columns to `agent_turns` (terminal state, transport-text sha256,
+prompt/output/cached token usage, typed diagnosis kind, verbatim provider
+diagnostics) and the append-only `canonical_runtime_prerequisites` fact
+(`pre_` ULID); ALTERs are guarded and additive, migrations rewrite no fact
+rows, pre-v9 rows read back with null evidence. **Uniform per-send gateway
+capture** (closing the M6 deferrals): send sites now *deposit* the semantic
+capture (identity, template hash, consumed inputs), and the gateway appends
+the one rendered-prompt fact at the transport moment, enriched with
+session/turn identity and the exact wire text — one-shot prompts are
+trailing-newline normalized *before* recording (single owner:
+`AgentPromptTransport`; the provider's own normalization is idempotent
+defense), persistent JSON-RPC turns never mutate the prompt, which also closes
+the renderer-framing note. A deposit whose send never happens mints nothing
+(dropped on overwrite and at transition entry); a send with no deposit mints
+an honest `gateway/unattributed` fact (unreachable in production today). The
+fact is attempted-send evidence appended at the transport threshold: a
+spawn or transport failure leaves the fact plus a thrown-turn row. **Turn and
+session evidence**: every provider result records state, usage, sha, and a
+typed diagnosis (Cancelled / UsageLimit / ProviderFailure — the usage-limit
+predicate is shared with the retry seam so recorded kind and retry behavior
+cannot drift); thrown turns (caller cancellation, transport failure) record
+terminal rows with `CancellationToken.None`; session rows are recorded
+*before* the provider launches and are completed on launch failure, so no
+launch goes unrecorded. The **prerequisite doctor** inspects
+`CODEX_EXECUTABLE` (error) and `CODEX_HOME` (informational) — policy-owned
+environment variables are deliberately not inspected, the resolver already
+validates them and a second validator would drift — and is wired at the Run
+verb for the production composition only: an error aborts with the typed
+**MissingRuntimePrerequisite** outcome (exit 4) before any transition,
+replacing the raw resolver exception at first send, and every inspection is
+appended as a fact (null run id — run identity does not exist yet; ledger
+position orders it). `CodexUsageProbe` (the app-server rate-limits read) is a
+**Runtime Authority component** composed once at the runtime boundary inside
+telemetry — the "no direct provider calls outside the gateway" brief reads
+gateway as the runtime-authority boundary, not the `IAgentRuntime` interface
+alone. The M6 **B4** deferral closes: the non-implementation reviewers'
+C#-injected payload instructions moved into their templates, payloads are pure
+data, and the template hash covers every instruction an agent receives (the
+disposition reuse-key question stays flagged for M15/M16). Deferred with
+owners: warm plan/execution session restart-resume orchestration to M9
+(recovery matrices) and M18 (plan restart semantics under Codex capabilities)
+— provider thread ids are recorded as evidence now; read/fork capability bits
+to M9 with their request shapes; production readers for the rendered-prompt,
+policy-resolution, and runtime-prerequisite ledgers to M16; the legacy
+Plan.Cli/Roadmap.Cli hosts compose no gateway or wrappers — their bodies
+retire M17–M19; `LoopRunner`/`ExecutionStep` removal stays parity-gated
+(M14 era).
 
 **Verification brief:** every run records its effective specification before
 launch; capability gaps produce typed outcomes; no direct provider calls remain

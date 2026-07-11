@@ -136,15 +136,14 @@ public sealed class NonImplementationSemanticConfirmer
                 classification.RuleId,
                 classification.Rationale,
                 classification.PathFacts,
-                classification.ClassifierVersion),
-            ReadOnlyInspectionInstructions:
-                "If deterministic evidence is insufficient, inspect candidatePath read-only in the repository. Do not write files, run mutation-capable operations, decide keep/delete, commit, or push.",
-            RequiredOutput:
-                "Return exactly one strict JSON object matching the prompt schema. The ledgerEntryId, candidatePath, reviewedContentSha256 or deletedReviewedIdentity, and reviewedFileDeleted values must match this payload.");
+                classification.ClassifierVersion));
 
         return JsonSerializer.Serialize(payload, JsonOptions);
     }
 
+    // The payload is pure data (M7/B4): the inspection and output instructions live in the
+    // ConfirmNonImplementationCandidate template, so the template source hash covers every
+    // instruction the agent receives.
     private sealed record SemanticConfirmationPromptPayload(
         string LedgerEntryId,
         string CandidatePath,
@@ -157,9 +156,7 @@ public sealed class NonImplementationSemanticConfirmer
         bool ReviewedFileDeleted,
         string? DeletedReviewedIdentity,
         string? BaselineContentSha256,
-        DeterministicClassificationEvidence DeterministicEvidence,
-        string ReadOnlyInspectionInstructions,
-        string RequiredOutput);
+        DeterministicClassificationEvidence DeterministicEvidence);
 
     private sealed record DeterministicClassificationEvidence(
         string RuleId,

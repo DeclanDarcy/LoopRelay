@@ -22,6 +22,8 @@ public sealed class InputWaitProgressAgentRuntime(
     private readonly IInputWaitObservationSink _observationSinkField =
         _observationSink ?? NullInputWaitObservationSink.Instance;
 
+    public AgentRuntimeCapabilities Capabilities => _inner.Capabilities;
+
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec,
         CancellationToken cancellationToken = default)
