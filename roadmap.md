@@ -167,10 +167,11 @@ through `WorkflowResolver`, with catalog access through
 `CanonicalWorkflowPersistenceStore` is its supporting store.
 
 **Named routing exceptions (visible, owned, with removal conditions):**
-`looprelay unblock` upserts blocker/workflow/stage records directly and
-`looprelay storage init|import|export|sync` writes schema/metadata directly,
-both bypassing the nucleus — owned as storage plumbing until M11/M14 replace
-them. The retired Plan/Roadmap projects remain compiled (their bodies are
+`looprelay unblock` upserts blocker/workflow/stage records directly, bypassing
+the nucleus — it retires at M2 (blocked state becomes derived from gate
+re-evaluation; satisfying the gate is the only unblock). `looprelay storage
+init|import|export|sync` writes schema/metadata directly, bypassing the
+nucleus — owned as storage plumbing until M11/M14 replace it. The retired Plan/Roadmap projects remain compiled (their bodies are
 executable specification, deleted on M17–M19 acceptance; their historical
 entrypoints are deleted at M20; M21 confirms). No other production path
 bypasses the nucleus.
@@ -189,7 +190,7 @@ bypasses the nucleus.
    execution, validation, product handling, state transition, effect
    reconciliation, and evidence emission.
 4. One logical workspace state authority owns mutable orchestration state,
-   stable identities, attempts, sessions, history, effects, blockers, recovery,
+   stable identities, attempts, sessions, history, effects, warnings, recovery,
    interactions, and schema evolution.
 5. Collaboration files (hand-editable planning artifacts under `.agents/**`)
    are **filesystem-authoritative**. Content is read from disk at the moment it
@@ -198,9 +199,11 @@ bypasses the nucleus.
    tree hash. A uniform clean-input gate guarantees every read resolves to a
    commit. System-owned facts (journals, ledgers, archives, evidence) are
    ledger-authoritative; files carrying them are exports, never inputs.
-6. Completed, waiting, blocked, failed, cancelled, stalled, ambiguous, and
-   recovery-required outcomes remain distinct through execution, persistence,
-   status, and client exit mapping.
+6. Completed, waiting, failed, cancelled, stalled, ambiguous,
+   recovery-required, and specifically labeled cannot-proceed outcomes (e.g.
+   missing-required-input, storage-unusable — never a generic "blocked")
+   remain distinct through execution, persistence, status, and client exit
+   mapping.
 7. Publication, repository mutation, archive, export, and other external work
    are ordered, journaled, idempotent effects. Unknown outcomes are reconciled
    before retry. Commits of written surfaces are blocking at step boundaries;
@@ -439,12 +442,30 @@ automation is implicitly agent-judged; the verdict and its evidence are
 recorded; no purity or replayability mandate. The clean-input gate (§5.2) is a
 standard requirement kind evaluated here.
 
-**Open at spec time:** the gate-outcome ↔ workflow-outcome mapping (six gate
-outcomes vs. eight workflow outcomes) — owner rules when specified.
+**Encoded decision (gate-outcome mapping, ruled 2026-07-10):** gate statuses
+are Satisfied / Unsatisfied / Waiting / Invalid / Ambiguous, with
+requirement-level results naming the specific failing condition. Waiting and
+Ambiguous map to themselves; Invalid maps to Failed; Unsatisfied is
+position-sensitive — at an input gate it yields the **specific cannot-proceed
+outcome of the failing condition** (e.g. missing-required-input,
+storage-unusable), at an output gate it yields Failed (the work ran; its
+product does not satisfy). Completed, Cancelled, Stalled, and Paused are never
+gate-produced. **No generic obstacle vocabulary (owner ruling):** "Blocked"
+does not survive as a status, state, outcome, or stop reason. Every
+cannot-proceed condition carries a specific informative label reflecting the
+actual gate failure; this is a standing vocabulary rule for all later
+milestones. **Derived, never latched:** the only path past a cannot-proceed
+outcome is satisfying the gate — the next evaluation observes the satisfied
+condition and proceeds. No manual unblock command, no hand-maintained obstacle
+state. **The blocker entity retires with its language:** durable blocker
+records existed to inelegantly guard against repeat failures; *warnings*
+(category, concern, remediation) replace them completely across types,
+storage, observed state, and status output. `looprelay unblock` retires at
+this milestone.
 
-**Verification brief:** valid/invalid/blocked/waiting/ambiguous behave
-distinctly end to end; provider or prompt success alone can never promote
-state.
+**Verification brief:** valid, invalid, waiting, ambiguous, and each specific
+cannot-proceed label behave distinctly end to end; provider or prompt success
+alone can never promote state.
 
 ### M3 — Product Authority
 
@@ -724,10 +745,10 @@ idempotent.
 state, authority, policy, pending work, and required action.
 
 **Impossible afterward:** console-only text as sole operational truth; a
-blocker, pending effect, recovery action, import conflict, or human request
+warning, pending effect, recovery action, import conflict, or human request
 invisible to status.
 
-**Contracts:** selected workflow/stage/transition; gates; blockers; attempts;
+**Contracts:** selected workflow/stage/transition; gates; warnings; attempts;
 pending effects (including pending pushes); recovery lineage; interaction
 requests; conflicts and uncertainty rendered rather than guessed away.
 
@@ -868,12 +889,12 @@ merely because a workflow body did. Declaration-only debris goes at M0.
 | Evaluation | Agent-executed judgment is first-class; verdicts + evidence recorded; no purity mandate |
 | Catalog validation | Fail-closed at startup under M13 (convergence audit GAP-17/ACI-29) — supersedes the retirement audit's test/build-only disposition |
 | Identity model (M1) | Causal spine of prefixed ULIDs ws_→run_→wfi_→tr_→att_→ses_→turn_; minted once at durable-record time; catalog names are references, external ids are attributes; ledger sequence is the ordering authority |
+| Gate↔workflow outcome mapping (M2) | Five gate statuses (no Blocked); Waiting/Ambiguous map to themselves, Invalid→Failed; Unsatisfied position-sensitive: entry→specific cannot-proceed label (missing-required-input, storage-unusable), exit→Failed. Generic "blocked" vocabulary banned system-wide; cannot-proceed outcomes are derived, never latched (satisfy the gate to proceed); no unblock command; the blocker entity retires — warnings (category, concern, remediation) replace it everywhere |
 
 ### Open — resolved by owner prose ruling when the gating milestone is specified
 
 | Item | Gates |
 |---|---|
-| Gate-outcome ↔ workflow-outcome mapping | M2 |
 | Prompt-policy profiles; unused-prompt retain/retire | M6 |
 | Cancellation salvage semantics | M9 |
 | Interaction timeout/default policy; isolation depth; trust evidence disposition | M10 |

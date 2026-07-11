@@ -7,7 +7,7 @@ public sealed record CompletionCertificationResult(
     CompletionEvaluationDecision? Decision,
     CompletionCertificationRoute? Route,
     string? EvaluationEvidencePath,
-    string? BlockerEvidencePath,
+    string? BlockedEvidencePath,
     IReadOnlyList<string> EvidencePaths,
     int? CompletedEpicArchiveIndex,
     string? CompletedEpicSynthesisPath,
@@ -41,7 +41,7 @@ public sealed record CompletionCertificationResult(
         CompletionEvaluationDecision? decision,
         CompletionCertificationRoute? route,
         string? evaluationEvidencePath,
-        string blockerEvidencePath,
+        string blockedEvidencePath,
         IReadOnlyList<string> evidencePaths,
         string message) =>
         new(
@@ -49,7 +49,7 @@ public sealed record CompletionCertificationResult(
             decision,
             route,
             evaluationEvidencePath,
-            blockerEvidencePath,
+            blockedEvidencePath,
             evidencePaths,
             null,
             null,
@@ -59,7 +59,7 @@ public sealed record CompletionCertificationResult(
 
     public static CompletionCertificationResult Failed(
         string? evaluationEvidencePath,
-        string blockerEvidencePath,
+        string blockedEvidencePath,
         IReadOnlyList<string> evidencePaths,
         string message) =>
         new(
@@ -67,7 +67,7 @@ public sealed record CompletionCertificationResult(
             null,
             null,
             evaluationEvidencePath,
-            blockerEvidencePath,
+            blockedEvidencePath,
             evidencePaths,
             null,
             null,

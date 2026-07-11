@@ -118,39 +118,65 @@ public sealed class CanonicalTransitionPersistenceStoresTests
     }
 
     [Fact]
-    public async Task Transition_blocker_store_persists_recoverable_canonical_blocker()
+    public async Task Transition_warning_store_appends_canonical_warning()
     {
         Repository repository = CreateRepository();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var blockerStore = new CanonicalTransitionBlockerStore(persistence);
+        var warningStore = new CanonicalTransitionWarningStore(persistence);
         WorkflowTransitionIdentity transition = PlanTransition("WriteExecutablePlan").Identity;
         var stage = new WorkflowStageIdentity("Planning");
         DateTimeOffset recordedAt = new(2026, 7, 10, 12, 2, 0, TimeSpan.Zero);
 
-        await blockerStore.RecordBlockerAsync(
-            new TransitionBlockerCapture(
-                "run-blocker-001",
+        await warningStore.RecordWarningAsync(
+            new TransitionWarningCapture(
+                "run-warning-001",
                 recordedAt,
                 new TransitionRuntimeRequest(WorkflowIdentity.Plan, stage, transition),
                 transition,
-                BlockerCategory.Validation,
-                "Input gate blocked.",
+                WarningCategory.Validation,
+                "Input gate unsatisfied.",
                 "Provide required products.",
-                Recoverable: true,
                 ["input-gate.md"]),
             CancellationToken.None);
 
         CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
-        CanonicalBlockerRecord blocker = Assert.Single(snapshot.Blockers);
-        Assert.Equal("run-blocker-001:WriteExecutablePlan", blocker.BlockerId);
-        Assert.Equal(WorkflowIdentity.Plan, blocker.Workflow);
-        Assert.Equal(stage, blocker.Stage);
-        Assert.Equal(transition, blocker.Transition);
-        Assert.Equal(BlockerCategory.Validation, blocker.Blocker.Category);
-        Assert.Equal("canonical transition runtime", blocker.Blocker.Authority);
-        Assert.Equal(["input-gate.md"], blocker.Blocker.Evidence);
-        Assert.True(blocker.Blocker.Recoverable);
-        Assert.Null(blocker.ResolvedAt);
+        CanonicalWarningRecord warning = Assert.Single(snapshot.Warnings);
+        Assert.StartsWith("warn_", warning.WarningId, StringComparison.Ordinal);
+        Assert.Equal(WorkflowIdentity.Plan, warning.Workflow);
+        Assert.Equal(stage, warning.Stage);
+        Assert.Equal(transition, warning.Transition);
+        Assert.Equal(WarningCategory.Validation, warning.Category);
+        Assert.Equal("Input gate unsatisfied.", warning.Concern);
+        Assert.Equal("canonical transition runtime", warning.Authority);
+        Assert.Equal("Provide required products.", warning.Remediation);
+        Assert.Equal(["input-gate.md"], warning.Evidence);
+        Assert.Equal(recordedAt, warning.CreatedAt);
+    }
+
+    [Fact]
+    public async Task Transition_warning_store_appends_rather_than_replacing_prior_warnings()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var warningStore = new CanonicalTransitionWarningStore(persistence);
+        WorkflowTransitionIdentity transition = PlanTransition("WriteExecutablePlan").Identity;
+        var stage = new WorkflowStageIdentity("Planning");
+        TransitionWarningCapture capture = new(
+            "run-warning-002",
+            new DateTimeOffset(2026, 7, 10, 12, 5, 0, TimeSpan.Zero),
+            new TransitionRuntimeRequest(WorkflowIdentity.Plan, stage, transition),
+            transition,
+            WarningCategory.Validation,
+            "Input gate unsatisfied.",
+            "Provide required products.",
+            ["input-gate.md"]);
+
+        await warningStore.RecordWarningAsync(capture, CancellationToken.None);
+        await warningStore.RecordWarningAsync(capture, CancellationToken.None);
+
+        CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
+        Assert.Equal(2, snapshot.Warnings.Count);
+        Assert.Equal(2, snapshot.Warnings.Select(warning => warning.WarningId).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -204,15 +230,15 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         var stage = new WorkflowStageIdentity("Planning");
         DateTimeOffset evaluatedAt = new(2026, 7, 10, 12, 4, 0, TimeSpan.Zero);
         var result = new GateResult(
-            GateStatus.Blocked,
+            GateStatus.Unsatisfied,
             [
                 new GateRequirementResult(
                     "plan-input",
-                    GateStatus.Blocked,
+                    GateStatus.Unsatisfied,
                     "Plan input is missing.",
                     ["input.md"]),
             ],
-            "Input gate blocked.",
+            "Input gate unsatisfied.",
             ["input.md"]);
 
         await gateStore.RecordGateEvaluationAsync(
@@ -231,11 +257,11 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         Assert.Equal(stage, evaluation.Stage);
         Assert.Equal(transition.Identity, evaluation.Transition);
         Assert.Equal(transition.InputGate.Identity, evaluation.Gate);
-        Assert.Equal(GateStatus.Blocked, evaluation.Status);
+        Assert.Equal(GateStatus.Unsatisfied, evaluation.Status);
         Assert.Equal(evaluatedAt, evaluation.EvaluatedAt);
         GateRequirementResult requirement = Assert.Single(evaluation.Requirements);
         Assert.Equal("plan-input", requirement.RequirementIdentity);
-        Assert.Equal("Input gate blocked.", evaluation.Explanation);
+        Assert.Equal("Input gate unsatisfied.", evaluation.Explanation);
         Assert.Equal(["input.md"], evaluation.Evidence);
     }
 

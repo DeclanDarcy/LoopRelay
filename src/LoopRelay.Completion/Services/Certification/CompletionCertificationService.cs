@@ -178,7 +178,7 @@ public sealed class CompletionCertificationService(
         }
         catch (Exception exception)
         {
-            string blocker = await WriteBlockerEvidenceAsync(
+            string blockedEvidence = await WriteBlockedEvidenceAsync(
                 artifacts,
                 "Completion certification failed",
                 exception.Message,
@@ -187,8 +187,8 @@ public sealed class CompletionCertificationService(
                 null);
             return CompletionCertificationResult.Failed(
                 evaluationPath,
-                blocker,
-                evaluationPath is null ? [blocker] : [evaluationPath, blocker],
+                blockedEvidence,
+                evaluationPath is null ? [blockedEvidence] : [evaluationPath, blockedEvidence],
                 exception.Message);
         }
     }
@@ -284,7 +284,7 @@ public sealed class CompletionCertificationService(
         string reason,
         IReadOnlyList<string>? priorEvidence = null)
     {
-        string blocker = await WriteBlockerEvidenceAsync(
+        string blockedEvidence = await WriteBlockedEvidenceAsync(
             artifacts,
             title,
             reason,
@@ -292,18 +292,18 @@ public sealed class CompletionCertificationService(
             decision,
             route);
         IReadOnlyList<string> evidence = priorEvidence is null
-            ? [blocker]
-            : [..priorEvidence, blocker];
+            ? [blockedEvidence]
+            : [..priorEvidence, blockedEvidence];
         return CompletionCertificationResult.Blocked(
             decision,
             route,
             evaluationPath,
-            blocker,
+            blockedEvidence,
             evidence,
             reason);
     }
 
-    private static async Task<string> WriteBlockerEvidenceAsync(
+    private static async Task<string> WriteBlockedEvidenceAsync(
         ArtifactStorage.CompletionArtifacts artifacts,
         string title,
         string reason,
@@ -328,7 +328,7 @@ public sealed class CompletionCertificationService(
             until certification closes the epic and roadmap completion context is updated.
             """;
         return await artifacts.WriteNumberedEvidenceAsync(
-            CompletionArtifactPaths.BlockerEvidenceDirectory,
+            CompletionArtifactPaths.BlockedEvidenceDirectory,
             "completion-certification-blocked",
             content);
     }

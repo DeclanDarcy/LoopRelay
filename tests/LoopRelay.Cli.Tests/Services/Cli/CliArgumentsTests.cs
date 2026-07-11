@@ -73,7 +73,6 @@ public class CliArgumentsTests
 
     [Theory]
     [InlineData("status", "Status")]
-    [InlineData("unblock", "Unblock")]
     [InlineData("storage init", "StorageInit")]
     [InlineData("storage import", "StorageImport")]
     [InlineData("storage export", "StorageExport")]
@@ -88,6 +87,17 @@ public class CliArgumentsTests
 
         Assert.True(ok, error);
         Assert.Equal(expected, invocation.Command.Kind.ToString());
+    }
+
+    [Fact]
+    public void TryParse_RejectsRetiredUnblockCommand()
+    {
+        string dir = Directory.CreateTempSubdirectory("cc-cli-retired-unblock").FullName;
+
+        bool ok = CliArguments.TryParse(["--repo", dir, "unblock"], out UnifiedCliInvocation _, out string error);
+
+        Assert.False(ok);
+        Assert.Contains("Unknown command: unblock", error, StringComparison.Ordinal);
     }
 
     [Fact]

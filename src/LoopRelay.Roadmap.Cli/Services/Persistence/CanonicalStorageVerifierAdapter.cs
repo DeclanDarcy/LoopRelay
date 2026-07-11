@@ -59,8 +59,8 @@ internal sealed class CanonicalStorageVerifierAdapter(
         IReadOnlyList<string> partialTransactions = Findings(
             roadmap,
             WorkspaceVerificationFindingKind.MutationRequired);
-        IReadOnlyList<ResolutionBlocker> blockers = roadmap.Findings
-            .Select(ToBlocker)
+        IReadOnlyList<ResolutionWarning> blockers = roadmap.Findings
+            .Select(ToWarning)
             .ToArray();
 
         StorageAuthorityKind authorityKind = corruption.Count > 0
@@ -96,21 +96,20 @@ internal sealed class CanonicalStorageVerifierAdapter(
             .ToArray();
     }
 
-    private static ResolutionBlocker ToBlocker(WorkspaceVerificationFinding finding) =>
+    private static ResolutionWarning ToWarning(WorkspaceVerificationFinding finding) =>
         new(
             ToCategory(finding.Kind),
             $"{finding.Domain}:{finding.Rule}: {finding.CurrentState}",
             "roadmap workspace verification",
             finding.RecommendedAction,
-            Recoverable: finding.Kind != WorkspaceVerificationFindingKind.UnsupportedVersion,
             [finding.Identity]);
 
-    private static BlockerCategory ToCategory(WorkspaceVerificationFindingKind kind) =>
+    private static WarningCategory ToCategory(WorkspaceVerificationFindingKind kind) =>
         kind switch
         {
-            WorkspaceVerificationFindingKind.MutationRequired => BlockerCategory.Recovery,
-            WorkspaceVerificationFindingKind.InvalidReference or WorkspaceVerificationFindingKind.UnresolvedPath => BlockerCategory.Validation,
-            WorkspaceVerificationFindingKind.Conflict or WorkspaceVerificationFindingKind.DuplicateIdentity => BlockerCategory.Repository,
-            _ => BlockerCategory.Storage,
+            WorkspaceVerificationFindingKind.MutationRequired => WarningCategory.Recovery,
+            WorkspaceVerificationFindingKind.InvalidReference or WorkspaceVerificationFindingKind.UnresolvedPath => WarningCategory.Validation,
+            WorkspaceVerificationFindingKind.Conflict or WorkspaceVerificationFindingKind.DuplicateIdentity => WarningCategory.Repository,
+            _ => WarningCategory.Storage,
         };
 }

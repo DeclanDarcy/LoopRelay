@@ -153,7 +153,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         ITransitionRuntime transitionRuntime = new TransitionRuntime(
             new UnifiedTransitionDefinitionResolver(workflowDefinitions),
             new RepositoryObservationProductResolver(repositoryObserver, repository),
-            new UnifiedGateEvaluator(),
+            new UnifiedGateEvaluator(processRunner, repository),
             new UnifiedPromptContextBuilder(repository),
             new UnifiedPromptRenderer(),
             promptExecutor,
@@ -162,7 +162,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             new UnifiedEffectExecutor(repository, persistence, workflowDefinitions),
             new CanonicalTransitionRunStore(persistence),
             new CanonicalTransitionEvidenceStore(persistence),
-            new CanonicalTransitionBlockerStore(persistence),
+            new CanonicalTransitionWarningStore(persistence),
             new CanonicalTransitionRecoveryStore(persistence),
             new CanonicalTransitionGateEvaluationStore(persistence),
             new CanonicalTransitionEffectStore(persistence),
@@ -302,51 +302,313 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         }
     }
 
-    private sealed class UnifiedGateEvaluator : IGateEvaluator
+    // Every requirement is evaluated individually into its own GateRequirementResult; the gate status
+    // is the worst-of aggregation Invalid > Unsatisfied > Ambiguous > Waiting > Satisfied. Requirement
+    // kinds are implicit by shape: Product != null is a product requirement, InputSurface != null is a
+    // clean-input requirement (scoped git-porcelain cleanliness), neither is an explainable declaration.
+    internal sealed class UnifiedGateEvaluator(
+        IProcessRunner _processRunner,
+        Repository _repository) : IGateEvaluator
     {
-        public Task<GateResult> EvaluateInputGateAsync(
+        public async Task<GateResult> EvaluateInputGateAsync(
             GateDefinition gate,
             ProductResolutionResult inputs,
             CancellationToken cancellationToken)
         {
-            GateStatus status = inputs.IsUsable ? GateStatus.Satisfied : GateStatus.Blocked;
-            string explanation = inputs.IsUsable
-                ? "Input gate satisfied by repository-owned products."
-                : "Input gate blocked by missing, stale, invalid, or ambiguous products.";
-            IReadOnlyList<string> evidence = inputs.Products
-                .SelectMany(product => product.EvidenceLocations)
-                .Concat(inputs.Missing.Select(requirement => requirement.Product.Value))
-                .Concat(inputs.Stale.Select(product => product.Identity.Value))
-                .Concat(inputs.Invalid.Select(product => product.Identity.Value))
-                .Concat(inputs.Ambiguous.Select(product => product.Identity.Value))
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            return Task.FromResult(Gate(gate, status, explanation, evidence));
+            var requirements = new List<GateRequirementResult>(gate.Requirements.Count);
+            foreach (GateRequirementDefinition requirement in gate.Requirements)
+            {
+                requirements.Add(await EvaluateRequirementAsync(
+                    requirement,
+                    product => EvaluateInputProduct(requirement, product, inputs)));
+            }
+
+            GateResult result = Aggregate(
+                gate,
+                requirements,
+                "Input gate satisfied by repository-owned products.");
+            return result.Status == GateStatus.Satisfied
+                ? result
+                : result with { Explanation = $"Input gate {Describe(result.Status)}: {result.Explanation}" };
         }
 
-        public Task<GateResult> EvaluateOutputGateAsync(
+        public async Task<GateResult> EvaluateOutputGateAsync(
             GateDefinition gate,
             ProductValidationResult validation,
             CancellationToken cancellationToken)
         {
-            GateStatus status = validation.IsValid ? GateStatus.Satisfied : GateStatus.Blocked;
-            return Task.FromResult(Gate(gate, status, validation.Explanation, validation.Evidence));
+            var requirements = new List<GateRequirementResult>(gate.Requirements.Count);
+            foreach (GateRequirementDefinition requirement in gate.Requirements)
+            {
+                requirements.Add(await EvaluateRequirementAsync(
+                    requirement,
+                    product => EvaluateOutputProduct(requirement, product, validation)));
+            }
+
+            return Aggregate(gate, requirements, validation.Explanation);
         }
 
-        private static GateResult Gate(
-            GateDefinition gate,
-            GateStatus status,
-            string explanation,
-            IReadOnlyList<string> evidence) =>
-            new(
-                status,
-                gate.Requirements.Select(requirement => new GateRequirementResult(
+        // Worst-of ordering: Invalid > Unsatisfied > Ambiguous > Waiting > Satisfied.
+        internal static GateStatus WorstOf(IEnumerable<GateStatus> statuses)
+        {
+            GateStatus worst = GateStatus.Satisfied;
+            foreach (GateStatus status in statuses)
+            {
+                if (Severity(status) > Severity(worst))
+                {
+                    worst = status;
+                }
+            }
+
+            return worst;
+        }
+
+        // Repo-relative porcelain paths are in scope when they equal the surface or fall under it as a
+        // path prefix; a collapsed entry for the surface directory itself (".agents" gitlink or
+        // "?? .agents/" untracked directory) also counts.
+        internal static bool IsWithinSurface(string path, string surface)
+        {
+            string normalizedSurface = Normalize(surface);
+            if (normalizedSurface.Length == 0)
+            {
+                return true;
+            }
+
+            string normalizedPath = Normalize(path);
+            return normalizedPath == normalizedSurface ||
+                normalizedPath.StartsWith(normalizedSurface + "/", StringComparison.Ordinal);
+        }
+
+        private async Task<GateRequirementResult> EvaluateRequirementAsync(
+            GateRequirementDefinition requirement,
+            Func<ProductIdentity, GateRequirementResult> productEvaluation)
+        {
+            if (requirement.Product is { } product)
+            {
+                return productEvaluation(product);
+            }
+
+            if (requirement.InputSurface is { } surface)
+            {
+                return await EvaluateCleanInputAsync(requirement, surface);
+            }
+
+            return new GateRequirementResult(
+                requirement.Identity,
+                GateStatus.Satisfied,
+                "Requirement declares no product or input surface; it is satisfied as an explainable declaration.",
+                [requirement.Description]);
+        }
+
+        private static GateRequirementResult EvaluateInputProduct(
+            GateRequirementDefinition requirement,
+            ProductIdentity product,
+            ProductResolutionResult inputs)
+        {
+            if (inputs.Missing.Any(missing => missing.Product == product) ||
+                inputs.Products.All(resolved => resolved.Identity != product))
+            {
+                return new GateRequirementResult(
                     requirement.Identity,
-                    status,
-                    explanation,
-                    evidence)).ToArray(),
-                explanation,
-                evidence);
+                    GateStatus.Unsatisfied,
+                    $"Required input product '{product}' is missing; produce it before rerunning.",
+                    [product.Value]);
+            }
+
+            if (inputs.Invalid.FirstOrDefault(invalid => invalid.Identity == product) is { } invalidRecord)
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Required input product '{product}' is invalid or unusable; repair it before rerunning.",
+                    ProductEvidence(product, invalidRecord));
+            }
+
+            if (inputs.Stale.FirstOrDefault(stale => stale.Identity == product) is { } staleRecord)
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Required input product '{product}' is stale; refresh it before rerunning.",
+                    ProductEvidence(product, staleRecord));
+            }
+
+            if (inputs.Ambiguous.FirstOrDefault(ambiguous => ambiguous.Identity == product) is { } ambiguousRecord)
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Ambiguous,
+                    $"Required input product '{product}' has ambiguous validation state.",
+                    ProductEvidence(product, ambiguousRecord));
+            }
+
+            ProductRecord satisfied = inputs.Products.First(resolved => resolved.Identity == product);
+            return new GateRequirementResult(
+                requirement.Identity,
+                GateStatus.Satisfied,
+                $"Required input product '{product}' is resolved and usable.",
+                satisfied.EvidenceLocations.Count > 0 ? satisfied.EvidenceLocations : [product.Value]);
+        }
+
+        private static GateRequirementResult EvaluateOutputProduct(
+            GateRequirementDefinition requirement,
+            ProductIdentity product,
+            ProductValidationResult validation)
+        {
+            if (validation.MissingProducts.Contains(product) ||
+                validation.InvalidProducts.Contains(product) ||
+                validation.StaleProducts.Contains(product))
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Output product '{product}' failed validation: {validation.Explanation}",
+                    [product.Value]);
+            }
+
+            if (validation.AmbiguousProducts.Contains(product))
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Ambiguous,
+                    $"Output product '{product}' has ambiguous validation state: {validation.Explanation}",
+                    [product.Value]);
+            }
+
+            ProductRecord? validated = validation.Products.FirstOrDefault(item => item.Identity == product);
+            if (validated is not null)
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Satisfied,
+                    $"Output product '{product}' passed validation.",
+                    validated.EvidenceLocations.Count > 0 ? validated.EvidenceLocations : [product.Value]);
+            }
+
+            return validation.Status == ProductValidationStatus.Valid
+                ? new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Satisfied,
+                    $"Output product '{product}' is accepted by a valid output validation.",
+                    validation.Evidence)
+                : new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Output product '{product}' was not produced by a valid output validation: {validation.Explanation}",
+                    [product.Value]);
+        }
+
+        private async Task<GateRequirementResult> EvaluateCleanInputAsync(
+            GateRequirementDefinition requirement,
+            string surface)
+        {
+            string gitMarker = Path.Combine(_repository.Path, ".git");
+            if (!Directory.Exists(gitMarker) && !File.Exists(gitMarker))
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Satisfied,
+                    $"Input surface '{surface}' has no git working tree; there is no uncommitted state to gate on.",
+                    [surface]);
+            }
+
+            ProcessRunResult status = await _processRunner.RunAsync("git", ["status", "--porcelain"], _repository.Path);
+            if (status.ExitCode != 0)
+            {
+                // Process stderr can span lines; the concern text feeds line-oriented warning output,
+                // so it is collapsed to a single line before it is composed into the explanation.
+                string standardError = string.Join(
+                    " ",
+                    status.StandardError.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Invalid,
+                    $"Cleanliness of input surface '{surface}' could not be evaluated: git status failed: {standardError}",
+                    [surface]);
+            }
+
+            IReadOnlyList<string> dirty = Git.GitPorcelain.ChangedPaths(status.StandardOutput)
+                .Where(path => IsWithinSurface(path, surface))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            return dirty.Count == 0
+                ? new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Satisfied,
+                    $"Input surface '{surface}' is clean in the git working tree.",
+                    [surface])
+                : new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Input surface '{surface}' has uncommitted changes; commit the listed files under '{surface}' before rerunning.",
+                    dirty);
+        }
+
+        private static GateResult Aggregate(
+            GateDefinition gate,
+            IReadOnlyList<GateRequirementResult> requirements,
+            string satisfiedExplanation)
+        {
+            if (requirements.Count == 0)
+            {
+                // No requirement, no decision: a gate with zero requirements is satisfied with an
+                // explainable requirement result naming why.
+                var explainable = new GateRequirementResult(
+                    $"{gate.Identity}.Explainable",
+                    GateStatus.Satisfied,
+                    $"Gate '{gate.Identity}' declares no requirements; it is satisfied by definition.",
+                    [gate.Purpose]);
+                return new GateResult(
+                    GateStatus.Satisfied,
+                    [explainable],
+                    explainable.Explanation,
+                    explainable.Evidence);
+            }
+
+            GateStatus status = WorstOf(requirements.Select(requirement => requirement.Status));
+            string explanation = status == GateStatus.Satisfied
+                ? satisfiedExplanation
+                : requirements.First(requirement => requirement.Status == status).Explanation;
+            IReadOnlyList<string> evidence = requirements
+                .SelectMany(requirement => requirement.Evidence)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            return new GateResult(status, requirements, explanation, evidence);
+        }
+
+        private static IReadOnlyList<string> ProductEvidence(ProductIdentity product, ProductRecord record) =>
+            new[] { product.Value }
+                .Concat(record.EvidenceLocations)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+#pragma warning disable CS8524
+        private static int Severity(GateStatus status) =>
+            status switch
+            {
+                GateStatus.Satisfied => 0,
+                GateStatus.Waiting => 1,
+                GateStatus.Ambiguous => 2,
+                GateStatus.Unsatisfied => 3,
+                GateStatus.Invalid => 4,
+            };
+
+        private static string Describe(GateStatus status) =>
+            status switch
+            {
+                GateStatus.Satisfied => "satisfied",
+                GateStatus.Unsatisfied => "unsatisfied",
+                GateStatus.Waiting => "waiting",
+                GateStatus.Ambiguous => "ambiguous",
+                GateStatus.Invalid => "invalid",
+            };
+#pragma warning restore CS8524
+
+        private static string Normalize(string value)
+        {
+            string normalized = value.Replace('\\', '/').Trim().Trim('/');
+            return normalized.StartsWith("./", StringComparison.Ordinal) ? normalized[2..] : normalized;
+        }
     }
 
     private sealed class UnifiedPromptContextBuilder(Repository _repository) : IPromptContextBuilder
@@ -371,7 +633,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     EvalRoadmapMilestonePromptContext.Build(_repository.Path);
                 if (!result.IsUsable)
                 {
-                    throw new PromptContextBlockedException(result.Explanation, result.Evidence);
+                    throw new PromptContextUnavailableException(result.Explanation, result.Evidence);
                 }
 
                 foreach ((string key, string value) in result.Metadata)
@@ -388,7 +650,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     PlanPromptContext.Build(_repository.Path, definition, inputs);
                 if (!result.IsUsable)
                 {
-                    throw new PromptContextBlockedException(result.Explanation, result.Evidence);
+                    throw new PromptContextUnavailableException(result.Explanation, result.Evidence);
                 }
 
                 foreach ((string key, string value) in result.Metadata)
@@ -1907,8 +2169,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             {
                 completionRecoveryEvidencePaths = completionObserver.EvidencePaths;
                 throw new InvalidOperationException(
-                    "Non-implementation completion review blocked final evaluation: " +
-                    string.Join("; ", completionReview.BlockerMessages));
+                    "Non-implementation completion review stopped final evaluation: " +
+                    string.Join("; ", completionReview.UnresolvedMessages));
             }
 
             if (completionReview.AppliedDeletePaths.Count > 0)
@@ -2046,7 +2308,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         | Created At | {DateTimeOffset.UtcNow:O} |
 
                         This marker records progress through canonical Execute completion. Recovery must inspect
-                        these phase markers together with transition runs, products, blockers, archive records,
+                        these phase markers together with transition runs, products, warnings, archive records,
                         and completion certification evidence before retrying interrupted closure work.
                         """);
                     evidencePaths.Add(relativePath);
@@ -2437,7 +2699,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 if (string.IsNullOrWhiteSpace(executionResult.RawOutput))
                 {
                     return new InterpretedTransitionOutput(
-                        OutputInterpretationStatus.Blocked,
+                        OutputInterpretationStatus.Unavailable,
                         [],
                         $"Eval prompt `{definition.Identity}` returned no output.",
                         []);
@@ -2463,7 +2725,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 if (string.IsNullOrWhiteSpace(executionResult.RawOutput))
                 {
                     return new InterpretedTransitionOutput(
-                        OutputInterpretationStatus.Blocked,
+                        OutputInterpretationStatus.Unavailable,
                         [],
                         $"Traditional roadmap prompt `{definition.Identity}` returned no output.",
                         []);
@@ -2503,7 +2765,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 if (string.IsNullOrWhiteSpace(executionResult.RawOutput))
                 {
                     return new InterpretedTransitionOutput(
-                        OutputInterpretationStatus.Blocked,
+                        OutputInterpretationStatus.Unavailable,
                         [],
                         "Adversarial review output was empty.",
                         []);
@@ -2555,7 +2817,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 !LocalArtifactTransitions.Supports(definition))
             {
                 return new InterpretedTransitionOutput(
-                    OutputInterpretationStatus.Blocked,
+                    OutputInterpretationStatus.Unavailable,
                     [],
                     "Output interpretation is not wired because prompt execution did not run.",
                     []);
@@ -2582,7 +2844,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             if (string.IsNullOrWhiteSpace(executionResult.RawOutput))
             {
                 return new InterpretedTransitionOutput(
-                    OutputInterpretationStatus.Blocked,
+                    OutputInterpretationStatus.Unavailable,
                     [],
                     $"Execute transition `{definition.Identity}` returned no output.",
                     []);
@@ -3689,7 +3951,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 | Parser | TraditionalRoadmap transition-specific parser validated the primary output artifact. |
                 | Output Validator | {validation.Explanation} |
                 | Effects | Product, stage, workflow, effect-record, and evidence persistence are owned by the canonical effect executor. |
-                | Blocker and Recovery Metadata | Failed, blocked, cancelled, and partial effect outcomes are recorded through canonical blocker and recovery stores. |
+                | Warning and Recovery Metadata | Failed, cannot-proceed, cancelled, and partial effect outcomes are recorded through canonical warning and recovery stores. |
                 | Transition Ordering | Declared by `{stage.Identity}` stage transition order in the workflow definition. |
                 | Prompt Execution Sequencing | Owned by `TransitionRuntime`; prompt success alone does not advance workflow state. |
                 | Transition Persistence Sequencing | Started, raw output, interpretation, validation, effects, and completion are persisted by canonical transition stores. |
@@ -3702,7 +3964,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 | Artifact Promotion Validation | Primary output validation must pass before `PreparedEpic`, `StrategicInitiativeSelection`, or context products become gate-usable. |
                 | Decision Ledger | Canonical transition/effect records replace legacy decision-ledger authority for active orchestration. |
                 | Split Lineage | Split transition output is represented as canonical product/evidence lineage instead of state-machine control flow. |
-                | Blocker Evidence | Canonical failed/blocked transition evidence remains repository-owned and resolvable. |
+                | Warning Evidence | Canonical failed/unsatisfied transition evidence remains repository-owned and resolvable. |
                 | Recovery Intent | Canonical recovery markers identify rerun/resume paths without silent repair. |
                 | Created At | {DateTimeOffset.UtcNow:O} |
                 """,
@@ -3721,38 +3983,20 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             DateTimeOffset recordedAt,
             CancellationToken cancellationToken)
         {
-            await _store.UpsertStageStateAsync(
-                new CanonicalStageStateRecord(
-                    workflow.Identity,
-                    stage.Identity,
-                    WorkflowResolutionState.Blocked,
-                    recordedAt,
-                    evidence),
-                cancellationToken);
-            await _store.UpsertWorkflowStateAsync(
-                new CanonicalWorkflowStateRecord(
-                    workflow.Identity,
-                    WorkflowResolutionState.Blocked,
-                    stage.Identity,
-                    RuntimeOutcomeKind.Stalled,
-                    recordedAt,
-                    evidence),
-                cancellationToken);
-            await _store.UpsertBlockerAsync(
-                new CanonicalBlockerRecord(
-                    $"{workflow.Identity.Value}:{definition.Identity.Value}:stalled",
+            // Stalls are derived, never latched: the stall evidence is appended as a warning and the
+            // next invocation re-evaluates gates without any manual clearing step.
+            await _store.AppendWarningAsync(
+                new CanonicalWarningRecord(
+                    CausalUlid.NewId("warn"),
                     workflow.Identity,
                     stage.Identity,
                     definition.Identity,
-                    new ResolutionBlocker(
-                        BlockerCategory.Repository,
-                        "Execute commit evaluation detected repeated no-substantive-change iterations.",
-                        "Execute commit gate",
-                        "Make substantive repository or milestone progress, or explicitly recover after inspecting stall evidence.",
-                        Recoverable: true,
-                        evidence),
-                    recordedAt,
-                    null),
+                    WarningCategory.Repository,
+                    "Execute commit evaluation detected repeated no-substantive-change iterations.",
+                    "Execute commit gate",
+                    "Make substantive repository or milestone progress, or rerun after inspecting stall evidence.",
+                    evidence,
+                    recordedAt),
                 cancellationToken);
         }
 

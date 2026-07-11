@@ -27,6 +27,60 @@ public sealed class WorkflowDefinitionValidatorTests
     }
 
     [Fact]
+    public void Write_executable_plan_is_the_only_transition_declaring_a_clean_input_surface()
+    {
+        IReadOnlyList<WorkflowDefinition> definitions = CanonicalWorkflowDefinitionSketches.CreateAll();
+
+        IReadOnlyList<(WorkflowTransitionIdentity Transition, GateRequirementDefinition Requirement)> surfaced = definitions
+            .SelectMany(definition => definition.Transitions)
+            .SelectMany(transition => transition.InputGate.Requirements
+                .Where(requirement => requirement.InputSurface is not null)
+                .Select(requirement => (Transition: transition.Identity, Requirement: requirement)))
+            .ToArray();
+
+        (WorkflowTransitionIdentity transition, GateRequirementDefinition requirement) = Assert.Single(surfaced);
+        Assert.Equal(new WorkflowTransitionIdentity("WriteExecutablePlan"), transition);
+        Assert.Equal(".agents/", requirement.InputSurface);
+        Assert.Null(requirement.Product);
+        Assert.Equal("WriteExecutablePlan.CleanInput", requirement.Identity);
+        Assert.True(requirement.BlocksProgress);
+    }
+
+    [Fact]
+    public void Validate_rejects_a_gate_requirement_declaring_both_product_and_input_surface()
+    {
+        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowTransitionDefinition transition = Assert.Single(
+            definition.Transitions,
+            item => item.Identity == new WorkflowTransitionIdentity("WriteExecutablePlan"));
+        GateRequirementDefinition cleanInput = Assert.Single(
+            transition.InputGate.Requirements,
+            item => item.InputSurface is not null);
+        GateRequirementDefinition dualShape = cleanInput with { Product = ProductIdentity.PreparedEpic };
+        GateDefinition inputGate = transition.InputGate with
+        {
+            Requirements = transition.InputGate.Requirements
+                .Select(item => item.Identity == cleanInput.Identity ? dualShape : item)
+                .ToArray(),
+        };
+        WorkflowTransitionDefinition mutatedTransition = transition with { InputGate = inputGate };
+        WorkflowDefinition mutatedDefinition = definition with
+        {
+            Transitions = definition.Transitions
+                .Select(item => item.Identity == transition.Identity ? mutatedTransition : item)
+                .ToArray(),
+        };
+
+        WorkflowDefinitionValidationResult result = WorkflowDefinitionValidator.Validate(mutatedDefinition);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("WriteExecutablePlan.CleanInput", StringComparison.Ordinal) &&
+                error.Contains("must not declare both a product and an input surface", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Canonical_chains_express_traditional_and_eval_routes_into_the_same_plan_and_execute_workflows()
     {
         IReadOnlyList<WorkflowChainDefinition> chains = CanonicalWorkflowDefinitionSketches.CreateChains();
@@ -317,7 +371,6 @@ public sealed class WorkflowDefinitionValidatorTests
             [
                 GateStatus.Satisfied,
                 GateStatus.Unsatisfied,
-                GateStatus.Blocked,
                 GateStatus.Waiting,
                 GateStatus.Invalid,
                 GateStatus.Ambiguous,
@@ -332,7 +385,8 @@ public sealed class WorkflowDefinitionValidatorTests
             [
                 RuntimeOutcomeKind.Completed,
                 RuntimeOutcomeKind.Paused,
-                RuntimeOutcomeKind.Blocked,
+                RuntimeOutcomeKind.MissingRequiredInput,
+                RuntimeOutcomeKind.DirtyInputSurface,
                 RuntimeOutcomeKind.Failed,
                 RuntimeOutcomeKind.Cancelled,
                 RuntimeOutcomeKind.Waiting,

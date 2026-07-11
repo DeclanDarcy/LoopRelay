@@ -156,20 +156,17 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
             now.AddSeconds(30),
             "effect applied",
             ["effect.md"]));
-        await store.UpsertBlockerAsync(new CanonicalBlockerRecord(
-            "blocker-001",
+        await store.AppendWarningAsync(new CanonicalWarningRecord(
+            "warn_001",
             workflow,
             stage,
             transition,
-            new ResolutionBlocker(
-                BlockerCategory.Human,
-                "review required",
-                "workflow resolver",
-                "approve review",
-                Recoverable: true,
-                ["blocker.md"]),
-            now.AddSeconds(40),
-            null));
+            WarningCategory.Human,
+            "review required",
+            "workflow resolver",
+            "approve review",
+            ["warning.md"],
+            now.AddSeconds(40)));
         await store.UpsertRecoveryMarkerAsync(new CanonicalRecoveryMarkerRecord(
             "recovery-001",
             workflow,
@@ -200,7 +197,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Equal(ProductIdentity.ExecutablePlan, snapshot.Products[0].Identity);
         Assert.Single(snapshot.GateEvaluations);
         Assert.Single(snapshot.EffectRecords);
-        Assert.Single(snapshot.Blockers);
+        Assert.Single(snapshot.Warnings);
         Assert.Single(snapshot.RecoveryMarkers);
         Assert.Single(snapshot.WorkflowChainRuns);
 
@@ -218,7 +215,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         "canonical_product_records",
         "canonical_gate_evaluations",
         "canonical_effect_records",
-        "canonical_blockers",
+        "evaluation_warnings",
         "canonical_recovery_markers",
         "canonical_workflow_chain_runs",
         "workspace_identity",

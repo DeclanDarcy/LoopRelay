@@ -1,3 +1,5 @@
+using LoopRelay.Orchestration.Services;
+
 namespace LoopRelay.Orchestration.Workflows;
 
 public static class CanonicalWorkflowDefinitionSketches
@@ -293,7 +295,7 @@ public static class CanonicalWorkflowDefinitionSketches
                 ProductIdentity.MilestoneSpecificationSet),
             downstream,
             Completion("TraditionalRoadmap.Complete", ProductIdentity.PreparedEpic, ProductIdentity.MilestoneSpecificationSet),
-            Blocker("TraditionalRoadmap.Blocked"),
+            Warning("TraditionalRoadmap.Warning"),
             Recovery("TraditionalRoadmap.Recovery"));
     }
 
@@ -484,7 +486,7 @@ public static class CanonicalWorkflowDefinitionSketches
             Gate("EvalRoadmap.Exit", "Prepared epic and milestone specification products are valid for planning.", ProductIdentity.PreparedEpic, ProductIdentity.MilestoneSpecificationSet),
             downstream,
             Completion("EvalRoadmap.Complete", ProductIdentity.PreparedEpic, ProductIdentity.MilestoneSpecificationSet),
-            Blocker("EvalRoadmap.Blocked"),
+            Warning("EvalRoadmap.Warning"),
             Recovery("EvalRoadmap.Recovery"));
     }
 
@@ -556,7 +558,9 @@ public static class CanonicalWorkflowDefinitionSketches
                     []),
             ],
             [
-                Transition(workflow, writePlan, "Write the first executable plan from roadmap products.", [Requirement(ProductIdentity.PreparedEpic), Requirement(ProductIdentity.MilestoneSpecificationSet)], "WritePlan", ExecutionPosture.WarmSession, [draftPlan], [ProductIdentity.ExecutablePlan], [Effect("persist-draft-plan", EffectCategory.ProductPersistence, [ProductIdentity.PreparedEpic, ProductIdentity.MilestoneSpecificationSet], [ProductIdentity.ExecutablePlan]), Effect("publish-agents-write-plan", EffectCategory.Publication, [ProductIdentity.ExecutablePlan], [ProductIdentity.ExecutablePlan], order: 1)], []),
+                // WriteExecutablePlan's prompt context reads `.agents/epic.md` and `.agents/specs/*.md`
+                // (PlanPromptContext), so its clean-input surface is the tightest prefix covering both reads.
+                Transition(workflow, writePlan, "Write the first executable plan from roadmap products.", [Requirement(ProductIdentity.PreparedEpic), Requirement(ProductIdentity.MilestoneSpecificationSet)], "WritePlan", ExecutionPosture.WarmSession, [draftPlan], [ProductIdentity.ExecutablePlan], [Effect("persist-draft-plan", EffectCategory.ProductPersistence, [ProductIdentity.PreparedEpic, ProductIdentity.MilestoneSpecificationSet], [ProductIdentity.ExecutablePlan]), Effect("publish-agents-write-plan", EffectCategory.Publication, [ProductIdentity.ExecutablePlan], [ProductIdentity.ExecutablePlan], order: 1)], [], cleanInputSurface: OrchestrationArtifactPaths.AgentsDirectory + "/"),
                 Transition(workflow, generateAdversarialProjection, "Generate an adversarial projection for plan validation.", [Requirement(ProductIdentity.ExecutablePlan)], "GenerateAdversarialProjection", ExecutionPosture.ScopedArtifactOperation, [adversarialProjection], [ProductIdentity.AdversarialProjection], [Effect("persist-adversarial-projection", EffectCategory.ProductPersistence, [ProductIdentity.ExecutablePlan], [ProductIdentity.AdversarialProjection]), Effect("publish-agents-adversarial-projection", EffectCategory.Publication, [ProductIdentity.AdversarialProjection], [ProductIdentity.AdversarialProjection], order: 1)], [ProductDependency(ProductIdentity.ExecutablePlan, writePlan, generateAdversarialProjection)]),
                 Transition(workflow, runAdversarialReview, "Run the adversarial review against the executable plan and projection.", [Requirement(ProductIdentity.ExecutablePlan), Requirement(ProductIdentity.AdversarialProjection)], "RunAdversarialReview", ExecutionPosture.ReadOnlyPrompt, [adversarialReview], [ProductIdentity.AdversarialReview], [Effect("persist-adversarial-review", EffectCategory.Evidence, [ProductIdentity.ExecutablePlan, ProductIdentity.AdversarialProjection], [ProductIdentity.AdversarialReview])], [ProductDependency(ProductIdentity.AdversarialProjection, generateAdversarialProjection, runAdversarialReview)]),
                 Transition(workflow, revisePlan, "Revise the executable plan using adversarial review evidence.", [Requirement(ProductIdentity.ExecutablePlan), Requirement(ProductIdentity.AdversarialReview)], "ReviewAndRevisePlan", ExecutionPosture.WarmSession, [executablePlan], [ProductIdentity.ExecutablePlan], [Effect("persist-reviewed-plan", EffectCategory.ProductPersistence, [ProductIdentity.ExecutablePlan, ProductIdentity.AdversarialReview], [ProductIdentity.ExecutablePlan])], [ProductDependency(ProductIdentity.AdversarialReview, runAdversarialReview, revisePlan)]),
@@ -570,7 +574,7 @@ public static class CanonicalWorkflowDefinitionSketches
             Gate("Plan.Exit", "Executable plan, operational context, details, milestone set, and readiness are valid for execution.", ProductIdentity.ExecutablePlan, ProductIdentity.OperationalContext, ProductIdentity.ExecutionDetails, ProductIdentity.ExecutionMilestoneSet, ProductIdentity.ExecutionReadiness),
             downstream,
             Completion("Plan.Complete", ProductIdentity.ExecutablePlan, ProductIdentity.OperationalContext, ProductIdentity.ExecutionDetails, ProductIdentity.ExecutionMilestoneSet, ProductIdentity.ExecutionReadiness),
-            Blocker("Plan.Blocked"),
+            Warning("Plan.Warning"),
             Recovery("Plan.Recovery"));
     }
 
@@ -622,7 +626,7 @@ public static class CanonicalWorkflowDefinitionSketches
                 Stage("Workflow Completion", "Expose certified closure as the terminal workflow state.", [Requirement(ProductIdentity.CompletionEvidence), Requirement(ProductIdentity.CompletionRoute)], [ProductIdentity.CertifiedCompletion], [ProductDependency(ProductIdentity.CompletionRoute, interpretCompletionRoute, verifyWorkflowExit)], [verifyWorkflowExit], []),
             ],
             [
-                Transition(workflow, verifyReadiness, "Verify execution input products and outstanding blockers.", [Requirement(ProductIdentity.ExecutionReadiness), Requirement(ProductIdentity.ExecutablePlan), Requirement(ProductIdentity.OperationalContext), Requirement(ProductIdentity.ExecutionDetails), Requirement(ProductIdentity.ExecutionMilestoneSet)], "VerifyExecutionReadiness", ExecutionPosture.ReadOnlyPrompt, [readiness], [ProductIdentity.ExecutionReadiness], [Effect("record-execution-readiness", EffectCategory.Evidence, [ProductIdentity.ExecutionReadiness, ProductIdentity.ExecutablePlan, ProductIdentity.OperationalContext, ProductIdentity.ExecutionDetails, ProductIdentity.ExecutionMilestoneSet], [ProductIdentity.ExecutionReadiness])], []),
+                Transition(workflow, verifyReadiness, "Verify execution input products are present, valid, and usable for execution.", [Requirement(ProductIdentity.ExecutionReadiness), Requirement(ProductIdentity.ExecutablePlan), Requirement(ProductIdentity.OperationalContext), Requirement(ProductIdentity.ExecutionDetails), Requirement(ProductIdentity.ExecutionMilestoneSet)], "VerifyExecutionReadiness", ExecutionPosture.ReadOnlyPrompt, [readiness], [ProductIdentity.ExecutionReadiness], [Effect("record-execution-readiness", EffectCategory.Evidence, [ProductIdentity.ExecutionReadiness, ProductIdentity.ExecutablePlan, ProductIdentity.OperationalContext, ProductIdentity.ExecutionDetails, ProductIdentity.ExecutionMilestoneSet], [ProductIdentity.ExecutionReadiness])], []),
                 Transition(workflow, generateDecision, "Generate or continue the decision set for the next implementation slice.", [Requirement(ProductIdentity.ExecutionReadiness)], "GenerateDecision", ExecutionPosture.DecisionSession, [decision], [ProductIdentity.DecisionSet], [Effect("persist-decision-set", EffectCategory.DecisionRecording, [ProductIdentity.ExecutionReadiness], [ProductIdentity.DecisionSet])], [ProductDependency(ProductIdentity.ExecutionReadiness, verifyReadiness, generateDecision)]),
                 Transition(workflow, transferDecision, "Transfer the active decision session into the execution context.", [Requirement(ProductIdentity.DecisionSet)], "TransferDecisionSession", ExecutionPosture.DecisionSession, [transferredDecision], [ProductIdentity.DecisionSet], [Effect("record-decision-transfer", EffectCategory.DecisionRecording, [ProductIdentity.DecisionSet], [ProductIdentity.DecisionSet])], [ProductDependency(ProductIdentity.DecisionSet, generateDecision, transferDecision)]),
                 Transition(workflow, continueDecision, "Continue an existing decision session when prior decision context is still active.", [Requirement(ProductIdentity.DecisionSet)], "ContinueDecisionSession", ExecutionPosture.DecisionSession, [continuedDecision], [ProductIdentity.DecisionSet], [Effect("record-decision-continuation", EffectCategory.DecisionRecording, [ProductIdentity.DecisionSet], [ProductIdentity.DecisionSet])], [ProductDependency(ProductIdentity.DecisionSet, transferDecision, continueDecision)]),
@@ -641,7 +645,7 @@ public static class CanonicalWorkflowDefinitionSketches
             Gate("Execute.Exit", "Certified completion is valid and discoverable.", ProductIdentity.CertifiedCompletion),
             null,
             Completion("Execute.Complete", ProductIdentity.CertifiedCompletion),
-            Blocker("Execute.Blocked"),
+            Warning("Execute.Warning"),
             Recovery("Execute.Recovery"));
     }
 
@@ -663,7 +667,7 @@ public static class CanonicalWorkflowDefinitionSketches
             allowedSuccessors.Select(successor => new WorkflowStageIdentity(successor)).ToArray(),
             Gate($"{identity}.Entry", $"Entry requirements for {identity}."),
             Gate($"{identity}.Complete", $"Completion requirements for {identity}."),
-            [RuntimeOutcomeKind.Completed, RuntimeOutcomeKind.Blocked, RuntimeOutcomeKind.Failed, RuntimeOutcomeKind.Cancelled]);
+            [RuntimeOutcomeKind.Completed, RuntimeOutcomeKind.MissingRequiredInput, RuntimeOutcomeKind.DirtyInputSurface, RuntimeOutcomeKind.Failed, RuntimeOutcomeKind.Cancelled]);
 
     private static WorkflowTransitionDefinition Transition(
         WorkflowIdentity workflow,
@@ -675,12 +679,36 @@ public static class CanonicalWorkflowDefinitionSketches
         IReadOnlyList<ProductDefinition> producedProducts,
         IReadOnlyList<ProductIdentity> outputProducts,
         IReadOnlyList<EffectDefinition> effects,
-        IReadOnlyList<TransitionDependency> dependencies) =>
-        new(
+        IReadOnlyList<TransitionDependency> dependencies,
+        string? cleanInputSurface = null)
+    {
+        GateDefinition inputGate = Gate(
+            $"{identity}.Input",
+            $"Required input products for {identity}.",
+            inputs.Select(input => input.Product).ToArray());
+        if (cleanInputSurface is not null)
+        {
+            inputGate = inputGate with
+            {
+                Requirements =
+                [
+                    .. inputGate.Requirements,
+                    new GateRequirementDefinition(
+                        $"{identity}.CleanInput",
+                        $"Working tree under '{cleanInputSurface}' is committed before {identity} reads it.",
+                        null,
+                        DependencyStrength.Required,
+                        true,
+                        cleanInputSurface),
+                ],
+            };
+        }
+
+        return new WorkflowTransitionDefinition(
             identity,
             purpose,
             inputs,
-            Gate($"{identity}.Input", $"Required input products for {identity}.", inputs.Select(input => input.Product).ToArray()),
+            inputGate,
             promptIdentity,
             posture,
             producedProducts,
@@ -690,6 +718,7 @@ public static class CanonicalWorkflowDefinitionSketches
             dependencies,
             [],
             Recovery($"{workflow}.{identity}.Recovery"));
+    }
 
     private static ProductDefinition Product(
         ProductIdentity identity,
@@ -721,7 +750,7 @@ public static class CanonicalWorkflowDefinitionSketches
                 ? [new GateRequirementDefinition($"{identity}.Explainable", "Gate has explainable workflow requirements.", null, DependencyStrength.Required, true)]
                 : products.Select(product => new GateRequirementDefinition($"{identity}.{product}", $"Validate {product}.", product, DependencyStrength.Required, true)).ToArray(),
             "canonical gate authority",
-            "Unsatisfied, blocked, waiting, invalid, or ambiguous requirements stop progress with evidence.");
+            "Unsatisfied, waiting, invalid, or ambiguous requirements stop progress with evidence.");
 
     private static EffectDefinition Effect(
         string identity,
@@ -760,8 +789,8 @@ public static class CanonicalWorkflowDefinitionSketches
     private static WorkflowCompletionDefinition Completion(string identity, params ProductIdentity[] products) =>
         new(identity, "Workflow completes when its exit gate and required products are satisfied.", Gate($"{identity}.Gate", "Completion gate.", products), products);
 
-    private static BlockerDefinition Blocker(string identity) =>
-        new(identity, "Blocking conditions preserve evidence and require explicit recovery or user action.", RuntimeOutcomeKind.Blocked, ["Resolve blocker evidence before retrying."]);
+    private static WarningDefinition Warning(string identity) =>
+        new(identity, "Cannot-proceed conditions are derived from gate evaluation; warnings preserve evidence without requiring manual clearing.", RuntimeOutcomeKind.MissingRequiredInput, ["Satisfy the unsatisfied gate requirement and rerun."]);
 
     private static RecoveryDefinition Recovery(string identity) =>
         new(identity, "Recovery is based on repository-owned evidence and never assumes prompt success is completion.", ["restart", "resume", "rerun"], ["silent repair", "discard state"]);

@@ -419,7 +419,7 @@ public sealed class CompletionCertificationServiceTests
 
         Assert.Equal(CompletionCertificationServiceOutcome.Blocked, result.Outcome);
         Assert.Equal("Continue Epic", result.Decision?.ClosureRecommendation);
-        Assert.NotNull(result.BlockerEvidencePath);
+        Assert.NotNull(result.BlockedEvidencePath);
         Assert.Null(await h.ReadAsync(".agents/archive/epics/1/plan.md"));
         Assert.Equal("# Roadmap Completion Context\n\nCurrent.", await h.ReadAsync(CompletionArtifactPaths.RoadmapCompletionContext));
         Assert.DoesNotContain(h.Prompts.Invocations, invocation => invocation.RuntimePromptName == CompletionRuntimePromptNames.SynthesizeCompletedEpic);

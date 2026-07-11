@@ -63,7 +63,6 @@ public sealed class WorkflowResolverTests
     [Theory]
     [InlineData(WorkflowResolutionState.Active, RepositoryClassification.InProgress)]
     [InlineData(WorkflowResolutionState.Resumable, RepositoryClassification.InProgress)]
-    [InlineData(WorkflowResolutionState.Blocked, RepositoryClassification.Blocked)]
     [InlineData(WorkflowResolutionState.Waiting, RepositoryClassification.Waiting)]
     [InlineData(WorkflowResolutionState.Cancelled, RepositoryClassification.Cancelled)]
     [InlineData(WorkflowResolutionState.Failed, RepositoryClassification.Failed)]
@@ -84,9 +83,7 @@ public sealed class WorkflowResolverTests
                         ? null
                         : new WorkflowStageIdentity("Planning"),
                     [],
-                    state == WorkflowResolutionState.Blocked
-                        ? [new ResolutionBlocker(BlockerCategory.Workflow, "blocked", "test", "fix", true, [])]
-                        : [],
+                    [],
                     [$"workflow-{state}.json"]),
             ],
             products:
@@ -562,7 +559,7 @@ public sealed class WorkflowResolverTests
             result.TransitionEligibility,
             transition => transition.Transition == new WorkflowTransitionIdentity("RunAdversarialReview"));
         Assert.Equal(TransitionEligibilityState.Eligible, projection.State);
-        Assert.Equal(TransitionEligibilityState.Blocked, review.State);
+        Assert.Equal(TransitionEligibilityState.MissingRequiredInput, review.State);
         Assert.Contains(review.UnsatisfiedGates, gate => gate.Contains("AdversarialProjection", StringComparison.Ordinal));
     }
 
@@ -764,7 +761,7 @@ public sealed class WorkflowResolverTests
     }
 
     [Fact]
-    public async Task Storage_observer_blocks_partial_workflow_transactions()
+    public async Task Storage_observer_reports_partial_workflow_transactions_as_unusable()
     {
         string repo = CreateRepo();
         await CreateSqliteDatabaseAsync(repo);
@@ -781,7 +778,7 @@ public sealed class WorkflowResolverTests
 
         Assert.False(observation.StorageAuthority.UsableAuthority);
         Assert.Contains(observation.StorageVerification.PartialTransactions, item => item.Contains("tx-1", StringComparison.Ordinal));
-        Assert.Contains(observation.StorageVerification.BlockingConditions, blocker => blocker.Category == BlockerCategory.Storage);
+        Assert.Contains(observation.StorageVerification.BlockingConditions, warning => warning.Category == WarningCategory.Storage);
     }
 
     [Fact]
@@ -961,14 +958,13 @@ public sealed class WorkflowResolverTests
     }
 
     [Fact]
-    public void Resolution_blocks_when_storage_verification_reports_partial_transactions()
+    public void Resolution_stops_with_storage_unusable_when_storage_verification_reports_partial_transactions()
     {
-        var blocker = new ResolutionBlocker(
-            BlockerCategory.Storage,
+        var warning = new ResolutionWarning(
+            WarningCategory.Storage,
             "partial transaction",
             "storage verifier",
             "retry or repair",
-            true,
             ["workflow_transactions"]);
         RepositoryObservation observation = Observation(
             storage: new StorageVerificationResult(
@@ -980,13 +976,50 @@ public sealed class WorkflowResolverTests
                 UnsupportedSchema: [],
                 UnresolvedReferences: [],
                 PartialTransactions: ["workflow_transactions"],
-                BlockingConditions: [blocker],
+                BlockingConditions: [warning],
                 Evidence: ["workflow_transactions"]));
 
         WorkflowResolutionResult result = Resolve(new WorkflowInvocation(InvocationModeKind.DefaultChained), observation);
 
-        Assert.Equal(RepositoryClassification.Blocked, result.Classification);
-        Assert.Contains(result.Explanation.Blockers, item => item.Reason == "partial transaction");
+        Assert.Equal(RepositoryClassification.StorageUnusable, result.Classification);
+        Assert.Contains(result.Explanation.Warnings, item => item.Concern == "partial transaction");
+    }
+
+    [Fact]
+    public async Task Previously_latched_blocked_workflow_resolves_on_its_real_gate_condition_after_migration()
+    {
+        string repo = CreateRepo();
+        await CreateSqliteDatabaseAsync(repo);
+        await ExecuteSqlAsync(
+            repo,
+            """
+            INSERT INTO canonical_workflow_states (workflow_identity, state, current_stage, outcome, updated_at, evidence_json)
+            VALUES ('Plan', 'Blocked', 'Planning', 'Blocked', '2026-07-10T12:00:00.0000000Z', '["legacy-blocked.md"]');
+
+            INSERT INTO canonical_stage_states (workflow_identity, stage_identity, state, updated_at, evidence_json)
+            VALUES ('Plan', 'Planning', 'Blocked', '2026-07-10T12:00:00.0000000Z', '["legacy-blocked-stage.md"]');
+            """);
+
+        // The next invocation's schema pass migrates the legacy labels; no unblock command exists or is needed.
+        await CreateSqliteDatabaseAsync(repo);
+
+        Assert.Equal("Resumable", await ScalarStringAsync(repo, "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
+        Assert.Equal("MissingRequiredInput", await ScalarStringAsync(repo, "SELECT outcome FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
+        Assert.Equal("Resumable", await ScalarStringAsync(repo, "SELECT state FROM canonical_stage_states WHERE workflow_identity = 'Plan';"));
+
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+        WorkflowResolutionResult result = Resolve(new WorkflowInvocation(InvocationModeKind.BoundedPlan), observation);
+
+        Assert.Equal(WorkflowResolutionState.Resumable, result.WorkflowState);
+        Assert.Equal(RepositoryClassification.InProgress, result.Classification);
+        Assert.All(
+            result.TransitionEligibility,
+            transition => Assert.True(
+                transition.State is TransitionEligibilityState.Eligible or TransitionEligibilityState.MissingRequiredInput,
+                $"Transition `{transition.Transition}` must stop on its real gate condition, got `{transition.State}`."));
+        Assert.Contains(
+            result.TransitionEligibility,
+            transition => transition.State == TransitionEligibilityState.MissingRequiredInput);
     }
 
     [Fact]
@@ -996,7 +1029,7 @@ public sealed class WorkflowResolverTests
             workflowStates:
             [
                 new ObservedWorkflowState(WorkflowIdentity.Plan, WorkflowResolutionState.Active, new WorkflowStageIdentity("Planning"), [], [], ["a.json"]),
-                new ObservedWorkflowState(WorkflowIdentity.Plan, WorkflowResolutionState.Blocked, new WorkflowStageIdentity("Planning"), [], [], ["b.json"]),
+                new ObservedWorkflowState(WorkflowIdentity.Plan, WorkflowResolutionState.Resumable, new WorkflowStageIdentity("Planning"), [], [], ["b.json"]),
             ],
             products:
             [
@@ -1040,7 +1073,7 @@ public sealed class WorkflowResolverTests
             new StorageAuthoritySnapshot(
                 effectiveStorage.Authority,
                 effectiveStorage.UsableAuthority,
-                effectiveStorage.UsableAuthority ? "test" : "blocked",
+                effectiveStorage.UsableAuthority ? "test" : "unusable",
                 effectiveStorage.Evidence),
             workflowStates ?? [],
             products ?? [],

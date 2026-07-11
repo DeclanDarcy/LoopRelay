@@ -94,7 +94,6 @@ public enum GateStatus
 {
     Satisfied,
     Unsatisfied,
-    Blocked,
     Waiting,
     Invalid,
     Ambiguous,
@@ -104,7 +103,8 @@ public enum RuntimeOutcomeKind
 {
     Completed,
     Paused,
-    Blocked,
+    MissingRequiredInput,
+    DirtyInputSurface,
     Failed,
     Cancelled,
     Waiting,
@@ -200,7 +200,7 @@ public sealed record WorkflowDefinition(
     GateDefinition ExitGate,
     WorkflowIdentity? DownstreamWorkflow,
     WorkflowCompletionDefinition Completion,
-    BlockerDefinition Blocker,
+    WarningDefinition Warning,
     RecoveryDefinition Recovery);
 
 public sealed record WorkflowStageDefinition(
@@ -274,7 +274,8 @@ public sealed record GateRequirementDefinition(
     string Description,
     ProductIdentity? Product,
     DependencyStrength Strength,
-    bool BlocksProgress);
+    bool BlocksProgress,
+    string? InputSurface = null);
 
 public sealed record GateResult(
     GateStatus Status,
@@ -300,7 +301,7 @@ public sealed record EffectDefinition(
     int Order,
     string FailureSemantics);
 
-public sealed record BlockerDefinition(
+public sealed record WarningDefinition(
     string Identity,
     string Semantics,
     RuntimeOutcomeKind Outcome,

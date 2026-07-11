@@ -1,4 +1,3 @@
-using System.Globalization;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Chaining;
@@ -20,6 +19,12 @@ internal sealed class UnifiedCliRunner(
         UnifiedCliInvocation invocation,
         CancellationToken cancellationToken)
     {
+        int? migrationExitCode = await MigrateExistingWorkspaceDatabaseAsync(cancellationToken);
+        if (migrationExitCode is not null)
+        {
+            return migrationExitCode.Value;
+        }
+
         if (invocation.Command.Kind == UnifiedCliCommandKind.Status)
         {
             return await RunStatusAsync(invocation, cancellationToken);
@@ -32,7 +37,7 @@ internal sealed class UnifiedCliRunner(
 
         RepositoryObservation observation = await _composition.ObserveAsync(cancellationToken);
         if (invocation.Command.RequiresStorageVerification &&
-            observation.StorageVerification.IsBlocked)
+            observation.StorageVerification.IsUnusable)
         {
             PrintStorageVerification(observation);
             return 4;
@@ -52,16 +57,36 @@ internal sealed class UnifiedCliRunner(
                 return await RunStorageSyncAsync(invocation, cancellationToken);
             }
 
-            if (invocation.Command.Kind == UnifiedCliCommandKind.Unblock)
-            {
-                return await RunUnblockAsync(invocation, cancellationToken);
-            }
-
             _error.WriteLine($"{invocation.Command.Kind} is parsed by the unified CLI but is not wired to an implementation yet.");
             return 2;
         }
 
         return await RunWorkflowAsync(invocation, observation, cancellationToken);
+    }
+
+    // Every command migrates an existing workspace database in place before the first observation so
+    // legacy durable labels (for example 'Blocked') are rewritten before any read-only snapshot parse
+    // can observe them. A missing database file is left absent; fresh workspaces keep current behavior.
+    private async Task<int?> MigrateExistingWorkspaceDatabaseAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            string databasePath = LoopRelayWorkspaceDatabase.Resolve(_composition.Repository);
+            if (!File.Exists(databasePath))
+            {
+                return null;
+            }
+
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+            await connection.OpenAsync(cancellationToken);
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
+            return null;
+        }
+        catch (InvalidOperationException exception)
+        {
+            _error.WriteLine(exception.Message);
+            return 4;
+        }
     }
 
     public static int ExitCodeFor(WorkflowStopReason stopReason) =>
@@ -73,7 +98,9 @@ internal sealed class UnifiedCliRunner(
             WorkflowStopReason.TransitionCompleted => 0,
             WorkflowStopReason.Failed => 1,
             WorkflowStopReason.Stalled => 3,
-            WorkflowStopReason.Blocked => 4,
+            WorkflowStopReason.MissingRequiredInput => 4,
+            WorkflowStopReason.DirtyInputSurface => 4,
+            WorkflowStopReason.StorageUnusable => 4,
             WorkflowStopReason.Ambiguous => 4,
             WorkflowStopReason.NoEligibleTransition => 4,
             WorkflowStopReason.Cancelled => 130,
@@ -94,7 +121,7 @@ internal sealed class UnifiedCliRunner(
     {
         RepositoryObservation observation = await _composition.ObserveAsync(cancellationToken);
         PrintStorageVerification(observation);
-        return observation.StorageVerification.IsBlocked ? 4 : 0;
+        return observation.StorageVerification.IsUnusable ? 4 : 0;
     }
 
     private async Task<int> RunStorageInitAsync(CancellationToken cancellationToken)
@@ -131,7 +158,7 @@ internal sealed class UnifiedCliRunner(
             case UnifiedCliCommandKind.StorageExport:
                 if (!File.Exists(databasePath))
                 {
-                    _output.WriteLine("Storage export blocked because the workspace database is missing.");
+                    _output.WriteLine("Storage export stopped because the workspace database is missing.");
                     _output.WriteLine($"Database: {databasePath}");
                     return 4;
                 }
@@ -153,89 +180,6 @@ internal sealed class UnifiedCliRunner(
             default:
                 throw new InvalidOperationException("Unsupported storage sync command.");
         }
-    }
-
-    private async Task<int> RunUnblockAsync(
-        UnifiedCliInvocation invocation,
-        CancellationToken cancellationToken)
-    {
-        if (invocation.Command.Arguments.Count > 0)
-        {
-            _error.WriteLine($"Unexpected argument: {invocation.Command.Arguments[0]}");
-            return 2;
-        }
-
-        var store = new CanonicalWorkflowPersistenceStore(_composition.Repository);
-        CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync(cancellationToken);
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        string unblockEvidence = $"unified-cli/unblock/{now.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture)}";
-        CanonicalBlockerRecord[] recoverableBlockers = snapshot.Blockers
-            .Where(blocker => blocker.ResolvedAt is null && blocker.Blocker.Recoverable)
-            .ToArray();
-        CanonicalBlockerRecord[] nonRecoverableBlockers = snapshot.Blockers
-            .Where(blocker => blocker.ResolvedAt is null && !blocker.Blocker.Recoverable)
-            .ToArray();
-
-        foreach (CanonicalBlockerRecord blocker in recoverableBlockers)
-        {
-            await store.UpsertBlockerAsync(blocker with { ResolvedAt = now }, cancellationToken);
-        }
-
-        CanonicalWorkflowStateRecord[] restorableWorkflows = snapshot.WorkflowStates
-            .Where(state => state.State == WorkflowResolutionState.Blocked &&
-                state.CurrentStage is not null &&
-                nonRecoverableBlockers.All(blocker => blocker.Workflow != state.Workflow))
-            .ToArray();
-        foreach (CanonicalWorkflowStateRecord workflow in restorableWorkflows)
-        {
-            IReadOnlyList<string> evidence = workflow.Evidence
-                .Concat([unblockEvidence])
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            await store.UpsertWorkflowStateAsync(
-                workflow with
-                {
-                    State = WorkflowResolutionState.Resumable,
-                    Outcome = RuntimeOutcomeKind.Waiting,
-                    UpdatedAt = now,
-                    Evidence = evidence,
-                },
-                cancellationToken);
-            await store.UpsertStageStateAsync(
-                new CanonicalStageStateRecord(
-                    workflow.Workflow,
-                    workflow.CurrentStage!.Value,
-                    WorkflowResolutionState.Active,
-                    now,
-                    evidence),
-                cancellationToken);
-        }
-
-        CanonicalWorkflowStateRecord[] stageLessBlockedWorkflows = snapshot.WorkflowStates
-            .Where(state => state.State == WorkflowResolutionState.Blocked && state.CurrentStage is null)
-            .ToArray();
-        if (recoverableBlockers.Length == 0 &&
-            restorableWorkflows.Length == 0 &&
-            nonRecoverableBlockers.Length == 0 &&
-            stageLessBlockedWorkflows.Length == 0)
-        {
-            _output.WriteLine("No canonical blockers or blocked workflow states were active.");
-            return 0;
-        }
-
-        _output.WriteLine($"Resolved canonical blockers: {recoverableBlockers.Length}");
-        _output.WriteLine($"Restored blocked workflows: {restorableWorkflows.Length}");
-        if (nonRecoverableBlockers.Length > 0)
-        {
-            _output.WriteLine($"Non-recoverable blockers remain: {nonRecoverableBlockers.Length}");
-        }
-
-        if (stageLessBlockedWorkflows.Length > 0)
-        {
-            _output.WriteLine($"Blocked workflows without a resumable stage remain: {stageLessBlockedWorkflows.Length}");
-        }
-
-        return nonRecoverableBlockers.Length == 0 && stageLessBlockedWorkflows.Length == 0 ? 0 : 4;
     }
 
     private static async Task EnsureWorkspaceDatabaseAsync(
@@ -335,9 +279,9 @@ internal sealed class UnifiedCliRunner(
 
                 observation = await _composition.ObserveAsync(cancellationToken);
                 if (invocation.Command.RequiresStorageVerification &&
-                    observation.StorageVerification.IsBlocked)
+                    observation.StorageVerification.IsUnusable)
                 {
-                    lastStopReason = WorkflowStopReason.Blocked;
+                    lastStopReason = WorkflowStopReason.StorageUnusable;
                     PrintStorageVerification(observation);
                     return 4;
                 }
@@ -393,8 +337,33 @@ internal sealed class UnifiedCliRunner(
             _output.WriteLine($"Transition: {transition.Transition}");
             _output.WriteLine($"Outcome: {transition.Outcome}");
             _output.WriteLine($"Durable state: {transition.DurableState}");
+            PrintGateWarnings(transition.InputGate);
+            PrintGateWarnings(transition.OutputGate);
         }
     }
+
+    private void PrintGateWarnings(GateResult? gate)
+    {
+        if (gate is null || gate.IsSatisfied)
+        {
+            return;
+        }
+
+        foreach (GateRequirementResult requirement in gate.Requirements)
+        {
+            if (requirement.Status != GateStatus.Satisfied)
+            {
+                _output.WriteLine($"Warning: {requirement.RequirementIdentity}: {CollapseToSingleLine(requirement.Explanation)}");
+            }
+        }
+    }
+
+    // Warning lines are line-oriented output; explanation text that embeds process output (for example
+    // multi-line git stderr) must not be able to break one warning across several lines.
+    private static string CollapseToSingleLine(string text) =>
+        string.Join(
+            " ",
+            text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
     private void PrintStorageVerification(RepositoryObservation observation)
     {
@@ -408,7 +377,7 @@ internal sealed class UnifiedCliRunner(
         _output.WriteLine($"Unsupported schema: {FormatList(verification.UnsupportedSchema)}");
         _output.WriteLine($"Unresolved references: {FormatList(verification.UnresolvedReferences)}");
         _output.WriteLine($"Partial transactions: {FormatList(verification.PartialTransactions)}");
-        _output.WriteLine($"Blocking conditions: {FormatList(verification.BlockingConditions.Select(blocker => blocker.Reason).ToArray())}");
+        _output.WriteLine($"Warnings: {FormatList(verification.BlockingConditions.Select(warning => warning.Concern).ToArray())}");
     }
 
     private static string FormatList(IReadOnlyList<string> values) =>

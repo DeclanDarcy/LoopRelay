@@ -77,7 +77,7 @@ public sealed class UnifiedCliCompositionTests
     }
 
     [Fact]
-    public async Task EvalRoadmap_milestone_deep_dive_blocks_empty_active_epic_context()
+    public async Task EvalRoadmap_milestone_deep_dive_stops_on_empty_active_epic_context()
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-eval-context").FullName;
         Directory.CreateDirectory(Path.Combine(repo, ".agents"));
@@ -96,18 +96,18 @@ public sealed class UnifiedCliCompositionTests
                 new WorkflowStageIdentity("Milestone Specification"),
                 new WorkflowTransitionIdentity("GenerateMilestoneDeepDivesForEpic")));
 
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
-        Assert.Equal(TransitionDurableState.Blocked, result.DurableState);
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
         Assert.Contains("Active Epic prompt context is empty", result.Explanation, StringComparison.Ordinal);
         Assert.Contains(".agents/epic.md", result.Evidence);
         CanonicalWorkflowPersistenceSnapshot snapshot =
             await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
-        CanonicalBlockerRecord blocker = Assert.Single(snapshot.Blockers);
-        Assert.Equal(WorkflowIdentity.EvalRoadmap, blocker.Workflow);
-        Assert.Equal(new WorkflowStageIdentity("Milestone Specification"), blocker.Stage);
-        Assert.Equal(new WorkflowTransitionIdentity("GenerateMilestoneDeepDivesForEpic"), blocker.Transition);
-        Assert.Equal(BlockerCategory.Transition, blocker.Blocker.Category);
-        Assert.Contains(".agents/epic.md", blocker.Blocker.Evidence);
+        CanonicalWarningRecord warning = Assert.Single(snapshot.Warnings);
+        Assert.Equal(WorkflowIdentity.EvalRoadmap, warning.Workflow);
+        Assert.Equal(new WorkflowStageIdentity("Milestone Specification"), warning.Stage);
+        Assert.Equal(new WorkflowTransitionIdentity("GenerateMilestoneDeepDivesForEpic"), warning.Transition);
+        Assert.Equal(WarningCategory.Transition, warning.Category);
+        Assert.Contains(".agents/epic.md", warning.Evidence);
         CanonicalRecoveryMarkerRecord recovery = Assert.Single(snapshot.RecoveryMarkers);
         Assert.Equal(WorkflowIdentity.EvalRoadmap, recovery.Workflow);
         Assert.Equal(new WorkflowStageIdentity("Milestone Specification"), recovery.Stage);
@@ -171,7 +171,7 @@ public sealed class UnifiedCliCompositionTests
     }
 
     [Fact]
-    public async Task Verify_execute_entry_contract_blocks_milestone_set_without_trackable_checkboxes()
+    public async Task Verify_execute_entry_contract_stops_on_milestone_set_without_trackable_checkboxes()
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-verify-milestone-checkbox").FullName;
         await WriteAsync(repo, ".agents/plan.md", "# Plan");
@@ -198,14 +198,14 @@ public sealed class UnifiedCliCompositionTests
             product => product.Product.Identity == ProductIdentity.ExecutionMilestoneSet);
         Assert.False(milestoneSet.GateUsable);
         Assert.Equal(ProductValidationState.Invalid, milestoneSet.Product.ValidationState);
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
-        Assert.Equal(TransitionDurableState.Blocked, result.DurableState);
-        Assert.Contains("Input gate blocked", result.Explanation, StringComparison.Ordinal);
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
+        Assert.Contains("Input gate unsatisfied", result.Explanation, StringComparison.Ordinal);
         CanonicalWorkflowPersistenceSnapshot snapshot =
             await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
-        CanonicalBlockerRecord blocker = Assert.Single(snapshot.Blockers);
-        Assert.Equal(BlockerCategory.Validation, blocker.Blocker.Category);
-        Assert.Contains(".agents/milestones/m1.md", blocker.Blocker.Evidence);
+        CanonicalWarningRecord warning = Assert.Single(snapshot.Warnings);
+        Assert.Equal(WarningCategory.Validation, warning.Category);
+        Assert.Contains(".agents/milestones/m1.md", warning.Evidence);
     }
 
     [Fact]
@@ -1139,11 +1139,16 @@ public sealed class UnifiedCliCompositionTests
         Assert.Contains(snapshot.EffectRecords, effect =>
             effect.Effect == new EffectIdentity("record-commit-evaluation") &&
             effect.Status == EffectExecutionStatus.Stalled);
-        Assert.Contains(snapshot.Blockers, blocker =>
-            blocker.Workflow == WorkflowIdentity.Execute &&
-            blocker.Transition == new WorkflowTransitionIdentity("EvaluateCommit") &&
-            blocker.Blocker.Category == BlockerCategory.Repository &&
-            blocker.Blocker.Evidence.Contains(".LoopRelay/evidence/execute-stall/state.md"));
+        Assert.Contains(snapshot.Warnings, warning =>
+            warning.Workflow == WorkflowIdentity.Execute &&
+            warning.Transition == new WorkflowTransitionIdentity("EvaluateCommit") &&
+            warning.Category == WarningCategory.Repository &&
+            warning.Evidence.Contains(".LoopRelay/evidence/execute-stall/state.md"));
+        Assert.DoesNotContain(snapshot.WorkflowStates, state => state.Workflow == WorkflowIdentity.Execute);
+        Assert.DoesNotContain(
+            snapshot.StageStates,
+            state => state.Workflow == WorkflowIdentity.Execute &&
+                state.Stage == new WorkflowStageIdentity("Execution Continuity"));
         Assert.Contains(snapshot.RecoveryMarkers, marker =>
             marker.Workflow == WorkflowIdentity.Execute &&
             marker.Transition == new WorkflowTransitionIdentity("EvaluateCommit") &&

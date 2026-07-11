@@ -7,7 +7,6 @@ internal enum UnifiedCliCommandKind
 {
     Run,
     Status,
-    Unblock,
     StorageInit,
     StorageImport,
     StorageExport,
@@ -22,7 +21,6 @@ internal sealed record UnifiedCliCommand(
 {
     public bool RequiresStorageVerification =>
         Kind is UnifiedCliCommandKind.Run
-            or UnifiedCliCommandKind.Unblock
             or UnifiedCliCommandKind.StorageInit
             or UnifiedCliCommandKind.StorageImport
             or UnifiedCliCommandKind.StorageExport
@@ -75,7 +73,7 @@ internal static class CliArguments
             {
                 if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
                 {
-                    error = "Usage: looprelay [--repo <path>] [--eval|--traditional] [status|unblock|storage <init|import|export|sync|verify>|eval|traditional|plan|execute]";
+                    error = "Usage: looprelay [--repo <path>] [--eval|--traditional] [status|storage <init|import|export|sync|verify>|eval|traditional|plan|execute]";
                     return false;
                 }
 
@@ -170,7 +168,6 @@ internal static class CliArguments
             "plan" => NoExtra(UnifiedCliCommandKind.Run, rest, InvocationModeKind.BoundedPlan, out error),
             "execute" => NoExtra(UnifiedCliCommandKind.Run, rest, InvocationModeKind.BoundedExecute, out error),
             "status" => new UnifiedCliCommand(UnifiedCliCommandKind.Status, rest),
-            "unblock" => new UnifiedCliCommand(UnifiedCliCommandKind.Unblock, rest),
             "storage" => ParseStorage(rest, out error),
             _ => Unknown(verb, out error),
         };
@@ -281,7 +278,6 @@ internal static class CliArguments
             or "plan"
             or "execute"
             or "status"
-            or "unblock"
             or "storage";
 
     private static bool IsPathLike(string value) =>

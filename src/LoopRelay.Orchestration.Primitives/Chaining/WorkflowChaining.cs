@@ -9,7 +9,9 @@ public enum WorkflowStopReason
 {
     ChainCompleted,
     BoundedWorkflowCompleted,
-    Blocked,
+    MissingRequiredInput,
+    DirtyInputSurface,
+    StorageUnusable,
     Waiting,
     Cancelled,
     Failed,
@@ -92,7 +94,7 @@ public sealed class WorkflowEntryGateEvaluator
         if (!observation.StorageAuthority.UsableAuthority)
         {
             return Gate(
-                GateStatus.Blocked,
+                GateStatus.Unsatisfied,
                 workflow.EntryGate,
                 "Storage authority is not usable for workflow entry.",
                 observation.StorageAuthority.Evidence);
@@ -104,7 +106,7 @@ public sealed class WorkflowEntryGateEvaluator
         if (missing.Count > 0)
         {
             return Gate(
-                GateStatus.Blocked,
+                GateStatus.Unsatisfied,
                 workflow.EntryGate,
                 $"Workflow '{workflow.Identity}' entry gate is missing required semantic products.",
                 missing.Select(requirement => requirement.Product.Value).ToArray());
@@ -175,7 +177,7 @@ public sealed class WorkflowExitGateEvaluator
         if (missing.Count > 0)
         {
             return Gate(
-                GateStatus.Blocked,
+                GateStatus.Unsatisfied,
                 workflow.ExitGate,
                 $"Workflow '{workflow.Identity}' exit gate is missing required output products.",
                 missing.Select(identity => identity.Value).ToArray());
@@ -221,7 +223,7 @@ public sealed class ProductTransferEvaluator
         IReadOnlyList<ProductIdentity> missing = required
             .Where(identity => products.All(product => product.Identity != identity))
             .ToArray();
-        GateStatus status = missing.Count == 0 ? GateStatus.Satisfied : GateStatus.Blocked;
+        GateStatus status = missing.Count == 0 ? GateStatus.Satisfied : GateStatus.Unsatisfied;
         string explanation = missing.Count == 0
             ? $"Transferred semantic products from {source.Identity} to {target.Identity}."
             : $"Cannot transfer required semantic products from {source.Identity} to {target.Identity}.";
@@ -290,11 +292,19 @@ public sealed class WorkflowController(
             .FirstOrDefault(transition => transition.State == TransitionEligibilityState.Eligible);
         if (selectedTransition is null)
         {
-            return new WorkflowControllerResult(
-                resolution,
-                null,
-                WorkflowStopReason.NoEligibleTransition,
-                "No eligible transition was available for the selected stage.");
+            bool missingRequiredInput = resolution.TransitionEligibility
+                .Any(transition => transition.State == TransitionEligibilityState.MissingRequiredInput);
+            return missingRequiredInput
+                ? new WorkflowControllerResult(
+                    resolution,
+                    null,
+                    WorkflowStopReason.MissingRequiredInput,
+                    "Every candidate transition is missing a required input product.")
+                : new WorkflowControllerResult(
+                    resolution,
+                    null,
+                    WorkflowStopReason.NoEligibleTransition,
+                    "No eligible transition was available for the selected stage.");
         }
 
         TransitionRuntimeResult transitionResult = await _transitionRuntime.RunAsync(
@@ -317,7 +327,7 @@ public sealed class WorkflowController(
     private static WorkflowStopReason? StopReasonFor(WorkflowResolutionResult resolution) =>
         resolution.Classification switch
         {
-            RepositoryClassification.Blocked or RepositoryClassification.Corrupt or RepositoryClassification.Unsupported => WorkflowStopReason.Blocked,
+            RepositoryClassification.StorageUnusable or RepositoryClassification.Corrupt or RepositoryClassification.Unsupported => WorkflowStopReason.StorageUnusable,
             RepositoryClassification.Waiting => WorkflowStopReason.Waiting,
             RepositoryClassification.Cancelled => WorkflowStopReason.Cancelled,
             RepositoryClassification.Failed => WorkflowStopReason.Failed,
@@ -329,7 +339,8 @@ public sealed class WorkflowController(
     private static WorkflowStopReason StopReasonFor(RuntimeOutcomeKind outcome) =>
         outcome switch
         {
-            RuntimeOutcomeKind.Blocked => WorkflowStopReason.Blocked,
+            RuntimeOutcomeKind.MissingRequiredInput => WorkflowStopReason.MissingRequiredInput,
+            RuntimeOutcomeKind.DirtyInputSurface => WorkflowStopReason.DirtyInputSurface,
             RuntimeOutcomeKind.Waiting => WorkflowStopReason.Waiting,
             RuntimeOutcomeKind.Cancelled => WorkflowStopReason.Cancelled,
             RuntimeOutcomeKind.Failed => WorkflowStopReason.Failed,
@@ -428,10 +439,13 @@ public sealed class WorkflowChainRunner(
 
             if (!canAdvance)
             {
-                await TryCompleteInstanceAsync(instanceId, "Completed", WorkflowStopReason.Blocked.ToString(), cancellationToken);
+                WorkflowStopReason boundaryStopReason = request.Observation.StorageAuthority.UsableAuthority
+                    ? WorkflowStopReason.MissingRequiredInput
+                    : WorkflowStopReason.StorageUnusable;
+                await TryCompleteInstanceAsync(instanceId, "Completed", boundaryStopReason.ToString(), cancellationToken);
                 return new WorkflowChainRunResult(
                     current,
-                    WorkflowStopReason.Blocked,
+                    boundaryStopReason,
                     boundaries,
                     null,
                     boundary.Explanation);

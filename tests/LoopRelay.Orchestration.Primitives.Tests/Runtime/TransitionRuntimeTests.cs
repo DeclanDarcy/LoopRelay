@@ -9,36 +9,36 @@ namespace LoopRelay.Orchestration.Tests.Runtime;
 public sealed class TransitionRuntimeTests
 {
     [Fact]
-    public async Task Missing_required_input_blocks_before_prompt_execution()
+    public async Task Missing_required_input_stops_before_prompt_execution()
     {
         RuntimeHarness harness = RuntimeHarness.Create();
         harness.Products.Result = new ProductResolutionResult([], [RuntimeHarness.InputRequirement], [], [], []);
 
         TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
 
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
-        Assert.Equal(TransitionDurableState.Blocked, result.DurableState);
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
         Assert.False(harness.Executor.WasCalled);
         Assert.Empty(harness.RunStore.Completions);
-        TransitionBlockerCapture blocker = Assert.Single(harness.Blockers.Blockers);
-        Assert.Equal(harness.Request.Workflow, blocker.Request.Workflow);
-        Assert.Equal(harness.Request.Stage, blocker.Request.Stage);
-        Assert.Equal(RuntimeHarness.Definition.Identity, blocker.Transition);
-        Assert.Equal(BlockerCategory.Validation, blocker.Category);
-        Assert.Contains("Input gate blocked", blocker.Reason, StringComparison.Ordinal);
+        TransitionWarningCapture warning = Assert.Single(harness.Warnings.Warnings);
+        Assert.Equal(harness.Request.Workflow, warning.Request.Workflow);
+        Assert.Equal(harness.Request.Stage, warning.Request.Stage);
+        Assert.Equal(RuntimeHarness.Definition.Identity, warning.Transition);
+        Assert.Equal(WarningCategory.Validation, warning.Category);
+        Assert.Contains("Input gate unsatisfied", warning.Concern, StringComparison.Ordinal);
         TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
         Assert.Equal(harness.Request.Workflow, recovery.Request.Workflow);
         Assert.Equal(harness.Request.Stage, recovery.Request.Stage);
         Assert.Equal(RuntimeHarness.Definition.Identity, recovery.Transition);
-        Assert.Equal(TransitionDurableState.Blocked, recovery.DurableState);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, recovery.DurableState);
         Assert.Equal(RuntimeHarness.Definition.Recovery, recovery.Recovery);
         TransitionGateEvaluationCapture gate = Assert.Single(harness.GateEvaluations.Evaluations);
         Assert.Equal(RuntimeHarness.Definition.InputGate.Identity, gate.Gate.Identity);
-        Assert.Equal(GateStatus.Blocked, gate.Result.Status);
+        Assert.Equal(GateStatus.Unsatisfied, gate.Result.Status);
     }
 
     [Fact]
-    public async Task Stale_required_input_blocks_when_freshness_is_required()
+    public async Task Stale_required_input_stops_when_freshness_is_required()
     {
         RuntimeHarness harness = RuntimeHarness.Create();
         ProductRecord stale = RuntimeHarness.Product(
@@ -51,12 +51,12 @@ public sealed class TransitionRuntimeTests
 
         TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
 
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
         Assert.False(harness.Executor.WasCalled);
     }
 
     [Fact]
-    public async Task Invalid_required_input_blocks_before_prompt_execution()
+    public async Task Invalid_required_input_stops_before_prompt_execution()
     {
         RuntimeHarness harness = RuntimeHarness.Create();
         ProductRecord invalid = RuntimeHarness.Product(
@@ -69,9 +69,192 @@ public sealed class TransitionRuntimeTests
 
         TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
 
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
         Assert.False(harness.Executor.WasCalled);
     }
+
+    [Fact]
+    public async Task Unsatisfied_clean_input_requirement_maps_to_dirty_input_surface_outcome()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        WorkflowTransitionDefinition definition = WithCleanInputRequirement();
+        harness.Definitions.Definition = definition;
+        harness.Gates.InputResult = new GateResult(
+            GateStatus.Unsatisfied,
+            [
+                new GateRequirementResult(
+                    definition.InputGate.Requirements[0].Identity,
+                    GateStatus.Satisfied,
+                    "Required input product is resolved and usable.",
+                    ["evidence.md"]),
+                new GateRequirementResult(
+                    "InputGate.CleanInput",
+                    GateStatus.Unsatisfied,
+                    "Input surface '.agents/' has uncommitted changes; commit the listed files under '.agents/' before rerunning.",
+                    [".agents/epic.md"]),
+            ],
+            "Input surface '.agents/' has uncommitted changes; commit the listed files under '.agents/' before rerunning.",
+            [".agents/epic.md"]);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.DirtyInputSurface, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
+        Assert.False(harness.Executor.WasCalled);
+        Assert.Empty(harness.RunStore.Completions);
+        Assert.Contains(".agents/epic.md", result.Evidence);
+        TransitionWarningCapture warning = Assert.Single(harness.Warnings.Warnings);
+        Assert.Equal(WarningCategory.Validation, warning.Category);
+        Assert.Contains("Commit the listed files", warning.Remediation, StringComparison.Ordinal);
+        TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, recovery.DurableState);
+        Assert.Equal(RuntimeOutcomeKind.DirtyInputSurface, recovery.Outcome);
+    }
+
+    [Fact]
+    public async Task First_unsatisfied_requirement_kind_selects_the_specific_input_label()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        WorkflowTransitionDefinition definition = WithCleanInputRequirement();
+        harness.Definitions.Definition = definition;
+        harness.Gates.InputResult = new GateResult(
+            GateStatus.Unsatisfied,
+            [
+                new GateRequirementResult(
+                    definition.InputGate.Requirements[0].Identity,
+                    GateStatus.Unsatisfied,
+                    "Required input product 'InputProduct' is missing; produce it before rerunning.",
+                    ["InputProduct"]),
+                new GateRequirementResult(
+                    "InputGate.CleanInput",
+                    GateStatus.Unsatisfied,
+                    "Input surface '.agents/' has uncommitted changes; commit the listed files under '.agents/' before rerunning.",
+                    [".agents/epic.md"]),
+            ],
+            "Required input product 'InputProduct' is missing; produce it before rerunning.",
+            ["InputProduct", ".agents/epic.md"]);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
+        Assert.False(harness.Executor.WasCalled);
+    }
+
+    [Fact]
+    public async Task Waiting_output_gate_maps_to_waiting_outcome_and_waiting_durable_state()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.Gates.OutputResult = new GateResult(
+            GateStatus.Waiting,
+            [
+                new GateRequirementResult(
+                    RuntimeHarness.Definition.OutputGate.Requirements[0].Identity,
+                    GateStatus.Waiting,
+                    "Output confirmation is pending.",
+                    ["pending-output.md"]),
+            ],
+            "Output confirmation is pending.",
+            ["pending-output.md"]);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.Waiting, result.Outcome);
+        Assert.Equal(TransitionDurableState.Waiting, result.DurableState);
+        Assert.True(harness.Executor.WasCalled);
+        Assert.Empty(harness.RunStore.Completions);
+        TransitionWarningCapture warning = Assert.Single(harness.Warnings.Warnings);
+        Assert.Equal(WarningCategory.Transition, warning.Category);
+        Assert.Contains("Satisfy the output gate", warning.Remediation, StringComparison.Ordinal);
+        Assert.Empty(harness.RecoveryMarkers.Markers);
+    }
+
+    [Fact]
+    public async Task Ambiguous_output_gate_maps_to_ambiguous_outcome_and_ambiguous_durable_state()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.Gates.OutputResult = new GateResult(
+            GateStatus.Ambiguous,
+            [
+                new GateRequirementResult(
+                    RuntimeHarness.Definition.OutputGate.Requirements[0].Identity,
+                    GateStatus.Ambiguous,
+                    "Output evidence is contradictory.",
+                    ["ambiguous-output.md"]),
+            ],
+            "Output evidence is contradictory.",
+            ["ambiguous-output.md"]);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.Ambiguous, result.Outcome);
+        Assert.Equal(TransitionDurableState.Ambiguous, result.DurableState);
+        Assert.Empty(harness.RunStore.Completions);
+        TransitionWarningCapture warning = Assert.Single(harness.Warnings.Warnings);
+        Assert.Equal(WarningCategory.Transition, warning.Category);
+        TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
+        Assert.Equal(TransitionDurableState.Ambiguous, recovery.DurableState);
+        Assert.Equal(RuntimeOutcomeKind.Ambiguous, recovery.Outcome);
+    }
+
+    [Fact]
+    public async Task Dual_shape_requirement_stops_as_missing_required_input_matching_evaluator_precedence()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        WorkflowTransitionDefinition definition = RuntimeHarness.Definition with
+        {
+            InputGate = RuntimeHarness.Definition.InputGate with
+            {
+                Requirements =
+                [
+                    new GateRequirementDefinition(
+                        "InputGate.DualShape",
+                        "Required input product that also declares an input surface.",
+                        RuntimeHarness.InputProduct,
+                        DependencyStrength.Required,
+                        true,
+                        ".agents/"),
+                ],
+            },
+        };
+        harness.Definitions.Definition = definition;
+        harness.Gates.InputResult = new GateResult(
+            GateStatus.Unsatisfied,
+            [
+                new GateRequirementResult(
+                    "InputGate.DualShape",
+                    GateStatus.Unsatisfied,
+                    "Required input product 'InputProduct' is missing; produce it before rerunning.",
+                    ["InputProduct"]),
+            ],
+            "Required input product 'InputProduct' is missing; produce it before rerunning.",
+            ["InputProduct"]);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
+        Assert.False(harness.Executor.WasCalled);
+    }
+
+    private static WorkflowTransitionDefinition WithCleanInputRequirement() =>
+        RuntimeHarness.Definition with
+        {
+            InputGate = RuntimeHarness.Definition.InputGate with
+            {
+                Requirements =
+                [
+                    .. RuntimeHarness.Definition.InputGate.Requirements,
+                    new GateRequirementDefinition(
+                        "InputGate.CleanInput",
+                        "Working tree under '.agents/' is committed input.",
+                        null,
+                        DependencyStrength.Required,
+                        true,
+                        ".agents/"),
+                ],
+            },
+        };
 
     [Fact]
     public async Task Prompt_failure_does_not_complete_transition()
@@ -97,30 +280,30 @@ public sealed class TransitionRuntimeTests
     }
 
     [Fact]
-    public async Task Prompt_context_block_stops_before_prompt_execution()
+    public async Task Prompt_context_unavailable_stops_before_prompt_execution()
     {
         RuntimeHarness harness = RuntimeHarness.Create();
-        harness.ContextBuilder.BlockedException = new PromptContextBlockedException(
+        harness.ContextBuilder.UnavailableException = new PromptContextUnavailableException(
             "Active Epic prompt context is missing.",
             [".agents/epic.md"]);
 
         TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
 
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
-        Assert.Equal(TransitionDurableState.Blocked, result.DurableState);
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
         Assert.Equal("Active Epic prompt context is missing.", result.Explanation);
         Assert.Contains(".agents/epic.md", result.Evidence);
         Assert.False(harness.Executor.WasCalled);
         Assert.Empty(harness.RunStore.Started);
         Assert.Empty(harness.RunStore.Completions);
-        TransitionBlockerCapture blocker = Assert.Single(harness.Blockers.Blockers);
-        Assert.Equal(harness.Request.Workflow, blocker.Request.Workflow);
-        Assert.Equal(harness.Request.Stage, blocker.Request.Stage);
-        Assert.Equal(RuntimeHarness.Definition.Identity, blocker.Transition);
-        Assert.Equal(BlockerCategory.Transition, blocker.Category);
-        Assert.Contains(".agents/epic.md", blocker.Evidence);
+        TransitionWarningCapture warning = Assert.Single(harness.Warnings.Warnings);
+        Assert.Equal(harness.Request.Workflow, warning.Request.Workflow);
+        Assert.Equal(harness.Request.Stage, warning.Request.Stage);
+        Assert.Equal(RuntimeHarness.Definition.Identity, warning.Transition);
+        Assert.Equal(WarningCategory.Transition, warning.Category);
+        Assert.Contains(".agents/epic.md", warning.Evidence);
         TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
-        Assert.Equal(TransitionDurableState.Blocked, recovery.DurableState);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, recovery.DurableState);
         Assert.Equal(RuntimeHarness.Definition.Recovery, recovery.Recovery);
         Assert.Contains(".agents/epic.md", recovery.Evidence);
     }
@@ -375,14 +558,14 @@ public sealed class TransitionRuntimeTests
     }
 
     [Fact]
-    public async Task Blocked_input_records_no_attempt()
+    public async Task Unsatisfied_input_records_no_attempt()
     {
         RuntimeHarness harness = RuntimeHarness.Create();
         harness.Products.Result = new ProductResolutionResult([], [RuntimeHarness.InputRequirement], [], [], []);
 
         TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
 
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
         Assert.False(harness.Executor.WasCalled);
         Assert.Empty(harness.Attempts.Started);
         Assert.Empty(harness.Attempts.Completions);
@@ -560,7 +743,7 @@ public sealed class TransitionRuntimeTests
             Effects = new FakeEffectExecutor();
             RunStore = new RecordingRunStore();
             Evidence = new RecordingEvidenceStore();
-            Blockers = new RecordingBlockerStore();
+            Warnings = new RecordingWarningStore();
             RecoveryMarkers = new RecordingRecoveryStore();
             GateEvaluations = new RecordingGateEvaluationStore();
             EffectRecords = new RecordingEffectStore();
@@ -577,7 +760,7 @@ public sealed class TransitionRuntimeTests
                 Effects,
                 RunStore,
                 Evidence,
-                Blockers,
+                Warnings,
                 RecoveryMarkers,
                 GateEvaluations,
                 EffectRecords,
@@ -615,7 +798,7 @@ public sealed class TransitionRuntimeTests
 
         public RecordingEvidenceStore Evidence { get; }
 
-        public RecordingBlockerStore Blockers { get; }
+        public RecordingWarningStore Warnings { get; }
 
         public RecordingRecoveryStore RecoveryMarkers { get; }
 
@@ -664,10 +847,12 @@ public sealed class TransitionRuntimeTests
 
     private sealed class FakeDefinitionResolver : ITransitionDefinitionResolver
     {
+        public WorkflowTransitionDefinition Definition { get; set; } = RuntimeHarness.Definition;
+
         public Task<WorkflowTransitionDefinition> ResolveAsync(
             TransitionRuntimeRequest request,
             CancellationToken cancellationToken) =>
-            Task.FromResult(RuntimeHarness.Definition);
+            Task.FromResult(Definition);
 
         public Task<IReadOnlyList<WorkflowTransitionIdentity>> ResolveEligibleSuccessorsAsync(
             WorkflowTransitionDefinition definition,
@@ -689,16 +874,25 @@ public sealed class TransitionRuntimeTests
 
     private sealed class FakeGateEvaluator : IGateEvaluator
     {
+        public GateResult? InputResult { get; set; }
+
+        public GateResult? OutputResult { get; set; }
+
         public Task<GateResult> EvaluateInputGateAsync(
             GateDefinition gate,
             ProductResolutionResult inputs,
             CancellationToken cancellationToken)
         {
-            GateStatus status = inputs.IsUsable ? GateStatus.Satisfied : GateStatus.Blocked;
+            if (InputResult is not null)
+            {
+                return Task.FromResult(InputResult);
+            }
+
+            GateStatus status = inputs.IsUsable ? GateStatus.Satisfied : GateStatus.Unsatisfied;
             return Task.FromResult(new GateResult(
                 status,
                 [new GateRequirementResult(gate.Requirements[0].Identity, status, status.ToString(), [])],
-                status == GateStatus.Satisfied ? "Input gate satisfied." : "Input gate blocked.",
+                status == GateStatus.Satisfied ? "Input gate satisfied." : "Input gate unsatisfied.",
                 status == GateStatus.Satisfied ? [] : ["input-gate.md"]));
         }
 
@@ -707,6 +901,11 @@ public sealed class TransitionRuntimeTests
             ProductValidationResult validation,
             CancellationToken cancellationToken)
         {
+            if (OutputResult is not null)
+            {
+                return Task.FromResult(OutputResult);
+            }
+
             GateStatus status = validation.IsValid ? GateStatus.Satisfied : GateStatus.Unsatisfied;
             return Task.FromResult(new GateResult(
                 status,
@@ -718,7 +917,7 @@ public sealed class TransitionRuntimeTests
 
     private sealed class FakePromptContextBuilder : IPromptContextBuilder
     {
-        public PromptContextBlockedException? BlockedException { get; set; }
+        public PromptContextUnavailableException? UnavailableException { get; set; }
 
         public Task<PromptContext> BuildAsync(
             TransitionRuntimeRequest request,
@@ -726,9 +925,9 @@ public sealed class TransitionRuntimeTests
             ProductResolutionResult inputs,
             CancellationToken cancellationToken)
         {
-            if (BlockedException is not null)
+            if (UnavailableException is not null)
             {
-                throw BlockedException;
+                throw UnavailableException;
             }
 
             IReadOnlyDictionary<string, string> metadata =
@@ -901,15 +1100,15 @@ public sealed class TransitionRuntimeTests
         }
     }
 
-    private sealed class RecordingBlockerStore : ITransitionBlockerStore
+    private sealed class RecordingWarningStore : ITransitionWarningStore
     {
-        public List<TransitionBlockerCapture> Blockers { get; } = [];
+        public List<TransitionWarningCapture> Warnings { get; } = [];
 
-        public Task RecordBlockerAsync(
-            TransitionBlockerCapture blocker,
+        public Task RecordWarningAsync(
+            TransitionWarningCapture warning,
             CancellationToken cancellationToken)
         {
-            Blockers.Add(blocker);
+            Warnings.Add(warning);
             return Task.CompletedTask;
         }
     }

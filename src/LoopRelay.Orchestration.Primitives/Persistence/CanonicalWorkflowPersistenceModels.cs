@@ -65,14 +65,17 @@ public sealed record CanonicalEffectRecord(
     string Explanation,
     IReadOnlyList<string> Evidence);
 
-public sealed record CanonicalBlockerRecord(
-    string BlockerId,
+public sealed record CanonicalWarningRecord(
+    string WarningId,
     WorkflowIdentity Workflow,
     WorkflowStageIdentity? Stage,
     WorkflowTransitionIdentity? Transition,
-    ResolutionBlocker Blocker,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset? ResolvedAt);
+    WarningCategory Category,
+    string Concern,
+    string Authority,
+    string Remediation,
+    IReadOnlyList<string> Evidence,
+    DateTimeOffset CreatedAt);
 
 public sealed record CanonicalRecoveryMarkerRecord(
     string MarkerId,
@@ -149,6 +152,6 @@ public sealed record CanonicalWorkflowPersistenceSnapshot(
     IReadOnlyList<ProductRecord> Products,
     IReadOnlyList<CanonicalGateEvaluationRecord> GateEvaluations,
     IReadOnlyList<CanonicalEffectRecord> EffectRecords,
-    IReadOnlyList<CanonicalBlockerRecord> Blockers,
+    IReadOnlyList<CanonicalWarningRecord> Warnings,
     IReadOnlyList<CanonicalRecoveryMarkerRecord> RecoveryMarkers,
     IReadOnlyList<CanonicalWorkflowChainRunRecord> WorkflowChainRuns);

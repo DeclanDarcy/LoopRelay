@@ -43,7 +43,7 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         var authority = new StorageAuthoritySnapshot(
             verification.Authority,
             verification.UsableAuthority,
-            verification.UsableAuthority ? "observed" : "blocked",
+            verification.UsableAuthority ? "observed" : "unusable",
             verification.Evidence);
 
         string agents = Path.Combine(root, OrchestrationArtifactPaths.AgentsDirectory);
@@ -546,9 +546,14 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
                     stageState.State == WorkflowResolutionState.Completed)
                 .Select(stageState => stageState.Stage)
                 .ToArray(),
-            canonicalSnapshot.Blockers
-                .Where(blocker => blocker.Workflow == state.Workflow && blocker.ResolvedAt is null)
-                .Select(blocker => blocker.Blocker)
+            canonicalSnapshot.Warnings
+                .Where(warning => warning.Workflow == state.Workflow)
+                .Select(warning => new ResolutionWarning(
+                    warning.Category,
+                    warning.Concern,
+                    warning.Authority,
+                    warning.Remediation,
+                    warning.Evidence))
                 .ToArray(),
             state.Evidence)).ToArray();
 
@@ -807,7 +812,7 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
                 new WorkflowStageIdentity("Completion"),
                 new WorkflowStageIdentity("Workflow Completion"),
             ],
-            Blockers: [],
+            Warnings: [],
             Evidence: completionArchiveEvidence
                 .Concat(["repository-observation:Execute:completion-archive-closed-state"])
                 .Distinct(StringComparer.Ordinal)
@@ -1130,9 +1135,8 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         run.State switch
         {
             TransitionDurableState.Completed => TransitionEligibilityState.Completed,
-            TransitionDurableState.Stalled => TransitionEligibilityState.Blocked,
-            TransitionDurableState.Blocked => TransitionEligibilityState.Blocked,
-            TransitionDurableState.Cancelled => TransitionEligibilityState.Blocked,
+            TransitionDurableState.InputUnsatisfied => TransitionEligibilityState.MissingRequiredInput,
+            TransitionDurableState.Ambiguous => TransitionEligibilityState.Ambiguous,
             TransitionDurableState.Failed => TransitionEligibilityState.Invalid,
             _ => TransitionEligibilityState.Waiting,
         };
@@ -1171,12 +1175,11 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
             : DatabaseInspection.Empty;
         if (hasDatabase && !inspection.CanOpen)
         {
-            var blocker = new ResolutionBlocker(
-                BlockerCategory.Storage,
+            var warning = new ResolutionWarning(
+                WarningCategory.Storage,
                 "Workspace database is not a valid SQLite database.",
                 "storage verifier",
                 "Restore or explicitly repair workspace storage.",
-                Recoverable: true,
                 [DatabaseRelativePath]);
             return Task.FromResult(new StorageVerificationResult(
                 StorageAuthorityKind.Corrupt,
@@ -1187,7 +1190,7 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
                 UnsupportedSchema: [],
                 UnresolvedReferences: [],
                 PartialTransactions: [],
-                BlockingConditions: [blocker],
+                BlockingConditions: [warning],
                 Evidence: evidence));
         }
 
@@ -1200,12 +1203,11 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
         };
         if (hasDatabase && inspection.UnsupportedSchema.Count > 0)
         {
-            var blocker = new ResolutionBlocker(
-                BlockerCategory.Storage,
+            var warning = new ResolutionWarning(
+                WarningCategory.Storage,
                 "Workspace database schema version is unsupported.",
                 "storage verifier",
                 "Use a compatible LoopRelay version or explicitly migrate workspace storage.",
-                Recoverable: true,
                 [DatabaseRelativePath]);
             return Task.FromResult(new StorageVerificationResult(
                 StorageAuthorityKind.Unsupported,
@@ -1216,18 +1218,17 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
                 UnsupportedSchema: inspection.UnsupportedSchema,
                 UnresolvedReferences: [],
                 PartialTransactions: [],
-                BlockingConditions: [blocker],
+                BlockingConditions: [warning],
                 Evidence: evidence));
         }
 
         if (hasDatabase && inspection.PartialTransactions.Count > 0)
         {
-            var blocker = new ResolutionBlocker(
-                BlockerCategory.Storage,
+            var warning = new ResolutionWarning(
+                WarningCategory.Storage,
                 "Workspace database contains partial workflow transaction markers.",
                 "storage verifier",
                 "Resolve or recover partial workflow transactions before mutating orchestration.",
-                Recoverable: true,
                 inspection.PartialTransactions);
             return Task.FromResult(new StorageVerificationResult(
                 authority,
@@ -1238,7 +1239,7 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
                 UnsupportedSchema: [],
                 UnresolvedReferences: [],
                 PartialTransactions: inspection.PartialTransactions,
-                BlockingConditions: [blocker],
+                BlockingConditions: [warning],
                 Evidence: evidence.Concat(inspection.PartialTransactions).ToArray()));
         }
 

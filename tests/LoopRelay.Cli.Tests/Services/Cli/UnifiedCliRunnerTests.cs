@@ -1,3 +1,5 @@
+using LoopRelay.Agents.Models.Process;
+using LoopRelay.Agents.Services.Process;
 using LoopRelay.Cli.Services.Cli;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Core.Models.Repositories;
@@ -20,7 +22,9 @@ public sealed class UnifiedCliRunnerTests
     [InlineData(WorkflowStopReason.TransitionCompleted, 0)]
     [InlineData(WorkflowStopReason.Failed, 1)]
     [InlineData(WorkflowStopReason.Stalled, 3)]
-    [InlineData(WorkflowStopReason.Blocked, 4)]
+    [InlineData(WorkflowStopReason.MissingRequiredInput, 4)]
+    [InlineData(WorkflowStopReason.DirtyInputSurface, 4)]
+    [InlineData(WorkflowStopReason.StorageUnusable, 4)]
     [InlineData(WorkflowStopReason.Ambiguous, 4)]
     [InlineData(WorkflowStopReason.NoEligibleTransition, 4)]
     [InlineData(WorkflowStopReason.Cancelled, 130)]
@@ -130,11 +134,108 @@ public sealed class UnifiedCliRunnerTests
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
         Assert.Equal(4, exitCode);
-        Assert.Contains("Unsupported schema", output.ToString(), StringComparison.Ordinal);
-        Assert.Equal(string.Empty, error.ToString());
+        Assert.Equal(string.Empty, output.ToString());
+        Assert.Contains("Unsupported SQLite schema version", error.ToString(), StringComparison.Ordinal);
         await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await verify.OpenAsync();
         Assert.Equal("999", await ScalarAsync(
+            verify,
+            "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+    }
+
+    [Fact]
+    public async Task RunAsync_status_migrates_pre_m2_database_with_latched_blocked_row_before_any_read()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            // A v3-shaped database is built with raw SQL only: EnsureSchemaAsync must never run here,
+            // because the point is that the CLI itself migrates before its first read.
+            await connection.OpenAsync();
+            await ExecuteAsync(
+                connection,
+                "CREATE TABLE schema_metadata(key text primary key, value text not null);");
+            await ExecuteAsync(
+                connection,
+                "INSERT INTO schema_metadata(key, value) VALUES ('schema_version', '3');");
+            await ExecuteAsync(
+                connection,
+                """
+                CREATE TABLE canonical_workflow_states(
+                    workflow_identity text primary key,
+                    state text not null,
+                    current_stage text,
+                    outcome text,
+                    updated_at text not null,
+                    evidence_json text not null
+                );
+                """);
+            await ExecuteAsync(
+                connection,
+                """
+                INSERT INTO canonical_workflow_states (workflow_identity, state, current_stage, outcome, updated_at, evidence_json)
+                VALUES ('Plan', 'Blocked', 'Planning', 'Blocked', '2026-07-10T12:00:00.0000000Z', '["legacy-blocked.md"]');
+                """);
+        }
+
+        var invocation = new UnifiedCliInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Status, []));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+
+        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, error.ToString());
+        Assert.Contains("Selected workflow: Plan", output.ToString(), StringComparison.Ordinal);
+        await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await verify.OpenAsync();
+        Assert.Equal("Resumable", await ScalarAsync(
+            verify,
+            "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
+        Assert.Equal(LoopRelayWorkspaceDatabase.CurrentSchemaVersion.ToString(), await ScalarAsync(
+            verify,
+            "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+    }
+
+    [Fact]
+    public async Task RunAsync_status_stops_with_exit_4_for_future_schema_version_without_crashing()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await connection.OpenAsync();
+            await ExecuteAsync(
+                connection,
+                "CREATE TABLE schema_metadata(key text primary key, value text not null);");
+            await ExecuteAsync(
+                connection,
+                "INSERT INTO schema_metadata(key, value) VALUES ('schema_version', '99');");
+        }
+
+        var invocation = new UnifiedCliInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Status, []));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+
+        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(4, exitCode);
+        Assert.Equal(string.Empty, output.ToString());
+        Assert.Contains("Unsupported SQLite schema version `99`", error.ToString(), StringComparison.Ordinal);
+        await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await verify.OpenAsync();
+        Assert.Equal("99", await ScalarAsync(
             verify,
             "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
     }
@@ -190,80 +291,78 @@ public sealed class UnifiedCliRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_unblock_resolves_recoverable_canonical_blockers_and_restores_workflow_state()
+    public async Task RunAsync_previously_latched_blocked_workflow_runs_without_any_unblock_step()
     {
         Repository repository = CreateRepository();
         var store = new CanonicalWorkflowPersistenceStore(repository);
         var stage = new WorkflowStageIdentity("Planning");
-        await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
-            WorkflowIdentity.Plan,
-            WorkflowResolutionState.Blocked,
-            stage,
-            RuntimeOutcomeKind.Blocked,
-            DateTimeOffset.UtcNow,
-            ["blocked-plan.md"]));
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await connection.OpenAsync();
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+            await ExecuteAsync(
+                connection,
+                """
+                INSERT INTO canonical_workflow_states (workflow_identity, state, current_stage, outcome, updated_at, evidence_json)
+                VALUES ('Plan', 'Blocked', 'Planning', 'Blocked', '2026-07-10T12:00:00.0000000Z', '["legacy-blocked.md"]');
+                """);
+        }
+
+        // The next store write runs the schema pass, which migrates the legacy label without any unblock step.
         await store.UpsertStageStateAsync(new CanonicalStageStateRecord(
             WorkflowIdentity.Plan,
             stage,
-            WorkflowResolutionState.Blocked,
+            WorkflowResolutionState.Active,
             DateTimeOffset.UtcNow,
-            ["blocked-plan-stage.md"]));
-        await store.UpsertBlockerAsync(new CanonicalBlockerRecord(
-            "blocker-001",
-            WorkflowIdentity.Plan,
-            stage,
-            new WorkflowTransitionIdentity("WriteInitialPlan"),
-            new ResolutionBlocker(
-                BlockerCategory.Human,
-                "Human approval is required.",
-                "test",
-                "Run unblock after approval.",
-                Recoverable: true,
-                ["approval.md"]),
-            DateTimeOffset.UtcNow,
-            null));
-        var invocation = new UnifiedCliInvocation(
-            repository,
-            new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Unblock, []));
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+            ["plan-stage.md"]));
 
-        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
-
-        Assert.Equal(0, exitCode);
-        Assert.Contains("Resolved canonical blockers: 1", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Restored blocked workflows: 1", output.ToString(), StringComparison.Ordinal);
-        Assert.Equal(string.Empty, error.ToString());
         CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync();
         CanonicalWorkflowStateRecord workflow = Assert.Single(snapshot.WorkflowStates);
         Assert.Equal(WorkflowResolutionState.Resumable, workflow.State);
-        Assert.Equal(RuntimeOutcomeKind.Waiting, workflow.Outcome);
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, workflow.Outcome);
         Assert.Equal(stage, workflow.CurrentStage);
-        CanonicalStageStateRecord stageState = Assert.Single(snapshot.StageStates);
-        Assert.Equal(WorkflowResolutionState.Active, stageState.State);
-        CanonicalBlockerRecord blocker = Assert.Single(snapshot.Blockers);
-        Assert.NotNull(blocker.ResolvedAt);
+
+        var runInvocation = new UnifiedCliInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+        using var runOutput = new StringWriter();
+        using var runError = new StringWriter();
+        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), runOutput, runError);
+
+        int runExitCode = await runner.RunAsync(runInvocation, CancellationToken.None);
+
+        Assert.Equal(4, runExitCode);
+        Assert.Contains("Stop reason: MissingRequiredInput", runOutput.ToString(), StringComparison.Ordinal);
+        Assert.Equal(string.Empty, runError.ToString());
     }
 
     [Fact]
-    public async Task RunAsync_unblock_rejects_extra_arguments()
+    public async Task RunAsync_dirty_input_surface_stops_with_exit_4_and_prints_requirement_warnings()
     {
         Repository repository = CreateRepository();
+        await SeedRoadmapArtifactsAsync(repository);
+        await GitAsync(repository.Path, "init");
         var invocation = new UnifiedCliInvocation(
             repository,
-            new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Unblock, ["extra"]));
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
         var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
-        Assert.Equal(2, exitCode);
-        Assert.Equal(string.Empty, output.ToString());
-        Assert.Contains("Unexpected argument: extra", error.ToString(), StringComparison.Ordinal);
+        Assert.Equal(4, exitCode);
+        string text = output.ToString();
+        Assert.Contains("Stop reason: DirtyInputSurface", text, StringComparison.Ordinal);
+        Assert.Contains("Outcome: DirtyInputSurface", text, StringComparison.Ordinal);
+        Assert.Contains("Durable state: InputUnsatisfied", text, StringComparison.Ordinal);
+        Assert.Contains("Warning: WriteExecutablePlan.CleanInput:", text, StringComparison.Ordinal);
+        Assert.Contains("commit the listed files under '.agents/'", text, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, error.ToString());
     }
 
     [Fact]
@@ -753,6 +852,12 @@ public sealed class UnifiedCliRunnerTests
             Name = Path.GetFileName(path),
             Path = path,
         };
+    }
+
+    private static async Task GitAsync(string repositoryPath, params string[] arguments)
+    {
+        ProcessRunResult result = await new ProcessRunner().RunAsync("git", arguments, repositoryPath);
+        Assert.Equal(0, result.ExitCode);
     }
 
     private static async Task PersistCompletedChainAsync(CanonicalWorkflowPersistenceStore store)

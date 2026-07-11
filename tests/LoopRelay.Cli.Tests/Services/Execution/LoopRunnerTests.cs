@@ -930,7 +930,7 @@ public class LoopRunnerTests
                     AppliedDeleteCount: 0,
                     SynthesisDecisionRequired: false,
                     SynthesisDecision: null),
-                BlockerMessages: []);
+                UnresolvedMessages: []);
 
         public List<NonImplementationCompletionReviewResult> ResultsReturned { get; } = [];
 
@@ -1162,7 +1162,7 @@ public class LoopRunnerTests
                     AppliedDeleteCount: 0,
                     SynthesisDecisionRequired: false,
                     SynthesisDecision: null),
-                BlockerMessages: ["Human decisions are required."]),
+                UnresolvedMessages: ["Human decisions are required."]),
         };
         var h = New(completionReview: completionReview);
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");

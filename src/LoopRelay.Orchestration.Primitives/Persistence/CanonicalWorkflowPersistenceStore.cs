@@ -246,48 +246,34 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$evidence_json", Json(effect.Evidence)));
     }
 
-    public async Task UpsertBlockerAsync(
-        CanonicalBlockerRecord blocker,
+    public async Task AppendWarningAsync(
+        CanonicalWarningRecord warning,
         CancellationToken cancellationToken = default)
     {
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await ExecuteAsync(
             connection,
             """
-            INSERT INTO canonical_blockers (
-                blocker_id, workflow_identity, stage_identity, transition_identity, category,
-                reason, authority, required_action, recoverable, evidence_json, created_at, resolved_at
+            INSERT INTO evaluation_warnings (
+                warning_id, workflow_identity, stage_identity, transition_identity, category,
+                concern, authority, remediation, evidence_json, created_at
             )
             VALUES (
-                $blocker_id, $workflow_identity, $stage_identity, $transition_identity, $category,
-                $reason, $authority, $required_action, $recoverable, $evidence_json, $created_at, $resolved_at
-            )
-            ON CONFLICT(blocker_id) DO UPDATE SET
-                workflow_identity = excluded.workflow_identity,
-                stage_identity = excluded.stage_identity,
-                transition_identity = excluded.transition_identity,
-                category = excluded.category,
-                reason = excluded.reason,
-                authority = excluded.authority,
-                required_action = excluded.required_action,
-                recoverable = excluded.recoverable,
-                evidence_json = excluded.evidence_json,
-                created_at = excluded.created_at,
-                resolved_at = excluded.resolved_at;
+                $warning_id, $workflow_identity, $stage_identity, $transition_identity, $category,
+                $concern, $authority, $remediation, $evidence_json, $created_at
+            );
             """,
             cancellationToken,
-            ("$blocker_id", blocker.BlockerId),
-            ("$workflow_identity", blocker.Workflow.Value),
-            ("$stage_identity", blocker.Stage?.Value),
-            ("$transition_identity", blocker.Transition?.Value),
-            ("$category", blocker.Blocker.Category.ToString()),
-            ("$reason", blocker.Blocker.Reason),
-            ("$authority", blocker.Blocker.Authority),
-            ("$required_action", blocker.Blocker.RequiredAction),
-            ("$recoverable", blocker.Blocker.Recoverable ? 1 : 0),
-            ("$evidence_json", Json(blocker.Blocker.Evidence)),
-            ("$created_at", Format(blocker.CreatedAt)),
-            ("$resolved_at", blocker.ResolvedAt is null ? null : Format(blocker.ResolvedAt.Value)));
+            ("$warning_id", warning.WarningId),
+            ("$workflow_identity", warning.Workflow.Value),
+            ("$stage_identity", warning.Stage?.Value),
+            ("$transition_identity", warning.Transition?.Value),
+            ("$category", warning.Category.ToString()),
+            ("$concern", warning.Concern),
+            ("$authority", warning.Authority),
+            ("$remediation", warning.Remediation),
+            ("$evidence_json", Json(warning.Evidence)),
+            ("$created_at", Format(warning.CreatedAt)));
     }
 
     public async Task UpsertRecoveryMarkerAsync(
@@ -641,7 +627,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await ReadProductsAsync(connection, cancellationToken),
             await ReadGateEvaluationsAsync(connection, cancellationToken),
             await ReadEffectRecordsAsync(connection, cancellationToken),
-            await ReadBlockersAsync(connection, cancellationToken),
+            await ReadWarningsAsync(connection, cancellationToken),
             await ReadRecoveryMarkersAsync(connection, cancellationToken),
             await ReadWorkflowChainRunsAsync(connection, cancellationToken));
     }
@@ -1062,37 +1048,42 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         return rows;
     }
 
-    private static async Task<IReadOnlyList<CanonicalBlockerRecord>> ReadBlockersAsync(
+    private static async Task<IReadOnlyList<CanonicalWarningRecord>> ReadWarningsAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
-        var rows = new List<CanonicalBlockerRecord>();
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT blocker_id, workflow_identity, stage_identity, transition_identity, category,
-                   reason, authority, required_action, recoverable, evidence_json, created_at, resolved_at
-            FROM canonical_blockers ORDER BY blocker_id;
-            """;
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
+        try
         {
-            rows.Add(new CanonicalBlockerRecord(
-                reader.GetString(0),
-                new WorkflowIdentity(reader.GetString(1)),
-                reader.IsDBNull(2) ? null : new WorkflowStageIdentity(reader.GetString(2)),
-                reader.IsDBNull(3) ? null : new WorkflowTransitionIdentity(reader.GetString(3)),
-                new ResolutionBlocker(
-                    ParseEnum<BlockerCategory>(reader.GetString(4)),
+            var rows = new List<CanonicalWarningRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT warning_id, workflow_identity, stage_identity, transition_identity, category,
+                       concern, authority, remediation, evidence_json, created_at
+                FROM evaluation_warnings ORDER BY created_at, warning_id;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new CanonicalWarningRecord(
+                    reader.GetString(0),
+                    new WorkflowIdentity(reader.GetString(1)),
+                    reader.IsDBNull(2) ? null : new WorkflowStageIdentity(reader.GetString(2)),
+                    reader.IsDBNull(3) ? null : new WorkflowTransitionIdentity(reader.GetString(3)),
+                    ParseEnum<WarningCategory>(reader.GetString(4)),
                     reader.GetString(5),
                     reader.GetString(6),
                     reader.GetString(7),
-                    reader.GetInt64(8) == 1,
-                    ReadJson<IReadOnlyList<string>>(reader.GetString(9))),
-                ParseDate(reader.GetString(10)),
-                reader.IsDBNull(11) ? null : ParseDate(reader.GetString(11))));
-        }
+                    ReadJson<IReadOnlyList<string>>(reader.GetString(8)),
+                    ParseDate(reader.GetString(9))));
+            }
 
-        return rows;
+            return rows;
+        }
+        catch (SqliteException exception) when (exception.Message.Contains("no such table"))
+        {
+            // Pre-v4 databases lack evaluation_warnings; warning reads report empty evidence instead of failing.
+            return [];
+        }
     }
 
     private static async Task<IReadOnlyList<CanonicalRecoveryMarkerRecord>> ReadRecoveryMarkersAsync(

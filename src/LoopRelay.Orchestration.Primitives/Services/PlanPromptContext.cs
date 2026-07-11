@@ -150,7 +150,7 @@ public static class PlanPromptContext
                 IsUsable: false,
                 Sections: sections,
                 Metadata: metadata,
-                Explanation: "Plan prompt context is blocked: " + string.Join("; ", blockers),
+                Explanation: "Plan prompt context is unavailable: " + string.Join("; ", blockers),
                 Evidence: evidence.Distinct(StringComparer.Ordinal).ToArray());
         }
 

@@ -26,7 +26,7 @@ public static class EvalRoadmapMilestonePromptContext
         string absolutePath = Path.Combine(root, Normalize(relativePath));
         if (!File.Exists(absolutePath))
         {
-            return Blocked(
+            return Unavailable(
                 "Active Epic prompt context is missing. Expected `.agents/epic.md` before generating milestone deep dives.",
                 [relativePath]);
         }
@@ -34,7 +34,7 @@ public static class EvalRoadmapMilestonePromptContext
         string content = File.ReadAllText(absolutePath);
         if (string.IsNullOrWhiteSpace(content))
         {
-            return Blocked(
+            return Unavailable(
                 "Active Epic prompt context is empty. `.agents/epic.md` must contain a selected epic before generating milestone deep dives.",
                 [relativePath]);
         }
@@ -42,7 +42,7 @@ public static class EvalRoadmapMilestonePromptContext
         IReadOnlyList<string> validationIssues = ValidateActiveEpic(content);
         if (validationIssues.Count > 0)
         {
-            return Blocked(
+            return Unavailable(
                 "Active Epic prompt context is malformed or ambiguous: " + string.Join("; ", validationIssues),
                 [relativePath]);
         }
@@ -125,7 +125,7 @@ public static class EvalRoadmapMilestonePromptContext
     private static string NormalizeTableLine(string line) =>
         line.Replace(" ", string.Empty, StringComparison.Ordinal).Trim();
 
-    private static EvalRoadmapMilestonePromptContextResult Blocked(
+    private static EvalRoadmapMilestonePromptContextResult Unavailable(
         string explanation,
         IReadOnlyList<string> evidence) =>
         new(
@@ -134,7 +134,7 @@ public static class EvalRoadmapMilestonePromptContext
             Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["context.active_epic.path"] = EvaluationArtifactPaths.PreparedEpic,
-                ["context.active_epic.status"] = "blocked",
+                ["context.active_epic.status"] = "unavailable",
             },
             Explanation: explanation,
             Evidence: evidence);

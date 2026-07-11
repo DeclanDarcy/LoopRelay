@@ -34,8 +34,8 @@ public sealed class ExecuteWorkflowStateClassifierTests
             ExecuteWorkflowStateKind.Waiting,
             Observation(workflow: Workflow(WorkflowResolutionState.Waiting, "Completion")));
         AssertState(
-            ExecuteWorkflowStateKind.Blocked,
-            Observation(workflow: Workflow(WorkflowResolutionState.Blocked, "Implementation")));
+            ExecuteWorkflowStateKind.ImplementationInProgress,
+            Observation(workflow: Workflow(WorkflowResolutionState.Resumable, "Implementation")));
         AssertState(
             ExecuteWorkflowStateKind.Cancelled,
             Observation(workflow: Workflow(WorkflowResolutionState.Cancelled, "Implementation")));

@@ -13,7 +13,6 @@ public enum RoadmapWorkflowStateKind
     ActiveEpicPreparationInProgress,
     MilestoneSpecificationInProgress,
     PlanEntryVerificationInProgress,
-    Blocked,
     Cancelled,
     Failed,
     Completed,
@@ -36,11 +35,6 @@ public static class RoadmapWorkflowStateClassifier
         if (workflowState?.State is WorkflowResolutionState.Completed)
         {
             return State(RoadmapWorkflowStateKind.Completed, workflowState, observation);
-        }
-
-        if (workflowState?.State is WorkflowResolutionState.Blocked)
-        {
-            return State(RoadmapWorkflowStateKind.Blocked, workflowState, observation);
         }
 
         if (workflowState?.State is WorkflowResolutionState.Cancelled)

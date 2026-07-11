@@ -91,7 +91,8 @@ public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStor
         {
             TransitionDurableState.Completed => RuntimeOutcomeKind.Completed,
             TransitionDurableState.Stalled => RuntimeOutcomeKind.Stalled,
-            TransitionDurableState.Blocked => RuntimeOutcomeKind.Blocked,
+            TransitionDurableState.InputUnsatisfied => RuntimeOutcomeKind.MissingRequiredInput,
+            TransitionDurableState.Ambiguous => RuntimeOutcomeKind.Ambiguous,
             TransitionDurableState.Failed => RuntimeOutcomeKind.Failed,
             TransitionDurableState.Cancelled => RuntimeOutcomeKind.Cancelled,
             _ => RuntimeOutcomeKind.Waiting,
@@ -100,7 +101,9 @@ public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStor
     private static bool IsTerminal(TransitionDurableState state) =>
         state is TransitionDurableState.Completed
             or TransitionDurableState.Stalled
-            or TransitionDurableState.Blocked
+            or TransitionDurableState.InputUnsatisfied
+            or TransitionDurableState.Waiting
+            or TransitionDurableState.Ambiguous
             or TransitionDurableState.Failed
             or TransitionDurableState.Cancelled;
 }
@@ -165,26 +168,23 @@ public sealed class CanonicalTransitionEvidenceStore(CanonicalWorkflowPersistenc
             cancellationToken);
 }
 
-public sealed class CanonicalTransitionBlockerStore(CanonicalWorkflowPersistenceStore _store) : ITransitionBlockerStore
+public sealed class CanonicalTransitionWarningStore(CanonicalWorkflowPersistenceStore _store) : ITransitionWarningStore
 {
-    public Task RecordBlockerAsync(
-        TransitionBlockerCapture blocker,
+    public Task RecordWarningAsync(
+        TransitionWarningCapture warning,
         CancellationToken cancellationToken) =>
-        _store.UpsertBlockerAsync(
-            new CanonicalBlockerRecord(
-                $"{blocker.RunId}:{blocker.Transition.Value}",
-                blocker.Request.Workflow,
-                blocker.Request.Stage,
-                blocker.Transition,
-                new ResolutionBlocker(
-                    blocker.Category,
-                    blocker.Reason,
-                    "canonical transition runtime",
-                    blocker.RequiredAction,
-                    blocker.Recoverable,
-                    blocker.Evidence),
-                blocker.RecordedAt,
-                null),
+        _store.AppendWarningAsync(
+            new CanonicalWarningRecord(
+                CausalUlid.NewId("warn"),
+                warning.Request.Workflow,
+                warning.Request.Stage,
+                warning.Transition,
+                warning.Category,
+                warning.Concern,
+                "canonical transition runtime",
+                warning.Remediation,
+                warning.Evidence,
+                warning.RecordedAt),
             cancellationToken);
 }
 

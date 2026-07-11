@@ -10,7 +10,7 @@ namespace LoopRelay.Core.Services.Persistence;
 /// </summary>
 public static class LoopRelayWorkspaceDatabase
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public static string Resolve(Repository repository)
@@ -410,19 +410,19 @@ public static class LoopRelayWorkspaceDatabase
             evidence_json text not null
         );
 
-        CREATE TABLE IF NOT EXISTS canonical_blockers(
-            blocker_id text primary key,
+        drop table if exists canonical_blockers;
+
+        CREATE TABLE IF NOT EXISTS evaluation_warnings(
+            warning_id text primary key,
             workflow_identity text not null,
             stage_identity text,
             transition_identity text,
             category text not null,
-            reason text not null,
+            concern text not null,
             authority text not null,
-            required_action text not null,
-            recoverable integer not null,
+            remediation text not null,
             evidence_json text not null,
-            created_at text not null,
-            resolved_at text
+            created_at text not null
         );
 
         CREATE TABLE IF NOT EXISTS canonical_recovery_markers(
@@ -477,7 +477,7 @@ public static class LoopRelayWorkspaceDatabase
         CREATE INDEX IF NOT EXISTS idx_canonical_gate_evaluations_workflow
             ON canonical_gate_evaluations(workflow_identity, stage_identity, transition_identity);
         CREATE INDEX IF NOT EXISTS idx_canonical_effect_records_run ON canonical_effect_records(run_id);
-        CREATE INDEX IF NOT EXISTS idx_canonical_blockers_workflow ON canonical_blockers(workflow_identity, stage_identity, transition_identity);
+        CREATE INDEX IF NOT EXISTS idx_evaluation_warnings_workflow ON evaluation_warnings(workflow_identity, stage_identity, transition_identity);
         CREATE INDEX IF NOT EXISTS idx_canonical_workflow_chain_runs_chain ON canonical_workflow_chain_runs(chain_identity, started_at);
         CREATE INDEX IF NOT EXISTS idx_session_telemetry_order
             ON session_telemetry_events(recorded_at, event_id);
@@ -548,5 +548,11 @@ public static class LoopRelayWorkspaceDatabase
         CREATE INDEX IF NOT EXISTS idx_workflow_instances_workflow ON workflow_instances(workflow_identity, started_at);
         CREATE INDEX IF NOT EXISTS idx_attempts_transition_run ON attempts(transition_run_id);
         CREATE INDEX IF NOT EXISTS idx_agent_sessions_attempt ON agent_sessions(attempt_id);
+
+        UPDATE canonical_workflow_states SET state = 'Resumable' WHERE state = 'Blocked';
+        UPDATE canonical_workflow_states SET outcome = 'MissingRequiredInput' WHERE outcome = 'Blocked';
+        UPDATE canonical_stage_states SET state = 'Resumable' WHERE state = 'Blocked';
+        UPDATE canonical_transition_runs SET state = 'InputUnsatisfied' WHERE state = 'Blocked';
+        UPDATE canonical_transition_runs SET outcome = 'MissingRequiredInput' WHERE outcome = 'Blocked';
         """;
 }

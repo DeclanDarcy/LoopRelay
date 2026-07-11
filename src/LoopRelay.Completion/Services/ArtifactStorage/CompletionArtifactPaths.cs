@@ -23,7 +23,7 @@ public static class CompletionArtifactPaths
     public const string CompletedEpicsPattern = CompletedEpicsDirectory + "/*.md";
     public const string ExecutionEvidenceDirectory = EvidenceDirectory + "/execution";
     public const string EvaluationEvidenceDirectory = EvidenceDirectory + "/evaluations";
-    public const string BlockerEvidenceDirectory = EvidenceDirectory + "/blockers";
+    public const string BlockedEvidenceDirectory = EvidenceDirectory + "/blockers";
 
     public static string CompletedEpicArchiveDirectory(int index) => $"{CompletedEpicsDirectory}/{index}";
 

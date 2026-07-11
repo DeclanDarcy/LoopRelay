@@ -9,7 +9,7 @@ public sealed record NonImplementationCompletionReviewResult(
     IReadOnlyList<string> EvidencePaths,
     IReadOnlyList<string> AppliedDeletePaths,
     NonImplementationCompletionReviewSummary Summary,
-    IReadOnlyList<string> BlockerMessages)
+    IReadOnlyList<string> UnresolvedMessages)
 {
     public bool IsReady => Status == NonImplementationCompletionReviewStatus.Ready;
 

@@ -16,7 +16,9 @@ public enum TransitionDurableState
     EffectsApplied,
     Completed,
     Stalled,
-    Blocked,
+    InputUnsatisfied,
+    Waiting,
+    Ambiguous,
     Failed,
     Cancelled,
 }
@@ -34,7 +36,7 @@ public enum OutputInterpretationStatus
     Malformed,
     Incomplete,
     Unexpected,
-    Blocked,
+    Unavailable,
 }
 
 public enum ProductValidationStatus
@@ -85,7 +87,7 @@ public sealed record PromptContextSection(
     string SourcePath,
     IReadOnlyList<string> Evidence);
 
-public sealed class PromptContextBlockedException(
+public sealed class PromptContextUnavailableException(
     string message,
     IReadOnlyList<string> evidence) : Exception(message)
 {
@@ -203,15 +205,14 @@ public sealed record TransitionEvidenceEvent(
     string Explanation,
     IReadOnlyList<string> Evidence);
 
-public sealed record TransitionBlockerCapture(
+public sealed record TransitionWarningCapture(
     string RunId,
     DateTimeOffset RecordedAt,
     TransitionRuntimeRequest Request,
     WorkflowTransitionIdentity Transition,
-    BlockerCategory Category,
-    string Reason,
-    string RequiredAction,
-    bool Recoverable,
+    WarningCategory Category,
+    string Concern,
+    string Remediation,
     IReadOnlyList<string> Evidence);
 
 public sealed record TransitionRecoveryMarkerCapture(
@@ -368,10 +369,10 @@ public interface ITransitionEvidenceStore
         CancellationToken cancellationToken);
 }
 
-public interface ITransitionBlockerStore
+public interface ITransitionWarningStore
 {
-    Task RecordBlockerAsync(
-        TransitionBlockerCapture blocker,
+    Task RecordWarningAsync(
+        TransitionWarningCapture warning,
         CancellationToken cancellationToken);
 }
 

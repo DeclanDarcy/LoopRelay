@@ -58,7 +58,7 @@ public sealed class WorkflowChainRunnerTests
     }
 
     [Fact]
-    public async Task Boundary_blocks_when_files_may_exist_but_required_semantic_products_are_not_validated()
+    public async Task Boundary_stops_with_missing_required_input_when_required_semantic_products_are_not_validated()
     {
         WorkflowChainRunner runner = CreateRunner(new FakeTransitionRuntime(), out _);
         RepositoryObservation observation = Observation(
@@ -74,14 +74,14 @@ public sealed class WorkflowChainRunnerTests
             TraditionalRoadmapChain,
             Definitions));
 
-        Assert.Equal(WorkflowStopReason.Blocked, result.StopReason);
+        Assert.Equal(WorkflowStopReason.MissingRequiredInput, result.StopReason);
         WorkflowBoundaryEvaluation boundary = Assert.Single(result.Boundaries);
         Assert.False(boundary.CanAdvance);
         Assert.False(boundary.ProductTransfer!.Gate.IsSatisfied);
     }
 
     [Fact]
-    public async Task EvalRoadmap_boundary_blocks_when_plan_entry_products_are_invalid()
+    public async Task EvalRoadmap_boundary_stops_with_missing_required_input_when_plan_entry_products_are_invalid()
     {
         WorkflowChainRunner runner = CreateRunner(new FakeTransitionRuntime(), out _);
         RepositoryObservation observation = Observation(
@@ -102,7 +102,7 @@ public sealed class WorkflowChainRunnerTests
             EvalRoadmapChain,
             Definitions));
 
-        Assert.Equal(WorkflowStopReason.Blocked, result.StopReason);
+        Assert.Equal(WorkflowStopReason.MissingRequiredInput, result.StopReason);
         WorkflowBoundaryEvaluation boundary = Assert.Single(result.Boundaries);
         Assert.False(boundary.CanAdvance);
         Assert.False(boundary.EntryGate!.IsSatisfied);
@@ -296,7 +296,6 @@ public sealed class WorkflowChainRunnerTests
     }
 
     [Theory]
-    [InlineData(WorkflowResolutionState.Blocked, WorkflowStopReason.Blocked)]
     [InlineData(WorkflowResolutionState.Waiting, WorkflowStopReason.Waiting)]
     [InlineData(WorkflowResolutionState.Cancelled, WorkflowStopReason.Cancelled)]
     [InlineData(WorkflowResolutionState.Failed, WorkflowStopReason.Failed)]
@@ -314,9 +313,7 @@ public sealed class WorkflowChainRunnerTests
                     state,
                     state == WorkflowResolutionState.Ambiguous ? null : new WorkflowStageIdentity("Planning"),
                     [],
-                    state == WorkflowResolutionState.Blocked
-                        ? [new ResolutionBlocker(BlockerCategory.Workflow, "blocked", "test", "fix", true, [])]
-                        : [],
+                    [],
                     [$"{state}.json"]),
             ],
             products:
@@ -335,7 +332,49 @@ public sealed class WorkflowChainRunnerTests
     }
 
     [Fact]
-    public async Task Controller_returns_no_eligible_transition_when_stage_has_only_blocked_transitions()
+    public async Task Controller_stops_with_storage_unusable_when_storage_verification_is_unusable()
+    {
+        WorkflowController controller = CreateController(new FakeTransitionRuntime());
+        RepositoryObservation observation = Observation(
+            products:
+            [
+                Product(ProductIdentity.PreparedEpic, WorkflowIdentity.TraditionalRoadmap),
+                Product(ProductIdentity.MilestoneSpecificationSet, WorkflowIdentity.TraditionalRoadmap),
+            ]) with
+        {
+            StorageVerification = new StorageVerificationResult(
+                StorageAuthorityKind.FilesystemExport,
+                UsableAuthority: false,
+                StaleExports: [],
+                Conflicts: [],
+                Corruption: [],
+                UnsupportedSchema: [],
+                UnresolvedReferences: [],
+                PartialTransactions: [],
+                BlockingConditions:
+                [
+                    new ResolutionWarning(
+                        WarningCategory.Storage,
+                        "storage unusable",
+                        "test",
+                        "repair storage",
+                        []),
+                ],
+                Evidence: [".agents"]),
+        };
+
+        WorkflowControllerResult result = await controller.RunAsync(new WorkflowControllerRequest(
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            observation,
+            Definitions));
+
+        Assert.Equal(WorkflowStopReason.StorageUnusable, result.StopReason);
+        Assert.Equal(RepositoryClassification.StorageUnusable, result.Resolution.Classification);
+        Assert.Null(result.Transition);
+    }
+
+    [Fact]
+    public async Task Controller_stops_with_missing_required_input_when_stage_transitions_lack_input_products()
     {
         WorkflowController controller = CreateController(new FakeTransitionRuntime());
         RepositoryObservation observation = Observation(
@@ -356,12 +395,12 @@ public sealed class WorkflowChainRunnerTests
             observation,
             Definitions));
 
-        Assert.Equal(WorkflowStopReason.NoEligibleTransition, result.StopReason);
+        Assert.Equal(WorkflowStopReason.MissingRequiredInput, result.StopReason);
         Assert.Null(result.Transition);
     }
 
     [Theory]
-    [InlineData(RuntimeOutcomeKind.Blocked, WorkflowStopReason.Blocked)]
+    [InlineData(RuntimeOutcomeKind.MissingRequiredInput, WorkflowStopReason.MissingRequiredInput)]
     [InlineData(RuntimeOutcomeKind.Waiting, WorkflowStopReason.Waiting)]
     [InlineData(RuntimeOutcomeKind.Cancelled, WorkflowStopReason.Cancelled)]
     [InlineData(RuntimeOutcomeKind.Failed, WorkflowStopReason.Failed)]

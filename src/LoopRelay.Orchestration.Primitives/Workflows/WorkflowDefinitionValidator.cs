@@ -34,7 +34,7 @@ public static class WorkflowDefinitionValidator
         ValidateGate(definition.ExitGate, "exit gate", errors);
         ValidateGate(definition.Completion.CompletionGate, "completion gate", errors);
         ValidateImplementationNeutralText(definition.Purpose, "workflow purpose", errors);
-        ValidateImplementationNeutralText(definition.Blocker.Semantics, "blocker semantics", errors);
+        ValidateImplementationNeutralText(definition.Warning.Semantics, "warning semantics", errors);
         ValidateImplementationNeutralText(definition.Recovery.Semantics, "recovery semantics", errors);
 
         var transitionIds = new HashSet<WorkflowTransitionIdentity>(
@@ -193,6 +193,13 @@ public static class WorkflowDefinitionValidator
         {
             RequireExplanation(requirement.Identity, $"{label} requirement identity", errors);
             RequireExplanation(requirement.Description, $"{label} requirement '{requirement.Identity}' description", errors);
+
+            // A requirement declaring both shapes is ambiguous: the evaluator would satisfy it by
+            // product while cannot-proceed labeling would have to choose between the two kinds.
+            if (requirement.Product is not null && requirement.InputSurface is not null)
+            {
+                errors.Add($"{label} requirement '{requirement.Identity}' must not declare both a product and an input surface.");
+            }
         }
     }
 

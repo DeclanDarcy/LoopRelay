@@ -18,7 +18,7 @@ public sealed class TransitionRuntime(
     IEffectExecutor _effectExecutor,
     ITransitionRunStore _runStore,
     ITransitionEvidenceStore _evidenceStore,
-    ITransitionBlockerStore? _blockerStore = null,
+    ITransitionWarningStore? _warningStore = null,
     ITransitionRecoveryStore? _recoveryStore = null,
     ITransitionGateEvaluationStore? _gateEvaluationStore = null,
     ITransitionEffectStore? _effectStore = null,
@@ -51,9 +51,10 @@ public sealed class TransitionRuntime(
             await TryRecordGateEvaluationAsync(runId, request, definition.Identity, definition.InputGate, inputGate, cancellationToken);
             if (!inputGate.IsSatisfied)
             {
+                RuntimeOutcomeKind inputOutcome = MapInputGateStatus(definition.InputGate, inputGate);
                 TransitionRuntimeResult result = Result(
-                    MapGateStatus(inputGate.Status),
-                    TransitionDurableState.Blocked,
+                    inputOutcome,
+                    DurableStateFor(inputOutcome),
                     definition.Identity,
                     inputGate,
                     null,
@@ -63,14 +64,17 @@ public sealed class TransitionRuntime(
                     inputGate.Explanation,
                     inputGate.Evidence);
                 await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordEventAsync(runId, definition.Identity, result.DurableState, "TransitionBlocked", result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordBlockerAsync(
+                await TryRecordEventAsync(runId, definition.Identity, result.DurableState, "TransitionInputUnsatisfied", result.Explanation, result.Evidence, cancellationToken);
+                string inputRemediation = inputOutcome == RuntimeOutcomeKind.DirtyInputSurface
+                    ? $"Commit the listed files under the declared input surface before rerunning '{definition.Identity}'."
+                    : $"Provide valid required input products before rerunning '{definition.Identity}'.";
+                await TryRecordWarningAsync(
                     runId,
                     request,
                     definition.Identity,
-                    BlockerCategory.Validation,
+                    WarningCategory.Validation,
                     result.Explanation,
-                    $"Provide valid required input products before rerunning '{definition.Identity}'.",
+                    inputRemediation,
                     result.Evidence,
                     cancellationToken);
                 await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
@@ -221,9 +225,13 @@ public sealed class TransitionRuntime(
             {
                 string explanation = validation.IsValid ? outputGate.Explanation : validation.Explanation;
                 IReadOnlyList<string> evidence = validation.IsValid ? outputGate.Evidence : validation.Evidence;
+                (RuntimeOutcomeKind outputOutcome, TransitionDurableState outputState, string eventName) =
+                    validation.IsValid
+                        ? MapOutputGateStatus(outputGate.Status)
+                        : (RuntimeOutcomeKind.Failed, TransitionDurableState.Failed, "TransitionProductInvalid");
                 TransitionRuntimeResult result = Result(
-                    RuntimeOutcomeKind.Failed,
-                    TransitionDurableState.Failed,
+                    outputOutcome,
+                    outputState,
                     definition.Identity,
                     inputGate,
                     outputGate,
@@ -233,7 +241,20 @@ public sealed class TransitionRuntime(
                     explanation,
                     evidence);
                 await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordEventAsync(runId, definition.Identity, result.DurableState, "TransitionProductInvalid", result.Explanation, result.Evidence, cancellationToken);
+                await TryRecordEventAsync(runId, definition.Identity, result.DurableState, eventName, result.Explanation, result.Evidence, cancellationToken);
+                if (outputOutcome is RuntimeOutcomeKind.Waiting or RuntimeOutcomeKind.Ambiguous)
+                {
+                    await TryRecordWarningAsync(
+                        runId,
+                        request,
+                        definition.Identity,
+                        WarningCategory.Transition,
+                        result.Explanation,
+                        $"Satisfy the output gate of '{definition.Identity}' and rerun to make progress.",
+                        result.Evidence,
+                        cancellationToken);
+                }
+
                 await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
                 await TryPersistAttemptCompletedAsync(recordedAttemptId, result.Outcome, cancellationToken);
                 return result;
@@ -343,11 +364,11 @@ public sealed class TransitionRuntime(
                 "Transition execution was cancelled.",
                 CancellationToken.None);
         }
-        catch (PromptContextBlockedException exception)
+        catch (PromptContextUnavailableException exception)
         {
             TransitionRuntimeResult result = Result(
-                RuntimeOutcomeKind.Blocked,
-                TransitionDurableState.Blocked,
+                RuntimeOutcomeKind.MissingRequiredInput,
+                TransitionDurableState.InputUnsatisfied,
                 transitionIdentity,
                 inputGate,
                 null,
@@ -357,14 +378,14 @@ public sealed class TransitionRuntime(
                 exception.Message,
                 exception.Evidence);
             await TryPersistStateAsync(runId, transitionIdentity, result.DurableState, result.Explanation, result.Evidence, CancellationToken.None);
-            await TryRecordEventAsync(runId, transitionIdentity, result.DurableState, "TransitionPromptContextBlocked", result.Explanation, result.Evidence, CancellationToken.None);
-            await TryRecordBlockerAsync(
+            await TryRecordEventAsync(runId, transitionIdentity, result.DurableState, "TransitionPromptContextUnavailable", result.Explanation, result.Evidence, CancellationToken.None);
+            await TryRecordWarningAsync(
                 runId,
                 request,
                 transitionIdentity,
-                BlockerCategory.Transition,
+                WarningCategory.Transition,
                 result.Explanation,
-                $"Resolve blocked prompt context before rerunning '{transitionIdentity}'.",
+                $"Provide the required prompt context before rerunning '{transitionIdentity}'.",
                 result.Evidence,
                 CancellationToken.None);
             await TryRecordRecoveryMarkerAsync(runId, request, resolvedDefinition, transitionIdentity, result, CancellationToken.None);
@@ -518,39 +539,38 @@ public sealed class TransitionRuntime(
         }
     }
 
-    private async Task TryRecordBlockerAsync(
+    private async Task TryRecordWarningAsync(
         string runId,
         TransitionRuntimeRequest request,
         WorkflowTransitionIdentity transition,
-        BlockerCategory category,
-        string reason,
-        string requiredAction,
+        WarningCategory category,
+        string concern,
+        string remediation,
         IReadOnlyList<string> evidence,
         CancellationToken cancellationToken)
     {
-        if (_blockerStore is null)
+        if (_warningStore is null)
         {
             return;
         }
 
         try
         {
-            await _blockerStore.RecordBlockerAsync(
-                new TransitionBlockerCapture(
+            await _warningStore.RecordWarningAsync(
+                new TransitionWarningCapture(
                     runId,
                     DateTimeOffset.UtcNow,
                     request,
                     transition,
                     category,
-                    reason,
-                    requiredAction,
-                    Recoverable: true,
+                    concern,
+                    remediation,
                     evidence),
                 cancellationToken);
         }
         catch
         {
-            // Blocker persistence is supporting evidence; the transition result already reports the block.
+            // Warning persistence is supporting evidence; the transition result already reports the condition.
         }
     }
 
@@ -666,20 +686,70 @@ public sealed class TransitionRuntime(
     }
 
     private static bool NeedsRecoveryMarker(TransitionDurableState state) =>
-        state is TransitionDurableState.Blocked
+        state is TransitionDurableState.InputUnsatisfied
+            or TransitionDurableState.Ambiguous
             or TransitionDurableState.Failed
             or TransitionDurableState.Cancelled
             or TransitionDurableState.Stalled
             or TransitionDurableState.EffectsPartiallyApplied;
 
-    private static RuntimeOutcomeKind MapGateStatus(GateStatus status) =>
-        status switch
+    // The switch stays exhaustive over named members without a default arm so a new GateStatus member
+    // is a compile error here; CS8524 (unnamed integral values) is intentionally not handled.
+#pragma warning disable CS8524
+    private static RuntimeOutcomeKind MapInputGateStatus(GateDefinition gate, GateResult result) =>
+        result.Status switch
         {
+            GateStatus.Satisfied => RuntimeOutcomeKind.Completed,
+            GateStatus.Unsatisfied => UnsatisfiedInputOutcome(gate, result),
             GateStatus.Waiting => RuntimeOutcomeKind.Waiting,
             GateStatus.Ambiguous => RuntimeOutcomeKind.Ambiguous,
             GateStatus.Invalid => RuntimeOutcomeKind.Failed,
-            _ => RuntimeOutcomeKind.Blocked,
         };
+#pragma warning restore CS8524
+
+    // The specific cannot-proceed label comes from the kind of the FIRST unsatisfied requirement,
+    // matching evaluator precedence: a declared product is evaluated first, so it stops as
+    // MissingRequiredInput even when an input surface is also declared; only a pure clean-input
+    // requirement (InputSurface without a product) stops as DirtyInputSurface. Requirement kinds are
+    // implicit by shape on the gate definition.
+    private static RuntimeOutcomeKind UnsatisfiedInputOutcome(GateDefinition gate, GateResult result)
+    {
+        GateRequirementResult? unsatisfied = result.Requirements
+            .FirstOrDefault(requirement => requirement.Status == GateStatus.Unsatisfied);
+        GateRequirementDefinition? requirementDefinition = unsatisfied is null
+            ? null
+            : gate.Requirements.FirstOrDefault(item => item.Identity == unsatisfied.RequirementIdentity);
+        return requirementDefinition is { Product: null, InputSurface: not null }
+            ? RuntimeOutcomeKind.DirtyInputSurface
+            : RuntimeOutcomeKind.MissingRequiredInput;
+    }
+
+    private static TransitionDurableState DurableStateFor(RuntimeOutcomeKind outcome) =>
+        outcome switch
+        {
+            RuntimeOutcomeKind.MissingRequiredInput => TransitionDurableState.InputUnsatisfied,
+            RuntimeOutcomeKind.DirtyInputSurface => TransitionDurableState.InputUnsatisfied,
+            RuntimeOutcomeKind.Waiting => TransitionDurableState.Waiting,
+            RuntimeOutcomeKind.Ambiguous => TransitionDurableState.Ambiguous,
+            _ => TransitionDurableState.Failed,
+        };
+
+    // The switch stays exhaustive over named members without a default arm so a new GateStatus member
+    // is a compile error here; CS8524 (unnamed integral values) is intentionally not handled. The
+    // Satisfied arm is unreachable at the call site (the map only runs on an unsatisfied output gate)
+    // but is named so the mapping stays total.
+#pragma warning disable CS8524
+    private static (RuntimeOutcomeKind Outcome, TransitionDurableState State, string EventName) MapOutputGateStatus(
+        GateStatus status) =>
+        status switch
+        {
+            GateStatus.Satisfied => (RuntimeOutcomeKind.Completed, TransitionDurableState.OutputValidated, "TransitionOutputValidated"),
+            GateStatus.Unsatisfied => (RuntimeOutcomeKind.Failed, TransitionDurableState.Failed, "TransitionProductInvalid"),
+            GateStatus.Waiting => (RuntimeOutcomeKind.Waiting, TransitionDurableState.Waiting, "TransitionOutputWaiting"),
+            GateStatus.Invalid => (RuntimeOutcomeKind.Failed, TransitionDurableState.Failed, "TransitionProductInvalid"),
+            GateStatus.Ambiguous => (RuntimeOutcomeKind.Ambiguous, TransitionDurableState.Ambiguous, "TransitionOutputAmbiguous"),
+        };
+#pragma warning restore CS8524
 
     private static TransitionRuntimeResult Result(
         RuntimeOutcomeKind outcome,
