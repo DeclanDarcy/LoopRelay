@@ -155,12 +155,14 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             INSERT INTO canonical_product_records (
                 product_identity, producer_workflow, producer_transition, intended_consumers_json,
                 repository_ownership, authority, storage_representations_json, causal_identity,
-                freshness, validation_state, lifecycle, evidence_locations_json, updated_at
+                freshness, validation_state, lifecycle, evidence_locations_json, updated_at,
+                schema_version
             )
             VALUES (
                 $product_identity, $producer_workflow, $producer_transition, $intended_consumers_json,
                 $repository_ownership, $authority, $storage_representations_json, $causal_identity,
-                $freshness, $validation_state, $lifecycle, $evidence_locations_json, $updated_at
+                $freshness, $validation_state, $lifecycle, $evidence_locations_json, $updated_at,
+                $schema_version
             )
             ON CONFLICT(product_identity) DO UPDATE SET
                 producer_workflow = excluded.producer_workflow,
@@ -174,7 +176,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 validation_state = excluded.validation_state,
                 lifecycle = excluded.lifecycle,
                 evidence_locations_json = excluded.evidence_locations_json,
-                updated_at = excluded.updated_at;
+                updated_at = excluded.updated_at,
+                schema_version = excluded.schema_version;
             """,
             cancellationToken,
             ("$product_identity", product.Identity.Value),
@@ -189,7 +192,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$validation_state", product.ValidationState.ToString()),
             ("$lifecycle", product.Lifecycle.ToString()),
             ("$evidence_locations_json", Json(product.EvidenceLocations)),
-            ("$updated_at", Format(DateTimeOffset.UtcNow)));
+            ("$updated_at", Format(DateTimeOffset.UtcNow)),
+            ("$schema_version", product.SchemaVersion));
     }
 
     public async Task AppendGateEvaluationAsync(
@@ -607,6 +611,40 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$recorded_at", Format(turn.RecordedAt)));
     }
 
+    public async Task AppendReadReceiptAsync(
+        CanonicalReadReceiptRecord receipt,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO read_receipts (
+                receipt_id, run_id, workflow_identity, transition_identity, attempt_id,
+                commit_hash, input_surfaces_json, surface_tree_hashes_json, files_json,
+                products_json, validation, consumed_at
+            )
+            VALUES (
+                $receipt_id, $run_id, $workflow_identity, $transition_identity, $attempt_id,
+                $commit_hash, $input_surfaces_json, $surface_tree_hashes_json, $files_json,
+                $products_json, $validation, $consumed_at
+            );
+            """,
+            cancellationToken,
+            ("$receipt_id", receipt.ReceiptId),
+            ("$run_id", receipt.RunId),
+            ("$workflow_identity", receipt.WorkflowIdentity),
+            ("$transition_identity", receipt.TransitionIdentity),
+            ("$attempt_id", receipt.AttemptId),
+            ("$commit_hash", receipt.CommitHash),
+            ("$input_surfaces_json", Json(receipt.InputSurfaces)),
+            ("$surface_tree_hashes_json", receipt.SurfaceTreeHashes is null ? null : Json(receipt.SurfaceTreeHashes)),
+            ("$files_json", Json(receipt.Files)),
+            ("$products_json", Json(receipt.Products)),
+            ("$validation", receipt.Validation),
+            ("$consumed_at", Format(receipt.ConsumedAt)));
+    }
+
     public async Task<CanonicalWorkflowPersistenceSnapshot> LoadSnapshotAsync(
         CancellationToken cancellationToken = default)
     {
@@ -824,6 +862,50 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         });
     }
 
+    public async Task<IReadOnlyList<CanonicalReadReceiptRecord>> ReadReadReceiptsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            List<CanonicalReadReceiptRecord> rows = [];
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT receipt_id, run_id, workflow_identity, transition_identity, attempt_id,
+                       commit_hash, input_surfaces_json, surface_tree_hashes_json, files_json,
+                       products_json, validation, consumed_at
+                FROM read_receipts ORDER BY consumed_at, receipt_id;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new CanonicalReadReceiptRecord(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    ReadJson<IReadOnlyList<string>>(reader.GetString(6)),
+                    reader.IsDBNull(7) ? null : ReadJson<IReadOnlyDictionary<string, string?>>(reader.GetString(7)),
+                    ReadJson<IReadOnlyList<CanonicalReadReceiptFile>>(reader.GetString(8)),
+                    ReadJson<IReadOnlyList<CanonicalReadReceiptProduct>>(reader.GetString(9)),
+                    reader.GetString(10),
+                    ParseDate(reader.GetString(11))));
+            }
+
+            return rows;
+        });
+    }
+
     public async Task<string> ReadWorkspaceIdentityAsync(
         CancellationToken cancellationToken = default)
     {
@@ -962,14 +1044,28 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
+        // The schema_version column arrived with schema v5; snapshots open read-only without
+        // migrating, so a pre-v5 database is read with the column defaulted rather than crashing.
+        bool hasSchemaVersion = await ColumnExistsAsync(
+            connection,
+            "canonical_product_records",
+            "schema_version",
+            cancellationToken);
         var rows = new List<ProductRecord>();
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT product_identity, producer_workflow, producer_transition, intended_consumers_json,
-                   repository_ownership, authority, storage_representations_json, causal_identity,
-                   freshness, validation_state, lifecycle, evidence_locations_json
-            FROM canonical_product_records ORDER BY product_identity;
-            """;
+        command.CommandText = hasSchemaVersion
+            ? """
+              SELECT product_identity, producer_workflow, producer_transition, intended_consumers_json,
+                     repository_ownership, authority, storage_representations_json, causal_identity,
+                     freshness, validation_state, lifecycle, evidence_locations_json, schema_version
+              FROM canonical_product_records ORDER BY product_identity;
+              """
+            : """
+              SELECT product_identity, producer_workflow, producer_transition, intended_consumers_json,
+                     repository_ownership, authority, storage_representations_json, causal_identity,
+                     freshness, validation_state, lifecycle, evidence_locations_json
+              FROM canonical_product_records ORDER BY product_identity;
+              """;
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -985,10 +1081,25 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 ParseEnum<ProductFreshness>(reader.GetString(8)),
                 ParseEnum<ProductValidationState>(reader.GetString(9)),
                 ParseEnum<ProductLifecycle>(reader.GetString(10)),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(11))));
+                ReadJson<IReadOnlyList<string>>(reader.GetString(11)),
+                hasSchemaVersion ? reader.GetString(12) : "1"));
         }
 
         return rows;
+    }
+
+    private static async Task<bool> ColumnExistsAsync(
+        SqliteConnection connection,
+        string table,
+        string column,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM pragma_table_info($table) WHERE name = $column;";
+        command.Parameters.AddWithValue("$table", table);
+        command.Parameters.AddWithValue("$column", column);
+        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt64(scalar, System.Globalization.CultureInfo.InvariantCulture) == 1;
     }
 
     private static async Task<IReadOnlyList<CanonicalGateEvaluationRecord>> ReadGateEvaluationsAsync(

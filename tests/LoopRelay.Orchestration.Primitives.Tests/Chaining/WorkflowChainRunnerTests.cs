@@ -401,6 +401,8 @@ public sealed class WorkflowChainRunnerTests
 
     [Theory]
     [InlineData(RuntimeOutcomeKind.MissingRequiredInput, WorkflowStopReason.MissingRequiredInput)]
+    [InlineData(RuntimeOutcomeKind.DirtyInputSurface, WorkflowStopReason.DirtyInputSurface)]
+    [InlineData(RuntimeOutcomeKind.UnversionedInputSurface, WorkflowStopReason.UnversionedInputSurface)]
     [InlineData(RuntimeOutcomeKind.Waiting, WorkflowStopReason.Waiting)]
     [InlineData(RuntimeOutcomeKind.Cancelled, WorkflowStopReason.Cancelled)]
     [InlineData(RuntimeOutcomeKind.Failed, WorkflowStopReason.Failed)]

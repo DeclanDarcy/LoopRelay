@@ -166,7 +166,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             new CanonicalTransitionRecoveryStore(persistence),
             new CanonicalTransitionGateEvaluationStore(persistence),
             new CanonicalTransitionEffectStore(persistence),
-            new CanonicalAttemptStore(persistence));
+            new CanonicalAttemptStore(persistence),
+            new CanonicalReadReceiptStore(persistence, processRunner, repository));
         var workflowController = new WorkflowController(workflowResolver, transitionRuntime);
         var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter();
         var workflowChainRunner = new WorkflowChainRunner(
@@ -405,6 +406,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             ProductIdentity product,
             ProductResolutionResult inputs)
         {
+            // Product failures declare the rank-0 cannot-proceed outcome so a missing product
+            // always outranks a surface problem in the runtime's worst-of selection.
             if (inputs.Missing.Any(missing => missing.Product == product) ||
                 inputs.Products.All(resolved => resolved.Identity != product))
             {
@@ -412,7 +415,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     requirement.Identity,
                     GateStatus.Unsatisfied,
                     $"Required input product '{product}' is missing; produce it before rerunning.",
-                    [product.Value]);
+                    [product.Value],
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.MissingRequiredInput);
             }
 
             if (inputs.Invalid.FirstOrDefault(invalid => invalid.Identity == product) is { } invalidRecord)
@@ -421,7 +425,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     requirement.Identity,
                     GateStatus.Unsatisfied,
                     $"Required input product '{product}' is invalid or unusable; repair it before rerunning.",
-                    ProductEvidence(product, invalidRecord));
+                    ProductEvidence(product, invalidRecord),
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.MissingRequiredInput);
             }
 
             if (inputs.Stale.FirstOrDefault(stale => stale.Identity == product) is { } staleRecord)
@@ -430,7 +435,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     requirement.Identity,
                     GateStatus.Unsatisfied,
                     $"Required input product '{product}' is stale; refresh it before rerunning.",
-                    ProductEvidence(product, staleRecord));
+                    ProductEvidence(product, staleRecord),
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.MissingRequiredInput);
             }
 
             if (inputs.Ambiguous.FirstOrDefault(ambiguous => ambiguous.Identity == product) is { } ambiguousRecord)
@@ -502,14 +508,17 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             GateRequirementDefinition requirement,
             string surface)
         {
+            // Read-at-use resolves every consumed input to a commit (M3); a workspace without a
+            // git working tree cannot honor that, so a declared input surface cannot proceed here.
             string gitMarker = Path.Combine(_repository.Path, ".git");
             if (!Directory.Exists(gitMarker) && !File.Exists(gitMarker))
             {
                 return new GateRequirementResult(
                     requirement.Identity,
-                    GateStatus.Satisfied,
-                    $"Input surface '{surface}' has no git working tree; there is no uncommitted state to gate on.",
-                    [surface]);
+                    GateStatus.Unsatisfied,
+                    $"Input surface '{surface}' has no git working tree; consumed inputs cannot resolve to a commit. Initialize git and commit the surface before rerunning.",
+                    [surface],
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.UnversionedInputSurface);
             }
 
             ProcessRunResult status = await _processRunner.RunAsync("git", ["status", "--porcelain"], _repository.Path);
@@ -541,7 +550,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     requirement.Identity,
                     GateStatus.Unsatisfied,
                     $"Input surface '{surface}' has uncommitted changes; commit the listed files under '{surface}' before rerunning.",
-                    dirty);
+                    dirty,
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.DirtyInputSurface);
         }
 
         private static GateResult Aggregate(
@@ -626,6 +636,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             }
 
             var sections = new List<PromptContextSection>();
+            var consumedFiles = new List<ConsumedInputFile>();
             if (request.Workflow == WorkflowIdentity.EvalRoadmap &&
                 request.Transition == EvalRoadmapMilestonePromptContext.Transition)
             {
@@ -633,7 +644,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     EvalRoadmapMilestonePromptContext.Build(_repository.Path);
                 if (!result.IsUsable)
                 {
-                    throw new PromptContextUnavailableException(result.Explanation, result.Evidence);
+                    throw new PromptContextUnavailableException(result.Explanation, result.Evidence, result.ConsumedFiles);
                 }
 
                 foreach ((string key, string value) in result.Metadata)
@@ -642,6 +653,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 }
 
                 sections.AddRange(result.Sections);
+                consumedFiles.AddRange(result.ConsumedFiles);
             }
             else if (request.Workflow == WorkflowIdentity.Plan &&
                 PlanPromptContext.Supports(definition.Identity))
@@ -650,7 +662,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     PlanPromptContext.Build(_repository.Path, definition, inputs);
                 if (!result.IsUsable)
                 {
-                    throw new PromptContextUnavailableException(result.Explanation, result.Evidence);
+                    throw new PromptContextUnavailableException(result.Explanation, result.Evidence, result.ConsumedFiles);
                 }
 
                 foreach ((string key, string value) in result.Metadata)
@@ -659,6 +671,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 }
 
                 sections.AddRange(result.Sections);
+                consumedFiles.AddRange(result.ConsumedFiles);
             }
 
             return Task.FromResult(new PromptContext(
@@ -666,7 +679,76 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 inputs,
                 TransitionInputSnapshotHasher.Create(definition, inputs.Products, metadata, sections),
                 metadata,
-                sections));
+                sections,
+                consumedFiles));
+        }
+    }
+
+    // Enriches a consumption capture with git provenance — the commit every read resolves to and
+    // per-surface tree hashes at that commit — then appends the receipt. Enrichment failures
+    // degrade to null fields; the receipt still records exactly what was read.
+    internal sealed class CanonicalReadReceiptStore(
+        CanonicalWorkflowPersistenceStore _persistence,
+        IProcessRunner _processRunner,
+        Repository _repository) : IReadReceiptStore
+    {
+        public async Task AppendAsync(ReadReceiptCapture capture, CancellationToken cancellationToken)
+        {
+            IReadOnlyList<string> surfaces = capture.Definition.InputGate.Requirements
+                .Where(requirement => requirement.InputSurface is not null)
+                .Select(requirement => requirement.InputSurface!)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            string? commitHash = await GitScalarAsync("rev-parse", "HEAD");
+            Dictionary<string, string?>? surfaceTreeHashes = null;
+            if (surfaces.Count > 0)
+            {
+                surfaceTreeHashes = new Dictionary<string, string?>(StringComparer.Ordinal);
+                foreach (string surface in surfaces)
+                {
+                    surfaceTreeHashes[surface] = commitHash is null
+                        ? null
+                        : await GitScalarAsync("rev-parse", $"HEAD:{surface.TrimEnd('/')}");
+                }
+            }
+
+            await _persistence.AppendReadReceiptAsync(
+                new CanonicalReadReceiptRecord(
+                    CausalUlid.NewId("rcpt"),
+                    capture.Request.Run?.Value ?? string.Empty,
+                    capture.Request.Workflow.Value,
+                    capture.Definition.Identity.Value,
+                    capture.AttemptId,
+                    commitHash,
+                    surfaces,
+                    surfaceTreeHashes,
+                    capture.ConsumedFiles.Select(file => new CanonicalReadReceiptFile(file.Path, file.Sha256)).ToArray(),
+                    capture.ConsumedProducts.Select(product => new CanonicalReadReceiptProduct(
+                        product.Identity.Value,
+                        product.CausalIdentity,
+                        product.ValidationState.ToString())).ToArray(),
+                    capture.Validation,
+                    capture.ConsumedAt),
+                cancellationToken);
+        }
+
+        private async Task<string?> GitScalarAsync(params string[] arguments)
+        {
+            try
+            {
+                ProcessRunResult result = await _processRunner.RunAsync("git", arguments, _repository.Path);
+                if (result.ExitCode != 0)
+                {
+                    return null;
+                }
+
+                string value = result.StandardOutput.Trim();
+                return value.Length == 0 ? null : value;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 
@@ -4359,7 +4441,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             product.Freshness,
             product.ValidationState,
             product.Lifecycle,
-            evidence);
+            evidence,
+            product.SchemaVersion);
 
     private static IReadOnlyList<string> PlanScopedStorageRepresentations(
         ProductDefinition product,

@@ -1,3 +1,4 @@
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Persistence;
@@ -195,6 +196,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Single(snapshot.TransitionEvidence);
         Assert.Single(snapshot.Products);
         Assert.Equal(ProductIdentity.ExecutablePlan, snapshot.Products[0].Identity);
+        Assert.Equal("1", snapshot.Products[0].SchemaVersion);
         Assert.Single(snapshot.GateEvaluations);
         Assert.Single(snapshot.EffectRecords);
         Assert.Single(snapshot.Warnings);
@@ -204,6 +206,115 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(LoopRelayWorkspaceDatabase.Resolve(repository));
         await connection.OpenAsync();
         Assert.Equal("canonical", await ScalarStringAsync(connection, "SELECT value FROM workspace_metadata WHERE key = 'persistence_state';"));
+    }
+
+    [Fact]
+    public async Task Store_round_trips_read_receipts_ordered_by_consumption_then_receipt_id()
+    {
+        Repository repository = CreateRepository();
+        CanonicalWorkflowPersistenceStore store = new(repository);
+        DateTimeOffset consumedAt = new(2026, 7, 10, 12, 0, 0, TimeSpan.Zero);
+
+        CanonicalReadReceiptRecord diskReceipt = new(
+            CausalUlid.NewId("rcpt"),
+            "run_001",
+            "Plan",
+            "WriteExecutablePlan",
+            "att_001",
+            "0123456789abcdef0123456789abcdef01234567",
+            [".agents/plan.md", ".agents/projections/"],
+            new Dictionary<string, string?>
+            {
+                [".agents/plan.md"] = "fedcba9876543210fedcba9876543210fedcba98",
+                [".agents/projections/"] = null,
+            },
+            [
+                new CanonicalReadReceiptFile(".agents/plan.md", "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678901234567890123456789012"),
+                new CanonicalReadReceiptFile(".agents/projections/next.md", "1111111111111111111111111111111111111111111111111111111111111111"),
+            ],
+            [new CanonicalReadReceiptProduct("ExecutablePlan", "causal-hash-plan", "Valid")],
+            "Usable",
+            consumedAt.AddMinutes(1));
+        CanonicalReadReceiptRecord ledgerOnlyReceipt = new(
+            CausalUlid.NewId("rcpt"),
+            "run_001",
+            "Execute",
+            "CollectExecutionDetails",
+            null,
+            null,
+            [],
+            null,
+            [],
+            [new CanonicalReadReceiptProduct("ExecutionMilestones", "causal-hash-milestones", "Stale")],
+            "ledger product `ExecutionMilestones` is Stale",
+            consumedAt);
+        CanonicalReadReceiptRecord tieBreakReceipt = ledgerOnlyReceipt with
+        {
+            ReceiptId = "rcpt_00000000000000000000000000",
+        };
+
+        await store.AppendReadReceiptAsync(diskReceipt);
+        await store.AppendReadReceiptAsync(ledgerOnlyReceipt);
+        await store.AppendReadReceiptAsync(tieBreakReceipt);
+
+        IReadOnlyList<CanonicalReadReceiptRecord> receipts = await store.ReadReadReceiptsAsync();
+
+        Assert.Equal(3, receipts.Count);
+        Assert.Equal(tieBreakReceipt.ReceiptId, receipts[0].ReceiptId);
+        Assert.Equal(ledgerOnlyReceipt.ReceiptId, receipts[1].ReceiptId);
+        Assert.Equal(diskReceipt.ReceiptId, receipts[2].ReceiptId);
+
+        CanonicalReadReceiptRecord readLedgerOnly = receipts[1];
+        Assert.StartsWith("rcpt_", readLedgerOnly.ReceiptId, StringComparison.Ordinal);
+        Assert.Equal("run_001", readLedgerOnly.RunId);
+        Assert.Equal("Execute", readLedgerOnly.WorkflowIdentity);
+        Assert.Equal("CollectExecutionDetails", readLedgerOnly.TransitionIdentity);
+        Assert.Null(readLedgerOnly.AttemptId);
+        Assert.Null(readLedgerOnly.CommitHash);
+        Assert.Empty(readLedgerOnly.InputSurfaces);
+        Assert.Null(readLedgerOnly.SurfaceTreeHashes);
+        Assert.Empty(readLedgerOnly.Files);
+        Assert.Single(readLedgerOnly.Products);
+        Assert.Equal(new CanonicalReadReceiptProduct("ExecutionMilestones", "causal-hash-milestones", "Stale"), readLedgerOnly.Products[0]);
+        Assert.Equal("ledger product `ExecutionMilestones` is Stale", readLedgerOnly.Validation);
+        Assert.Equal(consumedAt, readLedgerOnly.ConsumedAt);
+
+        CanonicalReadReceiptRecord readDisk = receipts[2];
+        Assert.Equal("Plan", readDisk.WorkflowIdentity);
+        Assert.Equal("WriteExecutablePlan", readDisk.TransitionIdentity);
+        Assert.Equal("att_001", readDisk.AttemptId);
+        Assert.Equal("0123456789abcdef0123456789abcdef01234567", readDisk.CommitHash);
+        Assert.Equal(diskReceipt.InputSurfaces, readDisk.InputSurfaces);
+        Assert.NotNull(readDisk.SurfaceTreeHashes);
+        Assert.Equal(2, readDisk.SurfaceTreeHashes!.Count);
+        Assert.Equal("fedcba9876543210fedcba9876543210fedcba98", readDisk.SurfaceTreeHashes[".agents/plan.md"]);
+        Assert.Null(readDisk.SurfaceTreeHashes[".agents/projections/"]);
+        Assert.Equal(diskReceipt.Files, readDisk.Files);
+        Assert.Equal(diskReceipt.Products, readDisk.Products);
+        Assert.Equal("Usable", readDisk.Validation);
+        Assert.Equal(consumedAt.AddMinutes(1), readDisk.ConsumedAt);
+    }
+
+    [Fact]
+    public async Task Read_receipt_reads_return_empty_when_database_predates_read_receipts_table()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '4');
+                """);
+        }
+
+        CanonicalWorkflowPersistenceStore store = new(repository);
+
+        Assert.Empty(await store.ReadReadReceiptsAsync());
     }
 
     private static readonly string[] ExpectedTables =
@@ -224,7 +335,34 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         "attempts",
         "agent_sessions",
         "agent_turns",
+        "read_receipts",
     ];
+
+    [Fact]
+    public async Task Product_schema_version_roundtrips_through_upsert_and_snapshot()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        await store.UpsertProductAsync(new ProductRecord(
+            ProductIdentity.ExecutablePlan,
+            WorkflowIdentity.Plan,
+            new WorkflowTransitionIdentity("WriteExecutablePlan"),
+            [WorkflowIdentity.Execute],
+            "repository-owned",
+            "canonical",
+            [".agents/plan.md"],
+            "causal-hash",
+            ProductFreshness.Fresh,
+            ProductValidationState.Valid,
+            ProductLifecycle.Active,
+            ["product.md"],
+            SchemaVersion: "2"));
+
+        CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync();
+
+        ProductRecord product = Assert.Single(snapshot.Products);
+        Assert.Equal("2", product.SchemaVersion);
+    }
 
     private static Repository CreateRepository()
     {

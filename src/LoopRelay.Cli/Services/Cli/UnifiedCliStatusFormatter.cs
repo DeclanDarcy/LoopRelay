@@ -7,7 +7,8 @@ internal static class UnifiedCliStatusFormatter
     public static string Format(
         UnifiedCliInvocation invocation,
         RepositoryObservation observation,
-        WorkflowResolutionResult resolution)
+        WorkflowResolutionResult resolution,
+        IReadOnlyList<ConsumedInputDrift>? inputDrift = null)
     {
         string nextTransition = resolution.Explanation.EligibleTransitions.FirstOrDefault().Value ?? "(none)";
         string userAction = resolution.Explanation.Warnings.Count == 0
@@ -37,6 +38,18 @@ internal static class UnifiedCliStatusFormatter
             }
         }
 
+        // Passive staleness is surfaced only when a consumed input has drifted; an
+        // unchanged working tree has no staleness section.
+        if (inputDrift is { Count: > 0 })
+        {
+            lines.Add("Inputs changed since last consumption:");
+            foreach (ConsumedInputDrift drift in inputDrift)
+            {
+                string current = drift.CurrentSha256 is null ? "missing" : Abbreviate(drift.CurrentSha256);
+                lines.Add($"  - {drift.Path}: consumed {Abbreviate(drift.ConsumedSha256)} now {current} ({drift.Workflow}/{drift.Transition})");
+            }
+        }
+
         lines.Add($"Storage authority: {observation.StorageAuthority.Authority} ({observation.StorageAuthority.ConfidenceQualifier})");
         lines.Add($"User action required: {userAction}");
 
@@ -45,4 +58,7 @@ internal static class UnifiedCliStatusFormatter
 
     private static string List(IReadOnlyList<string> values) =>
         values.Count == 0 ? "(none)" : string.Join(", ", values);
+
+    private static string Abbreviate(string sha256) =>
+        sha256.Length > 8 ? sha256[..8] : sha256;
 }

@@ -24,6 +24,7 @@ public sealed class UnifiedCliRunnerTests
     [InlineData(WorkflowStopReason.Stalled, 3)]
     [InlineData(WorkflowStopReason.MissingRequiredInput, 4)]
     [InlineData(WorkflowStopReason.DirtyInputSurface, 4)]
+    [InlineData(WorkflowStopReason.UnversionedInputSurface, 4)]
     [InlineData(WorkflowStopReason.StorageUnusable, 4)]
     [InlineData(WorkflowStopReason.Ambiguous, 4)]
     [InlineData(WorkflowStopReason.NoEligibleTransition, 4)]
@@ -61,6 +62,10 @@ public sealed class UnifiedCliRunnerTests
     public async Task RunAsync_completed_chain_returns_success_without_old_execute_loop()
     {
         Repository repository = CreateRepository();
+        // Collaboration-file products are filesystem-authoritative (M3): the persisted rows
+        // below only annotate them, so the actual files must exist to be observed.
+        await SeedRoadmapArtifactsAsync(repository);
+        await SeedPlanArtifactsAsync(repository);
         var store = new CanonicalWorkflowPersistenceStore(repository);
         await PersistCompletedChainAsync(store);
         var invocation = new UnifiedCliInvocation(
@@ -508,13 +513,22 @@ public sealed class UnifiedCliRunnerTests
         Assert.Equal(WorkflowResolutionState.Resumable, state.State);
         Assert.Equal(new WorkflowStageIdentity("Dependency Inventory"), state.CurrentStage);
         Assert.Contains(new WorkflowStageIdentity("Evaluation Foundation"), state.CompletedStages);
+        // EvaluationIntent is a collaboration file (M3): the observation reports the
+        // filesystem-authoritative record, while the canonical ledger row proves the
+        // runtime persisted the product through SelectEvaluationIntent.
         Assert.Contains(
             observation.Products,
             product => product.Product.Identity == ProductIdentity.EvaluationIntent &&
                 product.Product.ProducerWorkflow == WorkflowIdentity.EvalRoadmap &&
-                product.Product.ProducerTransition == new WorkflowTransitionIdentity("SelectEvaluationIntent") &&
-                product.Product.ValidationState == ProductValidationState.Valid &&
                 product.GateUsable);
+        CanonicalWorkflowPersistenceSnapshot snapshot =
+            await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
+        Assert.Contains(
+            snapshot.Products,
+            product => product.Identity == ProductIdentity.EvaluationIntent &&
+                product.ProducerWorkflow == WorkflowIdentity.EvalRoadmap &&
+                product.ProducerTransition == new WorkflowTransitionIdentity("SelectEvaluationIntent") &&
+                product.ValidationState == ProductValidationState.Valid);
         string evidencePath = Path.Combine(
             repository.Path,
             ".LoopRelay",
@@ -529,6 +543,9 @@ public sealed class UnifiedCliRunnerTests
     public async Task RunAsync_bounded_execute_verifies_existing_execution_readiness_through_canonical_runtime()
     {
         Repository repository = CreateRepository();
+        // Plan collaboration files are filesystem-authoritative (M3): the persisted rows
+        // below only annotate them, so the actual files must exist to be observed.
+        await SeedPlanArtifactsAsync(repository);
         var store = new CanonicalWorkflowPersistenceStore(repository);
         await PersistPlanProductsAsync(store);
         await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
@@ -566,6 +583,12 @@ public sealed class UnifiedCliRunnerTests
     public async Task RunAsync_bounded_execute_verifies_workflow_exit_through_canonical_runtime()
     {
         Repository repository = CreateRepository();
+        // CompletionEvidence is a collaboration file (M3): the persisted row below only
+        // annotates it, so the actual evidence file must exist to be observed.
+        await WriteAsync(
+            repository.Path,
+            ".agents/evidence/evaluations/completion-certification.md",
+            "# Completion Certification");
         var store = new CanonicalWorkflowPersistenceStore(repository);
         await store.UpsertProductAsync(Product(
             ProductIdentity.CompletionEvidence,

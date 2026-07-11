@@ -200,6 +200,37 @@ public static class WorkflowDefinitionValidator
             {
                 errors.Add($"{label} requirement '{requirement.Identity}' must not declare both a product and an input surface.");
             }
+
+            if (requirement.InputSurface is not null)
+            {
+                ValidateInputSurface(requirement.InputSurface, $"{label} requirement '{requirement.Identity}'", errors);
+            }
+        }
+    }
+
+    // Surfaces are repository-relative, forward-slash normalized paths so every evaluator resolves
+    // them against the same working-tree root without platform- or escape-dependent reads.
+    private static void ValidateInputSurface(string surface, string label, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(surface))
+        {
+            errors.Add($"{label} input surface must not be empty.");
+            return;
+        }
+
+        if (surface.Contains('\\', StringComparison.Ordinal))
+        {
+            errors.Add($"{label} input surface must be forward-slash normalized.");
+        }
+
+        if (surface.StartsWith('/') || (surface.Length >= 2 && surface[1] == ':'))
+        {
+            errors.Add($"{label} input surface must be repository-relative, not rooted.");
+        }
+
+        if (surface.Split('/').Any(segment => segment == ".."))
+        {
+            errors.Add($"{label} input surface must not contain '..' segments.");
         }
     }
 

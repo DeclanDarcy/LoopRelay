@@ -2,6 +2,7 @@ using System.Diagnostics;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Orchestration.Runtime;
@@ -22,7 +23,8 @@ public sealed class TransitionRuntime(
     ITransitionRecoveryStore? _recoveryStore = null,
     ITransitionGateEvaluationStore? _gateEvaluationStore = null,
     ITransitionEffectStore? _effectStore = null,
-    IAttemptStore? _attemptStore = null) : ITransitionRuntime
+    IAttemptStore? _attemptStore = null,
+    IReadReceiptStore? _readReceiptStore = null) : ITransitionRuntime
 {
     public async Task<TransitionRuntimeResult> RunAsync(
         TransitionRuntimeRequest request,
@@ -33,6 +35,7 @@ public sealed class TransitionRuntime(
         string? recordedAttemptId = null;
         WorkflowTransitionIdentity transitionIdentity = request.Transition;
         WorkflowTransitionDefinition? resolvedDefinition = null;
+        ProductResolutionResult? resolvedInputs = null;
         GateResult? inputGate = null;
         GateResult? outputGate = null;
         ProductValidationResult? validation = null;
@@ -47,6 +50,7 @@ public sealed class TransitionRuntime(
 
             ProductResolutionResult inputs =
                 await _productResolver.ResolveAsync(definition.RequiredInputProducts, cancellationToken);
+            resolvedInputs = inputs;
             inputGate = await _gateEvaluator.EvaluateInputGateAsync(definition.InputGate, inputs, cancellationToken);
             await TryRecordGateEvaluationAsync(runId, request, definition.Identity, definition.InputGate, inputGate, cancellationToken);
             if (!inputGate.IsSatisfied)
@@ -65,9 +69,14 @@ public sealed class TransitionRuntime(
                     inputGate.Evidence);
                 await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
                 await TryRecordEventAsync(runId, definition.Identity, result.DurableState, "TransitionInputUnsatisfied", result.Explanation, result.Evidence, cancellationToken);
-                string inputRemediation = inputOutcome == RuntimeOutcomeKind.DirtyInputSurface
-                    ? $"Commit the listed files under the declared input surface before rerunning '{definition.Identity}'."
-                    : $"Provide valid required input products before rerunning '{definition.Identity}'.";
+                string inputRemediation = inputOutcome switch
+                {
+                    RuntimeOutcomeKind.DirtyInputSurface =>
+                        $"Commit the listed files under the declared input surface before rerunning '{definition.Identity}'.",
+                    RuntimeOutcomeKind.UnversionedInputSurface =>
+                        $"Initialize git and commit the input surface before rerunning '{definition.Identity}'.",
+                    _ => $"Provide valid required input products before rerunning '{definition.Identity}'.",
+                };
                 await TryRecordWarningAsync(
                     runId,
                     request,
@@ -86,6 +95,17 @@ public sealed class TransitionRuntime(
                 definition,
                 inputs,
                 cancellationToken);
+            // The read has already happened once the context is built; the receipt is consumption
+            // evidence and must not be lost to a fired cancellation token.
+            await TryAppendReadReceiptAsync(
+                runId,
+                attemptId,
+                request,
+                definition,
+                context.ConsumedFiles ?? [],
+                ConsumedProducts(definition, inputs),
+                "Usable",
+                CancellationToken.None);
             RenderedPrompt renderedPrompt = await _promptRenderer.RenderAsync(
                 definition,
                 context,
@@ -377,6 +397,19 @@ public sealed class TransitionRuntime(
                 [],
                 exception.Message,
                 exception.Evidence);
+            // No attempt row is persisted on this path (the prompt never executed), so the
+            // receipt references only durably recorded attempts — null here.
+            await TryAppendReadReceiptAsync(
+                runId,
+                recordedAttemptId,
+                request,
+                resolvedDefinition,
+                exception.ConsumedFiles,
+                resolvedDefinition is not null && resolvedInputs is not null
+                    ? ConsumedProducts(resolvedDefinition, resolvedInputs)
+                    : [],
+                exception.Message,
+                CancellationToken.None);
             await TryPersistStateAsync(runId, transitionIdentity, result.DurableState, result.Explanation, result.Evidence, CancellationToken.None);
             await TryRecordEventAsync(runId, transitionIdentity, result.DurableState, "TransitionPromptContextUnavailable", result.Explanation, result.Evidence, CancellationToken.None);
             await TryRecordWarningAsync(
@@ -538,6 +571,50 @@ public sealed class TransitionRuntime(
             // Failure is reflected by the returned runtime outcome; callers decide recovery policy.
         }
     }
+
+    // A receipt is appended for every consumption event — usable or not — so read-time
+    // validation outcomes stay linked to the exact content that was read.
+    private async Task TryAppendReadReceiptAsync(
+        string runId,
+        string? attemptId,
+        TransitionRuntimeRequest request,
+        WorkflowTransitionDefinition? definition,
+        IReadOnlyList<ConsumedInputFile> consumedFiles,
+        IReadOnlyList<ProductRecord> consumedProducts,
+        string validation,
+        CancellationToken cancellationToken)
+    {
+        if (_readReceiptStore is null || definition is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _readReceiptStore.AppendAsync(
+                new ReadReceiptCapture(
+                    runId,
+                    attemptId,
+                    request,
+                    definition,
+                    consumedFiles,
+                    consumedProducts,
+                    validation,
+                    DateTimeOffset.UtcNow),
+                cancellationToken);
+        }
+        catch
+        {
+            // Receipt persistence is supporting evidence; failing to append must not fail the transition.
+        }
+    }
+
+    private static IReadOnlyList<ProductRecord> ConsumedProducts(
+        WorkflowTransitionDefinition definition,
+        ProductResolutionResult inputs) =>
+        inputs.Products
+            .Where(product => definition.RequiredInputProducts.Any(requirement => requirement.Product == product.Identity))
+            .ToArray();
 
     private async Task TryRecordWarningAsync(
         string runId,
@@ -707,15 +784,43 @@ public sealed class TransitionRuntime(
         };
 #pragma warning restore CS8524
 
-    // The specific cannot-proceed label comes from the kind of the FIRST unsatisfied requirement,
-    // matching evaluator precedence: a declared product is evaluated first, so it stops as
-    // MissingRequiredInput even when an input surface is also declared; only a pure clean-input
+    // Severity order for declared cannot-proceed labels lives here: a missing product always
+    // outranks a surface problem, and a surface that cannot resolve to a commit outranks one that
+    // is merely dirty. Labels the evaluator declares outside this vocabulary rank last.
+    private static int UnsatisfiedOutcomeSeverity(RuntimeOutcomeKind outcome) =>
+        outcome switch
+        {
+            RuntimeOutcomeKind.MissingRequiredInput => 0,
+            RuntimeOutcomeKind.UnversionedInputSurface => 1,
+            RuntimeOutcomeKind.DirtyInputSurface => 2,
+            _ => int.MaxValue,
+        };
+
+    // The specific cannot-proceed label prefers the typed discriminator: the worst declared
+    // UnsatisfiedOutcome among unsatisfied requirement results wins (see UnsatisfiedOutcomeSeverity).
+    // When no requirement declares one, the shape-based fallback applies, matching evaluator
+    // precedence: a declared product is evaluated first, so the first unsatisfied requirement stops
+    // as MissingRequiredInput even when an input surface is also declared; only a pure clean-input
     // requirement (InputSurface without a product) stops as DirtyInputSurface. Requirement kinds are
     // implicit by shape on the gate definition.
     private static RuntimeOutcomeKind UnsatisfiedInputOutcome(GateDefinition gate, GateResult result)
     {
-        GateRequirementResult? unsatisfied = result.Requirements
-            .FirstOrDefault(requirement => requirement.Status == GateStatus.Unsatisfied);
+        IReadOnlyList<GateRequirementResult> unsatisfiedRequirements = result.Requirements
+            .Where(requirement => requirement.Status == GateStatus.Unsatisfied)
+            .ToArray();
+        RuntimeOutcomeKind[] declaredOutcomes = unsatisfiedRequirements
+            .Where(requirement => requirement.UnsatisfiedOutcome is not null)
+            .Select(requirement => requirement.UnsatisfiedOutcome!.Value)
+            .OrderBy(UnsatisfiedOutcomeSeverity)
+            .ToArray();
+        if (declaredOutcomes.Length > 0)
+        {
+            return declaredOutcomes[0];
+        }
+
+        GateRequirementResult? unsatisfied = unsatisfiedRequirements.Count == 0
+            ? null
+            : unsatisfiedRequirements[0];
         GateRequirementDefinition? requirementDefinition = unsatisfied is null
             ? null
             : gate.Requirements.FirstOrDefault(item => item.Identity == unsatisfied.RequirementIdentity);
@@ -729,6 +834,7 @@ public sealed class TransitionRuntime(
         {
             RuntimeOutcomeKind.MissingRequiredInput => TransitionDurableState.InputUnsatisfied,
             RuntimeOutcomeKind.DirtyInputSurface => TransitionDurableState.InputUnsatisfied,
+            RuntimeOutcomeKind.UnversionedInputSurface => TransitionDurableState.InputUnsatisfied,
             RuntimeOutcomeKind.Waiting => TransitionDurableState.Waiting,
             RuntimeOutcomeKind.Ambiguous => TransitionDurableState.Ambiguous,
             _ => TransitionDurableState.Failed,

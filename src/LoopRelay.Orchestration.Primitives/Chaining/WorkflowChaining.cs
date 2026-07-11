@@ -11,6 +11,7 @@ public enum WorkflowStopReason
     BoundedWorkflowCompleted,
     MissingRequiredInput,
     DirtyInputSurface,
+    UnversionedInputSurface,
     StorageUnusable,
     Waiting,
     Cancelled,
@@ -341,6 +342,7 @@ public sealed class WorkflowController(
         {
             RuntimeOutcomeKind.MissingRequiredInput => WorkflowStopReason.MissingRequiredInput,
             RuntimeOutcomeKind.DirtyInputSurface => WorkflowStopReason.DirtyInputSurface,
+            RuntimeOutcomeKind.UnversionedInputSurface => WorkflowStopReason.UnversionedInputSurface,
             RuntimeOutcomeKind.Waiting => WorkflowStopReason.Waiting,
             RuntimeOutcomeKind.Cancelled => WorkflowStopReason.Cancelled,
             RuntimeOutcomeKind.Failed => WorkflowStopReason.Failed,

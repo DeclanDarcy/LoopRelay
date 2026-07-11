@@ -32,6 +32,33 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         "ExecutionBlocked",
     };
 
+    // The per-type authority split (M3): these products are hand-editable collaboration files
+    // observed from the working tree; the filesystem decides their presence and content, and
+    // ledger rows never substitute for or mask them. Every other product identity is a
+    // system-owned fact whose ledger row remains authoritative. This set must cover exactly
+    // the identities observed by AddProductIfPresent/AddExecutionMilestoneSetIfPresent.
+    private static readonly HashSet<ProductIdentity> FilesystemAuthoritativeProducts =
+    [
+        ProductIdentity.EvaluationIntent,
+        ProductIdentity.DependencyInventory,
+        ProductIdentity.HypothesisInventory,
+        ProductIdentity.ArchitecturalCatalog,
+        ProductIdentity.EvalDag,
+        ProductIdentity.NextEpicRoadmap,
+        ProductIdentity.PreparedEpic,
+        ProductIdentity.MilestoneSpecificationSet,
+        ProductIdentity.ExecutablePlan,
+        ProductIdentity.AdversarialProjection,
+        ProductIdentity.OperationalContext,
+        ProductIdentity.ExecutionDetails,
+        ProductIdentity.ExecutionMilestoneSet,
+        ProductIdentity.DecisionSet,
+        ProductIdentity.ImplementationSlice,
+        ProductIdentity.ExecutionHandoff,
+        ProductIdentity.OperationalDelta,
+        ProductIdentity.CompletionEvidence,
+    ];
+
     private readonly IStorageVerifier _storageVerifier = _storageVerifier ?? new FileSystemStorageVerifier();
 
     public async Task<RepositoryObservation> ObserveAsync(
@@ -79,6 +106,14 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         AddProductIfPresent(products, root, ProductIdentity.CompletionEvidence, ExecuteCompletionEvidencePaths(root, agents), WorkflowIdentity.Execute, WorkflowIdentity.Execute);
         foreach (ProductRecord product in canonicalSnapshot.Products)
         {
+            // Collaboration-file products are filesystem-authoritative: the working tree decides
+            // presence and content, so a ledger row can neither substitute for a missing file nor
+            // mask a present one. System-owned facts keep the ledger row as authority.
+            if (FilesystemAuthoritativeProducts.Contains(product.Identity))
+            {
+                continue;
+            }
+
             products.RemoveAll(observed => observed.Product.Identity == product.Identity);
             products.Add(new ObservedProduct(
                 product,
@@ -518,7 +553,12 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         WorkflowTransitionIdentity producerTransition,
         IReadOnlyList<string> evidence)
     {
-        products.RemoveAll(observed => observed.Product.Identity == identity);
+        // An archived representation is never selected over an active one: it only becomes
+        // observable when no live observation exists for the identity.
+        if (products.Any(observed => observed.Product.Identity == identity))
+        {
+            return;
+        }
         var record = new ProductRecord(
             identity,
             WorkflowIdentity.Execute,

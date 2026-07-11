@@ -2,6 +2,7 @@ using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Orchestration.Tests.Runtime;
@@ -137,6 +138,112 @@ public sealed class TransitionRuntimeTests
         TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
 
         Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
+        Assert.False(harness.Executor.WasCalled);
+    }
+
+    [Fact]
+    public async Task Declared_unsatisfied_outcome_overrides_the_shape_fallback()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        WorkflowTransitionDefinition definition = WithCleanInputRequirement();
+        harness.Definitions.Definition = definition;
+        harness.Gates.InputResult = new GateResult(
+            GateStatus.Unsatisfied,
+            [
+                new GateRequirementResult(
+                    definition.InputGate.Requirements[0].Identity,
+                    GateStatus.Satisfied,
+                    "Required input product is resolved and usable.",
+                    ["evidence.md"]),
+                new GateRequirementResult(
+                    "InputGate.CleanInput",
+                    GateStatus.Unsatisfied,
+                    "Input surface '.agents/' cannot resolve to a commit because no git working tree exists.",
+                    [".agents/"],
+                    RuntimeOutcomeKind.UnversionedInputSurface),
+            ],
+            "Input surface '.agents/' cannot resolve to a commit because no git working tree exists.",
+            [".agents/"]);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.UnversionedInputSurface, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
+        Assert.False(harness.Executor.WasCalled);
+        Assert.Empty(harness.RunStore.Completions);
+        TransitionWarningCapture warning = Assert.Single(harness.Warnings.Warnings);
+        Assert.Equal(WarningCategory.Validation, warning.Category);
+        Assert.Contains("Initialize git", warning.Remediation, StringComparison.Ordinal);
+        TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, recovery.DurableState);
+        Assert.Equal(RuntimeOutcomeKind.UnversionedInputSurface, recovery.Outcome);
+    }
+
+    [Theory]
+    [InlineData(RuntimeOutcomeKind.DirtyInputSurface, RuntimeOutcomeKind.UnversionedInputSurface, RuntimeOutcomeKind.UnversionedInputSurface)]
+    [InlineData(RuntimeOutcomeKind.UnversionedInputSurface, RuntimeOutcomeKind.DirtyInputSurface, RuntimeOutcomeKind.UnversionedInputSurface)]
+    [InlineData(RuntimeOutcomeKind.UnversionedInputSurface, RuntimeOutcomeKind.MissingRequiredInput, RuntimeOutcomeKind.MissingRequiredInput)]
+    [InlineData(RuntimeOutcomeKind.MissingRequiredInput, RuntimeOutcomeKind.DirtyInputSurface, RuntimeOutcomeKind.MissingRequiredInput)]
+    public async Task Worst_declared_unsatisfied_outcome_wins_regardless_of_requirement_order(
+        RuntimeOutcomeKind first,
+        RuntimeOutcomeKind second,
+        RuntimeOutcomeKind expected)
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.Gates.InputResult = new GateResult(
+            GateStatus.Unsatisfied,
+            [
+                new GateRequirementResult(
+                    "InputGate.First",
+                    GateStatus.Unsatisfied,
+                    "First requirement is unsatisfied.",
+                    ["first.md"],
+                    first),
+                new GateRequirementResult(
+                    "InputGate.Second",
+                    GateStatus.Unsatisfied,
+                    "Second requirement is unsatisfied.",
+                    ["second.md"],
+                    second),
+            ],
+            "Input gate unsatisfied.",
+            ["first.md", "second.md"]);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(expected, result.Outcome);
+        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
+        Assert.False(harness.Executor.WasCalled);
+    }
+
+    [Fact]
+    public async Task Declared_outcome_on_a_satisfied_requirement_does_not_affect_the_shape_fallback()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        WorkflowTransitionDefinition definition = WithCleanInputRequirement();
+        harness.Definitions.Definition = definition;
+        harness.Gates.InputResult = new GateResult(
+            GateStatus.Unsatisfied,
+            [
+                new GateRequirementResult(
+                    definition.InputGate.Requirements[0].Identity,
+                    GateStatus.Satisfied,
+                    "Required input product is resolved and usable.",
+                    ["evidence.md"],
+                    RuntimeOutcomeKind.MissingRequiredInput),
+                new GateRequirementResult(
+                    "InputGate.CleanInput",
+                    GateStatus.Unsatisfied,
+                    "Input surface '.agents/' has uncommitted changes; commit the listed files under '.agents/' before rerunning.",
+                    [".agents/epic.md"]),
+            ],
+            "Input surface '.agents/' has uncommitted changes; commit the listed files under '.agents/' before rerunning.",
+            [".agents/epic.md"]);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.DirtyInputSurface, result.Outcome);
         Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
         Assert.False(harness.Executor.WasCalled);
     }
@@ -306,6 +413,62 @@ public sealed class TransitionRuntimeTests
         Assert.Equal(TransitionDurableState.InputUnsatisfied, recovery.DurableState);
         Assert.Equal(RuntimeHarness.Definition.Recovery, recovery.Recovery);
         Assert.Contains(".agents/epic.md", recovery.Evidence);
+    }
+
+    [Fact]
+    public async Task Run_appends_a_usable_read_receipt_at_consumption()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.ContextBuilder.ConsumedFiles = [new ConsumedInputFile(".agents/epic.md", "abc123")];
+
+        await harness.Runtime.RunAsync(harness.Request);
+
+        ReadReceiptCapture receipt = Assert.Single(harness.ReadReceipts.Receipts);
+        Assert.Equal("Usable", receipt.Validation);
+        Assert.Equal(RuntimeHarness.Definition.Identity, receipt.Definition.Identity);
+        Assert.StartsWith("tr_", receipt.TransitionRunId, StringComparison.Ordinal);
+        Assert.NotNull(receipt.AttemptId);
+        Assert.StartsWith("att_", receipt.AttemptId, StringComparison.Ordinal);
+        ConsumedInputFile file = Assert.Single(receipt.ConsumedFiles);
+        Assert.Equal(".agents/epic.md", file.Path);
+        Assert.Equal("abc123", file.Sha256);
+        Assert.All(receipt.ConsumedProducts, product =>
+            Assert.Contains(
+                RuntimeHarness.Definition.RequiredInputProducts,
+                requirement => requirement.Product == product.Identity));
+    }
+
+    [Fact]
+    public async Task Unavailable_prompt_context_appends_a_receipt_with_the_validation_failure()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.ContextBuilder.UnavailableException = new PromptContextUnavailableException(
+            "Active Epic prompt context is empty.",
+            [".agents/epic.md"],
+            [new ConsumedInputFile(".agents/epic.md", "def456")]);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
+        ReadReceiptCapture receipt = Assert.Single(harness.ReadReceipts.Receipts);
+        Assert.Equal("Active Epic prompt context is empty.", receipt.Validation);
+        // The prompt never executed, so no attempt row exists; the receipt must not
+        // reference an attempt that was never durably recorded.
+        Assert.Null(receipt.AttemptId);
+        ConsumedInputFile file = Assert.Single(receipt.ConsumedFiles);
+        Assert.Equal("def456", file.Sha256);
+    }
+
+    [Fact]
+    public async Task Read_receipt_store_failure_does_not_fail_the_transition()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.ReadReceipts.ThrowOnAppend = true;
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.NotEqual(RuntimeOutcomeKind.Failed, result.Outcome);
+        Assert.Empty(harness.ReadReceipts.Receipts);
     }
 
     [Fact]
@@ -748,6 +911,7 @@ public sealed class TransitionRuntimeTests
             GateEvaluations = new RecordingGateEvaluationStore();
             EffectRecords = new RecordingEffectStore();
             Attempts = new RecordingAttemptStore();
+            ReadReceipts = new RecordingReadReceiptStore();
             Runtime = new TransitionRuntime(
                 Definitions,
                 Products,
@@ -764,7 +928,8 @@ public sealed class TransitionRuntimeTests
                 RecoveryMarkers,
                 GateEvaluations,
                 EffectRecords,
-                Attempts);
+                Attempts,
+                ReadReceipts);
             Request = new TransitionRuntimeRequest(
                 WorkflowIdentity.Plan,
                 new WorkflowStageIdentity("Planning"),
@@ -783,6 +948,8 @@ public sealed class TransitionRuntimeTests
         public FakeGateEvaluator Gates { get; }
 
         public FakePromptContextBuilder ContextBuilder { get; }
+
+        public RecordingReadReceiptStore ReadReceipts { get; }
 
         public FakePromptRenderer Renderer { get; }
 
@@ -919,6 +1086,8 @@ public sealed class TransitionRuntimeTests
     {
         public PromptContextUnavailableException? UnavailableException { get; set; }
 
+        public IReadOnlyList<ConsumedInputFile>? ConsumedFiles { get; set; }
+
         public Task<PromptContext> BuildAsync(
             TransitionRuntimeRequest request,
             WorkflowTransitionDefinition definition,
@@ -937,7 +1106,8 @@ public sealed class TransitionRuntimeTests
                 inputs,
                 TransitionInputSnapshotHasher.Create(definition, inputs.Products, metadata),
                 metadata,
-                []));
+                [],
+                ConsumedFiles));
         }
     }
 
@@ -1096,6 +1266,24 @@ public sealed class TransitionRuntimeTests
             CancellationToken cancellationToken)
         {
             Failures.Add(failure);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingReadReceiptStore : IReadReceiptStore
+    {
+        public List<ReadReceiptCapture> Receipts { get; } = [];
+
+        public bool ThrowOnAppend { get; set; }
+
+        public Task AppendAsync(ReadReceiptCapture capture, CancellationToken cancellationToken)
+        {
+            if (ThrowOnAppend)
+            {
+                throw new InvalidOperationException("read receipt store unavailable");
+            }
+
+            Receipts.Add(capture);
             return Task.CompletedTask;
         }
     }

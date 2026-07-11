@@ -82,6 +82,7 @@ public sealed class UnifiedCliCompositionTests
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-eval-context").FullName;
         Directory.CreateDirectory(Path.Combine(repo, ".agents"));
         await File.WriteAllTextAsync(Path.Combine(repo, ".agents", "epic.md"), "   ");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -213,6 +214,7 @@ public sealed class UnifiedCliCompositionTests
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-operational-context").FullName;
         await WriteAsync(repo, ".agents/plan.md", "# Plan\n\nImplement the capability.");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -296,6 +298,7 @@ public sealed class UnifiedCliCompositionTests
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-eval-full-runtime").FullName;
         await WriteAsync(repo, ".agents/evals/e1.md", "# Eval Intent\n\nEvaluate the capability.");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -329,6 +332,9 @@ public sealed class UnifiedCliCompositionTests
         TransitionRuntimeResult dag = await RunEvalAsync(composition, "Eval DAG", "CreateEvalDag");
         TransitionRuntimeResult roadmap = await RunEvalAsync(composition, "Next Epic Roadmap", "CreateNextEpicRoadmap");
         TransitionRuntimeResult epic = await RunEvalAsync(composition, "Active Epic Preparation", "CreateNextEpicActiveEpic");
+        // GenerateMilestoneDeepDivesForEpic declares `.agents/epic.md` as a clean-input
+        // surface, so the prepared epic just produced must be committed before it is read.
+        await GitWorkspace.CommitAgentsInputsAsync(repo);
         TransitionRuntimeResult specs = await RunEvalAsync(composition, "Milestone Specification", "GenerateMilestoneDeepDivesForEpic");
         TransitionRuntimeResult verify = await RunEvalAsync(composition, "Workflow Completion", "VerifyPlanEntryContract");
 
@@ -483,6 +489,7 @@ public sealed class UnifiedCliCompositionTests
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-prompt").FullName;
         await WriteAsync(repo, ".agents/epic.md", "# Active Epic");
         await WriteAsync(repo, ".agents/specs/s1.md", "# Milestone Spec");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -519,6 +526,7 @@ public sealed class UnifiedCliCompositionTests
             repo,
             PlanPromptContext.AdversarialPlanReviewProjectionPath,
             "# Adversarial Plan Review Projection\n\nProject-specific review context.");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -555,6 +563,7 @@ public sealed class UnifiedCliCompositionTests
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-warm-session").FullName;
         await WriteAsync(repo, ".agents/epic.md", "# Active Epic");
         await WriteAsync(repo, ".agents/specs/s1.md", "# Milestone Spec");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -586,6 +595,9 @@ public sealed class UnifiedCliCompositionTests
                 new WorkflowStageIdentity("Planning"),
                 new WorkflowTransitionIdentity("WriteExecutablePlan")));
         await WriteAdversarialReviewProductAsync(repository, "tighten the plan");
+        // RevisePlan declares `.agents/plan.md` as a clean-input surface, so the plan the
+        // warm session just wrote must be committed before it is consumed.
+        await GitWorkspace.CommitAgentsInputsAsync(repo);
         TransitionRuntimeResult revise = await composition.TransitionRuntime.RunAsync(
             new TransitionRuntimeRequest(
                 WorkflowIdentity.Plan,
@@ -618,6 +630,7 @@ public sealed class UnifiedCliCompositionTests
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-warm-session-missing-plan").FullName;
         await WriteAsync(repo, ".agents/epic.md", "# Active Epic");
         await WriteAsync(repo, ".agents/specs/s1.md", "# Milestone Spec");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -650,6 +663,7 @@ public sealed class UnifiedCliCompositionTests
         await WriteAsync(repo, ".agents/epic.md", "# Active Epic");
         await WriteAsync(repo, ".agents/specs/s1.md", "# Milestone Spec");
         await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -717,11 +731,19 @@ public sealed class UnifiedCliCompositionTests
 
         TransitionRuntimeResult write = await RunPlanAsync(composition, "Planning", "WriteExecutablePlan");
         TransitionRuntimeResult projection = await RunPlanAsync(composition, "Plan Validation", "GenerateAdversarialProjection");
+        // RunAdversarialReview declares `.agents/plan.md` and `.agents/projections/` as
+        // clean-input surfaces, so the plan and projection just produced must be committed.
+        await GitWorkspace.CommitAgentsInputsAsync(repo);
         TransitionRuntimeResult review = await RunPlanAsync(composition, "Plan Validation", "RunAdversarialReview");
         TransitionRuntimeResult revise = await RunPlanAsync(composition, "Plan Validation", "RevisePlan");
+        // GenerateOperationalContext declares `.agents/plan.md`, so the revised plan must be committed.
+        await GitWorkspace.CommitAgentsInputsAsync(repo);
         TransitionRuntimeResult operationalContext = await RunPlanAsync(composition, "Execution Preparation", "GenerateOperationalContext");
         TransitionRuntimeResult details = await RunPlanAsync(composition, "Execution Preparation", "CollectExecutionDetails");
         TransitionRuntimeResult milestones = await RunPlanAsync(composition, "Execution Preparation", "GenerateExecutionMilestones");
+        // RefineExecutionDetails declares `.agents/details.md` and `.agents/milestones/`, so the
+        // collected details and generated milestones must be committed before refinement reads them.
+        await GitWorkspace.CommitAgentsInputsAsync(repo);
         TransitionRuntimeResult refine = await RunPlanAsync(composition, "Execution Preparation", "RefineExecutionDetails");
         TransitionRuntimeResult verify = await RunPlanAsync(composition, "Workflow Completion", "VerifyExecuteEntryContract");
 
@@ -753,6 +775,7 @@ public sealed class UnifiedCliCompositionTests
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-scoped-artifacts").FullName;
         await WriteAsync(repo, ".agents/plan.md", "# Plan v1\n\nImplement capability.");
         await WriteAsync(repo, ".agents/specs/s1.md", "# Milestone Spec");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -798,6 +821,9 @@ public sealed class UnifiedCliCompositionTests
                 WorkflowIdentity.Plan,
                 new WorkflowStageIdentity("Execution Preparation"),
                 new WorkflowTransitionIdentity("GenerateExecutionMilestones")));
+        // RefineExecutionDetails declares `.agents/details.md` and `.agents/milestones/`, so the
+        // collected details and generated milestones must be committed before refinement reads them.
+        await GitWorkspace.CommitAgentsInputsAsync(repo);
         TransitionRuntimeResult refine = await composition.TransitionRuntime.RunAsync(
             new TransitionRuntimeRequest(
                 WorkflowIdentity.Plan,
@@ -864,6 +890,7 @@ public sealed class UnifiedCliCompositionTests
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-scoped-rollback").FullName;
         await WriteAsync(repo, ".agents/plan.md", "# Plan original\n\nImplement capability.");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -974,6 +1001,12 @@ public sealed class UnifiedCliCompositionTests
             File.WriteAllText(
                 Path.Combine(repo, ".agents", "milestones", "m1.md"),
                 "# Milestone 1\n\n- [x] Implement Execute runtime.");
+            // ImplementationSlice is a filesystem-authoritative collaboration product (M3):
+            // the slice evidence file must exist on disk for downstream transitions to observe it.
+            Directory.CreateDirectory(Path.Combine(repo, ".agents", "evidence", "execution"));
+            File.WriteAllText(
+                Path.Combine(repo, ".agents", "evidence", "execution", "slice-0001.md"),
+                "# Implementation Slice\n\nImplemented feature.cs.");
             return new AgentTurnResult(1, AgentTurnState.Completed, "implemented feature", AgentTokenUsage.Zero);
         }));
         runtime.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>

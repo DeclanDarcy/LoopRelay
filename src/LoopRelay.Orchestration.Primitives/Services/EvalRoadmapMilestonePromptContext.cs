@@ -10,7 +10,8 @@ public sealed record EvalRoadmapMilestonePromptContextResult(
     IReadOnlyList<PromptContextSection> Sections,
     IReadOnlyDictionary<string, string> Metadata,
     string Explanation,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    IReadOnlyList<ConsumedInputFile> ConsumedFiles);
 
 public static class EvalRoadmapMilestonePromptContext
 {
@@ -32,11 +33,13 @@ public static class EvalRoadmapMilestonePromptContext
         }
 
         string content = File.ReadAllText(absolutePath);
+        ConsumedInputFile consumed = ConsumedInputFile.FromContent(relativePath, content);
         if (string.IsNullOrWhiteSpace(content))
         {
             return Unavailable(
                 "Active Epic prompt context is empty. `.agents/epic.md` must contain a selected epic before generating milestone deep dives.",
-                [relativePath]);
+                [relativePath],
+                [consumed]);
         }
 
         IReadOnlyList<string> validationIssues = ValidateActiveEpic(content);
@@ -44,7 +47,8 @@ public static class EvalRoadmapMilestonePromptContext
         {
             return Unavailable(
                 "Active Epic prompt context is malformed or ambiguous: " + string.Join("; ", validationIssues),
-                [relativePath]);
+                [relativePath],
+                [consumed]);
         }
 
         string trimmed = content.Trim();
@@ -66,7 +70,8 @@ public static class EvalRoadmapMilestonePromptContext
             Sections: [section],
             Metadata: metadata,
             Explanation: "Active Epic prompt context loaded from `.agents/epic.md`.",
-            Evidence: [relativePath]);
+            Evidence: [relativePath],
+            ConsumedFiles: [consumed]);
     }
 
     private static IReadOnlyList<string> ValidateActiveEpic(string content)
@@ -127,7 +132,8 @@ public static class EvalRoadmapMilestonePromptContext
 
     private static EvalRoadmapMilestonePromptContextResult Unavailable(
         string explanation,
-        IReadOnlyList<string> evidence) =>
+        IReadOnlyList<string> evidence,
+        IReadOnlyList<ConsumedInputFile>? consumedFiles = null) =>
         new(
             IsUsable: false,
             Sections: [],
@@ -137,7 +143,8 @@ public static class EvalRoadmapMilestonePromptContext
                 ["context.active_epic.status"] = "unavailable",
             },
             Explanation: explanation,
-            Evidence: evidence);
+            Evidence: evidence,
+            ConsumedFiles: consumedFiles ?? []);
 
     private static string Hash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();

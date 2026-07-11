@@ -710,6 +710,10 @@ public sealed class WorkflowResolverTests
             ProductLifecycle.Active,
             ["product.md"]));
 
+        // ExecutablePlan is filesystem-authoritative (M3): the ledger row alone no longer
+        // observes the product, so the collaboration file must exist in the working tree.
+        Write(repo, ".agents/plan.md", "# Plan");
+
         RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
 
         ObservedWorkflowState state = Assert.Single(observation.WorkflowStates);
@@ -720,6 +724,116 @@ public sealed class WorkflowResolverTests
             run.Transition == new WorkflowTransitionIdentity("CreateExecutablePlan") &&
             run.State == TransitionEligibilityState.Completed);
         Assert.Contains(observation.LifecycleRows, row => row.Identity == "Plan:Planning");
+    }
+
+    [Fact]
+    public async Task Ledger_row_does_not_mask_a_present_collaboration_file()
+    {
+        string repo = CreateRepo();
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = Path.GetFileName(repo),
+            Path = repo,
+        };
+        Write(repo, ".agents/plan.md", "# Plan");
+        await new CanonicalWorkflowPersistenceStore(repository).UpsertProductAsync(new ProductRecord(
+            ProductIdentity.ExecutablePlan,
+            WorkflowIdentity.Plan,
+            new WorkflowTransitionIdentity("CreateExecutablePlan"),
+            [WorkflowIdentity.Execute],
+            "repository-owned",
+            "canonical",
+            [".agents/plan.md"],
+            "causal",
+            ProductFreshness.Stale,
+            ProductValidationState.Invalid,
+            ProductLifecycle.Active,
+            ["product.md"]));
+
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+
+        ObservedProduct observed = Assert.Single(observation.Products, product => product.Product.Identity == ProductIdentity.ExecutablePlan);
+        Assert.Equal("repository observation", observed.Product.Authority);
+        Assert.Equal(ProductValidationState.Unknown, observed.Product.ValidationState);
+        Assert.True(observed.GateUsable);
+    }
+
+    [Fact]
+    public async Task Ledger_row_does_not_substitute_for_a_missing_collaboration_file()
+    {
+        string repo = CreateRepo();
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = Path.GetFileName(repo),
+            Path = repo,
+        };
+        await new CanonicalWorkflowPersistenceStore(repository).UpsertProductAsync(new ProductRecord(
+            ProductIdentity.ExecutablePlan,
+            WorkflowIdentity.Plan,
+            new WorkflowTransitionIdentity("CreateExecutablePlan"),
+            [WorkflowIdentity.Execute],
+            "repository-owned",
+            "canonical",
+            [".agents/plan.md"],
+            "causal",
+            ProductFreshness.Fresh,
+            ProductValidationState.Valid,
+            ProductLifecycle.Active,
+            ["product.md"]));
+
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+
+        Assert.DoesNotContain(observation.Products, product => product.Product.Identity == ProductIdentity.ExecutablePlan);
+    }
+
+    [Fact]
+    public async Task System_owned_product_row_remains_ledger_authoritative()
+    {
+        string repo = CreateRepo();
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = Path.GetFileName(repo),
+            Path = repo,
+        };
+        await new CanonicalWorkflowPersistenceStore(repository).UpsertProductAsync(new ProductRecord(
+            ProductIdentity.AdversarialReview,
+            WorkflowIdentity.Plan,
+            new WorkflowTransitionIdentity("RunAdversarialReview"),
+            [WorkflowIdentity.Plan],
+            "repository-owned",
+            "canonical",
+            [".agents/projections/adversarial-plan-review.md"],
+            "causal",
+            ProductFreshness.Fresh,
+            ProductValidationState.Valid,
+            ProductLifecycle.Active,
+            ["review.md"]));
+
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+
+        ObservedProduct observed = Assert.Single(observation.Products, product => product.Product.Identity == ProductIdentity.AdversarialReview);
+        Assert.Equal("canonical", observed.Product.Authority);
+        Assert.True(observed.GateUsable);
+    }
+
+    [Fact]
+    public async Task Archived_representation_is_not_selected_over_an_active_one()
+    {
+        string repo = CreateRepo();
+        Write(repo, ".agents/archive/epics/1.md", "# Epic 1 synthesis");
+        Write(repo, ".agents/archive/epics/1/evidence.md", "archived evidence");
+        Write(repo, ".agents/evidence/evaluations/current.md", "live completion evidence");
+
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+
+        ObservedProduct completionEvidence = Assert.Single(observation.Products, product => product.Product.Identity == ProductIdentity.CompletionEvidence);
+        Assert.Equal(ProductLifecycle.Active, completionEvidence.Product.Lifecycle);
+        Assert.Equal("repository observation", completionEvidence.Product.Authority);
+        ObservedProduct certifiedCompletion = Assert.Single(observation.Products, product => product.Product.Identity == ProductIdentity.CertifiedCompletion);
+        Assert.Equal(ProductLifecycle.Archived, certifiedCompletion.Product.Lifecycle);
     }
 
     [Fact]

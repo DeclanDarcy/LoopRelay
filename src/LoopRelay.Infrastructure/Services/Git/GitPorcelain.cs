@@ -5,7 +5,7 @@ public static class GitPorcelain
 {
     public static IReadOnlyList<string> ChangedPaths(string statusOutput)
     {
-        var changed = new List<string>();
+        List<string> changed = [];
         foreach (string rawLine in statusOutput.Split('\n'))
         {
             string line = rawLine.TrimEnd('\r');
@@ -19,12 +19,25 @@ public static class GitPorcelain
             int arrow = path.IndexOf(" -> ", StringComparison.Ordinal);
             if (arrow >= 0)
             {
-                path = path[(arrow + " -> ".Length)..];
+                // A rename changes both ends of the arrow: the source stops existing and the
+                // target starts existing, so both belong to the changed surface.
+                AddNormalized(changed, path[..arrow]);
+                AddNormalized(changed, path[(arrow + " -> ".Length)..]);
+                continue;
             }
 
-            changed.Add(path.Replace('\\', '/').Trim('"'));
+            AddNormalized(changed, path);
         }
 
         return changed;
+    }
+
+    private static void AddNormalized(List<string> changed, string path)
+    {
+        string normalized = path.Replace('\\', '/').Trim('"');
+        if (!changed.Contains(normalized, StringComparer.Ordinal))
+        {
+            changed.Add(normalized);
+        }
     }
 }

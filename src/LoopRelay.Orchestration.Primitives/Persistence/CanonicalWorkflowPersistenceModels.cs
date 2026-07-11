@@ -144,6 +144,29 @@ public sealed record AgentTurnRecord(
     int TurnIndex,
     DateTimeOffset RecordedAt);
 
+public sealed record CanonicalReadReceiptFile(
+    string Path,
+    string Sha256);
+
+public sealed record CanonicalReadReceiptProduct(
+    string Identity,
+    string CausalIdentity,
+    string ValidationState);
+
+public sealed record CanonicalReadReceiptRecord(
+    string ReceiptId,
+    string RunId,
+    string WorkflowIdentity,
+    string TransitionIdentity,
+    string? AttemptId,
+    string? CommitHash,
+    IReadOnlyList<string> InputSurfaces,
+    IReadOnlyDictionary<string, string?>? SurfaceTreeHashes,
+    IReadOnlyList<CanonicalReadReceiptFile> Files,
+    IReadOnlyList<CanonicalReadReceiptProduct> Products,
+    string Validation,
+    DateTimeOffset ConsumedAt);
+
 public sealed record CanonicalWorkflowPersistenceSnapshot(
     IReadOnlyList<CanonicalWorkflowStateRecord> WorkflowStates,
     IReadOnlyList<CanonicalStageStateRecord> StageStates,

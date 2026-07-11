@@ -179,7 +179,7 @@ public sealed class UnifiedGateEvaluatorTests
     }
 
     [Fact]
-    public async Task Directory_without_a_git_working_tree_satisfies_the_clean_input_requirement()
+    public async Task Directory_without_a_git_working_tree_is_unversioned_input_surface()
     {
         string repo = TempRepo();
         GateDefinition gate = Gate(CleanInputRequirement(".agents/"));
@@ -189,9 +189,12 @@ public sealed class UnifiedGateEvaluatorTests
             new ProductResolutionResult([], [], [], [], []),
             CancellationToken.None);
 
-        Assert.Equal(GateStatus.Satisfied, result.Status);
+        Assert.Equal(GateStatus.Unsatisfied, result.Status);
         GateRequirementResult requirement = Assert.Single(result.Requirements);
-        Assert.Contains("no git working tree", requirement.Explanation, StringComparison.Ordinal);
+        Assert.Equal(GateStatus.Unsatisfied, requirement.Status);
+        Assert.Equal(RuntimeOutcomeKind.UnversionedInputSurface, requirement.UnsatisfiedOutcome);
+        Assert.Contains("cannot resolve to a commit", requirement.Explanation, StringComparison.Ordinal);
+        Assert.Contains(".agents/", requirement.Evidence);
     }
 
     [Fact]
@@ -216,6 +219,22 @@ public sealed class UnifiedGateEvaluatorTests
         Assert.Equal(GateStatus.Satisfied, result.Requirements[0].Status);
         Assert.Equal(GateStatus.Unsatisfied, result.Requirements[1].Status);
         Assert.Contains("MissingOutput", result.Requirements[1].Evidence);
+    }
+
+    [Fact]
+    public async Task Missing_product_requirement_declares_the_missing_required_input_outcome()
+    {
+        var missing = new ProductIdentity("MissingProduct");
+        GateDefinition gate = Gate(ProductRequirementFor(missing));
+        var inputs = new ProductResolutionResult([], [Requirement(missing)], [], [], []);
+
+        GateResult result = await Evaluator(TempRepo()).EvaluateInputGateAsync(gate, inputs, CancellationToken.None);
+
+        GateRequirementResult requirement = Assert.Single(result.Requirements);
+        Assert.Equal(GateStatus.Unsatisfied, requirement.Status);
+        // The rank-0 declaration keeps a missing product outranking any surface label in the
+        // runtime's worst-of selection when a gate mixes product and surface failures.
+        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, requirement.UnsatisfiedOutcome);
     }
 
     private static UnifiedCliComposition.UnifiedGateEvaluator Evaluator(string repositoryPath) =>

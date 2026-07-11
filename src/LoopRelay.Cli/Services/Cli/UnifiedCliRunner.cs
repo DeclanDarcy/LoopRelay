@@ -100,6 +100,7 @@ internal sealed class UnifiedCliRunner(
             WorkflowStopReason.Stalled => 3,
             WorkflowStopReason.MissingRequiredInput => 4,
             WorkflowStopReason.DirtyInputSurface => 4,
+            WorkflowStopReason.UnversionedInputSurface => 4,
             WorkflowStopReason.StorageUnusable => 4,
             WorkflowStopReason.Ambiguous => 4,
             WorkflowStopReason.NoEligibleTransition => 4,
@@ -113,7 +114,10 @@ internal sealed class UnifiedCliRunner(
     {
         RepositoryObservation observation = await _composition.ObserveAsync(cancellationToken);
         WorkflowResolutionResult resolution = _composition.Resolve(invocation.WorkflowInvocation, observation);
-        _output.WriteLine(UnifiedCliStatusFormatter.Format(invocation, observation, resolution));
+        IReadOnlyList<ConsumedInputDrift> inputDrift = observation.StorageAuthority.UsableAuthority
+            ? await ReadReceiptStaleness.ProjectAsync(invocation.Repository, cancellationToken)
+            : [];
+        _output.WriteLine(UnifiedCliStatusFormatter.Format(invocation, observation, resolution, inputDrift));
         return 0;
     }
 

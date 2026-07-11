@@ -105,6 +105,7 @@ public enum RuntimeOutcomeKind
     Paused,
     MissingRequiredInput,
     DirtyInputSurface,
+    UnversionedInputSurface,
     Failed,
     Cancelled,
     Waiting,
@@ -253,7 +254,8 @@ public sealed record ProductDefinition(
     ProductValidationState ValidationState,
     ProductFreshness Freshness,
     IReadOnlyList<TransitionDependency> Dependencies,
-    IReadOnlyList<string> StorageRepresentations);
+    IReadOnlyList<string> StorageRepresentations,
+    string SchemaVersion = "1");
 
 public sealed record ProductRequirement(
     ProductIdentity Product,
@@ -286,11 +288,15 @@ public sealed record GateResult(
     public bool IsSatisfied => Status == GateStatus.Satisfied;
 }
 
+// UnsatisfiedOutcome is the typed cannot-proceed discriminator: the evaluator that observed the
+// actual failure names the specific outcome, so no consumer ever has to string-match explanations.
+// Null means the requirement declares no specific label and shape-based mapping applies.
 public sealed record GateRequirementResult(
     string RequirementIdentity,
     GateStatus Status,
     string Explanation,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    RuntimeOutcomeKind? UnsatisfiedOutcome = null);
 
 public sealed record EffectDefinition(
     EffectIdentity Identity,
@@ -331,4 +337,5 @@ public sealed record ProductRecord(
     ProductFreshness Freshness,
     ProductValidationState ValidationState,
     ProductLifecycle Lifecycle,
-    IReadOnlyList<string> EvidenceLocations);
+    IReadOnlyList<string> EvidenceLocations,
+    string SchemaVersion = "1");

@@ -487,7 +487,20 @@ filesystem-authoritative — there is **no candidate/promotion content store**
 (judged no-op at best, distortion at worst). Product bodies live in git; the
 clean-input gate guarantees every read resolves to a commit. The per-type
 split: planning artifacts are inputs (git-authoritative); system-owned facts
-are ledger-authoritative (M4).
+are ledger-authoritative (M4). Consequences encoded at implementation: a
+workspace without a git working tree cannot honor read-resolves-to-commit, so
+a transition with a declared input surface yields the specific label
+**UnversionedInputSurface** (never a vacuous pass); porcelain rename lines
+contribute **both source and target** to the dirty set; collaboration-file
+products are selected from **filesystem observation only** — ledger rows keep
+production provenance (causal identity, schema version) as projection
+metadata but never substitute for or mask a file's presence or absence, while
+system-owned facts remain ledger-authoritative; every disk-reading transition **declares its input
+surfaces** in the catalog (per-step blast radius); receipts are append-only
+rows (`read_receipts`, schema v5) minted at the transition runtime seam and
+linked to the causal spine, with the read-time validation outcome recorded on
+the receipt; staleness is a **passive status projection** comparing the latest
+receipts against the working tree.
 
 **Verification brief:** every consumption produces a receipt; receipts resolve
 to exact content via git; staleness is visible; no alternate representation is

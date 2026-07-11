@@ -70,7 +70,7 @@ BenchmarkDotNet.Artifacts/
 .tmp-obj/
 project.lock.json
 project.fragment.lock.json
-artifacts/
+/artifacts/
 !schemas/artifacts/
 !schemas/artifacts/**
 !src/LoopRelay.Backend/Artifacts/

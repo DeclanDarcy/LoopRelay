@@ -27,23 +27,52 @@ public sealed class WorkflowDefinitionValidatorTests
     }
 
     [Fact]
-    public void Write_executable_plan_is_the_only_transition_declaring_a_clean_input_surface()
+    public void Disk_reading_transitions_declare_exactly_their_clean_input_surfaces()
     {
         IReadOnlyList<WorkflowDefinition> definitions = CanonicalWorkflowDefinitionSketches.CreateAll();
+        IReadOnlyDictionary<(string Workflow, string Transition), string[]> expected =
+            new Dictionary<(string Workflow, string Transition), string[]>
+            {
+                [("Plan", "WriteExecutablePlan")] = [".agents/"],
+                [("Plan", "RunAdversarialReview")] = [".agents/plan.md", ".agents/projections/"],
+                [("Plan", "RevisePlan")] = [".agents/plan.md", ".agents/projections/"],
+                [("Plan", "GenerateOperationalContext")] = [".agents/plan.md"],
+                [("Plan", "CollectExecutionDetails")] = [".agents/plan.md", ".agents/specs/"],
+                [("Plan", "GenerateExecutionMilestones")] = [".agents/plan.md"],
+                [("Plan", "RefineExecutionDetails")] = [".agents/details.md", ".agents/milestones/"],
+                [("EvalRoadmap", "GenerateMilestoneDeepDivesForEpic")] = [".agents/epic.md"],
+            };
 
-        IReadOnlyList<(WorkflowTransitionIdentity Transition, GateRequirementDefinition Requirement)> surfaced = definitions
-            .SelectMany(definition => definition.Transitions)
-            .SelectMany(transition => transition.InputGate.Requirements
-                .Where(requirement => requirement.InputSurface is not null)
-                .Select(requirement => (Transition: transition.Identity, Requirement: requirement)))
-            .ToArray();
+        foreach (WorkflowDefinition definition in definitions)
+        {
+            foreach (WorkflowTransitionDefinition transition in definition.Transitions)
+            {
+                GateRequirementDefinition[] surfaced = transition.InputGate.Requirements
+                    .Where(requirement => requirement.InputSurface is not null)
+                    .ToArray();
+                string[] declared = surfaced
+                    .Select(requirement => requirement.InputSurface!)
+                    .ToArray();
+                string[] expectedSurfaces = expected.TryGetValue(
+                    (definition.Identity.Value, transition.Identity.Value),
+                    out string[]? surfaces)
+                    ? surfaces
+                    : [];
+                string[] expectedIdentities = expectedSurfaces.Length == 1
+                    ? [$"{transition.Identity.Value}.CleanInput"]
+                    : expectedSurfaces
+                        .Select(surface => $"{transition.Identity.Value}.CleanInput:{surface}")
+                        .ToArray();
 
-        (WorkflowTransitionIdentity transition, GateRequirementDefinition requirement) = Assert.Single(surfaced);
-        Assert.Equal(new WorkflowTransitionIdentity("WriteExecutablePlan"), transition);
-        Assert.Equal(".agents/", requirement.InputSurface);
-        Assert.Null(requirement.Product);
-        Assert.Equal("WriteExecutablePlan.CleanInput", requirement.Identity);
-        Assert.True(requirement.BlocksProgress);
+                Assert.Equal(expectedSurfaces, declared);
+                Assert.Equal(expectedIdentities, surfaced.Select(requirement => requirement.Identity).ToArray());
+                Assert.All(surfaced, requirement =>
+                {
+                    Assert.Null(requirement.Product);
+                    Assert.True(requirement.BlocksProgress);
+                });
+            }
+        }
     }
 
     [Fact]
@@ -78,6 +107,62 @@ public sealed class WorkflowDefinitionValidatorTests
             result.Errors,
             error => error.Contains("WriteExecutablePlan.CleanInput", StringComparison.Ordinal) &&
                 error.Contains("must not declare both a product and an input surface", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("", "must not be empty")]
+    [InlineData("   ", "must not be empty")]
+    [InlineData("/absolute/surface/", "must be repository-relative, not rooted")]
+    [InlineData("C:/absolute/surface/", "must be repository-relative, not rooted")]
+    [InlineData(".agents\\plan.md", "must be forward-slash normalized")]
+    [InlineData(".agents/../secrets/", "must not contain '..' segments")]
+    [InlineData("..", "must not contain '..' segments")]
+    public void Validate_rejects_malformed_input_surfaces(string surface, string expectedError)
+    {
+        WorkflowDefinition definition = WithWriteExecutablePlanSurface(surface);
+
+        WorkflowDefinitionValidationResult result = WorkflowDefinitionValidator.Validate(definition);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("WriteExecutablePlan.CleanInput", StringComparison.Ordinal) &&
+                error.Contains(expectedError, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Validate_accepts_the_canonical_relative_forward_slash_surfaces()
+    {
+        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan();
+
+        WorkflowDefinitionValidationResult result = WorkflowDefinitionValidator.Validate(definition);
+
+        Assert.True(result.IsValid, string.Join(Environment.NewLine, result.Errors));
+    }
+
+    private static WorkflowDefinition WithWriteExecutablePlanSurface(string surface)
+    {
+        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowTransitionDefinition transition = Assert.Single(
+            definition.Transitions,
+            item => item.Identity == new WorkflowTransitionIdentity("WriteExecutablePlan"));
+        GateRequirementDefinition cleanInput = Assert.Single(
+            transition.InputGate.Requirements,
+            item => item.InputSurface is not null);
+        GateRequirementDefinition mutated = cleanInput with { InputSurface = surface };
+        GateDefinition inputGate = transition.InputGate with
+        {
+            Requirements = transition.InputGate.Requirements
+                .Select(item => item.Identity == cleanInput.Identity ? mutated : item)
+                .ToArray(),
+        };
+        WorkflowTransitionDefinition mutatedTransition = transition with { InputGate = inputGate };
+        return definition with
+        {
+            Transitions = definition.Transitions
+                .Select(item => item.Identity == transition.Identity ? mutatedTransition : item)
+                .ToArray(),
+        };
     }
 
     [Fact]
@@ -387,6 +472,7 @@ public sealed class WorkflowDefinitionValidatorTests
                 RuntimeOutcomeKind.Paused,
                 RuntimeOutcomeKind.MissingRequiredInput,
                 RuntimeOutcomeKind.DirtyInputSurface,
+                RuntimeOutcomeKind.UnversionedInputSurface,
                 RuntimeOutcomeKind.Failed,
                 RuntimeOutcomeKind.Cancelled,
                 RuntimeOutcomeKind.Waiting,

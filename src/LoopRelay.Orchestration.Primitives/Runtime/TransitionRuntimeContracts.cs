@@ -1,6 +1,7 @@
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Orchestration.Runtime;
@@ -79,7 +80,8 @@ public sealed record PromptContext(
     ProductResolutionResult Inputs,
     TransitionInputSnapshot InputSnapshot,
     IReadOnlyDictionary<string, string> Metadata,
-    IReadOnlyList<PromptContextSection> Sections);
+    IReadOnlyList<PromptContextSection> Sections,
+    IReadOnlyList<ConsumedInputFile>? ConsumedFiles = null);
 
 public sealed record PromptContextSection(
     string Title,
@@ -89,9 +91,31 @@ public sealed record PromptContextSection(
 
 public sealed class PromptContextUnavailableException(
     string message,
-    IReadOnlyList<string> evidence) : Exception(message)
+    IReadOnlyList<string> evidence,
+    IReadOnlyList<ConsumedInputFile>? consumedFiles = null) : Exception(message)
 {
     public IReadOnlyList<string> Evidence { get; } = evidence;
+
+    // Files that were actually read before the context proved unusable; the read receipt for a
+    // failed consumption is recorded from these.
+    public IReadOnlyList<ConsumedInputFile> ConsumedFiles { get; } = consumedFiles ?? [];
+}
+
+// One consumption event: the transition read its inputs (files and resolved ledger products) at
+// a single moment. The store enriches and persists this as an append-only read receipt.
+public sealed record ReadReceiptCapture(
+    string TransitionRunId,
+    string? AttemptId,
+    TransitionRuntimeRequest Request,
+    WorkflowTransitionDefinition Definition,
+    IReadOnlyList<ConsumedInputFile> ConsumedFiles,
+    IReadOnlyList<ProductRecord> ConsumedProducts,
+    string Validation,
+    DateTimeOffset ConsumedAt);
+
+public interface IReadReceiptStore
+{
+    Task AppendAsync(ReadReceiptCapture capture, CancellationToken cancellationToken);
 }
 
 public sealed record RenderedPrompt(

@@ -121,6 +121,63 @@ public sealed class UnifiedCliStatusFormatterTests
         Assert.Contains("User action required: (none)", status, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Format_renders_input_drift_section_with_consumed_and_current_hashes()
+    {
+        string repo = Directory.CreateTempSubdirectory("cc-cli-status-drift").FullName;
+        var invocation = new UnifiedCliInvocation(
+            new Repository
+            {
+                Id = Guid.NewGuid(),
+                Name = Path.GetFileName(repo),
+                Path = repo,
+            },
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Status, []));
+        RepositoryObservation observation = Observation(
+            [Observed(ProductIdentity.PreparedEpic), Observed(ProductIdentity.MilestoneSpecificationSet)]);
+        WorkflowResolutionResult resolution = new WorkflowResolver().Resolve(
+            invocation.WorkflowInvocation,
+            observation,
+            CanonicalWorkflowDefinitionSketches.CreateAll());
+        IReadOnlyList<ConsumedInputDrift> drift =
+        [
+            new ConsumedInputDrift(".agents/plan.md", "aaaabbbbccccdddd", "eeeeffff00001111", "Plan", "WriteExecutablePlan"),
+            new ConsumedInputDrift(".agents/epic.md", "1111222233334444", null, "Plan", "WriteExecutablePlan"),
+        ];
+
+        string status = UnifiedCliStatusFormatter.Format(invocation, observation, resolution, drift);
+
+        Assert.Contains("Inputs changed since last consumption:", status, StringComparison.Ordinal);
+        Assert.Contains(".agents/plan.md: consumed aaaabbbb now eeeeffff (Plan/WriteExecutablePlan)", status, StringComparison.Ordinal);
+        Assert.Contains(".agents/epic.md: consumed 11112222 now missing (Plan/WriteExecutablePlan)", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Format_omits_input_drift_section_when_no_consumed_input_changed()
+    {
+        string repo = Directory.CreateTempSubdirectory("cc-cli-status-no-drift").FullName;
+        var invocation = new UnifiedCliInvocation(
+            new Repository
+            {
+                Id = Guid.NewGuid(),
+                Name = Path.GetFileName(repo),
+                Path = repo,
+            },
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Status, []));
+        RepositoryObservation observation = Observation(
+            [Observed(ProductIdentity.PreparedEpic), Observed(ProductIdentity.MilestoneSpecificationSet)]);
+        WorkflowResolutionResult resolution = new WorkflowResolver().Resolve(
+            invocation.WorkflowInvocation,
+            observation,
+            CanonicalWorkflowDefinitionSketches.CreateAll());
+
+        string status = UnifiedCliStatusFormatter.Format(invocation, observation, resolution, []);
+
+        Assert.DoesNotContain("Inputs changed since last consumption", status, StringComparison.Ordinal);
+    }
+
     private static RepositoryObservation Observation(
         IReadOnlyList<ObservedProduct> products,
         IReadOnlyList<ObservedWorkflowState>? workflowStates = null)

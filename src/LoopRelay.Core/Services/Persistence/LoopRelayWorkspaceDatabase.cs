@@ -10,7 +10,7 @@ namespace LoopRelay.Core.Services.Persistence;
 /// </summary>
 public static class LoopRelayWorkspaceDatabase
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public static string Resolve(Repository repository)
@@ -42,6 +42,14 @@ public static class LoopRelayWorkspaceDatabase
         }
 
         await ExecuteAsync(connection, SchemaSql, cancellationToken);
+        if (!await ColumnExistsAsync(connection, "canonical_product_records", "schema_version", cancellationToken))
+        {
+            await ExecuteAsync(
+                connection,
+                "ALTER TABLE canonical_product_records ADD COLUMN schema_version text not null default '1';",
+                cancellationToken);
+        }
+
         await ExecuteAsync(
             connection,
             """
@@ -125,6 +133,20 @@ public static class LoopRelayWorkspaceDatabase
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $table;";
         command.Parameters.AddWithValue("$table", table);
+        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt64(scalar, CultureInfo.InvariantCulture) == 1;
+    }
+
+    private static async Task<bool> ColumnExistsAsync(
+        SqliteConnection connection,
+        string table,
+        string column,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM pragma_table_info($table) WHERE name = $column;";
+        command.Parameters.AddWithValue("$table", table);
+        command.Parameters.AddWithValue("$column", column);
         object? scalar = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(scalar, CultureInfo.InvariantCulture) == 1;
     }
@@ -383,7 +405,8 @@ public static class LoopRelayWorkspaceDatabase
             validation_state text not null,
             lifecycle text not null,
             evidence_locations_json text not null,
-            updated_at text not null
+            updated_at text not null,
+            schema_version text not null default '1'
         );
 
         CREATE TABLE IF NOT EXISTS canonical_gate_evaluations(
@@ -548,6 +571,21 @@ public static class LoopRelayWorkspaceDatabase
         CREATE INDEX IF NOT EXISTS idx_workflow_instances_workflow ON workflow_instances(workflow_identity, started_at);
         CREATE INDEX IF NOT EXISTS idx_attempts_transition_run ON attempts(transition_run_id);
         CREATE INDEX IF NOT EXISTS idx_agent_sessions_attempt ON agent_sessions(attempt_id);
+
+        CREATE TABLE IF NOT EXISTS read_receipts(
+            receipt_id text primary key,
+            run_id text not null,
+            workflow_identity text not null,
+            transition_identity text not null,
+            attempt_id text,
+            commit_hash text,
+            input_surfaces_json text not null,
+            surface_tree_hashes_json text,
+            files_json text not null,
+            products_json text not null,
+            validation text not null,
+            consumed_at text not null
+        );
 
         UPDATE canonical_workflow_states SET state = 'Resumable' WHERE state = 'Blocked';
         UPDATE canonical_workflow_states SET outcome = 'MissingRequiredInput' WHERE outcome = 'Blocked';
