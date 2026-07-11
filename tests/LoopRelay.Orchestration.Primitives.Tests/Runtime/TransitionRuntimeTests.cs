@@ -472,6 +472,46 @@ public sealed class TransitionRuntimeTests
     }
 
     [Fact]
+    public async Task Effect_execution_receives_the_causal_identity_context()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+
+        await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.NotNull(harness.Effects.Context);
+        Assert.StartsWith("tr_", harness.Effects.Context!.TransitionRunId, StringComparison.Ordinal);
+        Assert.NotNull(harness.Effects.Context.AttemptId);
+        Assert.StartsWith("att_", harness.Effects.Context.AttemptId, StringComparison.Ordinal);
+        // The harness request carries no workspace run or instance; the context reflects that
+        // honestly instead of inventing ids.
+        Assert.Null(harness.Effects.Context.RunId);
+        Assert.Null(harness.Effects.Context.WorkflowInstanceId);
+        ReadReceiptCapture receipt = Assert.Single(harness.ReadReceipts.Receipts);
+        Assert.Equal(receipt.TransitionRunId, harness.Effects.Context.TransitionRunId);
+    }
+
+    [Fact]
+    public async Task Every_transition_run_projection_mutation_appends_a_lifecycle_evidence_event()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+
+        await harness.Runtime.RunAsync(harness.Request);
+
+        // The current-state transition-run row is rewritten through the lifecycle; each rewrite
+        // must be backed by an appended fact so the row stays a projection over the ledger:
+        // Started and Completed have named events, PromptCompleted is backed by the raw-output
+        // append, EffectsApplied by per-effect records, and the two interpretation/validation
+        // rewrites by their own named events.
+        IReadOnlyList<string> eventNames = harness.Evidence.Events.Select(evidence => evidence.EventName).ToArray();
+        Assert.Contains("TransitionStarted", eventNames);
+        Assert.Contains("TransitionOutputInterpreted", eventNames);
+        Assert.Contains("TransitionOutputValidated", eventNames);
+        Assert.Contains("TransitionCompleted", eventNames);
+        Assert.Single(harness.Evidence.RawOutputs);
+        Assert.NotEmpty(harness.EffectRecords.Records);
+    }
+
+    [Fact]
     public async Task Malformed_output_does_not_satisfy_the_output_gate()
     {
         RuntimeHarness harness = RuntimeHarness.Create();
@@ -1176,6 +1216,8 @@ public sealed class TransitionRuntimeTests
     {
         public bool WasCalled { get; private set; }
 
+        public EffectExecutionContext? Context { get; private set; }
+
         public EffectExecutionResult Result { get; set; } =
             new(
                 EffectExecutionStatus.Succeeded,
@@ -1192,9 +1234,11 @@ public sealed class TransitionRuntimeTests
         public Task<EffectExecutionResult> ExecuteAsync(
             WorkflowTransitionDefinition definition,
             ProductValidationResult validation,
+            EffectExecutionContext context,
             CancellationToken cancellationToken)
         {
             WasCalled = true;
+            Context = context;
             return Task.FromResult(Result);
         }
     }

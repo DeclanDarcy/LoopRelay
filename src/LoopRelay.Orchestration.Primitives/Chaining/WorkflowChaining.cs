@@ -44,6 +44,19 @@ public sealed record WorkflowBoundaryEvidenceRecord(
     string Explanation,
     IReadOnlyList<string> Evidence);
 
+// One chain-boundary decision at a single moment: the runner evaluated exit, transfer, and
+// entry and either advanced or stopped. The store persists this as an append-only history fact.
+public sealed record ChainBoundaryEvidenceCapture(
+    string? RunId,
+    string ChainIdentity,
+    WorkflowBoundaryEvaluation Evaluation,
+    DateTimeOffset RecordedAt);
+
+public interface IChainBoundaryEvidenceStore
+{
+    Task AppendAsync(ChainBoundaryEvidenceCapture capture, CancellationToken cancellationToken);
+}
+
 public sealed record WorkflowControllerRequest(
     WorkflowInvocation Invocation,
     RepositoryObservation Observation,
@@ -245,14 +258,16 @@ public sealed class ProductTransferEvaluator
     }
 }
 
-public sealed class WorkflowBoundaryEvidenceWriter
+public sealed class WorkflowBoundaryEvidenceWriter(IChainBoundaryEvidenceStore? _boundaryStore = null)
 {
     private readonly List<WorkflowBoundaryEvidenceRecord> _records = [];
 
     public IReadOnlyList<WorkflowBoundaryEvidenceRecord> Records => _records;
 
-    public Task WriteAsync(
+    public async Task WriteAsync(
         WorkflowBoundaryEvaluation evaluation,
+        string? runId = null,
+        string? chainIdentity = null,
         CancellationToken cancellationToken = default)
     {
         _records.Add(new WorkflowBoundaryEvidenceRecord(
@@ -263,7 +278,26 @@ public sealed class WorkflowBoundaryEvidenceWriter
                 .Concat(evaluation.EntryGate?.Evidence ?? [])
                 .Concat(evaluation.ProductTransfer?.Gate.Evidence ?? [])
                 .ToArray()));
-        return Task.CompletedTask;
+
+        if (_boundaryStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _boundaryStore.AppendAsync(
+                new ChainBoundaryEvidenceCapture(
+                    runId,
+                    chainIdentity ?? string.Empty,
+                    evaluation,
+                    DateTimeOffset.UtcNow),
+                cancellationToken);
+        }
+        catch
+        {
+            // Boundary persistence is supporting evidence; the chain result remains authoritative.
+        }
     }
 }
 
@@ -437,7 +471,7 @@ public sealed class WorkflowChainRunner(
                     ? $"Advanced from {definition.Identity} to {downstream}."
                     : $"Stopped before {downstream} because a workflow boundary gate was unsatisfied.");
             boundaries.Add(boundary);
-            await _evidenceWriter.WriteAsync(boundary, cancellationToken);
+            await _evidenceWriter.WriteAsync(boundary, request.Run?.Value, request.Chain.Identity, cancellationToken);
 
             if (!canAdvance)
             {

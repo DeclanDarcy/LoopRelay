@@ -559,11 +559,11 @@ public class DecisionSessionTests
     }
 
     [Fact]
-    public async Task Run_Transfer_WritesOperationalDeltaHistoryToSqlite()
+    public async Task Run_Transfer_WritesOperationalDeltaHistoryToTheLedger()
     {
         using var repo = new TempFileRepo();
         await InitializeLoopHistoryDatabaseAsync(repo.Repository);
-        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var history = new LedgerLoopHistoryStore(repo.Store, repo.Repository);
         var art = new LoopArtifacts(repo.Store, repo.Repository, history);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(repo.Store);
@@ -590,7 +590,8 @@ public class DecisionSessionTests
         LoopHistoryRecord latestDelta = (await history.ReadLatestAsync(LoopHistoryKind.OperationalDelta))!;
         Assert.Equal(OrchestrationArtifactPaths.HistoricalDelta(1), latestDelta.RelativePath);
         Assert.Equal("DELTA-TEXT", latestDelta.Content);
-        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
+        // The numbered file exists as a derived projection of the ledger fact.
+        Assert.Equal("DELTA-TEXT", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalDelta)));
         Assert.Equal("OPCTX-1", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalContext)));
     }

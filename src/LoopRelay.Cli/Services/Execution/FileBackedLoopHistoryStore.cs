@@ -8,7 +8,9 @@ namespace LoopRelay.Cli.Services.Execution;
 
 internal sealed class FileBackedLoopHistoryStore(IArtifactStore _store, Repository _repository) : ILoopHistoryStore
 {
-    public async Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content)
+    // Numbered files cannot carry causal lineage; the ledger-backed store is the history
+    // authority and this store remains the legacy/projection writer, so lineage is dropped here.
+    public async Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content, LoopHistoryLineage? lineage = null)
     {
         LoopHistorySpec spec = GetSpec(kind);
         int sequence = await NextSequenceAsync(spec);

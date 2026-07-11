@@ -519,6 +519,43 @@ evidence.
 stable evidence identity; causal lineage; read receipts stored here;
 projections always derived.
 
+**Encoded decisions (within-doctrine, at implementation):** decision/handoff/
+delta history is **ledger-authoritative** on the canonical path — the active
+composition writes `loop_history` rows (stable `hist_` identity, content hash,
+causal lineage run/tr/att) and the numbered `.agents` file is written at the
+same sequence as a **derived projection only**; reads resolve from the ledger,
+never from numbered files, and the same table completion already reads closes
+the writer/reader split. Pre-ledger numbered files (written by earlier builds
+of this same path) are **imported into the ledger once, append-only with null
+lineage** — migration continuity like M2's label relabels, so upgraded
+workspaces keep one history with no file ever selected as read authority. The
+ledger row is the fact: a projection-file write failure after the ledger
+commit never fails the rotation (the projection is re-derivable), and a
+colliding projection target aborts before anything durable is written. The
+decision fact itself carries lineage (the decision session receives the
+executing transition's identity context). The never-called
+`SqliteLoopHistoryStore`/factory pair is retired (a rewiring hazard that wrote
+rows without stable identity). Causal lineage columns are additive (schema v6):
+receipts, gate evaluations, and warnings carry `transition_run_id` (the
+captures already carried it; the stores now persist it), and effect execution
+receives an identity context so effect-produced history carries lineage.
+**Ledger sequence (insertion order) is the canonical ordering** for appended
+facts — ULIDs are not monotonic within a millisecond and wall-clock is display
+metadata; fact reads order by insertion. Every mutation of the current-state
+transition-run projection row is backed by an appended evidence event (the two
+uncovered lifecycle rewrites now append `TransitionOutputInterpreted` /
+`TransitionOutputValidated`), and schema migrations never rewrite fact rows —
+the M2 label relabels touch only projection tables. Chain-boundary decisions
+become append-only facts (`canonical_chain_boundary_events`, `bnd_` identity,
+decision `Advanced`/`StoppedAtBoundary`) instead of living only in an
+in-memory list; the never-written `canonical_workflow_chain_runs` table and
+its dead store surface are retired (the M1 `runs` table is the chain-run
+record). Receipt-consumed system-owned bodies are retrievable from the ledger
+by content hash (raw prompt output and loop history), closing the M3
+AdversarialReview-retrievability and receipt-lineage deferrals. Legacy loop
+bodies keep their file-backed writer until M17–M19; archive/export execution
+reroutes at M8/M11/M15.
+
 **Verification brief:** execution-to-completion history parity; corrections
 supersede rather than erase; every decision links to durable evidence.
 

@@ -3,6 +3,7 @@ using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
@@ -70,7 +71,7 @@ internal sealed class DecisionSession(
     private double transferCost = 250_000d; // C: seed -> measured -> running average
     private int transferCount;
 
-    public async Task RunAsync(CancellationToken cancellationToken)
+    public async Task RunAsync(CancellationToken cancellationToken, LoopHistoryLineage? historyLineage = null)
     {
         DecisionRoute route = _router.Evaluate(BuildRouterInputs());
         // Eligibility downgrade: a Transfer needs a primed warm process to extract a delta from.
@@ -113,7 +114,7 @@ internal sealed class DecisionSession(
         proposalRenderer.EchoIfSilent(proposed.Output);
 
         // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
-        await _artifacts.PersistDecisionsAsync(proposed.Output);
+        await _artifacts.PersistDecisionsAsync(proposed.Output, historyLineage);
         if (_hitlRequestCapture is not null)
         {
             await _hitlRequestCapture.CaptureFromSourceAsync(OrchestrationArtifactPaths.Decisions, proposed.Output);

@@ -348,11 +348,23 @@ public interface IProductValidator
         CancellationToken cancellationToken);
 }
 
+// Identity context for effect execution: effects that append history facts (for example loop
+// history rotation) carry the causal spine ids of the transition that ran them.
+public sealed record EffectExecutionContext(
+    string? TransitionRunId,
+    string? AttemptId,
+    string? RunId,
+    string? WorkflowInstanceId)
+{
+    public static EffectExecutionContext Empty { get; } = new(null, null, null, null);
+}
+
 public interface IEffectExecutor
 {
     Task<EffectExecutionResult> ExecuteAsync(
         WorkflowTransitionDefinition definition,
         ProductValidationResult validation,
+        EffectExecutionContext context,
         CancellationToken cancellationToken);
 }
 

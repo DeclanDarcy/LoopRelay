@@ -297,7 +297,7 @@ public sealed class CanonicalSpineStoreTests
     }
 
     [Fact]
-    public async Task Agent_turn_append_round_trips_ordered_and_duplicate_turn_index_throws()
+    public async Task Agent_turn_append_round_trips_in_ledger_insertion_order_and_duplicate_turn_index_throws()
     {
         Repository repository = CreateRepository();
         var store = new CanonicalWorkflowPersistenceStore(repository);
@@ -306,14 +306,16 @@ public sealed class CanonicalSpineStoreTests
         await store.AppendAgentTurnAsync(new AgentTurnRecord("turn_second", "ses_001", 2, now.AddSeconds(20)));
         await store.AppendAgentTurnAsync(new AgentTurnRecord("turn_first", "ses_001", 1, now.AddSeconds(10)));
 
+        // Ledger sequence (insertion order) is the ordering authority: a fact appended later
+        // never rewrites its position in history via a claimed earlier timestamp or index.
         IReadOnlyList<AgentTurnRecord> turns = await store.ReadAgentTurnsAsync();
         Assert.Equal(2, turns.Count);
-        Assert.Equal("turn_first", turns[0].TurnId);
-        Assert.Equal(1, turns[0].TurnIndex);
+        Assert.Equal("turn_second", turns[0].TurnId);
+        Assert.Equal(2, turns[0].TurnIndex);
         Assert.Equal("ses_001", turns[0].SessionId);
-        Assert.Equal(now.AddSeconds(10), turns[0].RecordedAt);
-        Assert.Equal("turn_second", turns[1].TurnId);
-        Assert.Equal(2, turns[1].TurnIndex);
+        Assert.Equal(now.AddSeconds(20), turns[0].RecordedAt);
+        Assert.Equal("turn_first", turns[1].TurnId);
+        Assert.Equal(1, turns[1].TurnIndex);
 
         await Assert.ThrowsAsync<SqliteException>(() => store.AppendAgentTurnAsync(
             new AgentTurnRecord("turn_duplicate", "ses_001", 1, now.AddSeconds(30))));

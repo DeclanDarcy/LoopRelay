@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Core.Tests.Services;
 
-public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
+public sealed class LoopRelayWorkspaceDatabaseSchemaV6Tests
 {
     private static readonly string[] SpineTables =
     [
@@ -17,7 +17,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
     ];
 
     [Fact]
-    public async Task EnsureSchemaAsync_FreshDatabase_StampsVersionFiveAndCreatesSpineTables()
+    public async Task EnsureSchemaAsync_FreshDatabase_StampsVersionSixAndCreatesSpineTables()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -26,8 +26,8 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal(5, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
-        Assert.Equal("5", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal(6, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
+        Assert.Equal("6", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist.");
@@ -79,12 +79,116 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
             "products_json",
             "validation",
             "consumed_at",
+            "transition_run_id",
         ];
         Assert.Equal(expectedColumns, columns);
     }
 
     [Fact]
-    public async Task EnsureSchemaAsync_UpgradesVersionFourDatabaseToVersionFiveIdempotently()
+    public async Task EnsureSchemaAsync_FreshDatabase_CreatesChainBoundaryEventsAndRetiresChainRunsTable()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        Assert.True(await TableExistsAsync(connection, "canonical_chain_boundary_events"), "Expected table `canonical_chain_boundary_events` to exist.");
+        Assert.False(await TableExistsAsync(connection, "canonical_workflow_chain_runs"), "Expected the never-written `canonical_workflow_chain_runs` table to be absent in new databases.");
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_FreshDatabase_CreatesLineageColumnsOnHistoryFactTables()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        IReadOnlyList<string> loopHistoryColumns = await TableColumnsAsync(connection, "loop_history");
+        Assert.Contains("history_id", loopHistoryColumns);
+        Assert.Contains("run_id", loopHistoryColumns);
+        Assert.Contains("transition_run_id", loopHistoryColumns);
+        Assert.Contains("attempt_id", loopHistoryColumns);
+        Assert.Contains("transition_run_id", await TableColumnsAsync(connection, "evaluation_warnings"));
+        Assert.Contains("transition_run_id", await TableColumnsAsync(connection, "canonical_gate_evaluations"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_AddsLineageColumnsToVersionFiveTablesWithoutRewritingFactRows()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                CREATE TABLE workspace_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '5');
+
+                CREATE TABLE loop_history(
+                    kind text not null,
+                    sequence integer not null,
+                    logical_path text not null unique,
+                    body text not null,
+                    content_hash text not null,
+                    created_at text not null,
+                    primary key(kind, sequence)
+                );
+                INSERT INTO loop_history (kind, sequence, logical_path, body, content_hash, created_at)
+                VALUES ('Decisions', 1, '.agents/decisions/decisions.0001.md', 'decided', 'hash-1', '2026-07-10T12:00:00.0000000Z');
+
+                CREATE TABLE read_receipts(
+                    receipt_id text primary key,
+                    run_id text not null,
+                    workflow_identity text not null,
+                    transition_identity text not null,
+                    attempt_id text,
+                    commit_hash text,
+                    input_surfaces_json text not null,
+                    surface_tree_hashes_json text,
+                    files_json text not null,
+                    products_json text not null,
+                    validation text not null,
+                    consumed_at text not null
+                );
+                INSERT INTO read_receipts (
+                    receipt_id, run_id, workflow_identity, transition_identity, attempt_id, commit_hash,
+                    input_surfaces_json, surface_tree_hashes_json, files_json, products_json, validation, consumed_at)
+                VALUES (
+                    'rcpt_legacy_1', '', 'Plan', 'WriteExecutablePlan', NULL, NULL,
+                    '[]', NULL, '[]', '[]', 'Usable', '2026-07-10T12:00:00.0000000Z');
+                """);
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        Assert.Contains("history_id", await TableColumnsAsync(connection, "loop_history"));
+        Assert.Contains("transition_run_id", await TableColumnsAsync(connection, "read_receipts"));
+        // Fact rows survive the migration byte-identical with null lineage: corrections and
+        // migrations never rewrite append-only history.
+        Assert.Equal("decided", await ScalarStringAsync(connection, "SELECT body FROM loop_history WHERE sequence = 1;"));
+        Assert.Equal("hash-1", await ScalarStringAsync(connection, "SELECT content_hash FROM loop_history WHERE sequence = 1;"));
+        Assert.Null(await ScalarStringAsync(connection, "SELECT history_id FROM loop_history WHERE sequence = 1;"));
+        Assert.Equal("Usable", await ScalarStringAsync(connection, "SELECT validation FROM read_receipts WHERE receipt_id = 'rcpt_legacy_1';"));
+        Assert.Null(await ScalarStringAsync(connection, "SELECT transition_run_id FROM read_receipts WHERE receipt_id = 'rcpt_legacy_1';"));
+
+        // The column additions are guarded: a second schema pass neither duplicates nor fails.
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        Assert.Equal(1, (await TableColumnsAsync(connection, "loop_history")).Count(column => column == "history_id"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_UpgradesVersionFourDatabaseToVersionSixIdempotently()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -105,12 +209,12 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("5", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("6", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.True(await TableExistsAsync(connection, "read_receipts"), "Expected table `read_receipts` to exist after upgrade.");
 
-        // The v5 migration is idempotent: a second schema pass succeeds and keeps the same shape.
+        // The v6 migration is idempotent: a second schema pass succeeds and keeps the same shape.
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
-        Assert.Equal("5", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("6", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.True(await TableExistsAsync(connection, "read_receipts"), "Expected table `read_receipts` to survive a second schema pass.");
     }
 
@@ -195,7 +299,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
     }
 
     [Fact]
-    public async Task EnsureSchemaAsync_UpgradesVersionTwoShapedDatabaseToVersionFive()
+    public async Task EnsureSchemaAsync_UpgradesVersionTwoShapedDatabaseToVersionSix()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -212,7 +316,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("5", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("6", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist after upgrade.");
@@ -307,7 +411,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("5", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("6", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.Equal("Resumable", await ScalarStringAsync(connection, "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
         Assert.Equal("MissingRequiredInput", await ScalarStringAsync(connection, "SELECT outcome FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
         Assert.Equal("Resumable", await ScalarStringAsync(connection, "SELECT state FROM canonical_stage_states WHERE workflow_identity = 'Plan';"));
@@ -330,7 +434,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
-        await ExecuteAsync(connection, "UPDATE schema_metadata SET value = '6' WHERE key = 'schema_version';");
+        await ExecuteAsync(connection, "UPDATE schema_metadata SET value = '7' WHERE key = 'schema_version';");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));
@@ -353,7 +457,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV5Tests
 
     private static Repository CreateRepository()
     {
-        string path = Directory.CreateTempSubdirectory("looprelay-schema-v5-").FullName;
+        string path = Directory.CreateTempSubdirectory("looprelay-schema-v6-").FullName;
         return new Repository
         {
             Id = Guid.NewGuid(),

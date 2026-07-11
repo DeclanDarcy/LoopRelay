@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Models.Process;
@@ -10,6 +12,7 @@ using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Process;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
 using LoopRelay.Cli.Services.Decisions;
@@ -169,7 +172,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             new CanonicalAttemptStore(persistence),
             new CanonicalReadReceiptStore(persistence, processRunner, repository));
         var workflowController = new WorkflowController(workflowResolver, transitionRuntime);
-        var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter();
+        var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter(
+            new CanonicalChainBoundaryEvidenceStore(persistence));
         var workflowChainRunner = new WorkflowChainRunner(
             workflowResolver,
             workflowController,
@@ -684,6 +688,38 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         }
     }
 
+    // Persists each chain-boundary decision as an append-only history fact so chain progression
+    // never exists only in memory or console output.
+    internal sealed class CanonicalChainBoundaryEvidenceStore(
+        CanonicalWorkflowPersistenceStore _persistence) : IChainBoundaryEvidenceStore
+    {
+        private static readonly JsonSerializerOptions BoundaryJsonOptions = new(JsonSerializerDefaults.Web)
+        {
+            Converters = { new JsonStringEnumConverter() },
+        };
+
+        public Task AppendAsync(ChainBoundaryEvidenceCapture capture, CancellationToken cancellationToken) =>
+            _persistence.AppendChainBoundaryEventAsync(
+                new CanonicalChainBoundaryEventRecord(
+                    CausalUlid.NewId("bnd"),
+                    capture.RunId,
+                    capture.ChainIdentity,
+                    capture.Evaluation.SourceWorkflow,
+                    capture.Evaluation.TargetWorkflow,
+                    capture.Evaluation.ExitGate.Status,
+                    capture.Evaluation.EntryGate?.Status,
+                    capture.Evaluation.ProductTransfer?.Gate.Status,
+                    capture.Evaluation.CanAdvance ? "Advanced" : "StoppedAtBoundary",
+                    capture.Evaluation.Explanation,
+                    capture.Evaluation.ExitGate.Evidence
+                        .Concat(capture.Evaluation.EntryGate?.Evidence ?? [])
+                        .Concat(capture.Evaluation.ProductTransfer?.Gate.Evidence ?? [])
+                        .ToArray(),
+                    JsonSerializer.Serialize(capture.Evaluation, BoundaryJsonOptions),
+                    capture.RecordedAt),
+                cancellationToken);
+    }
+
     // Enriches a consumption capture with git provenance — the commit every read resolves to and
     // per-surface tree hashes at that commit — then appends the receipt. Enrichment failures
     // degrade to null fields; the receipt still records exactly what was read.
@@ -728,7 +764,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         product.CausalIdentity,
                         product.ValidationState.ToString())).ToArray(),
                     capture.Validation,
-                    capture.ConsumedAt),
+                    capture.ConsumedAt,
+                    capture.TransitionRunId),
                 cancellationToken);
         }
 
@@ -1821,7 +1858,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     _resumeStore: new SqliteDecisionSessionResumeStore(_repository),
                     _projectionService: null,
                     _resumeEnabled: DecisionResumeComposition.IsEnabled());
-                await executeDecisionSession.RunAsync(cancellationToken);
+                await executeDecisionSession.RunAsync(
+                    cancellationToken,
+                    new LoopHistoryLineage(
+                        CurrentExecutionContext?.RunId,
+                        CurrentExecutionContext?.TransitionRunId,
+                        CurrentExecutionContext?.AttemptId));
                 string decisions = await ReadRequiredAsync(OrchestrationArtifactPaths.Decisions, cancellationToken);
                 return new PromptExecutionResult(
                     PromptExecutionStatus.Completed,
@@ -2439,8 +2481,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     .Trim();
         }
 
+        // The ledger-backed history store makes decision/handoff/delta history ledger-authoritative
+        // on the canonical path; numbered files remain as derived projections only.
         private LoopArtifacts CreateLoopArtifacts() =>
-            new(artifactStore, _repository);
+            new(artifactStore, _repository, new LedgerLoopHistoryStore(artifactStore, _repository));
 
         private MilestoneGate CreateMilestoneGate() =>
             new(artifactStore, _repository);
@@ -3607,6 +3651,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         public async Task<EffectExecutionResult> ExecuteAsync(
             WorkflowTransitionDefinition definition,
             ProductValidationResult validation,
+            EffectExecutionContext context,
             CancellationToken cancellationToken)
         {
             if (LocalArtifactTransitions.Supports(definition))
@@ -3623,6 +3668,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? PlanWarmSessionTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Plan warm-session",
+                    context,
                     cancellationToken);
             }
 
@@ -3635,6 +3681,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? PlanProjectionTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Plan projection",
+                    context,
                     cancellationToken);
             }
 
@@ -3647,6 +3694,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? EvalPromptTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Eval prompt",
+                    context,
                     cancellationToken);
             }
 
@@ -3659,6 +3707,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? TraditionalRoadmapPromptTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Traditional roadmap prompt",
+                    context,
                     cancellationToken);
             }
 
@@ -3671,6 +3720,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? MilestoneDeepDiveTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Milestone deep-dive",
+                    context,
                     cancellationToken);
             }
 
@@ -3683,6 +3733,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? PlanReadOnlyReviewTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Plan read-only review",
+                    context,
                     cancellationToken);
             }
 
@@ -3695,6 +3746,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? PlanScopedArtifactTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Plan scoped artifact",
+                    context,
                     cancellationToken);
             }
 
@@ -3710,6 +3762,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? ExecuteEvidence(definition)
                         : validation.Evidence,
                     "Execute transition",
+                    context,
                     cancellationToken);
             }
 
@@ -3732,6 +3785,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 validation,
                 evidence,
                 "Local verification",
+                context,
                 cancellationToken);
         }
 
@@ -3740,6 +3794,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             ProductValidationResult validation,
             IReadOnlyList<string> evidence,
             string evidenceTitle,
+            EffectExecutionContext context,
             CancellationToken cancellationToken)
         {
             WorkflowDefinition workflow = WorkflowFor(definition);
@@ -3825,7 +3880,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 ExecuteRepositoryStateTransitions.Supports(definition) ||
                 ExecuteReviewTransitions.Supports(definition))
             {
-                await MaterializeExecuteTransitionEvidenceAsync(workflow, definition, validation, effectEvidence, cancellationToken);
+                await MaterializeExecuteTransitionEvidenceAsync(workflow, definition, validation, effectEvidence, context, cancellationToken);
             }
             else
             {
@@ -4277,10 +4332,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             WorkflowTransitionDefinition definition,
             ProductValidationResult validation,
             IReadOnlyList<string> evidence,
+            EffectExecutionContext context,
             CancellationToken cancellationToken)
         {
             IReadOnlyList<string> loopArtifactEffects =
-                await ApplyExecuteLoopArtifactEffectsAsync(definition, cancellationToken);
+                await ApplyExecuteLoopArtifactEffectsAsync(definition, context, cancellationToken);
             foreach (string relativePath in ExecuteEvidence(definition))
             {
                 string path = ResolveRepositoryPath(relativePath);
@@ -4306,23 +4362,31 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
         private async Task<IReadOnlyList<string>> ApplyExecuteLoopArtifactEffectsAsync(
             WorkflowTransitionDefinition definition,
+            EffectExecutionContext context,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var artifacts = new LoopArtifacts(new FileSystemArtifactStore(), _repository);
+            var fileStore = new FileSystemArtifactStore();
+            var artifacts = new LoopArtifacts(
+                fileStore,
+                _repository,
+                new LedgerLoopHistoryStore(fileStore, _repository));
+            var lineage = new LoopHistoryLineage(context.RunId, context.TransitionRunId, context.AttemptId);
             return definition.Identity.Value switch
             {
                 "GenerateDecision" or "TransferDecisionSession" or "ContinueDecisionSession" =>
-                    await RotateLiveHandoffEffectAsync(artifacts),
+                    await RotateLiveHandoffEffectAsync(artifacts, lineage),
                 "GenerateHandoff" => await RetireLiveDecisionsEffectAsync(artifacts),
-                "UpdateOperationalContext" => await RotateOperationalDeltaEffectAsync(artifacts),
+                "UpdateOperationalContext" => await RotateOperationalDeltaEffectAsync(artifacts, lineage),
                 _ => [],
             };
         }
 
-        private static async Task<IReadOnlyList<string>> RotateLiveHandoffEffectAsync(LoopArtifacts artifacts)
+        private static async Task<IReadOnlyList<string>> RotateLiveHandoffEffectAsync(
+            LoopArtifacts artifacts,
+            LoopHistoryLineage lineage)
         {
-            string? content = await artifacts.RotateLiveHandoffAsync();
+            string? content = await artifacts.RotateLiveHandoffAsync(lineage);
             return content is null
                 ? ["No live handoff was present to rotate."]
                 : ["Rotated live handoff into handoff history."];
@@ -4336,9 +4400,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 : ["No live decisions were present to retire."];
         }
 
-        private static async Task<IReadOnlyList<string>> RotateOperationalDeltaEffectAsync(LoopArtifacts artifacts)
+        private static async Task<IReadOnlyList<string>> RotateOperationalDeltaEffectAsync(
+            LoopArtifacts artifacts,
+            LoopHistoryLineage lineage)
         {
-            string? content = await artifacts.RotateOperationalDeltaAsync();
+            string? content = await artifacts.RotateOperationalDeltaAsync(lineage);
             return content is null
                 ? ["No live operational delta was present to rotate."]
                 : ["Rotated live operational delta into delta history."];

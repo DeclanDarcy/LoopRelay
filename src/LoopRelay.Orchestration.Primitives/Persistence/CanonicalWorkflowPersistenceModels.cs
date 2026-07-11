@@ -53,7 +53,8 @@ public sealed record CanonicalGateEvaluationRecord(
     DateTimeOffset EvaluatedAt,
     IReadOnlyList<GateRequirementResult> Requirements,
     string Explanation,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    string? TransitionRunId = null);
 
 public sealed record CanonicalEffectRecord(
     long RecordId,
@@ -75,7 +76,8 @@ public sealed record CanonicalWarningRecord(
     string Authority,
     string Remediation,
     IReadOnlyList<string> Evidence,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? TransitionRunId = null);
 
 public sealed record CanonicalRecoveryMarkerRecord(
     string MarkerId,
@@ -86,15 +88,21 @@ public sealed record CanonicalRecoveryMarkerRecord(
     IReadOnlyList<string> Evidence,
     DateTimeOffset RecordedAt);
 
-public sealed record CanonicalWorkflowChainRunRecord(
-    string ChainRunId,
+// Decision carries the specific boundary outcome: "Advanced" or "StoppedAtBoundary".
+public sealed record CanonicalChainBoundaryEventRecord(
+    string BoundaryId,
+    string? RunId,
     string ChainIdentity,
-    WorkflowIdentity CurrentWorkflow,
-    RuntimeOutcomeKind Status,
-    DateTimeOffset StartedAt,
-    DateTimeOffset? CompletedAt,
+    WorkflowIdentity SourceWorkflow,
+    WorkflowIdentity? TargetWorkflow,
+    GateStatus ExitGateStatus,
+    GateStatus? EntryGateStatus,
+    GateStatus? TransferGateStatus,
+    string Decision,
     string Explanation,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    string BoundaryJson,
+    DateTimeOffset RecordedAt);
 
 public sealed record RunRecord(
     string RunId,
@@ -165,7 +173,8 @@ public sealed record CanonicalReadReceiptRecord(
     IReadOnlyList<CanonicalReadReceiptFile> Files,
     IReadOnlyList<CanonicalReadReceiptProduct> Products,
     string Validation,
-    DateTimeOffset ConsumedAt);
+    DateTimeOffset ConsumedAt,
+    string? TransitionRunId = null);
 
 public sealed record CanonicalWorkflowPersistenceSnapshot(
     IReadOnlyList<CanonicalWorkflowStateRecord> WorkflowStates,
@@ -176,5 +185,4 @@ public sealed record CanonicalWorkflowPersistenceSnapshot(
     IReadOnlyList<CanonicalGateEvaluationRecord> GateEvaluations,
     IReadOnlyList<CanonicalEffectRecord> EffectRecords,
     IReadOnlyList<CanonicalWarningRecord> Warnings,
-    IReadOnlyList<CanonicalRecoveryMarkerRecord> RecoveryMarkers,
-    IReadOnlyList<CanonicalWorkflowChainRunRecord> WorkflowChainRuns);
+    IReadOnlyList<CanonicalRecoveryMarkerRecord> RecoveryMarkers);

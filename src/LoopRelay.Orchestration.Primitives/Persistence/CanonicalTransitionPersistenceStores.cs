@@ -184,7 +184,8 @@ public sealed class CanonicalTransitionWarningStore(CanonicalWorkflowPersistence
                 "canonical transition runtime",
                 warning.Remediation,
                 warning.Evidence,
-                warning.RecordedAt),
+                warning.RecordedAt,
+                warning.RunId),
             cancellationToken);
 }
 
@@ -221,7 +222,8 @@ public sealed class CanonicalTransitionGateEvaluationStore(CanonicalWorkflowPers
                 evaluation.EvaluatedAt,
                 evaluation.Result.Requirements,
                 evaluation.Result.Explanation,
-                evaluation.Result.Evidence),
+                evaluation.Result.Evidence,
+                evaluation.RunId),
             cancellationToken);
 }
 

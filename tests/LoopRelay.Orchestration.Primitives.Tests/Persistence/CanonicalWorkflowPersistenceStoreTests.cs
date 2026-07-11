@@ -176,16 +176,6 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
             new RecoveryDefinition("PlanRecovery", "resume from output validation", ["resume"], ["silent repair"]),
             ["recovery.md"],
             now.AddSeconds(50)));
-        await store.UpsertWorkflowChainRunAsync(new CanonicalWorkflowChainRunRecord(
-            "chain-001",
-            "TraditionalRoadmapChain",
-            workflow,
-            RuntimeOutcomeKind.Waiting,
-            now,
-            null,
-            "chain waiting",
-            ["chain.md"]));
-
         CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync();
 
         Assert.Single(snapshot.WorkflowStates);
@@ -201,7 +191,6 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Single(snapshot.EffectRecords);
         Assert.Single(snapshot.Warnings);
         Assert.Single(snapshot.RecoveryMarkers);
-        Assert.Single(snapshot.WorkflowChainRuns);
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(LoopRelayWorkspaceDatabase.Resolve(repository));
         await connection.OpenAsync();
@@ -209,7 +198,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
     }
 
     [Fact]
-    public async Task Store_round_trips_read_receipts_ordered_by_consumption_then_receipt_id()
+    public async Task Store_round_trips_read_receipts_ordered_by_ledger_insertion()
     {
         Repository repository = CreateRepository();
         CanonicalWorkflowPersistenceStore store = new(repository);
@@ -259,10 +248,13 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
 
         IReadOnlyList<CanonicalReadReceiptRecord> receipts = await store.ReadReadReceiptsAsync();
 
+        // Ledger sequence (insertion order) is the ordering authority: neither the earlier
+        // consumed_at of the ledger-only receipt nor the lexically-smallest receipt id of the
+        // last-appended receipt reorders the history.
         Assert.Equal(3, receipts.Count);
-        Assert.Equal(tieBreakReceipt.ReceiptId, receipts[0].ReceiptId);
+        Assert.Equal(diskReceipt.ReceiptId, receipts[0].ReceiptId);
         Assert.Equal(ledgerOnlyReceipt.ReceiptId, receipts[1].ReceiptId);
-        Assert.Equal(diskReceipt.ReceiptId, receipts[2].ReceiptId);
+        Assert.Equal(tieBreakReceipt.ReceiptId, receipts[2].ReceiptId);
 
         CanonicalReadReceiptRecord readLedgerOnly = receipts[1];
         Assert.StartsWith("rcpt_", readLedgerOnly.ReceiptId, StringComparison.Ordinal);
@@ -279,7 +271,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Equal("ledger product `ExecutionMilestones` is Stale", readLedgerOnly.Validation);
         Assert.Equal(consumedAt, readLedgerOnly.ConsumedAt);
 
-        CanonicalReadReceiptRecord readDisk = receipts[2];
+        CanonicalReadReceiptRecord readDisk = receipts[0];
         Assert.Equal("Plan", readDisk.WorkflowIdentity);
         Assert.Equal("WriteExecutablePlan", readDisk.TransitionIdentity);
         Assert.Equal("att_001", readDisk.AttemptId);
@@ -317,6 +309,274 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Empty(await store.ReadReadReceiptsAsync());
     }
 
+    [Fact]
+    public async Task Receipts_warnings_and_gate_evaluations_carry_their_transition_run_lineage()
+    {
+        Repository repository = CreateRepository();
+        CanonicalWorkflowPersistenceStore store = new(repository);
+        DateTimeOffset now = new(2026, 7, 11, 9, 0, 0, TimeSpan.Zero);
+
+        await store.AppendReadReceiptAsync(new CanonicalReadReceiptRecord(
+            CausalUlid.NewId("rcpt"),
+            "run_lineage",
+            "Plan",
+            "WriteExecutablePlan",
+            "att_lineage",
+            null,
+            [],
+            null,
+            [],
+            [],
+            "Usable",
+            now,
+            "tr_lineage"));
+        await store.AppendWarningAsync(new CanonicalWarningRecord(
+            CausalUlid.NewId("warn"),
+            new WorkflowIdentity("Plan"),
+            new WorkflowStageIdentity("Planning"),
+            new WorkflowTransitionIdentity("WriteExecutablePlan"),
+            WarningCategory.Validation,
+            "input surface dirty",
+            "canonical transition runtime",
+            "commit the surface",
+            [],
+            now,
+            "tr_lineage"));
+        await store.AppendGateEvaluationAsync(new CanonicalGateEvaluationRecord(
+            0,
+            new WorkflowIdentity("Plan"),
+            new WorkflowStageIdentity("Planning"),
+            new WorkflowTransitionIdentity("WriteExecutablePlan"),
+            new GateIdentity("WriteExecutablePlan.Input"),
+            GateStatus.Satisfied,
+            now,
+            [],
+            "gate satisfied",
+            [],
+            "tr_lineage"));
+
+        CanonicalReadReceiptRecord receipt = Assert.Single(await store.ReadReadReceiptsAsync());
+        Assert.Equal("tr_lineage", receipt.TransitionRunId);
+        CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync();
+        Assert.Equal("tr_lineage", Assert.Single(snapshot.Warnings).TransitionRunId);
+        Assert.Equal("tr_lineage", Assert.Single(snapshot.GateEvaluations).TransitionRunId);
+    }
+
+    [Fact]
+    public async Task Chain_boundary_events_append_and_read_back_in_ledger_insertion_order()
+    {
+        Repository repository = CreateRepository();
+        CanonicalWorkflowPersistenceStore store = new(repository);
+        DateTimeOffset now = new(2026, 7, 11, 9, 0, 0, TimeSpan.Zero);
+
+        var advanced = new CanonicalChainBoundaryEventRecord(
+            CausalUlid.NewId("bnd"),
+            "run_chain",
+            "CanonicalDelivery",
+            new WorkflowIdentity("Plan"),
+            new WorkflowIdentity("Execute"),
+            GateStatus.Satisfied,
+            GateStatus.Satisfied,
+            GateStatus.Satisfied,
+            "Advanced",
+            "Advanced from Plan to Execute.",
+            ["plan-exit.md"],
+            """{"canAdvance":true}""",
+            now);
+        var stopped = new CanonicalChainBoundaryEventRecord(
+            CausalUlid.NewId("bnd"),
+            null,
+            "CanonicalDelivery",
+            new WorkflowIdentity("Execute"),
+            null,
+            GateStatus.Unsatisfied,
+            null,
+            null,
+            "StoppedAtBoundary",
+            "Stopped before Completion because a workflow boundary gate was unsatisfied.",
+            [],
+            """{"canAdvance":false}""",
+            now.AddMinutes(1));
+
+        await store.AppendChainBoundaryEventAsync(advanced);
+        await store.AppendChainBoundaryEventAsync(stopped);
+
+        IReadOnlyList<CanonicalChainBoundaryEventRecord> events = await store.ReadChainBoundaryEventsAsync();
+
+        Assert.Equal(2, events.Count);
+        CanonicalChainBoundaryEventRecord readAdvanced = events[0];
+        Assert.Equal(advanced.BoundaryId, readAdvanced.BoundaryId);
+        Assert.Equal("run_chain", readAdvanced.RunId);
+        Assert.Equal("CanonicalDelivery", readAdvanced.ChainIdentity);
+        Assert.Equal(new WorkflowIdentity("Plan"), readAdvanced.SourceWorkflow);
+        Assert.Equal(new WorkflowIdentity("Execute"), readAdvanced.TargetWorkflow);
+        Assert.Equal(GateStatus.Satisfied, readAdvanced.ExitGateStatus);
+        Assert.Equal(GateStatus.Satisfied, readAdvanced.EntryGateStatus);
+        Assert.Equal(GateStatus.Satisfied, readAdvanced.TransferGateStatus);
+        Assert.Equal("Advanced", readAdvanced.Decision);
+        Assert.Equal("Advanced from Plan to Execute.", readAdvanced.Explanation);
+        Assert.Equal(["plan-exit.md"], readAdvanced.Evidence);
+        Assert.Equal("""{"canAdvance":true}""", readAdvanced.BoundaryJson);
+        Assert.Equal(now, readAdvanced.RecordedAt);
+
+        CanonicalChainBoundaryEventRecord readStopped = events[1];
+        Assert.Equal(stopped.BoundaryId, readStopped.BoundaryId);
+        Assert.Null(readStopped.RunId);
+        Assert.Null(readStopped.TargetWorkflow);
+        Assert.Equal(GateStatus.Unsatisfied, readStopped.ExitGateStatus);
+        Assert.Null(readStopped.EntryGateStatus);
+        Assert.Null(readStopped.TransferGateStatus);
+        Assert.Equal("StoppedAtBoundary", readStopped.Decision);
+        Assert.Empty(readStopped.Evidence);
+    }
+
+    [Fact]
+    public async Task Chain_boundary_reads_return_empty_when_database_predates_the_table()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '5');
+                """);
+        }
+
+        CanonicalWorkflowPersistenceStore store = new(repository);
+
+        Assert.Empty(await store.ReadChainBoundaryEventsAsync());
+    }
+
+    [Fact]
+    public async Task Pre_v6_fact_rows_read_back_with_null_lineage_without_migrating()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '5');
+
+                CREATE TABLE read_receipts(
+                    receipt_id text primary key,
+                    run_id text not null,
+                    workflow_identity text not null,
+                    transition_identity text not null,
+                    attempt_id text,
+                    commit_hash text,
+                    input_surfaces_json text not null,
+                    surface_tree_hashes_json text,
+                    files_json text not null,
+                    products_json text not null,
+                    validation text not null,
+                    consumed_at text not null
+                );
+                INSERT INTO read_receipts (
+                    receipt_id, run_id, workflow_identity, transition_identity, attempt_id, commit_hash,
+                    input_surfaces_json, surface_tree_hashes_json, files_json, products_json, validation, consumed_at)
+                VALUES (
+                    'rcpt_pre_v6', '', 'Plan', 'WriteExecutablePlan', NULL, NULL,
+                    '[]', NULL, '[]', '[]', 'Usable', '2026-07-10T12:00:00.0000000Z');
+
+                CREATE TABLE evaluation_warnings(
+                    warning_id text primary key,
+                    workflow_identity text not null,
+                    stage_identity text,
+                    transition_identity text,
+                    category text not null,
+                    concern text not null,
+                    authority text not null,
+                    remediation text not null,
+                    evidence_json text not null,
+                    created_at text not null
+                );
+                INSERT INTO evaluation_warnings (
+                    warning_id, workflow_identity, stage_identity, transition_identity, category,
+                    concern, authority, remediation, evidence_json, created_at)
+                VALUES (
+                    'warn_pre_v6', 'Plan', 'Planning', 'WriteExecutablePlan', 'Validation',
+                    'pre-v6 concern', 'legacy', 'rerun', '[]', '2026-07-10T12:00:00.0000000Z');
+
+                CREATE TABLE canonical_gate_evaluations(
+                    evaluation_id integer primary key autoincrement,
+                    workflow_identity text not null,
+                    stage_identity text,
+                    transition_identity text,
+                    gate_identity text not null,
+                    status text not null,
+                    evaluated_at text not null,
+                    requirements_json text not null,
+                    explanation text not null,
+                    evidence_json text not null
+                );
+                INSERT INTO canonical_gate_evaluations (
+                    workflow_identity, stage_identity, transition_identity, gate_identity, status,
+                    evaluated_at, requirements_json, explanation, evidence_json)
+                VALUES (
+                    'Plan', 'Planning', 'WriteExecutablePlan', 'WriteExecutablePlan.Input', 'Satisfied',
+                    '2026-07-10T12:00:00.0000000Z', '[]', 'pre-v6 gate', '[]');
+
+                CREATE TABLE canonical_workflow_states(
+                    workflow_identity text primary key, state text not null, current_stage text,
+                    outcome text, updated_at text not null, evidence_json text not null);
+                CREATE TABLE canonical_stage_states(
+                    workflow_identity text not null, stage_identity text not null, state text not null,
+                    updated_at text not null, evidence_json text not null,
+                    primary key(workflow_identity, stage_identity));
+                CREATE TABLE canonical_transition_runs(
+                    run_id text primary key, workflow_identity text not null, stage_identity text not null,
+                    transition_identity text not null, state text not null, outcome text not null,
+                    started_at text not null, completed_at text, input_snapshot_hash text,
+                    explanation text not null, evidence_json text not null);
+                CREATE TABLE canonical_transition_evidence(
+                    evidence_id integer primary key autoincrement, run_id text not null,
+                    transition_identity text not null, event_name text not null, recorded_at text not null,
+                    state text not null, explanation text not null, evidence_json text not null,
+                    document_json text not null);
+                CREATE TABLE canonical_product_records(
+                    product_identity text primary key, producer_workflow text not null,
+                    producer_transition text not null, intended_consumers_json text not null,
+                    repository_ownership text not null, authority text not null,
+                    storage_representations_json text not null, causal_identity text not null,
+                    freshness text not null, validation_state text not null, lifecycle text not null,
+                    evidence_locations_json text not null, updated_at text not null);
+                CREATE TABLE canonical_effect_records(
+                    record_id integer primary key autoincrement, run_id text not null,
+                    effect_identity text not null, category text not null, status text not null,
+                    recorded_at text not null, explanation text not null, evidence_json text not null);
+                CREATE TABLE canonical_recovery_markers(
+                    marker_id text primary key, workflow_identity text not null, stage_identity text,
+                    transition_identity text, semantics text not null, supported_actions_json text not null,
+                    unsupported_actions_json text not null, evidence_json text not null, recorded_at text not null);
+                """);
+        }
+
+        // Reads open the database read-only and never migrate, so the pre-v6 shape must read
+        // back intact with null lineage rather than crashing on the missing column.
+        CanonicalWorkflowPersistenceStore store = new(repository);
+
+        CanonicalReadReceiptRecord receipt = Assert.Single(await store.ReadReadReceiptsAsync());
+        Assert.Equal("rcpt_pre_v6", receipt.ReceiptId);
+        Assert.Null(receipt.TransitionRunId);
+        CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync();
+        CanonicalWarningRecord warning = Assert.Single(snapshot.Warnings);
+        Assert.Equal("pre-v6 concern", warning.Concern);
+        Assert.Null(warning.TransitionRunId);
+        CanonicalGateEvaluationRecord gate = Assert.Single(snapshot.GateEvaluations);
+        Assert.Equal("pre-v6 gate", gate.Explanation);
+        Assert.Null(gate.TransitionRunId);
+    }
+
     private static readonly string[] ExpectedTables =
     [
         "canonical_workflow_states",
@@ -328,7 +588,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         "canonical_effect_records",
         "evaluation_warnings",
         "canonical_recovery_markers",
-        "canonical_workflow_chain_runs",
+        "canonical_chain_boundary_events",
         "workspace_identity",
         "runs",
         "workflow_instances",

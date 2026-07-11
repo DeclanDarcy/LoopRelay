@@ -7,9 +7,11 @@ using LoopRelay.Orchestration.Services;
 namespace LoopRelay.Cli.Services.Execution;
 
 /// <summary>
-/// All .agents/* disk effects for the loop: rotation (read+archive numbered+delete live), restart-safe
-/// latest reads (live or highest numbered), decision persistence (numbered + canonical), and the
-/// operational_context safety copy. Rotation is move-semantics (matches RepositoryOrchestrator's loop path).
+/// All .agents/* disk effects for the loop: rotation (read live + append to the configured history
+/// store + delete live), restart-safe latest reads (live file, else the history store), decision
+/// persistence, and the operational_context safety copy. Rotation is move-semantics. The canonical
+/// composition injects the ledger-backed store (history authority); the file-backed default remains
+/// only for legacy loop bodies until M17-M19.
 /// </summary>
 internal sealed class LoopArtifacts(IArtifactStore _store, Repository _repository, ILoopHistoryStore? historyStore = null)
 {
@@ -40,11 +42,11 @@ internal sealed class LoopArtifacts(IArtifactStore _store, Repository _repositor
     /// <summary>The optional plan companion (<c>.agents/details.md</c>): null when absent, mirroring <see cref="ReadPlanAsync"/>.</summary>
     public Task<string?> ReadDetailsAsync() => ReadAsync(OrchestrationArtifactPaths.Details);
 
-    public Task<string?> RotateLiveHandoffAsync() => RotateAsync(OrchestrationArtifactPaths.LiveHandoff, LoopHistoryKind.Handoff);
+    public Task<string?> RotateLiveHandoffAsync(LoopHistoryLineage? lineage = null) => RotateAsync(OrchestrationArtifactPaths.LiveHandoff, LoopHistoryKind.Handoff, lineage);
 
-    public Task<string?> RotateLiveDecisionsAsync() => RotateAsync(OrchestrationArtifactPaths.Decisions, LoopHistoryKind.Decisions);
+    public Task<string?> RotateLiveDecisionsAsync(LoopHistoryLineage? lineage = null) => RotateAsync(OrchestrationArtifactPaths.Decisions, LoopHistoryKind.Decisions, lineage);
 
-    public Task<string?> RotateOperationalDeltaAsync() => RotateAsync(OrchestrationArtifactPaths.OperationalDelta, LoopHistoryKind.OperationalDelta);
+    public Task<string?> RotateOperationalDeltaAsync(LoopHistoryLineage? lineage = null) => RotateAsync(OrchestrationArtifactPaths.OperationalDelta, LoopHistoryKind.OperationalDelta, lineage);
 
     public Task<(string? Content, string? RelativePath)> ReadLatestHandoffAsync() => ReadLatestAsync(OrchestrationArtifactPaths.LiveHandoff, LoopHistoryKind.Handoff);
 
@@ -69,9 +71,9 @@ internal sealed class LoopArtifacts(IArtifactStore _store, Repository _repositor
         return true;
     }
 
-    public async Task PersistDecisionsAsync(string decisions)
+    public async Task PersistDecisionsAsync(string decisions, LoopHistoryLineage? lineage = null)
     {
-        await _historyStore.AppendAsync(LoopHistoryKind.Decisions, decisions);
+        await _historyStore.AppendAsync(LoopHistoryKind.Decisions, decisions, lineage);
         await _store.WriteAsync(Resolve(OrchestrationArtifactPaths.Decisions), decisions);
     }
 
@@ -92,7 +94,7 @@ internal sealed class LoopArtifacts(IArtifactStore _store, Repository _repositor
     private string Resolve(string relativePath) =>
         ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
 
-    private async Task<string?> RotateAsync(string liveRelative, LoopHistoryKind kind)
+    private async Task<string?> RotateAsync(string liveRelative, LoopHistoryKind kind, LoopHistoryLineage? lineage = null)
     {
         string? content = await _store.ReadAsync(Resolve(liveRelative));
         if (content is null)
@@ -100,7 +102,7 @@ internal sealed class LoopArtifacts(IArtifactStore _store, Repository _repositor
             return null;
         }
 
-        await _historyStore.AppendAsync(kind, content);
+        await _historyStore.AppendAsync(kind, content, lineage);
         await _store.DeleteAsync(Resolve(liveRelative));
         return content;
     }

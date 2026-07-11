@@ -57,38 +57,18 @@ public class LoopArtifactsTests
     }
 
     [Fact]
-    public async Task LoopHistoryStoreFactory_FallsBackToFileBackedStoreWhenDatabaseIsMissing()
-    {
-        var (_, store, repo) = New();
-
-        ILoopHistoryStore history = LoopHistoryStoreFactory.Create(store, repo);
-
-        Assert.IsType<FileBackedLoopHistoryStore>(history);
-    }
-
-    [Fact]
-    public async Task LoopHistoryStoreFactory_UsesSqliteStoreForImportedWorkspaceDatabase()
+    public async Task PersistDecisions_WritesLiveFileAndLedgerHistoryWithProjection()
     {
         using var repo = new TempFileRepo();
         await InitializeLoopHistoryDatabaseAsync(repo.Repository);
-
-        ILoopHistoryStore history = LoopHistoryStoreFactory.Create(repo.Store, repo.Repository);
-
-        Assert.IsType<SqliteLoopHistoryStore>(history);
-    }
-
-    [Fact]
-    public async Task PersistDecisions_WritesLiveFileAndSqliteHistory()
-    {
-        using var repo = new TempFileRepo();
-        await InitializeLoopHistoryDatabaseAsync(repo.Repository);
-        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var history = new LedgerLoopHistoryStore(repo.Store, repo.Repository);
         var artifacts = new LoopArtifacts(repo.Store, repo.Repository, history);
 
         await artifacts.PersistDecisionsAsync("D1\r\nopaque body");
 
         Assert.Equal("D1\r\nopaque body", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.Decisions)));
-        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDecision(1))));
+        // The numbered file exists as a derived projection of the ledger fact.
+        Assert.Equal("D1\r\nopaque body", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDecision(1))));
         LoopHistoryRecord latest = (await history.ReadLatestAsync(LoopHistoryKind.Decisions))!;
         Assert.Equal(1, latest.Sequence);
         Assert.Equal(OrchestrationArtifactPaths.HistoricalDecision(1), latest.RelativePath);
@@ -96,11 +76,11 @@ public class LoopArtifactsTests
     }
 
     [Fact]
-    public async Task RotateLiveHandoff_WritesSqliteHistoryBeforeDeletingLiveFile()
+    public async Task RotateLiveHandoff_AppendsLedgerHistoryBeforeDeletingLiveFile()
     {
         using var repo = new TempFileRepo();
         await InitializeLoopHistoryDatabaseAsync(repo.Repository);
-        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var history = new LedgerLoopHistoryStore(repo.Store, repo.Repository);
         var artifacts = new LoopArtifacts(repo.Store, repo.Repository, history);
         await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff), "H1");
 
@@ -108,18 +88,18 @@ public class LoopArtifactsTests
 
         Assert.Equal("H1", rotated);
         Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff)));
-        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalHandoff(1))));
+        Assert.Equal("H1", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalHandoff(1))));
         LoopHistoryRecord latest = (await history.ReadLatestAsync(LoopHistoryKind.Handoff))!;
         Assert.Equal(OrchestrationArtifactPaths.HistoricalHandoff(1), latest.RelativePath);
         Assert.Equal("H1", latest.Content);
     }
 
     [Fact]
-    public async Task RotateOperationalDelta_WritesSqliteHistoryBeforeDeletingLiveFile()
+    public async Task RotateOperationalDelta_AppendsLedgerHistoryBeforeDeletingLiveFile()
     {
         using var repo = new TempFileRepo();
         await InitializeLoopHistoryDatabaseAsync(repo.Repository);
-        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var history = new LedgerLoopHistoryStore(repo.Store, repo.Repository);
         var artifacts = new LoopArtifacts(repo.Store, repo.Repository, history);
         await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalDelta), "DELTA-1");
 
@@ -127,27 +107,27 @@ public class LoopArtifactsTests
 
         Assert.Equal("DELTA-1", rotated);
         Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalDelta)));
-        Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
+        Assert.Equal("DELTA-1", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
         LoopHistoryRecord latest = (await history.ReadLatestAsync(LoopHistoryKind.OperationalDelta))!;
         Assert.Equal(OrchestrationArtifactPaths.HistoricalDelta(1), latest.RelativePath);
         Assert.Equal("DELTA-1", latest.Content);
     }
 
     [Fact]
-    public async Task ReadLatestHandoff_PrefersLiveFileBeforeSqliteHistory()
+    public async Task ReadLatestHandoff_PrefersLiveFileBeforeLedgerHistory()
     {
         using var repo = new TempFileRepo();
         await InitializeLoopHistoryDatabaseAsync(repo.Repository);
-        var history = new SqliteLoopHistoryStore(repo.Repository);
+        var history = new LedgerLoopHistoryStore(repo.Store, repo.Repository);
         var artifacts = new LoopArtifacts(repo.Store, repo.Repository, history);
-        await history.AppendAsync(LoopHistoryKind.Handoff, "numbered");
+        await history.AppendAsync(LoopHistoryKind.Handoff, "retained");
 
-        var numbered = await artifacts.ReadLatestHandoffAsync();
+        var retained = await artifacts.ReadLatestHandoffAsync();
         await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff), "live");
         var live = await artifacts.ReadLatestHandoffAsync();
 
-        Assert.Equal("numbered", numbered.Content);
-        Assert.Equal(OrchestrationArtifactPaths.HistoricalHandoff(1), numbered.RelativePath);
+        Assert.Equal("retained", retained.Content);
+        Assert.Equal(OrchestrationArtifactPaths.HistoricalHandoff(1), retained.RelativePath);
         Assert.Equal("live", live.Content);
         Assert.Equal(OrchestrationArtifactPaths.LiveHandoff, live.RelativePath);
     }
@@ -374,7 +354,7 @@ public class LoopArtifactsTests
     {
         public int ReadLatestCalls { get; private set; }
 
-        public Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content) =>
+        public Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content, LoopHistoryLineage? lineage = null) =>
             Task.FromResult(new LoopHistoryRecord(kind, 1, ".agents/history.0001.md", content));
 
         public Task<LoopHistoryRecord?> ReadLatestAsync(LoopHistoryKind kind)
@@ -386,7 +366,7 @@ public class LoopArtifactsTests
 
     private sealed class ThrowingLoopHistoryStore : ILoopHistoryStore
     {
-        public Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content) =>
+        public Task<LoopHistoryRecord> AppendAsync(LoopHistoryKind kind, string content, LoopHistoryLineage? lineage = null) =>
             throw new IOException("Configured history write failure.");
 
         public Task<LoopHistoryRecord?> ReadLatestAsync(LoopHistoryKind kind) =>

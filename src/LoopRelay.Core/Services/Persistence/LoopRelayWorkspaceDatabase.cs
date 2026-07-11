@@ -10,7 +10,7 @@ namespace LoopRelay.Core.Services.Persistence;
 /// </summary>
 public static class LoopRelayWorkspaceDatabase
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public static string Resolve(Repository repository)
@@ -48,6 +48,19 @@ public static class LoopRelayWorkspaceDatabase
                 connection,
                 "ALTER TABLE canonical_product_records ADD COLUMN schema_version text not null default '1';",
                 cancellationToken);
+        }
+
+        // v6 lineage columns are additive and nullable: pre-v6 rows keep null lineage, and the
+        // ALTERs never rewrite existing fact rows (fact tables stay append-only through migration).
+        foreach ((string table, string column) in V6LineageColumns)
+        {
+            if (!await ColumnExistsAsync(connection, table, column, cancellationToken))
+            {
+                await ExecuteAsync(
+                    connection,
+                    $"ALTER TABLE {table} ADD COLUMN {column} text;",
+                    cancellationToken);
+            }
         }
 
         await ExecuteAsync(
@@ -136,6 +149,17 @@ public static class LoopRelayWorkspaceDatabase
         object? scalar = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(scalar, CultureInfo.InvariantCulture) == 1;
     }
+
+    private static readonly (string Table, string Column)[] V6LineageColumns =
+    [
+        ("loop_history", "history_id"),
+        ("loop_history", "run_id"),
+        ("loop_history", "transition_run_id"),
+        ("loop_history", "attempt_id"),
+        ("read_receipts", "transition_run_id"),
+        ("evaluation_warnings", "transition_run_id"),
+        ("canonical_gate_evaluations", "transition_run_id"),
+    ];
 
     private static async Task<bool> ColumnExistsAsync(
         SqliteConnection connection,
@@ -306,6 +330,10 @@ public static class LoopRelayWorkspaceDatabase
             body text not null,
             content_hash text not null,
             created_at text not null,
+            history_id text,
+            run_id text,
+            transition_run_id text,
+            attempt_id text,
             primary key(kind, sequence)
         );
 
@@ -419,7 +447,8 @@ public static class LoopRelayWorkspaceDatabase
             evaluated_at text not null,
             requirements_json text not null,
             explanation text not null,
-            evidence_json text not null
+            evidence_json text not null,
+            transition_run_id text
         );
 
         CREATE TABLE IF NOT EXISTS canonical_effect_records(
@@ -445,7 +474,8 @@ public static class LoopRelayWorkspaceDatabase
             authority text not null,
             remediation text not null,
             evidence_json text not null,
-            created_at text not null
+            created_at text not null,
+            transition_run_id text
         );
 
         CREATE TABLE IF NOT EXISTS canonical_recovery_markers(
@@ -460,15 +490,20 @@ public static class LoopRelayWorkspaceDatabase
             recorded_at text not null
         );
 
-        CREATE TABLE IF NOT EXISTS canonical_workflow_chain_runs(
-            chain_run_id text primary key,
+        CREATE TABLE IF NOT EXISTS canonical_chain_boundary_events(
+            boundary_id text primary key,
+            run_id text,
             chain_identity text not null,
-            current_workflow text not null,
-            status text not null,
-            started_at text not null,
-            completed_at text,
+            source_workflow text not null,
+            target_workflow text,
+            exit_gate_status text not null,
+            entry_gate_status text,
+            transfer_gate_status text,
+            decision text not null,
             explanation text not null,
-            evidence_json text not null
+            evidence_json text not null,
+            boundary_json text not null,
+            recorded_at text not null
         );
 
         CREATE TABLE IF NOT EXISTS decision_session_resume(
@@ -501,7 +536,7 @@ public static class LoopRelayWorkspaceDatabase
             ON canonical_gate_evaluations(workflow_identity, stage_identity, transition_identity);
         CREATE INDEX IF NOT EXISTS idx_canonical_effect_records_run ON canonical_effect_records(run_id);
         CREATE INDEX IF NOT EXISTS idx_evaluation_warnings_workflow ON evaluation_warnings(workflow_identity, stage_identity, transition_identity);
-        CREATE INDEX IF NOT EXISTS idx_canonical_workflow_chain_runs_chain ON canonical_workflow_chain_runs(chain_identity, started_at);
+        CREATE INDEX IF NOT EXISTS idx_canonical_chain_boundary_events_run ON canonical_chain_boundary_events(run_id);
         CREATE INDEX IF NOT EXISTS idx_session_telemetry_order
             ON session_telemetry_events(recorded_at, event_id);
 
@@ -584,7 +619,8 @@ public static class LoopRelayWorkspaceDatabase
             files_json text not null,
             products_json text not null,
             validation text not null,
-            consumed_at text not null
+            consumed_at text not null,
+            transition_run_id text
         );
 
         UPDATE canonical_workflow_states SET state = 'Resumable' WHERE state = 'Blocked';

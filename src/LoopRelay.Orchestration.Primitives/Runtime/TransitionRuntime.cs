@@ -217,6 +217,9 @@ public sealed class TransitionRuntime(
                     interpreted.Explanation,
                     interpreted.Evidence),
                 cancellationToken);
+            // Every mutation of the current-state transition-run row is backed by an appended
+            // fact, so the row stays a pure projection over the append-only evidence history.
+            await TryRecordEventAsync(runId, definition.Identity, TransitionDurableState.OutputInterpreted, "TransitionOutputInterpreted", interpreted.Explanation, interpreted.Evidence, cancellationToken);
 
             if (interpreted.Status != OutputInterpretationStatus.Valid)
             {
@@ -289,8 +292,13 @@ public sealed class TransitionRuntime(
                     validation.Explanation,
                     validation.Evidence),
                 cancellationToken);
+            await TryRecordEventAsync(runId, definition.Identity, TransitionDurableState.OutputValidated, "TransitionOutputValidated", validation.Explanation, validation.Evidence, cancellationToken);
 
-            effects = await _effectExecutor.ExecuteAsync(definition, validation, cancellationToken);
+            effects = await _effectExecutor.ExecuteAsync(
+                definition,
+                validation,
+                new EffectExecutionContext(runId, recordedAttemptId, request.Run?.Value, request.WorkflowInstance?.Value),
+                cancellationToken);
             await TryRecordEffectsAsync(runId, request, definition, effects, cancellationToken);
             if (!effects.IsSuccess)
             {

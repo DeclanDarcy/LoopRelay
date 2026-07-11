@@ -82,7 +82,7 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         };
         CanonicalWorkflowPersistenceSnapshot canonicalSnapshot = verification.UsableAuthority
             ? await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync(cancellationToken)
-            : new CanonicalWorkflowPersistenceSnapshot([], [], [], [], [], [], [], [], [], []);
+            : new CanonicalWorkflowPersistenceSnapshot([], [], [], [], [], [], [], [], []);
         IReadOnlyList<string> evalIntentPaths = ListRelativeFiles(root, Path.Combine(agents, "evals"), "*.md");
         var products = new List<ObservedProduct>();
 
@@ -143,11 +143,6 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
                 Ignored: false))))
             .Concat(canonicalSnapshot.EffectRecords.SelectMany(item => item.Evidence.Select(location => new ObservedEvidence(
                 item.Effect.Value,
-                location,
-                "canonical workflow persistence",
-                Ignored: false))))
-            .Concat(canonicalSnapshot.WorkflowChainRuns.SelectMany(item => item.Evidence.Select(location => new ObservedEvidence(
-                item.ChainIdentity,
                 location,
                 "canonical workflow persistence",
                 Ignored: false))))

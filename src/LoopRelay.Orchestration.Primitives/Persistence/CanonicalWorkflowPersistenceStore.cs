@@ -206,11 +206,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             """
             INSERT INTO canonical_gate_evaluations (
                 workflow_identity, stage_identity, transition_identity, gate_identity, status,
-                evaluated_at, requirements_json, explanation, evidence_json
+                evaluated_at, requirements_json, explanation, evidence_json, transition_run_id
             )
             VALUES (
                 $workflow_identity, $stage_identity, $transition_identity, $gate_identity, $status,
-                $evaluated_at, $requirements_json, $explanation, $evidence_json
+                $evaluated_at, $requirements_json, $explanation, $evidence_json, $transition_run_id
             );
             """,
             cancellationToken,
@@ -222,7 +222,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$evaluated_at", Format(evaluation.EvaluatedAt)),
             ("$requirements_json", Json(evaluation.Requirements)),
             ("$explanation", evaluation.Explanation),
-            ("$evidence_json", Json(evaluation.Evidence)));
+            ("$evidence_json", Json(evaluation.Evidence)),
+            ("$transition_run_id", evaluation.TransitionRunId));
     }
 
     public async Task AppendEffectRecordAsync(
@@ -260,11 +261,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             """
             INSERT INTO evaluation_warnings (
                 warning_id, workflow_identity, stage_identity, transition_identity, category,
-                concern, authority, remediation, evidence_json, created_at
+                concern, authority, remediation, evidence_json, created_at, transition_run_id
             )
             VALUES (
                 $warning_id, $workflow_identity, $stage_identity, $transition_identity, $category,
-                $concern, $authority, $remediation, $evidence_json, $created_at
+                $concern, $authority, $remediation, $evidence_json, $created_at, $transition_run_id
             );
             """,
             cancellationToken,
@@ -277,7 +278,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$authority", warning.Authority),
             ("$remediation", warning.Remediation),
             ("$evidence_json", Json(warning.Evidence)),
-            ("$created_at", Format(warning.CreatedAt)));
+            ("$created_at", Format(warning.CreatedAt)),
+            ("$transition_run_id", warning.TransitionRunId));
     }
 
     public async Task UpsertRecoveryMarkerAsync(
@@ -318,40 +320,84 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$recorded_at", Format(marker.RecordedAt)));
     }
 
-    public async Task UpsertWorkflowChainRunAsync(
-        CanonicalWorkflowChainRunRecord run,
+    public async Task AppendChainBoundaryEventAsync(
+        CanonicalChainBoundaryEventRecord boundary,
         CancellationToken cancellationToken = default)
     {
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await ExecuteAsync(
             connection,
             """
-            INSERT INTO canonical_workflow_chain_runs (
-                chain_run_id, chain_identity, current_workflow, status, started_at,
-                completed_at, explanation, evidence_json
+            INSERT INTO canonical_chain_boundary_events (
+                boundary_id, run_id, chain_identity, source_workflow, target_workflow,
+                exit_gate_status, entry_gate_status, transfer_gate_status, decision,
+                explanation, evidence_json, boundary_json, recorded_at
             )
             VALUES (
-                $chain_run_id, $chain_identity, $current_workflow, $status, $started_at,
-                $completed_at, $explanation, $evidence_json
-            )
-            ON CONFLICT(chain_run_id) DO UPDATE SET
-                chain_identity = excluded.chain_identity,
-                current_workflow = excluded.current_workflow,
-                status = excluded.status,
-                started_at = excluded.started_at,
-                completed_at = excluded.completed_at,
-                explanation = excluded.explanation,
-                evidence_json = excluded.evidence_json;
+                $boundary_id, $run_id, $chain_identity, $source_workflow, $target_workflow,
+                $exit_gate_status, $entry_gate_status, $transfer_gate_status, $decision,
+                $explanation, $evidence_json, $boundary_json, $recorded_at
+            );
             """,
             cancellationToken,
-            ("$chain_run_id", run.ChainRunId),
-            ("$chain_identity", run.ChainIdentity),
-            ("$current_workflow", run.CurrentWorkflow.Value),
-            ("$status", run.Status.ToString()),
-            ("$started_at", Format(run.StartedAt)),
-            ("$completed_at", run.CompletedAt is null ? null : Format(run.CompletedAt.Value)),
-            ("$explanation", run.Explanation),
-            ("$evidence_json", Json(run.Evidence)));
+            ("$boundary_id", boundary.BoundaryId),
+            ("$run_id", boundary.RunId),
+            ("$chain_identity", boundary.ChainIdentity),
+            ("$source_workflow", boundary.SourceWorkflow.Value),
+            ("$target_workflow", boundary.TargetWorkflow?.Value),
+            ("$exit_gate_status", boundary.ExitGateStatus.ToString()),
+            ("$entry_gate_status", boundary.EntryGateStatus?.ToString()),
+            ("$transfer_gate_status", boundary.TransferGateStatus?.ToString()),
+            ("$decision", boundary.Decision),
+            ("$explanation", boundary.Explanation),
+            ("$evidence_json", Json(boundary.Evidence)),
+            ("$boundary_json", boundary.BoundaryJson),
+            ("$recorded_at", Format(boundary.RecordedAt)));
+    }
+
+    public async Task<IReadOnlyList<CanonicalChainBoundaryEventRecord>> ReadChainBoundaryEventsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            var rows = new List<CanonicalChainBoundaryEventRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT boundary_id, run_id, chain_identity, source_workflow, target_workflow,
+                       exit_gate_status, entry_gate_status, transfer_gate_status, decision,
+                       explanation, evidence_json, boundary_json, recorded_at
+                FROM canonical_chain_boundary_events ORDER BY rowid;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new CanonicalChainBoundaryEventRecord(
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.GetString(2),
+                    new WorkflowIdentity(reader.GetString(3)),
+                    reader.IsDBNull(4) ? null : new WorkflowIdentity(reader.GetString(4)),
+                    ParseEnum<GateStatus>(reader.GetString(5)),
+                    reader.IsDBNull(6) ? null : ParseEnum<GateStatus>(reader.GetString(6)),
+                    reader.IsDBNull(7) ? null : ParseEnum<GateStatus>(reader.GetString(7)),
+                    reader.GetString(8),
+                    reader.GetString(9),
+                    ReadJson<IReadOnlyList<string>>(reader.GetString(10)),
+                    reader.GetString(11),
+                    ParseDate(reader.GetString(12))));
+            }
+
+            return rows;
+        });
     }
 
     public async Task UpsertRunAsync(
@@ -622,12 +668,12 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             INSERT INTO read_receipts (
                 receipt_id, run_id, workflow_identity, transition_identity, attempt_id,
                 commit_hash, input_surfaces_json, surface_tree_hashes_json, files_json,
-                products_json, validation, consumed_at
+                products_json, validation, consumed_at, transition_run_id
             )
             VALUES (
                 $receipt_id, $run_id, $workflow_identity, $transition_identity, $attempt_id,
                 $commit_hash, $input_surfaces_json, $surface_tree_hashes_json, $files_json,
-                $products_json, $validation, $consumed_at
+                $products_json, $validation, $consumed_at, $transition_run_id
             );
             """,
             cancellationToken,
@@ -642,7 +688,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$files_json", Json(receipt.Files)),
             ("$products_json", Json(receipt.Products)),
             ("$validation", receipt.Validation),
-            ("$consumed_at", Format(receipt.ConsumedAt)));
+            ("$consumed_at", Format(receipt.ConsumedAt)),
+            ("$transition_run_id", receipt.TransitionRunId));
     }
 
     public async Task<CanonicalWorkflowPersistenceSnapshot> LoadSnapshotAsync(
@@ -651,7 +698,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
         if (!File.Exists(databasePath))
         {
-            return new CanonicalWorkflowPersistenceSnapshot([], [], [], [], [], [], [], [], [], []);
+            return new CanonicalWorkflowPersistenceSnapshot([], [], [], [], [], [], [], [], []);
         }
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
@@ -666,8 +713,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await ReadGateEvaluationsAsync(connection, cancellationToken),
             await ReadEffectRecordsAsync(connection, cancellationToken),
             await ReadWarningsAsync(connection, cancellationToken),
-            await ReadRecoveryMarkersAsync(connection, cancellationToken),
-            await ReadWorkflowChainRunsAsync(connection, cancellationToken));
+            await ReadRecoveryMarkersAsync(connection, cancellationToken));
     }
 
     public async Task<IReadOnlyList<RunRecord>> ReadRunsAsync(
@@ -846,7 +892,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText = """
                 SELECT turn_id, session_id, turn_index, recorded_at
-                FROM agent_turns ORDER BY recorded_at, turn_id;
+                FROM agent_turns ORDER BY rowid;
                 """;
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
@@ -876,14 +922,28 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
 
+            // Ledger sequence (insertion order) is the ordering authority for appended facts;
+            // ULIDs are not monotonic within a millisecond and wall-clock is display metadata.
+            bool hasTransitionRunId = await ColumnExistsAsync(
+                connection,
+                "read_receipts",
+                "transition_run_id",
+                cancellationToken);
             List<CanonicalReadReceiptRecord> rows = [];
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT receipt_id, run_id, workflow_identity, transition_identity, attempt_id,
-                       commit_hash, input_surfaces_json, surface_tree_hashes_json, files_json,
-                       products_json, validation, consumed_at
-                FROM read_receipts ORDER BY consumed_at, receipt_id;
-                """;
+            command.CommandText = hasTransitionRunId
+                ? """
+                  SELECT receipt_id, run_id, workflow_identity, transition_identity, attempt_id,
+                         commit_hash, input_surfaces_json, surface_tree_hashes_json, files_json,
+                         products_json, validation, consumed_at, transition_run_id
+                  FROM read_receipts ORDER BY rowid;
+                  """
+                : """
+                  SELECT receipt_id, run_id, workflow_identity, transition_identity, attempt_id,
+                         commit_hash, input_surfaces_json, surface_tree_hashes_json, files_json,
+                         products_json, validation, consumed_at
+                  FROM read_receipts ORDER BY rowid;
+                  """;
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -899,7 +959,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                     ReadJson<IReadOnlyList<CanonicalReadReceiptFile>>(reader.GetString(8)),
                     ReadJson<IReadOnlyList<CanonicalReadReceiptProduct>>(reader.GetString(9)),
                     reader.GetString(10),
-                    ParseDate(reader.GetString(11))));
+                    ParseDate(reader.GetString(11)),
+                    hasTransitionRunId && !reader.IsDBNull(12) ? reader.GetString(12) : null));
             }
 
             return rows;
@@ -1106,13 +1167,27 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
+        // The transition_run_id column arrived with schema v6; snapshots open read-only without
+        // migrating, so a pre-v6 database is read with null lineage rather than crashing.
+        bool hasTransitionRunId = await ColumnExistsAsync(
+            connection,
+            "canonical_gate_evaluations",
+            "transition_run_id",
+            cancellationToken);
         var rows = new List<CanonicalGateEvaluationRecord>();
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT evaluation_id, workflow_identity, stage_identity, transition_identity,
-                   gate_identity, status, evaluated_at, requirements_json, explanation, evidence_json
-            FROM canonical_gate_evaluations ORDER BY evaluation_id;
-            """;
+        command.CommandText = hasTransitionRunId
+            ? """
+              SELECT evaluation_id, workflow_identity, stage_identity, transition_identity,
+                     gate_identity, status, evaluated_at, requirements_json, explanation, evidence_json,
+                     transition_run_id
+              FROM canonical_gate_evaluations ORDER BY evaluation_id;
+              """
+            : """
+              SELECT evaluation_id, workflow_identity, stage_identity, transition_identity,
+                     gate_identity, status, evaluated_at, requirements_json, explanation, evidence_json
+              FROM canonical_gate_evaluations ORDER BY evaluation_id;
+              """;
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -1126,7 +1201,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 ParseDate(reader.GetString(6)),
                 ReadJson<IReadOnlyList<GateRequirementResult>>(reader.GetString(7)),
                 reader.GetString(8),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(9))));
+                ReadJson<IReadOnlyList<string>>(reader.GetString(9)),
+                hasTransitionRunId && !reader.IsDBNull(10) ? reader.GetString(10) : null));
         }
 
         return rows;
@@ -1165,13 +1241,26 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     {
         try
         {
+            // Ledger sequence (insertion order) is the ordering authority for appended facts;
+            // the transition_run_id column arrived with schema v6 and reads null before it.
+            bool hasTransitionRunId = await ColumnExistsAsync(
+                connection,
+                "evaluation_warnings",
+                "transition_run_id",
+                cancellationToken);
             var rows = new List<CanonicalWarningRecord>();
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT warning_id, workflow_identity, stage_identity, transition_identity, category,
-                       concern, authority, remediation, evidence_json, created_at
-                FROM evaluation_warnings ORDER BY created_at, warning_id;
-                """;
+            command.CommandText = hasTransitionRunId
+                ? """
+                  SELECT warning_id, workflow_identity, stage_identity, transition_identity, category,
+                         concern, authority, remediation, evidence_json, created_at, transition_run_id
+                  FROM evaluation_warnings ORDER BY rowid;
+                  """
+                : """
+                  SELECT warning_id, workflow_identity, stage_identity, transition_identity, category,
+                         concern, authority, remediation, evidence_json, created_at
+                  FROM evaluation_warnings ORDER BY rowid;
+                  """;
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -1185,7 +1274,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                     reader.GetString(6),
                     reader.GetString(7),
                     ReadJson<IReadOnlyList<string>>(reader.GetString(8)),
-                    ParseDate(reader.GetString(9))));
+                    ParseDate(reader.GetString(9)),
+                    hasTransitionRunId && !reader.IsDBNull(10) ? reader.GetString(10) : null));
             }
 
             return rows;
@@ -1223,34 +1313,6 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                     ReadJson<IReadOnlyList<string>>(reader.GetString(6))),
                 ReadJson<IReadOnlyList<string>>(reader.GetString(7)),
                 ParseDate(reader.GetString(8))));
-        }
-
-        return rows;
-    }
-
-    private static async Task<IReadOnlyList<CanonicalWorkflowChainRunRecord>> ReadWorkflowChainRunsAsync(
-        SqliteConnection connection,
-        CancellationToken cancellationToken)
-    {
-        var rows = new List<CanonicalWorkflowChainRunRecord>();
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT chain_run_id, chain_identity, current_workflow, status,
-                   started_at, completed_at, explanation, evidence_json
-            FROM canonical_workflow_chain_runs ORDER BY started_at, chain_run_id;
-            """;
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            rows.Add(new CanonicalWorkflowChainRunRecord(
-                reader.GetString(0),
-                reader.GetString(1),
-                new WorkflowIdentity(reader.GetString(2)),
-                ParseEnum<RuntimeOutcomeKind>(reader.GetString(3)),
-                ParseDate(reader.GetString(4)),
-                reader.IsDBNull(5) ? null : ParseDate(reader.GetString(5)),
-                reader.GetString(6),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(7))));
         }
 
         return rows;

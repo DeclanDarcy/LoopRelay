@@ -81,6 +81,89 @@ public sealed class WorkflowChainRunnerTests
     }
 
     [Fact]
+    public async Task Advancing_boundary_appends_a_durable_chain_boundary_fact_with_run_lineage()
+    {
+        RecordingChainBoundaryStore boundaryStore = new();
+        WorkflowChainRunner runner = CreateRunner(new FakeTransitionRuntime(), out _, boundaryStore: boundaryStore);
+        RunIdentity run = RunIdentity.New();
+        RepositoryObservation observation = Observation(
+            workflowStates:
+            [
+                Completed(WorkflowIdentity.TraditionalRoadmap),
+            ],
+            products:
+            [
+                Product(ProductIdentity.PreparedEpic, WorkflowIdentity.TraditionalRoadmap),
+                Product(ProductIdentity.MilestoneSpecificationSet, WorkflowIdentity.TraditionalRoadmap),
+            ]);
+
+        await runner.RunAsync(new WorkflowChainRunRequest(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            observation,
+            TraditionalRoadmapChain,
+            Definitions,
+            run));
+
+        ChainBoundaryEvidenceCapture capture = Assert.Single(boundaryStore.Captures);
+        Assert.Equal(run.Value, capture.RunId);
+        Assert.Equal(TraditionalRoadmapChain.Identity, capture.ChainIdentity);
+        Assert.True(capture.Evaluation.CanAdvance);
+        Assert.Equal(WorkflowIdentity.Plan, capture.Evaluation.TargetWorkflow);
+    }
+
+    [Fact]
+    public async Task Stopped_boundary_appends_a_durable_chain_boundary_fact_recording_the_stop()
+    {
+        RecordingChainBoundaryStore boundaryStore = new();
+        WorkflowChainRunner runner = CreateRunner(new FakeTransitionRuntime(), out _, boundaryStore: boundaryStore);
+        RepositoryObservation observation = Observation(
+            workflowStates:
+            [
+                Completed(WorkflowIdentity.TraditionalRoadmap),
+            ],
+            products: []);
+
+        WorkflowChainRunResult result = await runner.RunAsync(new WorkflowChainRunRequest(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            observation,
+            TraditionalRoadmapChain,
+            Definitions));
+
+        Assert.Equal(WorkflowStopReason.MissingRequiredInput, result.StopReason);
+        ChainBoundaryEvidenceCapture capture = Assert.Single(boundaryStore.Captures);
+        Assert.False(capture.Evaluation.CanAdvance);
+        // No run identity was supplied, so the fact records null lineage honestly.
+        Assert.Null(capture.RunId);
+    }
+
+    [Fact]
+    public async Task Boundary_store_failure_does_not_fail_the_chain()
+    {
+        RecordingChainBoundaryStore boundaryStore = new() { ThrowOnAppend = true };
+        WorkflowChainRunner runner = CreateRunner(new FakeTransitionRuntime(), out WorkflowBoundaryEvidenceWriter evidence, boundaryStore: boundaryStore);
+        RepositoryObservation observation = Observation(
+            workflowStates:
+            [
+                Completed(WorkflowIdentity.TraditionalRoadmap),
+            ],
+            products:
+            [
+                Product(ProductIdentity.PreparedEpic, WorkflowIdentity.TraditionalRoadmap),
+                Product(ProductIdentity.MilestoneSpecificationSet, WorkflowIdentity.TraditionalRoadmap),
+            ]);
+
+        WorkflowChainRunResult result = await runner.RunAsync(new WorkflowChainRunRequest(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            observation,
+            TraditionalRoadmapChain,
+            Definitions));
+
+        Assert.Equal(WorkflowStopReason.TransitionCompleted, result.StopReason);
+        Assert.Single(evidence.Records);
+        Assert.Empty(boundaryStore.Captures);
+    }
+
+    [Fact]
     public async Task EvalRoadmap_boundary_stops_with_missing_required_input_when_plan_entry_products_are_invalid()
     {
         WorkflowChainRunner runner = CreateRunner(new FakeTransitionRuntime(), out _);
@@ -439,10 +522,11 @@ public sealed class WorkflowChainRunnerTests
     private static WorkflowChainRunner CreateRunner(
         FakeTransitionRuntime runtime,
         out WorkflowBoundaryEvidenceWriter evidenceWriter,
-        IWorkflowInstanceRecorder? instanceRecorder = null)
+        IWorkflowInstanceRecorder? instanceRecorder = null,
+        IChainBoundaryEvidenceStore? boundaryStore = null)
     {
         WorkflowController controller = CreateController(runtime);
-        evidenceWriter = new WorkflowBoundaryEvidenceWriter();
+        evidenceWriter = new WorkflowBoundaryEvidenceWriter(boundaryStore);
         return new WorkflowChainRunner(
             new WorkflowResolver(),
             controller,
@@ -451,6 +535,24 @@ public sealed class WorkflowChainRunnerTests
             new ProductTransferEvaluator(),
             evidenceWriter,
             instanceRecorder);
+    }
+
+    private sealed class RecordingChainBoundaryStore : IChainBoundaryEvidenceStore
+    {
+        public List<ChainBoundaryEvidenceCapture> Captures { get; } = [];
+
+        public bool ThrowOnAppend { get; set; }
+
+        public Task AppendAsync(ChainBoundaryEvidenceCapture capture, CancellationToken cancellationToken)
+        {
+            if (ThrowOnAppend)
+            {
+                throw new InvalidOperationException("boundary store unavailable");
+            }
+
+            Captures.Add(capture);
+            return Task.CompletedTask;
+        }
     }
 
     private static WorkflowController CreateController(FakeTransitionRuntime runtime) =>
