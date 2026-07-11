@@ -1,3 +1,5 @@
+using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
@@ -322,6 +324,126 @@ public sealed class TransitionRuntimeTests
     }
 
     [Fact]
+    public async Task Attempt_is_recorded_with_parents_before_prompt_execution_and_completed_on_success()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        TransitionRuntimeRequest request = harness.Request with
+        {
+            Run = new RunIdentity("run_parent"),
+            WorkflowInstance = new WorkflowInstanceIdentity("wfi_parent"),
+        };
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(request);
+
+        Assert.Equal(RuntimeOutcomeKind.Completed, result.Outcome);
+        TransitionRunStarted started = Assert.Single(harness.RunStore.Started);
+        Assert.StartsWith("tr_", started.RunId, StringComparison.Ordinal);
+        AttemptRecord attempt = Assert.Single(harness.Attempts.Started);
+        Assert.StartsWith("att_", attempt.AttemptId, StringComparison.Ordinal);
+        Assert.Equal(started.RunId, attempt.TransitionRunId);
+        Assert.Equal("run_parent", attempt.RunId);
+        Assert.Equal("wfi_parent", attempt.WorkflowInstanceId);
+        Assert.Equal(1, attempt.AttemptIndex);
+        Assert.Null(attempt.CompletedAt);
+        Assert.Equal("run_parent", started.WorkspaceRunId);
+        Assert.Equal("wfi_parent", started.WorkflowInstanceId);
+        Assert.Equal(attempt.AttemptId, started.AttemptId);
+        (string completedAttemptId, DateTimeOffset _, string outcome) = Assert.Single(harness.Attempts.Completions);
+        Assert.Equal(attempt.AttemptId, completedAttemptId);
+        Assert.Equal("Completed", outcome);
+        Assert.NotNull(harness.Executor.Context);
+        Assert.Equal("run_parent", harness.Executor.Context!.RunId);
+        Assert.Equal("wfi_parent", harness.Executor.Context.WorkflowInstanceId);
+        Assert.Equal(started.RunId, harness.Executor.Context.TransitionRunId);
+        Assert.Equal(attempt.AttemptId, harness.Executor.Context.AttemptId);
+    }
+
+    [Fact]
+    public async Task Attempt_parents_fall_back_to_empty_strings_without_run_context()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.Completed, result.Outcome);
+        AttemptRecord attempt = Assert.Single(harness.Attempts.Started);
+        Assert.Equal(string.Empty, attempt.RunId);
+        Assert.Equal(string.Empty, attempt.WorkflowInstanceId);
+        Assert.Null(harness.RunStore.Started.Single().WorkspaceRunId);
+        Assert.Null(harness.Executor.Context!.RunId);
+        Assert.Null(harness.Executor.Context.WorkflowInstanceId);
+    }
+
+    [Fact]
+    public async Task Blocked_input_records_no_attempt()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.Products.Result = new ProductResolutionResult([], [RuntimeHarness.InputRequirement], [], [], []);
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
+        Assert.False(harness.Executor.WasCalled);
+        Assert.Empty(harness.Attempts.Started);
+        Assert.Empty(harness.Attempts.Completions);
+    }
+
+    [Fact]
+    public async Task Cancelled_prompt_records_attempt_completion_as_cancelled()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.Executor.ThrowCancellation = true;
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.Cancelled, result.Outcome);
+        AttemptRecord attempt = Assert.Single(harness.Attempts.Started);
+        (string completedAttemptId, DateTimeOffset _, string outcome) = Assert.Single(harness.Attempts.Completions);
+        Assert.Equal(attempt.AttemptId, completedAttemptId);
+        Assert.Equal("Cancelled", outcome);
+    }
+
+    [Fact]
+    public async Task In_band_cancelled_prompt_records_attempt_completion_despite_fired_token()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.Executor.Result = new PromptExecutionResult(
+            PromptExecutionStatus.Cancelled,
+            "partial output",
+            TimeSpan.FromMilliseconds(10),
+            new Dictionary<string, string>());
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request, cancellation.Token);
+
+        Assert.Equal(RuntimeOutcomeKind.Cancelled, result.Outcome);
+        Assert.Equal(TransitionDurableState.Cancelled, result.DurableState);
+        (string _, DateTimeOffset _, string outcome) = Assert.Single(harness.Attempts.Completions);
+        Assert.Equal("Cancelled", outcome);
+    }
+
+    [Fact]
+    public async Task Failed_prompt_records_attempt_completion_as_failed()
+    {
+        RuntimeHarness harness = RuntimeHarness.Create();
+        harness.Executor.Result = new PromptExecutionResult(
+            PromptExecutionStatus.Failed,
+            "partial output",
+            TimeSpan.FromMilliseconds(10),
+            new Dictionary<string, string>(),
+            "agent failed");
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
+        AttemptRecord attempt = Assert.Single(harness.Attempts.Started);
+        (string completedAttemptId, DateTimeOffset _, string outcome) = Assert.Single(harness.Attempts.Completions);
+        Assert.Equal(attempt.AttemptId, completedAttemptId);
+        Assert.Equal("Failed", outcome);
+    }
+
+    [Fact]
     public void Input_snapshot_hash_is_stable_and_changes_when_product_causal_identity_changes()
     {
         WorkflowTransitionDefinition definition = RuntimeHarness.Definition;
@@ -442,6 +564,7 @@ public sealed class TransitionRuntimeTests
             RecoveryMarkers = new RecordingRecoveryStore();
             GateEvaluations = new RecordingGateEvaluationStore();
             EffectRecords = new RecordingEffectStore();
+            Attempts = new RecordingAttemptStore();
             Runtime = new TransitionRuntime(
                 Definitions,
                 Products,
@@ -457,7 +580,8 @@ public sealed class TransitionRuntimeTests
                 Blockers,
                 RecoveryMarkers,
                 GateEvaluations,
-                EffectRecords);
+                EffectRecords,
+                Attempts);
             Request = new TransitionRuntimeRequest(
                 WorkflowIdentity.Plan,
                 new WorkflowStageIdentity("Planning"),
@@ -498,6 +622,8 @@ public sealed class TransitionRuntimeTests
         public RecordingGateEvaluationStore GateEvaluations { get; }
 
         public RecordingEffectStore EffectRecords { get; }
+
+        public RecordingAttemptStore Attempts { get; }
 
         public static RuntimeHarness Create() => new();
 
@@ -631,15 +757,19 @@ public sealed class TransitionRuntimeTests
 
         public bool WasCalled { get; private set; }
 
+        public PromptExecutionContext? Context { get; private set; }
+
         public PromptExecutionResult Result { get; set; } =
             new(PromptExecutionStatus.Completed, "raw output", TimeSpan.FromMilliseconds(5), new Dictionary<string, string>());
 
         public Task<PromptExecutionResult> ExecuteAsync(
             WorkflowTransitionDefinition definition,
             RenderedPrompt prompt,
+            PromptExecutionContext context,
             CancellationToken cancellationToken)
         {
             WasCalled = true;
+            Context = context;
             if (ThrowCancellation)
             {
                 throw new OperationCanceledException(cancellationToken);
@@ -819,6 +949,31 @@ public sealed class TransitionRuntimeTests
             CancellationToken cancellationToken)
         {
             Records.Add(effect);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingAttemptStore : IAttemptStore
+    {
+        public List<AttemptRecord> Started { get; } = [];
+
+        public List<(string AttemptId, DateTimeOffset CompletedAt, string Outcome)> Completions { get; } = [];
+
+        public Task PersistAttemptStartedAsync(AttemptRecord attempt, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Started.Add(attempt);
+            return Task.CompletedTask;
+        }
+
+        public Task PersistAttemptCompletedAsync(
+            string attemptId,
+            DateTimeOffset completedAt,
+            string outcome,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Completions.Add((attemptId, completedAt, outcome));
             return Task.CompletedTask;
         }
     }

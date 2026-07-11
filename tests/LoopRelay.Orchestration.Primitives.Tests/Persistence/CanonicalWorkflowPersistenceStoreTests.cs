@@ -22,7 +22,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
         Assert.Equal(LoopRelayWorkspaceDatabase.CurrentSchemaVersion.ToString(), await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
-        foreach (string table in CanonicalTables)
+        foreach (string table in ExpectedTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected table {table}.");
         }
@@ -49,7 +49,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
 
         Assert.Equal(LoopRelayWorkspaceDatabase.CurrentSchemaVersion.ToString(), await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.Equal("imported", await ScalarStringAsync(connection, "SELECT value FROM workspace_metadata WHERE key = 'persistence_state';"));
-        foreach (string table in CanonicalTables)
+        foreach (string table in ExpectedTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected table {table}.");
         }
@@ -209,7 +209,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Equal("canonical", await ScalarStringAsync(connection, "SELECT value FROM workspace_metadata WHERE key = 'persistence_state';"));
     }
 
-    private static readonly string[] CanonicalTables =
+    private static readonly string[] ExpectedTables =
     [
         "canonical_workflow_states",
         "canonical_stage_states",
@@ -221,6 +221,12 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         "canonical_blockers",
         "canonical_recovery_markers",
         "canonical_workflow_chain_runs",
+        "workspace_identity",
+        "runs",
+        "workflow_instances",
+        "attempts",
+        "agent_sessions",
+        "agent_turns",
     ];
 
     private static Repository CreateRepository()

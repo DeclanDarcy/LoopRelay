@@ -1,3 +1,5 @@
+using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Workflows;
 
@@ -56,7 +58,9 @@ public sealed record TransitionRuntimeRequest(
     WorkflowIdentity Workflow,
     WorkflowStageIdentity Stage,
     WorkflowTransitionIdentity Transition,
-    IReadOnlyDictionary<string, string>? Metadata = null);
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    RunIdentity? Run = null,
+    WorkflowInstanceIdentity? WorkflowInstance = null);
 
 public sealed record ProductResolutionResult(
     IReadOnlyList<ProductRecord> Products,
@@ -99,6 +103,15 @@ public sealed record PromptExecutionResult(
     TimeSpan Duration,
     IReadOnlyDictionary<string, string> Metadata,
     string? FailureMessage = null);
+
+public sealed record PromptExecutionContext(
+    string? RunId,
+    string? WorkflowInstanceId,
+    string? TransitionRunId,
+    string? AttemptId)
+{
+    public static PromptExecutionContext Empty { get; } = new(null, null, null, null);
+}
 
 public sealed record InterpretedTransitionOutput(
     OutputInterpretationStatus Status,
@@ -162,7 +175,10 @@ public sealed record TransitionRunStarted(
     TransitionRuntimeRequest Request,
     WorkflowTransitionDefinition Definition,
     TransitionInputSnapshot InputSnapshot,
-    RenderedPrompt RenderedPrompt);
+    RenderedPrompt RenderedPrompt,
+    string? WorkspaceRunId = null,
+    string? WorkflowInstanceId = null,
+    string? AttemptId = null);
 
 public sealed record TransitionRunStateUpdate(
     string RunId,
@@ -287,6 +303,7 @@ public interface IPromptExecutor
     Task<PromptExecutionResult> ExecuteAsync(
         WorkflowTransitionDefinition definition,
         RenderedPrompt prompt,
+        PromptExecutionContext context,
         CancellationToken cancellationToken);
 }
 
@@ -321,6 +338,17 @@ public interface ITransitionRunStore
     Task PersistStateAsync(TransitionRunStateUpdate update, CancellationToken cancellationToken);
 
     Task PersistCompletedAsync(TransitionRunCompleted completed, CancellationToken cancellationToken);
+}
+
+public interface IAttemptStore
+{
+    Task PersistAttemptStartedAsync(AttemptRecord attempt, CancellationToken cancellationToken);
+
+    Task PersistAttemptCompletedAsync(
+        string attemptId,
+        DateTimeOffset completedAt,
+        string outcome,
+        CancellationToken cancellationToken);
 }
 
 public interface ITransitionEvidenceStore

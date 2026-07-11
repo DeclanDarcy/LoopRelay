@@ -1,3 +1,4 @@
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
@@ -169,6 +170,111 @@ public sealed class WorkflowChainRunnerTests
         Assert.Equal(2, result.Boundaries.Count);
     }
 
+    [Fact]
+    public async Task Chain_runner_records_workflow_instances_per_driven_workflow()
+    {
+        FakeTransitionRuntime runtime = new();
+        FakeInstanceRecorder recorder = new();
+        WorkflowChainRunner runner = CreateRunner(runtime, out _, recorder);
+        RepositoryObservation observation = Observation(
+            workflowStates:
+            [
+                Completed(WorkflowIdentity.TraditionalRoadmap),
+            ],
+            products:
+            [
+                Product(ProductIdentity.PreparedEpic, WorkflowIdentity.TraditionalRoadmap),
+                Product(ProductIdentity.MilestoneSpecificationSet, WorkflowIdentity.TraditionalRoadmap),
+            ]);
+
+        WorkflowChainRunResult result = await runner.RunAsync(new WorkflowChainRunRequest(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            observation,
+            TraditionalRoadmapChain,
+            Definitions,
+            new RunIdentity("run_chain")));
+
+        Assert.Equal(WorkflowStopReason.TransitionCompleted, result.StopReason);
+        Assert.Equal(2, recorder.Begun.Count);
+        Assert.Equal(WorkflowIdentity.TraditionalRoadmap, recorder.Begun[0].Workflow);
+        Assert.Equal(WorkflowIdentity.Plan, recorder.Begun[1].Workflow);
+        Assert.All(recorder.Begun, begun => Assert.Equal("run_chain", begun.RunId));
+        Assert.Equal(2, recorder.Completed.Count);
+        Assert.Equal((recorder.Begun[0].InstanceId, "Completed", (string?)null), recorder.Completed[0]);
+        Assert.Equal((recorder.Begun[1].InstanceId, "Stopped", (string?)"TransitionCompleted"), recorder.Completed[1]);
+        TransitionRuntimeRequest runtimeRequest = Assert.Single(runtime.Requests);
+        Assert.Equal(new RunIdentity("run_chain"), runtimeRequest.Run);
+        Assert.Equal(new WorkflowInstanceIdentity(recorder.Begun[1].InstanceId), runtimeRequest.WorkflowInstance);
+    }
+
+    [Fact]
+    public async Task Chain_runner_skips_instance_recording_without_a_run_identity()
+    {
+        FakeTransitionRuntime runtime = new();
+        FakeInstanceRecorder recorder = new();
+        WorkflowChainRunner runner = CreateRunner(runtime, out _, recorder);
+        RepositoryObservation observation = Observation(
+            workflowStates:
+            [
+                Completed(WorkflowIdentity.TraditionalRoadmap),
+            ],
+            products:
+            [
+                Product(ProductIdentity.PreparedEpic, WorkflowIdentity.TraditionalRoadmap),
+                Product(ProductIdentity.MilestoneSpecificationSet, WorkflowIdentity.TraditionalRoadmap),
+            ]);
+
+        WorkflowChainRunResult result = await runner.RunAsync(new WorkflowChainRunRequest(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            observation,
+            TraditionalRoadmapChain,
+            Definitions));
+
+        Assert.Equal(WorkflowStopReason.TransitionCompleted, result.StopReason);
+        Assert.Empty(recorder.Begun);
+        Assert.Empty(recorder.Completed);
+        TransitionRuntimeRequest runtimeRequest = Assert.Single(runtime.Requests);
+        Assert.Null(runtimeRequest.Run);
+        Assert.Null(runtimeRequest.WorkflowInstance);
+    }
+
+    [Fact]
+    public async Task Cancelled_controller_stop_still_completes_the_workflow_instance_despite_fired_token()
+    {
+        FakeTransitionRuntime runtime = new()
+        {
+            Result = RuntimeResult(RuntimeOutcomeKind.Cancelled),
+        };
+        FakeInstanceRecorder recorder = new();
+        WorkflowChainRunner runner = CreateRunner(runtime, out _, recorder);
+        RepositoryObservation observation = Observation(
+            workflowStates:
+            [
+                Completed(WorkflowIdentity.TraditionalRoadmap),
+            ],
+            products:
+            [
+                Product(ProductIdentity.PreparedEpic, WorkflowIdentity.TraditionalRoadmap),
+                Product(ProductIdentity.MilestoneSpecificationSet, WorkflowIdentity.TraditionalRoadmap),
+            ]);
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        WorkflowChainRunResult result = await runner.RunAsync(
+            new WorkflowChainRunRequest(
+                new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+                observation,
+                TraditionalRoadmapChain,
+                Definitions,
+                new RunIdentity("run_cancel")),
+            cancellation.Token);
+
+        Assert.Equal(WorkflowStopReason.Cancelled, result.StopReason);
+        Assert.Equal(2, recorder.Completed.Count);
+        Assert.Equal((recorder.Begun[0].InstanceId, "Completed", (string?)null), recorder.Completed[0]);
+        Assert.Equal((recorder.Begun[1].InstanceId, "Stopped", (string?)"Cancelled"), recorder.Completed[1]);
+    }
+
     [Theory]
     [InlineData(InvocationModeKind.DefaultChained, true, "EvalRoadmapChain")]
     [InlineData(InvocationModeKind.DefaultChained, false, "TraditionalRoadmapChain")]
@@ -291,7 +397,8 @@ public sealed class WorkflowChainRunnerTests
 
     private static WorkflowChainRunner CreateRunner(
         FakeTransitionRuntime runtime,
-        out WorkflowBoundaryEvidenceWriter evidenceWriter)
+        out WorkflowBoundaryEvidenceWriter evidenceWriter,
+        IWorkflowInstanceRecorder? instanceRecorder = null)
     {
         WorkflowController controller = CreateController(runtime);
         evidenceWriter = new WorkflowBoundaryEvidenceWriter();
@@ -301,7 +408,8 @@ public sealed class WorkflowChainRunnerTests
             new WorkflowEntryGateEvaluator(),
             new WorkflowExitGateEvaluator(),
             new ProductTransferEvaluator(),
-            evidenceWriter);
+            evidenceWriter,
+            instanceRecorder);
     }
 
     private static WorkflowController CreateController(FakeTransitionRuntime runtime) =>
@@ -393,6 +501,37 @@ public sealed class WorkflowChainRunnerTests
         {
             Requests.Add(request);
             return Task.FromResult(Result);
+        }
+    }
+
+    private sealed class FakeInstanceRecorder : IWorkflowInstanceRecorder
+    {
+        private int sequence;
+
+        public List<(string RunId, WorkflowIdentity Workflow, string InstanceId)> Begun { get; } = [];
+
+        public List<(string InstanceId, string Status, string? Outcome)> Completed { get; } = [];
+
+        public Task<string> BeginInstanceAsync(
+            string runId,
+            WorkflowIdentity workflow,
+            CancellationToken cancellationToken)
+        {
+            sequence++;
+            string instanceId = $"wfi_{sequence:D3}";
+            Begun.Add((runId, workflow, instanceId));
+            return Task.FromResult(instanceId);
+        }
+
+        public Task CompleteInstanceAsync(
+            string workflowInstanceId,
+            string status,
+            string? outcome,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Completed.Add((workflowInstanceId, status, outcome));
+            return Task.CompletedTask;
         }
     }
 }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Persistence;
@@ -268,36 +269,118 @@ internal sealed class UnifiedCliRunner(
             ? 1
             : MaxUnboundedContinuationSteps;
 
-        for (int step = 0; step < guard; step++)
+        RunIdentity run = RunIdentity.New();
+        DateTimeOffset runStartedAt = DateTimeOffset.UtcNow;
+        string chainIdentity = _composition.SelectChain(invocation.WorkflowInvocation, observation).Identity;
+        string invocationMode = invocation.WorkflowInvocation.Mode.ToString();
+        string workspaceId = string.Empty;
+        try
         {
-            WorkflowChainDefinition chain = _composition.SelectChain(invocation.WorkflowInvocation, observation);
-            WorkflowChainRunResult result = await _composition.WorkflowChainRunner.RunAsync(
-                new WorkflowChainRunRequest(
-                    invocation.WorkflowInvocation,
-                    observation,
-                    chain,
-                    _composition.WorkflowDefinitions),
-                cancellationToken);
-            PrintRunResult(result);
-
-            if (invocation.WorkflowInvocation.IsBounded ||
-                result.StopReason != WorkflowStopReason.TransitionCompleted)
-            {
-                return ExitCodeFor(result.StopReason);
-            }
-
-            observation = await _composition.ObserveAsync(cancellationToken);
-            if (invocation.Command.RequiresStorageVerification &&
-                observation.StorageVerification.IsBlocked)
-            {
-                PrintStorageVerification(observation);
-                return 4;
-            }
+            workspaceId = await _composition.Persistence.ReadWorkspaceIdentityAsync(cancellationToken);
+        }
+        catch
+        {
+            // Run bookkeeping is best-effort supporting evidence; the CLI never fails because of it.
         }
 
-        _output.WriteLine($"Stop reason: {WorkflowStopReason.Stalled}");
-        _output.WriteLine($"Explanation: Unbounded workflow continuation guard exhausted after {guard} completed transitions.");
-        return ExitCodeFor(WorkflowStopReason.Stalled);
+        try
+        {
+            await _composition.Persistence.InterruptLingeringActiveRunsAsync(run.Value, cancellationToken);
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            await _composition.Persistence.UpsertRunAsync(
+                new RunRecord(
+                    run.Value,
+                    workspaceId,
+                    chainIdentity,
+                    invocationMode,
+                    "Active",
+                    runStartedAt,
+                    null,
+                    null,
+                    string.Empty),
+                cancellationToken);
+        }
+        catch
+        {
+        }
+
+        WorkflowStopReason? lastStopReason = null;
+        try
+        {
+            for (int step = 0; step < guard; step++)
+            {
+                WorkflowChainDefinition chain = _composition.SelectChain(invocation.WorkflowInvocation, observation);
+                WorkflowChainRunResult result = await _composition.WorkflowChainRunner.RunAsync(
+                    new WorkflowChainRunRequest(
+                        invocation.WorkflowInvocation,
+                        observation,
+                        chain,
+                        _composition.WorkflowDefinitions,
+                        run),
+                    cancellationToken);
+                lastStopReason = result.StopReason;
+                PrintRunResult(result);
+
+                if (invocation.WorkflowInvocation.IsBounded ||
+                    result.StopReason != WorkflowStopReason.TransitionCompleted)
+                {
+                    return ExitCodeFor(result.StopReason);
+                }
+
+                observation = await _composition.ObserveAsync(cancellationToken);
+                if (invocation.Command.RequiresStorageVerification &&
+                    observation.StorageVerification.IsBlocked)
+                {
+                    lastStopReason = WorkflowStopReason.Blocked;
+                    PrintStorageVerification(observation);
+                    return 4;
+                }
+            }
+
+            lastStopReason = WorkflowStopReason.Stalled;
+            _output.WriteLine($"Stop reason: {WorkflowStopReason.Stalled}");
+            _output.WriteLine($"Explanation: Unbounded workflow continuation guard exhausted after {guard} completed transitions.");
+            return ExitCodeFor(WorkflowStopReason.Stalled);
+        }
+        catch (OperationCanceledException)
+        {
+            lastStopReason = WorkflowStopReason.Cancelled;
+            throw;
+        }
+        catch
+        {
+            lastStopReason = WorkflowStopReason.Failed;
+            throw;
+        }
+        finally
+        {
+            WorkflowStopReason terminal = lastStopReason ?? WorkflowStopReason.Failed;
+            try
+            {
+                await _composition.Persistence.UpsertRunAsync(
+                    new RunRecord(
+                        run.Value,
+                        workspaceId,
+                        chainIdentity,
+                        invocationMode,
+                        terminal.ToString(),
+                        runStartedAt,
+                        DateTimeOffset.UtcNow,
+                        terminal.ToString(),
+                        string.Empty),
+                    CancellationToken.None);
+            }
+            catch
+            {
+                // Run finalization is best-effort: a failed spine write must not mask the run outcome.
+            }
+        }
     }
 
     private void PrintRunResult(WorkflowChainRunResult result)

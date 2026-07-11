@@ -647,6 +647,103 @@ public sealed class UnifiedCliRunnerTests
                 workflow.State == WorkflowResolutionState.Completed);
     }
 
+    [Fact]
+    public async Task RunAsync_run_command_writes_terminal_run_row_and_interrupts_lingering_active_runs()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        await store.UpsertRunAsync(new RunRecord(
+            "run_lingering",
+            "ws_lingering",
+            "BoundedPlan",
+            "BoundedPlan",
+            "Active",
+            DateTimeOffset.UtcNow.AddMinutes(-5),
+            null,
+            null,
+            string.Empty));
+        await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
+            WorkflowIdentity.Plan,
+            WorkflowResolutionState.Completed,
+            null,
+            RuntimeOutcomeKind.Completed,
+            DateTimeOffset.UtcNow,
+            ["plan-complete.md"]));
+        await PersistPlanProductsAsync(store);
+        var invocation = new UnifiedCliInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+
+        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        IReadOnlyList<RunRecord> runs = await store.ReadRunsAsync();
+        Assert.Equal(2, runs.Count);
+        RunRecord lingering = Assert.Single(runs, run => run.RunId == "run_lingering");
+        Assert.Equal("Interrupted", lingering.Status);
+        Assert.NotNull(lingering.CompletedAt);
+        RunRecord current = Assert.Single(runs, run => run.RunId != "run_lingering");
+        Assert.StartsWith("run_", current.RunId, StringComparison.Ordinal);
+        Assert.StartsWith("ws_", current.WorkspaceId, StringComparison.Ordinal);
+        Assert.Equal("BoundedPlan", current.ChainIdentity);
+        Assert.Equal(InvocationModeKind.BoundedPlan.ToString(), current.InvocationMode);
+        Assert.Equal(WorkflowStopReason.BoundedWorkflowCompleted.ToString(), current.Status);
+        Assert.Equal(WorkflowStopReason.BoundedWorkflowCompleted.ToString(), current.StopReason);
+        Assert.NotNull(current.CompletedAt);
+    }
+
+    [Fact]
+    public async Task RunAsync_run_command_records_cancelled_run_row_on_cancellation()
+    {
+        Repository repository = CreateRepository();
+        await SeedRoadmapArtifactsAsync(repository);
+        var invocation = new UnifiedCliInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+        using var source = new CancellationTokenSource();
+        using var output = new CancelOnStopReasonWriter(source);
+        using var error = new StringWriter();
+        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+
+        int? exitCode = null;
+        try
+        {
+            exitCode = await runner.RunAsync(invocation, source.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation may surface as a thrown OperationCanceledException or as a Cancelled stop reason.
+        }
+
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        IReadOnlyList<RunRecord> runs = await store.ReadRunsAsync();
+        RunRecord run = Assert.Single(runs);
+        Assert.Equal(WorkflowStopReason.Cancelled.ToString(), run.Status);
+        Assert.Equal(WorkflowStopReason.Cancelled.ToString(), run.StopReason);
+        Assert.NotNull(run.CompletedAt);
+        if (exitCode is not null)
+        {
+            Assert.Equal(130, exitCode);
+        }
+    }
+
+    private sealed class CancelOnStopReasonWriter(CancellationTokenSource _source) : StringWriter
+    {
+        public override void WriteLine(string? value)
+        {
+            base.WriteLine(value);
+            if (value is not null && value.StartsWith("Stop reason:", StringComparison.Ordinal))
+            {
+                _source.Cancel();
+            }
+        }
+    }
+
     private static Repository CreateRepository()
     {
         string path = Directory.CreateTempSubdirectory("cc-cli-unified-runner-").FullName;

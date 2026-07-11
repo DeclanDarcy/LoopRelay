@@ -364,6 +364,263 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$evidence_json", Json(run.Evidence)));
     }
 
+    public async Task UpsertRunAsync(
+        RunRecord run,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO runs (
+                run_id, workspace_id, chain_identity, invocation_mode, status,
+                started_at, completed_at, stop_reason, explanation
+            )
+            VALUES (
+                $run_id, $workspace_id, $chain_identity, $invocation_mode, $status,
+                $started_at, $completed_at, $stop_reason, $explanation
+            )
+            ON CONFLICT(run_id) DO UPDATE SET
+                workspace_id = excluded.workspace_id,
+                chain_identity = excluded.chain_identity,
+                invocation_mode = excluded.invocation_mode,
+                status = excluded.status,
+                started_at = excluded.started_at,
+                completed_at = excluded.completed_at,
+                stop_reason = excluded.stop_reason,
+                explanation = excluded.explanation;
+            """,
+            cancellationToken,
+            ("$run_id", run.RunId),
+            ("$workspace_id", run.WorkspaceId),
+            ("$chain_identity", run.ChainIdentity),
+            ("$invocation_mode", run.InvocationMode),
+            ("$status", run.Status),
+            ("$started_at", Format(run.StartedAt)),
+            ("$completed_at", run.CompletedAt is null ? null : Format(run.CompletedAt.Value)),
+            ("$stop_reason", run.StopReason),
+            ("$explanation", run.Explanation));
+    }
+
+    public async Task InterruptLingeringActiveRunsAsync(
+        string exceptRunId,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        string completedAt = Format(DateTimeOffset.UtcNow);
+        await ExecuteAsync(
+            connection,
+            """
+            UPDATE runs SET
+                status = 'Interrupted',
+                completed_at = $completed_at,
+                stop_reason = 'Interrupted'
+            WHERE status = 'Active' AND run_id <> $except_run_id;
+            """,
+            cancellationToken,
+            ("$completed_at", completedAt),
+            ("$except_run_id", exceptRunId));
+        await ExecuteAsync(
+            connection,
+            """
+            UPDATE workflow_instances SET
+                status = 'Interrupted',
+                completed_at = $completed_at
+            WHERE status = 'Active' AND run_id <> $except_run_id;
+            """,
+            cancellationToken,
+            ("$completed_at", completedAt),
+            ("$except_run_id", exceptRunId));
+        await ExecuteAsync(
+            connection,
+            """
+            UPDATE attempts SET
+                outcome = 'Interrupted',
+                completed_at = $completed_at
+            WHERE completed_at IS NULL AND run_id <> $except_run_id;
+            """,
+            cancellationToken,
+            ("$completed_at", completedAt),
+            ("$except_run_id", exceptRunId));
+    }
+
+    public async Task UpsertWorkflowInstanceAsync(
+        WorkflowInstanceRecord instance,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO workflow_instances (
+                workflow_instance_id, run_id, workflow_identity, catalog_version, status,
+                started_at, completed_at, outcome
+            )
+            VALUES (
+                $workflow_instance_id, $run_id, $workflow_identity, $catalog_version, $status,
+                $started_at, $completed_at, $outcome
+            )
+            ON CONFLICT(workflow_instance_id) DO UPDATE SET
+                run_id = excluded.run_id,
+                workflow_identity = excluded.workflow_identity,
+                catalog_version = excluded.catalog_version,
+                status = excluded.status,
+                started_at = excluded.started_at,
+                completed_at = excluded.completed_at,
+                outcome = excluded.outcome;
+            """,
+            cancellationToken,
+            ("$workflow_instance_id", instance.WorkflowInstanceId),
+            ("$run_id", instance.RunId),
+            ("$workflow_identity", instance.Workflow.Value),
+            ("$catalog_version", instance.CatalogVersion),
+            ("$status", instance.Status),
+            ("$started_at", Format(instance.StartedAt)),
+            ("$completed_at", instance.CompletedAt is null ? null : Format(instance.CompletedAt.Value)),
+            ("$outcome", instance.Outcome));
+    }
+
+    public async Task CompleteWorkflowInstanceAsync(
+        string workflowInstanceId,
+        string status,
+        string? outcome,
+        DateTimeOffset completedAt,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            UPDATE workflow_instances SET
+                status = $status,
+                completed_at = $completed_at,
+                outcome = $outcome
+            WHERE workflow_instance_id = $workflow_instance_id;
+            """,
+            cancellationToken,
+            ("$status", status),
+            ("$completed_at", Format(completedAt)),
+            ("$outcome", outcome),
+            ("$workflow_instance_id", workflowInstanceId));
+    }
+
+    public async Task UpsertAttemptAsync(
+        AttemptRecord attempt,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO attempts (
+                attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
+                started_at, completed_at, outcome
+            )
+            VALUES (
+                $attempt_id, $transition_run_id, $workflow_instance_id, $run_id, $attempt_index,
+                $started_at, $completed_at, $outcome
+            )
+            ON CONFLICT(attempt_id) DO UPDATE SET
+                transition_run_id = excluded.transition_run_id,
+                workflow_instance_id = excluded.workflow_instance_id,
+                run_id = excluded.run_id,
+                attempt_index = excluded.attempt_index,
+                started_at = excluded.started_at,
+                completed_at = excluded.completed_at,
+                outcome = excluded.outcome;
+            """,
+            cancellationToken,
+            ("$attempt_id", attempt.AttemptId),
+            ("$transition_run_id", attempt.TransitionRunId),
+            ("$workflow_instance_id", attempt.WorkflowInstanceId),
+            ("$run_id", attempt.RunId),
+            ("$attempt_index", attempt.AttemptIndex),
+            ("$started_at", Format(attempt.StartedAt)),
+            ("$completed_at", attempt.CompletedAt is null ? null : Format(attempt.CompletedAt.Value)),
+            ("$outcome", attempt.Outcome));
+    }
+
+    public async Task CompleteAttemptAsync(
+        string attemptId,
+        DateTimeOffset completedAt,
+        string outcome,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            UPDATE attempts SET
+                completed_at = $completed_at,
+                outcome = $outcome
+            WHERE attempt_id = $attempt_id;
+            """,
+            cancellationToken,
+            ("$completed_at", Format(completedAt)),
+            ("$outcome", outcome),
+            ("$attempt_id", attemptId));
+    }
+
+    public async Task UpsertAgentSessionAsync(
+        AgentSessionRecord session,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO agent_sessions (
+                session_id, attempt_id, workspace_id, provider, provider_thread_id,
+                role, legacy_session_guid, started_at, completed_at
+            )
+            VALUES (
+                $session_id, $attempt_id, $workspace_id, $provider, $provider_thread_id,
+                $role, $legacy_session_guid, $started_at, $completed_at
+            )
+            ON CONFLICT(session_id) DO UPDATE SET
+                attempt_id = excluded.attempt_id,
+                workspace_id = excluded.workspace_id,
+                provider = excluded.provider,
+                provider_thread_id = excluded.provider_thread_id,
+                role = excluded.role,
+                legacy_session_guid = excluded.legacy_session_guid,
+                started_at = excluded.started_at,
+                completed_at = excluded.completed_at;
+            """,
+            cancellationToken,
+            ("$session_id", session.SessionId),
+            ("$attempt_id", session.AttemptId),
+            ("$workspace_id", session.WorkspaceId),
+            ("$provider", session.Provider),
+            ("$provider_thread_id", session.ProviderThreadId),
+            ("$role", session.Role),
+            ("$legacy_session_guid", session.LegacySessionGuid),
+            ("$started_at", Format(session.StartedAt)),
+            ("$completed_at", session.CompletedAt is null ? null : Format(session.CompletedAt.Value)));
+    }
+
+    public async Task AppendAgentTurnAsync(
+        AgentTurnRecord turn,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO agent_turns (
+                turn_id, session_id, turn_index, recorded_at
+            )
+            VALUES (
+                $turn_id, $session_id, $turn_index, $recorded_at
+            );
+            """,
+            cancellationToken,
+            ("$turn_id", turn.TurnId),
+            ("$session_id", turn.SessionId),
+            ("$turn_index", turn.TurnIndex),
+            ("$recorded_at", Format(turn.RecordedAt)));
+    }
+
     public async Task<CanonicalWorkflowPersistenceSnapshot> LoadSnapshotAsync(
         CancellationToken cancellationToken = default)
     {
@@ -387,6 +644,205 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await ReadBlockersAsync(connection, cancellationToken),
             await ReadRecoveryMarkersAsync(connection, cancellationToken),
             await ReadWorkflowChainRunsAsync(connection, cancellationToken));
+    }
+
+    public async Task<IReadOnlyList<RunRecord>> ReadRunsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            var rows = new List<RunRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT run_id, workspace_id, chain_identity, invocation_mode, status,
+                       started_at, completed_at, stop_reason, explanation
+                FROM runs ORDER BY started_at, run_id;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new RunRecord(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    ParseDate(reader.GetString(5)),
+                    reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.GetString(8)));
+            }
+
+            return rows;
+        });
+    }
+
+    public async Task<IReadOnlyList<WorkflowInstanceRecord>> ReadWorkflowInstancesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            var rows = new List<WorkflowInstanceRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT workflow_instance_id, run_id, workflow_identity, catalog_version, status,
+                       started_at, completed_at, outcome
+                FROM workflow_instances ORDER BY started_at, workflow_instance_id;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new WorkflowInstanceRecord(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    new WorkflowIdentity(reader.GetString(2)),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    ParseDate(reader.GetString(5)),
+                    reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
+                    reader.IsDBNull(7) ? null : reader.GetString(7)));
+            }
+
+            return rows;
+        });
+    }
+
+    public async Task<IReadOnlyList<AttemptRecord>> ReadAttemptsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            var rows = new List<AttemptRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
+                       started_at, completed_at, outcome
+                FROM attempts ORDER BY started_at, attempt_id;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new AttemptRecord(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetInt32(4),
+                    ParseDate(reader.GetString(5)),
+                    reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
+                    reader.IsDBNull(7) ? null : reader.GetString(7)));
+            }
+
+            return rows;
+        });
+    }
+
+    public async Task<IReadOnlyList<AgentSessionRecord>> ReadAgentSessionsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            var rows = new List<AgentSessionRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT session_id, attempt_id, workspace_id, provider, provider_thread_id,
+                       role, legacy_session_guid, started_at, completed_at
+                FROM agent_sessions ORDER BY started_at, session_id;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new AgentSessionRecord(
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetString(2),
+                    reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.GetString(5),
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    ParseDate(reader.GetString(7)),
+                    reader.IsDBNull(8) ? null : ParseDate(reader.GetString(8))));
+            }
+
+            return rows;
+        });
+    }
+
+    public async Task<IReadOnlyList<AgentTurnRecord>> ReadAgentTurnsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            var rows = new List<AgentTurnRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT turn_id, session_id, turn_index, recorded_at
+                FROM agent_turns ORDER BY recorded_at, turn_id;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new AgentTurnRecord(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetInt32(2),
+                    ParseDate(reader.GetString(3))));
+            }
+
+            return rows;
+        });
+    }
+
+    public async Task<string> ReadWorkspaceIdentityAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        return await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection, cancellationToken);
     }
 
     private async Task<SqliteConnection> OpenAsync(CancellationToken cancellationToken)
@@ -696,6 +1152,20 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         }
 
         return rows;
+    }
+
+    private static async Task<IReadOnlyList<TRow>> ReadSpineRowsOrEmptyAsync<TRow>(
+        Func<Task<List<TRow>>> readRows)
+    {
+        try
+        {
+            return await readRows();
+        }
+        catch (SqliteException exception) when (exception.Message.Contains("no such table"))
+        {
+            // Pre-v3 databases lack the spine tables; spine reads report empty evidence instead of failing.
+            return [];
+        }
     }
 
     private static async Task ExecuteAsync(

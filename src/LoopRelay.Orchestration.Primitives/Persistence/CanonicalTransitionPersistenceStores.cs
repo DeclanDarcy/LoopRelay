@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
@@ -220,6 +222,56 @@ public sealed class CanonicalTransitionGateEvaluationStore(CanonicalWorkflowPers
                 evaluation.Result.Requirements,
                 evaluation.Result.Explanation,
                 evaluation.Result.Evidence),
+            cancellationToken);
+}
+
+public sealed class CanonicalAttemptStore(CanonicalWorkflowPersistenceStore _store) : IAttemptStore
+{
+    public Task PersistAttemptStartedAsync(
+        AttemptRecord attempt,
+        CancellationToken cancellationToken) =>
+        _store.UpsertAttemptAsync(attempt, cancellationToken);
+
+    public Task PersistAttemptCompletedAsync(
+        string attemptId,
+        DateTimeOffset completedAt,
+        string outcome,
+        CancellationToken cancellationToken) =>
+        _store.CompleteAttemptAsync(attemptId, completedAt, outcome, cancellationToken);
+}
+
+public sealed class CanonicalWorkflowInstanceRecorder(CanonicalWorkflowPersistenceStore _store) : IWorkflowInstanceRecorder
+{
+    public async Task<string> BeginInstanceAsync(
+        string runId,
+        WorkflowIdentity workflow,
+        CancellationToken cancellationToken)
+    {
+        string workflowInstanceId = WorkflowInstanceIdentity.New().Value;
+        await _store.UpsertWorkflowInstanceAsync(
+            new WorkflowInstanceRecord(
+                workflowInstanceId,
+                runId,
+                workflow,
+                string.Empty,
+                "Active",
+                DateTimeOffset.UtcNow,
+                null,
+                null),
+            cancellationToken);
+        return workflowInstanceId;
+    }
+
+    public Task CompleteInstanceAsync(
+        string workflowInstanceId,
+        string status,
+        string? outcome,
+        CancellationToken cancellationToken) =>
+        _store.CompleteWorkflowInstanceAsync(
+            workflowInstanceId,
+            status,
+            outcome,
+            DateTimeOffset.UtcNow,
             cancellationToken);
 }
 

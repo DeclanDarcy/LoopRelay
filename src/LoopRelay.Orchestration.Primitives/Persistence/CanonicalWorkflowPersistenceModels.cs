@@ -93,6 +93,54 @@ public sealed record CanonicalWorkflowChainRunRecord(
     string Explanation,
     IReadOnlyList<string> Evidence);
 
+public sealed record RunRecord(
+    string RunId,
+    string WorkspaceId,
+    string ChainIdentity,
+    string InvocationMode,
+    string Status,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? StopReason,
+    string Explanation);
+
+public sealed record WorkflowInstanceRecord(
+    string WorkflowInstanceId,
+    string RunId,
+    WorkflowIdentity Workflow,
+    string CatalogVersion,
+    string Status,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? Outcome);
+
+public sealed record AttemptRecord(
+    string AttemptId,
+    string TransitionRunId,
+    string WorkflowInstanceId,
+    string RunId,
+    int AttemptIndex,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? Outcome);
+
+public sealed record AgentSessionRecord(
+    string SessionId,
+    string? AttemptId,
+    string? WorkspaceId,
+    string Provider,
+    string? ProviderThreadId,
+    string Role,
+    string? LegacySessionGuid,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt);
+
+public sealed record AgentTurnRecord(
+    string TurnId,
+    string SessionId,
+    int TurnIndex,
+    DateTimeOffset RecordedAt);
+
 public sealed record CanonicalWorkflowPersistenceSnapshot(
     IReadOnlyList<CanonicalWorkflowStateRecord> WorkflowStates,
     IReadOnlyList<CanonicalStageStateRecord> StageStates,

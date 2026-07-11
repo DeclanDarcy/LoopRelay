@@ -1,3 +1,4 @@
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
@@ -43,7 +44,9 @@ public sealed record WorkflowBoundaryEvidenceRecord(
 public sealed record WorkflowControllerRequest(
     WorkflowInvocation Invocation,
     RepositoryObservation Observation,
-    IReadOnlyList<WorkflowDefinition> Definitions);
+    IReadOnlyList<WorkflowDefinition> Definitions,
+    RunIdentity? Run = null,
+    WorkflowInstanceIdentity? WorkflowInstance = null);
 
 public sealed record WorkflowControllerResult(
     WorkflowResolutionResult Resolution,
@@ -55,7 +58,22 @@ public sealed record WorkflowChainRunRequest(
     WorkflowInvocation Invocation,
     RepositoryObservation Observation,
     WorkflowChainDefinition Chain,
-    IReadOnlyList<WorkflowDefinition> Definitions);
+    IReadOnlyList<WorkflowDefinition> Definitions,
+    RunIdentity? Run = null);
+
+public interface IWorkflowInstanceRecorder
+{
+    Task<string> BeginInstanceAsync(
+        string runId,
+        WorkflowIdentity workflow,
+        CancellationToken cancellationToken);
+
+    Task CompleteInstanceAsync(
+        string workflowInstanceId,
+        string status,
+        string? outcome,
+        CancellationToken cancellationToken);
+}
 
 public sealed record WorkflowChainRunResult(
     WorkflowIdentity LastWorkflow,
@@ -283,7 +301,9 @@ public sealed class WorkflowController(
             new TransitionRuntimeRequest(
                 resolution.Selection.SelectedWorkflow,
                 resolution.SelectedStage ?? new WorkflowStageIdentity("Unknown"),
-                selectedTransition.Transition),
+                selectedTransition.Transition,
+                Run: request.Run,
+                WorkflowInstance: request.WorkflowInstance),
             cancellationToken);
         return new WorkflowControllerResult(
             resolution,
@@ -325,7 +345,8 @@ public sealed class WorkflowChainRunner(
     WorkflowEntryGateEvaluator _entryGate,
     WorkflowExitGateEvaluator _exitGate,
     ProductTransferEvaluator _transfer,
-    WorkflowBoundaryEvidenceWriter _evidenceWriter)
+    WorkflowBoundaryEvidenceWriter _evidenceWriter,
+    IWorkflowInstanceRecorder? _instanceRecorder = null)
 {
     public async Task<WorkflowChainRunResult> RunAsync(
         WorkflowChainRunRequest request,
@@ -340,6 +361,7 @@ public sealed class WorkflowChainRunner(
         for (int guard = 0; guard < request.Chain.Workflows.Count + 1; guard++)
         {
             WorkflowDefinition definition = Definition(request.Definitions, current);
+            string? instanceId = await TryBeginInstanceAsync(request.Run, current, cancellationToken);
             WorkflowResolutionResult resolution = _resolver.Resolve(
                 InvocationFor(current),
                 request.Observation,
@@ -348,8 +370,14 @@ public sealed class WorkflowChainRunner(
             if (resolution.WorkflowState != WorkflowResolutionState.Completed)
             {
                 WorkflowControllerResult controller = await _controller.RunAsync(
-                    new WorkflowControllerRequest(InvocationFor(current), request.Observation, request.Definitions),
+                    new WorkflowControllerRequest(
+                        InvocationFor(current),
+                        request.Observation,
+                        request.Definitions,
+                        request.Run,
+                        instanceId is null ? null : new WorkflowInstanceIdentity(instanceId)),
                     cancellationToken);
+                await TryCompleteInstanceAsync(instanceId, "Stopped", controller.StopReason.ToString(), cancellationToken);
                 return new WorkflowChainRunResult(
                     current,
                     controller.StopReason,
@@ -360,6 +388,7 @@ public sealed class WorkflowChainRunner(
 
             if (request.Invocation.IsBounded)
             {
+                await TryCompleteInstanceAsync(instanceId, "Completed", WorkflowStopReason.BoundedWorkflowCompleted.ToString(), cancellationToken);
                 return new WorkflowChainRunResult(
                     current,
                     WorkflowStopReason.BoundedWorkflowCompleted,
@@ -370,6 +399,7 @@ public sealed class WorkflowChainRunner(
 
             if (definition.DownstreamWorkflow is not { IsEmpty: false } downstream)
             {
+                await TryCompleteInstanceAsync(instanceId, "Completed", WorkflowStopReason.ChainCompleted.ToString(), cancellationToken);
                 return new WorkflowChainRunResult(
                     current,
                     WorkflowStopReason.ChainCompleted,
@@ -398,6 +428,7 @@ public sealed class WorkflowChainRunner(
 
             if (!canAdvance)
             {
+                await TryCompleteInstanceAsync(instanceId, "Completed", WorkflowStopReason.Blocked.ToString(), cancellationToken);
                 return new WorkflowChainRunResult(
                     current,
                     WorkflowStopReason.Blocked,
@@ -406,6 +437,7 @@ public sealed class WorkflowChainRunner(
                     boundary.Explanation);
             }
 
+            await TryCompleteInstanceAsync(instanceId, "Completed", null, cancellationToken);
             current = downstream;
         }
 
@@ -415,6 +447,49 @@ public sealed class WorkflowChainRunner(
             boundaries,
             null,
             "Workflow chain guard exhausted without terminal progress.");
+    }
+
+    private async Task<string?> TryBeginInstanceAsync(
+        RunIdentity? run,
+        WorkflowIdentity workflow,
+        CancellationToken cancellationToken)
+    {
+        if (_instanceRecorder is null || run is not { IsEmpty: false } runIdentity)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _instanceRecorder.BeginInstanceAsync(runIdentity.Value, workflow, cancellationToken);
+        }
+        catch
+        {
+            // Instance recording is supporting evidence; chain progression remains authoritative.
+            return null;
+        }
+    }
+
+    private async Task TryCompleteInstanceAsync(
+        string? workflowInstanceId,
+        string status,
+        string? outcome,
+        CancellationToken cancellationToken)
+    {
+        if (_instanceRecorder is null || workflowInstanceId is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Terminal instance evidence must survive a fired token; the store write always runs uncancelled.
+            await _instanceRecorder.CompleteInstanceAsync(workflowInstanceId, status, outcome, CancellationToken.None);
+        }
+        catch
+        {
+            // Instance recording is supporting evidence; chain progression remains authoritative.
+        }
     }
 
     private static WorkflowDefinition Definition(

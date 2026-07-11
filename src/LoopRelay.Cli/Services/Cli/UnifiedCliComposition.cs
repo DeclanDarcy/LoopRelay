@@ -4,6 +4,8 @@ using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Process;
 using LoopRelay.Agents.Services.Sessions;
@@ -19,6 +21,7 @@ using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Completion.Services.Certification;
 using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
@@ -66,6 +69,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         WorkflowBoundaryEvidenceWriter boundaryEvidenceWriter,
         IReadOnlyList<WorkflowDefinition> workflowDefinitions,
         IReadOnlyList<WorkflowChainDefinition> workflowChains,
+        CanonicalWorkflowPersistenceStore persistence,
         ServiceProvider? provider = null,
         IAsyncDisposable? promptExecutorLifetime = null)
     {
@@ -79,6 +83,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         BoundaryEvidenceWriter = boundaryEvidenceWriter;
         WorkflowDefinitions = workflowDefinitions;
         WorkflowChains = workflowChains;
+        Persistence = persistence;
         this.provider = provider;
         this.promptExecutorLifetime = promptExecutorLifetime;
     }
@@ -102,6 +107,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     public IReadOnlyList<WorkflowDefinition> WorkflowDefinitions { get; }
 
     public IReadOnlyList<WorkflowChainDefinition> WorkflowChains { get; }
+
+    internal CanonicalWorkflowPersistenceStore Persistence { get; }
 
     public static UnifiedCliComposition Create(Repository repository) =>
         CreateCore(repository, agentRuntime: null, processRunner: new ProcessRunner(), provider: null);
@@ -142,7 +149,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IReadOnlyList<WorkflowDefinition> workflowDefinitions = CanonicalWorkflowDefinitionSketches.CreateAll();
         IReadOnlyList<WorkflowChainDefinition> workflowChains = CanonicalWorkflowDefinitionSketches.CreateChains();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var promptExecutor = new UnifiedPromptExecutor(repository, agentRuntime, processRunner);
+        var promptExecutor = new UnifiedPromptExecutor(repository, agentRuntime, processRunner, persistence);
         ITransitionRuntime transitionRuntime = new TransitionRuntime(
             new UnifiedTransitionDefinitionResolver(workflowDefinitions),
             new RepositoryObservationProductResolver(repositoryObserver, repository),
@@ -158,7 +165,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             new CanonicalTransitionBlockerStore(persistence),
             new CanonicalTransitionRecoveryStore(persistence),
             new CanonicalTransitionGateEvaluationStore(persistence),
-            new CanonicalTransitionEffectStore(persistence));
+            new CanonicalTransitionEffectStore(persistence),
+            new CanonicalAttemptStore(persistence));
         var workflowController = new WorkflowController(workflowResolver, transitionRuntime);
         var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter();
         var workflowChainRunner = new WorkflowChainRunner(
@@ -167,7 +175,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             new WorkflowEntryGateEvaluator(),
             new WorkflowExitGateEvaluator(),
             new ProductTransferEvaluator(),
-            boundaryEvidenceWriter);
+            boundaryEvidenceWriter,
+            new CanonicalWorkflowInstanceRecorder(persistence));
         return new UnifiedCliComposition(
             repository,
             storageVerifier,
@@ -179,6 +188,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             boundaryEvidenceWriter,
             workflowDefinitions,
             workflowChains,
+            persistence,
             provider,
             promptExecutor);
     }
@@ -811,10 +821,13 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     private sealed class UnifiedPromptExecutor(
         Repository _repository,
         IAgentRuntime? _agentRuntime,
-        IProcessRunner _processRunner) : IPromptExecutor, IAsyncDisposable
+        IProcessRunner _processRunner,
+        CanonicalWorkflowPersistenceStore _persistence) : IPromptExecutor, IAsyncDisposable
     {
         private readonly IArtifactStore artifactStore = new FileSystemArtifactStore();
         private readonly ILoopConsole console = new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null);
+        private readonly SessionSpineRecorder sessionRecorder = new(_persistence);
+        private IAgentRuntime? recordingRuntime;
         private IAgentSession? planAuthoringSession;
         private DecisionSession? executeDecisionSession;
         private IAgentSession? executionSession;
@@ -826,11 +839,24 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private IReadOnlyList<string> completionRecoveryEvidencePaths = [];
         private CompletionCertificationResult? completionCertificationResult;
 
+        private PromptExecutionContext CurrentExecutionContext { get; set; } = PromptExecutionContext.Empty;
+
+        /// <summary>The agent runtime wrapped with best-effort causal-spine recording: one agent_sessions row
+        /// per underlying session open (one-shot or persistent, including sessions opened inside DecisionSession
+        /// and the helper prompt runners), one agent_turns row per completed AgentTurnResult.</summary>
+        private IAgentRuntime? Runtime =>
+            _agentRuntime is null
+                ? null
+                : recordingRuntime ??= new RecordingAgentRuntime(_agentRuntime, this);
+
         public async Task<PromptExecutionResult> ExecuteAsync(
             WorkflowTransitionDefinition definition,
             RenderedPrompt prompt,
+            PromptExecutionContext context,
             CancellationToken cancellationToken)
         {
+            CurrentExecutionContext = context;
+
             if (LocalVerificationTransitions.Supports(definition))
             {
                 return new PromptExecutionResult(
@@ -950,7 +976,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             try
             {
-                AgentTurnResult result = await _agentRuntime.RunOneShotAsync(
+                AgentTurnResult result = await Runtime!.RunOneShotAsync(
                     AgentSpecs.Operational(_repository, AgentEffortLevel.High, "xhigh"),
                     prompt.Text,
                     onChunk: null,
@@ -1054,7 +1080,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             IAgentSession? session = null;
             try
             {
-                session = await _agentRuntime.OpenSessionAsync(AgentSpecs.Review(_repository), cancellationToken);
+                session = await Runtime!.OpenSessionAsync(AgentSpecs.Review(_repository), cancellationToken);
                 AgentTurnResult result = await session.RunTurnAsync(
                     prompt.Text,
                     onChunk: null,
@@ -1102,7 +1128,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             {
                 if (session is not null)
                 {
-                    await _agentRuntime.CloseSessionAsync(session);
+                    await Runtime!.CloseSessionAsync(session);
                 }
             }
         }
@@ -1117,7 +1143,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 new ProjectionManifestStore(artifacts),
                 new ProjectionValidator(registry),
                 new ProjectionPromptRunner(
-                    _agentRuntime ?? throw new InvalidOperationException("Projection prompt runner requires an agent runtime."),
+                    Runtime ?? throw new InvalidOperationException("Projection prompt runner requires an agent runtime."),
                     _repository,
                     new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null)));
         }
@@ -1159,7 +1185,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             try
             {
-                session = await _agentRuntime.OpenSessionAsync(
+                session = await Runtime!.OpenSessionAsync(
                     AgentSpecs.ScopedArtifactOperation(_repository, AgentEffortLevel.High, "xhigh", profile),
                     cancellationToken);
                 AgentTurnResult result = await session.RunTurnAsync(
@@ -1235,7 +1261,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             {
                 if (session is not null)
                 {
-                    await _agentRuntime.CloseSessionAsync(session);
+                    await Runtime!.CloseSessionAsync(session);
                 }
             }
         }
@@ -1372,7 +1398,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         await ClosePlanSessionAsync();
                     }
 
-                    planAuthoringSession = await _agentRuntime.OpenSessionAsync(
+                    planAuthoringSession = await Runtime!.OpenSessionAsync(
                         AgentSpecs.PlanAuthoring(_repository),
                         cancellationToken);
                 }
@@ -1442,7 +1468,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             try
             {
                 executeDecisionSession ??= new DecisionSession(
-                    _agentRuntime,
+                    Runtime!,
                     new DecisionSessionRouter(),
                     CreateLoopArtifacts(),
                     console,
@@ -1519,7 +1545,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 string executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
                     ContinueExecution.Render(plan, details, decisions, "TODO"),
                     ImplementationFirstPromptPolicyComposer.ComposeDefault());
-                executionSession = await _agentRuntime!.OpenSessionAsync(
+                executionSession = await Runtime!.OpenSessionAsync(
                     AgentSpecs.Operational(
                         _repository,
                         AgentEffortLevel.Medium,
@@ -1900,7 +1926,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
-            var promptRunner = new AgentCompletionPromptRunner(_agentRuntime!, _repository);
+            var promptRunner = new AgentCompletionPromptRunner(Runtime!, _repository);
             var archiveService = new CompletedEpicArchiveService(artifactStore, promptRunner, completionObserver);
             var service = new CompletionCertificationService(
                 artifactStore,
@@ -2084,7 +2110,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private INonImplementationPostExecutionReviewService CreateNonImplementationPostExecutionReviewService()
         {
             var ledger = new NonImplementationReviewLedgerStore(artifactStore);
-            var runner = new AgentNonImplementationReviewRunner(_agentRuntime!, _repository);
+            var runner = new AgentNonImplementationReviewRunner(Runtime!, _repository);
             return new NonImplementationPostExecutionReviewService(
                 CreateBaselineStore(),
                 new NonImplementationArtifactClassifier(),
@@ -2095,7 +2121,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private INonImplementationCompletionReviewService CreateNonImplementationCompletionReviewService()
         {
             var ledger = new NonImplementationReviewLedgerStore(artifactStore);
-            var runner = new AgentNonImplementationReviewRunner(_agentRuntime!, _repository);
+            var runner = new AgentNonImplementationReviewRunner(Runtime!, _repository);
             return new NonImplementationCompletionReviewService(
                 new RepositoryChangeSetDetector(_processRunner, _repository),
                 new NonImplementationArtifactClassifier(),
@@ -2155,7 +2181,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             IAgentSession session = planAuthoringSession;
             planAuthoringSession = null;
-            await _agentRuntime.CloseSessionAsync(session);
+            await Runtime!.CloseSessionAsync(session);
         }
 
         private async ValueTask CloseExecutionSessionAsync()
@@ -2168,7 +2194,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             IAgentSession session = executionSession;
             executionSession = null;
-            await _agentRuntime.CloseSessionAsync(session);
+            await Runtime!.CloseSessionAsync(session);
         }
 
         private static string WithDiagnostics(string message, string? diagnostics) =>
@@ -2184,6 +2210,189 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             {
                 await executeDecisionSession.DisposeAsync();
                 executeDecisionSession = null;
+            }
+        }
+
+        /// <summary>Best-effort agent_sessions/agent_turns spine writes. Every method swallows store failures:
+        /// prompt execution must never fail because session evidence recording failed.</summary>
+        private sealed class SessionSpineRecorder(CanonicalWorkflowPersistenceStore _store)
+        {
+            public async Task<AgentSessionRecord?> TryBeginSessionAsync(
+                AgentSessionSpec spec,
+                PromptExecutionContext context,
+                CancellationToken cancellationToken)
+            {
+                try
+                {
+                    var record = new AgentSessionRecord(
+                        AgentSessionIdentity.New().Value,
+                        context.AttemptId,
+                        null,
+                        "codex",
+                        spec.ResumeThreadId,
+                        spec.Role.ToString(),
+                        spec.SessionId.Value.ToString("D"),
+                        DateTimeOffset.UtcNow,
+                        null);
+                    await _store.UpsertAgentSessionAsync(record, cancellationToken);
+                    return record;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            public async Task TryRecordTurnAsync(
+                AgentSessionRecord? session,
+                AgentTurnResult result,
+                CancellationToken cancellationToken)
+            {
+                if (session is null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await _store.AppendAgentTurnAsync(
+                        new AgentTurnRecord(
+                            TurnIdentity.New().Value,
+                            session.SessionId,
+                            result.TurnIndex,
+                            DateTimeOffset.UtcNow),
+                        cancellationToken);
+                }
+                catch
+                {
+                    // Duplicate turn indexes (resume edge) and store failures are tolerated silently.
+                }
+            }
+
+            public async Task TryCompleteSessionAsync(
+                AgentSessionRecord? session,
+                string? providerThreadId)
+            {
+                if (session is null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await _store.UpsertAgentSessionAsync(
+                        session with
+                        {
+                            ProviderThreadId = providerThreadId ?? session.ProviderThreadId,
+                            CompletedAt = DateTimeOffset.UtcNow,
+                        },
+                        CancellationToken.None);
+                }
+                catch
+                {
+                    // Session completion is supporting evidence only.
+                }
+            }
+        }
+
+        /// <summary>Wraps the real agent runtime so every underlying session open (including opens made by
+        /// DecisionSession and the helper prompt runners) records one agent_sessions row tied to the ambient
+        /// PromptExecutionContext, and every completed turn records one agent_turns row. A resumed session gets
+        /// a NEW row whose provider_thread_id is the resumed thread id.</summary>
+        private sealed class RecordingAgentRuntime(
+            IAgentRuntime _inner,
+            UnifiedPromptExecutor _executor) : IAgentRuntime
+        {
+            public async Task<IAgentSession> OpenSessionAsync(
+                AgentSessionSpec spec,
+                CancellationToken cancellationToken = default)
+            {
+                IAgentSession session = await _inner.OpenSessionAsync(spec, cancellationToken);
+                AgentSessionRecord? record = await _executor.sessionRecorder.TryBeginSessionAsync(
+                    spec,
+                    _executor.CurrentExecutionContext,
+                    cancellationToken);
+                return new RecordingAgentSession(session, _executor.sessionRecorder, record);
+            }
+
+            public async Task<AgentTurnResult> RunOneShotAsync(
+                AgentSessionSpec spec,
+                string prompt,
+                Func<AgentStreamChunk, Task>? onChunk = null,
+                CancellationToken cancellationToken = default)
+            {
+                AgentSessionRecord? record = await _executor.sessionRecorder.TryBeginSessionAsync(
+                    spec,
+                    _executor.CurrentExecutionContext,
+                    cancellationToken);
+                try
+                {
+                    AgentTurnResult result = await _inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
+                    await _executor.sessionRecorder.TryRecordTurnAsync(record, result, cancellationToken);
+                    return result;
+                }
+                finally
+                {
+                    await _executor.sessionRecorder.TryCompleteSessionAsync(record, providerThreadId: null);
+                }
+            }
+
+            public async ValueTask CloseSessionAsync(IAgentSession session)
+            {
+                if (session is RecordingAgentSession recording)
+                {
+                    await recording.CompleteAsync();
+                    await _inner.CloseSessionAsync(recording.Inner);
+                    return;
+                }
+
+                await _inner.CloseSessionAsync(session);
+            }
+        }
+
+        private sealed class RecordingAgentSession(
+            IAgentSession _inner,
+            SessionSpineRecorder _recorder,
+            AgentSessionRecord? _record) : IAgentSession
+        {
+            public IAgentSession Inner => _inner;
+
+            public SessionIdentity SessionId => _inner.SessionId;
+
+            public string RepositoryId => _inner.RepositoryId;
+
+            public SessionRole Role => _inner.Role;
+
+            public AgentSessionMode Mode => _inner.Mode;
+
+            public AgentProcessState State => _inner.State;
+
+            public int CompletedTurns => _inner.CompletedTurns;
+
+            public AgentTokenUsage TotalUsage => _inner.TotalUsage;
+
+            public string? ThreadId => _inner.ThreadId;
+
+            public async Task<AgentTurnResult> RunTurnAsync(
+                string prompt,
+                Func<AgentStreamChunk, Task>? onChunk = null,
+                CancellationToken cancellationToken = default)
+            {
+                AgentTurnResult result = await _inner.RunTurnAsync(prompt, onChunk, cancellationToken);
+                await _recorder.TryRecordTurnAsync(_record, result, cancellationToken);
+                return result;
+            }
+
+            public Task CancelAsync(CancellationToken cancellationToken = default) =>
+                _inner.CancelAsync(cancellationToken);
+
+            public Task CompleteAsync() =>
+                _recorder.TryCompleteSessionAsync(_record, _inner.ThreadId);
+
+            public async ValueTask DisposeAsync()
+            {
+                await CompleteAsync();
+                await _inner.DisposeAsync();
             }
         }
     }

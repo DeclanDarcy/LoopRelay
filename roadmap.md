@@ -397,10 +397,26 @@ sidecar.
 store (replaceable mechanism, not an authority); collaboration file *content*
 is out of scope here — it is filesystem-authoritative with git provenance
 (§3.5); one active run per workspace is the working assumption (concurrency
-deferred).
+deferred). Scoping (2026-07-10): the spine is **additive** — the name-keyed
+current-state tables remain the current-state projection (truthful under one
+active run) and are re-keyed no earlier than the kernel/read-model milestones;
+history unification is M4's. A run is one Run-command invocation; a lingering
+`Active` run found at the next start is marked `Interrupted` (evidence
+preserved). Attempts are 1:1 with transition executions until M9 introduces
+retries under the same transition run. Legacy 32-hex ids coexist with prefixed
+ULIDs; nothing may assume a single id format.
 
-**Open at spec time:** the identity model is the most irreversible artifact in
-the program — the owner rules on it when this milestone is specified.
+**Encoded decision (identity model, ruled 2026-07-10):** one causal identity
+spine of prefixed ULIDs — `ws_` workspace → `run_` run → `wfi_` workflow
+instance → `tr_` transition run → `att_` attempt → `ses_` session → `turn_`
+turn — stored as opaque TEXT, minted exactly once at the moment the durable
+record is written, every child row carrying its parent id. Catalog names
+(workflow/stage/transition/product/effect/gate) plus catalog version are
+references on instance rows, never instance identities. External identifiers
+(Codex ThreadId) are attributes of the session row, never primary ids. The
+ledger append sequence is the ordering authority; id sort order is diagnostic
+convenience only. Domain identities (decision `D####`, split families, epic
+forms) stay with their owning authorities; M12 import maps them.
 
 **Verification brief:** atomicity, restart, identity stability, and
 current-read consistency through the production composition.
@@ -851,12 +867,12 @@ merely because a workflow body did. Declaration-only debris goes at M0.
 | Rigor posture | Ephemeral epic-scoped instruments; agent best-effort verification; owner is acceptance authority; no CI, fixtures, cert tooling |
 | Evaluation | Agent-executed judgment is first-class; verdicts + evidence recorded; no purity mandate |
 | Catalog validation | Fail-closed at startup under M13 (convergence audit GAP-17/ACI-29) — supersedes the retirement audit's test/build-only disposition |
+| Identity model (M1) | Causal spine of prefixed ULIDs ws_→run_→wfi_→tr_→att_→ses_→turn_; minted once at durable-record time; catalog names are references, external ids are attributes; ledger sequence is the ordering authority |
 
 ### Open — resolved by owner prose ruling when the gating milestone is specified
 
 | Item | Gates |
 |---|---|
-| Identity model (workspace/run/workflow/transition/attempt/session/turn) | M1 |
 | Gate-outcome ↔ workflow-outcome mapping | M2 |
 | Prompt-policy profiles; unused-prompt retain/retire | M6 |
 | Cancellation salvage semantics | M9 |

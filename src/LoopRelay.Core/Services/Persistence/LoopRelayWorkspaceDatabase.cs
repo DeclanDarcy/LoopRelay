@@ -1,4 +1,5 @@
 using System.Globalization;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using Microsoft.Data.Sqlite;
 
@@ -9,7 +10,7 @@ namespace LoopRelay.Core.Services.Persistence;
 /// </summary>
 public static class LoopRelayWorkspaceDatabase
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public static string Resolve(Repository repository)
@@ -60,6 +61,34 @@ public static class LoopRelayWorkspaceDatabase
             );
             """,
             cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO workspace_identity (id, workspace_id, created_at)
+            SELECT 1, $workspace_id, $created_at
+            WHERE NOT EXISTS (
+                SELECT 1 FROM workspace_identity WHERE id = 1
+            );
+            """,
+            cancellationToken,
+            ("$workspace_id", WorkspaceIdentity.New().Value),
+            ("$created_at", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)));
+    }
+
+    public static async Task<string> ReadWorkspaceIdentityAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT workspace_id FROM workspace_identity WHERE id = 1;";
+        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
+        string? value = scalar is null or DBNull ? null : Convert.ToString(scalar, CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException("Workspace identity has not been seeded in the workspace database.");
+        }
+
+        return value;
     }
 
     private static async Task<int?> ReadExistingSchemaVersionAsync(
@@ -452,5 +481,72 @@ public static class LoopRelayWorkspaceDatabase
         CREATE INDEX IF NOT EXISTS idx_canonical_workflow_chain_runs_chain ON canonical_workflow_chain_runs(chain_identity, started_at);
         CREATE INDEX IF NOT EXISTS idx_session_telemetry_order
             ON session_telemetry_events(recorded_at, event_id);
+
+        CREATE TABLE IF NOT EXISTS workspace_identity(
+            id integer primary key check (id = 1),
+            workspace_id text not null,
+            created_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS runs(
+            run_id text primary key,
+            workspace_id text not null,
+            chain_identity text not null,
+            invocation_mode text not null,
+            status text not null,
+            started_at text not null,
+            completed_at text,
+            stop_reason text,
+            explanation text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS workflow_instances(
+            workflow_instance_id text primary key,
+            run_id text not null,
+            workflow_identity text not null,
+            catalog_version text not null,
+            status text not null,
+            started_at text not null,
+            completed_at text,
+            outcome text
+        );
+
+        CREATE TABLE IF NOT EXISTS attempts(
+            attempt_id text primary key,
+            transition_run_id text not null,
+            workflow_instance_id text not null,
+            run_id text not null,
+            attempt_index integer not null,
+            started_at text not null,
+            completed_at text,
+            outcome text,
+            unique(transition_run_id, attempt_index)
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_sessions(
+            session_id text primary key,
+            attempt_id text,
+            workspace_id text,
+            provider text not null,
+            provider_thread_id text,
+            role text not null,
+            legacy_session_guid text,
+            started_at text not null,
+            completed_at text
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_turns(
+            turn_id text primary key,
+            session_id text not null,
+            turn_index integer not null,
+            recorded_at text not null,
+            unique(session_id, turn_index)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_runs_workspace_started ON runs(workspace_id, started_at);
+        CREATE INDEX IF NOT EXISTS idx_workflow_instances_run ON workflow_instances(run_id);
+        CREATE INDEX IF NOT EXISTS idx_workflow_instances_workflow ON workflow_instances(workflow_identity, started_at);
+        CREATE INDEX IF NOT EXISTS idx_attempts_transition_run ON attempts(transition_run_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_sessions_attempt ON agent_sessions(attempt_id);
         """;
 }

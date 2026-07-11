@@ -1236,6 +1236,96 @@ public sealed class UnifiedCliCompositionTests
                 new WorkflowStageIdentity(stage),
                 new WorkflowTransitionIdentity(transition)));
 
+    [Fact]
+    public async Task Run_command_records_workflow_instance_and_attempt_rows_linked_to_the_run()
+    {
+        string repo = Directory.CreateTempSubdirectory("cc-cli-unified-run-spine").FullName;
+        await WriteAsync(repo, ".agents/epic.md", "# Epic");
+        await WriteAsync(repo, ".agents/specs/s1.md", "# Spec");
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = Path.GetFileName(repo),
+            Path = repo,
+        };
+        var invocation = new UnifiedCliInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.BoundedTraditional),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+
+        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        RunRecord run = Assert.Single(await store.ReadRunsAsync());
+        Assert.StartsWith("run_", run.RunId, StringComparison.Ordinal);
+        Assert.Equal(WorkflowStopReason.TransitionCompleted.ToString(), run.Status);
+        WorkflowInstanceRecord instance = Assert.Single(await store.ReadWorkflowInstancesAsync());
+        Assert.StartsWith("wfi_", instance.WorkflowInstanceId, StringComparison.Ordinal);
+        Assert.Equal(run.RunId, instance.RunId);
+        Assert.Equal(WorkflowIdentity.TraditionalRoadmap, instance.Workflow);
+        Assert.Equal("Stopped", instance.Status);
+        Assert.Equal(WorkflowStopReason.TransitionCompleted.ToString(), instance.Outcome);
+        Assert.NotNull(instance.CompletedAt);
+        AttemptRecord attempt = Assert.Single(await store.ReadAttemptsAsync());
+        Assert.StartsWith("att_", attempt.AttemptId, StringComparison.Ordinal);
+        Assert.StartsWith("tr_", attempt.TransitionRunId, StringComparison.Ordinal);
+        Assert.Equal(instance.WorkflowInstanceId, attempt.WorkflowInstanceId);
+        Assert.Equal(run.RunId, attempt.RunId);
+        Assert.Equal(1, attempt.AttemptIndex);
+        Assert.Equal(RuntimeOutcomeKind.Completed.ToString(), attempt.Outcome);
+        Assert.NotNull(attempt.CompletedAt);
+        CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync();
+        CanonicalTransitionRunRecord transitionRun = Assert.Single(snapshot.TransitionRuns);
+        Assert.Equal(transitionRun.RunId, attempt.TransitionRunId);
+    }
+
+    [Fact]
+    public async Task Prompt_transitions_record_agent_session_and_turn_rows()
+    {
+        string repo = Directory.CreateTempSubdirectory("cc-cli-unified-session-spine").FullName;
+        await WriteAsync(repo, ".agents/evals/e1.md", "# Eval Intent\n\nEvaluate the capability.");
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = Path.GetFileName(repo),
+            Path = repo,
+        };
+        var runtime = new FakeAgentRuntime(new MemoryArtifactStore());
+        EnqueueEvalOutput(runtime, "CreateEvalDependencyInventory", "# Dependency Inventory");
+        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository, runtime);
+
+        TransitionRuntimeResult select = await RunEvalAsync(composition, "Evaluation Foundation", "SelectEvaluationIntent");
+        TransitionRuntimeResult dependencies = await RunEvalAsync(composition, "Dependency Inventory", "CreateEvalDependencyInventory");
+
+        Assert.Equal(RuntimeOutcomeKind.Completed, select.Outcome);
+        Assert.True(dependencies.Outcome == RuntimeOutcomeKind.Completed, dependencies.Explanation);
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        AgentSessionRecord session = Assert.Single(await store.ReadAgentSessionsAsync());
+        Assert.StartsWith("ses_", session.SessionId, StringComparison.Ordinal);
+        Assert.Equal("codex", session.Provider);
+        Assert.Equal(SessionRole.OperationalExecution.ToString(), session.Role);
+        Assert.Null(session.ProviderThreadId);
+        Assert.True(Guid.TryParse(session.LegacySessionGuid, out Guid legacyGuid));
+        Assert.NotEqual(Guid.Empty, legacyGuid);
+        Assert.NotNull(session.CompletedAt);
+        CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync();
+        CanonicalTransitionRunRecord inventoryRun = Assert.Single(
+            snapshot.TransitionRuns,
+            item => item.Transition == new WorkflowTransitionIdentity("CreateEvalDependencyInventory"));
+        AttemptRecord attempt = Assert.Single(
+            await store.ReadAttemptsAsync(),
+            item => item.TransitionRunId == inventoryRun.RunId);
+        Assert.Equal(attempt.AttemptId, session.AttemptId);
+        AgentTurnRecord turn = Assert.Single(await store.ReadAgentTurnsAsync());
+        Assert.StartsWith("turn_", turn.TurnId, StringComparison.Ordinal);
+        Assert.Equal(session.SessionId, turn.SessionId);
+        Assert.Equal(1, turn.TurnIndex);
+    }
+
     private static Task<TransitionRuntimeResult> RunEvalAsync(
         UnifiedCliComposition composition,
         string stage,

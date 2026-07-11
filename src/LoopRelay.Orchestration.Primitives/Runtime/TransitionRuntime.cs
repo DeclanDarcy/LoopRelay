@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Workflows;
 
@@ -19,13 +21,16 @@ public sealed class TransitionRuntime(
     ITransitionBlockerStore? _blockerStore = null,
     ITransitionRecoveryStore? _recoveryStore = null,
     ITransitionGateEvaluationStore? _gateEvaluationStore = null,
-    ITransitionEffectStore? _effectStore = null) : ITransitionRuntime
+    ITransitionEffectStore? _effectStore = null,
+    IAttemptStore? _attemptStore = null) : ITransitionRuntime
 {
     public async Task<TransitionRuntimeResult> RunAsync(
         TransitionRuntimeRequest request,
         CancellationToken cancellationToken = default)
     {
-        string runId = Guid.NewGuid().ToString("N");
+        string runId = TransitionRunIdentity.New().Value;
+        string attemptId = AttemptIdentity.New().Value;
+        string? recordedAttemptId = null;
         WorkflowTransitionIdentity transitionIdentity = request.Transition;
         WorkflowTransitionDefinition? resolvedDefinition = null;
         GateResult? inputGate = null;
@@ -83,7 +88,16 @@ public sealed class TransitionRuntime(
                 cancellationToken);
             DateTimeOffset startedAt = DateTimeOffset.UtcNow;
             await _runStore.PersistStartedAsync(
-                new TransitionRunStarted(runId, startedAt, request, definition, context.InputSnapshot, renderedPrompt),
+                new TransitionRunStarted(
+                    runId,
+                    startedAt,
+                    request,
+                    definition,
+                    context.InputSnapshot,
+                    renderedPrompt,
+                    request.Run?.Value,
+                    request.WorkflowInstance?.Value,
+                    attemptId),
                 cancellationToken);
             await _evidenceStore.RecordEventAsync(
                 new TransitionEvidenceEvent(
@@ -96,10 +110,24 @@ public sealed class TransitionRuntime(
                     [renderedPrompt.EvidenceLocation, context.InputSnapshot.Hash]),
                 cancellationToken);
 
+            recordedAttemptId = attemptId;
+            await TryPersistAttemptStartedAsync(
+                new AttemptRecord(
+                    attemptId,
+                    runId,
+                    request.WorkflowInstance?.Value ?? string.Empty,
+                    request.Run?.Value ?? string.Empty,
+                    1,
+                    startedAt,
+                    null,
+                    null),
+                cancellationToken);
+
             var stopwatch = Stopwatch.StartNew();
             PromptExecutionResult executionResult = await _promptExecutor.ExecuteAsync(
                 definition,
                 renderedPrompt,
+                new PromptExecutionContext(request.Run?.Value, request.WorkflowInstance?.Value, runId, attemptId),
                 cancellationToken);
             stopwatch.Stop();
 
@@ -107,12 +135,13 @@ public sealed class TransitionRuntime(
             {
                 return await CancelledAsync(
                     runId,
+                    recordedAttemptId,
                     request,
                     definition,
                     definition.Identity,
                     inputGate,
                     "Prompt execution reported cancellation.",
-                    cancellationToken);
+                    CancellationToken.None);
             }
 
             await _evidenceStore.RecordRawOutputAsync(
@@ -147,6 +176,7 @@ public sealed class TransitionRuntime(
                     []);
                 await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
                 await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
+                await TryPersistAttemptCompletedAsync(recordedAttemptId, result.Outcome, cancellationToken);
                 return result;
             }
 
@@ -180,6 +210,7 @@ public sealed class TransitionRuntime(
                 await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
                 await TryRecordEventAsync(runId, definition.Identity, result.DurableState, "TransitionOutputInvalid", result.Explanation, result.Evidence, cancellationToken);
                 await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
+                await TryPersistAttemptCompletedAsync(recordedAttemptId, result.Outcome, cancellationToken);
                 return result;
             }
 
@@ -204,6 +235,7 @@ public sealed class TransitionRuntime(
                 await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
                 await TryRecordEventAsync(runId, definition.Identity, result.DurableState, "TransitionProductInvalid", result.Explanation, result.Evidence, cancellationToken);
                 await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
+                await TryPersistAttemptCompletedAsync(recordedAttemptId, result.Outcome, cancellationToken);
                 return result;
             }
 
@@ -251,6 +283,7 @@ public sealed class TransitionRuntime(
                     result.Evidence,
                     cancellationToken);
                 await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
+                await TryPersistAttemptCompletedAsync(recordedAttemptId, result.Outcome, cancellationToken);
                 return result;
             }
 
@@ -294,6 +327,7 @@ public sealed class TransitionRuntime(
                     completed.Explanation,
                     completed.Evidence),
                 cancellationToken);
+            await TryPersistAttemptCompletedAsync(recordedAttemptId, completed.Outcome, cancellationToken);
 
             return completed;
         }
@@ -301,6 +335,7 @@ public sealed class TransitionRuntime(
         {
             return await CancelledAsync(
                 runId,
+                recordedAttemptId,
                 request,
                 resolvedDefinition,
                 transitionIdentity,
@@ -333,6 +368,7 @@ public sealed class TransitionRuntime(
                 result.Evidence,
                 CancellationToken.None);
             await TryRecordRecoveryMarkerAsync(runId, request, resolvedDefinition, transitionIdentity, result, CancellationToken.None);
+            await TryPersistAttemptCompletedAsync(recordedAttemptId, result.Outcome, CancellationToken.None);
             return result;
         }
         catch (Exception exception)
@@ -352,12 +388,14 @@ public sealed class TransitionRuntime(
                 explanation,
                 []);
             await TryRecordRecoveryMarkerAsync(runId, request, resolvedDefinition, transitionIdentity, result, CancellationToken.None);
+            await TryPersistAttemptCompletedAsync(recordedAttemptId, result.Outcome, CancellationToken.None);
             return result;
         }
     }
 
     private async Task<TransitionRuntimeResult> CancelledAsync(
         string runId,
+        string? attemptId,
         TransitionRuntimeRequest request,
         WorkflowTransitionDefinition? definition,
         WorkflowTransitionIdentity transition,
@@ -379,7 +417,48 @@ public sealed class TransitionRuntime(
             explanation,
             []);
         await TryRecordRecoveryMarkerAsync(runId, request, definition, transition, result, cancellationToken);
+        await TryPersistAttemptCompletedAsync(attemptId, result.Outcome, cancellationToken);
         return result;
+    }
+
+    private async Task TryPersistAttemptStartedAsync(
+        AttemptRecord attempt,
+        CancellationToken cancellationToken)
+    {
+        if (_attemptStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _attemptStore.PersistAttemptStartedAsync(attempt, cancellationToken);
+        }
+        catch
+        {
+            // Attempt persistence is supporting evidence; the transition result remains authoritative.
+        }
+    }
+
+    private async Task TryPersistAttemptCompletedAsync(
+        string? attemptId,
+        RuntimeOutcomeKind outcome,
+        CancellationToken cancellationToken)
+    {
+        if (_attemptStore is null || attemptId is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Terminal attempt evidence must survive a fired token; the store write always runs uncancelled.
+            await _attemptStore.PersistAttemptCompletedAsync(attemptId, DateTimeOffset.UtcNow, outcome.ToString(), CancellationToken.None);
+        }
+        catch
+        {
+            // Attempt persistence is supporting evidence; the transition result remains authoritative.
+        }
     }
 
     private async Task TryPersistStateAsync(
