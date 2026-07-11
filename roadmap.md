@@ -649,8 +649,70 @@ policy sections; rendered provenance that **embeds the read receipts of every
 collaboration file that fed the prompt** — any agent invocation is reproducible
 from (prompt version, policy identity, input commits and hashes).
 
-**Open at spec time (from D6):** prompt-policy profiles per workflow; retain or
-retire the audited unused-but-substantial prompts.
+**Owner rulings (2026-07-11, resolving the D6 open items):** no prompt-policy
+profile mechanism — the implementation-first policy text is **template-owned
+and unconditional**: both artifactPolicy Allow toggles are removed and the
+formerly conditional text is promoted into the prompt templates directly, so
+the generated template SourceHash is the policy-complete prompt version by
+construction. The ten `Prompts/NonImplementation` fragment files retire with
+their legacy Roadmap.Cli consumers (composer, section sets,
+RoadmapRuntimePromptPolicy), which also closes the audited C-16 parity gap —
+the five epic templates' policy holes, previously sent to agents as raw
+unfilled braces on the unified path, now carry the fragments' default-policy
+content verbatim. All other unused prompts are **retained** (owner has
+near-future plans): the extensionless `Planning/CreateNewRoadmap` stays
+uncompiled and owner-reserved for the M17 full-roadmap-generation ruling, and
+the three stub Eval templates (UpdateDependencyInventory,
+UpdateHypothesisInventory, UpdateRoadmap) stay registered and wired with
+content authoring owner-pending. M17's remaining ruling shrinks to
+full-roadmap generation intent — the roadmap prompt-policy profile question
+dissolved with the fragments.
+
+**Encoded decisions (within-doctrine, at implementation):** the flattened
+policy section adopts evidence-gated wording ("non-implementation deliverables
+require a structured explicit HITL request captured for the exact deliverable")
+— behavior-identical to the removed default (the capture service is unwired in
+the nucleus, so no request can exist), coherent without a toggle, and still
+correct when the Plan/Roadmap bodies wire capture at M17–M19; a pin test holds
+the complete canonical section in all twelve policy-owning templates and ties
+its marker line to the capture service's heading constant. Policy schema bumps
+to **policy-v2** (the artifactPolicy field set is gone; a settings file or
+`--policy` override naming a retired key rejects loudly as unknown; the
+`pol_v1_` id prefix versions the hash scheme, not the field set, which lives
+inside the hashed JSON). The three post-render policy appends and the
+adversarial-review renderer's seven inline instruction literals are gone —
+appended/injected text now lives in the templates; the decision session's
+operational-context string-prepend became a declared `{operationalContext}`
+template hole; the implementation-slice/StartExecution "TODO" placeholder hole
+was replaced by the embedded section. Schema v8 adds the append-only
+`canonical_rendered_prompts` fact (rp_ ULID; template source hash, rendered
+text + sha256, consumed-input manifest, policy identity, causal lineage; rowid
+reads; pre-v8 guards) and additive `agent_sessions.effort/sandbox` evidence
+columns (declared spec profiles; guarded ALTERs; migrations rewrite no fact
+rows). **Facts are minted at the send site, never the render seam** — a
+canonical render an executor branch discards and re-composes is never recorded
+as an agent-bound prompt: minted at the one-shot/read-only/scoped/warm-session
+executors (consumed-input manifest handed over via the execution context), the
+decision session's proposal and transfer-family turns, the implementation
+slice, both handoff branches, the completion, projection, and
+non-implementation-review runners. `.gitattributes` pins `*.prompt` to LF so
+template hashes are checkout-independent. The legacy Roadmap.Cli transition
+journal keeps prompt-version identity as `template-owned-v1` (template source
+hash), replacing the retired composer-based identity. A prompt-asset ownership
+registry test pins all 50 assets to registered owners with bidirectional
+set equality; the unwired-prompt renderer fallback names its unwired state
+honestly and the executor fails closed before any send. Deferred with owners:
+session/turn linkage on rendered facts, template-hash linkage for
+runner-shaped sends, uniform per-send gateway capture (incl. the legacy loop's
+StartExecution and provider transport normalization such as the trailing
+newline the agent session appends) to M7 Runtime Authority; the
+non-implementation reviewers' C#-injected payload instructions (pre-existing:
+recorded in full in rendered facts as of M6, but outside template identity,
+and disposition reuse keys on template hash alone) to M7 with the reuse-key
+question flagged for M15/M16; a production reader for the rendered-prompt
+ledger to M16; renderer-owned framing (`Environment.NewLine` joins around
+hashed templates — rendered_text is recorded verbatim, so verification is
+unaffected) accepted as-is until M7 gateway capture.
 
 **Verification brief:** zero unowned prompt assets; rendered output is a pure
 function of recorded identity and inputs.
@@ -995,16 +1057,16 @@ merely because a workflow body did. Declaration-only debris goes at M0.
 | Catalog validation | Fail-closed at startup under M13 (convergence audit GAP-17/ACI-29) — supersedes the retirement audit's test/build-only disposition |
 | Identity model (M1) | Causal spine of prefixed ULIDs ws_→run_→wfi_→tr_→att_→ses_→turn_; minted once at durable-record time; catalog names are references, external ids are attributes; ledger sequence is the ordering authority |
 | Gate↔workflow outcome mapping (M2) | Five gate statuses (no Blocked); Waiting/Ambiguous map to themselves, Invalid→Failed; Unsatisfied position-sensitive: entry→specific cannot-proceed label (missing-required-input, storage-unusable), exit→Failed. Generic "blocked" vocabulary banned system-wide; cannot-proceed outcomes are derived, never latched (satisfy the gate to proceed); no unblock command; the blocker entity retires — warnings (category, concern, remediation) replace it everywhere |
+| Prompt policy & unused prompts (M6) | Ruled 2026-07-11: NO profile mechanism — implementation-first policy text is template-owned and unconditional; both artifactPolicy Allow toggles removed (policy-v2); the ten NonImplementation fragments retire with their legacy consumers; all other unused prompts retained (CreateNewRoadmap owner-reserved for M17; three Eval stubs registered, content owner-pending) |
 
 ### Open — resolved by owner prose ruling when the gating milestone is specified
 
 | Item | Gates |
 |---|---|
-| Prompt-policy profiles; unused-prompt retain/retire | M6 |
 | Cancellation salvage semantics | M9 |
 | Interaction timeout/default policy; isolation depth; trust evidence disposition | M10 |
 | Completion block/failure mapping; resume cleanup | M15 |
-| Full-roadmap generation intent; roadmap prompt-policy profile | M17 |
+| Full-roadmap generation intent (roadmap prompt-policy profile dissolved by the M6 ruling) | M17 |
 | Plan restart semantics under Codex capabilities | M18 |
 | First-run sequencing; review order | M19 |
 

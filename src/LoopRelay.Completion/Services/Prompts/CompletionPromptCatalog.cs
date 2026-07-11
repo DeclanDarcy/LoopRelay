@@ -24,4 +24,23 @@ public static class CompletionPromptCatalog
                 invocation.RuntimePromptName,
                 "Unknown completion runtime prompt."),
         };
+
+    // The build-time source hash of the template behind a runtime prompt: with policy text
+    // template-owned, this hash is the policy-complete prompt version recorded in evidence.
+    public static string TemplateSourceHash(string runtimePromptName) =>
+        runtimePromptName switch
+        {
+            CompletionRuntimePromptNames.CreateRoadmapCompletionContext =>
+                Core.Prompts.Planning.CreateRoadmapCompletionContext.SourceHash,
+            CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift =>
+                Core.Prompts.Planning.EvaluateEpicCompletionAndDrift.SourceHash,
+            CompletionRuntimePromptNames.SynthesizeCompletedEpic =>
+                Core.Prompts.Planning.SynthesizeCompletedEpic.SourceHash,
+            CompletionRuntimePromptNames.UpdateRoadmapCompletionContext =>
+                Core.Prompts.Planning.UpdateRoadmapCompletionContext.SourceHash,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(runtimePromptName),
+                runtimePromptName,
+                "Unknown completion runtime prompt."),
+        };
 }

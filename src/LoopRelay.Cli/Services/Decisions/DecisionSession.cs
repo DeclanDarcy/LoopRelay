@@ -14,9 +14,9 @@ using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Primitives;
+using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models.Context;
@@ -50,14 +50,18 @@ internal sealed class DecisionSession(
     IDecisionSessionResumeStore? _resumeStore = null,
     IProjectContextProjectionService? _projectionService = null,
     bool _resumeEnabled = true,
-    string? _promptPolicy = null,
     ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = null,
     int _operationalContextGrowthStreakWarningThreshold =
-        OperationalPolicyResolver.DefaultOperationalContextGrowthWarningStreak) : IAsyncDisposable
+        OperationalPolicyResolver.DefaultOperationalContextGrowthWarningStreak,
+    IRenderedPromptStore? _renderedPromptStore = null,
+    string? _policyIdentity = null) : IAsyncDisposable
 {
     private IAgentSession? session;
     private bool seeded;
     private bool resumeAttempted;
+    // Causal lineage of the transition currently driving this session; rendered-prompt facts
+    // minted by any turn in the pass (proposal or transfer family) carry it.
+    private LoopHistoryLineage? currentLineage;
 
     // Operational-context size-health state (Stage 2, mirrors RepositoryOrchestrator). Single-threaded, no lock.
     private int? previousOperationalContextSize;
@@ -75,6 +79,7 @@ internal sealed class DecisionSession(
 
     public async Task RunAsync(CancellationToken cancellationToken, LoopHistoryLineage? historyLineage = null)
     {
+        currentLineage = historyLineage;
         DecisionRoute route = _router.Evaluate(BuildRouterInputs());
         // Eligibility downgrade: a Transfer needs a primed warm process to extract a delta from.
         if (route == DecisionRoute.Transfer && !seeded)
@@ -91,8 +96,11 @@ internal sealed class DecisionSession(
 
         session ??= await OpenOrResumeSessionAsync(cancellationToken);
 
-        (string? handoff, _) = await _artifacts.ReadLatestHandoffAsync();
-        string proposalPrompt = await BuildProposalPromptAsync(handoff, cancellationToken);
+        (string? handoff, string? handoffPath) = await _artifacts.ReadLatestHandoffAsync();
+        ProposalPrompt proposal = await BuildProposalPromptAsync(handoff, handoffPath, cancellationToken);
+        string proposalPrompt = proposal.Prompt;
+        await TryAppendRenderedPromptAsync(
+            proposal.PromptIdentity, proposal.TemplateSourceHash, proposal.Prompt, proposal.ConsumedInputs);
 
         // Own phase header so post-transfer proposal output no longer prints under the last
         // "Decision: Transfer/…" header.
@@ -135,30 +143,88 @@ internal sealed class DecisionSession(
     // authors the NEXT agent's, folding in the previous session's handoff. A FRESH process is also primed with
     // the operational context in this same turn (there is no separate seed) — a WARM process already carries it
     // from its first proposal, so its later proposals send only the handoff delta.
-    private async Task<string> BuildProposalPromptAsync(string? handoff, CancellationToken cancellationToken)
+    // One composed proposal prompt plus the identity evidence needed to append its
+    // rendered-prompt fact: the generated template it came from (whose build-time source hash is
+    // the policy-complete prompt version) and the collaboration files whose content fed the holes.
+    private sealed record ProposalPrompt(
+        string Prompt,
+        string PromptIdentity,
+        string TemplateSourceHash,
+        IReadOnlyList<ConsumedInputFile> ConsumedInputs);
+
+    private async Task<ProposalPrompt> BuildProposalPromptAsync(
+        string? handoff,
+        string? handoffPath,
+        CancellationToken cancellationToken)
     {
+        // Warm process: the projection and operational context are already in this process's history,
+        // so both declared template holes render empty and the turn carries only the handoff delta.
         string decisionSessionProjection = seeded
             ? string.Empty
             : (await EnsureDecisionProjectionAsync(cancellationToken)).Content;
-        string baseline = handoff is null
-            ? GenerateSystemPromptForFirstExecutionAgent.Render(decisionSessionProjection)
-            : GenerateSystemPromptForNextExecutionAgent.Render(decisionSessionProjection, handoff);
-        baseline = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(baseline, (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
-
-        if (seeded)
+        string operationalContext = string.Empty;
+        List<ConsumedInputFile> consumedInputs = [];
+        if (!seeded)
         {
-            return baseline; // warm process: the projection and operational context are already in this process's history
+            await _artifacts.EnsureOperationalContextAsync();
+            operationalContext = await _artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
+            consumedInputs.Add(ConsumedInputFile.FromContent(OrchestrationArtifactPaths.OperationalContext, operationalContext));
+
+            if (string.IsNullOrWhiteSpace(operationalContext))
+            {
+                _console.Warn("Operational context is empty — the decision agent has no context to work from.");
+            }
         }
 
-        await _artifacts.EnsureOperationalContextAsync();
-        string operationalContext = await _artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
-
-        if (string.IsNullOrWhiteSpace(operationalContext))
+        if (handoff is not null)
         {
-            _console.Warn("Operational context is empty — the decision agent has no context to work from.");
+            consumedInputs.Add(ConsumedInputFile.FromContent(handoffPath ?? OrchestrationArtifactPaths.LiveHandoff, handoff));
         }
 
-        return $"{operationalContext}\n\n{baseline}";
+        return handoff is null
+            ? new ProposalPrompt(
+                GenerateSystemPromptForFirstExecutionAgent.Render(operationalContext, decisionSessionProjection),
+                "GenerateSystemPromptForFirstExecutionAgent",
+                GenerateSystemPromptForFirstExecutionAgent.SourceHash,
+                consumedInputs)
+            : new ProposalPrompt(
+                GenerateSystemPromptForNextExecutionAgent.Render(operationalContext, decisionSessionProjection, handoff),
+                "GenerateSystemPromptForNextExecutionAgent",
+                GenerateSystemPromptForNextExecutionAgent.SourceHash,
+                consumedInputs);
+    }
+
+    // Minted at the SEND site for every agent-bound prompt this session composes: the proposal
+    // turns and the transfer-family template turns (delta, context evolution, optimization).
+    private async Task TryAppendRenderedPromptAsync(
+        string promptIdentity,
+        string templateSourceHash,
+        string renderedText,
+        IReadOnlyList<ConsumedInputFile> consumedInputs)
+    {
+        if (_renderedPromptStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _renderedPromptStore.AppendAsync(
+                new RenderedPromptCapture(
+                    currentLineage?.TransitionRunId ?? string.Empty,
+                    currentLineage?.AttemptId,
+                    promptIdentity,
+                    templateSourceHash,
+                    renderedText,
+                    consumedInputs,
+                    _policyIdentity,
+                    DateTimeOffset.UtcNow),
+                CancellationToken.None);
+        }
+        catch
+        {
+            // Rendered-prompt persistence is supporting evidence; failing to append must not fail the decision turn.
+        }
     }
 
     /// <summary>
@@ -251,6 +317,8 @@ internal sealed class DecisionSession(
     {
         _console.Phase("Decision: Transfer/ProduceOperationalDelta");
         var deltaRenderer = new ConsoleTurnRenderer(_console);
+        await TryAppendRenderedPromptAsync(
+            "ProduceOperationalDelta", ProduceOperationalDelta.SourceHash, ProduceOperationalDelta.Text, []);
         AgentTurnResult delta = await session!.RunTurnAsync(
             ProduceOperationalDelta.Text, deltaRenderer.Stream, cancellationToken);
         if (delta.State != AgentTurnState.Completed)
@@ -324,6 +392,10 @@ internal sealed class DecisionSession(
             RequiredOutputs: [OrchestrationArtifactPaths.OperationalContext],
             ChangedGuard: OrchestrationArtifactPaths.OperationalContext);
 
+        // The delta reaches the agent through its scoped file access, not through the prompt
+        // text, so the fact records the pure template send with no embedded inputs.
+        await TryAppendRenderedPromptAsync(
+            "UpdateOperationalContext", UpdateOperationalContext.SourceHash, UpdateOperationalContext.Text, []);
         return await RunArtifactOperationAsync(
             operation,
             "Transfer left no operational_context.md to seed the next decision session from.",
@@ -365,6 +437,8 @@ internal sealed class DecisionSession(
             RequiredOutputs: [OrchestrationArtifactPaths.OperationalContext],
             ChangedGuard: null);
 
+        await TryAppendRenderedPromptAsync(
+            "OptimizeOperationalDocuments", OptimizeOperationalDocuments.SourceHash, OptimizeOperationalDocuments.Text, []);
         AgentTurnResult optimize = await RunArtifactOperationAsync(
             operation,
             "Optimization left no operational_context.md to seed the next decision session from.",

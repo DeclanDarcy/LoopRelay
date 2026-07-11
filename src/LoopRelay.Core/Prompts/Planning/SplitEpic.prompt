@@ -159,9 +159,47 @@ If the repository suggests the projection is stale:
 
 ---
 
-{splitEpicImplementationFirstGuidance}
+# SplitEpic Implementation-First Guidance
 
-{splitEpicAuxiliaryArtifactLimits}
+SplitEpic is implementation-first because it creates the machine-consumed split bundle that partitions one strategic opportunity into implementation-bearing child epics.
+
+The sanctioned output boundary is the split bundle consumed by the split transition.
+
+The bundle includes the split plan and `# FILE: .agents/epic-N.md` child epic sections required by the prompt contract.
+
+Child epic files are primary contracted outputs, not invalid auxiliary artifacts.
+
+The bundle is valid because it supplies capability partitioning, coverage proof, non-overlap evidence, sibling dependencies, split lineage input, and selected-child promotion input.
+
+Each child epic should follow the CreateNewEpic authoring standard at the concept level: complete strategic purpose, desired capability, repository grounding, scope, non-goals, assumptions, dependencies, constraints, acceptance criteria, risks, milestone roadmap, and implementation-ready completion signals.
+
+SplitEpic owns the capability partition.
+
+It must prove coverage of the original opportunity, prevent overlapping ownership, define sibling dependencies, and preserve selected-child promotion semantics.
+
+Splits are invalid when they merely divide planning phases, file areas, implementation layers, task lists, or work breakdowns.
+
+If the proposal cannot be decomposed into coherent capability-owning child epics, output the documented `# Split Epic Blocked` response.
+
+# SplitEpic Auxiliary Artifact Limits
+
+For SplitEpic, the split bundle is the implementation-bearing operational artifact.
+
+The split plan and `# FILE: .agents/epic-N.md` child epic sections are primary contracted output because downstream services parse them, persist split lineage, capture HITL evidence, validate child epics, and promote the selected child.
+
+Do not create companion inventories, RFCs, governance notes, research documents, design reports, explanatory appendices, migration reports, readiness reports, or certification notes unless the user explicitly requests them or an existing machine-consumed contract requires them.
+
+Do not move coverage proof, dependency reasoning, overlap prevention, or selection rationale into a side document.
+
+Those details belong inside the split bundle to the degree that they affect child epic capability boundaries, dependencies, validation, lineage, or promotion.
+
+Do not create task splits, file-area splits, layer splits, phase splits, or work-item lists as auxiliary artifacts.
+
+The blocked response `# Split Epic Blocked` replaces the split bundle for that run.
+
+It does not authorize extra explanation files.
+
+Output only the final split bundle or the documented blocked response unless the user explicitly requests another machine-consumed artifact.
 
 ---
 

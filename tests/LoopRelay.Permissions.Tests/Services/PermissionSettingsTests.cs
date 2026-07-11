@@ -21,10 +21,6 @@ public sealed class PermissionSettingsTests
         PermissionPolicyOptions policy = result.Permissions;
 
         Assert.Equal("v1", policy.FingerprintVersion);
-        Assert.False(result.Policy.AllowHitlRequestedNonImplementationFiles);
-        Assert.False(result.Policy.AllowAuxiliaryNonImplementationFiles);
-        Assert.True(Object(DefaultSettings(), "artifactPolicy").ContainsKey("allowHitlRequestedNonImplementationFiles"));
-        Assert.True(Object(DefaultSettings(), "artifactPolicy").ContainsKey("allowAuxiliaryNonImplementationFiles"));
 
         AssertAllowed(policy, "pwd");
         AssertAllowed(policy, "git status");
@@ -107,66 +103,19 @@ public sealed class PermissionSettingsTests
     }
 
     [Fact]
-    public void Missing_artifact_policy_section_loads_as_unconfigured()
+    public void Retired_artifact_policy_section_is_rejected()
     {
+        // policy-v2 (M6 owner ruling): the implementation-first prompt policy is template-owned
+        // and unconditional, so the artifactPolicy section no longer exists. A settings file
+        // that still carries it rejects as an unknown top-level key instead of being silently
+        // ignored — the same posture as any other configured value with no production effect.
         JsonObject settings = DefaultSettings();
-        settings.Remove("artifactPolicy");
+        settings["artifactPolicy"] = new JsonObject
+        {
+            ["allowHitlRequestedNonImplementationFiles"] = false,
+        };
 
-        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
-
-        Assert.Null(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
-        Assert.Null(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
-    }
-
-    [Fact]
-    public void Missing_artifact_policy_flags_load_as_unconfigured()
-    {
-        // Defaults are owned by the policy resolver, not the loader: an unconfigured flag loads
-        // as null so provenance can distinguish workspace config from built-in defaults.
-        JsonObject settings = DefaultSettings();
-        settings["artifactPolicy"] = new JsonObject();
-
-        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
-
-        Assert.Null(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
-        Assert.Null(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
-    }
-
-    [Fact]
-    public void Loader_reads_enabled_hitl_requested_non_implementation_mode()
-    {
-        JsonObject settings = DefaultSettings();
-        Object(settings, "artifactPolicy")["allowHitlRequestedNonImplementationFiles"] = true;
-
-        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
-
-        Assert.True(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
-        Assert.False(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
-    }
-
-    [Fact]
-    public void Loader_reads_enabled_auxiliary_non_implementation_mode()
-    {
-        JsonObject settings = DefaultSettings();
-        Object(settings, "artifactPolicy")["allowAuxiliaryNonImplementationFiles"] = true;
-
-        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
-
-        Assert.False(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
-        Assert.True(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
-    }
-
-    [Fact]
-    public void Artifact_policy_flags_are_independent()
-    {
-        JsonObject settings = DefaultSettings();
-        Object(settings, "artifactPolicy")["allowHitlRequestedNonImplementationFiles"] = true;
-        Object(settings, "artifactPolicy")["allowAuxiliaryNonImplementationFiles"] = true;
-
-        CliSettingsLoadResult loaded = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
-
-        Assert.True(loaded.Policy.AllowHitlRequestedNonImplementationFiles);
-        Assert.True(loaded.Policy.AllowAuxiliaryNonImplementationFiles);
+        Assert.Throws<CliSettingsException>(() => CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
     }
 
     [Fact]

@@ -18,6 +18,7 @@ using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationLedger;
@@ -44,6 +45,52 @@ public class DecisionSessionTests
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
+
+    private sealed class RecordingRenderedPromptStore : IRenderedPromptStore
+    {
+        public List<RenderedPromptCapture> Captures { get; } = [];
+
+        public Task AppendAsync(RenderedPromptCapture capture, CancellationToken cancellationToken)
+        {
+            Captures.Add(capture);
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task Proposal_turn_appends_a_rendered_prompt_fact_with_template_hash_and_consumed_inputs()
+    {
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = new LoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var renderedPrompts = new RecordingRenderedPromptStore();
+        var session = new DecisionSession(
+            rt,
+            new DecisionSessionRouter(),
+            art,
+            con,
+            repo,
+            _renderedPromptStore: renderedPrompts,
+            _policyIdentity: "pol_v1_0123456789abcdef0123456789abcdef");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("FIRST-SYS-PROMPT")));
+
+        await session.RunAsync(CancellationToken.None, new LoopHistoryLineage("run_1", "tr_1", "att_1"));
+
+        RenderedPromptCapture capture = Assert.Single(renderedPrompts.Captures);
+        Assert.Equal("tr_1", capture.TransitionRunId);
+        Assert.Equal("att_1", capture.AttemptId);
+        Assert.Equal("GenerateSystemPromptForFirstExecutionAgent", capture.PromptIdentity);
+        Assert.Equal(GenerateSystemPromptForFirstExecutionAgent.SourceHash, capture.TemplateSourceHash);
+        Assert.Contains("OPCTX", capture.RenderedText);
+        ConsumedInputFile consumed = Assert.Single(capture.ConsumedInputs);
+        Assert.Equal(OrchestrationArtifactPaths.OperationalContext, consumed.Path);
+        Assert.Equal(ConsumedInputFile.HashContent("OPCTX"), consumed.Sha256);
+        Assert.Equal("pol_v1_0123456789abcdef0123456789abcdef", capture.PolicyId);
+        await session.DisposeAsync();
+    }
 
     private static (DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
         RecordingLoopConsole Con, FakeDecisionSessionResumeStore Resume)

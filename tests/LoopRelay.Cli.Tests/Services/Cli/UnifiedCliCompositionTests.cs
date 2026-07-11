@@ -79,7 +79,6 @@ public sealed class UnifiedCliCompositionTests
         Assert.Equal(2, composition.Policy.MaxNoChangesCommits);
         Assert.Equal(2, composition.Policy.OperationalContextGrowthWarningStreak);
         Assert.True(composition.Policy.DecisionSessionResume);
-        Assert.False(composition.Policy.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
         Assert.Equal(
             composition.Policy.PolicyId,
             UnifiedCliComposition.Create(repository).Policy.PolicyId);

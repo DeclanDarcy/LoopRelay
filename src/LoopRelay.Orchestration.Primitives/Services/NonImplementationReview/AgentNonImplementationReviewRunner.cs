@@ -7,12 +7,16 @@ using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
+using LoopRelay.Orchestration.Runtime;
 
 namespace LoopRelay.Orchestration.Services.NonImplementationReview;
 
 public sealed class AgentNonImplementationReviewRunner(
     IAgentRuntime _runtime,
-    Repository _repository) : INonImplementationReviewRunner
+    Repository _repository,
+    IRenderedPromptStore? _renderedPromptStore = null,
+    string? _policyIdentity = null,
+    PromptExecutionContext? _executionContext = null) : INonImplementationReviewRunner
 {
     public NonImplementationReviewRunnerConstraints Capabilities =>
         NonImplementationReviewRunnerConstraints.ReadOnly;
@@ -24,6 +28,10 @@ public sealed class AgentNonImplementationReviewRunner(
         ArgumentNullException.ThrowIfNull(request);
         request.Constraints.EnsureReadOnly();
 
+        // The payload is composed upstream (template plus caller-injected sections); the fact
+        // records the exact sent text so payload drift is observable in evidence even though
+        // the payload's template-hash linkage joins at M7 gateway capture.
+        await TryAppendRenderedPromptAsync(request.PromptName, request.PromptPayload);
         AgentTurnResult result = await _runtime.RunOneShotAsync(
             ReadOnlyReviewSpec(_repository),
             request.PromptPayload,
@@ -49,6 +57,33 @@ public sealed class AgentNonImplementationReviewRunner(
             new SandboxProfile("read-only", CanWriteWorkspace: false, CanAccessNetwork: false, RequiresApproval: false),
             new EffortProfile(AgentEffortLevel.High, "xhigh"),
             repository.Path);
+
+    private async Task TryAppendRenderedPromptAsync(string promptIdentity, string renderedText)
+    {
+        if (_renderedPromptStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _renderedPromptStore.AppendAsync(
+                new RenderedPromptCapture(
+                    _executionContext?.TransitionRunId ?? string.Empty,
+                    _executionContext?.AttemptId,
+                    promptIdentity,
+                    null,
+                    renderedText,
+                    [],
+                    _policyIdentity,
+                    DateTimeOffset.UtcNow),
+                CancellationToken.None);
+        }
+        catch
+        {
+            // Rendered-prompt persistence is supporting evidence; failing to append must not fail the review.
+        }
+    }
 
     private static string WithDiagnostics(string message, string? diagnostics) =>
         string.IsNullOrWhiteSpace(diagnostics)

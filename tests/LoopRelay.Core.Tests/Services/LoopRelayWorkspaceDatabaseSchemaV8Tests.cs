@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Core.Tests.Services;
 
-public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
+public sealed class LoopRelayWorkspaceDatabaseSchemaV8Tests
 {
     private static readonly string[] SpineTables =
     [
@@ -17,7 +17,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
     ];
 
     [Fact]
-    public async Task EnsureSchemaAsync_FreshDatabase_StampsVersionSevenAndCreatesSpineTables()
+    public async Task EnsureSchemaAsync_FreshDatabase_StampsVersionEightAndCreatesSpineTables()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -26,8 +26,8 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal(7, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
-        Assert.Equal("7", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal(8, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
+        Assert.Equal("8", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist.");
@@ -140,6 +140,95 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
         ];
         Assert.Equal(expectedColumns, await TableColumnsAsync(connection, "canonical_policy_resolutions"));
         Assert.Contains("policy_id", await TableColumnsAsync(connection, "attempts"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_FreshDatabase_CreatesRenderedPromptsTableAndSessionProfileColumns()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        Assert.True(await TableExistsAsync(connection, "canonical_rendered_prompts"), "Expected table `canonical_rendered_prompts` to exist.");
+        string[] expectedColumns =
+        [
+            "rendered_prompt_id",
+            "transition_run_id",
+            "attempt_id",
+            "session_id",
+            "turn_id",
+            "prompt_identity",
+            "template_source_hash",
+            "rendered_sha256",
+            "rendered_text",
+            "consumed_inputs_json",
+            "policy_id",
+            "rendered_at",
+        ];
+        Assert.Equal(expectedColumns, await TableColumnsAsync(connection, "canonical_rendered_prompts"));
+        Assert.Contains("effort", await TableColumnsAsync(connection, "agent_sessions"));
+        Assert.Contains("sandbox", await TableColumnsAsync(connection, "agent_sessions"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_AddsSessionProfileColumnsToVersionSevenSessionsWithoutRewritingFactRows()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                CREATE TABLE workspace_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '7');
+
+                CREATE TABLE agent_sessions(
+                    session_id text primary key,
+                    attempt_id text,
+                    workspace_id text,
+                    provider text not null,
+                    provider_thread_id text,
+                    role text not null,
+                    legacy_session_guid text,
+                    started_at text not null,
+                    completed_at text
+                );
+                INSERT INTO agent_sessions (
+                    session_id, attempt_id, workspace_id, provider, provider_thread_id,
+                    role, legacy_session_guid, started_at, completed_at)
+                VALUES (
+                    'ses_legacy_1', 'att_legacy_1', NULL, 'codex', 'thread-1',
+                    'Planning', NULL, '2026-07-11T12:00:00.0000000Z', '2026-07-11T12:01:00.0000000Z');
+                """);
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        // Pre-v8 sessions survive the migration with every pre-existing column value unchanged
+        // and null profile evidence: migrations never rewrite fact rows.
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM agent_sessions;"));
+        Assert.Equal("att_legacy_1", await ScalarStringAsync(connection, "SELECT attempt_id FROM agent_sessions WHERE session_id = 'ses_legacy_1';"));
+        Assert.Equal("codex", await ScalarStringAsync(connection, "SELECT provider FROM agent_sessions WHERE session_id = 'ses_legacy_1';"));
+        Assert.Equal("thread-1", await ScalarStringAsync(connection, "SELECT provider_thread_id FROM agent_sessions WHERE session_id = 'ses_legacy_1';"));
+        Assert.Equal("Planning", await ScalarStringAsync(connection, "SELECT role FROM agent_sessions WHERE session_id = 'ses_legacy_1';"));
+        Assert.Equal("2026-07-11T12:00:00.0000000Z", await ScalarStringAsync(connection, "SELECT started_at FROM agent_sessions WHERE session_id = 'ses_legacy_1';"));
+        Assert.Equal("2026-07-11T12:01:00.0000000Z", await ScalarStringAsync(connection, "SELECT completed_at FROM agent_sessions WHERE session_id = 'ses_legacy_1';"));
+        Assert.Null(await ScalarStringAsync(connection, "SELECT effort FROM agent_sessions WHERE session_id = 'ses_legacy_1';"));
+        Assert.Null(await ScalarStringAsync(connection, "SELECT sandbox FROM agent_sessions WHERE session_id = 'ses_legacy_1';"));
+
+        // The column additions are guarded: a second schema pass neither duplicates nor fails.
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        Assert.Equal(1, (await TableColumnsAsync(connection, "agent_sessions")).Count(column => column == "effort"));
+        Assert.Equal(1, (await TableColumnsAsync(connection, "agent_sessions")).Count(column => column == "sandbox"));
     }
 
     [Fact]
@@ -271,7 +360,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
     }
 
     [Fact]
-    public async Task EnsureSchemaAsync_UpgradesVersionFourDatabaseToVersionSevenIdempotently()
+    public async Task EnsureSchemaAsync_UpgradesVersionFourDatabaseToVersionEightIdempotently()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -292,12 +381,12 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("7", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("8", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.True(await TableExistsAsync(connection, "read_receipts"), "Expected table `read_receipts` to exist after upgrade.");
 
         // The migration is idempotent: a second schema pass succeeds and keeps the same shape.
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
-        Assert.Equal("7", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("8", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.True(await TableExistsAsync(connection, "read_receipts"), "Expected table `read_receipts` to survive a second schema pass.");
     }
 
@@ -382,7 +471,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
     }
 
     [Fact]
-    public async Task EnsureSchemaAsync_UpgradesVersionTwoShapedDatabaseToVersionSeven()
+    public async Task EnsureSchemaAsync_UpgradesVersionTwoShapedDatabaseToVersionEight()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -399,7 +488,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("7", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("8", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist after upgrade.");
@@ -494,7 +583,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("7", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("8", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.Equal("Resumable", await ScalarStringAsync(connection, "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
         Assert.Equal("MissingRequiredInput", await ScalarStringAsync(connection, "SELECT outcome FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
         Assert.Equal("Resumable", await ScalarStringAsync(connection, "SELECT state FROM canonical_stage_states WHERE workflow_identity = 'Plan';"));
@@ -517,7 +606,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV7Tests
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
-        await ExecuteAsync(connection, "UPDATE schema_metadata SET value = '8' WHERE key = 'schema_version';");
+        await ExecuteAsync(connection, "UPDATE schema_metadata SET value = '9' WHERE key = 'schema_version';");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));

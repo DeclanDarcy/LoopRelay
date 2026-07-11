@@ -10,7 +10,7 @@ namespace LoopRelay.Core.Services.Persistence;
 /// </summary>
 public static class LoopRelayWorkspaceDatabase
 {
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 8;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public static string Resolve(Repository repository)
@@ -71,6 +71,19 @@ public static class LoopRelayWorkspaceDatabase
                 connection,
                 "ALTER TABLE attempts ADD COLUMN policy_id text;",
                 cancellationToken);
+        }
+
+        // The v8 session profile columns are additive and nullable: pre-v8 sessions keep null
+        // effort/sandbox evidence, and the ALTERs never rewrite existing fact rows.
+        foreach (string column in (string[])["effort", "sandbox"])
+        {
+            if (!await ColumnExistsAsync(connection, "agent_sessions", column, cancellationToken))
+            {
+                await ExecuteAsync(
+                    connection,
+                    $"ALTER TABLE agent_sessions ADD COLUMN {column} text;",
+                    cancellationToken);
+            }
         }
 
         await ExecuteAsync(
@@ -601,7 +614,9 @@ public static class LoopRelayWorkspaceDatabase
             role text not null,
             legacy_session_guid text,
             started_at text not null,
-            completed_at text
+            completed_at text,
+            effort text,
+            sandbox text
         );
 
         CREATE TABLE IF NOT EXISTS agent_turns(
@@ -645,6 +660,23 @@ public static class LoopRelayWorkspaceDatabase
         );
 
         CREATE INDEX IF NOT EXISTS idx_canonical_policy_resolutions_policy ON canonical_policy_resolutions(policy_id);
+
+        CREATE TABLE IF NOT EXISTS canonical_rendered_prompts(
+            rendered_prompt_id text primary key,
+            transition_run_id text not null,
+            attempt_id text,
+            session_id text,
+            turn_id text,
+            prompt_identity text not null,
+            template_source_hash text,
+            rendered_sha256 text not null,
+            rendered_text text not null,
+            consumed_inputs_json text not null,
+            policy_id text,
+            rendered_at text not null
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_canonical_rendered_prompts_transition ON canonical_rendered_prompts(transition_run_id);
 
         UPDATE canonical_workflow_states SET state = 'Resumable' WHERE state = 'Blocked';
         UPDATE canonical_workflow_states SET outcome = 'MissingRequiredInput' WHERE outcome = 'Blocked';

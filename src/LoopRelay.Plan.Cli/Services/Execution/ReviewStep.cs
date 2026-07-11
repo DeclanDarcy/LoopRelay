@@ -22,9 +22,6 @@ namespace LoopRelay.Plan.Cli.Services.Execution;
 internal sealed class ReviewStep(
     IAgentRuntime _runtime, PlanArtifacts _artifacts, ILoopConsole _console, Repository _repository)
 {
-    // TODO: replace this with proper user settings.json derived AllowAuxiliaryNonImplementationFiles when merging the CLIs
-    private const bool AllowAuxiliaryNonImplementationFiles = false;
-    
     public async Task<string> RunAsync(string projectContextProjection, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(projectContextProjection))
@@ -47,7 +44,7 @@ internal sealed class ReviewStep(
         {
             var renderer = new ConsoleTurnRenderer(_console);
             AgentTurnResult result = await session.RunTurnAsync(
-                RenderAdversarialPlanReviewPrompt(projectContextProjection, plan), renderer.Stream, cancellationToken);
+                AdversarialPlanReview.Render(projectContextProjection, plan), renderer.Stream, cancellationToken);
             if (result.State != AgentTurnState.Completed)
             {
                 throw new PlanStepException(WithDiagnostics(
@@ -76,65 +73,6 @@ internal sealed class ReviewStep(
         {
             await _runtime.CloseSessionAsync(session);
         }
-    }
-
-    private static string RenderAdversarialPlanReviewPrompt(string projectContextProjection, string? plan)
-    {
-        if (AllowAuxiliaryNonImplementationFiles)
-        {
-            return AdversarialPlanReview.Render(
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                "If no projection rule is violated, explicitly state that the finding is based on generic planning quality rather than project-specific semantics.",
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                projectContextProjection,
-                plan);
-        }
-        
-        return AdversarialPlanReview.Render(
-"""
-
-A plan is not safe because it is coherent, complete-looking, or well documented. It is safe only when it drives implementation-bearing work that advances implemented capability, creates executable progress, and can be validated by operational gates. Treat documentation-centric progress as a failure mode when it creates false implementation confidence or lets non-executable outputs stand in for capability evidence.
-
-""",
-"""
-
-During generic review, treat implementation-first fidelity as an explicit attack vector. Attack plans that substitute artifacts about work for work. Look for plan steps that produce reports, inventories, governance language, certification narratives, explanatory documentation, or other non-implementation deliverables without advancing implemented capability.
-
-Treat acceptance criteria that measure prose completion, non-implementation deliverables presented as capability evidence, or completed-looking artifacts that leave code, tests, runtime behavior, project files, required generated artifacts, or sanctioned `.agents` operational artifacts unchanged or insufficiently constrained as material risk.
-
-A HITL-requested non-implementation deliverable is only a narrow, evidence-grounded exception for that deliverable; it does not create general permission to make documentation-centric progress. Treat machine-consumed operational artifacts as valid capability evidence only when they directly constrain execution, validation, or downstream agent behavior.
-
-Optimize for detecting false implementation confidence created by plans that can look complete while the software remains unchanged or insufficiently constrained.
-
-""",
-"""
-
-- Implementation-first fidelity: Does the plan advance implemented capability, or does it mistake artifacts about work for work?
-- Capability evidence: Are exit criteria tied to code, tests, runtime behavior, project files, generated artifacts, or sanctioned operational artifacts that constrain execution?
-- Documentation theater: Do prose deliverables, governance or certification language, and explanatory artifacts create false confidence without executable gates?
-- Operational artifact validity: Are `.agents` artifacts or generated artifacts machine-consumed and execution-bearing, or are they auxiliary commentary?
-""",
-"If no projection rule is violated, explicitly state that the finding is based on generic implementation-first review quality or another generic planning quality axis rather than project-specific projection semantics. Implementation-first failures are material findings even when the projection does not restate them.",
-"""
-
-Always include implementation-first false-closure modes when the plan can appear complete through prose deliverables, governance or certification artifacts, inventories, or other non-executable outputs while implemented capability remains incomplete.
-
-""",            
-"""
-
-Corrections should move risk back into implementation-bearing plan content, milestone acceptance criteria, validation gates, required generated artifacts, or sanctioned `.agents` operational artifacts. Do not ask for separate policy documents, side reports, or documentation theater as the correction unless they are machine-consumed gates that directly constrain execution.
-
-""",
-"""
-
-- no realistic implementation-first false-success path remains
-""",
-projectContextProjection,
-            plan);
     }
 
     // Scans for a trimmed line starting with one of the three canonical verdict bullets the

@@ -3,7 +3,9 @@
 You are the adversarial planning authority for this epic.
 
 The plan will govern autonomous execution across multiple agents and milestones. Weaknesses compound. Ambiguity, stale assumptions, duplicated authority, missing gates, and non-executable acceptance criteria are not documentation issues; they are execution risks.
-{p1}
+
+A plan is not safe because it is coherent, complete-looking, or well documented. It is safe only when it drives implementation-bearing work that advances implemented capability, creates executable progress, and can be validated by operational gates. Treat documentation-centric progress as a failure mode when it creates false implementation confidence or lets non-executable outputs stand in for capability evidence.
+
 Review the plan and milestones as an integrated operational system.
 
 ## Review Authority
@@ -63,7 +65,15 @@ The projection should determine where the review spends most of its effort.
 If the projection identifies attack priorities, spend proportionally more review effort attacking those areas.
 
 The review should optimize for discovering project-specific catastrophic failures rather than producing an even distribution of findings.
-{p2}
+
+During generic review, treat implementation-first fidelity as an explicit attack vector. Attack plans that substitute artifacts about work for work. Look for plan steps that produce reports, inventories, governance language, certification narratives, explanatory documentation, or other non-implementation deliverables without advancing implemented capability.
+
+Treat acceptance criteria that measure prose completion, non-implementation deliverables presented as capability evidence, or completed-looking artifacts that leave code, tests, runtime behavior, project files, required generated artifacts, or sanctioned `.agents` operational artifacts unchanged or insufficiently constrained as material risk.
+
+A HITL-requested non-implementation deliverable is only a narrow, evidence-grounded exception for that deliverable; it does not create general permission to make documentation-centric progress. Treat machine-consumed operational artifacts as valid capability evidence only when they directly constrain execution, validation, or downstream agent behavior.
+
+Optimize for detecting false implementation confidence created by plans that can look complete while the software remains unchanged or insufficiently constrained.
+
 Prioritize attacks against:
 
 - Critical Intent
@@ -77,7 +87,11 @@ Prioritize attacks against:
 
 Generic adversarial review axes:
 
-- Objective fidelity: Does the plan preserve the epic’s real intent, or only list work?{p3}
+- Objective fidelity: Does the plan preserve the epic’s real intent, or only list work?
+- Implementation-first fidelity: Does the plan advance implemented capability, or does it mistake artifacts about work for work?
+- Capability evidence: Are exit criteria tied to code, tests, runtime behavior, project files, generated artifacts, or sanctioned operational artifacts that constrain execution?
+- Documentation theater: Do prose deliverables, governance or certification language, and explanatory artifacts create false confidence without executable gates?
+- Operational artifact validity: Are `.agents` artifacts or generated artifacts machine-consumed and execution-bearing, or are they auxiliary commentary?
 - Sequencing: Are milestone dependencies, entry gates, exit gates, rollback points, and handoffs correct?
 - Authority boundaries: Is it clear what belongs in `plan.md` versus milestone files versus operational context versus code/docs?
 - Missing decisions: Are future agents forced to make architectural or sequencing decisions the plan should already decide?
@@ -105,7 +119,7 @@ Quote or precisely reference the plan/milestone content that creates the issue.
 Projection Conflict:
 Identify exactly which projection rule, invariant, capability, authority boundary, drift pattern, or false-success heuristic the plan violates.
 
-{p4}
+If no projection rule is violated, explicitly state that the finding is based on generic implementation-first review quality or another generic planning quality axis rather than project-specific projection semantics. Implementation-first failures are material findings even when the projection does not restate them.
 
 Failure mode:
 Explain how this will produce bad execution, bad decisions, drift, rework, false closure, or architectural regression.
@@ -138,7 +152,9 @@ Omit decisions that are genuinely unknowable until implementation produces evide
 Use the projection's False-Success Heuristics as the primary source.
 
 Then identify any additional false-closure modes discovered during review.
-{p5}
+
+Always include implementation-first false-closure modes when the plan can appear complete through prose deliverables, governance or certification artifacts, inventories, or other non-executable outputs while implemented capability remains incomplete.
+
 Each test should explain:
 
 - what appears complete
@@ -186,7 +202,9 @@ Focus especially on:
 ## Suggested Patch
 
 Provide concise patch-style edits: replacements, deletions, moved responsibilities, added gates, or tightened acceptance criteria. Do not rewrite the entire plan unless the structure itself is defective.
-{p6}
+
+Corrections should move risk back into implementation-bearing plan content, milestone acceptance criteria, validation gates, required generated artifacts, or sanctioned `.agents` operational artifacts. Do not ask for separate policy documents, side reports, or documentation theater as the correction unless they are machine-consumed gates that directly constrain execution.
+
 ## Final Adversarial Question
 
 Answer this question:
@@ -205,7 +223,8 @@ Choose exactly one:
 
 PASS may only be issued when:
 
-- no material generic planning failures remain{p7}
+- no material generic planning failures remain
+- no realistic implementation-first false-success path remains
 - no projection invariant is violated
 - no project-specific false-success pattern is possible
 - no veto condition is triggered

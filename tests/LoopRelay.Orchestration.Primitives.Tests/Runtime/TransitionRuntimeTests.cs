@@ -761,6 +761,28 @@ public sealed class TransitionRuntimeTests
     }
 
     [Fact]
+    public async Task Executor_receives_the_consumed_input_manifest_for_send_site_fact_minting()
+    {
+        // Rendered-prompt facts are minted where the text is actually SENT to an agent (the
+        // executor's send helpers), never at the render seam — a canonical render that an
+        // executor branch discards and re-composes must not be recorded as an agent-bound
+        // prompt. The runtime's job is to hand the executor the consumed-input manifest.
+        RuntimeHarness harness = RuntimeHarness.Create("pol_v1_0123456789abcdef0123456789abcdef");
+        harness.ContextBuilder.ConsumedFiles =
+        [
+            new ConsumedInputFile(".agents/epic.md", "hash-epic"),
+        ];
+
+        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(RuntimeOutcomeKind.Completed, result.Outcome);
+        Assert.NotNull(harness.Executor.Context);
+        ConsumedInputFile consumed = Assert.Single(harness.Executor.Context!.ConsumedFiles ?? []);
+        Assert.Equal(".agents/epic.md", consumed.Path);
+        Assert.Equal("hash-epic", consumed.Sha256);
+    }
+
+    [Fact]
     public async Task Attempt_records_the_runtimes_resolved_policy_identity()
     {
         RuntimeHarness harness = RuntimeHarness.Create("pol_v1_0123456789abcdef0123456789abcdef");

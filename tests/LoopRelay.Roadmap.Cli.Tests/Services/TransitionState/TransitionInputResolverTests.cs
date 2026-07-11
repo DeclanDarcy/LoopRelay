@@ -1,9 +1,7 @@
 using LoopRelay.Core.Abstractions.Artifacts;
-using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.TransitionInputs;
 using LoopRelay.Roadmap.Cli.Services.Artifacts;
-using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.State;
 using LoopRelay.Roadmap.Cli.Services.TransitionState;
 using LoopRelay.Roadmap.Cli.Tests.Services.Execution;
@@ -133,59 +131,6 @@ public sealed class TransitionInputResolverTests
     }
 
     [Fact]
-    public async Task CreateNewEpic_snapshot_hash_changes_when_prompt_policy_branch_changes()
-    {
-        using var repo = new TempRepo();
-        string projectionPath = SeedProjection(repo, "CreateNewEpic");
-        repo.Write(RoadmapArtifactPaths.Selection, "selection");
-        TransitionPromptPolicyIdentity strictPolicy = Policy(false).CreateIdentity("CreateNewEpic");
-        TransitionPromptPolicyIdentity allowedPolicy = Policy(true).CreateIdentity("CreateNewEpic");
-
-        TransitionInputSnapshot strict = await ResolveAsync(
-            repo,
-            "CreateNewEpic",
-            projectionPath,
-            promptPolicy: strictPolicy);
-        TransitionInputSnapshot allowed = await ResolveAsync(
-            repo,
-            "CreateNewEpic",
-            projectionPath,
-            promptPolicy: allowedPolicy);
-
-        Assert.NotEqual(strict.SnapshotHash, allowed.SnapshotHash);
-        Assert.Equal("create-new-epic-prompt-owned-v1", strict.PromptPolicy.Mode);
-        Assert.Equal("strict", strict.PromptPolicy.Inputs["sectionMode"]);
-        Assert.Equal("false", strict.PromptPolicy.Inputs["allowAuxiliaryNonImplementationFiles"]);
-        Assert.Contains("section.CreateNewEpicImplementationFirstGuidance.sourceHash", strict.PromptPolicy.Inputs.Keys);
-        Assert.Contains("section.CreateNewEpicAuxiliaryArtifactLimits.sourceHash", strict.PromptPolicy.Inputs.Keys);
-
-        Assert.Equal("create-new-epic-prompt-owned-v1", allowed.PromptPolicy.Mode);
-        Assert.Equal("omitted", allowed.PromptPolicy.Inputs["sectionMode"]);
-        Assert.Equal("true", allowed.PromptPolicy.Inputs["allowAuxiliaryNonImplementationFiles"]);
-        Assert.DoesNotContain(allowed.PromptPolicy.Inputs.Keys, key => key.StartsWith("section.", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task Legacy_runtime_prompt_snapshot_records_composer_policy_hash()
-    {
-        using var repo = new TempRepo();
-        string projectionPath = SeedProjection(repo, "SelectNextEpic");
-        repo.Write(RoadmapArtifactPaths.RoadmapCompletionContext, "completion");
-        repo.Write(".agents/roadmap/001-roadmap.md", "roadmap");
-        TransitionPromptPolicyIdentity promptPolicy = Policy(false).CreateIdentity("SelectNextEpic");
-
-        TransitionInputSnapshot snapshot = await ResolveAsync(
-            repo,
-            "SelectNextEpic",
-            projectionPath,
-            promptPolicy: promptPolicy);
-
-        Assert.Equal("legacy-implementation-first-composer-v1", snapshot.PromptPolicy.Mode);
-        Assert.Contains("legacyImplementationFirstPromptPolicyHash", snapshot.PromptPolicy.Inputs.Keys);
-        Assert.NotEqual(TransitionPromptPolicyIdentity.None.Hash, snapshot.PromptPolicy.Hash);
-    }
-
-    [Fact]
     public async Task Update_completion_context_resolves_latest_evaluation_as_causal_input()
     {
         using var repo = new TempRepo();
@@ -265,8 +210,7 @@ public sealed class TransitionInputResolverTests
         string renderedContext = "rendered context",
         string secondaryInput = "",
         TransitionInputContext? context = null,
-        ICanonicalArtifactHasher? canonicalHasher = null,
-        TransitionPromptPolicyIdentity? promptPolicy = null)
+        ICanonicalArtifactHasher? canonicalHasher = null)
     {
         return await new TransitionInputResolver(
             repo.Artifacts,
@@ -276,17 +220,8 @@ public sealed class TransitionInputResolverTests
             projectionPath,
             renderedContext,
             secondaryInput,
-            context ?? TransitionInputContext.Empty)
-        {
-            PromptPolicy = promptPolicy ?? TransitionPromptPolicyIdentity.None,
-        });
+            context ?? TransitionInputContext.Empty));
     }
-
-    private static RoadmapRuntimePromptPolicy Policy(bool allowAuxiliaryNonImplementationFiles) =>
-        RoadmapRuntimePromptPolicy.FromArtifactPolicy(
-            new NonImplementationArtifactPolicyOptions(
-                AllowHitlRequestedNonImplementationFiles: false,
-                AllowAuxiliaryNonImplementationFiles: allowAuxiliaryNonImplementationFiles));
 
     private static string SeedProjection(TempRepo repo, string runtimePromptName)
     {

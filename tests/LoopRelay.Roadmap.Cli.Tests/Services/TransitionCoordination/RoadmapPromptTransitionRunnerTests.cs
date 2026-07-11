@@ -79,11 +79,9 @@ public sealed class RoadmapPromptTransitionRunnerTests
             journal.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)[0],
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
         Assert.NotNull(started.InputSnapshot);
-        Assert.Equal(
-            promotionCandidate
-                ? "create-new-epic-prompt-owned-v1"
-                : "legacy-implementation-first-composer-v1",
-            started.InputSnapshot!.PromptPolicy.Mode);
+        // The journal ties every persisted transition to the prompt version that rendered it:
+        // with the policy template-owned (M6), that identity is the template's source hash.
+        Assert.Equal("template-owned-v1", started.InputSnapshot!.PromptPolicy.Mode);
     }
 
     private static RoadmapPromptTransitionRunner CreateRunner(

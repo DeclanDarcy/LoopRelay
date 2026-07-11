@@ -118,10 +118,35 @@ public interface IReadReceiptStore
     Task AppendAsync(ReadReceiptCapture capture, CancellationToken cancellationToken);
 }
 
+// TemplateSourceHash is the build-time SHA-256 of the raw prompt template the text was rendered
+// from (null only for deterministic local transitions that render no template). With policy text
+// template-owned, this hash IS the policy-complete prompt version.
 public sealed record RenderedPrompt(
     string PromptIdentity,
     string Text,
-    string EvidenceLocation);
+    string EvidenceLocation,
+    string? TemplateSourceHash = null);
+
+// One rendered agent-bound prompt: the exact text produced from a hashed template and its
+// declared inputs, appended as an append-only fact. Together with the attempt's policy identity
+// and the run's input snapshot this makes an agent invocation reproducible from
+// (template source hash, policy identity, consumed input paths and hashes).
+public sealed record RenderedPromptCapture(
+    string TransitionRunId,
+    string? AttemptId,
+    string PromptIdentity,
+    string? TemplateSourceHash,
+    string RenderedText,
+    IReadOnlyList<ConsumedInputFile> ConsumedInputs,
+    string? PolicyId,
+    DateTimeOffset RenderedAt,
+    string? SessionId = null,
+    string? TurnId = null);
+
+public interface IRenderedPromptStore
+{
+    Task AppendAsync(RenderedPromptCapture capture, CancellationToken cancellationToken);
+}
 
 public sealed record PromptExecutionResult(
     PromptExecutionStatus Status,
@@ -130,11 +155,15 @@ public sealed record PromptExecutionResult(
     IReadOnlyDictionary<string, string> Metadata,
     string? FailureMessage = null);
 
+// ConsumedFiles carries the transition's consumed-input manifest (the same files the read
+// receipt records) to the executor, so a rendered-prompt fact minted at the SEND site can embed
+// the inputs that fed the render.
 public sealed record PromptExecutionContext(
     string? RunId,
     string? WorkflowInstanceId,
     string? TransitionRunId,
-    string? AttemptId)
+    string? AttemptId,
+    IReadOnlyList<ConsumedInputFile>? ConsumedFiles = null)
 {
     public static PromptExecutionContext Empty { get; } = new(null, null, null, null);
 }

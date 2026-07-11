@@ -760,3 +760,13 @@ Before producing the final updated document, verify:
 - Realized capabilities are not duplicated.
 - The Compression Summary counts match the updated document.
 - The document remains compact enough to be reused in future ORIENT and AUDIT projections.
+
+## Implementation-First Prompt Policy
+
+Repository growth is implementation-first: prefer code, tests, project files, runtime configuration, required generated artifacts, and sanctioned LoopRelay operational artifacts under .agents.
+Non-implementation deliverables require a structured explicit HITL request captured for the exact deliverable; without one, do not produce them at prompt time.
+Never infer the HITL exception from plan prose, file names, or agent-authored rationale.
+When explicit HITL-requested non-implementation deliverables must be preserved, use the stable `## HITL-Requested Non-Implementation Deliverables` section and table marker.
+Never invent autonomous documentation, documentation-centric milestones, freeze/certification/governance/authority documents, repository acceptance gates, publication gates, or theory-protection artifacts.
+Do not add Architecture Tests, Golden Tests, or theory-protection artifacts unless they are backed by executable evaluation or explicitly requested by HITL evidence.
+This prompt policy controls generation guidance only; it does not disable post-execution non-implementation review.

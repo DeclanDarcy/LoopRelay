@@ -620,6 +620,91 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
     }
 
     [Fact]
+    public async Task Rendered_prompts_append_and_read_back_in_ledger_insertion_order()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        DateTimeOffset now = new(2026, 7, 11, 10, 0, 0, TimeSpan.Zero);
+        // The first-appended record carries a lexically LARGER id and a LATER wall-clock stamp
+        // than the second, so only ledger insertion order (rowid) can return them append-first.
+        var first = new CanonicalRenderedPromptRecord(
+            "rp_zzzz_appended_first",
+            "tr_001",
+            "att_001",
+            "GenerateSystemPromptForFirstExecutionAgent",
+            "aaaa1111",
+            "feedfeed",
+            "PROMPT ONE",
+            [new CanonicalReadReceiptFile(".agents/operational_context.md", "hash-a")],
+            "pol_v1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            now.AddMinutes(1));
+        var second = new CanonicalRenderedPromptRecord(
+            "rp_aaaa_appended_second",
+            "tr_001",
+            null,
+            "ContinueExecution",
+            null,
+            "beefbeef",
+            "PROMPT TWO",
+            [],
+            null,
+            now,
+            "ses_001",
+            "turn_001");
+
+        await store.AppendRenderedPromptAsync(first);
+        await store.AppendRenderedPromptAsync(second);
+
+        IReadOnlyList<CanonicalRenderedPromptRecord> prompts = await store.ReadRenderedPromptsAsync();
+
+        Assert.Equal(2, prompts.Count);
+        CanonicalRenderedPromptRecord readFirst = prompts[0];
+        Assert.Equal(first.RenderedPromptId, readFirst.RenderedPromptId);
+        Assert.Equal("tr_001", readFirst.TransitionRunId);
+        Assert.Equal("att_001", readFirst.AttemptId);
+        Assert.Equal("GenerateSystemPromptForFirstExecutionAgent", readFirst.PromptIdentity);
+        Assert.Equal("aaaa1111", readFirst.TemplateSourceHash);
+        Assert.Equal("feedfeed", readFirst.RenderedSha256);
+        Assert.Equal("PROMPT ONE", readFirst.RenderedText);
+        CanonicalReadReceiptFile consumed = Assert.Single(readFirst.ConsumedInputs);
+        Assert.Equal(".agents/operational_context.md", consumed.Path);
+        Assert.Equal("hash-a", consumed.Sha256);
+        Assert.Equal("pol_v1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", readFirst.PolicyId);
+        Assert.Equal(now.AddMinutes(1), readFirst.RenderedAt);
+        Assert.Null(readFirst.SessionId);
+        CanonicalRenderedPromptRecord readSecond = prompts[1];
+        Assert.Equal(second.RenderedPromptId, readSecond.RenderedPromptId);
+        Assert.Null(readSecond.AttemptId);
+        Assert.Null(readSecond.TemplateSourceHash);
+        Assert.Empty(readSecond.ConsumedInputs);
+        Assert.Null(readSecond.PolicyId);
+        Assert.Equal("ses_001", readSecond.SessionId);
+        Assert.Equal("turn_001", readSecond.TurnId);
+    }
+
+    [Fact]
+    public async Task Rendered_prompt_reads_return_empty_when_database_predates_the_table()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '7');
+                """);
+        }
+
+        CanonicalWorkflowPersistenceStore store = new(repository);
+
+        Assert.Empty(await store.ReadRenderedPromptsAsync());
+    }
+
+    [Fact]
     public async Task Policy_resolution_reads_return_empty_when_database_predates_the_table()
     {
         Repository repository = CreateRepository();
@@ -698,6 +783,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         "canonical_recovery_markers",
         "canonical_chain_boundary_events",
         "canonical_policy_resolutions",
+        "canonical_rendered_prompts",
         "workspace_identity",
         "runs",
         "workflow_instances",

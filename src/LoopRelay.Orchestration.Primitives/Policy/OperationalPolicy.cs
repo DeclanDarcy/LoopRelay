@@ -38,7 +38,6 @@ public sealed record PolicyOverride(string Key, string Value, string Origin, boo
 public sealed record ResolvedOperationalPolicy(
     string PolicyId,
     string SchemaVersion,
-    NonImplementationArtifactPolicyOptions ArtifactPolicy,
     int MaxUnboundedContinuationSteps,
     int MaxNoChangesCommits,
     int OperationalContextGrowthWarningStreak,
@@ -59,22 +58,22 @@ public sealed class PolicyResolutionException : Exception
 /// <summary>
 /// Resolves the operational policy from exactly three layers: built-in defaults, the workspace
 /// settings document, and invocation overrides. A configured value is either demonstrably
-/// effective or explicitly rejected — unknown keys, malformed values, duplicate overrides, and
-/// consumer-less toggles all reject resolution instead of being silently ignored.
+/// effective or explicitly rejected — unknown keys, malformed values, and duplicate overrides
+/// all reject resolution instead of being silently ignored.
+/// Schema policy-v2 (M6): the artifactPolicy toggles are removed by owner ruling — the
+/// implementation-first prompt policy is template-owned and unconditional, so there is no
+/// artifact-policy field to configure; a settings file or override that still names one is
+/// rejected as an unknown key.
 /// </summary>
 public static class OperationalPolicyResolver
 {
-    public const string SchemaVersion = "policy-v1";
+    public const string SchemaVersion = "policy-v2";
 
-    public const string AllowHitlRequestedNonImplementationFilesKey = "artifactPolicy.allowHitlRequestedNonImplementationFiles";
-    public const string AllowAuxiliaryNonImplementationFilesKey = "artifactPolicy.allowAuxiliaryNonImplementationFiles";
     public const string MaxUnboundedContinuationStepsKey = "execution.maxUnboundedContinuationSteps";
     public const string MaxNoChangesCommitsKey = "execution.maxNoChangesCommits";
     public const string OperationalContextGrowthWarningStreakKey = "execution.operationalContextGrowthWarningStreak";
     public const string DecisionSessionResumeKey = "decisions.sessionResume";
 
-    public const bool DefaultAllowHitlRequestedNonImplementationFiles = false;
-    public const bool DefaultAllowAuxiliaryNonImplementationFiles = false;
     public const int DefaultMaxUnboundedContinuationSteps = 32;
     public const int DefaultMaxNoChangesCommits = 2;
     public const int DefaultOperationalContextGrowthWarningStreak = 2;
@@ -98,20 +97,6 @@ public static class OperationalPolicyResolver
         IReadOnlyDictionary<string, PolicyOverride> overrides = IndexOverrides(invocationOverrides);
         List<PolicyFieldProvenance> provenance = [];
 
-        bool allowHitl = ResolveBool(
-            AllowHitlRequestedNonImplementationFilesKey,
-            DefaultAllowHitlRequestedNonImplementationFiles,
-            workspacePolicy.AllowHitlRequestedNonImplementationFiles,
-            workspaceSource,
-            overrides,
-            provenance);
-        bool allowAuxiliary = ResolveBool(
-            AllowAuxiliaryNonImplementationFilesKey,
-            DefaultAllowAuxiliaryNonImplementationFiles,
-            workspacePolicy.AllowAuxiliaryNonImplementationFiles,
-            workspaceSource,
-            overrides,
-            provenance);
         int maxUnboundedContinuationSteps = ResolvePositiveInt(
             MaxUnboundedContinuationStepsKey,
             DefaultMaxUnboundedContinuationSteps,
@@ -150,19 +135,9 @@ public static class OperationalPolicyResolver
             }
         }
 
-        if (allowAuxiliary)
-        {
-            throw new PolicyResolutionException(
-                $"`{AllowAuxiliaryNonImplementationFilesKey}` is configured `true` but has no consumer on the " +
-                "canonical path; the value would have no production effect. Remove it (or set it to `false`) " +
-                "until the plan-review surface converges.");
-        }
-
-        NonImplementationArtifactPolicyOptions artifactPolicy = new(allowHitl, allowAuxiliary);
         string resolvedJson = JsonSerializer.Serialize(
             new CanonicalPolicySnapshot(
                 SchemaVersion,
-                new CanonicalArtifactPolicy(allowHitl, allowAuxiliary),
                 new CanonicalExecutionPolicy(
                     maxUnboundedContinuationSteps,
                     maxNoChangesCommits,
@@ -175,7 +150,6 @@ public static class OperationalPolicyResolver
         return new ResolvedOperationalPolicy(
             policyId,
             SchemaVersion,
-            artifactPolicy,
             maxUnboundedContinuationSteps,
             maxNoChangesCommits,
             operationalContextGrowthWarningStreak,
@@ -188,8 +162,6 @@ public static class OperationalPolicyResolver
 
     private static readonly IReadOnlyList<string> KnownKeys =
     [
-        AllowHitlRequestedNonImplementationFilesKey,
-        AllowAuxiliaryNonImplementationFilesKey,
         MaxUnboundedContinuationStepsKey,
         MaxNoChangesCommitsKey,
         OperationalContextGrowthWarningStreakKey,
@@ -290,6 +262,9 @@ public static class OperationalPolicyResolver
         return (string.Empty, PolicyLayer.BuiltIn, BuiltInOrigin, false);
     }
 
+    // The `pol_v1_` prefix versions the identity SCHEME (sha256 over canonical JSON, first 32
+    // hex); the field-set version lives inside the hashed JSON as SchemaVersion, so a schema
+    // change already yields different identities without a new prefix.
     private static string ComputePolicyId(string resolvedJson)
     {
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(resolvedJson));
@@ -304,14 +279,9 @@ public static class OperationalPolicyResolver
     // each value.
     private sealed record CanonicalPolicySnapshot(
         string SchemaVersion,
-        CanonicalArtifactPolicy ArtifactPolicy,
         CanonicalExecutionPolicy Execution,
         CanonicalDecisionsPolicy Decisions,
         CanonicalPermissions Permissions);
-
-    private sealed record CanonicalArtifactPolicy(
-        bool AllowHitlRequestedNonImplementationFiles,
-        bool AllowAuxiliaryNonImplementationFiles);
 
     private sealed record CanonicalExecutionPolicy(
         int MaxUnboundedContinuationSteps,

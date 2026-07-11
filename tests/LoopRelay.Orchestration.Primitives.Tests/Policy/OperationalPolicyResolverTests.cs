@@ -18,23 +18,20 @@ public sealed class OperationalPolicyResolverTests
     {
         ResolvedOperationalPolicy policy = Resolve();
 
-        Assert.False(policy.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
-        Assert.False(policy.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
         Assert.Equal(32, policy.MaxUnboundedContinuationSteps);
         Assert.Equal(2, policy.MaxNoChangesCommits);
         Assert.Equal(2, policy.OperationalContextGrowthWarningStreak);
         Assert.True(policy.DecisionSessionResume);
         Assert.All(policy.Provenance, field => Assert.Equal(PolicyLayer.BuiltIn, field.Layer));
-        Assert.Equal(6, policy.Provenance.Count);
+        Assert.Equal(4, policy.Provenance.Count);
     }
 
     [Fact]
     public void Workspace_values_override_built_in_defaults_with_workspace_provenance()
     {
         ResolvedOperationalPolicy policy = Resolve(
-            workspace: new CliPolicyDocument(true, null, 64, null, 5, false));
+            workspace: new CliPolicyDocument(64, null, 5, false));
 
-        Assert.True(policy.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles);
         Assert.Equal(64, policy.MaxUnboundedContinuationSteps);
         Assert.Equal(2, policy.MaxNoChangesCommits);
         Assert.Equal(5, policy.OperationalContextGrowthWarningStreak);
@@ -53,7 +50,7 @@ public sealed class OperationalPolicyResolverTests
     public void Invocation_overrides_beat_workspace_values_with_invocation_provenance()
     {
         ResolvedOperationalPolicy policy = Resolve(
-            workspace: new CliPolicyDocument(null, null, 64, null, null, null),
+            workspace: new CliPolicyDocument(64, null, null, null),
             overrides:
             [
                 new PolicyOverride(
@@ -136,27 +133,18 @@ public sealed class OperationalPolicyResolverTests
             ]));
     }
 
-    [Fact]
-    public void Consumer_less_auxiliary_toggle_is_rejected_when_configured_true()
+    [Theory]
+    [InlineData("artifactPolicy.allowHitlRequestedNonImplementationFiles")]
+    [InlineData("artifactPolicy.allowAuxiliaryNonImplementationFiles")]
+    public void Retired_artifact_policy_keys_are_rejected_as_unknown(string retiredKey)
     {
-        // The value would have no production effect on the canonical path; the policy authority
-        // rejects it instead of silently accepting a configuration lie. Configuring the default
-        // (false) stays accepted.
-        Assert.Throws<PolicyResolutionException>(() => Resolve(
-            workspace: new CliPolicyDocument(null, true, null, null, null, null)));
-        Assert.Throws<PolicyResolutionException>(() => Resolve(
-            overrides:
-            [
-                new PolicyOverride(
-                    OperationalPolicyResolver.AllowAuxiliaryNonImplementationFilesKey,
-                    "true",
-                    "flag:--policy",
-                    IsExplicit: true),
-            ]));
+        // policy-v2 (M6 owner ruling): the implementation-first prompt policy is template-owned
+        // and unconditional, so the artifactPolicy toggles no longer exist as policy fields. A
+        // configuration that still names one rejects loudly instead of being silently ignored.
+        PolicyResolutionException exception = Assert.Throws<PolicyResolutionException>(() => Resolve(
+            overrides: [new PolicyOverride(retiredKey, "false", "flag:--policy", IsExplicit: true)]));
 
-        ResolvedOperationalPolicy policy = Resolve(
-            workspace: new CliPolicyDocument(null, false, null, null, null, null));
-        Assert.False(policy.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles);
+        Assert.Contains("Unknown policy override key", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -175,11 +163,10 @@ public sealed class OperationalPolicyResolverTests
     {
         string baseline = Resolve().PolicyId;
 
-        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(true, null, null, null, null, null)).PolicyId);
-        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, null, 64, null, null, null)).PolicyId);
-        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, null, null, 3, null, null)).PolicyId);
-        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, null, null, null, 5, null)).PolicyId);
-        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, null, null, null, null, false)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(64, null, null, null)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, 3, null, null)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, null, 5, null)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, null, null, false)).PolicyId);
     }
 
     [Fact]
@@ -189,7 +176,7 @@ public sealed class OperationalPolicyResolverTests
         // each value: configuring the built-in default explicitly changes provenance only.
         ResolvedOperationalPolicy fromDefaults = Resolve();
         ResolvedOperationalPolicy fromWorkspace = Resolve(
-            workspace: new CliPolicyDocument(false, false, 32, 2, 2, true));
+            workspace: new CliPolicyDocument(32, 2, 2, true));
 
         Assert.Equal(fromDefaults.PolicyId, fromWorkspace.PolicyId);
         Assert.NotEqual(fromDefaults.Provenance, fromWorkspace.Provenance);
@@ -245,12 +232,6 @@ public sealed class OperationalPolicyResolverTests
         // installs. This pins template values to the resolver's built-ins.
         CliSettingsLoadResult template = CliSettingsLoader.LoadFromFile(DefaultTemplatePath(), isDefaultTemplate: true);
 
-        Assert.Equal(
-            OperationalPolicyResolver.DefaultAllowHitlRequestedNonImplementationFiles,
-            template.Policy.AllowHitlRequestedNonImplementationFiles);
-        Assert.Equal(
-            OperationalPolicyResolver.DefaultAllowAuxiliaryNonImplementationFiles,
-            template.Policy.AllowAuxiliaryNonImplementationFiles);
         Assert.Equal(
             OperationalPolicyResolver.DefaultMaxUnboundedContinuationSteps,
             template.Policy.MaxUnboundedContinuationSteps);

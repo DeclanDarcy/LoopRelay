@@ -7,12 +7,10 @@ namespace LoopRelay.Permissions.Models.Configuration;
 /// the resolver, not by this document.
 /// </summary>
 public sealed record CliPolicyDocument(
-    bool? AllowHitlRequestedNonImplementationFiles,
-    bool? AllowAuxiliaryNonImplementationFiles,
     int? MaxUnboundedContinuationSteps,
     int? MaxNoChangesCommits,
     int? OperationalContextGrowthWarningStreak,
     bool? DecisionSessionResume)
 {
-    public static CliPolicyDocument Empty { get; } = new(null, null, null, null, null, null);
+    public static CliPolicyDocument Empty { get; } = new(null, null, null, null);
 }

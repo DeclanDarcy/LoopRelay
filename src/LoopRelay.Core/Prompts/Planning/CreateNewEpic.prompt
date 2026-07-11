@@ -146,9 +146,100 @@ If the repository suggests the projection is stale:
 
 ---
 
-{epicImplementationFirstGuidance}
+# CreateNewEpic Implementation-First Guidance
 
-{epicAuxiliaryArtifactLimits}
+An epic exists to define how a strategic initiative becomes implemented software capability.
+
+A proposed initiative is justified only if completing it would cause the software itself to become meaningfully more capable, more correct, more robust, more integrated, or more executable.
+
+Strategic epic authoring is valid when it clarifies the path from proposal to capability.
+
+Examples of valid epic content include:
+
+* desired capability
+* strategic purpose
+* projection alignment
+* repository grounding
+* scope and non-goals
+* assumptions
+* constraints
+* dependencies
+* risks and watchpoints
+* acceptance criteria
+* milestone roadmap content
+* completion signals that future work can audit
+
+These are not substitutes for implementation.
+
+They are valid because they define the capability boundary that implementation must eventually satisfy.
+
+Repository grounding is valuable when it changes how the capability should be framed, scoped, ordered, constrained, or validated.
+
+It is not valuable as an inventory of the repository.
+
+A milestone is valid when it names a meaningful state of capability realization.
+
+It is not valid when it merely groups implementation tasks, names files to edit, records a work breakdown, or turns the epic into an execution prompt.
+
+Improved understanding, clearer rationale, cleaner planning, or better documentation are valuable only when they are absorbed into the epic as constraints on implemented capability.
+
+They are not epic outcomes by themselves.
+
+Once the capability frame is clear, `.agents/epic.md` is the sanctioned operational artifact for that frame.
+
+Creating it is part of the roadmap loop because it is the artifact later prompts consume to expand and execute the initiative.
+
+It is not an exception to implementation-first thinking.
+
+It is the place where strategic reasoning is compressed into an implementation-bearing artifact.
+
+Do not weaken the boundary because this prompt is authoring rather than coding.
+
+If a statement helps only human readers feel better informed, it probably does not belong.
+
+If it defines what must become true of the software, what must be preserved while making it true, or how later milestones will prove it true, it probably belongs.
+
+# CreateNewEpic Auxiliary Artifact Limits
+
+Implementation-first authoring has a single center of gravity.
+
+The work product should leave behind one operational artifact that directs later implementation, not a collection of artifacts about directing implementation.
+
+An auxiliary artifact is invalid when it moves reasoning out of the sanctioned epic and into a side channel.
+
+The question is not whether the material would be thoughtful, accurate, or useful to a human reader.
+
+The question is whether the material is part of the implementation-bearing epic, explicitly requested by the user, or required by the project as a machine-consumed implementation artifact.
+
+For CreateNewEpic, the implementation-bearing artifact is `.agents/epic.md`.
+
+Strategic purpose, repository grounding, assumptions, constraints, dependencies, risks, acceptance criteria, and milestone roadmap content remain valid there.
+
+They become invalid when copied into separate reports, appendices, inventories, RFCs, ADRs, governance notes, research notes, analysis documents, planning documents, certification notes, or other companion files whose primary result is human understanding rather than software capability.
+
+The problem with those artifacts is not their format.
+
+The problem is that they make documentation, coordination, governance, or analysis the produced outcome.
+
+CreateNewEpic should instead compress the useful reasoning into the epic itself, and only to the degree that it changes capability, scope, dependency order, constraints, validation, or future milestone expansion.
+
+If the initiative cannot be safely authored as an epic, output the documented Create New Epic blocked response.
+
+The blocked response replaces the epic for that run.
+
+It does not authorize additional explanatory artifacts.
+
+General test:
+
+> If this additional artifact were completed perfectly, but `.agents/epic.md` already contained the capability definition, constraints, dependencies, risks, acceptance criteria, and milestone roadmap needed for future implementation, would the software be meaningfully closer to the intended system?
+
+If the answer is no, the artifact almost certainly does not belong.
+
+If the answer is yes only because humans would have more surrounding narrative, it almost certainly does not belong.
+
+If the answer is yes because the project explicitly requires that artifact as a machine-consumed implementation input, or because the user explicitly requested it, it may belong.
+
+Otherwise, output only the `.agents/epic.md` Markdown content or the documented blocked response.
 
 ---
 

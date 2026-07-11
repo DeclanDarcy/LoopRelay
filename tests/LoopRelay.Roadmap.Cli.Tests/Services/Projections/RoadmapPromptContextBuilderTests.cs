@@ -93,7 +93,7 @@ public sealed class RoadmapPromptContextBuilderTests
     }
 
     [Fact]
-    public async Task Runtime_prompt_runner_appends_implementation_first_policy()
+    public async Task Runtime_prompt_carries_template_owned_implementation_first_policy()
     {
         using var repo = new TempRepo();
         var runtime = new ScriptedAgentRuntime(ScriptedAgentRuntime.Completed("ok"));
@@ -102,8 +102,9 @@ public sealed class RoadmapPromptContextBuilderTests
         await runner.RunRuntimePromptAsync("SelectNextEpic", "project context", string.Empty, CancellationToken.None);
 
         string prompt = Assert.Single(runtime.Prompts);
+        Assert.Contains("## Implementation-First Prompt Policy", prompt, StringComparison.Ordinal);
         Assert.Contains("Repository growth is implementation-first", prompt, StringComparison.Ordinal);
-        Assert.Contains("The HITL-requested exception is disabled", prompt, StringComparison.Ordinal);
+        Assert.Contains("structured explicit HITL request", prompt, StringComparison.Ordinal);
     }
 
     private sealed class StubLogicalArtifactResolver(string path, string content) : ILogicalArtifactResolver

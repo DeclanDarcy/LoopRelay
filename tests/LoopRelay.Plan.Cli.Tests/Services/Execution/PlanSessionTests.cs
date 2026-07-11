@@ -8,7 +8,6 @@ using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationLedger;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Plan.Cli.Models;
 using LoopRelay.Plan.Cli.Services.Execution;
 using LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
@@ -33,10 +32,16 @@ public class PlanSessionTests
 
     private static string Resolve(Repository repo, string rel) => ArtifactPath.ResolveRepositoryPath(repo, rel);
 
-    private static string WithPromptPolicy(string prompt) =>
-        ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-            prompt,
-            ImplementationFirstPromptPolicyComposer.ComposeDefault());
+    [Fact]
+    public void Plan_prompts_carry_the_template_owned_implementation_first_prompt_policy()
+    {
+        Assert.Contains("## Implementation-First Prompt Policy", WritePlan.Text, StringComparison.Ordinal);
+        Assert.Contains("Repository growth is implementation-first", WritePlan.Text, StringComparison.Ordinal);
+        Assert.Contains(
+            "## Implementation-First Prompt Policy",
+            RevisePlan.Render("feedback"),
+            StringComparison.Ordinal);
+    }
 
     [Fact]
     public void Plan_prompts_define_the_structured_hitl_request_marker_rules()
@@ -62,13 +67,13 @@ public class PlanSessionTests
 
         rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
         {
-            Assert.Equal(WithPromptPolicy(WritePlan.Text), prompt);
+            Assert.Equal(WritePlan.Text, prompt);
             s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN V1").Wait();
             return Turns.Completed("wrote plan");
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
         {
-            Assert.Equal(WithPromptPolicy(RevisePlan.Render("FEEDBACK")), prompt);
+            Assert.Equal(RevisePlan.Render("FEEDBACK"), prompt);
             s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN V2").Wait();
             return Turns.Completed("revised plan");
         }));

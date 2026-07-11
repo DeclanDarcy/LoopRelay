@@ -6,7 +6,6 @@ using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
-using LoopRelay.Permissions.Models.Policy;
 
 namespace LoopRelay.Orchestration.Tests.Services.NonImplementationReview;
 
@@ -61,79 +60,6 @@ public sealed class NonImplementationReviewFoundationTests
                 Assert.Equal($"Non-Implementation Review Synthesis: {OrchestrationArtifactPaths.NonImplementationSynthesis}", section.Title);
                 Assert.Equal(OrchestrationArtifactPaths.NonImplementationSynthesis, section.Path);
             });
-    }
-
-    [Fact]
-    public void Prompt_policy_composer_defaults_to_implementation_first_mode()
-    {
-        string policy = ImplementationFirstPromptPolicyComposer.Compose(NonImplementationArtifactPolicyOptions.Default);
-
-        Assert.Contains("Repository growth is implementation-first", policy, StringComparison.Ordinal);
-        Assert.Contains("exception is disabled", policy, StringComparison.Ordinal);
-        Assert.Contains("Never invent autonomous documentation", policy, StringComparison.Ordinal);
-        Assert.Contains("Architecture Tests", policy, StringComparison.Ordinal);
-        Assert.Contains("Golden Tests", policy, StringComparison.Ordinal);
-        Assert.Contains("does not disable post-execution non-implementation review", policy, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Prompt_policy_composer_preserves_hitl_requested_exception_when_enabled()
-    {
-        string policy = ImplementationFirstPromptPolicyComposer.Compose(
-            new NonImplementationArtifactPolicyOptions(
-                AllowHitlRequestedNonImplementationFiles: true,
-                AllowAuxiliaryNonImplementationFiles: false));
-
-        Assert.Contains("explicit HITL request evidence", policy, StringComparison.Ordinal);
-        Assert.Contains("HITL-requested documentation exception", policy, StringComparison.Ordinal);
-        Assert.Contains("never infer the exception", policy, StringComparison.Ordinal);
-        Assert.Contains("Never invent autonomous documentation", policy, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Prompt_policy_section_is_rendered_from_central_composer()
-    {
-        string prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-            "do work",
-            ImplementationFirstPromptPolicyComposer.ComposeDefault());
-
-        Assert.Contains(ImplementationFirstPromptPolicyComposer.SectionHeading, prompt, StringComparison.Ordinal);
-        Assert.Contains("do work", prompt, StringComparison.Ordinal);
-        Assert.Contains("Repository growth is implementation-first", prompt, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Prompt_policy_body_is_not_hard_coded_outside_the_composer()
-    {
-        string repositoryRoot = FindRepositoryRoot();
-        string sourceRoot = Path.Combine(repositoryRoot, "src");
-        string composerPath = Path.GetFullPath(Path.Combine(
-            sourceRoot,
-            "LoopRelay.Orchestration.Primitives",
-            "Services",
-            "NonImplementationReview",
-            "ImplementationFirstPromptPolicyComposer.cs"));
-        string[] policyLines = ImplementationFirstPromptPolicyComposer.ComposeDefault()
-            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        foreach (string file in Directory.EnumerateFiles(sourceRoot, "*.*", SearchOption.AllDirectories)
-            .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith(".prompt", StringComparison.OrdinalIgnoreCase)))
-        {
-            string fullPath = Path.GetFullPath(file);
-            if (string.Equals(fullPath, composerPath, StringComparison.OrdinalIgnoreCase) ||
-                fullPath.Split(Path.DirectorySeparatorChar).Contains("bin") ||
-                fullPath.Split(Path.DirectorySeparatorChar).Contains("obj"))
-            {
-                continue;
-            }
-
-            string content = File.ReadAllText(fullPath);
-            foreach (string policyLine in policyLines)
-            {
-                Assert.DoesNotContain(policyLine, content, StringComparison.Ordinal);
-            }
-        }
     }
 
     [Fact]
@@ -325,22 +251,5 @@ public sealed class NonImplementationReviewFoundationTests
 
         public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path) =>
             Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        DirectoryInfo? directory = new(Directory.GetCurrentDirectory());
-        while (directory is not null)
-        {
-            if (Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                Directory.Exists(Path.Combine(directory.FullName, "tests")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not locate repository root.");
     }
 }

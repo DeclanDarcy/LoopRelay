@@ -148,6 +148,28 @@ public sealed record CanonicalPolicyResolutionRecord(
     string SourceDescription,
     DateTimeOffset RecordedAt);
 
+// The append-only fact behind a rendered prompt: the exact agent-bound text, the build-time
+// source hash of the template it was rendered from (policy text is template-owned, so this hash
+// is the policy-complete prompt version), the consumed input files (path + content hash), and
+// the policy identity in effect. (TemplateSourceHash, PolicyId, ConsumedInputs, the run's input
+// snapshot) reproduce the invocation; RenderedSha256 verifies the reproduction.
+public sealed record CanonicalRenderedPromptRecord(
+    string RenderedPromptId,
+    string TransitionRunId,
+    string? AttemptId,
+    string PromptIdentity,
+    string? TemplateSourceHash,
+    string RenderedSha256,
+    string RenderedText,
+    IReadOnlyList<CanonicalReadReceiptFile> ConsumedInputs,
+    string? PolicyId,
+    DateTimeOffset RenderedAt,
+    string? SessionId = null,
+    string? TurnId = null);
+
+// Effort and Sandbox record the session spec's declared profiles (identifier when one is set,
+// otherwise the level name) so every session's evidence carries the effort it ran with. The
+// provider wire format and full effective specification are M7 Runtime Authority scope.
 public sealed record AgentSessionRecord(
     string SessionId,
     string? AttemptId,
@@ -157,7 +179,9 @@ public sealed record AgentSessionRecord(
     string Role,
     string? LegacySessionGuid,
     DateTimeOffset StartedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    string? Effort = null,
+    string? Sandbox = null);
 
 public sealed record AgentTurnRecord(
     string TurnId,

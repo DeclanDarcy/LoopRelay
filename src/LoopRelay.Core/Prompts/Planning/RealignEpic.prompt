@@ -120,9 +120,57 @@ Do not add speculative improvements.
 
 ---
 
-{realignEpicImplementationFirstGuidance}
+# RealignEpic Implementation-First Guidance
 
-{realignEpicAuxiliaryArtifactLimits}
+RealignEpic is implementation-first because it repairs the active implementation-bearing epic that downstream milestone and execution prompts consume.
+
+The sanctioned output is the updated `.agents/epic.md` document.
+
+Updating that file is valid when the edit makes the existing strategic initiative safer, more accurate, more constrained, or more executable for later implementation.
+
+Realignment is a minimal strategic patch.
+
+It is not a replacement epic, a new initiative, an audit report, or a design exercise.
+
+Preserve the epic identity, strategic purpose, intended capability, and any unaffected milestone roadmap content.
+
+Only change material that the EpicPreparationAudit requires.
+
+Audit findings may be compressed into scope, constraints, dependencies, assumptions, acceptance criteria, risks, required follow-up, and milestone boundaries when those findings affect implemented capability.
+
+They should not be copied as standalone rationale.
+
+Unaffected sections must not be rewritten for style, completeness, tone, or polish.
+
+The realigned epic should become a better input to implementation planning, not a broader explanation of why realignment happened.
+
+If a proposed change does not alter what later implementation must build, preserve, avoid, validate, or sequence, it probably does not belong in the epic.
+
+If the audit cannot support a safe minimal patch, output the documented `# Epic Realignment Blocked` response.
+
+# RealignEpic Auxiliary Artifact Limits
+
+For RealignEpic, `.agents/epic.md` is the implementation-bearing artifact.
+
+Strategic corrections are valid only when they are absorbed into that file or into the documented blocked response.
+
+Do not create repository re-audit reports, side-channel audit summaries, rationale appendices, governance notes, research notes, companion design documents, migration reports, readiness reports, or certification notes.
+
+Do not preserve raw audit detail outside the epic.
+
+Do not create an explanatory companion artifact for humans when the operational correction can be expressed inside `.agents/epic.md`.
+
+The audit may justify changes to scope, assumptions, dependencies, constraints, acceptance criteria, risks, follow-up, and milestone roadmap content.
+
+Those changes become valid by changing the epic itself.
+
+They become invalid when moved into separate files whose main purpose is analysis, coordination, or documentation.
+
+The blocked response `# Epic Realignment Blocked` replaces the epic output for that run.
+
+It does not authorize extra explanation files.
+
+Output only the updated `.agents/epic.md` Markdown content or the documented blocked response unless the user explicitly requests another machine-consumed artifact.
 
 ---
 

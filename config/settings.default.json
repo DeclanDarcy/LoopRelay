@@ -1,8 +1,4 @@
 {
-  "artifactPolicy": {
-    "allowHitlRequestedNonImplementationFiles": false,
-    "allowAuxiliaryNonImplementationFiles": false
-  },
   "policy": {
     "execution": {
       "maxUnboundedContinuationSteps": 32,

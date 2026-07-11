@@ -15,8 +15,7 @@ internal sealed class RoadmapPromptTransitionRunner(
     TransitionInputResolver _inputResolver,
     RoadmapPromptRunner _promptRunner,
     ITransitionJournalStore _journalStore,
-    RoadmapTransitionPersistence _transitionPersistence,
-    RoadmapRuntimePromptPolicy? _runtimePromptPolicy = null)
+    RoadmapTransitionPersistence _transitionPersistence)
 {
     public async Task<string> RunNormalAsync(
         RoadmapState from,
@@ -163,7 +162,9 @@ internal sealed class RoadmapPromptTransitionRunner(
         string secondaryInput,
         TransitionInputContext inputContext)
     {
-        RoadmapRuntimePromptPolicy effectivePolicy = _runtimePromptPolicy ?? RoadmapRuntimePromptPolicy.Default;
+        // With the prompt policy template-owned (M6), the template's build-time source hash is
+        // the policy-complete prompt version; stamping it keeps every persisted transition
+        // snapshot tied to the prompt version that rendered it.
         return await _inputResolver.ResolveAsync(new TransitionInputRequest(
             prompt,
             projectionPath,
@@ -171,7 +172,15 @@ internal sealed class RoadmapPromptTransitionRunner(
             secondaryInput,
             inputContext)
         {
-            PromptPolicy = effectivePolicy.CreateIdentity(prompt),
+            PromptPolicy = TemplateOwnedPromptIdentity(prompt),
         });
     }
+
+    internal static TransitionPromptPolicyIdentity TemplateOwnedPromptIdentity(string runtimePromptName) =>
+        TransitionPromptPolicyIdentity.Create(
+            "template-owned-v1",
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["promptSourceHash"] = RoadmapPromptCatalog.RuntimeTemplateSourceHash(runtimePromptName),
+            });
 }

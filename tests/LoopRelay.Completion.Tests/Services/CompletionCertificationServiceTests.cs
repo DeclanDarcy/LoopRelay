@@ -21,6 +21,7 @@ using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models;
@@ -591,7 +592,7 @@ public sealed class CompletionCertificationServiceTests
     }
 
     [Fact]
-    public async Task AgentCompletionPromptRunner_AppendsImplementationFirstPolicy()
+    public async Task AgentCompletionPromptRunner_SendsTemplateOwnedImplementationFirstPolicy()
     {
         var runtime = new RecordingAgentRuntime(new AgentTurnResult(
             0,
@@ -606,9 +607,54 @@ public sealed class CompletionCertificationServiceTests
             ProjectContext: "context"));
 
         Assert.Equal("ok", output);
+        // The policy section is template-owned (M6): it arrives inside the rendered template
+        // rather than as a post-render append, so the template's SourceHash covers it.
         string prompt = Assert.Single(runtime.Prompts);
+        Assert.Contains("## Implementation-First Prompt Policy", prompt, StringComparison.Ordinal);
         Assert.Contains("Repository growth is implementation-first", prompt, StringComparison.Ordinal);
-        Assert.Contains("The HITL-requested exception is disabled", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AgentCompletionPromptRunner_AppendsARenderedPromptFactWithTemplateHashAndPolicyIdentity()
+    {
+        var runtime = new RecordingAgentRuntime(new AgentTurnResult(
+            0,
+            AgentTurnState.Completed,
+            "ok",
+            AgentTokenUsage.Zero));
+        var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" };
+        var renderedPrompts = new RecordingRenderedPromptStore();
+        var runner = new AgentCompletionPromptRunner(
+            runtime,
+            repository,
+            renderedPrompts,
+            "pol_v1_0123456789abcdef0123456789abcdef",
+            new PromptExecutionContext("run_1", "wfi_1", "tr_1", "att_1"));
+
+        await runner.RunAsync(new CompletionRuntimePromptInvocation(
+            CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift,
+            ProjectContext: "context"));
+
+        RenderedPromptCapture capture = Assert.Single(renderedPrompts.Captures);
+        Assert.Equal("tr_1", capture.TransitionRunId);
+        Assert.Equal("att_1", capture.AttemptId);
+        Assert.Equal(CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift, capture.PromptIdentity);
+        Assert.Equal(
+            CompletionPromptCatalog.TemplateSourceHash(CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift),
+            capture.TemplateSourceHash);
+        Assert.Equal(Assert.Single(runtime.Prompts), capture.RenderedText);
+        Assert.Equal("pol_v1_0123456789abcdef0123456789abcdef", capture.PolicyId);
+    }
+
+    private sealed class RecordingRenderedPromptStore : IRenderedPromptStore
+    {
+        public List<RenderedPromptCapture> Captures { get; } = [];
+
+        public Task AppendAsync(RenderedPromptCapture capture, CancellationToken cancellationToken)
+        {
+            Captures.Add(capture);
+            return Task.CompletedTask;
+        }
     }
 
     private static string Evaluation(string completionStatus, string drift, string recommendation) => $$"""

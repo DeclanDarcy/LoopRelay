@@ -851,6 +851,29 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         }
     }
 
+    // Appends the rendered-prompt fact: the exact agent-bound text, the template source hash it
+    // was rendered from, the consumed input manifest, and the policy identity in effect.
+    internal sealed class CanonicalRenderedPromptStore(
+        CanonicalWorkflowPersistenceStore _persistence) : IRenderedPromptStore
+    {
+        public async Task AppendAsync(RenderedPromptCapture capture, CancellationToken cancellationToken) =>
+            await _persistence.AppendRenderedPromptAsync(
+                new CanonicalRenderedPromptRecord(
+                    CausalUlid.NewId("rp"),
+                    capture.TransitionRunId,
+                    capture.AttemptId,
+                    capture.PromptIdentity,
+                    capture.TemplateSourceHash,
+                    ConsumedInputFile.HashContent(capture.RenderedText),
+                    capture.RenderedText,
+                    capture.ConsumedInputs.Select(file => new CanonicalReadReceiptFile(file.Path, file.Sha256)).ToArray(),
+                    capture.PolicyId,
+                    capture.RenderedAt,
+                    capture.SessionId,
+                    capture.TurnId),
+                cancellationToken);
+    }
+
     private static class LocalVerificationTransitions
     {
         private static readonly HashSet<string> Supported =
@@ -1101,20 +1124,24 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         {
             string text;
             string evidence;
+            string? templateSourceHash;
             if (LocalVerificationTransitions.Supports(definition))
             {
                 text = $"Local verification transition `{definition.Identity}` validates already-observed canonical products.";
                 evidence = LocalVerificationTransitions.Evidence(definition)[0];
+                templateSourceHash = null;
             }
             else if (LocalArtifactTransitions.Supports(definition))
             {
                 text = $"Local artifact transition `{definition.Identity}` materializes deterministic repository-owned artifacts.";
                 evidence = LocalArtifactTransitions.Evidence(definition)[0];
+                templateSourceHash = null;
             }
             else if (EvalPromptAssetCatalog.TryGetByTransition(definition.Identity, out EvalPromptAsset asset))
             {
                 text = RenderEvalPromptAsset(asset, context);
                 evidence = $"unified-cli/prompts/eval/{asset.PromptAssetName}@{asset.SourceHash}";
+                templateSourceHash = asset.SourceHash;
             }
             else if (CanonicalPromptAssetCatalog.TryGetByPromptIdentity(definition.PromptIdentity, out CanonicalPromptAsset canonicalAsset))
             {
@@ -1122,14 +1149,19 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     ? RenderAdversarialPlanReviewPrompt(context)
                     : RenderCanonicalPromptAsset(canonicalAsset, context);
                 evidence = $"unified-cli/prompts/core/{canonicalAsset.PromptAssetName}@{canonicalAsset.SourceHash}";
+                templateSourceHash = canonicalAsset.SourceHash;
             }
             else
             {
+                // No catalog owns this prompt identity: the placeholder never reaches an agent —
+                // the executor fails closed with a typed not-wired result before any send — and
+                // the evidence names the unwired state instead of fabricating an asset path.
                 text = $"Prompt `{definition.PromptIdentity}` is registered but execution integration is not wired.";
-                evidence = $"unified-cli/prompts/{definition.PromptIdentity}.prompt";
+                evidence = $"unified-cli/prompts/unwired/{definition.PromptIdentity}";
+                templateSourceHash = null;
             }
 
-            return Task.FromResult(new RenderedPrompt(definition.PromptIdentity, text, evidence));
+            return Task.FromResult(new RenderedPrompt(definition.PromptIdentity, text, evidence, templateSourceHash));
         }
 
         private static string RenderEvalPromptAsset(
@@ -1211,49 +1243,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
         private static string RenderAdversarialPlanReviewPrompt(PromptContext context)
         {
+            // All instruction text is template-owned (covered by the asset SourceHash); this branch only
+            // routes the two declared inputs into their positional holes.
             string projection = RequiredSection(context, "Adversarial Projection");
             string plan = RequiredSection(context, "Executable Plan");
-            return AdversarialPlanReview.Render(
-                """
-
-                A plan is not safe because it is coherent, complete-looking, or well documented. It is safe only when it drives implementation-bearing work that advances implemented capability, creates executable progress, and can be validated by operational gates. Treat documentation-centric progress as a failure mode when it creates false implementation confidence or lets non-executable outputs stand in for capability evidence.
-
-                """,
-                """
-
-                During generic review, treat implementation-first fidelity as an explicit attack vector. Attack plans that substitute artifacts about work for work. Look for plan steps that produce reports, inventories, governance language, certification narratives, explanatory documentation, or other non-implementation deliverables without advancing implemented capability.
-
-                Treat acceptance criteria that measure prose completion, non-implementation deliverables presented as capability evidence, or completed-looking artifacts that leave code, tests, runtime behavior, project files, required generated artifacts, or sanctioned `.agents` operational artifacts unchanged or insufficiently constrained as material risk.
-
-                A HITL-requested non-implementation deliverable is only a narrow, evidence-grounded exception for that deliverable; it does not create general permission to make documentation-centric progress. Treat machine-consumed operational artifacts as valid capability evidence only when they directly constrain execution, validation, or downstream agent behavior.
-
-                Optimize for detecting false implementation confidence created by plans that can look complete while the software remains unchanged or insufficiently constrained.
-
-                """,
-                """
-
-                - Implementation-first fidelity: Does the plan advance implemented capability, or does it mistake artifacts about work for work?
-                - Capability evidence: Are exit criteria tied to code, tests, runtime behavior, project files, generated artifacts, or sanctioned operational artifacts that constrain execution?
-                - Documentation theater: Do prose deliverables, governance or certification language, and explanatory artifacts create false confidence without executable gates?
-                - Operational artifact validity: Are `.agents` artifacts or generated artifacts machine-consumed and execution-bearing, or are they auxiliary commentary?
-                """,
-                "If no projection rule is violated, explicitly state that the finding is based on generic implementation-first review quality or another generic planning quality axis rather than project-specific projection semantics. Implementation-first failures are material findings even when the projection does not restate them.",
-                """
-
-                Always include implementation-first false-closure modes when the plan can appear complete through prose deliverables, governance or certification artifacts, inventories, or other non-executable outputs while implemented capability remains incomplete.
-
-                """,
-                """
-
-                Corrections should move risk back into implementation-bearing plan content, milestone acceptance criteria, validation gates, required generated artifacts, or sanctioned `.agents` operational artifacts. Do not ask for separate policy documents, side reports, or documentation theater as the correction unless they are machine-consumed gates that directly constrain execution.
-
-                """,
-                """
-
-                - no realistic implementation-first false-success path remains
-                """,
-                projection,
-                plan);
+            return AdversarialPlanReview.Render(projection, plan);
         }
 
         private static string RequiredSection(PromptContext context, string title) =>
@@ -1284,6 +1278,51 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private CompletionCertificationResult? completionCertificationResult;
 
         private PromptExecutionContext CurrentExecutionContext { get; set; } = PromptExecutionContext.Empty;
+
+        // Rendered-prompt facts are minted at the SEND site — the point where text actually goes
+        // to an agent — never at the render seam, so a canonical render an executor branch
+        // discards and re-composes is never recorded as an agent-bound prompt. This overload
+        // covers sends of the runtime-rendered text verbatim; the manifest comes from the
+        // execution context the runtime handed over.
+        private async Task TryAppendRenderedPromptAsync(RenderedPrompt prompt) =>
+            await TryAppendRenderedPromptAsync(
+                prompt.PromptIdentity,
+                prompt.TemplateSourceHash,
+                prompt.Text,
+                CurrentExecutionContext.ConsumedFiles ?? []);
+
+        private async Task TryAppendRenderedPromptAsync(
+            string promptIdentity,
+            string? templateSourceHash,
+            string renderedText,
+            IReadOnlyList<ConsumedInputFile> consumedInputs)
+        {
+            try
+            {
+                await new CanonicalRenderedPromptStore(_persistence).AppendAsync(
+                    new RenderedPromptCapture(
+                        CurrentExecutionContext.TransitionRunId ?? string.Empty,
+                        CurrentExecutionContext.AttemptId,
+                        promptIdentity,
+                        templateSourceHash,
+                        renderedText,
+                        consumedInputs,
+                        _policy.PolicyId,
+                        DateTimeOffset.UtcNow),
+                    CancellationToken.None);
+            }
+            catch
+            {
+                // Rendered-prompt persistence is supporting evidence; failing to append must not fail execution.
+            }
+        }
+
+        private static IReadOnlyList<ConsumedInputFile> ConsumedFiles(
+            params (string Path, string? Content)[] files) =>
+            files
+                .Where(file => file.Content is not null)
+                .Select(file => ConsumedInputFile.FromContent(file.Path, file.Content!))
+                .ToArray();
 
         /// <summary>The agent runtime wrapped with best-effort causal-spine recording: one agent_sessions row
         /// per underlying session open (one-shot or persistent, including sessions opened inside DecisionSession
@@ -1420,6 +1459,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             try
             {
+                await TryAppendRenderedPromptAsync(prompt);
                 AgentTurnResult result = await Runtime!.RunOneShotAsync(
                     AgentSpecs.Operational(_repository, AgentEffortLevel.High, "xhigh"),
                     prompt.Text,
@@ -1525,6 +1565,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             try
             {
                 session = await Runtime!.OpenSessionAsync(AgentSpecs.Review(_repository), cancellationToken);
+                await TryAppendRenderedPromptAsync(prompt);
                 AgentTurnResult result = await session.RunTurnAsync(
                     prompt.Text,
                     onChunk: null,
@@ -1589,7 +1630,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 new ProjectionPromptRunner(
                     Runtime ?? throw new InvalidOperationException("Projection prompt runner requires an agent runtime."),
                     _repository,
-                    new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null)));
+                    new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null),
+                    new CanonicalRenderedPromptStore(_persistence),
+                    _policy.PolicyId,
+                    CurrentExecutionContext));
         }
 
         private async Task<PromptExecutionResult> ExecutePlanScopedArtifactOperationAsync(
@@ -1632,6 +1676,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 session = await Runtime!.OpenSessionAsync(
                     AgentSpecs.ScopedArtifactOperation(_repository, AgentEffortLevel.High, "xhigh", profile),
                     cancellationToken);
+                await TryAppendRenderedPromptAsync(prompt);
                 AgentTurnResult result = await session.RunTurnAsync(
                     prompt.Text,
                     onChunk: null,
@@ -1856,6 +1901,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         "RevisePlan requires the warm planning session opened by WriteExecutablePlan.");
                 }
 
+                await TryAppendRenderedPromptAsync(prompt);
                 AgentTurnResult result = await planAuthoringSession.RunTurnAsync(
                     prompt.Text,
                     onChunk: null,
@@ -1921,8 +1967,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     _resumeStore: new SqliteDecisionSessionResumeStore(_repository),
                     _projectionService: null,
                     _resumeEnabled: _policy.DecisionSessionResume,
-                    _promptPolicy: ImplementationFirstPromptPolicyComposer.Compose(_policy.ArtifactPolicy),
-                    _operationalContextGrowthStreakWarningThreshold: _policy.OperationalContextGrowthWarningStreak);
+                    _operationalContextGrowthStreakWarningThreshold: _policy.OperationalContextGrowthWarningStreak,
+                    _renderedPromptStore: new CanonicalRenderedPromptStore(_persistence),
+                    _policyIdentity: _policy.PolicyId);
                 await executeDecisionSession.RunAsync(
                     cancellationToken,
                     new LoopHistoryLineage(
@@ -1983,7 +2030,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 LoopArtifacts artifacts = CreateLoopArtifacts();
                 string? plan = await artifacts.ReadPlanAsync();
                 string? details = await artifacts.ReadDetailsAsync();
-                (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
+                (string? decisions, string? decisionsPath) = await artifacts.ReadLatestDecisionsAsync();
                 if (string.IsNullOrWhiteSpace(decisions))
                 {
                     return Failed($"{OrchestrationArtifactPaths.Decisions} was not available for execution.");
@@ -1993,9 +2040,15 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 uncheckedMilestonesBeforeExecution = (await milestones.GetUntickedItemsAsync()).Count;
                 executionSliceBaseline = await CreateBaselineStore().CapturePreSliceAsync();
 
-                string executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-                    ContinueExecution.Render(plan, details, decisions, "TODO"),
-                    ImplementationFirstPromptPolicyComposer.Compose(_policy.ArtifactPolicy));
+                string executionPrompt = ContinueExecution.Render(plan, details, decisions);
+                await TryAppendRenderedPromptAsync(
+                    "ContinueExecution",
+                    ContinueExecution.SourceHash,
+                    executionPrompt,
+                    ConsumedFiles(
+                        (OrchestrationArtifactPaths.Plan, plan),
+                        (OrchestrationArtifactPaths.Details, details),
+                        (decisionsPath ?? OrchestrationArtifactPaths.Decisions, decisions)));
                 executionSession = await Runtime!.OpenSessionAsync(
                     AgentSpecs.Operational(
                         _repository,
@@ -2060,11 +2113,15 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 if (changedPathsAfterExecution.Count > 0)
                 {
                     handoffPrompt = GenerateHandoff.Text;
+                    await TryAppendRenderedPromptAsync(
+                        "GenerateHandoff", GenerateHandoff.SourceHash, handoffPrompt, []);
                 }
                 else
                 {
                     IReadOnlyList<string> unticked = await CreateMilestoneGate().GetUntickedItemsAsync();
                     handoffPrompt = GenerateNoChangesHandoff.Render(string.Join("\n", unticked));
+                    await TryAppendRenderedPromptAsync(
+                        "GenerateNoChangesHandoff", GenerateNoChangesHandoff.SourceHash, handoffPrompt, []);
                 }
 
                 AgentTurnResult handoff = await executionSession.RunTurnAsync(
@@ -2382,7 +2439,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             var promptRunner = new AgentCompletionPromptRunner(
                 Runtime!,
                 _repository,
-                ImplementationFirstPromptPolicyComposer.Compose(_policy.ArtifactPolicy));
+                new CanonicalRenderedPromptStore(_persistence),
+                _policy.PolicyId,
+                CurrentExecutionContext);
             var archiveService = new CompletedEpicArchiveService(artifactStore, promptRunner, completionObserver);
             var service = new CompletionCertificationService(
                 artifactStore,
@@ -2568,7 +2627,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private INonImplementationPostExecutionReviewService CreateNonImplementationPostExecutionReviewService()
         {
             var ledger = new NonImplementationReviewLedgerStore(artifactStore);
-            var runner = new AgentNonImplementationReviewRunner(Runtime!, _repository);
+            var runner = new AgentNonImplementationReviewRunner(
+                Runtime!,
+                _repository,
+                new CanonicalRenderedPromptStore(_persistence),
+                _policy.PolicyId,
+                CurrentExecutionContext);
             return new NonImplementationPostExecutionReviewService(
                 CreateBaselineStore(),
                 new NonImplementationArtifactClassifier(),
@@ -2579,7 +2643,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private INonImplementationCompletionReviewService CreateNonImplementationCompletionReviewService()
         {
             var ledger = new NonImplementationReviewLedgerStore(artifactStore);
-            var runner = new AgentNonImplementationReviewRunner(Runtime!, _repository);
+            var runner = new AgentNonImplementationReviewRunner(
+                Runtime!,
+                _repository,
+                new CanonicalRenderedPromptStore(_persistence),
+                _policy.PolicyId,
+                CurrentExecutionContext);
             return new NonImplementationCompletionReviewService(
                 new RepositoryChangeSetDetector(_processRunner, _repository),
                 new NonImplementationArtifactClassifier(),
@@ -2691,7 +2760,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         spec.Role.ToString(),
                         spec.SessionId.Value.ToString("D"),
                         DateTimeOffset.UtcNow,
-                        null);
+                        null,
+                        spec.Effort.Identifier ?? spec.Effort.Level.ToString(),
+                        spec.Sandbox.Identifier);
                     await _store.UpsertAgentSessionAsync(record, cancellationToken);
                     return record;
                 }

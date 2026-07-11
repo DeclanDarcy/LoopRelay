@@ -157,7 +157,12 @@ public sealed class TransitionRuntime(
             PromptExecutionResult executionResult = await _promptExecutor.ExecuteAsync(
                 definition,
                 renderedPrompt,
-                new PromptExecutionContext(request.Run?.Value, request.WorkflowInstance?.Value, runId, attemptId),
+                new PromptExecutionContext(
+                    request.Run?.Value,
+                    request.WorkflowInstance?.Value,
+                    runId,
+                    attemptId,
+                    context.ConsumedFiles),
                 cancellationToken);
             stopwatch.Stop();
 

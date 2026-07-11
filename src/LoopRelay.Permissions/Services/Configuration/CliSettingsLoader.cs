@@ -73,8 +73,6 @@ public static class CliSettingsLoader
             PermissionPolicyOptions policy = PermissionPolicyDocumentMapper.ToPolicy(document.Permissions);
             PermissionPolicyOptions merged = PermissionPolicyFactory.MergeWithMinimum(policy);
             CliPolicyDocument policyDocument = new(
-                document.ArtifactPolicy?.AllowHitlRequestedNonImplementationFiles,
-                document.ArtifactPolicy?.AllowAuxiliaryNonImplementationFiles,
                 document.Policy?.Execution?.MaxUnboundedContinuationSteps,
                 document.Policy?.Execution?.MaxNoChangesCommits,
                 document.Policy?.Execution?.OperationalContextGrowthWarningStreak,
@@ -102,17 +100,7 @@ public static class CliSettingsLoader
     {
         public PermissionPolicyDocument? Permissions { get; set; }
 
-        public ArtifactPolicyDocument? ArtifactPolicy { get; set; }
-
         public PolicyDocument? Policy { get; set; }
-    }
-
-    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-    private sealed class ArtifactPolicyDocument
-    {
-        public bool? AllowHitlRequestedNonImplementationFiles { get; set; }
-
-        public bool? AllowAuxiliaryNonImplementationFiles { get; set; }
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

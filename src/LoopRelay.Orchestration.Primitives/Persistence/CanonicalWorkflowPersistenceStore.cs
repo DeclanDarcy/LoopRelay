@@ -466,6 +466,85 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         });
     }
 
+    public async Task AppendRenderedPromptAsync(
+        CanonicalRenderedPromptRecord renderedPrompt,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO canonical_rendered_prompts (
+                rendered_prompt_id, transition_run_id, attempt_id, session_id, turn_id,
+                prompt_identity, template_source_hash, rendered_sha256, rendered_text,
+                consumed_inputs_json, policy_id, rendered_at
+            )
+            VALUES (
+                $rendered_prompt_id, $transition_run_id, $attempt_id, $session_id, $turn_id,
+                $prompt_identity, $template_source_hash, $rendered_sha256, $rendered_text,
+                $consumed_inputs_json, $policy_id, $rendered_at
+            );
+            """,
+            cancellationToken,
+            ("$rendered_prompt_id", renderedPrompt.RenderedPromptId),
+            ("$transition_run_id", renderedPrompt.TransitionRunId),
+            ("$attempt_id", renderedPrompt.AttemptId),
+            ("$session_id", renderedPrompt.SessionId),
+            ("$turn_id", renderedPrompt.TurnId),
+            ("$prompt_identity", renderedPrompt.PromptIdentity),
+            ("$template_source_hash", renderedPrompt.TemplateSourceHash),
+            ("$rendered_sha256", renderedPrompt.RenderedSha256),
+            ("$rendered_text", renderedPrompt.RenderedText),
+            ("$consumed_inputs_json", Json(renderedPrompt.ConsumedInputs)),
+            ("$policy_id", renderedPrompt.PolicyId),
+            ("$rendered_at", Format(renderedPrompt.RenderedAt)));
+    }
+
+    public async Task<IReadOnlyList<CanonicalRenderedPromptRecord>> ReadRenderedPromptsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            var rows = new List<CanonicalRenderedPromptRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            // Ledger sequence (insertion order) is the ordering authority for appended facts.
+            command.CommandText = """
+                SELECT rendered_prompt_id, transition_run_id, attempt_id, session_id, turn_id,
+                       prompt_identity, template_source_hash, rendered_sha256, rendered_text,
+                       consumed_inputs_json, policy_id, rendered_at
+                FROM canonical_rendered_prompts ORDER BY rowid;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new CanonicalRenderedPromptRecord(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetString(2),
+                    reader.GetString(5),
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    reader.GetString(7),
+                    reader.GetString(8),
+                    ReadJson<List<CanonicalReadReceiptFile>>(reader.GetString(9)),
+                    reader.IsDBNull(10) ? null : reader.GetString(10),
+                    ParseDate(reader.GetString(11)),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4)));
+            }
+
+            return rows;
+        });
+    }
+
     public async Task UpsertRunAsync(
         RunRecord run,
         CancellationToken cancellationToken = default)
@@ -675,11 +754,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             """
             INSERT INTO agent_sessions (
                 session_id, attempt_id, workspace_id, provider, provider_thread_id,
-                role, legacy_session_guid, started_at, completed_at
+                role, legacy_session_guid, started_at, completed_at, effort, sandbox
             )
             VALUES (
                 $session_id, $attempt_id, $workspace_id, $provider, $provider_thread_id,
-                $role, $legacy_session_guid, $started_at, $completed_at
+                $role, $legacy_session_guid, $started_at, $completed_at, $effort, $sandbox
             )
             ON CONFLICT(session_id) DO UPDATE SET
                 attempt_id = excluded.attempt_id,
@@ -689,7 +768,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 role = excluded.role,
                 legacy_session_guid = excluded.legacy_session_guid,
                 started_at = excluded.started_at,
-                completed_at = excluded.completed_at;
+                completed_at = excluded.completed_at,
+                effort = excluded.effort,
+                sandbox = excluded.sandbox;
             """,
             cancellationToken,
             ("$session_id", session.SessionId),
@@ -700,7 +781,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$role", session.Role),
             ("$legacy_session_guid", session.LegacySessionGuid),
             ("$started_at", Format(session.StartedAt)),
-            ("$completed_at", session.CompletedAt is null ? null : Format(session.CompletedAt.Value)));
+            ("$completed_at", session.CompletedAt is null ? null : Format(session.CompletedAt.Value)),
+            ("$effort", session.Effort),
+            ("$sandbox", session.Sandbox));
     }
 
     public async Task AppendAgentTurnAsync(
@@ -928,13 +1011,25 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
 
+            // Pre-v8 databases opened read-only have no effort/sandbox columns; those sessions
+            // read back with null profile evidence without migrating the database.
+            bool hasSessionProfiles = await ColumnExistsAsync(
+                connection, "agent_sessions", "effort", cancellationToken);
+
             var rows = new List<AgentSessionRecord>();
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT session_id, attempt_id, workspace_id, provider, provider_thread_id,
-                       role, legacy_session_guid, started_at, completed_at
-                FROM agent_sessions ORDER BY started_at, session_id;
-                """;
+            command.CommandText = hasSessionProfiles
+                ? """
+                  SELECT session_id, attempt_id, workspace_id, provider, provider_thread_id,
+                         role, legacy_session_guid, started_at, completed_at, effort, sandbox
+                  FROM agent_sessions ORDER BY started_at, session_id;
+                  """
+                : """
+                  SELECT session_id, attempt_id, workspace_id, provider, provider_thread_id,
+                         role, legacy_session_guid, started_at, completed_at,
+                         NULL AS effort, NULL AS sandbox
+                  FROM agent_sessions ORDER BY started_at, session_id;
+                  """;
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -947,7 +1042,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                     reader.GetString(5),
                     reader.IsDBNull(6) ? null : reader.GetString(6),
                     ParseDate(reader.GetString(7)),
-                    reader.IsDBNull(8) ? null : ParseDate(reader.GetString(8))));
+                    reader.IsDBNull(8) ? null : ParseDate(reader.GetString(8)),
+                    reader.IsDBNull(9) ? null : reader.GetString(9),
+                    reader.IsDBNull(10) ? null : reader.GetString(10)));
             }
 
             return rows;
