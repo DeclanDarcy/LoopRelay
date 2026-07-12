@@ -21,14 +21,6 @@ public static partial class CodexCompatibilityIdentityProbe
     private static CodexInstalledCompatibilityIdentity Probe()
     {
         string executable = Environment.GetEnvironmentVariable("CODEX_EXECUTABLE") ?? "codex";
-        string? configuredVersion = Environment.GetEnvironmentVariable("LOOPRELAY_CODEX_VERSION");
-        string? configuredDigest = Environment.GetEnvironmentVariable("LOOPRELAY_CODEX_SCHEMA_DIGEST");
-        if (!string.IsNullOrWhiteSpace(configuredVersion) && !string.IsNullOrWhiteSpace(configuredDigest))
-        {
-            return new CodexInstalledCompatibilityIdentity(
-                configuredVersion, configuredDigest, executable, "explicit environment identity");
-        }
-
         string root = Directory.CreateTempSubdirectory("looprelay-codex-identity-").FullName;
         string home = Directory.CreateDirectory(Path.Combine(root, "codex-home")).FullName;
         string schemas = Directory.CreateDirectory(Path.Combine(root, "schemas")).FullName;
@@ -54,7 +46,7 @@ public static partial class CodexCompatibilityIdentityProbe
         catch (Exception exception)
         {
             return new CodexInstalledCompatibilityIdentity(
-                configuredVersion, configuredDigest, executable, $"identity probe failed: {exception.GetType().Name}");
+                null, null, executable, $"identity probe failed: {exception.GetType().Name}");
         }
         finally
         {
@@ -74,7 +66,11 @@ public static partial class CodexCompatibilityIdentityProbe
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
-        if (OperatingSystem.IsWindows())
+        string extension = Path.GetExtension(executable);
+        if (OperatingSystem.IsWindows() &&
+            (string.IsNullOrEmpty(extension) ||
+             extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase) ||
+             extension.Equals(".bat", StringComparison.OrdinalIgnoreCase)))
         {
             info.FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
             string command = string.Join(' ', new[] { Quote(executable) }.Concat(arguments.Select(Quote)));

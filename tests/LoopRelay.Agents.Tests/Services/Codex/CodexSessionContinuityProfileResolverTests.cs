@@ -33,6 +33,68 @@ public sealed class CodexSessionContinuityProfileResolverTests
             profile.Operation(SessionContinuityOperation.Resume).Status);
     }
 
+    [Theory]
+    [InlineData("other-provider", "app-server-v2")]
+    [InlineData("codex", "other-protocol")]
+    public void ExactFixtureCannotAuthorizeAnotherProviderOrProtocol(string provider, string protocol)
+    {
+        SessionContinuityNegotiationResult result = Resolver().Resolve(Request(
+            "0.142.5",
+            "sha256:fixture",
+            """{"capabilities":{}}""",
+            provider,
+            protocol));
+
+        Assert.False(result.FromCertifiedManifest);
+        Assert.Equal(SessionOperationSupport.Unknown,
+            result.Profile.Operation(SessionContinuityOperation.Resume).Status);
+        Assert.Contains("Provider/protocol identity", result.Evidence, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false, """{"capabilities":{}}""")]
+    [InlineData(true, """{"capabilities":{"experimentalApi":false}}""")]
+    public void CertifiedResumeIsNotBroadenedBeyondTheFixtureExperimentalShape(
+        bool offerExperimentalApi,
+        string initializeJson)
+    {
+        SessionContinuityProfile profile = Resolver().Resolve(Request(
+            "0.142.5",
+            "sha256:fixture",
+            initializeJson,
+            offerExperimentalApi: offerExperimentalApi)).Profile;
+
+        Assert.Equal(SessionOperationSupport.Unknown,
+            profile.Operation(SessionContinuityOperation.Resume).Status);
+        Assert.Equal(SessionOperationSupport.Unsupported,
+            profile.Parameter(
+                SessionContinuityOperation.Resume,
+                SessionContinuityProfile.ExcludeTurnsParameter).Status);
+    }
+
+    [Fact]
+    public void ManifestRejectsDuplicateCertifiedVersionAndSchemaIdentity()
+    {
+        CodexCompatibilityManifestEntry first = Entry("one", "fixture-one");
+        CodexCompatibilityManifestEntry second = Entry("two", "fixture-two");
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => new CodexCompatibilityManifest([first, second]));
+
+        Assert.Contains("duplicate version/schema identity", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ManifestRejectsNonPositiveMaximumRecoverableContext()
+    {
+        CodexCompatibilityManifestEntry invalid = Entry("one", "fixture-one") with
+        {
+            MaximumRecoverableContext = 0,
+        };
+
+        Assert.Throws<InvalidOperationException>(() => new CodexCompatibilityManifest([invalid]));
+    }
+
     [Fact]
     public void ExplicitServerUnsupportedNarrowsCertifiedEvidence()
     {
@@ -85,11 +147,31 @@ public sealed class CodexSessionContinuityProfileResolverTests
                 "evidence-digest"),
         ]));
 
-    private static SessionContinuityNegotiationRequest Request(string version, string schema, string json)
+    private static CodexCompatibilityManifestEntry Entry(string id, string fixture) =>
+        new(
+            id,
+            "0.142.5",
+            "sha256:fixture",
+            fixture,
+            SessionOperationSupport.Supported,
+            SessionOperationSupport.Supported,
+            SessionOperationSupport.Unknown,
+            SessionOperationSupport.Supported,
+            SessionOperationSupport.Unknown,
+            null,
+            "evidence-digest");
+
+    private static SessionContinuityNegotiationRequest Request(
+        string version,
+        string schema,
+        string json,
+        string provider = "codex",
+        string protocol = "app-server-v2",
+        bool offerExperimentalApi = true)
     {
         using JsonDocument document = JsonDocument.Parse(json);
         return new SessionContinuityNegotiationRequest(
-            "codex", "LoopRelay/0.1", version, "codex", "app-server-v2", schema,
-            document.RootElement.Clone(), OfferExperimentalApi: true);
+            provider, "LoopRelay/0.1", version, "codex", protocol, schema,
+            document.RootElement.Clone(), offerExperimentalApi);
     }
 }

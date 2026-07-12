@@ -1,12 +1,14 @@
-# Codex 0.142.5 continuity certification
+# Codex continuity certification fixtures
 
-This fixture is the scrubbed, repository-owned result of the Milestone 9 disposable certification run on 2026-07-10. The harness creates a new repository, schema directory, and `CODEX_HOME` for every run. It records booleans and digests only; provider thread IDs, prompts, responses, credentials, and rollout bodies are never checked in.
+These fixtures are scrubbed, repository-owned results of disposable certification runs. The harness creates a new repository, schema directory, and `CODEX_HOME` for every run. It records booleans and digests only; provider thread IDs, prompts, responses, credentials, and rollout bodies are never checked in.
 
-Certified exact identity:
+Certified exact identities:
 
-- server version: `0.142.5`;
-- canonical experimental app-server v2 schema digest: `f0ead6fd0bb0f21a9a3194c65e068f5c8ba333d24464d2575933065066b76a5e`;
-- evidence digest: `d28f9111ac48038de0e7427de8a3363bc792541bf96644dd0913b815aa35bf8e`.
+| Codex version | Canonical experimental app-server v2 schema digest | Evidence digest |
+| --- | --- | --- |
+| `0.142.5` | `f0ead6fd0bb0f21a9a3194c65e068f5c8ba333d24464d2575933065066b76a5e` | `d28f9111ac48038de0e7427de8a3363bc792541bf96644dd0913b815aa35bf8e` |
+| `0.144.0` | `d3639dd0e04172c9dbb9ca7af048e32cfe197d482d9344a137d2bca95f946c6f` | `e2cbb8b6928af5637b656174118ff1e812de4d4bfc8b1033aa1f1f55c7a54637` |
+| `0.144.1` | `d3639dd0e04172c9dbb9ca7af048e32cfe197d482d9344a137d2bca95f946c6f` | `25b5ed3bdbb55dee15f88b287beee1297750a9d4d729c5e87031dd878b29e4b3` |
 
 Observed in the disposable live matrix:
 

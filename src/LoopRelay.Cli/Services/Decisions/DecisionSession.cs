@@ -744,10 +744,10 @@ internal sealed class DecisionSession(
         return new SessionContinuityNegotiationRequest(
             "codex",
             CodexAppServerProtocol.ClientVersion,
-            Environment.GetEnvironmentVariable("LOOPRELAY_CODEX_VERSION") ?? identity.ServerVersion,
+            identity.ServerVersion,
             identity.ExecutableIdentity,
             "app-server-v2",
-            Environment.GetEnvironmentVariable("LOOPRELAY_CODEX_SCHEMA_DIGEST") ?? identity.SchemaDigest,
+            identity.SchemaDigest,
             document.RootElement.Clone(),
             OfferExperimentalApi: true);
     }

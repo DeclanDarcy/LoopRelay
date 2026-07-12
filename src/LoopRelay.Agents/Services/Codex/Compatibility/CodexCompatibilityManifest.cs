@@ -22,7 +22,34 @@ public sealed class CodexCompatibilityManifest
 
     public CodexCompatibilityManifest(IEnumerable<CodexCompatibilityManifestEntry> entries)
     {
-        Entries = entries.OrderBy(entry => entry.Id, StringComparer.Ordinal).ToArray();
+        ArgumentNullException.ThrowIfNull(entries);
+        CodexCompatibilityManifestEntry[] materialized = entries.ToArray();
+        foreach (CodexCompatibilityManifestEntry entry in materialized)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Id) ||
+                string.IsNullOrWhiteSpace(entry.ServerVersion) ||
+                string.IsNullOrWhiteSpace(entry.SchemaDigest) ||
+                string.IsNullOrWhiteSpace(entry.FixtureIdentity) ||
+                string.IsNullOrWhiteSpace(entry.EvidenceDigest))
+            {
+                throw new InvalidOperationException(
+                    "Codex compatibility manifest entries require non-empty identity and evidence fields.");
+            }
+
+            if (entry.MaximumRecoverableContext is <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"Codex compatibility manifest entry '{entry.Id}' has an invalid maximum recoverable context.");
+            }
+        }
+
+        RejectDuplicates(materialized, entry => entry.Id, "entry id");
+        RejectDuplicates(materialized, entry => entry.FixtureIdentity, "fixture identity");
+        RejectDuplicates(
+            materialized,
+            entry => $"{entry.ServerVersion}\n{entry.SchemaDigest.ToUpperInvariant()}",
+            "version/schema identity");
+        Entries = materialized.OrderBy(entry => entry.Id, StringComparer.Ordinal).ToArray();
     }
 
     public IReadOnlyList<CodexCompatibilityManifestEntry> Entries { get; }
@@ -39,6 +66,12 @@ public sealed class CodexCompatibilityManifest
         using Stream stream = typeof(CodexCompatibilityManifest).Assembly.GetManifestResourceStream(EmbeddedResourceName)
             ?? throw new InvalidOperationException($"Embedded Codex compatibility manifest '{EmbeddedResourceName}' was not found.");
         using JsonDocument document = JsonDocument.Parse(stream);
+        int schemaVersion = document.RootElement.GetProperty("schemaVersion").GetInt32();
+        if (schemaVersion != 1)
+        {
+            throw new InvalidOperationException(
+                $"Unsupported Codex compatibility manifest schema version '{schemaVersion}'.");
+        }
         var entries = new List<CodexCompatibilityManifestEntry>();
         foreach (JsonElement item in document.RootElement.GetProperty("entries").EnumerateArray())
         {
@@ -59,5 +92,20 @@ public sealed class CodexCompatibilityManifest
         }
 
         return new CodexCompatibilityManifest(entries);
+    }
+
+    private static void RejectDuplicates(
+        IReadOnlyList<CodexCompatibilityManifestEntry> entries,
+        Func<CodexCompatibilityManifestEntry, string> keySelector,
+        string identityName)
+    {
+        string? duplicate = entries
+            .GroupBy(keySelector, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1)?.Key;
+        if (duplicate is not null)
+        {
+            throw new InvalidOperationException(
+                $"Codex compatibility manifest contains a duplicate {identityName}.");
+        }
     }
 }

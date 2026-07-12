@@ -8,7 +8,12 @@ public sealed class CodexSessionContinuityProfileResolver(CodexCompatibilityMani
 {
     public SessionContinuityNegotiationResult Resolve(SessionContinuityNegotiationRequest request)
     {
-        CodexCompatibilityManifestEntry? certified = _manifest.FindExact(request.ServerVersion, request.SchemaDigest);
+        bool certifiedProtocolIdentity =
+            string.Equals(request.Provider, "codex", StringComparison.Ordinal) &&
+            string.Equals(request.ProtocolIdentity, "app-server-v2", StringComparison.Ordinal);
+        CodexCompatibilityManifestEntry? certified = certifiedProtocolIdentity
+            ? _manifest.FindExact(request.ServerVersion, request.SchemaDigest)
+            : null;
         var returnedCapabilities = ReadCapabilities(request.InitializeResult);
 
         SessionOperationSupport resume = certified?.ResumeSupport ?? SessionOperationSupport.Unknown;
@@ -28,8 +33,18 @@ public sealed class CodexSessionContinuityProfileResolver(CodexCompatibilityMani
             excludeTurns = SessionOperationSupport.Unsupported;
         }
 
+        // The checked real-Codex fixtures certify resume only with experimentalApi offered and
+        // excludeTurns=true. Never broaden that evidence into an untested resume request shape.
+        if (resume == SessionOperationSupport.Supported &&
+            excludeTurns != SessionOperationSupport.Supported)
+        {
+            resume = SessionOperationSupport.Unknown;
+        }
+
         string evidence = certified is null
-            ? "No exact certified version/schema fixture matched; omitted capabilities remain Unknown."
+            ? certifiedProtocolIdentity
+                ? "No exact certified version/schema fixture matched; omitted capabilities remain Unknown."
+                : "Provider/protocol identity did not match the Codex app-server v2 fixture authority."
             : $"Exact certified fixture {certified.FixtureIdentity} ({certified.EvidenceDigest}).";
 
         var operations = new Dictionary<SessionContinuityOperation, SessionOperationSupportDescriptor>

@@ -128,9 +128,19 @@ public sealed class CodexAppServerCertificationTests
             CodexCompatibilityManifestEntry entry = Assert.Single(entries, item => item.ServerVersion == fixture.ServerVersion);
             Assert.Equal(fixture.SchemaDigest, entry.SchemaDigest);
             Assert.Equal(fixture.EvidenceDigest, entry.EvidenceDigest);
-            Assert.Equal(SessionOperationSupport.Supported, entry.ResumeSupport);
-            Assert.Equal(SessionOperationSupport.Supported, entry.ExcludeTurnsSupport);
-            Assert.Equal(SessionOperationSupport.Supported, entry.ReadSupport);
+            Assert.Equal($"codex-{fixture.ServerVersion}-certification.v1", entry.FixtureIdentity);
+            Assert.Equal(
+                $"codex-{fixture.ServerVersion}-app-server-v2-{fixture.SchemaDigest[..8]}",
+                entry.Id);
+            Assert.Equal(
+                fixture.ResumePreservesIdentity ? SessionOperationSupport.Supported : SessionOperationSupport.Unknown,
+                entry.ResumeSupport);
+            Assert.Equal(
+                fixture.ResumePreservesIdentity ? SessionOperationSupport.Supported : SessionOperationSupport.Unknown,
+                entry.ExcludeTurnsSupport);
+            Assert.Equal(
+                fixture.ReadPreservesIdentity ? SessionOperationSupport.Supported : SessionOperationSupport.Unknown,
+                entry.ReadSupport);
             Assert.Equal(SessionOperationSupport.Unknown, entry.WriteSupport);
             Assert.Equal(SessionOperationSupport.Unknown, entry.ForkSupport);
             Assert.Null(entry.MaximumRecoverableContext);
