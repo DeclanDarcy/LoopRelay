@@ -1,47 +1,55 @@
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models.Sessions;
-using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Console;
-using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Projections.Models.Definitions;
-using LoopRelay.Permissions.Models.Configuration;
+using LoopRelay.Projections.Services.Prompts;
 
 namespace LoopRelay.Cli.Services.Agents;
 
 internal sealed class ProjectionPromptRunner(
-    IAgentRuntime _runtime,
-    Repository _repository,
-    ILoopConsole _console,
-    BrainConfiguration _brainConfiguration) : IProjectionPromptRunner
+    IPromptDispatchGateway _prompts,
+    IPromptComposer _composer,
+    PromptPolicyProfile _policyProfile,
+    PromptDispatchAuthorization _authorization,
+    ConsumedInputManifestIdentity _consumedInputManifest,
+    IReadOnlyList<ConsumedInputFile> _consumedInputs,
+    ILoopConsole _console) : IProjectionPromptRunner
 {
     public async Task<string> RunProjectionPromptAsync(
         ProjectionDefinition definition,
         string prompt,
         CancellationToken cancellationToken = default)
     {
-        var renderer = new ConsoleTurnRenderer(_console);
-        AgentTurnResult result = await _runtime.RunOneShotAsync(
-            AgentSpecs.Decision(_repository, _brainConfiguration),
-            prompt,
-            renderer.Stream,
-            cancellationToken);
+        var metadata = ProjectionPromptCatalog.GetProjectionMetadata(definition.ProjectionPromptName);
+        PromptComposition composition = _composer.Compose(
+            new PromptTemplateIdentity(metadata.PromptName),
+            metadata.SourceHash,
+            _authorization.Policy,
+            _policyProfile,
+            _consumedInputManifest,
+            _consumedInputs,
+            new Dictionary<string, string>(),
+            prompt);
 
-        if (result.State != AgentTurnState.Completed)
+        PreparedPromptDispatch prepared = await _prompts.PrepareAsync(
+            composition,
+            _authorization,
+            cancellationToken);
+        PromptExecutionResult result = await _prompts.DispatchAsync(prepared, cancellationToken);
+        if (result.Status != PromptExecutionStatus.Completed)
         {
-            throw new LoopStepException(WithDiagnostics(
-                $"{definition.ProjectionPromptName} turn ended in state {result.State}.",
-                result.Diagnostics));
+            throw new LoopStepException(
+                $"{definition.ProjectionPromptName} turn ended in state {result.Status}." +
+                (string.IsNullOrWhiteSpace(result.FailureMessage)
+                    ? string.Empty
+                    : $" Provider diagnostics: {result.FailureMessage}"));
         }
 
-        renderer.EchoIfSilent(result.Output);
-        return result.Output;
+        new ConsoleTurnRenderer(_console).EchoIfSilent(result.RawOutput);
+        return result.RawOutput;
     }
-
-    private static string WithDiagnostics(string message, string? diagnostics) =>
-        string.IsNullOrWhiteSpace(diagnostics)
-            ? message
-            : $"{message} Agent stderr (tail):\n{diagnostics}";
 }

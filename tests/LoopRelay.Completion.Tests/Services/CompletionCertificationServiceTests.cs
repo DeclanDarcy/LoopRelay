@@ -18,10 +18,13 @@ using LoopRelay.Completion.Services.Certification;
 using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Abstractions.Persistence;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Workflows;
 using LoopRelay.Projections.Abstractions;
 using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Projections.Models;
@@ -420,7 +423,7 @@ public sealed class CompletionCertificationServiceTests
 
         Assert.Equal(CompletionCertificationServiceOutcome.Blocked, result.Outcome);
         Assert.Equal("Continue Epic", result.Decision?.ClosureRecommendation);
-        Assert.NotNull(result.BlockerEvidencePath);
+        Assert.NotNull(result.BlockedEvidencePath);
         Assert.Null(await h.ReadAsync(".agents/archive/epics/1/plan.md"));
         Assert.Equal("# Roadmap Completion Context\n\nCurrent.", await h.ReadAsync(CompletionArtifactPaths.RoadmapCompletionContext));
         Assert.DoesNotContain(h.Prompts.Invocations, invocation => invocation.RuntimePromptName == CompletionRuntimePromptNames.SynthesizeCompletedEpic);
@@ -595,69 +598,91 @@ public sealed class CompletionCertificationServiceTests
     }
 
     [Fact]
-    public async Task AgentCompletionPromptRunner_AppendsImplementationFirstPolicy()
+    public async Task AgentCompletionPromptRunnerRoutesExactTemplateRenderThroughPromptAuthority()
     {
-        var runtime = new RecordingAgentRuntime(new AgentTurnResult(
-            0,
-            AgentTurnState.Completed,
-            "ok",
-            AgentTokenUsage.Zero));
-        var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" };
-        var runner = new AgentCompletionPromptRunner(
-            runtime,
-            repository,
-            new BrainConfiguration(AgentModel.Gpt56Sol, AgentEffort.XHigh));
-
-        string output = await runner.RunAsync(new CompletionRuntimePromptInvocation(
+        var gateway = new RecordingPromptGateway("ok");
+        var runner = CreateAgentCompletionPromptRunner(gateway);
+        var invocation = new CompletionRuntimePromptInvocation(
             CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift,
-            ProjectContext: "context"));
+            ProjectContext: "context");
+
+        string output = await runner.RunAsync(invocation);
 
         Assert.Equal("ok", output);
-        string prompt = Assert.Single(runtime.Prompts);
-        Assert.Contains("Repository growth is implementation-first", prompt, StringComparison.Ordinal);
-        Assert.Contains("The HITL-requested exception is disabled", prompt, StringComparison.Ordinal);
-        AgentSessionSpec spec = Assert.Single(runtime.Specs);
-        Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
-        Assert.True(spec.Sandbox.CanWriteWorkspace);
-        Assert.True(spec.Sandbox.CanAccessNetwork);
-        Assert.False(spec.Sandbox.RequiresApproval);
+        Assert.NotNull(gateway.Composition);
+        PromptComposition composition = gateway.Composition;
+        Assert.StartsWith(CompletionPromptCatalog.RenderRuntime(invocation), composition.RenderedContent, StringComparison.Ordinal);
+        Assert.Contains("## Implementation-First Prompt Policy", composition.RenderedContent, StringComparison.Ordinal);
+        Assert.Equal(invocation.RuntimePromptName, composition.Template.Value);
+        Assert.Equal(CompletionPromptCatalog.TemplateSourceHash(invocation.RuntimePromptName), composition.TemplateSourceHash);
+        Assert.Equal("context", composition.RenderingVariables[nameof(invocation.ProjectContext)]);
     }
 
     [Fact]
-    public async Task AgentCompletionPromptRunner_MaterializesReturnedSynthesisWhenAgentDidNotWriteFile()
+    public async Task AgentCompletionPromptRunnerNeverMaterializesSynthesisIntoRepositoryState()
     {
-        string root = Directory.CreateTempSubdirectory("looprelay-completion-synthesis-fallback").FullName;
-        var runtime = new RecordingAgentRuntime(new AgentTurnResult(
-            0,
-            AgentTurnState.Completed,
-            """
-            I’ll inspect the archived source set first.
+        string root = Directory.CreateTempSubdirectory("looprelay-completion-no-runner-effects").FullName;
+        var gateway = new RecordingPromptGateway("# Completed Epic\n\n## 1. Epic Purpose\n\nPurpose.");
+        var runner = CreateAgentCompletionPromptRunner(gateway);
 
-            I found the source files and will now synthesize them.
-
-            # Completed Greeting Epic
-
-            ## 1. Epic Purpose
-
-            Preserve the deterministic greeting capability.
-            """,
-            AgentTokenUsage.Zero));
-        var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = root };
-        var runner = new AgentCompletionPromptRunner(
-            runtime,
-            repository,
-            new BrainConfiguration(AgentModel.Gpt56Sol, AgentEffort.High));
-
-        await runner.RunAsync(new CompletionRuntimePromptInvocation(
+        string output = await runner.RunAsync(new CompletionRuntimePromptInvocation(
             CompletionRuntimePromptNames.SynthesizeCompletedEpic,
             Label: "1"));
 
-        string path = Path.Combine(root, ".agents", "archive", "epics", "1.md");
-        Assert.True(File.Exists(path));
-        string synthesis = await File.ReadAllTextAsync(path);
-        Assert.StartsWith("# Completed Greeting Epic", synthesis, StringComparison.Ordinal);
-        Assert.DoesNotContain("inspect the archived source", synthesis, StringComparison.Ordinal);
-        Assert.Contains("## 1. Epic Purpose", synthesis, StringComparison.Ordinal);
+        Assert.StartsWith("# Completed Epic", output, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(root, ".agents", "archive", "epics", "1.md")));
+    }
+
+    private static AgentCompletionPromptRunner CreateAgentCompletionPromptRunner(RecordingPromptGateway gateway)
+    {
+        var causality = new CanonicalCausalContext(
+            WorkspaceIdentity.New(), RunIdentity.New(), WorkflowInstanceIdentity.New(),
+            TransitionRunIdentity.New(), AttemptIdentity.New());
+        var authorization = new PromptDispatchAuthorization(
+            causality,
+            new PolicyIdentity("policy-completion"),
+            new PromptPolicyProfileIdentity("prompt-policy-completion"),
+            new RuntimeProfileIdentity("runtime-completion"),
+            new WorkflowTransitionIdentity("completion-prompt"),
+            "snapshot-completion");
+        return new AgentCompletionPromptRunner(
+            gateway,
+            new CanonicalPromptComposer(),
+            new PromptPolicyProfile(
+                authorization.PolicyProfile,
+                "## Implementation-First Prompt Policy\n\nRepository growth is implementation-first."),
+            authorization,
+            ConsumedInputManifestIdentity.New(),
+            []);
+    }
+
+    private sealed class RecordingPromptGateway(string output) : IPromptDispatchGateway
+    {
+        public PromptComposition? Composition { get; private set; }
+
+        public Task<PreparedPromptDispatch> PrepareAsync(
+            PromptComposition composition,
+            PromptDispatchAuthorization authorization,
+            CancellationToken cancellationToken)
+        {
+            Composition = composition;
+            var fact = new RenderedPromptFact(
+                RenderedPromptFactIdentity.New(), authorization.Causality, composition.RenderedContent,
+                RenderedPromptFact.ComputeContentHash(composition.RenderedContent), composition.Template,
+                composition.TemplateSourceHash, authorization.Policy, authorization.PolicyProfile,
+                composition.ConsumedInputManifest, composition.ConsumedInputs, DateTimeOffset.UtcNow);
+            var persisted = new PersistedRenderedPromptFact(
+                fact, RenderedPromptPersistenceIdentity.New(), 1, DateTimeOffset.UtcNow);
+            var dispatch = new AuthorizedPromptDispatch(
+                PromptDispatchIdentity.New(), fact.Identity, persisted.PersistenceIdentity, authorization);
+            return Task.FromResult(new PreparedPromptDispatch(persisted, dispatch));
+        }
+
+        public Task<PromptExecutionResult> DispatchAsync(
+            PreparedPromptDispatch prepared,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new PromptExecutionResult(
+                PromptExecutionStatus.Completed, output, TimeSpan.Zero, new Dictionary<string, string>()));
     }
 
     private static string Evaluation(string completionStatus, string drift, string recommendation) => $$"""

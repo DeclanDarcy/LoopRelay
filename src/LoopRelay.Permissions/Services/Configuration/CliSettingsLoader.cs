@@ -1,10 +1,10 @@
 using System.Collections.Frozen;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Permissions.Models.Shell;
-using LoopRelay.Permissions.Services.Evaluation;
 
 namespace LoopRelay.Permissions.Services.Configuration;
 
@@ -13,6 +13,7 @@ public static class CliSettingsLoader
     public const string SettingsPathEnvironmentVariable = "LOOPRELAY_SETTINGS_PATH";
     public const string ConsumerSettingsFileName = "settings.json";
     public const string DefaultSettingsFileName = "settings.default.json";
+    public const string CurrentSchemaVersion = "settings-v3";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -21,7 +22,7 @@ public static class CliSettingsLoader
         ReadCommentHandling = JsonCommentHandling.Skip,
     };
 
-    public static PermissionPolicyOptions LoadPermissionPolicy() => Load().Permissions;
+    public static PermissionPolicyOptions LoadPermissionInputs() => Load().PermissionInputs;
 
     public static CliSettingsLoadResult Load(
         string? baseDirectory = null,
@@ -69,18 +70,70 @@ public static class CliSettingsLoader
                 throw new PermissionPolicyValidationException("permissions section is required.");
             }
 
-            BrainConfiguration brain = new(
-                AgentConfigurationCatalog.ParseModel(
-                    RequiredRootScalar("BrainModel", document.BrainModel),
-                    "BrainModel"),
-                AgentConfigurationCatalog.ParseEffort(
-                    RequiredRootScalar("BrainEffort", document.BrainEffort),
-                    "BrainEffort"));
-            PermissionPolicyOptions policy = PermissionPolicyDocumentMapper.ToPolicy(document.Permissions);
-            PermissionPolicyOptions merged = PermissionPolicyFactory.MergeWithMinimum(policy);
-            NonImplementationArtifactPolicyOptions artifactPolicy =
-                ArtifactPolicyDocumentMapper.ToOptions(document.ArtifactPolicy);
-            return new CliSettingsLoadResult(brain, merged, artifactPolicy, fullPath, isDefaultTemplate);
+            var warnings = new List<ConfigurationCompatibilityWarning>();
+            bool canonicalLayout = document.SchemaVersion is not null;
+            if (canonicalLayout && !string.Equals(document.SchemaVersion, CurrentSchemaVersion, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"schemaVersion must be '{CurrentSchemaVersion}'.",
+                    nameof(document.SchemaVersion));
+            }
+
+            if (canonicalLayout && document.HasLegacyRuntimeFields)
+            {
+                throw new ArgumentException(
+                    "Canonical settings cannot mix runtime fields with the legacy brainModel/brainEffort/continuity layout.");
+            }
+
+            if (!canonicalLayout && document.Runtime is not null)
+            {
+                throw new ArgumentException(
+                    $"runtime requires schemaVersion '{CurrentSchemaVersion}'.",
+                    nameof(document.Runtime));
+            }
+
+            if (document.Policy?.Decisions?.SessionResume is not null && document.Continuity?.DecisionResume is not null)
+            {
+                throw new ArgumentException("Decision resume was configured in both policy and legacy continuity sections.");
+            }
+
+            if (document.Policy?.Recovery?.Strategy is not null && document.Continuity?.RecoveryPolicy is not null)
+            {
+                throw new ArgumentException("Recovery strategy was configured in both policy and legacy continuity sections.");
+            }
+
+            ConfiguredRuntimeFacts runtime = canonicalLayout
+                ? ToRuntimeFacts(document.Runtime)
+                : TranslateLegacyRuntimeFacts(document, warnings);
+            PermissionPolicyOptions permissionInputs =
+                PermissionPolicyDocumentMapper.ToPolicy(document.Permissions);
+            CliPolicyDocument policyInputs = new(
+                document.Policy?.Execution?.MaxUnboundedContinuationSteps,
+                document.Policy?.Execution?.MaxNoChangesCommits,
+                document.Policy?.Execution?.OperationalContextGrowthWarningStreak,
+                document.Policy?.Decisions?.SessionResume ?? document.Continuity?.DecisionResume,
+                NormalizeOptional(document.Policy?.Recovery?.Strategy ?? document.Continuity?.RecoveryPolicy),
+                document.ArtifactPolicy is null
+                    ? null
+                    : new LegacyArtifactPolicyInputs(
+                        document.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles,
+                        document.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles));
+            if (document.ArtifactPolicy is not null)
+            {
+                warnings.Add(new ConfigurationCompatibilityWarning(
+                    "legacy-artifact-policy",
+                    "artifactPolicy was preserved as a compatibility policy input; Policy Authority must translate or reject it."));
+            }
+
+            return new CliSettingsLoadResult(
+                runtime,
+                permissionInputs,
+                policyInputs,
+                warnings,
+                new ConfigurationSourceProvenance(
+                    fullPath,
+                    isDefaultTemplate,
+                    canonicalLayout ? CurrentSchemaVersion : "legacy-unversioned"));
         }
         catch (JsonException ex)
         {
@@ -100,18 +153,69 @@ public static class CliSettingsLoader
         }
     }
 
-    private sealed class SettingsDocument
+    private static ConfiguredRuntimeFacts ToRuntimeFacts(RuntimeDocument? document) =>
+        new(
+            new ConfiguredBrainFacts(
+                ParseOptionalModel("runtime.brain.model", document?.Brain?.Model),
+                ParseOptionalEffort("runtime.brain.effort", document?.Brain?.Effort)),
+            NormalizeDistinctStrings(
+                "runtime.providers.supportedCodexProfiles",
+                document?.Providers?.SupportedCodexProfiles));
+
+    private static ConfiguredRuntimeFacts TranslateLegacyRuntimeFacts(
+        SettingsDocument document,
+        List<ConfigurationCompatibilityWarning> warnings)
     {
-        public string? BrainModel { get; set; }
+        warnings.Add(new ConfigurationCompatibilityWarning(
+            "legacy-settings-layout",
+            $"Legacy unversioned settings were translated to {CurrentSchemaVersion} configuration and policy inputs."));
 
-        public string? BrainEffort { get; set; }
-
-        public PermissionPolicyDocument? Permissions { get; set; }
-
-        public ArtifactPolicyDocument? ArtifactPolicy { get; set; }
+        return new ConfiguredRuntimeFacts(
+            new ConfiguredBrainFacts(
+                ParseOptionalModel("brainModel", document.BrainModel),
+                ParseOptionalEffort("brainEffort", document.BrainEffort)),
+            NormalizeDistinctStrings(
+                "continuity.supportedCodexProfiles",
+                document.Continuity?.SupportedCodexProfiles));
     }
 
-    private static string RequiredRootScalar(string path, string? value)
+    private static AgentModel? ParseOptionalModel(string path, string? value) =>
+        value is null
+            ? null
+            : AgentConfigurationCatalog.ParseModel(RequiredScalar(path, value), path);
+
+    private static AgentEffort? ParseOptionalEffort(string path, string? value) =>
+        value is null
+            ? null
+            : AgentConfigurationCatalog.ParseEffort(RequiredScalar(path, value), path);
+
+    private static string? NormalizeOptional(string? value) =>
+        value is null ? null : RequiredScalar("policy.recovery.strategy", value);
+
+    private static IReadOnlyList<string> NormalizeDistinctStrings(string path, string[]? values)
+    {
+        if (values is null)
+        {
+            return [];
+        }
+
+        var distinct = new HashSet<string>(StringComparer.Ordinal);
+        var normalized = new List<string>(values.Length);
+        for (int index = 0; index < values.Length; index++)
+        {
+            string value = RequiredScalar($"{path}[{index}]", values[index]);
+            if (!distinct.Add(value))
+            {
+                throw new ArgumentException($"{path} contains duplicate value '{value}'.", path);
+            }
+
+            normalized.Add(value);
+        }
+
+        return normalized;
+    }
+
+    private static string RequiredScalar(string path, string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -121,13 +225,104 @@ public static class CliSettingsLoader
         return value.Trim();
     }
 
-    private sealed class ArtifactPolicyDocument
+    // Configuration parsing is strict: a typo is neither configured evidence nor a policy input.
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class SettingsDocument
+    {
+        public string? SchemaVersion { get; set; }
+
+        public RuntimeDocument? Runtime { get; set; }
+
+        public PolicyDocument? Policy { get; set; }
+
+        public PermissionPolicyDocument? Permissions { get; set; }
+
+        // Explicit compatibility inputs for the two pre-authority settings layouts.
+        public string? BrainModel { get; set; }
+
+        public string? BrainEffort { get; set; }
+
+        public LegacyContinuityDocument? Continuity { get; set; }
+
+        public LegacyArtifactPolicyDocument? ArtifactPolicy { get; set; }
+
+        public bool HasLegacyRuntimeFields =>
+            BrainModel is not null || BrainEffort is not null || Continuity is not null || ArtifactPolicy is not null;
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class RuntimeDocument
+    {
+        public RuntimeBrainDocument? Brain { get; set; }
+
+        public RuntimeProvidersDocument? Providers { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class RuntimeBrainDocument
+    {
+        public string? Model { get; set; }
+
+        public string? Effort { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class RuntimeProvidersDocument
+    {
+        public string[]? SupportedCodexProfiles { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class PolicyDocument
+    {
+        public PolicyExecutionDocument? Execution { get; set; }
+
+        public PolicyDecisionsDocument? Decisions { get; set; }
+
+        public PolicyRecoveryDocument? Recovery { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class PolicyExecutionDocument
+    {
+        public int? MaxUnboundedContinuationSteps { get; set; }
+
+        public int? MaxNoChangesCommits { get; set; }
+
+        public int? OperationalContextGrowthWarningStreak { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class PolicyDecisionsDocument
+    {
+        public bool? SessionResume { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class PolicyRecoveryDocument
+    {
+        public string? Strategy { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class LegacyContinuityDocument
+    {
+        public bool? DecisionResume { get; set; }
+
+        public string? RecoveryPolicy { get; set; }
+
+        public string[]? SupportedCodexProfiles { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class LegacyArtifactPolicyDocument
     {
         public bool? AllowHitlRequestedNonImplementationFiles { get; set; }
 
         public bool? AllowAuxiliaryNonImplementationFiles { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class PermissionPolicyDocument
     {
         public string? FingerprintVersion { get; set; }
@@ -145,6 +340,7 @@ public static class CliSettingsLoader
         public PermissionAllowDocument? Allow { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class PermissionHardDenyDocument
     {
         public string[]? PrivilegeEscalationCommands { get; set; }
@@ -160,6 +356,7 @@ public static class CliSettingsLoader
         public IndirectShellExecutionDocument? IndirectShellExecution { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class RecursiveForceDeleteDocument
     {
         public string? Command { get; set; }
@@ -167,6 +364,7 @@ public static class CliSettingsLoader
         public string[][]? FlagSets { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class IndirectShellExecutionDocument
     {
         public string[]? Commands { get; set; }
@@ -174,6 +372,7 @@ public static class CliSettingsLoader
         public string? Flag { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class PermissionReviewRequiredDocument
     {
         public bool? GitCommit { get; set; }
@@ -189,6 +388,7 @@ public static class CliSettingsLoader
         public string[]? InfrastructureCommands { get; set; }
     }
 
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class PermissionAllowDocument
     {
         public string[]? AlwaysAllowedCommands { get; set; }
@@ -398,13 +598,4 @@ public static class CliSettingsLoader
             left.Count == right.Count && left.All(right.Contains);
     }
 
-    private static class ArtifactPolicyDocumentMapper
-    {
-        public static NonImplementationArtifactPolicyOptions ToOptions(ArtifactPolicyDocument? document) =>
-            new(
-                document?.AllowHitlRequestedNonImplementationFiles
-                    ?? NonImplementationArtifactPolicyOptions.Default.AllowHitlRequestedNonImplementationFiles,
-                document?.AllowAuxiliaryNonImplementationFiles
-                    ?? NonImplementationArtifactPolicyOptions.Default.AllowAuxiliaryNonImplementationFiles);
-    }
 }

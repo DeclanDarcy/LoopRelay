@@ -22,6 +22,7 @@ public enum AgentConfigurationAuthority
 {
     Brain,
     Execution,
+    Policy,
 }
 
 public sealed record BrainConfiguration

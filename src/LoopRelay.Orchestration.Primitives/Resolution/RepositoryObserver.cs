@@ -13,7 +13,9 @@ using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Orchestration.Resolution;
 
-public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null)
+public sealed class RepositoryObserver(
+    IStorageVerifier? _storageVerifier = null,
+    ICanonicalPersistenceProjection? _persistenceProjection = null)
 {
     private const string WorkspaceDatabaseRelativePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
@@ -33,7 +35,36 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         "ExecutionBlocked",
     };
 
+    // The per-type authority split (M3): these products are hand-editable collaboration files
+    // observed from the working tree; the filesystem decides their presence and content, and
+    // ledger rows never substitute for or mask them. Every other product identity is a
+    // system-owned fact whose ledger row remains authoritative. This set must cover exactly
+    // the identities observed by AddProductIfPresent/AddExecutionMilestoneSetIfPresent.
+    private static readonly HashSet<ProductIdentity> FilesystemAuthoritativeProducts =
+    [
+        ProductIdentity.EvaluationIntent,
+        ProductIdentity.DependencyInventory,
+        ProductIdentity.HypothesisInventory,
+        ProductIdentity.ArchitecturalCatalog,
+        ProductIdentity.EvalDag,
+        ProductIdentity.NextEpicRoadmap,
+        ProductIdentity.PreparedEpic,
+        ProductIdentity.MilestoneSpecificationSet,
+        ProductIdentity.ExecutablePlan,
+        ProductIdentity.AdversarialProjection,
+        ProductIdentity.OperationalContext,
+        ProductIdentity.ExecutionDetails,
+        ProductIdentity.ExecutionMilestoneSet,
+        ProductIdentity.DecisionSet,
+        ProductIdentity.ImplementationSlice,
+        ProductIdentity.ExecutionHandoff,
+        ProductIdentity.OperationalDelta,
+        ProductIdentity.CompletionEvidence,
+    ];
+
     private readonly IStorageVerifier _storageVerifier = _storageVerifier ?? new FileSystemStorageVerifier();
+    private readonly ICanonicalPersistenceProjection _persistenceProjection =
+        _persistenceProjection ?? new CanonicalPersistenceProjection();
 
     public async Task<RepositoryObservation> ObserveAsync(
         string repositoryPath,
@@ -44,7 +75,7 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         var authority = new StorageAuthoritySnapshot(
             verification.Authority,
             verification.UsableAuthority,
-            verification.UsableAuthority ? "observed" : "blocked",
+            verification.UsableAuthority ? "observed" : "unusable",
             verification.Evidence);
 
         string agents = Path.Combine(root, OrchestrationArtifactPaths.AgentsDirectory);
@@ -54,9 +85,10 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
             Name = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
             Path = root,
         };
-        CanonicalWorkflowPersistenceSnapshot canonicalSnapshot = verification.UsableAuthority
-            ? await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync(cancellationToken)
-            : new CanonicalWorkflowPersistenceSnapshot([], [], [], [], [], [], [], [], [], []);
+        CanonicalPersistenceReadModel persistenceReadModel = verification.UsableAuthority
+            ? await _persistenceProjection.ProjectAsync(repository, cancellationToken)
+            : CanonicalPersistenceReadModel.Empty;
+        CanonicalWorkflowPersistenceSnapshot canonicalSnapshot = persistenceReadModel.Workflow;
         IReadOnlyList<string> evalIntentPaths = ListRelativeFiles(root, Path.Combine(agents, "evals"), "*.md");
         var products = new List<ObservedProduct>();
 
@@ -80,6 +112,14 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         AddProductIfPresent(products, root, ProductIdentity.CompletionEvidence, ExecuteCompletionEvidencePaths(root, agents), WorkflowIdentity.Execute, WorkflowIdentity.Execute);
         foreach (ProductRecord product in canonicalSnapshot.Products)
         {
+            // Collaboration-file products are filesystem-authoritative: the working tree decides
+            // presence and content, so a ledger row can neither substitute for a missing file nor
+            // mask a present one. System-owned facts keep the ledger row as authority.
+            if (FilesystemAuthoritativeProducts.Contains(product.Identity))
+            {
+                continue;
+            }
+
             products.RemoveAll(observed => observed.Product.Identity == product.Identity);
             products.Add(new ObservedProduct(
                 product,
@@ -113,7 +153,7 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
                 location,
                 "canonical workflow persistence",
                 Ignored: false))))
-            .Concat(canonicalSnapshot.WorkflowChainRuns.SelectMany(item => item.Evidence.Select(location => new ObservedEvidence(
+            .Concat(persistenceReadModel.ChainBoundaries.SelectMany(item => item.Evidence.Select(location => new ObservedEvidence(
                 item.ChainIdentity,
                 location,
                 "canonical workflow persistence",
@@ -528,7 +568,12 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         WorkflowTransitionIdentity producerTransition,
         IReadOnlyList<string> evidence)
     {
-        products.RemoveAll(observed => observed.Product.Identity == identity);
+        // An archived representation is never selected over an active one: it only becomes
+        // observable when no live observation exists for the identity.
+        if (products.Any(observed => observed.Product.Identity == identity))
+        {
+            return;
+        }
         var record = new ProductRecord(
             identity,
             WorkflowIdentity.Execute,
@@ -556,9 +601,14 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
                     stageState.State == WorkflowResolutionState.Completed)
                 .Select(stageState => stageState.Stage)
                 .ToArray(),
-            canonicalSnapshot.Blockers
-                .Where(blocker => blocker.Workflow == state.Workflow && blocker.ResolvedAt is null)
-                .Select(blocker => blocker.Blocker)
+            canonicalSnapshot.Warnings
+                .Where(warning => warning.Workflow == state.Workflow)
+                .Select(warning => new ResolutionWarning(
+                    warning.Category,
+                    warning.Concern,
+                    warning.Authority,
+                    warning.Remediation,
+                    warning.Evidence))
                 .ToArray(),
             state.Evidence)).ToArray();
 
@@ -817,7 +867,7 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
                 new WorkflowStageIdentity("Completion"),
                 new WorkflowStageIdentity("Workflow Completion"),
             ],
-            Blockers: [],
+            Warnings: [],
             Evidence: completionArchiveEvidence
                 .Concat(["repository-observation:Execute:completion-archive-closed-state"])
                 .Distinct(StringComparer.Ordinal)
@@ -1248,9 +1298,8 @@ public sealed class RepositoryObserver(IStorageVerifier? _storageVerifier = null
         run.State switch
         {
             TransitionDurableState.Completed => TransitionEligibilityState.Completed,
-            TransitionDurableState.Stalled => TransitionEligibilityState.Blocked,
-            TransitionDurableState.Blocked => TransitionEligibilityState.Blocked,
-            TransitionDurableState.Cancelled => TransitionEligibilityState.Blocked,
+            TransitionDurableState.InputUnsatisfied => TransitionEligibilityState.MissingRequiredInput,
+            TransitionDurableState.Ambiguous => TransitionEligibilityState.Ambiguous,
             TransitionDurableState.Failed => TransitionEligibilityState.Invalid,
             _ => TransitionEligibilityState.Waiting,
         };
@@ -1289,12 +1338,11 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
             : DatabaseInspection.Empty;
         if (hasDatabase && !inspection.CanOpen)
         {
-            var blocker = new ResolutionBlocker(
-                BlockerCategory.Storage,
+            var warning = new ResolutionWarning(
+                WarningCategory.Storage,
                 "Workspace database is not a valid SQLite database.",
                 "storage verifier",
                 "Restore or explicitly repair workspace storage.",
-                Recoverable: true,
                 [DatabaseRelativePath]);
             return Task.FromResult(new StorageVerificationResult(
                 StorageAuthorityKind.Corrupt,
@@ -1305,7 +1353,7 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
                 UnsupportedSchema: [],
                 UnresolvedReferences: [],
                 PartialTransactions: [],
-                BlockingConditions: [blocker],
+                BlockingConditions: [warning],
                 Evidence: evidence));
         }
 
@@ -1318,12 +1366,11 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
         };
         if (hasDatabase && inspection.UnsupportedSchema.Count > 0)
         {
-            var blocker = new ResolutionBlocker(
-                BlockerCategory.Storage,
+            var warning = new ResolutionWarning(
+                WarningCategory.Storage,
                 "Workspace database schema version is unsupported.",
                 "storage verifier",
                 "Use a compatible LoopRelay version or explicitly migrate workspace storage.",
-                Recoverable: true,
                 [DatabaseRelativePath]);
             return Task.FromResult(new StorageVerificationResult(
                 StorageAuthorityKind.Unsupported,
@@ -1334,18 +1381,17 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
                 UnsupportedSchema: inspection.UnsupportedSchema,
                 UnresolvedReferences: [],
                 PartialTransactions: [],
-                BlockingConditions: [blocker],
+                BlockingConditions: [warning],
                 Evidence: evidence));
         }
 
         if (hasDatabase && inspection.PartialTransactions.Count > 0)
         {
-            var blocker = new ResolutionBlocker(
-                BlockerCategory.Storage,
+            var warning = new ResolutionWarning(
+                WarningCategory.Storage,
                 "Workspace database contains partial workflow transaction markers.",
                 "storage verifier",
                 "Resolve or recover partial workflow transactions before mutating orchestration.",
-                Recoverable: true,
                 inspection.PartialTransactions);
             return Task.FromResult(new StorageVerificationResult(
                 authority,
@@ -1356,7 +1402,7 @@ public sealed class FileSystemStorageVerifier : IStorageVerifier
                 UnsupportedSchema: [],
                 UnresolvedReferences: [],
                 PartialTransactions: inspection.PartialTransactions,
-                BlockingConditions: [blocker],
+                BlockingConditions: [warning],
                 Evidence: evidence.Concat(inspection.PartialTransactions).ToArray()));
         }
 

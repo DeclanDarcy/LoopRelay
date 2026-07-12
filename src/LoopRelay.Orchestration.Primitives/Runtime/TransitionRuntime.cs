@@ -1,585 +1,459 @@
-using System.Diagnostics;
-using LoopRelay.Orchestration.Resolution;
+using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Orchestration.Runtime;
 
+/// <summary>
+/// Executes exactly one authorized attempt. Cross-attempt resume, retry, fork, reconciliation,
+/// chaining, and human-escalation policy belong to their respective authorities.
+/// </summary>
 public sealed class TransitionRuntime(
     ITransitionDefinitionResolver _definitionResolver,
     IProductResolver _productResolver,
     IGateEvaluator _gateEvaluator,
     IPromptContextBuilder _promptContextBuilder,
     IPromptRenderer _promptRenderer,
-    IPromptExecutor _promptExecutor,
+    IPromptDispatchGateway _promptGateway,
     IOutputInterpreter _outputInterpreter,
+    ICandidateProductStore _candidateProducts,
     IProductValidator _productValidator,
-    IEffectExecutor _effectExecutor,
+    IInputFreshnessValidator _freshnessValidator,
     ITransitionRunStore _runStore,
+    IAttemptStore _attemptStore,
+    IReadReceiptStore _readReceiptStore,
     ITransitionEvidenceStore _evidenceStore,
-    ITransitionBlockerStore? _blockerStore = null,
-    ITransitionRecoveryStore? _recoveryStore = null,
-    ITransitionGateEvaluationStore? _gateEvaluationStore = null,
-    ITransitionEffectStore? _effectStore = null,
+    ITransitionGateEvaluationStore _gateEvaluationStore,
+    ITransitionCommitStore _commitStore,
     ITransitionBoundaryJournal? _boundaryJournal = null) : ITransitionRuntime
 {
+    private int boundarySequence;
+
     public async Task<TransitionRuntimeResult> RunAsync(
         TransitionRuntimeRequest request,
         CancellationToken cancellationToken = default)
     {
-        string runId = request.RunId ?? Guid.NewGuid().ToString("N");
-        WorkflowTransitionIdentity transitionIdentity = request.Transition;
-        WorkflowTransitionDefinition? resolvedDefinition = null;
-        GateResult? inputGate = null;
-        GateResult? outputGate = null;
-        ProductValidationResult? validation = null;
-        EffectExecutionResult? effects = null;
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.ExecutionContext is not CanonicalTransitionExecutionContext execution)
+        {
+            return PreAttemptResult(
+                RuntimeOutcomeKind.CompatibilityImportRequired,
+                request.Transition,
+                "Canonical execution requires a translated causal context; legacy callers must pass through Compatibility Authority.",
+                [request.ExecutionContext.GetType().Name]);
+        }
 
+        WorkflowTransitionDefinition definition =
+            await _definitionResolver.ResolveAsync(request, cancellationToken);
+        ProductResolutionResult inputs =
+            await _productResolver.ResolveAsync(definition.RequiredInputProducts, cancellationToken);
+        GateResult inputGate =
+            await _gateEvaluator.EvaluateInputGateAsync(definition.InputGate, inputs, cancellationToken);
+        if (!inputGate.IsSatisfied)
+        {
+            RuntimeOutcomeKind outcome = MapInputGate(inputGate);
+            return PreAttemptResult(outcome, definition.Identity, inputGate.Explanation, inputGate.Evidence, inputGate);
+        }
+
+        PromptContext promptContext;
         try
         {
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, transitionIdentity, TransitionBoundaryKind.PreResolution, 0,
-                    DateTimeOffset.UtcNow, string.Empty, null, []),
-                cancellationToken);
-            WorkflowTransitionDefinition definition =
-                await _definitionResolver.ResolveAsync(request, cancellationToken);
-            resolvedDefinition = definition;
-            transitionIdentity = definition.Identity;
+            promptContext = await _promptContextBuilder.BuildAsync(request, definition, inputs, cancellationToken);
+        }
+        catch (PromptContextUnavailableException exception)
+        {
+            return PreAttemptResult(
+                RuntimeOutcomeKind.MissingRequiredInput,
+                definition.Identity,
+                exception.Message,
+                exception.Evidence,
+                inputGate);
+        }
 
-            ProductResolutionResult inputs =
-                await _productResolver.ResolveAsync(definition.RequiredInputProducts, cancellationToken);
-            inputGate = await _gateEvaluator.EvaluateInputGateAsync(definition.InputGate, inputs, cancellationToken);
-            await TryRecordGateEvaluationAsync(runId, request, definition.Identity, definition.InputGate, inputGate, cancellationToken);
-            if (!inputGate.IsSatisfied)
-            {
-                TransitionRuntimeResult result = Result(
-                    MapGateStatus(inputGate.Status),
-                    TransitionDurableState.Blocked,
-                    definition.Identity,
-                    inputGate,
-                    null,
-                    null,
-                    null,
-                    [],
-                    inputGate.Explanation,
-                    inputGate.Evidence);
-                await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordEventAsync(runId, definition.Identity, result.DurableState, "TransitionBlocked", result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordBlockerAsync(
-                    runId,
-                    request,
-                    definition.Identity,
-                    BlockerCategory.Validation,
-                    result.Explanation,
-                    $"Provide valid required input products before rerunning '{definition.Identity}'.",
-                    true,
-                    result.Evidence,
-                    cancellationToken);
-                await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
-                return result;
-            }
+        (TransitionRunIdentity transitionRun, AttemptIdentity attempt, int attemptIndex) =
+            AuthorizeAttempt(request.Authorization, execution);
+        CanonicalCausalContext causality = new(
+            execution.Workspace,
+            execution.Run,
+            execution.WorkflowInstance,
+            transitionRun,
+            attempt);
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
 
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, definition.Identity, TransitionBoundaryKind.InputGateSatisfied, 0,
-                    DateTimeOffset.UtcNow, string.Empty, null, inputGate.Evidence),
-                cancellationToken);
+        // Attempt intent is durable before any prompt rendering or provider-visible work.
+        await _attemptStore.PersistAttemptStartedAsync(
+            new AttemptRecord(
+                attempt.Value,
+                transitionRun.Value,
+                execution.WorkflowInstance.Value,
+                execution.Run.Value,
+                attemptIndex,
+                startedAt,
+                null,
+                null,
+                execution.ResolvedPolicy.Value),
+            cancellationToken);
 
-            PromptContext context = await _promptContextBuilder.BuildAsync(
+        ConsumedInputManifestIdentity manifestIdentity = ConsumedInputManifestIdentity.New();
+        await _readReceiptStore.AppendAsync(
+            new ReadReceiptCapture(
+                causality,
                 request,
                 definition,
-                inputs,
-                cancellationToken);
-            RenderedPrompt renderedPrompt = await _promptRenderer.RenderAsync(
+                promptContext.ConsumedFiles ?? [],
+                inputs.Products,
+                "Usable",
+                startedAt),
+            cancellationToken);
+
+        RenderedPrompt rendered = await _promptRenderer.RenderAsync(
+            new PromptRenderRequest(
                 definition,
-                context,
-                cancellationToken);
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, definition.Identity, TransitionBoundaryKind.PromptRendered, 0,
-                    DateTimeOffset.UtcNow, context.InputSnapshot.Hash, null, [renderedPrompt.EvidenceLocation]),
-                cancellationToken);
+                promptContext,
+                causality,
+                execution.ResolvedPolicy,
+                execution.PromptPolicyProfile,
+                manifestIdentity),
+            cancellationToken);
+        if (rendered.PolicyProfileIdentity != execution.PromptPolicyProfile)
+        {
+            throw new InvalidOperationException("Prompt renderer returned a policy profile different from the authorized attempt.");
+        }
 
-            PromptExecutionResult? executionResult = null;
-            TransitionRunRecoverySnapshot? recovery = request.RunId is null
-                ? null
-                : await _runStore.LoadRecoveryAsync(runId, cancellationToken);
-            if (recovery is not null)
-            {
-                if (!string.Equals(recovery.InputSnapshotHash, context.InputSnapshot.Hash, StringComparison.Ordinal))
-                {
-                    return Result(
-                        RuntimeOutcomeKind.Blocked,
-                        TransitionDurableState.Blocked,
-                        definition.Identity,
-                        inputGate,
-                        null,
-                        null,
-                        null,
-                        [],
-                        "The transition input snapshot changed; existing recovery evidence cannot be reused.",
-                        [recovery.InputSnapshotHash ?? "(missing)", context.InputSnapshot.Hash]);
-                }
+        var composition = new PromptComposition(
+            PromptCompositionIdentity.New(),
+            rendered.TemplateIdentity,
+            rendered.TemplateSourceHash,
+            execution.ResolvedPolicy,
+            rendered.PolicyProfileIdentity,
+            manifestIdentity,
+            promptContext.ConsumedFiles ?? [],
+            promptContext.Metadata,
+            rendered.Text,
+            "utf-8");
+        var authorization = new PromptDispatchAuthorization(
+            causality,
+            execution.ResolvedPolicy,
+            rendered.PolicyProfileIdentity,
+            execution.RuntimeProfile,
+            definition.Identity,
+            promptContext.InputSnapshot.Hash);
+        PreparedPromptDispatch prepared =
+            await _promptGateway.PrepareAsync(composition, authorization, cancellationToken);
 
-                TransitionRecoveryDecision decision = TransitionRecoveryClassifier.Classify(recovery);
-                if (decision.Disposition is TransitionRecoveryDisposition.ReuseCompleted
-                    or TransitionRecoveryDisposition.CompleteWithoutWork)
-                {
-                    EffectExecutionResult recoveredEffects = new(
-                        EffectExecutionStatus.Succeeded,
-                        recovery.Effects,
-                        decision.Explanation,
-                        decision.Evidence);
-                    TransitionRuntimeResult recovered = Result(
-                        RuntimeOutcomeKind.Completed,
-                        TransitionDurableState.Completed,
-                        definition.Identity,
-                        inputGate,
-                        null,
-                        null,
-                        recoveredEffects,
-                        [],
-                        decision.Explanation,
-                        decision.Evidence);
-                    if (decision.Disposition == TransitionRecoveryDisposition.CompleteWithoutWork)
-                    {
-                        await _runStore.PersistCompletedAsync(
-                            new TransitionRunCompleted(runId, DateTimeOffset.UtcNow, definition.Identity, recovered),
-                            cancellationToken);
-                    }
-
-                    return recovered;
-                }
-
-                if (decision.Disposition == TransitionRecoveryDisposition.MaterializeCommittedOutput &&
-                    recovery.RawOutput is not null)
-                {
-                    executionResult = recovery.RawOutput;
-                }
-                else if (decision.Disposition != TransitionRecoveryDisposition.SafeRetry)
-                {
-                    RuntimeOutcomeKind blockedOutcome = decision.Disposition == TransitionRecoveryDisposition.FailClosedUnknownSideEffect
-                        ? RuntimeOutcomeKind.Failed
-                        : RuntimeOutcomeKind.Blocked;
-                    TransitionDurableState blockedState = decision.Disposition == TransitionRecoveryDisposition.FailClosedUnknownSideEffect
-                        ? TransitionDurableState.EffectsPartiallyApplied
-                        : TransitionDurableState.Blocked;
-                    return Result(
-                        blockedOutcome,
-                        blockedState,
-                        definition.Identity,
-                        inputGate,
-                        null,
-                        null,
-                        null,
-                        [],
-                        decision.Explanation,
-                        decision.Evidence);
-                }
-            }
-
-            if (executionResult is null)
-            {
-                DateTimeOffset startedAt = DateTimeOffset.UtcNow;
-                await _runStore.PersistStartedAsync(
-                    new TransitionRunStarted(runId, startedAt, request, definition, context.InputSnapshot, renderedPrompt),
-                    cancellationToken);
-                await _evidenceStore.RecordEventAsync(
-                    new TransitionEvidenceEvent(
-                        runId,
-                        startedAt,
-                        definition.Identity,
-                        TransitionDurableState.Started,
-                        "TransitionStarted",
-                        "Transition input gate satisfied and prompt rendered.",
-                        [renderedPrompt.EvidenceLocation, context.InputSnapshot.Hash]),
-                    cancellationToken);
-
-                var stopwatch = Stopwatch.StartNew();
-                executionResult = await _promptExecutor.ExecuteAsync(
-                    new PromptExecutionRequest(
-                        runId,
-                        request.Workflow,
-                        request.Stage,
-                        definition.Identity,
-                        definition,
-                        renderedPrompt,
-                        context.InputSnapshot.Hash,
-                        request.RootInvocation ?? new WorkflowInvocation(InvocationModeKind.BoundedExecute),
-                        request.Metadata ?? new Dictionary<string, string>()),
-                    cancellationToken);
-                stopwatch.Stop();
-                executionResult = executionResult with
-                {
-                    Duration = executionResult.Duration == TimeSpan.Zero ? stopwatch.Elapsed : executionResult.Duration,
-                };
-            }
-
-            if (executionResult.Status == PromptExecutionStatus.Cancelled)
-            {
-                return await CancelledAsync(
-                    runId,
-                    request,
-                    definition,
-                    definition.Identity,
-                    inputGate,
-                    "Prompt execution reported cancellation.",
-                    cancellationToken);
-            }
-
-            if (!executionResult.Metadata.TryGetValue("durable-raw-output", out string? durableRaw) || durableRaw != "true")
-            {
-                await _evidenceStore.RecordRawOutputAsync(
-                    runId,
-                    definition.Identity,
-                    executionResult,
-                    cancellationToken);
-            }
-            await _runStore.PersistStateAsync(
-                new TransitionRunStateUpdate(
-                    runId,
-                    DateTimeOffset.UtcNow,
-                    definition.Identity,
-                    TransitionDurableState.PromptCompleted,
-                    "Prompt execution completed and raw output was captured.",
-                    []),
-                cancellationToken);
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, definition.Identity, TransitionBoundaryKind.RawOutputPersisted, 0,
-                    DateTimeOffset.UtcNow, context.InputSnapshot.Hash, null, ["raw-output"]),
-                cancellationToken);
-
-            if (executionResult.Status == PromptExecutionStatus.Failed)
-            {
-                string failure = executionResult.FailureMessage ?? "Prompt execution failed.";
-                await _evidenceStore.RecordFailureAsync(runId, definition.Identity, failure, cancellationToken);
-                TransitionRuntimeResult result = Result(
-                    RuntimeOutcomeKind.Failed,
-                    TransitionDurableState.Failed,
-                    definition.Identity,
-                    inputGate,
-                    null,
-                    null,
-                    null,
-                    [],
-                    failure,
-                    []);
-                await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
-                return result;
-            }
-
-            InterpretedTransitionOutput interpreted = await _outputInterpreter.InterpretAsync(
+        await _runStore.PersistStartedAsync(
+            new TransitionRunStarted(
+                causality,
+                startedAt,
+                request,
                 definition,
-                executionResult,
-                cancellationToken);
+                promptContext.InputSnapshot,
+                prepared.Prompt),
+            cancellationToken);
+        await _evidenceStore.RecordEventAsync(
+            Event(causality, definition.Identity, TransitionDurableState.Started, "TransitionStarted",
+                "Attempt intent, causal inputs, policy, and rendered prompt are durable.",
+                [prepared.Prompt.PersistenceIdentity.Value, promptContext.InputSnapshot.Hash]),
+            cancellationToken);
+        await ObserveBoundaryAsync(
+            causality,
+            definition.Identity,
+            TransitionBoundaryKind.PromptRendered,
+            promptContext.InputSnapshot.Hash,
+            [prepared.Prompt.PersistenceIdentity.Value],
+            cancellationToken);
+        await ObserveBoundaryAsync(
+            causality,
+            definition.Identity,
+            TransitionBoundaryKind.DispatchIntended,
+            promptContext.InputSnapshot.Hash,
+            [prepared.Dispatch.Dispatch.Value],
+            cancellationToken);
+
+        PromptExecutionResult executionResult;
+        try
+        {
+            executionResult = await _promptGateway.DispatchAsync(prepared, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            string diagnostic = exception.InnerException?.Message ?? exception.Message;
+            string explanation =
+                "Provider dispatch did not return a normalized outcome; Recovery Authority must reconcile it before any repeat execution. " +
+                $"Diagnostic: {diagnostic}";
+            await _evidenceStore.RecordFailureAsync(causality, definition.Identity, explanation, CancellationToken.None);
             await _runStore.PersistStateAsync(
-                new TransitionRunStateUpdate(
-                    runId,
-                    DateTimeOffset.UtcNow,
-                    definition.Identity,
-                    TransitionDurableState.OutputInterpreted,
-                    interpreted.Explanation,
-                    interpreted.Evidence),
-                cancellationToken);
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, definition.Identity, TransitionBoundaryKind.OutputInterpreted, 0,
-                    DateTimeOffset.UtcNow, context.InputSnapshot.Hash, null, interpreted.Evidence),
-                cancellationToken);
-
-            if (interpreted.Status != OutputInterpretationStatus.Valid)
-            {
-                TransitionRuntimeResult result = Result(
-                    RuntimeOutcomeKind.Failed,
-                    TransitionDurableState.Failed,
-                    definition.Identity,
-                    inputGate,
-                    null,
-                    null,
-                    null,
-                    [],
-                    interpreted.Explanation,
-                    interpreted.Evidence);
-                await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordEventAsync(runId, definition.Identity, result.DurableState, "TransitionOutputInvalid", result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
-                return result;
-            }
-
-            validation = await _productValidator.ValidateAsync(definition, interpreted, cancellationToken);
-            outputGate = await _gateEvaluator.EvaluateOutputGateAsync(definition.OutputGate, validation, cancellationToken);
-            await TryRecordGateEvaluationAsync(runId, request, definition.Identity, definition.OutputGate, outputGate, cancellationToken);
-            if (!validation.IsValid || !outputGate.IsSatisfied)
-            {
-                string explanation = validation.IsValid ? outputGate.Explanation : validation.Explanation;
-                IReadOnlyList<string> evidence = validation.IsValid ? outputGate.Evidence : validation.Evidence;
-                TransitionRuntimeResult result = Result(
-                    RuntimeOutcomeKind.Failed,
-                    TransitionDurableState.Failed,
-                    definition.Identity,
-                    inputGate,
-                    outputGate,
-                    validation,
-                    null,
-                    [],
-                    explanation,
-                    evidence);
-                await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordEventAsync(runId, definition.Identity, result.DurableState, "TransitionProductInvalid", result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
-                return result;
-            }
-
-            await _runStore.PersistStateAsync(
-                new TransitionRunStateUpdate(
-                    runId,
-                    DateTimeOffset.UtcNow,
-                    definition.Identity,
-                    TransitionDurableState.OutputValidated,
-                    validation.Explanation,
-                    validation.Evidence),
-                cancellationToken);
-
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, definition.Identity, TransitionBoundaryKind.OutputValidated, 0,
-                    DateTimeOffset.UtcNow, context.InputSnapshot.Hash, null, validation.Evidence),
-                cancellationToken);
-
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, definition.Identity, TransitionBoundaryKind.BeforeEffects, 0,
-                    DateTimeOffset.UtcNow, context.InputSnapshot.Hash, null, []),
-                cancellationToken);
-            effects = await _effectExecutor.ExecuteAsync(definition, validation, cancellationToken);
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, definition.Identity, TransitionBoundaryKind.DuringEffects, 0,
-                    DateTimeOffset.UtcNow, context.InputSnapshot.Hash, null, effects.Evidence),
-                cancellationToken);
-            await TryRecordEffectsAsync(runId, request, definition, effects, cancellationToken);
-            if (!effects.IsSuccess)
-            {
-                TransitionDurableState state = effects.Status switch
-                {
-                    EffectExecutionStatus.Stalled => TransitionDurableState.Stalled,
-                    EffectExecutionStatus.PartiallyFailed => TransitionDurableState.EffectsPartiallyApplied,
-                    _ => TransitionDurableState.Failed,
-                };
-                RuntimeOutcomeKind outcome = effects.Status == EffectExecutionStatus.Stalled
-                    ? RuntimeOutcomeKind.Stalled
-                    : RuntimeOutcomeKind.Failed;
-                TransitionRuntimeResult result = Result(
-                    outcome,
-                    state,
-                    definition.Identity,
-                    inputGate,
-                    outputGate,
-                    validation,
-                    effects,
-                    [],
-                    effects.Explanation,
-                    effects.Evidence);
-                await TryPersistStateAsync(runId, definition.Identity, result.DurableState, result.Explanation, result.Evidence, cancellationToken);
-                await TryRecordEventAsync(
-                    runId,
-                    definition.Identity,
-                    result.DurableState,
-                    effects.Status == EffectExecutionStatus.Stalled ? "TransitionStalled" : "TransitionEffectFailure",
-                    result.Explanation,
-                    result.Evidence,
-                    cancellationToken);
-                await TryRecordRecoveryMarkerAsync(runId, request, definition, definition.Identity, result, cancellationToken);
-                return result;
-            }
-
-            await _runStore.PersistStateAsync(
-                new TransitionRunStateUpdate(
-                    runId,
-                    DateTimeOffset.UtcNow,
-                    definition.Identity,
-                    TransitionDurableState.EffectsApplied,
-                    effects.Explanation,
-                    effects.Evidence),
-                cancellationToken);
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, definition.Identity, TransitionBoundaryKind.EffectsApplied, 0,
-                    DateTimeOffset.UtcNow, context.InputSnapshot.Hash, null, effects.Evidence),
-                cancellationToken);
-
-            IReadOnlyList<WorkflowTransitionIdentity> successors =
-                await _definitionResolver.ResolveEligibleSuccessorsAsync(
-                    definition,
-                    validation.Products,
-                    cancellationToken);
-            TransitionRuntimeResult completed = Result(
-                RuntimeOutcomeKind.Completed,
-                TransitionDurableState.Completed,
+                State(causality, definition.Identity, TransitionDurableState.ProviderOutcomeUnknown, explanation,
+                    [exception.GetType().Name, prepared.Dispatch.Dispatch.Value]),
+                CancellationToken.None);
+            await _attemptStore.PersistAttemptCompletedAsync(
+                attempt,
+                DateTimeOffset.UtcNow,
+                RuntimeOutcomeKind.RecoveryRequired.ToString(),
+                CancellationToken.None);
+            return Result(
+                RuntimeOutcomeKind.RecoveryRequired,
+                TransitionDurableState.ProviderOutcomeUnknown,
                 definition.Identity,
                 inputGate,
-                outputGate,
-                validation,
-                effects,
-                successors,
-                "Transition completed through validated products and effects.",
-                effects.Evidence);
-
-            await _runStore.PersistCompletedAsync(
-                new TransitionRunCompleted(runId, DateTimeOffset.UtcNow, definition.Identity, completed),
-                cancellationToken);
-            await ObserveBoundaryAsync(
-                new TransitionBoundaryObservation(
-                    runId, definition.Identity, TransitionBoundaryKind.CompletionPersisted, 0,
-                    DateTimeOffset.UtcNow, context.InputSnapshot.Hash, null, completed.Evidence),
-                cancellationToken);
-            await _evidenceStore.RecordEventAsync(
-                new TransitionEvidenceEvent(
-                    runId,
-                    DateTimeOffset.UtcNow,
-                    definition.Identity,
-                    TransitionDurableState.Completed,
-                    "TransitionCompleted",
-                    completed.Explanation,
-                    completed.Evidence),
-                cancellationToken);
-
-            return completed;
-        }
-        catch (TransitionFaultInjectedException exception)
-        {
-            TransitionDurableState state = exception.Observation.Boundary switch
-            {
-                TransitionBoundaryKind.PreSubmission or TransitionBoundaryKind.RequestWriteStarted => TransitionDurableState.Cancelled,
-                TransitionBoundaryKind.ProviderCompleted or TransitionBoundaryKind.RawOutputPersisted => TransitionDurableState.PromptCompleted,
-                TransitionBoundaryKind.DuringEffects => TransitionDurableState.EffectsPartiallyApplied,
-                TransitionBoundaryKind.EffectsApplied => TransitionDurableState.EffectsApplied,
-                TransitionBoundaryKind.CompletionPersisted => TransitionDurableState.Completed,
-                _ => TransitionDurableState.Blocked,
-            };
-            RuntimeOutcomeKind outcome = state switch
-            {
-                TransitionDurableState.Cancelled => RuntimeOutcomeKind.Cancelled,
-                TransitionDurableState.Completed => RuntimeOutcomeKind.Completed,
-                TransitionDurableState.EffectsPartiallyApplied => RuntimeOutcomeKind.Failed,
-                TransitionDurableState.PromptCompleted or TransitionDurableState.EffectsApplied => RuntimeOutcomeKind.Waiting,
-                _ => RuntimeOutcomeKind.Blocked,
-            };
-            string explanation = exception.Message;
-            await TryPersistStateAsync(runId, transitionIdentity, state, explanation,
-                [$"boundary:{exception.Observation.Boundary}"], CancellationToken.None);
-            TransitionRuntimeResult result = Result(
-                outcome, state, transitionIdentity, inputGate, outputGate, validation, effects, [], explanation,
-                [$"boundary:{exception.Observation.Boundary}"]);
-            await TryRecordRecoveryMarkerAsync(
-                runId, request, resolvedDefinition, transitionIdentity, result, CancellationToken.None);
-            if (state is TransitionDurableState.Blocked or TransitionDurableState.EffectsPartiallyApplied)
-            {
-                await TryRecordBlockerAsync(
-                    runId,
-                    request,
-                    transitionIdentity,
-                    BlockerCategory.Recovery,
-                    explanation,
-                    state == TransitionDurableState.EffectsPartiallyApplied
-                        ? "Verify the uncertain effect independently before recording recovery."
-                        : "Reconcile the accepted provider turn before retrying.",
-                    false,
-                    result.Evidence,
-                    CancellationToken.None);
-            }
-            return result;
-        }
-        catch (OperationCanceledException)
-        {
-            return await CancelledAsync(
-                runId,
-                request,
-                resolvedDefinition,
-                transitionIdentity,
-                inputGate,
-                "Transition execution was cancelled.",
-                CancellationToken.None);
-        }
-        catch (PromptContextBlockedException exception)
-        {
-            TransitionRuntimeResult result = Result(
-                RuntimeOutcomeKind.Blocked,
-                TransitionDurableState.Blocked,
-                transitionIdentity,
-                inputGate,
                 null,
                 null,
                 null,
-                [],
-                exception.Message,
-                exception.Evidence);
-            await TryPersistStateAsync(runId, transitionIdentity, result.DurableState, result.Explanation, result.Evidence, CancellationToken.None);
-            await TryRecordEventAsync(runId, transitionIdentity, result.DurableState, "TransitionPromptContextBlocked", result.Explanation, result.Evidence, CancellationToken.None);
-            await TryRecordBlockerAsync(
-                runId,
-                request,
-                transitionIdentity,
-                BlockerCategory.Transition,
-                result.Explanation,
-                $"Resolve blocked prompt context before rerunning '{transitionIdentity}'.",
-                true,
-                result.Evidence,
-                CancellationToken.None);
-            await TryRecordRecoveryMarkerAsync(runId, request, resolvedDefinition, transitionIdentity, result, CancellationToken.None);
-            return result;
-        }
-        catch (Exception exception)
-        {
-            string explanation = $"Transition failed: {exception.Message}";
-            await TryRecordFailureAsync(runId, transitionIdentity, explanation, CancellationToken.None);
-            await TryPersistStateAsync(runId, transitionIdentity, TransitionDurableState.Failed, explanation, [], CancellationToken.None);
-            TransitionRuntimeResult result = Result(
-                RuntimeOutcomeKind.Failed,
-                TransitionDurableState.Failed,
-                transitionIdentity,
-                inputGate,
-                outputGate,
-                validation,
-                effects,
                 [],
                 explanation,
-                []);
-            await TryRecordRecoveryMarkerAsync(runId, request, resolvedDefinition, transitionIdentity, result, CancellationToken.None);
-            return result;
+                [exception.GetType().Name, prepared.Dispatch.Dispatch.Value],
+                causality,
+                attemptCompleted: true);
         }
+
+        // Raw outcome and provider evidence are durable before interpretation or validation.
+        await _evidenceStore.RecordRawOutputAsync(causality, definition.Identity, executionResult, CancellationToken.None);
+        await _evidenceStore.RecordEventAsync(
+            Event(causality, definition.Identity, TransitionDurableState.PromptCompleted, "ProviderResultObserved",
+                "A normalized provider result is durable.", [prepared.Dispatch.Dispatch.Value]),
+            CancellationToken.None);
+        await _runStore.PersistStateAsync(
+            State(causality, definition.Identity, TransitionDurableState.PromptCompleted,
+                "Provider result was captured.", [prepared.Dispatch.Dispatch.Value]),
+            CancellationToken.None);
+        await ObserveBoundaryAsync(
+            causality,
+            definition.Identity,
+            TransitionBoundaryKind.RawOutputPersisted,
+            promptContext.InputSnapshot.Hash,
+            [prepared.Dispatch.Dispatch.Value],
+            CancellationToken.None);
+
+        if (executionResult.Status != PromptExecutionStatus.Completed)
+        {
+            RuntimeOutcomeKind outcome = executionResult.Status == PromptExecutionStatus.Cancelled
+                ? RuntimeOutcomeKind.Cancelled
+                : RuntimeOutcomeKind.Failed;
+            TransitionDurableState state = executionResult.Status == PromptExecutionStatus.Cancelled
+                ? TransitionDurableState.Cancelled
+                : TransitionDurableState.Failed;
+            string explanation = executionResult.FailureMessage ?? $"Provider execution {executionResult.Status}.";
+            return await CompleteNonSuccessAsync(
+                causality,
+                definition.Identity,
+                inputGate,
+                outcome,
+                state,
+                explanation,
+                [],
+                CancellationToken.None);
+        }
+
+        InterpretedTransitionOutput interpreted =
+            await _outputInterpreter.InterpretAsync(definition, executionResult, cancellationToken);
+        await _evidenceStore.RecordEventAsync(
+            Event(causality, definition.Identity, TransitionDurableState.OutputInterpreted,
+                "TransitionOutputInterpreted", interpreted.Explanation, interpreted.Evidence),
+            cancellationToken);
+        await _runStore.PersistStateAsync(
+            State(causality, definition.Identity, TransitionDurableState.OutputInterpreted,
+                interpreted.Explanation, interpreted.Evidence),
+            cancellationToken);
+        if (interpreted.Status != OutputInterpretationStatus.Valid)
+        {
+            return await CompleteNonSuccessAsync(
+                causality,
+                definition.Identity,
+                inputGate,
+                RuntimeOutcomeKind.Failed,
+                TransitionDurableState.Failed,
+                interpreted.Explanation,
+                interpreted.Evidence,
+                cancellationToken);
+        }
+
+        await _candidateProducts.RegisterAsync(causality, interpreted.CandidateProducts, cancellationToken);
+        ProductValidationResult validation =
+            await _productValidator.ValidateAsync(definition, interpreted, cancellationToken);
+        await _evidenceStore.RecordEventAsync(
+            Event(causality, definition.Identity, TransitionDurableState.OutputValidated,
+                "TransitionOutputValidated", validation.Explanation, validation.Evidence),
+            cancellationToken);
+        if (!validation.IsValid)
+        {
+            return await CompleteNonSuccessAsync(
+                causality,
+                definition.Identity,
+                inputGate,
+                validation.Status == ProductValidationStatus.Ambiguous
+                    ? RuntimeOutcomeKind.Ambiguous
+                    : RuntimeOutcomeKind.Failed,
+                validation.Status == ProductValidationStatus.Ambiguous
+                    ? TransitionDurableState.Ambiguous
+                    : TransitionDurableState.Failed,
+                validation.Explanation,
+                validation.Evidence,
+                cancellationToken,
+                validation);
+        }
+
+        GateResult outputGate =
+            await _gateEvaluator.EvaluateOutputGateAsync(definition.OutputGate, validation, cancellationToken);
+        await _gateEvaluationStore.RecordGateEvaluationAsync(
+            new TransitionGateEvaluationCapture(
+                causality,
+                DateTimeOffset.UtcNow,
+                request,
+                definition.Identity,
+                definition.OutputGate,
+                outputGate),
+            cancellationToken);
+        if (!outputGate.IsSatisfied)
+        {
+            RuntimeOutcomeKind outcome = outputGate.Status switch
+            {
+                GateStatus.Waiting => RuntimeOutcomeKind.Waiting,
+                GateStatus.Ambiguous => RuntimeOutcomeKind.Ambiguous,
+                _ => RuntimeOutcomeKind.Failed,
+            };
+            TransitionDurableState state = outputGate.Status switch
+            {
+                GateStatus.Waiting => TransitionDurableState.Waiting,
+                GateStatus.Ambiguous => TransitionDurableState.Ambiguous,
+                _ => TransitionDurableState.Failed,
+            };
+            return await CompleteNonSuccessAsync(
+                causality,
+                definition.Identity,
+                inputGate,
+                outcome,
+                state,
+                outputGate.Explanation,
+                outputGate.Evidence,
+                cancellationToken,
+                validation,
+                outputGate);
+        }
+
+        InputFreshnessResult freshness = await _freshnessValidator.ValidateAsync(
+            causality,
+            request,
+            definition,
+            promptContext,
+            cancellationToken);
+        if (!freshness.IsFresh)
+        {
+            RuntimeOutcomeKind outcome = freshness.Status == InputFreshnessStatus.ConcurrentStateAdvanced
+                ? RuntimeOutcomeKind.ConcurrentStateConflict
+                : RuntimeOutcomeKind.InputInvalidated;
+            TransitionDurableState state = freshness.Status == InputFreshnessStatus.ConcurrentStateAdvanced
+                ? TransitionDurableState.ConcurrentStateConflict
+                : TransitionDurableState.InputInvalidated;
+            return await CompleteNonSuccessAsync(
+                causality,
+                definition.Identity,
+                inputGate,
+                outcome,
+                state,
+                freshness.Explanation,
+                freshness.Evidence,
+                cancellationToken,
+                validation,
+                outputGate);
+        }
+
+        IReadOnlyList<WorkflowTransitionIdentity> successors =
+            await _definitionResolver.ResolveEligibleSuccessorsAsync(definition, validation.Products, cancellationToken);
+        await _commitStore.CommitAsync(
+            new TransitionCommitCapture(
+                causality,
+                request,
+                definition,
+                validation,
+                outputGate,
+                successors,
+                DateTimeOffset.UtcNow),
+            cancellationToken);
+
+        bool effectsPending = definition.Effects.Count > 0;
+        TransitionDurableState durableState = effectsPending
+            ? TransitionDurableState.EffectsPending
+            : TransitionDurableState.Completed;
+        RuntimeOutcomeKind finalOutcome = effectsPending
+            ? RuntimeOutcomeKind.EffectsPending
+            : RuntimeOutcomeKind.Completed;
+        EffectExecutionResult effectPlan = new(
+            effectsPending ? EffectExecutionStatus.Planned : EffectExecutionStatus.Succeeded,
+            definition.Effects.Select(effect => new EffectExecutionRecord(
+                effect.Identity,
+                EffectExecutionStatus.Planned,
+                "Required effect intent is durable and awaits Effect Coordinator execution.",
+                [effect.Trigger])).ToArray(),
+            effectsPending ? "Required effects are pending." : "No external effects are required.",
+            definition.Effects.Select(effect => effect.Identity.Value).ToArray());
+        return Result(
+            finalOutcome,
+            durableState,
+            definition.Identity,
+            inputGate,
+            outputGate,
+            validation,
+            effectPlan,
+            successors,
+            effectsPending ? "Attempt completed; required effects are pending." : "Transition completed.",
+            validation.Evidence.Concat(outputGate.Evidence).ToArray(),
+            causality,
+            attemptCompleted: true,
+            effectsPending: effectsPending);
     }
 
-    private async Task<TransitionRuntimeResult> CancelledAsync(
-        string runId,
-        TransitionRuntimeRequest request,
-        WorkflowTransitionDefinition? definition,
-        WorkflowTransitionIdentity transition,
-        GateResult? inputGate,
-        string explanation,
-        CancellationToken cancellationToken)
+    private static (TransitionRunIdentity TransitionRun, AttemptIdentity Attempt, int AttemptIndex) AuthorizeAttempt(
+        AttemptAuthorization authorization,
+        CanonicalTransitionExecutionContext execution) => authorization switch
     {
-        await TryPersistStateAsync(runId, transition, TransitionDurableState.Cancelled, explanation, [], cancellationToken);
-        await TryRecordEventAsync(runId, transition, TransitionDurableState.Cancelled, "TransitionCancelled", explanation, [], cancellationToken);
-        TransitionRuntimeResult result = Result(
-            RuntimeOutcomeKind.Cancelled,
-            TransitionDurableState.Cancelled,
-            transition,
-            inputGate,
-            null,
-            null,
-            null,
-            [],
-            explanation,
-            []);
-        await TryRecordRecoveryMarkerAsync(runId, request, definition, transition, result, cancellationToken);
-        return result;
+        FreshAttemptAuthorization => (TransitionRunIdentity.New(), AttemptIdentity.New(), 1),
+        RecoveryAttemptAuthorization recovery
+            when recovery.Plan.Action == TransitionRecoveryAction.RetryAsNewAttempt &&
+                 recovery.Plan.ResultingAttemptMode == RecoveryAttemptMode.RetryExistingTransitionRun &&
+                 recovery.Plan.SourceCausality.Workspace == execution.Workspace &&
+                 recovery.Plan.SourceCausality.Run == execution.Run &&
+                 recovery.Plan.SourceCausality.WorkflowInstance == execution.WorkflowInstance =>
+            (recovery.Plan.SourceCausality.TransitionRun, AttemptIdentity.New(), recovery.Plan.NextAttemptIndex),
+        RecoveryAttemptAuthorization => throw new InvalidOperationException(
+            "The supplied recovery plan does not authorize a new provider attempt for this causal context."),
+        _ => throw new InvalidOperationException("Unknown attempt authorization."),
+    };
+
+    private async Task<TransitionRuntimeResult> CompleteNonSuccessAsync(
+        CanonicalCausalContext causality,
+        WorkflowTransitionIdentity transition,
+        GateResult inputGate,
+        RuntimeOutcomeKind outcome,
+        TransitionDurableState state,
+        string explanation,
+        IReadOnlyList<string> evidence,
+        CancellationToken cancellationToken,
+        ProductValidationResult? validation = null,
+        GateResult? outputGate = null)
+    {
+        await _runStore.PersistCompletedAsync(
+            new TransitionRunCompleted(
+                causality,
+                DateTimeOffset.UtcNow,
+                transition,
+                Result(outcome, state, transition, inputGate, outputGate, validation, null, [],
+                    explanation, evidence, causality, attemptCompleted: true)),
+            cancellationToken);
+        await _attemptStore.PersistAttemptCompletedAsync(
+            causality.Attempt,
+            DateTimeOffset.UtcNow,
+            outcome.ToString(),
+            cancellationToken);
+        return Result(outcome, state, transition, inputGate, outputGate, validation, null, [],
+            explanation, evidence, causality, attemptCompleted: true);
     }
 
     private async Task ObserveBoundaryAsync(
-        TransitionBoundaryObservation observation,
+        CanonicalCausalContext causality,
+        WorkflowTransitionIdentity transition,
+        TransitionBoundaryKind boundary,
+        string inputSnapshotHash,
+        IReadOnlyList<string> evidence,
         CancellationToken cancellationToken)
     {
         if (_boundaryJournal is null)
@@ -587,6 +461,15 @@ public sealed class TransitionRuntime(
             return;
         }
 
+        var observation = new TransitionBoundaryObservation(
+            causality,
+            transition,
+            boundary,
+            Interlocked.Increment(ref boundarySequence),
+            DateTimeOffset.UtcNow,
+            inputSnapshotHash,
+            null,
+            evidence);
         await _boundaryJournal.RecordAsync(observation, cancellationToken);
         if (_boundaryJournal.ShouldInterrupt(observation))
         {
@@ -594,230 +477,34 @@ public sealed class TransitionRuntime(
         }
     }
 
-    private async Task TryPersistStateAsync(
-        string runId,
+    private static TransitionEvidenceEvent Event(
+        CanonicalCausalContext causality,
+        WorkflowTransitionIdentity transition,
+        TransitionDurableState state,
+        string name,
+        string explanation,
+        IReadOnlyList<string> evidence) =>
+        new(causality, DateTimeOffset.UtcNow, transition, state, name, explanation, evidence);
+
+    private static TransitionRunStateUpdate State(
+        CanonicalCausalContext causality,
         WorkflowTransitionIdentity transition,
         TransitionDurableState state,
         string explanation,
-        IReadOnlyList<string> evidence,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _runStore.PersistStateAsync(
-                new TransitionRunStateUpdate(runId, DateTimeOffset.UtcNow, transition, state, explanation, evidence),
-                cancellationToken);
-        }
-        catch
-        {
-            // Failure is reflected by the returned runtime outcome; callers decide recovery policy.
-        }
-    }
+        IReadOnlyList<string> evidence) =>
+        new(causality, DateTimeOffset.UtcNow, transition, state, explanation, evidence);
 
-    private async Task TryRecordEventAsync(
-        string runId,
+    private static TransitionRuntimeResult PreAttemptResult(
+        RuntimeOutcomeKind outcome,
         WorkflowTransitionIdentity transition,
-        TransitionDurableState state,
-        string eventName,
         string explanation,
         IReadOnlyList<string> evidence,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _evidenceStore.RecordEventAsync(
-                new TransitionEvidenceEvent(runId, DateTimeOffset.UtcNow, transition, state, eventName, explanation, evidence),
-                cancellationToken);
-        }
-        catch
-        {
-            // Failure is reflected by the returned runtime outcome; callers decide recovery policy.
-        }
-    }
-
-    private async Task TryRecordFailureAsync(
-        string runId,
-        WorkflowTransitionIdentity transition,
-        string failure,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _evidenceStore.RecordFailureAsync(runId, transition, failure, cancellationToken);
-        }
-        catch
-        {
-            // Failure is reflected by the returned runtime outcome; callers decide recovery policy.
-        }
-    }
-
-    private async Task TryRecordBlockerAsync(
-        string runId,
-        TransitionRuntimeRequest request,
-        WorkflowTransitionIdentity transition,
-        BlockerCategory category,
-        string reason,
-        string requiredAction,
-        bool recoverable,
-        IReadOnlyList<string> evidence,
-        CancellationToken cancellationToken)
-    {
-        if (_blockerStore is null)
-        {
-            return;
-        }
-
-        try
-        {
-            await _blockerStore.RecordBlockerAsync(
-                new TransitionBlockerCapture(
-                    runId,
-                    DateTimeOffset.UtcNow,
-                    request,
-                    transition,
-                    category,
-                    reason,
-                    requiredAction,
-                    Recoverable: recoverable,
-                    evidence),
-                cancellationToken);
-        }
-        catch
-        {
-            // Blocker persistence is supporting evidence; the transition result already reports the block.
-        }
-    }
-
-    private async Task TryRecordRecoveryMarkerAsync(
-        string runId,
-        TransitionRuntimeRequest request,
-        WorkflowTransitionDefinition? definition,
-        WorkflowTransitionIdentity transition,
-        TransitionRuntimeResult result,
-        CancellationToken cancellationToken)
-    {
-        if (_recoveryStore is null || !NeedsRecoveryMarker(result.DurableState))
-        {
-            return;
-        }
-
-        RecoveryDefinition recovery = definition?.Recovery ??
-            new RecoveryDefinition(
-                $"{transition}.Recovery",
-                "Recover from transition evidence after the runtime ended before transition metadata could be fully resolved.",
-                ["rerun"],
-                ["silent repair"]);
-
-        try
-        {
-            await _recoveryStore.RecordRecoveryMarkerAsync(
-                new TransitionRecoveryMarkerCapture(
-                    runId,
-                    DateTimeOffset.UtcNow,
-                    request,
-                    transition,
-                    result.DurableState,
-                    result.Outcome,
-                    recovery,
-                    result.Explanation,
-                    result.Evidence),
-                cancellationToken);
-        }
-        catch
-        {
-            // Recovery marker persistence is supporting evidence; the transition result remains authoritative.
-        }
-    }
-
-    private async Task TryRecordGateEvaluationAsync(
-        string runId,
-        TransitionRuntimeRequest request,
-        WorkflowTransitionIdentity transition,
-        GateDefinition gate,
-        GateResult result,
-        CancellationToken cancellationToken)
-    {
-        if (_gateEvaluationStore is null)
-        {
-            return;
-        }
-
-        try
-        {
-            await _gateEvaluationStore.RecordGateEvaluationAsync(
-                new TransitionGateEvaluationCapture(
-                    runId,
-                    DateTimeOffset.UtcNow,
-                    request,
-                    transition,
-                    gate,
-                    result),
-                cancellationToken);
-        }
-        catch
-        {
-            // Gate evaluation persistence is supporting evidence; the transition result already carries gate state.
-        }
-    }
-
-    private async Task TryRecordEffectsAsync(
-        string runId,
-        TransitionRuntimeRequest request,
-        WorkflowTransitionDefinition definition,
-        EffectExecutionResult effects,
-        CancellationToken cancellationToken)
-    {
-        if (_effectStore is null)
-        {
-            return;
-        }
-
-        foreach (EffectExecutionRecord effect in effects.Effects)
-        {
-            EffectCategory category = definition.Effects
-                .FirstOrDefault(item => item.Identity == effect.Effect)
-                ?.Category ?? EffectCategory.Evidence;
-            try
-            {
-                await _effectStore.RecordEffectAsync(
-                    new TransitionEffectRecordCapture(
-                        runId,
-                        DateTimeOffset.UtcNow,
-                        request,
-                        definition.Identity,
-                        effect.Effect,
-                        category,
-                        effect.Status,
-                        effect.Explanation,
-                        effect.Evidence),
-                    cancellationToken);
-            }
-            catch
-            {
-                // Effect record persistence is supporting evidence; the returned effect result remains authoritative.
-            }
-        }
-    }
-
-    private static bool NeedsRecoveryMarker(TransitionDurableState state) =>
-        state is TransitionDurableState.Blocked
-            or TransitionDurableState.Failed
-            or TransitionDurableState.Cancelled
-            or TransitionDurableState.Stalled
-            or TransitionDurableState.EffectsPartiallyApplied;
-
-    private static RuntimeOutcomeKind MapGateStatus(GateStatus status) =>
-        status switch
-        {
-            GateStatus.Waiting => RuntimeOutcomeKind.Waiting,
-            GateStatus.Ambiguous => RuntimeOutcomeKind.Ambiguous,
-            GateStatus.Invalid => RuntimeOutcomeKind.Failed,
-            _ => RuntimeOutcomeKind.Blocked,
-        };
+        GateResult? inputGate = null) =>
+        new(outcome, DurableStateFor(outcome), transition, inputGate, null, null, null, [], explanation, evidence);
 
     private static TransitionRuntimeResult Result(
         RuntimeOutcomeKind outcome,
-        TransitionDurableState durableState,
+        TransitionDurableState state,
         WorkflowTransitionIdentity transition,
         GateResult? inputGate,
         GateResult? outputGate,
@@ -825,16 +512,43 @@ public sealed class TransitionRuntime(
         EffectExecutionResult? effects,
         IReadOnlyList<WorkflowTransitionIdentity> successors,
         string explanation,
-        IReadOnlyList<string> evidence) =>
-        new(
-            outcome,
-            durableState,
-            transition,
-            inputGate,
-            outputGate,
-            validation,
-            effects,
-            successors,
-            explanation,
-            evidence);
+        IReadOnlyList<string> evidence,
+        CanonicalCausalContext causality,
+        bool attemptCompleted,
+        bool effectsPending = false) =>
+        new(outcome, state, transition, inputGate, outputGate, validation, effects, successors,
+            explanation, evidence, causality.TransitionRun, causality.Attempt, attemptCompleted, effectsPending);
+
+    private static RuntimeOutcomeKind MapInputGate(GateResult gate)
+    {
+        if (gate.Status == GateStatus.Unsatisfied)
+        {
+            return gate.Requirements
+                .Select(requirement => requirement.UnsatisfiedOutcome)
+                .FirstOrDefault(outcome => outcome is not null)
+                ?? RuntimeOutcomeKind.MissingRequiredInput;
+        }
+
+        return gate.Status switch
+        {
+            GateStatus.Waiting => RuntimeOutcomeKind.Waiting,
+            GateStatus.Ambiguous => RuntimeOutcomeKind.Ambiguous,
+            GateStatus.Invalid => RuntimeOutcomeKind.Failed,
+            _ => RuntimeOutcomeKind.Failed,
+        };
+    }
+
+    private static TransitionDurableState DurableStateFor(RuntimeOutcomeKind outcome) => outcome switch
+    {
+        RuntimeOutcomeKind.Waiting => TransitionDurableState.Waiting,
+        RuntimeOutcomeKind.Ambiguous => TransitionDurableState.Ambiguous,
+        RuntimeOutcomeKind.Cancelled => TransitionDurableState.Cancelled,
+        RuntimeOutcomeKind.Stalled => TransitionDurableState.Stalled,
+        RuntimeOutcomeKind.InputInvalidated => TransitionDurableState.InputInvalidated,
+        RuntimeOutcomeKind.ConcurrentStateConflict => TransitionDurableState.ConcurrentStateConflict,
+        RuntimeOutcomeKind.EffectsPending => TransitionDurableState.EffectsPending,
+        RuntimeOutcomeKind.RecoveryRequired => TransitionDurableState.ProviderOutcomeUnknown,
+        RuntimeOutcomeKind.Failed => TransitionDurableState.Failed,
+        _ => TransitionDurableState.InputUnsatisfied,
+    };
 }

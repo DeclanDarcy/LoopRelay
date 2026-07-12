@@ -1,586 +1,270 @@
+using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Workflows;
 
-namespace LoopRelay.Orchestration.Tests.Runtime;
+namespace LoopRelay.Orchestration.Primitives.Tests.Runtime;
 
 public sealed class TransitionRuntimeTests
 {
     [Fact]
-    public async Task Missing_required_input_blocks_before_prompt_execution()
+    public async Task Attempt_intent_failure_prevents_prompt_render_and_provider_dispatch()
     {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.Products.Result = new ProductResolutionResult([], [RuntimeHarness.InputRequirement], [], [], []);
+        Harness harness = new();
+        harness.Attempts.FailStart = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Runtime.RunAsync(harness.Request));
+
+        Assert.Equal(0, harness.Renderer.CallCount);
+        Assert.Equal(0, harness.Executor.CallCount);
+    }
+
+    [Fact]
+    public async Task Prompt_fact_failure_prevents_provider_dispatch()
+    {
+        Harness harness = new();
+        harness.Prompts.FailAppend = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Runtime.RunAsync(harness.Request));
+
+        Assert.Equal(1, harness.Renderer.CallCount);
+        Assert.Equal(0, harness.Executor.CallCount);
+        Assert.Single(harness.Receipts.Captures);
+    }
+
+    [Fact]
+    public async Task Provider_exception_becomes_recovery_required_without_local_retry()
+    {
+        Harness harness = new();
+        harness.Executor.Exception = new IOException("connection disappeared");
 
         TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
 
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
-        Assert.Equal(TransitionDurableState.Blocked, result.DurableState);
-        Assert.False(harness.Executor.WasCalled);
-        Assert.Empty(harness.RunStore.Completions);
-        TransitionBlockerCapture blocker = Assert.Single(harness.Blockers.Blockers);
-        Assert.Equal(harness.Request.Workflow, blocker.Request.Workflow);
-        Assert.Equal(harness.Request.Stage, blocker.Request.Stage);
-        Assert.Equal(RuntimeHarness.Definition.Identity, blocker.Transition);
-        Assert.Equal(BlockerCategory.Validation, blocker.Category);
-        Assert.Contains("Input gate blocked", blocker.Reason, StringComparison.Ordinal);
-        TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
-        Assert.Equal(harness.Request.Workflow, recovery.Request.Workflow);
-        Assert.Equal(harness.Request.Stage, recovery.Request.Stage);
-        Assert.Equal(RuntimeHarness.Definition.Identity, recovery.Transition);
-        Assert.Equal(TransitionDurableState.Blocked, recovery.DurableState);
-        Assert.Equal(RuntimeHarness.Definition.Recovery, recovery.Recovery);
-        TransitionGateEvaluationCapture gate = Assert.Single(harness.GateEvaluations.Evaluations);
-        Assert.Equal(RuntimeHarness.Definition.InputGate.Identity, gate.Gate.Identity);
-        Assert.Equal(GateStatus.Blocked, gate.Result.Status);
+        Assert.Equal(RuntimeOutcomeKind.RecoveryRequired, result.Outcome);
+        Assert.Equal(TransitionDurableState.ProviderOutcomeUnknown, result.DurableState);
+        Assert.Equal(1, harness.Executor.CallCount);
+        Assert.True(result.AttemptCompleted);
+        Assert.NotNull(result.TransitionRun);
+        Assert.NotNull(result.Attempt);
+        Assert.Equal("RecoveryRequired", Assert.Single(harness.Attempts.Completed).Outcome);
     }
 
     [Fact]
-    public async Task Stale_required_input_blocks_when_freshness_is_required()
+    public async Task Raw_outcome_persistence_failure_stops_before_interpretation_or_validation()
     {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        ProductRecord stale = RuntimeHarness.Product(
-            RuntimeHarness.InputProduct,
-            WorkflowIdentity.TraditionalRoadmap,
-            new WorkflowTransitionIdentity("ProduceInput"),
-            ProductFreshness.Stale,
-            ProductValidationState.Valid);
-        harness.Products.Result = new ProductResolutionResult([stale], [], [stale], [], []);
+        Harness harness = new();
+        harness.Evidence.FailRawOutput = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Runtime.RunAsync(harness.Request));
+
+        Assert.Equal(0, harness.Interpreter.CallCount);
+        Assert.Equal(0, harness.Validator.CallCount);
+        Assert.Null(harness.Commit.Capture);
+    }
+
+    [Fact]
+    public async Task Stale_inputs_preserve_candidate_evidence_but_deny_atomic_commit()
+    {
+        Harness harness = new();
+        harness.Freshness.Result = new InputFreshnessResult(
+            InputFreshnessStatus.InputInvalidated,
+            "input changed",
+            ["old", "new"]);
 
         TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
 
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
-        Assert.False(harness.Executor.WasCalled);
+        Assert.Equal(RuntimeOutcomeKind.InputInvalidated, result.Outcome);
+        Assert.Single(harness.Candidates.Registered);
+        Assert.Null(harness.Commit.Capture);
+        Assert.Equal("InputInvalidated", Assert.Single(harness.Attempts.Completed).Outcome);
     }
 
     [Fact]
-    public async Task Invalid_required_input_blocks_before_prompt_execution()
+    public async Task Valid_attempt_atomically_commits_and_returns_required_effects_pending()
     {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        ProductRecord invalid = RuntimeHarness.Product(
-            RuntimeHarness.InputProduct,
-            WorkflowIdentity.TraditionalRoadmap,
-            new WorkflowTransitionIdentity("ProduceInput"),
-            ProductFreshness.Fresh,
-            ProductValidationState.Invalid);
-        harness.Products.Result = new ProductResolutionResult([invalid], [], [], [invalid], []);
+        Harness harness = new(withEffect: true);
 
         TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
 
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
-        Assert.False(harness.Executor.WasCalled);
+        Assert.Equal(RuntimeOutcomeKind.EffectsPending, result.Outcome);
+        Assert.Equal(TransitionDurableState.EffectsPending, result.DurableState);
+        Assert.True(result.AttemptCompleted);
+        Assert.True(result.RequiredEffectsPending);
+        Assert.NotNull(harness.Commit.Capture);
+        Assert.Equal(EffectExecutionStatus.Planned, Assert.Single(result.Effects!.Effects).Status);
     }
 
     [Fact]
-    public async Task Prompt_failure_does_not_complete_transition()
+    public async Task Retry_plan_reuses_transition_run_but_mints_a_distinct_attempt()
     {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.Executor.Result = new PromptExecutionResult(
-            PromptExecutionStatus.Failed,
-            "partial output",
-            TimeSpan.FromMilliseconds(10),
-            new Dictionary<string, string>(),
-            "agent failed");
+        Harness first = new();
+        TransitionRuntimeResult original = await first.Runtime.RunAsync(first.Request);
+        CanonicalTransitionExecutionContext execution = Assert.IsType<CanonicalTransitionExecutionContext>(first.Request.ExecutionContext);
+        var source = new CanonicalCausalContext(
+            execution.Workspace,
+            execution.Run,
+            execution.WorkflowInstance,
+            original.TransitionRun!.Value,
+            original.Attempt!.Value);
+        var plan = new TransitionRecoveryPlan(
+            RecoveryAttemptIdentity.New(),
+            source,
+            TransitionRecoveryDisposition.SafeRetry.ToString(),
+            TransitionRecoveryAction.RetryAsNewAttempt,
+            ["submission not accepted"],
+            ["durable pre-submission boundary"],
+            RecoveryAttemptMode.RetryExistingTransitionRun,
+            2);
+        Harness retry = new(execution: execution, authorization: new RecoveryAttemptAuthorization(plan));
 
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
+        TransitionRuntimeResult retried = await retry.Runtime.RunAsync(retry.Request);
 
-        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
-        Assert.Equal(TransitionDurableState.Failed, result.DurableState);
-        Assert.Empty(harness.RunStore.Completions);
-        Assert.Contains(harness.Evidence.Failures, failure => failure.Contains("agent failed", StringComparison.Ordinal));
-        TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
-        Assert.Equal(TransitionDurableState.Failed, recovery.DurableState);
-        Assert.Equal(RuntimeOutcomeKind.Failed, recovery.Outcome);
-        Assert.Equal(RuntimeHarness.Definition.Recovery, recovery.Recovery);
+        Assert.Equal(original.TransitionRun, retried.TransitionRun);
+        Assert.NotEqual(original.Attempt, retried.Attempt);
+        Assert.Equal(2, Assert.Single(retry.Attempts.Started).AttemptIndex);
     }
 
-    [Fact]
-    public async Task Prompt_context_block_stops_before_prompt_execution()
+    private sealed class Harness
     {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.ContextBuilder.BlockedException = new PromptContextBlockedException(
-            "Active Epic prompt context is missing.",
-            [".agents/epic.md"]);
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
-
-        Assert.Equal(RuntimeOutcomeKind.Blocked, result.Outcome);
-        Assert.Equal(TransitionDurableState.Blocked, result.DurableState);
-        Assert.Equal("Active Epic prompt context is missing.", result.Explanation);
-        Assert.Contains(".agents/epic.md", result.Evidence);
-        Assert.False(harness.Executor.WasCalled);
-        Assert.Empty(harness.RunStore.Started);
-        Assert.Empty(harness.RunStore.Completions);
-        TransitionBlockerCapture blocker = Assert.Single(harness.Blockers.Blockers);
-        Assert.Equal(harness.Request.Workflow, blocker.Request.Workflow);
-        Assert.Equal(harness.Request.Stage, blocker.Request.Stage);
-        Assert.Equal(RuntimeHarness.Definition.Identity, blocker.Transition);
-        Assert.Equal(BlockerCategory.Transition, blocker.Category);
-        Assert.Contains(".agents/epic.md", blocker.Evidence);
-        TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
-        Assert.Equal(TransitionDurableState.Blocked, recovery.DurableState);
-        Assert.Equal(RuntimeHarness.Definition.Recovery, recovery.Recovery);
-        Assert.Contains(".agents/epic.md", recovery.Evidence);
-    }
-
-    [Fact]
-    public async Task Malformed_output_does_not_satisfy_the_output_gate()
-    {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.Interpreter.Output = new InterpretedTransitionOutput(
-            OutputInterpretationStatus.Malformed,
-            [],
-            "Output was malformed.",
-            ["malformed-output.md"]);
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
-
-        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
-        Assert.Equal(TransitionDurableState.Failed, result.DurableState);
-        Assert.Null(result.OutputGate);
-        Assert.False(harness.Effects.WasCalled);
-    }
-
-    [Fact]
-    public async Task Missing_output_does_not_satisfy_the_output_gate()
-    {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.Validator.Result = new ProductValidationResult(
-            ProductValidationStatus.Missing,
-            [],
-            [RuntimeHarness.OutputProduct],
-            [],
-            [],
-            [],
-            "Required output product is missing.",
-            ["missing-output.md"]);
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
-
-        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
-        Assert.NotNull(result.OutputGate);
-        Assert.False(result.OutputGate!.IsSatisfied);
-        Assert.False(harness.Effects.WasCalled);
-    }
-
-    [Fact]
-    public async Task Invalid_output_remains_evidence_but_not_a_usable_product()
-    {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.Validator.Result = new ProductValidationResult(
-            ProductValidationStatus.Invalid,
-            [RuntimeHarness.ValidOutput],
-            [],
-            [RuntimeHarness.OutputProduct],
-            [],
-            [],
-            "Output product failed validation.",
-            ["invalid-output.md"]);
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
-
-        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
-        Assert.Equal(ProductValidationStatus.Invalid, result.ProductValidation!.Status);
-        Assert.Contains("invalid-output.md", result.Evidence);
-        Assert.False(harness.Effects.WasCalled);
-    }
-
-    [Fact]
-    public async Task Partial_effect_failure_is_observable_and_does_not_complete_transition()
-    {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.Effects.Result = new EffectExecutionResult(
-            EffectExecutionStatus.PartiallyFailed,
-            [
-                new EffectExecutionRecord(
-                    new EffectIdentity("write-output"),
-                    EffectExecutionStatus.Succeeded,
-                    "Output persisted.",
-                    ["output.md"]),
-                new EffectExecutionRecord(
-                    new EffectIdentity("publish-output"),
-                    EffectExecutionStatus.Failed,
-                    "Publication failed.",
-                    ["publish-failure.md"]),
-            ],
-            "One effect failed after earlier effects succeeded.",
-            ["publish-failure.md"]);
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
-
-        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
-        Assert.Equal(TransitionDurableState.EffectsPartiallyApplied, result.DurableState);
-        Assert.Equal(EffectExecutionStatus.PartiallyFailed, result.Effects!.Status);
-        Assert.Empty(harness.RunStore.Completions);
-        TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
-        Assert.Equal(TransitionDurableState.EffectsPartiallyApplied, recovery.DurableState);
-        Assert.Equal(RuntimeOutcomeKind.Failed, recovery.Outcome);
-        Assert.Equal(RuntimeHarness.Definition.Recovery, recovery.Recovery);
-        Assert.Equal(
-            [EffectExecutionStatus.Succeeded, EffectExecutionStatus.Failed],
-            harness.EffectRecords.Records.Select(effect => effect.Status).ToArray());
-        Assert.Equal(
-            [EffectCategory.ProductPersistence, EffectCategory.Evidence],
-            harness.EffectRecords.Records.Select(effect => effect.Category).ToArray());
-    }
-
-    [Fact]
-    public async Task Stalled_effect_returns_stalled_runtime_outcome_with_recovery_evidence()
-    {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.Effects.Result = new EffectExecutionResult(
-            EffectExecutionStatus.Stalled,
-            [
-                new EffectExecutionRecord(
-                    new EffectIdentity("evaluate-progress"),
-                    EffectExecutionStatus.Stalled,
-                    "No substantive progress was detected.",
-                    ["stall.md"]),
-            ],
-            "Commit gate stalled.",
-            ["stall.md"]);
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
-
-        Assert.Equal(RuntimeOutcomeKind.Stalled, result.Outcome);
-        Assert.Equal(TransitionDurableState.Stalled, result.DurableState);
-        Assert.Equal(EffectExecutionStatus.Stalled, result.Effects!.Status);
-        Assert.Empty(harness.RunStore.Completions);
-        Assert.Contains(harness.Evidence.Events, evidence => evidence.EventName == "TransitionStalled");
-        TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
-        Assert.Equal(TransitionDurableState.Stalled, recovery.DurableState);
-        Assert.Equal(RuntimeOutcomeKind.Stalled, recovery.Outcome);
-        TransitionEffectRecordCapture effect = Assert.Single(harness.EffectRecords.Records);
-        Assert.Equal(EffectExecutionStatus.Stalled, effect.Status);
-    }
-
-    [Fact]
-    public async Task Cancellation_remains_cancellation()
-    {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.Executor.ThrowCancellation = true;
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
-
-        Assert.Equal(RuntimeOutcomeKind.Cancelled, result.Outcome);
-        Assert.Equal(TransitionDurableState.Cancelled, result.DurableState);
-        Assert.Empty(harness.RunStore.Completions);
-        TransitionRecoveryMarkerCapture recovery = Assert.Single(harness.RecoveryMarkers.Markers);
-        Assert.Equal(TransitionDurableState.Cancelled, recovery.DurableState);
-        Assert.Equal(RuntimeOutcomeKind.Cancelled, recovery.Outcome);
-        Assert.Equal(RuntimeHarness.Definition.Recovery, recovery.Recovery);
-    }
-
-    [Fact]
-    public async Task Persistence_failure_is_returned_as_failed_runtime_result()
-    {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        harness.RunStore.ThrowOnCompleted = true;
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
-
-        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
-        Assert.Equal(TransitionDurableState.Failed, result.DurableState);
-        Assert.Contains("completed persistence failed", result.Explanation, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Representative_transition_executes_fully_through_the_runtime()
-    {
-        RuntimeHarness harness = RuntimeHarness.Create();
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(harness.Request);
-
-        Assert.Equal(RuntimeOutcomeKind.Completed, result.Outcome);
-        Assert.Equal(TransitionDurableState.Completed, result.DurableState);
-        Assert.True(result.InputGate!.IsSatisfied);
-        Assert.True(result.OutputGate!.IsSatisfied);
-        Assert.True(result.ProductValidation!.IsValid);
-        Assert.True(result.Effects!.IsSuccess);
-        Assert.Equal([new WorkflowTransitionIdentity("NextTransition")], result.EligibleSuccessors);
-        Assert.Equal(
-            [
-                TransitionDurableState.Started,
-                TransitionDurableState.PromptCompleted,
-                TransitionDurableState.OutputInterpreted,
-                TransitionDurableState.OutputValidated,
-                TransitionDurableState.EffectsApplied,
-                TransitionDurableState.Completed,
-            ],
-            harness.RunStore.States);
-        Assert.Matches("^[a-f0-9]{64}$", harness.RunStore.Started.Single().InputSnapshot.Hash);
-        PromptExecutionRequest execution = Assert.IsType<PromptExecutionRequest>(harness.Executor.Request);
-        Assert.Equal(harness.RunStore.Started.Single().RunId, execution.RunId);
-        Assert.Equal(harness.RunStore.Started.Single().InputSnapshot.Hash, execution.InputSnapshotHash);
-        Assert.Equal(harness.Request.Workflow, execution.Workflow);
-        Assert.Equal(harness.Request.Stage, execution.Stage);
-        Assert.Equal(InvocationModeKind.ForcedEvalChain, execution.RootInvocation.Mode);
-        Assert.Equal("hash", execution.Metadata["project-context"]);
-        Assert.Empty(harness.RecoveryMarkers.Markers);
-        Assert.Equal(
-            [RuntimeHarness.Definition.InputGate.Identity, RuntimeHarness.Definition.OutputGate.Identity],
-            harness.GateEvaluations.Evaluations.Select(evaluation => evaluation.Gate.Identity).ToArray());
-        Assert.All(harness.GateEvaluations.Evaluations, evaluation => Assert.Equal(GateStatus.Satisfied, evaluation.Result.Status));
-        TransitionEffectRecordCapture effect = Assert.Single(harness.EffectRecords.Records);
-        Assert.Equal(harness.RunStore.Started.Single().RunId, effect.RunId);
-        Assert.Equal(new EffectIdentity("write-output"), effect.Effect);
-        Assert.Equal(EffectCategory.ProductPersistence, effect.Category);
-        Assert.Equal(EffectExecutionStatus.Succeeded, effect.Status);
-    }
-
-    [Fact]
-    public async Task ExplicitPersistedRunIdentityFlowsToExecutorAndEvidence()
-    {
-        RuntimeHarness harness = RuntimeHarness.Create();
-        TransitionRuntimeRequest request = harness.Request with { RunId = "persisted-run-001" };
-
-        TransitionRuntimeResult result = await harness.Runtime.RunAsync(request);
-
-        Assert.Equal(RuntimeOutcomeKind.Completed, result.Outcome);
-        Assert.Equal("persisted-run-001", harness.RunStore.Started.Single().RunId);
-        Assert.Equal("persisted-run-001", harness.Executor.Request!.RunId);
-        Assert.All(harness.Evidence.Events, item => Assert.Equal("persisted-run-001", item.RunId));
-    }
-
-    [Fact]
-    public void Input_snapshot_hash_is_stable_and_changes_when_product_causal_identity_changes()
-    {
-        WorkflowTransitionDefinition definition = RuntimeHarness.Definition;
-        ProductRecord input = RuntimeHarness.Product(
-            RuntimeHarness.InputProduct,
-            WorkflowIdentity.TraditionalRoadmap,
-            new WorkflowTransitionIdentity("ProduceInput"),
-            ProductFreshness.Fresh,
-            ProductValidationState.Valid,
-            causalIdentity: "hash-a");
-        ProductRecord changed = input with
+        public Harness(
+            bool withEffect = false,
+            CanonicalTransitionExecutionContext? execution = null,
+            AttemptAuthorization? authorization = null)
         {
-            CausalIdentity = "hash-b",
-        };
-
-        TransitionInputSnapshot first = TransitionInputSnapshotHasher.Create(
-            definition,
-            [input],
-            new Dictionary<string, string> { ["projection"] = "p1" });
-        TransitionInputSnapshot second = TransitionInputSnapshotHasher.Create(
-            definition,
-            [input],
-            new Dictionary<string, string> { ["projection"] = "p1" });
-        TransitionInputSnapshot third = TransitionInputSnapshotHasher.Create(
-            definition,
-            [changed],
-            new Dictionary<string, string> { ["projection"] = "p1" });
-        TransitionInputSnapshot withSection = TransitionInputSnapshotHasher.Create(
-            definition,
-            [input],
-            new Dictionary<string, string> { ["projection"] = "p1" },
-            [new PromptContextSection("Active Epic", "content-a", ".agents/epic.md", [".agents/epic.md"])]);
-        TransitionInputSnapshot changedSection = TransitionInputSnapshotHasher.Create(
-            definition,
-            [input],
-            new Dictionary<string, string> { ["projection"] = "p1" },
-            [new PromptContextSection("Active Epic", "content-b", ".agents/epic.md", [".agents/epic.md"])]);
-
-        Assert.Equal(first.Hash, second.Hash);
-        Assert.NotEqual(first.Hash, third.Hash);
-        Assert.NotEqual(first.Hash, withSection.Hash);
-        Assert.NotEqual(withSection.Hash, changedSection.Hash);
-    }
-
-    private sealed class RuntimeHarness
-    {
-        public static readonly ProductIdentity InputProduct = new("InputProduct");
-        public static readonly ProductIdentity OutputProduct = new("OutputProduct");
-        public static readonly ProductRequirement InputRequirement = new(
-            InputProduct,
-            DependencyStrength.FreshnessSensitive,
-            true,
-            "canonical product authority",
-            "Input product required.");
-        public static readonly ProductRecord ValidInput = Product(
-            InputProduct,
-            WorkflowIdentity.TraditionalRoadmap,
-            new WorkflowTransitionIdentity("ProduceInput"),
-            ProductFreshness.Fresh,
-            ProductValidationState.Valid);
-        public static readonly ProductRecord ValidOutput = Product(
-            OutputProduct,
-            WorkflowIdentity.Plan,
-            new WorkflowTransitionIdentity("GenerateOutput"),
-            ProductFreshness.Fresh,
-            ProductValidationState.Valid);
-        public static readonly WorkflowTransitionDefinition Definition = new(
-            new WorkflowTransitionIdentity("GenerateOutput"),
-            "Generate output product from input product.",
-            [InputRequirement],
-            Gate("InputGate", InputProduct),
-            "GenerateOutputPrompt",
-            ExecutionPosture.OneShotAgentPrompt,
-            [
-                new ProductDefinition(
-                    OutputProduct,
-                    WorkflowIdentity.Plan,
-                    new WorkflowTransitionIdentity("GenerateOutput"),
-                    [WorkflowIdentity.Execute],
-                    "repository-owned orchestration evidence",
-                    "canonical workflow contract",
-                    ProductLifecycle.Active,
-                    ProductValidationState.Valid,
-                    ProductFreshness.Fresh,
-                    [],
-                    ["output representation"]),
-            ],
-            Gate("OutputGate", OutputProduct),
-            ["OutputProductValidator"],
-            [
-                new EffectDefinition(
-                    new EffectIdentity("write-output"),
-                    EffectCategory.ProductPersistence,
-                    "Run after output gate satisfaction.",
-                    [InputProduct],
-                    [OutputProduct],
-                    0,
-                    "Failure prevents completion."),
-            ],
-            [],
-            [new WorkflowTransitionIdentity("NextTransition")],
-            new RecoveryDefinition("RuntimeHarness.Recovery", "Recover from evidence.", ["restart"], ["silent repair"]));
-
-        private RuntimeHarness()
-        {
-            Definitions = new FakeDefinitionResolver();
+            Definition = DefinitionFor(withEffect);
+            Resolver = new FakeDefinitionResolver(Definition);
             Products = new FakeProductResolver();
             Gates = new FakeGateEvaluator();
-            ContextBuilder = new FakePromptContextBuilder();
+            Contexts = new FakePromptContextBuilder();
             Renderer = new FakePromptRenderer();
+            Prompts = new RecordingPromptStore();
             Executor = new FakePromptExecutor();
-            Interpreter = new FakeOutputInterpreter();
-            Validator = new FakeProductValidator();
-            Effects = new FakeEffectExecutor();
-            RunStore = new RecordingRunStore();
+            Dispatches = new RecordingDispatchLifecycleStore();
+            Gateway = new PromptDispatchGateway(Prompts, Dispatches, Executor);
+            Interpreter = new FakeInterpreter();
+            Candidates = new RecordingCandidateStore();
+            Validator = new FakeValidator();
+            Freshness = new FakeFreshnessValidator();
+            Runs = new RecordingRunStore();
+            Attempts = new RecordingAttemptStore();
+            Receipts = new RecordingReceiptStore();
             Evidence = new RecordingEvidenceStore();
-            Blockers = new RecordingBlockerStore();
-            RecoveryMarkers = new RecordingRecoveryStore();
-            GateEvaluations = new RecordingGateEvaluationStore();
-            EffectRecords = new RecordingEffectStore();
+            GateEvaluations = new RecordingGateStore();
+            Commit = new RecordingCommitStore();
             Runtime = new TransitionRuntime(
-                Definitions,
+                Resolver,
                 Products,
                 Gates,
-                ContextBuilder,
+                Contexts,
                 Renderer,
-                Executor,
+                Gateway,
                 Interpreter,
+                Candidates,
                 Validator,
-                Effects,
-                RunStore,
+                Freshness,
+                Runs,
+                Attempts,
+                Receipts,
                 Evidence,
-                Blockers,
-                RecoveryMarkers,
                 GateEvaluations,
-                EffectRecords);
+                Commit);
+            CanonicalTransitionExecutionContext context = execution ?? NewExecutionContext();
             Request = new TransitionRuntimeRequest(
                 WorkflowIdentity.Plan,
                 new WorkflowStageIdentity("Planning"),
                 Definition.Identity,
-                new Dictionary<string, string> { ["project-context"] = "hash" },
-                new WorkflowInvocation(InvocationModeKind.ForcedEvalChain));
+                context,
+                authorization ?? FreshAttemptAuthorization.Instance);
         }
 
-        public TransitionRuntime Runtime { get; }
-
-        public TransitionRuntimeRequest Request { get; }
-
-        public FakeDefinitionResolver Definitions { get; }
-
+        public WorkflowTransitionDefinition Definition { get; }
+        public FakeDefinitionResolver Resolver { get; }
         public FakeProductResolver Products { get; }
-
         public FakeGateEvaluator Gates { get; }
-
-        public FakePromptContextBuilder ContextBuilder { get; }
-
+        public FakePromptContextBuilder Contexts { get; }
         public FakePromptRenderer Renderer { get; }
-
+        public RecordingPromptStore Prompts { get; }
         public FakePromptExecutor Executor { get; }
-
-        public FakeOutputInterpreter Interpreter { get; }
-
-        public FakeProductValidator Validator { get; }
-
-        public FakeEffectExecutor Effects { get; }
-
-        public RecordingRunStore RunStore { get; }
-
+        public RecordingDispatchLifecycleStore Dispatches { get; }
+        public PromptDispatchGateway Gateway { get; }
+        public FakeInterpreter Interpreter { get; }
+        public RecordingCandidateStore Candidates { get; }
+        public FakeValidator Validator { get; }
+        public FakeFreshnessValidator Freshness { get; }
+        public RecordingRunStore Runs { get; }
+        public RecordingAttemptStore Attempts { get; }
+        public RecordingReceiptStore Receipts { get; }
         public RecordingEvidenceStore Evidence { get; }
-
-        public RecordingBlockerStore Blockers { get; }
-
-        public RecordingRecoveryStore RecoveryMarkers { get; }
-
-        public RecordingGateEvaluationStore GateEvaluations { get; }
-
-        public RecordingEffectStore EffectRecords { get; }
-
-        public static RuntimeHarness Create() => new();
-
-        public static ProductRecord Product(
-            ProductIdentity identity,
-            WorkflowIdentity workflow,
-            WorkflowTransitionIdentity transition,
-            ProductFreshness freshness,
-            ProductValidationState validation,
-            string causalIdentity = "hash") =>
-            new(
-                identity,
-                workflow,
-                transition,
-                [WorkflowIdentity.Plan],
-                "repository-owned orchestration evidence",
-                "canonical product authority",
-                ["artifact representation"],
-                causalIdentity,
-                freshness,
-                validation,
-                ProductLifecycle.Active,
-                ["evidence.md"]);
-
-        private static GateDefinition Gate(string identity, params ProductIdentity[] products) =>
-            new(
-                new GateIdentity(identity),
-                "Gate purpose.",
-                products.Select(product => new GateRequirementDefinition(
-                    $"{identity}.{product}",
-                    $"Validate {product}.",
-                    product,
-                    DependencyStrength.Required,
-                    true)).ToArray(),
-                "canonical gate authority",
-                "Unsatisfied requirements stop progress.");
+        public RecordingGateStore GateEvaluations { get; }
+        public RecordingCommitStore Commit { get; }
+        public TransitionRuntime Runtime { get; }
+        public TransitionRuntimeRequest Request { get; }
     }
 
-    private sealed class FakeDefinitionResolver : ITransitionDefinitionResolver
+    private static CanonicalTransitionExecutionContext NewExecutionContext() => new(
+        new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+        WorkspaceIdentity.New(),
+        RunIdentity.New(),
+        WorkflowInstanceIdentity.New(),
+        new PolicyIdentity("policy_test"),
+        new RuntimeProfileIdentity("runtime_test"),
+        new PromptPolicyProfileIdentity("prompt_policy_test"));
+
+    private static WorkflowTransitionDefinition DefinitionFor(bool withEffect) => new(
+        new WorkflowTransitionIdentity("WritePlan"),
+        "write plan",
+        [],
+        Gate("input"),
+        "WritePlan",
+        ExecutionPosture.OneShotAgentPrompt,
+        [],
+        Gate("output"),
+        [],
+        withEffect
+            ? [new EffectDefinition(new EffectIdentity("publish"), EffectCategory.Publication,
+                "validated", [], [], 1, "retry")]
+            : [],
+        [],
+        [],
+        new RecoveryDefinition("recovery", "recover", ["retry"], []));
+
+    private static GateDefinition Gate(string identity) =>
+        new(new GateIdentity(identity), identity, [], "test", "fail");
+
+    private static ProductRecord Candidate() => new(
+        new ProductIdentity("plan"),
+        WorkflowIdentity.Plan,
+        new WorkflowTransitionIdentity("WritePlan"),
+        [WorkflowIdentity.Execute],
+        "repository",
+        "test",
+        ["plan.md"],
+        "candidate-1",
+        ProductFreshness.Fresh,
+        ProductValidationState.Valid,
+        ProductLifecycle.Active,
+        ["plan.md"]);
+
+    private sealed class FakeDefinitionResolver(WorkflowTransitionDefinition definition) : ITransitionDefinitionResolver
     {
-        public Task<WorkflowTransitionDefinition> ResolveAsync(
-            TransitionRuntimeRequest request,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(RuntimeHarness.Definition);
+        public Task<WorkflowTransitionDefinition> ResolveAsync(TransitionRuntimeRequest request, CancellationToken cancellationToken) =>
+            Task.FromResult(definition);
 
         public Task<IReadOnlyList<WorkflowTransitionIdentity>> ResolveEligibleSuccessorsAsync(
-            WorkflowTransitionDefinition definition,
-            IReadOnlyList<ProductRecord> validatedProducts,
+            WorkflowTransitionDefinition resolved,
+            IReadOnlyList<ProductRecord> products,
             CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<WorkflowTransitionIdentity>>(definition.EligibleSuccessors);
+            Task.FromResult<IReadOnlyList<WorkflowTransitionIdentity>>([]);
     }
 
     private sealed class FakeProductResolver : IProductResolver
     {
-        public ProductResolutionResult Result { get; set; } =
-            new([RuntimeHarness.ValidInput], [], [], [], []);
-
         public Task<ProductResolutionResult> ResolveAsync(
             IReadOnlyList<ProductRequirement> requirements,
             CancellationToken cancellationToken) =>
-            Task.FromResult(Result);
+            Task.FromResult(new ProductResolutionResult([], [], [], [], []));
     }
 
     private sealed class FakeGateEvaluator : IGateEvaluator
@@ -588,261 +272,261 @@ public sealed class TransitionRuntimeTests
         public Task<GateResult> EvaluateInputGateAsync(
             GateDefinition gate,
             ProductResolutionResult inputs,
-            CancellationToken cancellationToken)
-        {
-            GateStatus status = inputs.IsUsable ? GateStatus.Satisfied : GateStatus.Blocked;
-            return Task.FromResult(new GateResult(
-                status,
-                [new GateRequirementResult(gate.Requirements[0].Identity, status, status.ToString(), [])],
-                status == GateStatus.Satisfied ? "Input gate satisfied." : "Input gate blocked.",
-                status == GateStatus.Satisfied ? [] : ["input-gate.md"]));
-        }
+            CancellationToken cancellationToken) => Task.FromResult(Satisfied());
 
         public Task<GateResult> EvaluateOutputGateAsync(
             GateDefinition gate,
             ProductValidationResult validation,
-            CancellationToken cancellationToken)
-        {
-            GateStatus status = validation.IsValid ? GateStatus.Satisfied : GateStatus.Unsatisfied;
-            return Task.FromResult(new GateResult(
-                status,
-                [new GateRequirementResult(gate.Requirements[0].Identity, status, status.ToString(), validation.Evidence)],
-                validation.IsValid ? "Output gate satisfied." : "Output gate unsatisfied.",
-                validation.Evidence));
-        }
+            CancellationToken cancellationToken) => Task.FromResult(Satisfied());
+
+        private static GateResult Satisfied() => new(GateStatus.Satisfied, [], "satisfied", []);
     }
 
     private sealed class FakePromptContextBuilder : IPromptContextBuilder
     {
-        public PromptContextBlockedException? BlockedException { get; set; }
-
         public Task<PromptContext> BuildAsync(
             TransitionRuntimeRequest request,
             WorkflowTransitionDefinition definition,
             ProductResolutionResult inputs,
-            CancellationToken cancellationToken)
-        {
-            if (BlockedException is not null)
-            {
-                throw BlockedException;
-            }
-
-            IReadOnlyDictionary<string, string> metadata =
-                request.Metadata ?? new Dictionary<string, string>();
-            return Task.FromResult(new PromptContext(
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new PromptContext(
                 definition,
                 inputs,
-                TransitionInputSnapshotHasher.Create(definition, inputs.Products, metadata),
-                metadata,
-                []));
-        }
+                new TransitionInputSnapshot("snapshot-1", [], new Dictionary<string, string>(), []),
+                new Dictionary<string, string>(),
+                [],
+                [new ConsumedInputFile("plan.md", new string('a', 64))]));
     }
 
     private sealed class FakePromptRenderer : IPromptRenderer
     {
-        public Task<RenderedPrompt> RenderAsync(
-            WorkflowTransitionDefinition definition,
-            PromptContext context,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(new RenderedPrompt(definition.PromptIdentity, "prompt text", "rendered-prompt.md"));
+        public int CallCount { get; private set; }
+
+        public Task<RenderedPrompt> RenderAsync(PromptRenderRequest request, CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(new RenderedPrompt(
+                new PromptTemplateIdentity("template"),
+                request.PolicyProfile,
+                "rendered prompt",
+                "template.prompt",
+                "template-hash"));
+        }
+    }
+
+    private sealed class RecordingPromptStore : IRenderedPromptStore
+    {
+        public bool FailAppend { get; set; }
+
+        public Task<PersistedRenderedPromptFact> AppendAsync(RenderedPromptFact fact, CancellationToken cancellationToken)
+        {
+            if (FailAppend)
+            {
+                throw new InvalidOperationException("prompt persistence failed");
+            }
+
+            return Task.FromResult(new PersistedRenderedPromptFact(
+                fact,
+                RenderedPromptPersistenceIdentity.New(),
+                1,
+                DateTimeOffset.UtcNow));
+        }
     }
 
     private sealed class FakePromptExecutor : IPromptExecutor
     {
-        public bool ThrowCancellation { get; set; }
+        public int CallCount { get; private set; }
+        public Exception? Exception { get; set; }
 
-        public bool WasCalled { get; private set; }
-
-        public PromptExecutionRequest? Request { get; private set; }
-
-        public PromptExecutionResult Result { get; set; } =
-            new(PromptExecutionStatus.Completed, "raw output", TimeSpan.FromMilliseconds(5), new Dictionary<string, string>());
-
-        public Task<PromptExecutionResult> ExecuteAsync(
-            PromptExecutionRequest request,
-            CancellationToken cancellationToken)
+        public Task<PromptExecutionResult> DispatchAsync(AuthorizedPromptDispatch request, CancellationToken cancellationToken)
         {
-            WasCalled = true;
-            Request = request;
-            if (ThrowCancellation)
+            CallCount++;
+            if (Exception is not null)
             {
-                throw new OperationCanceledException(cancellationToken);
+                throw Exception;
             }
 
-            return Task.FromResult(Result);
+            return Task.FromResult(new PromptExecutionResult(
+                PromptExecutionStatus.Completed,
+                "provider output",
+                TimeSpan.FromMilliseconds(10),
+                new Dictionary<string, string>()));
         }
     }
 
-    private sealed class FakeOutputInterpreter : IOutputInterpreter
+    private sealed class RecordingDispatchLifecycleStore : IPromptDispatchLifecycleStore
     {
-        public InterpretedTransitionOutput Output { get; set; } =
-            new(OutputInterpretationStatus.Valid, [RuntimeHarness.ValidOutput], "Output interpreted.", ["interpreted-output.md"]);
+        public List<PromptDispatchLifecycleEvent> Events { get; } = [];
+
+        public Task AppendAsync(PromptDispatchLifecycleEvent dispatchEvent, CancellationToken cancellationToken)
+        {
+            Events.Add(dispatchEvent);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeInterpreter : IOutputInterpreter
+    {
+        public int CallCount { get; private set; }
 
         public Task<InterpretedTransitionOutput> InterpretAsync(
             WorkflowTransitionDefinition definition,
             PromptExecutionResult executionResult,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Output);
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(new InterpretedTransitionOutput(
+                OutputInterpretationStatus.Valid, [Candidate()], "interpreted", []));
+        }
     }
 
-    private sealed class FakeProductValidator : IProductValidator
+    private sealed class RecordingCandidateStore : ICandidateProductStore
     {
-        public ProductValidationResult Result { get; set; } =
-            new(ProductValidationStatus.Valid, [RuntimeHarness.ValidOutput], [], [], [], [], "Products validated.", ["validated-output.md"]);
+        public List<ProductRecord> Registered { get; } = [];
+
+        public Task RegisterAsync(
+            CanonicalCausalContext causality,
+            IReadOnlyList<ProductRecord> candidates,
+            CancellationToken cancellationToken)
+        {
+            Registered.AddRange(candidates);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeValidator : IProductValidator
+    {
+        public int CallCount { get; private set; }
 
         public Task<ProductValidationResult> ValidateAsync(
             WorkflowTransitionDefinition definition,
             InterpretedTransitionOutput output,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(Result);
-    }
-
-    private sealed class FakeEffectExecutor : IEffectExecutor
-    {
-        public bool WasCalled { get; private set; }
-
-        public EffectExecutionResult Result { get; set; } =
-            new(
-                EffectExecutionStatus.Succeeded,
-                [
-                    new EffectExecutionRecord(
-                        new EffectIdentity("write-output"),
-                        EffectExecutionStatus.Succeeded,
-                        "Output persisted.",
-                        ["output.md"]),
-                ],
-                "Effects applied.",
-                ["effects.md"]);
-
-        public Task<EffectExecutionResult> ExecuteAsync(
-            WorkflowTransitionDefinition definition,
-            ProductValidationResult validation,
             CancellationToken cancellationToken)
         {
-            WasCalled = true;
-            return Task.FromResult(Result);
+            CallCount++;
+            return Task.FromResult(new ProductValidationResult(
+                ProductValidationStatus.Valid,
+                output.CandidateProducts,
+                [], [], [], [],
+                "valid",
+                ["validation"]));
         }
+    }
+
+    private sealed class FakeFreshnessValidator : IInputFreshnessValidator
+    {
+        public InputFreshnessResult Result { get; set; } =
+            new(InputFreshnessStatus.Fresh, "fresh", ["snapshot-1"]);
+
+        public Task<InputFreshnessResult> ValidateAsync(
+            CanonicalCausalContext causality,
+            TransitionRuntimeRequest request,
+            WorkflowTransitionDefinition definition,
+            PromptContext frozenContext,
+            CancellationToken cancellationToken) => Task.FromResult(Result);
     }
 
     private sealed class RecordingRunStore : ITransitionRunStore
     {
         public List<TransitionRunStarted> Started { get; } = [];
-
-        public List<TransitionDurableState> States { get; } = [];
-
-        public List<TransitionRunCompleted> Completions { get; } = [];
-
-        public bool ThrowOnCompleted { get; set; }
+        public List<TransitionRunCompleted> Completed { get; } = [];
 
         public Task PersistStartedAsync(TransitionRunStarted started, CancellationToken cancellationToken)
         {
             Started.Add(started);
-            States.Add(TransitionDurableState.Started);
             return Task.CompletedTask;
         }
 
-        public Task PersistStateAsync(TransitionRunStateUpdate update, CancellationToken cancellationToken)
-        {
-            States.Add(update.State);
-            return Task.CompletedTask;
-        }
+        public Task PersistStateAsync(TransitionRunStateUpdate update, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task PersistCompletedAsync(TransitionRunCompleted completed, CancellationToken cancellationToken)
         {
-            if (ThrowOnCompleted)
+            Completed.Add(completed);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingAttemptStore : IAttemptStore
+    {
+        public bool FailStart { get; set; }
+        public List<AttemptRecord> Started { get; } = [];
+        public List<(AttemptIdentity Attempt, string Outcome)> Completed { get; } = [];
+
+        public Task PersistAttemptStartedAsync(AttemptRecord attempt, CancellationToken cancellationToken)
+        {
+            if (FailStart)
             {
-                throw new InvalidOperationException("completed persistence failed");
+                throw new InvalidOperationException("attempt persistence failed");
             }
 
-            Completions.Add(completed);
-            States.Add(TransitionDurableState.Completed);
+            Started.Add(attempt);
+            return Task.CompletedTask;
+        }
+
+        public Task PersistAttemptCompletedAsync(
+            AttemptIdentity attempt,
+            DateTimeOffset completedAt,
+            string outcome,
+            CancellationToken cancellationToken)
+        {
+            Completed.Add((attempt, outcome));
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingReceiptStore : IReadReceiptStore
+    {
+        public List<ReadReceiptCapture> Captures { get; } = [];
+
+        public Task AppendAsync(ReadReceiptCapture capture, CancellationToken cancellationToken)
+        {
+            Captures.Add(capture);
             return Task.CompletedTask;
         }
     }
 
     private sealed class RecordingEvidenceStore : ITransitionEvidenceStore
     {
-        public List<TransitionEvidenceEvent> Events { get; } = [];
+        public bool FailRawOutput { get; set; }
 
-        public List<PromptExecutionResult> RawOutputs { get; } = [];
-
-        public List<string> Failures { get; } = [];
-
-        public Task RecordEventAsync(TransitionEvidenceEvent evidence, CancellationToken cancellationToken)
-        {
-            Events.Add(evidence);
-            return Task.CompletedTask;
-        }
+        public Task RecordEventAsync(TransitionEvidenceEvent evidence, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
 
         public Task RecordRawOutputAsync(
-            string runId,
+            CanonicalCausalContext causality,
             WorkflowTransitionIdentity transition,
             PromptExecutionResult executionResult,
             CancellationToken cancellationToken)
         {
-            RawOutputs.Add(executionResult);
+            if (FailRawOutput)
+            {
+                throw new InvalidOperationException("raw output persistence failed");
+            }
+
             return Task.CompletedTask;
         }
 
         public Task RecordFailureAsync(
-            string runId,
+            CanonicalCausalContext causality,
             WorkflowTransitionIdentity transition,
             string failure,
-            CancellationToken cancellationToken)
-        {
-            Failures.Add(failure);
-            return Task.CompletedTask;
-        }
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
-    private sealed class RecordingBlockerStore : ITransitionBlockerStore
+    private sealed class RecordingGateStore : ITransitionGateEvaluationStore
     {
-        public List<TransitionBlockerCapture> Blockers { get; } = [];
-
-        public Task RecordBlockerAsync(
-            TransitionBlockerCapture blocker,
-            CancellationToken cancellationToken)
-        {
-            Blockers.Add(blocker);
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class RecordingRecoveryStore : ITransitionRecoveryStore
-    {
-        public List<TransitionRecoveryMarkerCapture> Markers { get; } = [];
-
-        public Task RecordRecoveryMarkerAsync(
-            TransitionRecoveryMarkerCapture marker,
-            CancellationToken cancellationToken)
-        {
-            Markers.Add(marker);
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class RecordingGateEvaluationStore : ITransitionGateEvaluationStore
-    {
-        public List<TransitionGateEvaluationCapture> Evaluations { get; } = [];
-
         public Task RecordGateEvaluationAsync(
             TransitionGateEvaluationCapture evaluation,
-            CancellationToken cancellationToken)
-        {
-            Evaluations.Add(evaluation);
-            return Task.CompletedTask;
-        }
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
-    private sealed class RecordingEffectStore : ITransitionEffectStore
+    private sealed class RecordingCommitStore : ITransitionCommitStore
     {
-        public List<TransitionEffectRecordCapture> Records { get; } = [];
+        public TransitionCommitCapture? Capture { get; private set; }
 
-        public Task RecordEffectAsync(
-            TransitionEffectRecordCapture effect,
-            CancellationToken cancellationToken)
+        public Task CommitAsync(TransitionCommitCapture capture, CancellationToken cancellationToken)
         {
-            Records.Add(effect);
+            Capture = capture;
             return Task.CompletedTask;
         }
     }

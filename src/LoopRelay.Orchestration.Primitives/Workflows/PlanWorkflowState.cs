@@ -13,7 +13,6 @@ public enum PlanWorkflowStateKind
     ExecutionPreparationComplete,
     PartialExecutionProducts,
     ExecutionReady,
-    Blocked,
     Cancelled,
     Failed,
     Completed,
@@ -34,11 +33,6 @@ public static class PlanWorkflowStateClassifier
         if (workflow?.State is WorkflowResolutionState.Completed)
         {
             return State(PlanWorkflowStateKind.Completed, workflow, observation);
-        }
-
-        if (workflow?.State is WorkflowResolutionState.Blocked)
-        {
-            return State(PlanWorkflowStateKind.Blocked, workflow, observation);
         }
 
         if (workflow?.State is WorkflowResolutionState.Cancelled)

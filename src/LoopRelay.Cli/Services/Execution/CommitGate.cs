@@ -4,6 +4,7 @@ using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Services;
 
 namespace LoopRelay.Cli.Services.Execution;
@@ -32,9 +33,10 @@ namespace LoopRelay.Cli.Services.Execution;
 /// <see cref="LoopStepException"/>, which the loop surfaces as a failed run.
 /// </summary>
 internal sealed class CommitGate(
-    WorkingTreeChangeDetector _changeDetector, IProcessRunner _processRunner, Repository _repository, ILoopConsole _console)
+    WorkingTreeChangeDetector _changeDetector, IProcessRunner _processRunner, Repository _repository, ILoopConsole _console,
+    int _maxNoChangesCount = OperationalPolicyResolver.DefaultMaxNoChangesCommits)
 {
-    internal const int MaxNoChangesCount = 2;
+    internal int MaxNoChangesCount => _maxNoChangesCount;
 
     private const string CommitMessage = "Orchestration loop: automated execution and decision iteration";
     private const string NonImplementationReviewDecisionMessage =
@@ -84,10 +86,10 @@ internal sealed class CommitGate(
         else
         {
             noChangesCount++;
-            _console.Info($"No substantive changes this iteration ({noChangesCount}/{MaxNoChangesCount}).");
+            _console.Info($"No substantive changes this iteration ({noChangesCount}/{_maxNoChangesCount}).");
         }
 
-        if (noChangesCount > MaxNoChangesCount)
+        if (noChangesCount > _maxNoChangesCount)
         {
             _console.Warn(
                 $"No substantive changes across {noChangesCount} consecutive iterations — stalling the loop.");

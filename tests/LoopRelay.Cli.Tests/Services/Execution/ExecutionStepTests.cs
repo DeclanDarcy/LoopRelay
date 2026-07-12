@@ -19,7 +19,7 @@ public class ExecutionStepTests
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new LoopArtifacts(store, repo);
+        var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         // Default git: the work turn produced a real change, so turn 2 is the ordinary GenerateHandoff —
@@ -27,8 +27,9 @@ public class ExecutionStepTests
         git ??= StatusRunner(" M src/Foo.cs");
         var detector = new WorkingTreeChangeDetector(git, repo);
         var milestones = new MilestoneGate(store, repo);
+        var execution = CanonicalTestStores.ExecutionAuthorization();
         return (new ExecutionStep(
-            rt, art, con, repo, detector, milestones, TestAgentConfiguration.ValidatedExecution),
+            rt, art, con, repo, detector, milestones, execution.Authorization, execution.Resolver),
             rt, store, art, repo, con);
     }
 

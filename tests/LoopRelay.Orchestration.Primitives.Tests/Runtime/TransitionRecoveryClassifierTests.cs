@@ -1,3 +1,4 @@
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
 
@@ -19,7 +20,7 @@ public sealed class TransitionRecoveryClassifierTests
     public void AcceptedRequestRequiresReconciliationAndForbidsResubmission()
     {
         TransitionRecoveryDecision decision = TransitionRecoveryClassifier.Classify(
-            Snapshot(TransitionDurableState.Blocked, boundaries:
+            Snapshot(TransitionDurableState.ProviderOutcomeUnknown, boundaries:
             [
                 Boundary(TransitionBoundaryKind.RequestSubmitted),
                 Boundary(TransitionBoundaryKind.RequestAccepted),
@@ -28,6 +29,17 @@ public sealed class TransitionRecoveryClassifierTests
         Assert.Equal(TransitionRecoveryDisposition.ReconcileProvider, decision.Disposition);
         Assert.False(decision.MaySubmitProviderTurn);
         Assert.False(decision.MayApplyEffects);
+    }
+
+    [Fact]
+    public void RequestWriteStartedRequiresReconciliationBecausePartialSubmissionIsUnknown()
+    {
+        TransitionRecoveryDecision decision = TransitionRecoveryClassifier.Classify(
+            Snapshot(TransitionDurableState.ProviderOutcomeUnknown,
+                boundaries: [Boundary(TransitionBoundaryKind.RequestWriteStarted)]));
+
+        Assert.Equal(TransitionRecoveryDisposition.ReconcileProvider, decision.Disposition);
+        Assert.False(decision.MaySubmitProviderTurn);
     }
 
     [Fact]
@@ -75,7 +87,7 @@ public sealed class TransitionRecoveryClassifierTests
         PromptExecutionResult? raw = null,
         IReadOnlyList<TransitionBoundaryObservation>? boundaries = null) =>
         new(
-            "run-1",
+            Causality,
             new WorkflowTransitionIdentity("Transition"),
             state,
             state == TransitionDurableState.Completed ? RuntimeOutcomeKind.Completed : RuntimeOutcomeKind.Waiting,
@@ -87,6 +99,13 @@ public sealed class TransitionRecoveryClassifierTests
             []);
 
     private static TransitionBoundaryObservation Boundary(TransitionBoundaryKind kind) =>
-        new("run-1", new WorkflowTransitionIdentity("Transition"), kind, 1,
+        new(Causality, new WorkflowTransitionIdentity("Transition"), kind, 1,
             DateTimeOffset.UtcNow, "input-hash", null, []);
+
+    private static CanonicalCausalContext Causality { get; } = new(
+        new WorkspaceIdentity("ws_test"),
+        new RunIdentity("run_test"),
+        new WorkflowInstanceIdentity("wfi_test"),
+        new TransitionRunIdentity("tr_test"),
+        new AttemptIdentity("att_test"));
 }

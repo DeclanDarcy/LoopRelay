@@ -1,7 +1,7 @@
+using LoopRelay.Cli.Services.Application;
 using LoopRelay.Cli.Services.Cli;
-using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Recovery;
+using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Workflows;
 using Xunit;
 
@@ -10,51 +10,54 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 public sealed class UnifiedCliStatusFormatterTests
 {
     [Fact]
-    public void Format_explains_invocation_selection_stage_transition_gates_blockers_and_storage()
+    public void Format_renders_the_immutable_application_snapshot()
     {
-        string repo = Directory.CreateTempSubdirectory("cc-cli-status").FullName;
-        var invocation = new UnifiedCliInvocation(
-            new Repository
-            {
-                Id = Guid.NewGuid(),
-                Name = Path.GetFileName(repo),
-                Path = repo,
-            },
-            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Status, []));
-        RepositoryObservation observation = Observation(
-            [Observed(ProductIdentity.PreparedEpic), Observed(ProductIdentity.MilestoneSpecificationSet)]);
-        WorkflowResolutionResult resolution = new WorkflowResolver().Resolve(
-            invocation.WorkflowInvocation,
-            observation,
-            CanonicalWorkflowDefinitionSketches.CreateAll());
+        CanonicalCliStatusSnapshot snapshot = Snapshot();
 
-        string status = UnifiedCliStatusFormatter.Format(invocation, observation, resolution);
+        string status = UnifiedCliStatusFormatter.Format(snapshot);
 
         Assert.Contains("Invocation mode: BoundedPlan", status, StringComparison.Ordinal);
         Assert.Contains("Selected chain: BoundedPlan", status, StringComparison.Ordinal);
         Assert.Contains("Selected workflow: Plan", status, StringComparison.Ordinal);
         Assert.Contains("Current stage: Planning", status, StringComparison.Ordinal);
         Assert.Contains("Next eligible transition: WriteExecutablePlan", status, StringComparison.Ordinal);
-        Assert.Contains("Satisfied gates:", status, StringComparison.Ordinal);
-        Assert.Contains("Unsatisfied gates:", status, StringComparison.Ordinal);
-        Assert.Contains("Blockers:", status, StringComparison.Ordinal);
         Assert.Contains("Storage authority: FilesystemExport", status, StringComparison.Ordinal);
-        Assert.Contains("User action required:", status, StringComparison.Ordinal);
+        Assert.Contains("User action required: inspect plan inputs", status, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Format_exposes_authoritative_continuity_ids_ancestry_and_operator_action_without_content()
+    public void Format_renders_warnings_and_input_drift_without_querying_authority_stores()
     {
-        string repo = Directory.CreateTempSubdirectory("cc-cli-continuity-status").FullName;
-        var invocation = new UnifiedCliInvocation(
-            new Repository { Id = Guid.NewGuid(), Name = "repo", Path = repo },
-            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Status, []));
-        RepositoryObservation observation = Observation(
-            [Observed(ProductIdentity.PreparedEpic), Observed(ProductIdentity.MilestoneSpecificationSet)]);
-        WorkflowResolutionResult resolution = new WorkflowResolver().Resolve(
-            invocation.WorkflowInvocation, observation, CanonicalWorkflowDefinitionSketches.CreateAll());
+        var warning = new ResolutionWarning(
+            WarningCategory.Repository,
+            "Input surface has uncommitted changes.",
+            "canonical gate authority",
+            "Commit the listed files before rerunning.",
+            [".agents/epic.md"]);
+        CanonicalCliStatusSnapshot baseline = Snapshot(warning);
+        CanonicalCliStatusSnapshot snapshot = baseline with
+        {
+            InputDrift =
+            [
+                new ConsumedInputDrift(
+                    ".agents/plan.md", "aaaabbbbccccdddd", "eeeeffff00001111", "Plan", "WriteExecutablePlan"),
+                new ConsumedInputDrift(
+                    ".agents/epic.md", "1111222233334444", null, "Plan", "WriteExecutablePlan"),
+            ],
+        };
+
+        string status = UnifiedCliStatusFormatter.Format(snapshot);
+
+        Assert.Contains("Warnings:", status, StringComparison.Ordinal);
+        Assert.Contains("Remediation: Commit the listed files before rerunning.", status, StringComparison.Ordinal);
+        Assert.Contains("Inputs changed since last consumption:", status, StringComparison.Ordinal);
+        Assert.Contains(".agents/plan.md: consumed aaaabbbb now eeeeffff", status, StringComparison.Ordinal);
+        Assert.Contains(".agents/epic.md: consumed 11112222 now missing", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Format_renders_continuity_pending_work_policy_and_compatibility_evidence()
+    {
         DateTimeOffset now = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
         var lineage = new DecisionSessionLineageNode(
             "lineage-child", "scope-1", "codex", "thread-child", "lineage-parent", "lineage-parent",
@@ -63,20 +66,49 @@ public sealed class UnifiedCliStatusFormatterTests
         var active = new DecisionSessionActiveState(
             "scope-1", lineage.LineageId, new DecisionSessionAccounting(0, 0, 0, 0, 0, 0, 0, null, 0),
             "policy", null, 2, now);
-        var snapshot = new DecisionContinuityStatusSnapshot(
-            1, active, lineage, [lineage], null, null, null, null);
+        CanonicalCliStatusSnapshot snapshot = Snapshot() with
+        {
+            Continuity = new DecisionContinuityStatusSnapshot(
+                1, active, lineage, [lineage], null, null, null, null),
+            PendingEffects = ["persist-plan"],
+            PendingDispatches = ["dispatch-1:Prepared"],
+            PolicyEvaluations = ["runtime-eval-1:Accepted"],
+            Compatibility = ["legacy export requires import"],
+        };
 
-        string status = UnifiedCliStatusFormatter.Format(invocation, observation, resolution, snapshot);
+        string status = UnifiedCliStatusFormatter.Format(snapshot);
 
         Assert.Contains("Continuity active scope: scope-1", status, StringComparison.Ordinal);
         Assert.Contains("Continuity provider thread: thread-child", status, StringComparison.Ordinal);
-        Assert.Contains("Continuity completeness: RepositoryOnly", status, StringComparison.Ordinal);
         Assert.Contains("Continuity ancestry: lineage-child:thread-child:RepositoryOnly", status, StringComparison.Ordinal);
-        Assert.Contains("Continuity operator action: (none)", status, StringComparison.Ordinal);
-        Assert.DoesNotContain("secret", status, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Pending effects: persist-plan", status, StringComparison.Ordinal);
+        Assert.Contains("Pending dispatches: dispatch-1:Prepared", status, StringComparison.Ordinal);
+        Assert.Contains("Policy evaluations: runtime-eval-1:Accepted", status, StringComparison.Ordinal);
+        Assert.Contains("Compatibility: legacy export requires import", status, StringComparison.Ordinal);
     }
 
-    private static RepositoryObservation Observation(IReadOnlyList<ObservedProduct> products)
+    private static CanonicalCliStatusSnapshot Snapshot(ResolutionWarning? warning = null)
+    {
+        RepositoryObservation observation = Observation(warning);
+        var invocation = new WorkflowInvocation(InvocationModeKind.BoundedPlan);
+        WorkflowResolutionResult resolution = new WorkflowResolver().Resolve(
+            invocation,
+            observation,
+            CanonicalWorkflowDefinitionSketches.CreateAll());
+        return new CanonicalCliStatusSnapshot(
+            "repo",
+            observation,
+            resolution,
+            null,
+            [],
+            [],
+            [],
+            [],
+            [],
+            ["inspect plan inputs"]);
+    }
+
+    private static RepositoryObservation Observation(ResolutionWarning? warning)
     {
         var storage = new StorageVerificationResult(
             StorageAuthorityKind.FilesystemExport,
@@ -89,19 +121,25 @@ public sealed class UnifiedCliStatusFormatterTests
             PartialTransactions: [],
             BlockingConditions: [],
             Evidence: [".agents"]);
+        IReadOnlyList<ResolutionWarning> warnings = warning is null ? [] : [warning];
         return new RepositoryObservation(
             "repo",
-            new StorageAuthoritySnapshot(
-                storage.Authority,
-                storage.UsableAuthority,
-                storage.UsableAuthority ? "test" : "blocked",
-                storage.Evidence),
-            WorkflowStates: [],
-            Products: products,
+            new StorageAuthoritySnapshot(storage.Authority, true, "test", storage.Evidence),
+            WorkflowStates:
+            [
+                new ObservedWorkflowState(
+                    WorkflowIdentity.Plan,
+                    WorkflowResolutionState.Active,
+                    new WorkflowStageIdentity("Planning"),
+                    [],
+                    warnings,
+                    ["plan-state.md"]),
+            ],
+            Products: [Observed(ProductIdentity.PreparedEpic), Observed(ProductIdentity.MilestoneSpecificationSet)],
             LifecycleRows: [],
             Evidence: [],
             TransitionRuns: [],
-            GitFacts: new ObservedGitFacts(IsRepository: true, HasWorkingTreeChanges: false, CurrentBranch: "main", Evidence: [".git"]),
+            GitFacts: new ObservedGitFacts(true, false, "main", [".git"]),
             HumanInteractionRequirements: [],
             EvaluationIntentPaths: [],
             StorageVerification: storage);
@@ -122,6 +160,6 @@ public sealed class UnifiedCliStatusFormatterTests
             ProductValidationState.Valid,
             ProductLifecycle.Active,
             [$"{identity}.md"]);
-        return new ObservedProduct(record, GateUsable: true, record.EvidenceLocations);
+        return new ObservedProduct(record, true, record.EvidenceLocations);
     }
 }

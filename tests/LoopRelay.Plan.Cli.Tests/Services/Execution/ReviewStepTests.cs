@@ -2,7 +2,6 @@ using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Plan.Cli.Models;
@@ -61,7 +60,7 @@ public class ReviewStepTests
         Assert.NotNull(capturedPrompt);
         AdversarialPlanReviewPromptTestAssertions.AssertContainsImplementationFirstReviewSemantics(capturedPrompt);
         AdversarialPlanReviewPromptTestAssertions.AssertNoUnresolvedPlaceholders(capturedPrompt);
-        Assert.DoesNotContain(ImplementationFirstPromptPolicyComposer.SectionHeading, capturedPrompt ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("## Implementation-First Prompt Policy", capturedPrompt ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("PROJECT CONTEXT PROJECTION", capturedPrompt);
         Assert.Contains("PLAN CONTENT", capturedPrompt);
     }

@@ -21,15 +21,23 @@ internal static class AgentSpecs
     // Retired CLI compatibility paths load the selected settings document explicitly. The unified CLI injects
     // one BrainConfiguration at composition and does not use these overloads.
     public static AgentSessionSpec PlanAuthoring(Repository repository) =>
-        PlanAuthoring(repository, CliSettingsLoader.Load().Brain);
+        PlanAuthoring(repository, LoadBrain());
 
     public static AgentSessionSpec Review(Repository repository) =>
-        Review(repository, CliSettingsLoader.Load().Brain);
+        Review(repository, LoadBrain());
 
     public static AgentSessionSpec ScopedArtifactOperation(
         Repository repository,
         OperationPermissionProfile operationProfile) =>
-        ScopedArtifactOperation(repository, CliSettingsLoader.Load().Brain, operationProfile);
+        ScopedArtifactOperation(repository, LoadBrain(), operationProfile);
+
+    private static BrainConfiguration LoadBrain()
+    {
+        ConfiguredBrainFacts configured = CliSettingsLoader.Load().Runtime.Brain;
+        return configured.Model is { } model && configured.Effort is { } effort
+            ? new BrainConfiguration(model, effort)
+            : throw new CliSettingsException("runtime.brain.model and runtime.brain.effort are required.");
+    }
 
     public static AgentSessionSpec PlanAuthoring(Repository repository, BrainConfiguration brain) =>
         new(

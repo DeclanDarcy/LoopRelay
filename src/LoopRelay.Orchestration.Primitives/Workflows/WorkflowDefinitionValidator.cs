@@ -34,7 +34,7 @@ public static class WorkflowDefinitionValidator
         ValidateGate(definition.ExitGate, "exit gate", errors);
         ValidateGate(definition.Completion.CompletionGate, "completion gate", errors);
         ValidateImplementationNeutralText(definition.Purpose, "workflow purpose", errors);
-        ValidateImplementationNeutralText(definition.Blocker.Semantics, "blocker semantics", errors);
+        ValidateImplementationNeutralText(definition.Warning.Semantics, "warning semantics", errors);
         ValidateImplementationNeutralText(definition.Recovery.Semantics, "recovery semantics", errors);
 
         var transitionIds = new HashSet<WorkflowTransitionIdentity>(
@@ -193,6 +193,44 @@ public static class WorkflowDefinitionValidator
         {
             RequireExplanation(requirement.Identity, $"{label} requirement identity", errors);
             RequireExplanation(requirement.Description, $"{label} requirement '{requirement.Identity}' description", errors);
+
+            // A requirement declaring both shapes is ambiguous: the evaluator would satisfy it by
+            // product while cannot-proceed labeling would have to choose between the two kinds.
+            if (requirement.Product is not null && requirement.InputSurface is not null)
+            {
+                errors.Add($"{label} requirement '{requirement.Identity}' must not declare both a product and an input surface.");
+            }
+
+            if (requirement.InputSurface is not null)
+            {
+                ValidateInputSurface(requirement.InputSurface, $"{label} requirement '{requirement.Identity}'", errors);
+            }
+        }
+    }
+
+    // Surfaces are repository-relative, forward-slash normalized paths so every evaluator resolves
+    // them against the same working-tree root without platform- or escape-dependent reads.
+    private static void ValidateInputSurface(string surface, string label, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(surface))
+        {
+            errors.Add($"{label} input surface must not be empty.");
+            return;
+        }
+
+        if (surface.Contains('\\', StringComparison.Ordinal))
+        {
+            errors.Add($"{label} input surface must be forward-slash normalized.");
+        }
+
+        if (surface.StartsWith('/') || (surface.Length >= 2 && surface[1] == ':'))
+        {
+            errors.Add($"{label} input surface must be repository-relative, not rooted.");
+        }
+
+        if (surface.Split('/').Any(segment => segment == ".."))
+        {
+            errors.Add($"{label} input surface must not contain '..' segments.");
         }
     }
 

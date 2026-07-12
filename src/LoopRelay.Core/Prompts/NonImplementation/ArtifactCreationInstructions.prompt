@@ -1,2 +1,0 @@
-Only create artifacts that are machine-required or explicitly requested.
-You can assume that any human-readable artifact that was not requested will never be read.

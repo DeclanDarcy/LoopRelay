@@ -7,9 +7,9 @@ using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
-using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Models;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
+using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Services;
 
 namespace LoopRelay.Cli.Services.Execution;
 
@@ -34,8 +34,8 @@ internal sealed class ExecutionStep(
     Repository _repository,
     WorkingTreeChangeDetector _changeDetector,
     MilestoneGate _milestones,
-    ValidatedExecutionRecommendation _legacyExecutionConfiguration,
-    string? _promptPolicy = null)
+    ExecutionAuthorization _executionAuthorization,
+    IExecutionAuthorizationResolver _authorizationResolver)
 {
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -56,26 +56,29 @@ internal sealed class ExecutionStep(
         if (hasDecisions)
         {
             (string? decisions, _) = await _artifacts.ReadLatestDecisionsAsync();
-            executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-                // TODO:
-                ContinueExecution.Render(plan, details, decisions, "TODO"),
-                (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
+            executionPrompt = ContinueExecution.Render(plan, details, decisions);
             workPhase = "Execution: ContinueExecution";
         }
         else
         {
-            executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-                // TODO:
-                StartExecution.Render(plan, details, "TODO"),
-                (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
+            executionPrompt = StartExecution.Render(plan, details);
             workPhase = "Execution: StartExecution";
         }
 
         // The execution agent runs codex with full access (no sandbox): it needs to build, run tools, touch
         // git, and reach outside the workspace to do real work. This is the ONE session granted danger-full-access
         // — the decision session stays read-only and the context-update evolution keeps its own posture.
+        ResolvedRuntimeProfile profile;
+        try
+        {
+            profile = await _authorizationResolver.ResolveAsync(_executionAuthorization, cancellationToken);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new LoopStepException(exception.Message, exception);
+        }
         IAgentSession session = await _runtime.OpenSessionAsync(
-            AgentSpecs.Execution(_repository, _legacyExecutionConfiguration),
+            AgentSpecs.Execution(_repository, profile),
             cancellationToken);
         try
         {

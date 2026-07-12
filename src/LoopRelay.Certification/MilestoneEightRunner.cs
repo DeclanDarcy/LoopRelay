@@ -240,7 +240,7 @@ public sealed class MilestoneEightRunner
     {
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(database);
         await connection.OpenAsync(token);
-        return await LoopRelayWorkspaceDatabase.ReadWorkspaceIdAsync(connection, token);
+        return await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection, token);
     }
 
     private static async Task<int> SchemaVersionAsync(string database, CancellationToken token)

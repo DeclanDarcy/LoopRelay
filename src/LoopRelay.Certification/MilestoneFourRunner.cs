@@ -9,6 +9,7 @@ using LoopRelay.Agents.Services.Codex.Compatibility;
 using LoopRelay.Agents.Services.Process;
 using LoopRelay.Agents.Services.Usage;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
@@ -65,9 +66,9 @@ public sealed class MilestoneFourRunner
             cases.Add(await RunCase(
                 "accepted-reconcile-required",
                 TransitionBoundaryKind.RequestAccepted,
-                TransitionDurableState.Blocked,
+                TransitionDurableState.ProviderOutcomeUnknown,
                 TransitionRecoveryDisposition.ReconcileProvider,
-                TransitionDurableState.Blocked,
+                TransitionDurableState.ProviderOutcomeUnknown,
                 expectedProviderCalls: 1,
                 expectedEffectCalls: 0,
                 requirePublicRecovery: true));
@@ -148,15 +149,19 @@ public sealed class MilestoneFourRunner
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromMinutes(2));
             TransitionRuntimeResult initial = await firstRuntime.RunAsync(Request(runId), timeout.Token);
+            TransitionRunIdentity transitionRun = initial.TransitionRun
+                ?? throw new InvalidOperationException("Initial transition run identity was not recorded.");
 
             var restartedStore = new CanonicalTransitionRunStore(new CanonicalWorkflowPersistenceStore(repository));
-            TransitionRunRecoverySnapshot snapshot = await restartedStore.LoadRecoveryAsync(runId, cancellationToken)
+            TransitionRunRecoverySnapshot snapshot = await restartedStore.LoadRecoveryAsync(transitionRun, cancellationToken)
                 ?? throw new InvalidOperationException("Recovery snapshot was not durable across runtime reconstruction.");
             TransitionRecoveryDecision decision = TransitionRecoveryClassifier.Classify(snapshot);
             TransitionRuntime restartedRuntime = CreateRuntime(repository, live, effects, interruptAt: null);
             TransitionRuntimeResult restarted = await restartedRuntime.RunAsync(Request(runId), timeout.Token);
             TransitionRunRecoverySnapshot afterRestart = await new CanonicalTransitionRunStore(
-                new CanonicalWorkflowPersistenceStore(repository)).LoadRecoveryAsync(runId, cancellationToken)
+                new CanonicalWorkflowPersistenceStore(repository)).LoadRecoveryAsync(
+                    restarted.TransitionRun ?? transitionRun,
+                    cancellationToken)
                 ?? throw new InvalidOperationException("Restarted recovery snapshot was missing.");
 
             bool statusExposed = true;
@@ -174,7 +179,7 @@ public sealed class MilestoneFourRunner
 
             bool duplicateProvider = live.Calls > expectedProviderCalls;
             bool duplicateEffect = effects.Calls > expectedEffectCalls;
-            bool singleRun = afterRestart.RunId == runId;
+            bool singleRun = afterRestart.Causality.TransitionRun == transitionRun;
             bool passed = initial.DurableState == expectedInitial &&
                 decision.Disposition == expectedDisposition &&
                 restarted.DurableState == expectedRestart &&
@@ -229,32 +234,55 @@ public sealed class MilestoneFourRunner
         var runs = new CanonicalTransitionRunStore(persistence);
         var evidence = new CanonicalTransitionEvidenceStore(persistence);
         var journal = new CanonicalTransitionBoundaryJournal(persistence, interruptAt);
+        var products = new EmptyProductResolver();
+        var context = new ContextBuilder();
+        var promptStore = new CanonicalRenderedPromptFactStore(persistence);
+        var promptRuntime = new FaultInjectingPromptExecutor(
+            new LoadingPromptRuntimeDispatcher(promptStore, live),
+            evidence,
+            journal);
+        var promptGateway = new PromptDispatchGateway(
+            promptStore,
+            new CanonicalPromptDispatchLifecycleStore(persistence),
+            promptRuntime);
         return new TransitionRuntime(
             new DefinitionResolver(),
-            new EmptyProductResolver(),
+            products,
             new SatisfiedGateEvaluator(),
-            new ContextBuilder(),
+            context,
             new PromptRenderer(),
-            new FaultInjectingPromptExecutor(live, evidence, journal),
+            promptGateway,
             new OutputInterpreter(),
+            new CanonicalCandidateProductStore(persistence),
             new ProductValidator(),
-            effects,
+            new SnapshotInputFreshnessValidator(products, context),
             runs,
+            new CanonicalAttemptStore(persistence),
+            new NoOpReadReceiptStore(),
             evidence,
-            new CanonicalTransitionBlockerStore(persistence),
-            new CanonicalTransitionRecoveryStore(persistence),
             new CanonicalTransitionGateEvaluationStore(persistence),
-            new CanonicalTransitionEffectStore(persistence),
+            new CanonicalTransitionCommitStore(persistence),
             journal);
     }
 
-    private static TransitionRuntimeRequest Request(string runId) => new(
-        WorkflowIdentity.TraditionalRoadmap,
-        new WorkflowStageIdentity("Live Recovery"),
-        Transition,
-        new Dictionary<string, string> { ["case"] = "milestone-4" },
-        new WorkflowInvocation(InvocationModeKind.BoundedTraditional),
-        runId);
+    private static TransitionRuntimeRequest Request(string runId)
+    {
+        var invocation = new WorkflowInvocation(InvocationModeKind.BoundedTraditional);
+        return new TransitionRuntimeRequest(
+            WorkflowIdentity.TraditionalRoadmap,
+            new WorkflowStageIdentity("Live Recovery"),
+            Transition,
+            new CanonicalTransitionExecutionContext(
+                invocation,
+                WorkspaceIdentity.New(),
+                new RunIdentity(runId),
+                WorkflowInstanceIdentity.New(),
+                new PolicyIdentity("policy_milestone_4"),
+                new RuntimeProfileIdentity("runtime_milestone_4"),
+                new PromptPolicyProfileIdentity("prompt_policy_milestone_4")),
+            FreshAttemptAuthorization.Instance,
+            new Dictionary<string, string> { ["case"] = "milestone-4" });
+    }
 
     private static WorkflowTransitionDefinition CreateDefinition()
     {
@@ -324,16 +352,22 @@ public sealed class MilestoneFourRunner
 
     private sealed class PromptRenderer : IPromptRenderer
     {
-        public Task<RenderedPrompt> RenderAsync(WorkflowTransitionDefinition definition, PromptContext context, CancellationToken token) =>
-            Task.FromResult(new RenderedPrompt(definition.PromptIdentity,
-                "Reply with exactly RECOVERY_OK. Do not call tools or inspect files.", "certification/live-recovery"));
+        public Task<RenderedPrompt> RenderAsync(PromptRenderRequest request, CancellationToken token) =>
+            Task.FromResult(new RenderedPrompt(
+                new PromptTemplateIdentity(request.Definition.PromptIdentity),
+                request.PolicyProfile,
+                "Reply with exactly RECOVERY_OK. Do not call tools or inspect files.",
+                "certification/live-recovery"));
     }
 
-    private sealed class LivePromptExecutor(string executable, string repository) : IPromptExecutor
+    private sealed class LivePromptExecutor(string executable, string repository) : IProviderPromptTransport
     {
         public int Calls { get; private set; }
 
-        public async Task<PromptExecutionResult> ExecuteAsync(PromptExecutionRequest request, CancellationToken token)
+        public async Task<PromptExecutionResult> DispatchAsync(
+            PersistedRenderedPromptFact prompt,
+            AuthorizedPromptDispatch dispatch,
+            CancellationToken token)
         {
             Calls++;
             IAgentProcess process = await new ProcessRunner().StartInteractiveAsync(
@@ -343,7 +377,7 @@ public sealed class MilestoneFourRunner
                 new SandboxProfile("read-only", false, false, false),
                 AgentModel.Gpt56Luna, AgentEffort.Low, AgentConfigurationAuthority.Brain, repository);
             await using var session = new CodexAppServerSession(spec, process, new DeterministicAgentTokenEstimator());
-            AgentTurnResult result = await session.RunTurnAsync(request.RenderedPrompt.Text, cancellationToken: token);
+            AgentTurnResult result = await session.RunTurnAsync(prompt.Fact.RenderedContent, cancellationToken: token);
             return new PromptExecutionResult(
                 result.State == AgentTurnState.Completed ? PromptExecutionStatus.Completed : PromptExecutionStatus.Failed,
                 result.Output,
@@ -383,11 +417,20 @@ public sealed class MilestoneFourRunner
         }
     }
 
+    private sealed class NoOpReadReceiptStore : IReadReceiptStore
+    {
+        public Task AppendAsync(ReadReceiptCapture capture, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+    }
+
     private sealed class MarkerEffectExecutor(string path) : IEffectExecutor
     {
         public int Calls { get; private set; }
         public async Task<EffectExecutionResult> ExecuteAsync(
-            WorkflowTransitionDefinition definition, ProductValidationResult validation, CancellationToken token)
+            WorkflowTransitionDefinition definition,
+            ProductValidationResult validation,
+            EffectExecutionContext context,
+            CancellationToken token)
         {
             Calls++;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);

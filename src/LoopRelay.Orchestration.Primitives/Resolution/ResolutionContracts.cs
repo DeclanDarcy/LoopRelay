@@ -18,7 +18,7 @@ public enum RepositoryClassification
 {
     Fresh,
     InProgress,
-    Blocked,
+    StorageUnusable,
     Waiting,
     Completed,
     Cancelled,
@@ -35,7 +35,6 @@ public enum WorkflowResolutionState
     Active,
     Resumable,
     Completed,
-    Blocked,
     Waiting,
     Cancelled,
     Failed,
@@ -46,7 +45,7 @@ public enum WorkflowResolutionState
 public enum TransitionEligibilityState
 {
     Eligible,
-    Blocked,
+    MissingRequiredInput,
     Waiting,
     Invalid,
     Completed,
@@ -64,7 +63,7 @@ public enum InvocationModeKind
     BoundedExecute,
 }
 
-public enum BlockerCategory
+public enum WarningCategory
 {
     Storage,
     Workflow,
@@ -114,10 +113,10 @@ public sealed record StorageVerificationResult(
     IReadOnlyList<string> UnsupportedSchema,
     IReadOnlyList<string> UnresolvedReferences,
     IReadOnlyList<string> PartialTransactions,
-    IReadOnlyList<ResolutionBlocker> BlockingConditions,
+    IReadOnlyList<ResolutionWarning> BlockingConditions,
     IReadOnlyList<string> Evidence)
 {
-    public bool IsBlocked =>
+    public bool IsUnusable =>
         !UsableAuthority ||
         BlockingConditions.Count > 0 ||
         Conflicts.Count > 0 ||
@@ -144,7 +143,7 @@ public sealed record ObservedWorkflowState(
     WorkflowResolutionState State,
     WorkflowStageIdentity? CurrentStage,
     IReadOnlyList<WorkflowStageIdentity> CompletedStages,
-    IReadOnlyList<ResolutionBlocker> Blockers,
+    IReadOnlyList<ResolutionWarning> Warnings,
     IReadOnlyList<string> Evidence);
 
 public sealed record ObservedProduct(
@@ -186,12 +185,11 @@ public sealed record HumanInteractionRequirement(
     string BlockingScope,
     IReadOnlyList<string> Evidence);
 
-public sealed record ResolutionBlocker(
-    BlockerCategory Category,
-    string Reason,
+public sealed record ResolutionWarning(
+    WarningCategory Category,
+    string Concern,
     string Authority,
-    string RequiredAction,
-    bool Recoverable,
+    string Remediation,
     IReadOnlyList<string> Evidence);
 
 public sealed record ResolutionAmbiguity(
@@ -222,7 +220,7 @@ public sealed record TransitionEligibility(
     TransitionEligibilityState State,
     IReadOnlyList<string> SatisfiedGates,
     IReadOnlyList<string> UnsatisfiedGates,
-    IReadOnlyList<ResolutionBlocker> Blockers,
+    IReadOnlyList<ResolutionWarning> Warnings,
     IReadOnlyList<string> Evidence);
 
 public sealed record WorkflowResolutionResult(
@@ -240,7 +238,7 @@ public sealed record ResolutionExplanation(
     IReadOnlyList<WorkflowTransitionIdentity> EligibleTransitions,
     IReadOnlyList<string> SatisfiedGates,
     IReadOnlyList<string> UnsatisfiedGates,
-    IReadOnlyList<ResolutionBlocker> Blockers,
+    IReadOnlyList<ResolutionWarning> Warnings,
     IReadOnlyList<string> Evidence,
     StorageAuthoritySnapshot Authority,
     IReadOnlyList<string> IgnoredEvidence,

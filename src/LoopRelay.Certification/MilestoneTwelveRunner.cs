@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
 
@@ -141,7 +142,7 @@ public sealed class MilestoneTwelveRunner
         TransitionRecoveryDecision safe = TransitionRecoveryClassifier.Classify(Snapshot(
             transition.Identity, TransitionDurableState.Cancelled, TransitionBoundaryKind.PreSubmission));
         TransitionRecoveryDecision uncertainProvider = TransitionRecoveryClassifier.Classify(Snapshot(
-            transition.Identity, TransitionDurableState.Blocked, TransitionBoundaryKind.RequestAccepted));
+            transition.Identity, TransitionDurableState.ProviderOutcomeUnknown, TransitionBoundaryKind.RequestAccepted));
         TransitionRecoveryDecision postValidation = TransitionRecoveryClassifier.Classify(Snapshot(
             transition.Identity,
             TransitionDurableState.OutputValidated,
@@ -196,9 +197,16 @@ public sealed class MilestoneTwelveRunner
         WorkflowTransitionIdentity transition,
         TransitionDurableState state,
         TransitionBoundaryKind boundary,
-        PromptExecutionResult? raw = null) =>
-        new(
-            "milestone-12",
+        PromptExecutionResult? raw = null)
+    {
+        CanonicalCausalContext causality = new(
+            new WorkspaceIdentity("workspace_milestone_12"),
+            new RunIdentity("run_milestone_12"),
+            new WorkflowInstanceIdentity("workflow_instance_milestone_12"),
+            new TransitionRunIdentity("transition_run_milestone_12"),
+            new AttemptIdentity("attempt_milestone_12"));
+        return new(
+            causality,
             transition,
             state,
             RuntimeOutcomeKind.Waiting,
@@ -206,10 +214,11 @@ public sealed class MilestoneTwelveRunner
             raw,
             [],
             [new TransitionBoundaryObservation(
-                "milestone-12", transition, boundary, 1, DateTimeOffset.UnixEpoch,
+                causality, transition, boundary, 1, DateTimeOffset.UnixEpoch,
                 "input-hash", null, ["deterministic-boundary-control"])],
             "deterministic recovery classifier control",
             ["milestone-12"]);
+    }
 
     private static OracleControlCaseResult[] CreateOracleControls() =>
     [

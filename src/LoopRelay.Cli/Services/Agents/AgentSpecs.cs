@@ -60,19 +60,19 @@ internal static class AgentSpecs
 
     public static AgentSessionSpec Execution(
         Repository repository,
-        ValidatedExecutionRecommendation recommendation) =>
+        ResolvedRuntimeProfile profile) =>
         new(
             SessionIdentity.New(),
             repository.Id.ToString("N"),
             SessionRole.OperationalExecution,
             new SandboxProfile(
-                "danger-full-access",
+                profile.SandboxProfile,
                 CanWriteWorkspace: true,
-                CanAccessNetwork: true,
-                RequiresApproval: false),
-            recommendation.Model,
-            recommendation.Effort,
-            AgentConfigurationAuthority.Execution,
+                CanAccessNetwork: string.Equals(profile.SandboxProfile, "danger-full-access", StringComparison.Ordinal),
+                RequiresApproval: !string.Equals(profile.ApprovalPolicy, "never", StringComparison.Ordinal)),
+            profile.Model,
+            profile.Effort,
+            AgentConfigurationAuthority.Policy,
             repository.Path);
 
     public static AgentSessionSpec Decision(

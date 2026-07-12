@@ -136,7 +136,7 @@ public sealed class NonImplementationCompletionReviewTests
 
         Assert.True(result.IsBlocked);
         Assert.True(File.Exists(temp.Resolve("docs/remove.md")));
-        Assert.Contains(result.BlockerMessages, message => message.Contains("hash changed", StringComparison.Ordinal));
+        Assert.Contains(result.UnresolvedMessages, message => message.Contains("hash changed", StringComparison.Ordinal));
         NonImplementationReviewLedgerEntry entry = Assert.Single((await temp.Ledger.LoadOrCreateAsync()).Entries);
         Assert.Equal(NonImplementationResolutionState.Unresolved, entry.ResolutionState);
     }
@@ -156,8 +156,8 @@ public sealed class NonImplementationCompletionReviewTests
         NonImplementationCompletionReviewResult result = await service.ReviewAsync();
 
         Assert.True(result.IsBlocked);
-        Assert.Contains(result.BlockerMessages, message => message.Contains("path traversal", StringComparison.Ordinal));
-        Assert.Contains(result.BlockerMessages, message => message.Contains(".agents", StringComparison.Ordinal));
+        Assert.Contains(result.UnresolvedMessages, message => message.Contains("path traversal", StringComparison.Ordinal));
+        Assert.Contains(result.UnresolvedMessages, message => message.Contains(".agents", StringComparison.Ordinal));
     }
 
     [Theory]

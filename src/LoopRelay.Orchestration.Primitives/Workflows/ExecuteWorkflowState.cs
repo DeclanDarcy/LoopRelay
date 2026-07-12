@@ -12,7 +12,6 @@ public enum ExecuteWorkflowStateKind
     CompletionInProgress,
     WorkflowCompletionInProgress,
     Waiting,
-    Blocked,
     Cancelled,
     Failed,
     Completed,
@@ -33,11 +32,6 @@ public static class ExecuteWorkflowStateClassifier
         if (workflow?.State is WorkflowResolutionState.Completed)
         {
             return State(ExecuteWorkflowStateKind.Completed, workflow, observation);
-        }
-
-        if (workflow?.State is WorkflowResolutionState.Blocked)
-        {
-            return State(ExecuteWorkflowStateKind.Blocked, workflow, observation);
         }
 
         if (workflow?.State is WorkflowResolutionState.Waiting)

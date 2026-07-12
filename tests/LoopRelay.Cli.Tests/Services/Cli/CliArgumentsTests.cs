@@ -1,4 +1,5 @@
 using LoopRelay.Cli.Services.Cli;
+using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Resolution;
 using Xunit;
 
@@ -6,6 +7,53 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 
 public class CliArgumentsTests
 {
+    [Fact]
+    public void TryParse_CollectsRepeatedPolicyOverridesAsExplicitFlagInputs()
+    {
+        string dir = Directory.CreateTempSubdirectory("cc-cli-policy").FullName;
+
+        bool ok = CliArguments.TryParse(
+            ["--repo", dir, "--policy", "execution.maxNoChangesCommits=3", "--policy", "decisions.sessionResume=false"],
+            out UnifiedCliInvocation invocation,
+            out string error);
+
+        Assert.True(ok, error);
+        Assert.NotNull(invocation.PolicyOverrides);
+        Assert.Equal(2, invocation.PolicyOverrides.Count);
+        PolicyOverride first = invocation.PolicyOverrides[0];
+        Assert.Equal("execution.maxNoChangesCommits", first.Key);
+        Assert.Equal("3", first.Value);
+        Assert.Equal("flag:--policy", first.Origin);
+        Assert.True(first.IsExplicit);
+        Assert.Equal("decisions.sessionResume", invocation.PolicyOverrides[1].Key);
+        Assert.Equal("false", invocation.PolicyOverrides[1].Value);
+    }
+
+    [Theory]
+    [InlineData("no-equals-sign")]
+    [InlineData("=value")]
+    [InlineData("key=")]
+    public void TryParse_RejectsMalformedPolicyOverrides(string assignment)
+    {
+        string dir = Directory.CreateTempSubdirectory("cc-cli-policy-bad").FullName;
+
+        bool ok = CliArguments.TryParse(["--repo", dir, "--policy", assignment], out _, out string error);
+
+        Assert.False(ok);
+        Assert.Contains("--policy", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TryParse_RejectsPolicyFlagWithoutAValue()
+    {
+        string dir = Directory.CreateTempSubdirectory("cc-cli-policy-missing").FullName;
+
+        bool ok = CliArguments.TryParse(["--repo", dir, "--policy"], out _, out string error);
+
+        Assert.False(ok);
+        Assert.Contains("--policy", error, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TryParse_WithExistingDirectory_ReturnsRepositoryWithAbsolutePath()
     {
@@ -73,7 +121,6 @@ public class CliArgumentsTests
 
     [Theory]
     [InlineData("status", "Status")]
-    [InlineData("unblock", "Unblock")]
     [InlineData("storage init", "StorageInit")]
     [InlineData("storage import", "StorageImport")]
     [InlineData("storage export", "StorageExport")]
@@ -88,6 +135,17 @@ public class CliArgumentsTests
 
         Assert.True(ok, error);
         Assert.Equal(expected, invocation.Command.Kind.ToString());
+    }
+
+    [Fact]
+    public void TryParse_RejectsRetiredUnblockCommand()
+    {
+        string dir = Directory.CreateTempSubdirectory("cc-cli-retired-unblock").FullName;
+
+        bool ok = CliArguments.TryParse(["--repo", dir, "unblock"], out UnifiedCliInvocation _, out string error);
+
+        Assert.False(ok);
+        Assert.Contains("Unknown command: unblock", error, StringComparison.Ordinal);
     }
 
     [Fact]

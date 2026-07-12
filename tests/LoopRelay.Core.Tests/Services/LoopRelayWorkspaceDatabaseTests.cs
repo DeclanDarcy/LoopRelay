@@ -24,7 +24,7 @@ public sealed class LoopRelayWorkspaceDatabaseTests
                 await connection.OpenAsync();
                 string second = await LoopRelayWorkspaceDatabase.EnsureSchemaAndReadWorkspaceIdAsync(connection);
                 Assert.Equal(first, second);
-                Assert.Matches("^[a-f0-9]{32}$", second);
+                Assert.Matches("^(ws_[0-9A-Z]{26}|[a-f0-9]{32})$", second);
             }
         }
         finally

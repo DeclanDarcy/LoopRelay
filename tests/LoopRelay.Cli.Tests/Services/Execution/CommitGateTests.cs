@@ -45,6 +45,21 @@ public class CommitGateTests
     }
 
     [Fact]
+    public async Task T1b_PolicyConfiguredThreshold_ChangesWhenTheGateTrips()
+    {
+        // The no-progress cap is resolved policy, not an ambient constant: a cap of 1 trips one
+        // iteration earlier than the built-in default of 2.
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var fake = StatusRunner(GitlinkOnly);
+        var gate = new CommitGate(new WorkingTreeChangeDetector(fake, repo), fake, repo, new RecordingLoopConsole(), 1);
+
+        Assert.False(await gate.CommitPushAndEvaluateAsync(0, 0, CancellationToken.None)); // count 1
+        Assert.True(await gate.CommitPushAndEvaluateAsync(0, 0, CancellationToken.None));  // count 2 -> 2 > 1
+
+        Assert.Equal(2, gate.NoChangesCount);
+    }
+
+    [Fact]
     public async Task T2_RealSourceChange_ResetsCounter()
     {
         var fake = StatusRunner(GitlinkOnly);

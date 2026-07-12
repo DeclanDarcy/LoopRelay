@@ -1,15 +1,20 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Extensions;
 using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Agents.Models.Streams;
+using LoopRelay.Agents.Primitives.Process;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Process;
 using LoopRelay.Agents.Services.Codex;
 using LoopRelay.Agents.Services.Codex.Compatibility;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
 using LoopRelay.Cli.Services.Decisions;
@@ -24,6 +29,7 @@ using LoopRelay.Completion.Services.ArtifactStorage;
 using LoopRelay.Completion.Services.Certification;
 using LoopRelay.Completion.Services.Prompts;
 using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
@@ -34,6 +40,7 @@ using LoopRelay.Orchestration.Models.NonImplementationCompletion;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.RepositorySlices;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Primitives;
 using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Resolution;
@@ -45,9 +52,10 @@ using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
 using LoopRelay.Orchestration.Services.RepositorySlices;
 using LoopRelay.Orchestration.Workflows;
-using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Permissions.Models.Configuration;
+using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Permissions.Services.Configuration;
+using LoopRelay.Permissions.Services.Evaluation;
 using LoopRelay.Projections.Models.Context;
 using LoopRelay.Projections.Models.Definitions;
 using LoopRelay.Projections.Models.ProjectionArtifacts;
@@ -75,10 +83,13 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         WorkflowBoundaryEvidenceWriter boundaryEvidenceWriter,
         IReadOnlyList<WorkflowDefinition> workflowDefinitions,
         IReadOnlyList<WorkflowChainDefinition> workflowChains,
+        CanonicalWorkflowPersistenceStore persistence,
+        ResolvedOperationalPolicy policy,
         ServiceProvider? provider = null,
         IAsyncDisposable? promptExecutorLifetime = null)
     {
         Repository = repository;
+        Policy = policy;
         StorageVerifier = storageVerifier;
         RepositoryObserver = repositoryObserver;
         WorkflowResolver = workflowResolver;
@@ -88,11 +99,18 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         BoundaryEvidenceWriter = boundaryEvidenceWriter;
         WorkflowDefinitions = workflowDefinitions;
         WorkflowChains = workflowChains;
+        Persistence = persistence;
         this.provider = provider;
         this.promptExecutorLifetime = promptExecutorLifetime;
     }
 
     public Repository Repository { get; }
+
+    /// <summary>
+    /// The single resolved operational policy this invocation executes under. Every consumer
+    /// observes this one instance; no production code re-reads settings or environment ad hoc.
+    /// </summary>
+    public ResolvedOperationalPolicy Policy { get; }
 
     public IStorageVerifier StorageVerifier { get; }
 
@@ -112,22 +130,32 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
     public IReadOnlyList<WorkflowChainDefinition> WorkflowChains { get; }
 
+    internal CanonicalWorkflowPersistenceStore Persistence { get; }
+
     public static UnifiedCliComposition Create(Repository repository) =>
         CreateCore(
             repository,
             agentRuntime: null,
             processRunner: new ProcessRunner(),
-            CliSettingsLoader.Load().Brain,
+            RequireBrain(CliSettingsLoader.Load()),
             provider: null);
 
     public static UnifiedCliComposition CreateProduction(
         Repository repository,
+        IReadOnlyList<PolicyOverride>? policyOverrides = null,
         TextWriter? output = null,
         TextWriter? error = null)
     {
         var settings = CliSettingsLoader.Load();
+        ResolvedOperationalPolicy policy = OperationalPolicyResolver.Resolve(
+            settings.PolicyInputs,
+            settings.IsDefaultTemplate
+                ? $"settings:{settings.Path} (default template)"
+                : $"settings:{settings.Path}",
+            CombineInvocationOverrides(policyOverrides),
+            settings.PermissionInputs);
         var services = new ServiceCollection();
-        services.AddAgents(settings.Permissions);
+        services.AddAgents(settings.PermissionInputs);
         ServiceProvider provider = services.BuildServiceProvider();
         TextWriter effectiveOutput = output ?? System.Console.Out;
         TextWriter effectiveError = error ?? System.Console.Error;
@@ -154,28 +182,79 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             repository,
             agentRuntime,
             provider.GetRequiredService<IProcessRunner>(),
-            settings.Brain,
+            RequireBrain(settings),
             provider,
             effectiveOutput,
             effectiveError,
-            agentRuntime);
+            agentRuntime,
+            policy);
+    }
+
+    // Recognized environment variables are ambient invocation-layer inputs; explicit --policy
+    // flags beat them for the same key. The decision-resume kill switch stays functional
+    // (LoopRelay_DECISION_RESUME=0 or =false disables resume) but its value now flows through
+    // the resolver's validation like any other policy input: a garbage value is rejected
+    // loudly instead of silently enabling resume.
+    internal static IReadOnlyList<PolicyOverride> CombineInvocationOverrides(
+        IReadOnlyList<PolicyOverride>? flagOverrides,
+        Func<string, string?>? getEnvironmentVariable = null)
+    {
+        getEnvironmentVariable ??= Environment.GetEnvironmentVariable;
+        List<PolicyOverride> overrides = [];
+        string? decisionResume = getEnvironmentVariable("LoopRelay_DECISION_RESUME");
+        if (decisionResume is not null)
+        {
+            overrides.Add(new PolicyOverride(
+                OperationalPolicyResolver.DecisionSessionResumeKey,
+                decisionResume,
+                "env:LoopRelay_DECISION_RESUME",
+                IsExplicit: false));
+        }
+
+        string? recoveryPolicy = getEnvironmentVariable("LoopRelay_DECISION_RECOVERY_POLICY");
+        if (recoveryPolicy is not null)
+        {
+            overrides.Add(new PolicyOverride(
+                OperationalPolicyResolver.DecisionRecoveryPolicyKey,
+                recoveryPolicy,
+                "env:LoopRelay_DECISION_RECOVERY_POLICY",
+                IsExplicit: false));
+        }
+
+        if (flagOverrides is not null)
+        {
+            overrides.AddRange(flagOverrides);
+        }
+
+        return overrides;
     }
 
     internal static UnifiedCliComposition Create(
         Repository repository,
-        IAgentRuntime agentRuntime) =>
-        CreateCore(
-            repository,
-            agentRuntime,
-            processRunner: new ProcessRunner(),
-            CliSettingsLoader.Load().Brain,
-            provider: null);
+        IAgentRuntime agentRuntime,
+        ResolvedOperationalPolicy? policy = null) =>
+        CreateCore(repository, agentRuntime, processRunner: new ProcessRunner(),
+            RequireBrain(CliSettingsLoader.Load()), provider: null, policy: policy);
 
     internal static UnifiedCliComposition Create(
         Repository repository,
         IAgentRuntime agentRuntime,
-        IProcessRunner processRunner) =>
-        CreateCore(repository, agentRuntime, processRunner, CliSettingsLoader.Load().Brain, provider: null);
+        IProcessRunner processRunner,
+        ResolvedOperationalPolicy? policy = null) =>
+        CreateCore(repository, agentRuntime, processRunner,
+            RequireBrain(CliSettingsLoader.Load()), provider: null, policy: policy);
+
+    private static BrainConfiguration RequireBrain(CliSettingsLoadResult settings)
+    {
+        ConfiguredBrainFacts configured = settings.Runtime.Brain;
+        if (configured.Model is null || configured.Effort is null)
+        {
+            throw new CliSettingsException(
+                "runtime.brain.model and runtime.brain.effort are required application composition inputs.");
+        }
+
+        return new BrainConfiguration(configured.Model.Value, configured.Effort.Value);
+    }
 
     private static UnifiedCliComposition CreateCore(
         Repository repository,
@@ -185,47 +264,93 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         ServiceProvider? provider,
         TextWriter? output = null,
         TextWriter? error = null,
-        IAgentSessionContinuityRuntime? continuityRuntime = null)
+        IAgentSessionContinuityRuntime? continuityRuntime = null,
+        ResolvedOperationalPolicy? policy = null)
     {
+        // Non-production compositions execute under the built-in defaults so every attempt
+        // still records one resolved policy identity.
+        policy ??= OperationalPolicyResolver.Resolve(
+            CliPolicyDocument.Empty,
+            "built-in",
+            [],
+            PermissionPolicyFactory.Minimum);
         IStorageVerifier storageVerifier = new FileSystemStorageVerifier();
         var repositoryObserver = new RepositoryObserver(storageVerifier);
         var workflowResolver = new WorkflowResolver();
         IReadOnlyList<WorkflowDefinition> workflowDefinitions = CanonicalWorkflowDefinitionSketches.CreateAll();
         IReadOnlyList<WorkflowChainDefinition> workflowChains = CanonicalWorkflowDefinitionSketches.CreateChains();
+        string[] catalogErrors = workflowDefinitions
+            .SelectMany(definition => WorkflowDefinitionValidator.Validate(definition).Errors
+                .Select(error => $"{definition.Identity}: {error}"))
+            .ToArray();
+        if (catalogErrors.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Canonical workflow catalog validation failed: {string.Join("; ", catalogErrors)}");
+        }
+
+        if (workflowDefinitions.SelectMany(definition => definition.Transitions)
+            .Any(transition => string.IsNullOrWhiteSpace(transition.PromptIdentity)))
+        {
+            throw new InvalidOperationException("Canonical prompt catalog contains an empty prompt identity.");
+        }
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
         var promptExecutor = new UnifiedPromptExecutor(
             repository, agentRuntime, processRunner,
             new ConsoleLoopConsole(output ?? TextWriter.Null, error ?? TextWriter.Null),
             continuityRuntime ?? agentRuntime as IAgentSessionContinuityRuntime,
-            brainConfiguration);
+            brainConfiguration,
+            persistence,
+            policy,
+            workflowDefinitions);
         var transitionEvidenceStore = new CanonicalTransitionEvidenceStore(persistence);
         var transitionBoundaryJournal = new CanonicalTransitionBoundaryJournal(persistence);
+        var promptStore = new CanonicalRenderedPromptFactStore(persistence);
+        var promptGateway = new PromptDispatchGateway(
+            promptStore,
+            new CanonicalPromptDispatchLifecycleStore(persistence),
+            new LoadingPromptRuntimeDispatcher(promptStore, promptExecutor));
+        var productResolver = new RepositoryObservationProductResolver(repositoryObserver, repository);
+        var observationSource = new UnifiedRepositoryObservationSource(repositoryObserver, repository);
+        var promptContextBuilder = new UnifiedPromptContextBuilder(repository);
         ITransitionRuntime transitionRuntime = new TransitionRuntime(
             new UnifiedTransitionDefinitionResolver(workflowDefinitions),
-            new RepositoryObservationProductResolver(repositoryObserver, repository),
-            new UnifiedGateEvaluator(),
-            new UnifiedPromptContextBuilder(repository),
+            productResolver,
+            new UnifiedGateEvaluator(processRunner, repository),
+            promptContextBuilder,
             new UnifiedPromptRenderer(),
-            new FaultInjectingPromptExecutor(promptExecutor, transitionEvidenceStore, transitionBoundaryJournal),
+            promptGateway,
             new UnifiedOutputInterpreter(repository),
+            new CanonicalCandidateProductStore(persistence),
             new UnifiedProductValidator(repository),
-            new UnifiedEffectExecutor(repository, persistence, workflowDefinitions),
+            new SnapshotInputFreshnessValidator(productResolver, promptContextBuilder),
             new CanonicalTransitionRunStore(persistence),
+            new CanonicalAttemptStore(persistence),
+            new CanonicalReadReceiptStore(persistence, processRunner, repository),
             transitionEvidenceStore,
-            new CanonicalTransitionBlockerStore(persistence),
-            new CanonicalTransitionRecoveryStore(persistence),
             new CanonicalTransitionGateEvaluationStore(persistence),
-            new CanonicalTransitionEffectStore(persistence),
+            new CanonicalTransitionCommitStore(persistence),
             transitionBoundaryJournal);
-        var workflowController = new WorkflowController(workflowResolver, transitionRuntime);
-        var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter(persistence);
+        var effectExecutor = new UnifiedEffectExecutor(repository, persistence, workflowDefinitions);
+        var effectCoordinator = new TransitionEffectCoordinator(
+            effectExecutor,
+            new CanonicalTransitionEffectIntentStateStore(persistence));
+        var workflowController = new WorkflowController(
+            workflowResolver,
+            transitionRuntime,
+            effectCoordinator,
+            observationSource);
+        var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter(
+            new CanonicalChainBoundaryEvidenceStore(persistence));
         var workflowChainRunner = new WorkflowChainRunner(
             workflowResolver,
             workflowController,
             new WorkflowEntryGateEvaluator(),
             new WorkflowExitGateEvaluator(),
             new ProductTransferEvaluator(),
-            boundaryEvidenceWriter);
+            boundaryEvidenceWriter,
+            new CanonicalWorkflowInstanceRecorder(persistence),
+            observationSource);
         return new UnifiedCliComposition(
             repository,
             storageVerifier,
@@ -237,6 +362,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             boundaryEvidenceWriter,
             workflowDefinitions,
             workflowChains,
+            persistence,
+            policy,
             provider,
             promptExecutor);
     }
@@ -350,51 +477,330 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         }
     }
 
-    private sealed class UnifiedGateEvaluator : IGateEvaluator
+    private sealed class UnifiedRepositoryObservationSource(
+        RepositoryObserver _observer,
+        Repository _repository) : ICanonicalRepositoryObservationSource
     {
-        public Task<GateResult> EvaluateInputGateAsync(
+        public Task<RepositoryObservation> ObserveAsync(CancellationToken cancellationToken = default) =>
+            _observer.ObserveAsync(_repository.Path, cancellationToken);
+    }
+
+    // Every requirement is evaluated individually into its own GateRequirementResult; the gate status
+    // is the worst-of aggregation Invalid > Unsatisfied > Ambiguous > Waiting > Satisfied. Requirement
+    // kinds are implicit by shape: Product != null is a product requirement, InputSurface != null is a
+    // clean-input requirement (scoped git-porcelain cleanliness), neither is an explainable declaration.
+    internal sealed class UnifiedGateEvaluator(
+        IProcessRunner _processRunner,
+        Repository _repository) : IGateEvaluator
+    {
+        public async Task<GateResult> EvaluateInputGateAsync(
             GateDefinition gate,
             ProductResolutionResult inputs,
             CancellationToken cancellationToken)
         {
-            GateStatus status = inputs.IsUsable ? GateStatus.Satisfied : GateStatus.Blocked;
-            string explanation = inputs.IsUsable
-                ? "Input gate satisfied by repository-owned products."
-                : "Input gate blocked by missing, stale, invalid, or ambiguous products.";
-            IReadOnlyList<string> evidence = inputs.Products
-                .SelectMany(product => product.EvidenceLocations)
-                .Concat(inputs.Missing.Select(requirement => requirement.Product.Value))
-                .Concat(inputs.Stale.Select(product => product.Identity.Value))
-                .Concat(inputs.Invalid.Select(product => product.Identity.Value))
-                .Concat(inputs.Ambiguous.Select(product => product.Identity.Value))
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            return Task.FromResult(Gate(gate, status, explanation, evidence));
+            var requirements = new List<GateRequirementResult>(gate.Requirements.Count);
+            foreach (GateRequirementDefinition requirement in gate.Requirements)
+            {
+                requirements.Add(await EvaluateRequirementAsync(
+                    requirement,
+                    product => EvaluateInputProduct(requirement, product, inputs)));
+            }
+
+            GateResult result = Aggregate(
+                gate,
+                requirements,
+                "Input gate satisfied by repository-owned products.");
+            return result.Status == GateStatus.Satisfied
+                ? result
+                : result with { Explanation = $"Input gate {Describe(result.Status)}: {result.Explanation}" };
         }
 
-        public Task<GateResult> EvaluateOutputGateAsync(
+        public async Task<GateResult> EvaluateOutputGateAsync(
             GateDefinition gate,
             ProductValidationResult validation,
             CancellationToken cancellationToken)
         {
-            GateStatus status = validation.IsValid ? GateStatus.Satisfied : GateStatus.Blocked;
-            return Task.FromResult(Gate(gate, status, validation.Explanation, validation.Evidence));
+            var requirements = new List<GateRequirementResult>(gate.Requirements.Count);
+            foreach (GateRequirementDefinition requirement in gate.Requirements)
+            {
+                requirements.Add(await EvaluateRequirementAsync(
+                    requirement,
+                    product => EvaluateOutputProduct(requirement, product, validation)));
+            }
+
+            return Aggregate(gate, requirements, validation.Explanation);
         }
 
-        private static GateResult Gate(
-            GateDefinition gate,
-            GateStatus status,
-            string explanation,
-            IReadOnlyList<string> evidence) =>
-            new(
-                status,
-                gate.Requirements.Select(requirement => new GateRequirementResult(
+        // Worst-of ordering: Invalid > Unsatisfied > Ambiguous > Waiting > Satisfied.
+        internal static GateStatus WorstOf(IEnumerable<GateStatus> statuses)
+        {
+            GateStatus worst = GateStatus.Satisfied;
+            foreach (GateStatus status in statuses)
+            {
+                if (Severity(status) > Severity(worst))
+                {
+                    worst = status;
+                }
+            }
+
+            return worst;
+        }
+
+        // Repo-relative porcelain paths are in scope when they equal the surface or fall under it as a
+        // path prefix; a collapsed entry for the surface directory itself (".agents" gitlink or
+        // "?? .agents/" untracked directory) also counts.
+        internal static bool IsWithinSurface(string path, string surface)
+        {
+            string normalizedSurface = Normalize(surface);
+            if (normalizedSurface.Length == 0)
+            {
+                return true;
+            }
+
+            string normalizedPath = Normalize(path);
+            return normalizedPath == normalizedSurface ||
+                normalizedPath.StartsWith(normalizedSurface + "/", StringComparison.Ordinal);
+        }
+
+        private async Task<GateRequirementResult> EvaluateRequirementAsync(
+            GateRequirementDefinition requirement,
+            Func<ProductIdentity, GateRequirementResult> productEvaluation)
+        {
+            if (requirement.Product is { } product)
+            {
+                return productEvaluation(product);
+            }
+
+            if (requirement.InputSurface is { } surface)
+            {
+                return await EvaluateCleanInputAsync(requirement, surface);
+            }
+
+            return new GateRequirementResult(
+                requirement.Identity,
+                GateStatus.Satisfied,
+                "Requirement declares no product or input surface; it is satisfied as an explainable declaration.",
+                [requirement.Description]);
+        }
+
+        private static GateRequirementResult EvaluateInputProduct(
+            GateRequirementDefinition requirement,
+            ProductIdentity product,
+            ProductResolutionResult inputs)
+        {
+            // Product failures declare the rank-0 cannot-proceed outcome so a missing product
+            // always outranks a surface problem in the runtime's worst-of selection.
+            if (inputs.Missing.Any(missing => missing.Product == product) ||
+                inputs.Products.All(resolved => resolved.Identity != product))
+            {
+                return new GateRequirementResult(
                     requirement.Identity,
-                    status,
-                    explanation,
-                    evidence)).ToArray(),
-                explanation,
-                evidence);
+                    GateStatus.Unsatisfied,
+                    $"Required input product '{product}' is missing; produce it before rerunning.",
+                    [product.Value],
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.MissingRequiredInput);
+            }
+
+            if (inputs.Invalid.FirstOrDefault(invalid => invalid.Identity == product) is { } invalidRecord)
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Required input product '{product}' is invalid or unusable; repair it before rerunning.",
+                    ProductEvidence(product, invalidRecord),
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.MissingRequiredInput);
+            }
+
+            if (inputs.Stale.FirstOrDefault(stale => stale.Identity == product) is { } staleRecord)
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Required input product '{product}' is stale; refresh it before rerunning.",
+                    ProductEvidence(product, staleRecord),
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.MissingRequiredInput);
+            }
+
+            if (inputs.Ambiguous.FirstOrDefault(ambiguous => ambiguous.Identity == product) is { } ambiguousRecord)
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Ambiguous,
+                    $"Required input product '{product}' has ambiguous validation state.",
+                    ProductEvidence(product, ambiguousRecord));
+            }
+
+            ProductRecord satisfied = inputs.Products.First(resolved => resolved.Identity == product);
+            return new GateRequirementResult(
+                requirement.Identity,
+                GateStatus.Satisfied,
+                $"Required input product '{product}' is resolved and usable.",
+                satisfied.EvidenceLocations.Count > 0 ? satisfied.EvidenceLocations : [product.Value]);
+        }
+
+        private static GateRequirementResult EvaluateOutputProduct(
+            GateRequirementDefinition requirement,
+            ProductIdentity product,
+            ProductValidationResult validation)
+        {
+            if (validation.MissingProducts.Contains(product) ||
+                validation.InvalidProducts.Contains(product) ||
+                validation.StaleProducts.Contains(product))
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Output product '{product}' failed validation: {validation.Explanation}",
+                    [product.Value]);
+            }
+
+            if (validation.AmbiguousProducts.Contains(product))
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Ambiguous,
+                    $"Output product '{product}' has ambiguous validation state: {validation.Explanation}",
+                    [product.Value]);
+            }
+
+            ProductRecord? validated = validation.Products.FirstOrDefault(item => item.Identity == product);
+            if (validated is not null)
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Satisfied,
+                    $"Output product '{product}' passed validation.",
+                    validated.EvidenceLocations.Count > 0 ? validated.EvidenceLocations : [product.Value]);
+            }
+
+            return validation.Status == ProductValidationStatus.Valid
+                ? new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Satisfied,
+                    $"Output product '{product}' is accepted by a valid output validation.",
+                    validation.Evidence)
+                : new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Output product '{product}' was not produced by a valid output validation: {validation.Explanation}",
+                    [product.Value]);
+        }
+
+        private async Task<GateRequirementResult> EvaluateCleanInputAsync(
+            GateRequirementDefinition requirement,
+            string surface)
+        {
+            // Read-at-use resolves every consumed input to a commit (M3); a workspace without a
+            // git working tree cannot honor that, so a declared input surface cannot proceed here.
+            string gitMarker = Path.Combine(_repository.Path, ".git");
+            if (!Directory.Exists(gitMarker) && !File.Exists(gitMarker))
+            {
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Input surface '{surface}' has no git working tree; consumed inputs cannot resolve to a commit. Initialize git and commit the surface before rerunning.",
+                    [surface],
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.UnversionedInputSurface);
+            }
+
+            ProcessRunResult status = await _processRunner.RunAsync("git", ["status", "--porcelain"], _repository.Path);
+            if (status.ExitCode != 0)
+            {
+                // Process stderr can span lines; the concern text feeds line-oriented warning output,
+                // so it is collapsed to a single line before it is composed into the explanation.
+                string standardError = string.Join(
+                    " ",
+                    status.StandardError.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                return new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Invalid,
+                    $"Cleanliness of input surface '{surface}' could not be evaluated: git status failed: {standardError}",
+                    [surface]);
+            }
+
+            IReadOnlyList<string> dirty = Git.GitPorcelain.ChangedPaths(status.StandardOutput)
+                .Where(path => IsWithinSurface(path, surface))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            return dirty.Count == 0
+                ? new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Satisfied,
+                    $"Input surface '{surface}' is clean in the git working tree.",
+                    [surface])
+                : new GateRequirementResult(
+                    requirement.Identity,
+                    GateStatus.Unsatisfied,
+                    $"Input surface '{surface}' has uncommitted changes; commit the listed files under '{surface}' before rerunning.",
+                    dirty,
+                    UnsatisfiedOutcome: RuntimeOutcomeKind.DirtyInputSurface);
+        }
+
+        private static GateResult Aggregate(
+            GateDefinition gate,
+            IReadOnlyList<GateRequirementResult> requirements,
+            string satisfiedExplanation)
+        {
+            if (requirements.Count == 0)
+            {
+                // No requirement, no decision: a gate with zero requirements is satisfied with an
+                // explainable requirement result naming why.
+                var explainable = new GateRequirementResult(
+                    $"{gate.Identity}.Explainable",
+                    GateStatus.Satisfied,
+                    $"Gate '{gate.Identity}' declares no requirements; it is satisfied by definition.",
+                    [gate.Purpose]);
+                return new GateResult(
+                    GateStatus.Satisfied,
+                    [explainable],
+                    explainable.Explanation,
+                    explainable.Evidence);
+            }
+
+            GateStatus status = WorstOf(requirements.Select(requirement => requirement.Status));
+            string explanation = status == GateStatus.Satisfied
+                ? satisfiedExplanation
+                : requirements.First(requirement => requirement.Status == status).Explanation;
+            IReadOnlyList<string> evidence = requirements
+                .SelectMany(requirement => requirement.Evidence)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            return new GateResult(status, requirements, explanation, evidence);
+        }
+
+        private static IReadOnlyList<string> ProductEvidence(ProductIdentity product, ProductRecord record) =>
+            new[] { product.Value }
+                .Concat(record.EvidenceLocations)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+#pragma warning disable CS8524
+        private static int Severity(GateStatus status) =>
+            status switch
+            {
+                GateStatus.Satisfied => 0,
+                GateStatus.Waiting => 1,
+                GateStatus.Ambiguous => 2,
+                GateStatus.Unsatisfied => 3,
+                GateStatus.Invalid => 4,
+            };
+
+        private static string Describe(GateStatus status) =>
+            status switch
+            {
+                GateStatus.Satisfied => "satisfied",
+                GateStatus.Unsatisfied => "unsatisfied",
+                GateStatus.Waiting => "waiting",
+                GateStatus.Ambiguous => "ambiguous",
+                GateStatus.Invalid => "invalid",
+            };
+#pragma warning restore CS8524
+
+        private static string Normalize(string value)
+        {
+            string normalized = value.Replace('\\', '/').Trim().Trim('/');
+            return normalized.StartsWith("./", StringComparison.Ordinal) ? normalized[2..] : normalized;
+        }
     }
 
     private sealed class UnifiedPromptContextBuilder(Repository _repository) : IPromptContextBuilder
@@ -412,6 +818,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             }
 
             var sections = new List<PromptContextSection>();
+            var consumedFiles = new List<ConsumedInputFile>();
             if (request.Workflow == WorkflowIdentity.EvalRoadmap &&
                 request.Transition == EvalRoadmapMilestonePromptContext.Transition)
             {
@@ -419,7 +826,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     EvalRoadmapMilestonePromptContext.Build(_repository.Path);
                 if (!result.IsUsable)
                 {
-                    throw new PromptContextBlockedException(result.Explanation, result.Evidence);
+                    throw new PromptContextUnavailableException(result.Explanation, result.Evidence, result.ConsumedFiles);
                 }
 
                 foreach ((string key, string value) in result.Metadata)
@@ -428,6 +835,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 }
 
                 sections.AddRange(result.Sections);
+                consumedFiles.AddRange(result.ConsumedFiles);
             }
             else if (request.Workflow == WorkflowIdentity.EvalRoadmap)
             {
@@ -502,7 +910,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     PlanPromptContext.Build(_repository.Path, definition, inputs);
                 if (!result.IsUsable)
                 {
-                    throw new PromptContextBlockedException(result.Explanation, result.Evidence);
+                    throw new PromptContextUnavailableException(result.Explanation, result.Evidence, result.ConsumedFiles);
                 }
 
                 foreach ((string key, string value) in result.Metadata)
@@ -511,6 +919,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 }
 
                 sections.AddRange(result.Sections);
+                consumedFiles.AddRange(result.ConsumedFiles);
             }
             else if (request.Workflow == WorkflowIdentity.TraditionalRoadmap)
             {
@@ -552,7 +961,109 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 inputs,
                 TransitionInputSnapshotHasher.Create(definition, inputs.Products, metadata, sections),
                 metadata,
-                sections);
+                sections,
+                consumedFiles);
+        }
+    }
+
+    // Persists each chain-boundary decision as an append-only history fact so chain progression
+    // never exists only in memory or console output.
+    internal sealed class CanonicalChainBoundaryEvidenceStore(
+        CanonicalWorkflowPersistenceStore _persistence) : IChainBoundaryEvidenceStore
+    {
+        private static readonly JsonSerializerOptions BoundaryJsonOptions = new(JsonSerializerDefaults.Web)
+        {
+            Converters = { new JsonStringEnumConverter() },
+        };
+
+        public Task AppendAsync(ChainBoundaryEvidenceCapture capture, CancellationToken cancellationToken) =>
+            _persistence.AppendChainBoundaryEventAsync(
+                new CanonicalChainBoundaryEventRecord(
+                    CausalUlid.NewId("bnd"),
+                    capture.Run.Value,
+                    capture.ChainIdentity,
+                    capture.Evaluation.SourceWorkflow,
+                    capture.Evaluation.TargetWorkflow,
+                    capture.Evaluation.ExitGate.Status,
+                    capture.Evaluation.EntryGate?.Status,
+                    capture.Evaluation.ProductTransfer?.Gate.Status,
+                    capture.Evaluation.CanAdvance ? "Advanced" : "StoppedAtBoundary",
+                    capture.Evaluation.Explanation,
+                    capture.Evaluation.ExitGate.Evidence
+                        .Concat(capture.Evaluation.EntryGate?.Evidence ?? [])
+                        .Concat(capture.Evaluation.ProductTransfer?.Gate.Evidence ?? [])
+                        .ToArray(),
+                    JsonSerializer.Serialize(capture.Evaluation, BoundaryJsonOptions),
+                    capture.RecordedAt),
+                cancellationToken);
+    }
+
+    // Enriches a consumption capture with git provenance — the commit every read resolves to and
+    // per-surface tree hashes at that commit — then appends the receipt. Enrichment failures
+    // degrade to null fields; the receipt still records exactly what was read.
+    internal sealed class CanonicalReadReceiptStore(
+        CanonicalWorkflowPersistenceStore _persistence,
+        IProcessRunner _processRunner,
+        Repository _repository) : IReadReceiptStore
+    {
+        public async Task AppendAsync(ReadReceiptCapture capture, CancellationToken cancellationToken)
+        {
+            IReadOnlyList<string> surfaces = capture.Definition.InputGate.Requirements
+                .Where(requirement => requirement.InputSurface is not null)
+                .Select(requirement => requirement.InputSurface!)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            string? commitHash = await GitScalarAsync("rev-parse", "HEAD");
+            Dictionary<string, string?>? surfaceTreeHashes = null;
+            if (surfaces.Count > 0)
+            {
+                surfaceTreeHashes = new Dictionary<string, string?>(StringComparer.Ordinal);
+                foreach (string surface in surfaces)
+                {
+                    surfaceTreeHashes[surface] = commitHash is null
+                        ? null
+                        : await GitScalarAsync("rev-parse", $"HEAD:{surface.TrimEnd('/')}");
+                }
+            }
+
+            await _persistence.AppendReadReceiptAsync(
+                new CanonicalReadReceiptRecord(
+                    CausalUlid.NewId("rcpt"),
+                    capture.Causality.Run.Value,
+                    capture.Request.Workflow.Value,
+                    capture.Definition.Identity.Value,
+                    capture.Causality.Attempt.Value,
+                    commitHash,
+                    surfaces,
+                    surfaceTreeHashes,
+                    capture.ConsumedFiles.Select(file => new CanonicalReadReceiptFile(file.Path, file.Sha256)).ToArray(),
+                    capture.ConsumedProducts.Select(product => new CanonicalReadReceiptProduct(
+                        product.Identity.Value,
+                        product.CausalIdentity,
+                        product.ValidationState.ToString())).ToArray(),
+                    capture.Validation,
+                    capture.ConsumedAt,
+                    capture.Causality.TransitionRun.Value),
+                cancellationToken);
+        }
+
+        private async Task<string?> GitScalarAsync(params string[] arguments)
+        {
+            try
+            {
+                ProcessRunResult result = await _processRunner.RunAsync("git", arguments, _repository.Path);
+                if (result.ExitCode != 0)
+                {
+                    return null;
+                }
+
+                string value = result.StandardOutput.Trim();
+                return value.Length == 0 ? null : value;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 
@@ -810,26 +1321,31 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     private sealed class UnifiedPromptRenderer : IPromptRenderer
     {
         public Task<RenderedPrompt> RenderAsync(
-            WorkflowTransitionDefinition definition,
-            PromptContext context,
+            PromptRenderRequest request,
             CancellationToken cancellationToken)
         {
+            WorkflowTransitionDefinition definition = request.Definition;
+            PromptContext context = request.Context;
             string text;
             string evidence;
+            string? templateSourceHash;
             if (LocalVerificationTransitions.Supports(definition))
             {
                 text = $"Local verification transition `{definition.Identity}` validates already-observed canonical products.";
                 evidence = LocalVerificationTransitions.Evidence(definition)[0];
+                templateSourceHash = null;
             }
             else if (LocalArtifactTransitions.Supports(definition))
             {
                 text = $"Local artifact transition `{definition.Identity}` materializes deterministic repository-owned artifacts.";
                 evidence = LocalArtifactTransitions.Evidence(definition)[0];
+                templateSourceHash = null;
             }
             else if (EvalPromptAssetCatalog.TryGetByTransition(definition.Identity, out EvalPromptAsset asset))
             {
                 text = RenderEvalPromptAsset(asset, context);
                 evidence = $"unified-cli/prompts/eval/{asset.PromptAssetName}@{asset.SourceHash}";
+                templateSourceHash = asset.SourceHash;
             }
             else if (CanonicalPromptAssetCatalog.TryGetByPromptIdentity(definition.PromptIdentity, out CanonicalPromptAsset canonicalAsset))
             {
@@ -837,14 +1353,24 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     ? RenderAdversarialPlanReviewPrompt(context)
                     : RenderCanonicalPromptAsset(canonicalAsset, context);
                 evidence = $"unified-cli/prompts/core/{canonicalAsset.PromptAssetName}@{canonicalAsset.SourceHash}";
+                templateSourceHash = canonicalAsset.SourceHash;
             }
             else
             {
+                // No catalog owns this prompt identity: the placeholder never reaches an agent —
+                // the executor fails closed with a typed not-wired result before any send — and
+                // the evidence names the unwired state instead of fabricating an asset path.
                 text = $"Prompt `{definition.PromptIdentity}` is registered but execution integration is not wired.";
-                evidence = $"unified-cli/prompts/{definition.PromptIdentity}.prompt";
+                evidence = $"unified-cli/prompts/unwired/{definition.PromptIdentity}";
+                templateSourceHash = null;
             }
 
-            return Task.FromResult(new RenderedPrompt(definition.PromptIdentity, text, evidence));
+            return Task.FromResult(new RenderedPrompt(
+                new PromptTemplateIdentity(definition.PromptIdentity),
+                request.PolicyProfile,
+                text,
+                evidence,
+                templateSourceHash));
         }
 
         private static string RenderEvalPromptAsset(
@@ -967,34 +1493,15 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 "AuditExistingEpic" =>
                     Core.Prompts.Planning.EpicPreparationAudit.Render(projectContext, selection),
                 "CreateNewEpic" =>
-                    Core.Prompts.Planning.CreateNewEpic.Render(
-                        projectContext,
-                        selection,
-                        Core.Prompts.NonImplementation.CreateNewEpicImplementationFirstGuidance.Text,
-                        Core.Prompts.NonImplementation.CreateNewEpicAuxiliaryArtifactLimits.Text),
+                    Core.Prompts.Planning.CreateNewEpic.Render(projectContext, selection),
                 "SplitEpic" =>
-                    Core.Prompts.Planning.SplitEpic.Render(
-                        projectContext,
-                        epic,
-                        Core.Prompts.NonImplementation.SplitEpicImplementationFirstGuidance.Text,
-                        Core.Prompts.NonImplementation.SplitEpicAuxiliaryArtifactLimits.Text),
+                    Core.Prompts.Planning.SplitEpic.Render(projectContext, epic),
                 "RealignEpic" =>
-                    Core.Prompts.Planning.RealignEpic.Render(
-                        projectContext,
-                        epic,
-                        Core.Prompts.NonImplementation.RealignEpicImplementationFirstGuidance.Text,
-                        Core.Prompts.NonImplementation.RealignEpicAuxiliaryArtifactLimits.Text),
+                    Core.Prompts.Planning.RealignEpic.Render(projectContext, epic),
                 "ReimagineEpic" =>
-                    Core.Prompts.Planning.ReimagineEpic.Render(
-                        projectContext,
-                        epic,
-                        Core.Prompts.NonImplementation.ReimagineEpicImplementationFirstGuidance.Text,
-                        Core.Prompts.NonImplementation.ReimagineEpicAuxiliaryArtifactLimits.Text),
+                    Core.Prompts.Planning.ReimagineEpic.Render(projectContext, epic),
                 "GenerateMilestoneDeepDivesForEpic" =>
-                    Core.Prompts.Planning.GenerateMilestoneDeepDivesForEpic.Render(
-                        projectContext,
-                        Core.Prompts.NonImplementation.GenerateMilestoneDeepDivesForEpicImplementationFirstGuidance.Text,
-                        Core.Prompts.NonImplementation.GenerateMilestoneDeepDivesForEpicAuxiliaryArtifactLimits.Text),
+                    Core.Prompts.Planning.GenerateMilestoneDeepDivesForEpic.Render(projectContext),
                 _ => asset.PromptTemplate,
             };
         }
@@ -1008,54 +1515,25 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
         private static string RenderAdversarialPlanReviewPrompt(PromptContext context)
         {
+            // All instruction text is template-owned (covered by the asset SourceHash); this branch only
+            // routes the two declared inputs into their positional holes.
             string projection = RequiredSection(context, "Adversarial Projection");
             string plan = RequiredSection(context, "Executable Plan");
-            return AdversarialPlanReview.Render(
-                """
-
-                A plan is not safe because it is coherent, complete-looking, or well documented. It is safe only when it drives implementation-bearing work that advances implemented capability, creates executable progress, and can be validated by operational gates. Treat documentation-centric progress as a failure mode when it creates false implementation confidence or lets non-executable outputs stand in for capability evidence.
-
-                """,
-                """
-
-                During generic review, treat implementation-first fidelity as an explicit attack vector. Attack plans that substitute artifacts about work for work. Look for plan steps that produce reports, inventories, governance language, certification narratives, explanatory documentation, or other non-implementation deliverables without advancing implemented capability.
-
-                Treat acceptance criteria that measure prose completion, non-implementation deliverables presented as capability evidence, or completed-looking artifacts that leave code, tests, runtime behavior, project files, required generated artifacts, or sanctioned `.agents` operational artifacts unchanged or insufficiently constrained as material risk.
-
-                A HITL-requested non-implementation deliverable is only a narrow, evidence-grounded exception for that deliverable; it does not create general permission to make documentation-centric progress. Treat machine-consumed operational artifacts as valid capability evidence only when they directly constrain execution, validation, or downstream agent behavior.
-
-                Optimize for detecting false implementation confidence created by plans that can look complete while the software remains unchanged or insufficiently constrained.
-
-                """,
-                """
-
-                - Implementation-first fidelity: Does the plan advance implemented capability, or does it mistake artifacts about work for work?
-                - Capability evidence: Are exit criteria tied to code, tests, runtime behavior, project files, generated artifacts, or sanctioned operational artifacts that constrain execution?
-                - Documentation theater: Do prose deliverables, governance or certification language, and explanatory artifacts create false confidence without executable gates?
-                - Operational artifact validity: Are `.agents` artifacts or generated artifacts machine-consumed and execution-bearing, or are they auxiliary commentary?
-                """,
-                "If no projection rule is violated, explicitly state that the finding is based on generic implementation-first review quality or another generic planning quality axis rather than project-specific projection semantics. Implementation-first failures are material findings even when the projection does not restate them.",
-                """
-
-                Always include implementation-first false-closure modes when the plan can appear complete through prose deliverables, governance or certification artifacts, inventories, or other non-executable outputs while implemented capability remains incomplete.
-
-                """,
-                """
-
-                Corrections should move risk back into implementation-bearing plan content, milestone acceptance criteria, validation gates, required generated artifacts, or sanctioned `.agents` operational artifacts. Do not ask for separate policy documents, side reports, or documentation theater as the correction unless they are machine-consumed gates that directly constrain execution.
-
-                """,
-                """
-
-                - no realistic implementation-first false-success path remains
-                """,
-                projection,
-                plan);
+            return AdversarialPlanReview.Render(projection, plan);
         }
 
         private static string RequiredSection(PromptContext context, string title) =>
             context.Sections.FirstOrDefault(section => string.Equals(section.Title, title, StringComparison.Ordinal))?.Content
             ?? throw new InvalidOperationException($"Plan prompt context did not include `{title}`.");
+    }
+
+    private sealed record PromptExecutionContext(
+        string? RunId,
+        string? TransitionRunId,
+        string? AttemptId,
+        IReadOnlyList<ConsumedInputFile>? ConsumedFiles)
+    {
+        public static PromptExecutionContext Empty { get; } = new(null, null, null, []);
     }
 
     private sealed class UnifiedPromptExecutor(
@@ -1064,9 +1542,21 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         IProcessRunner _processRunner,
         ILoopConsole console,
         IAgentSessionContinuityRuntime? _continuityRuntime,
-        BrainConfiguration _brainConfiguration) : IPromptExecutor, IAsyncDisposable
+        BrainConfiguration _brainConfiguration,
+        CanonicalWorkflowPersistenceStore _persistence,
+        ResolvedOperationalPolicy _policy,
+        IReadOnlyList<WorkflowDefinition> _workflowDefinitions) : IProviderPromptTransport, IAsyncDisposable
     {
+        private sealed class PromptContextBlockedException(
+            string message,
+            IReadOnlyList<string> evidence) : InvalidOperationException(message)
+        {
+            public IReadOnlyList<string> Evidence { get; } = evidence;
+        }
+
         private readonly IArtifactStore artifactStore = new FileSystemArtifactStore();
+        private readonly SessionSpineRecorder sessionRecorder = new(_persistence);
+        private IAgentRuntime? recordingRuntime;
         private IAgentSession? planAuthoringSession;
         private DecisionSession? executeDecisionSession;
         private IRecoveryStore? executeRecoveryStore;
@@ -1079,7 +1569,65 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private IReadOnlyList<string> completionRecoveryEvidencePaths = [];
         private CompletionCertificationResult? completionCertificationResult;
 
-        public async Task<PromptExecutionResult> ExecuteAsync(
+        private PromptExecutionContext CurrentExecutionContext { get; set; } = PromptExecutionContext.Empty;
+        private PromptDispatchAuthorization? CurrentAuthorization { get; set; }
+        private RenderedPromptFact? CurrentPromptFact { get; set; }
+
+        private static IReadOnlyList<ConsumedInputFile> ConsumedFiles(
+            params (string Path, string? Content)[] files) =>
+            files
+                .Where(file => file.Content is not null)
+                .Select(file => ConsumedInputFile.FromContent(file.Path, file.Content!))
+                .ToArray();
+
+        /// <summary>The agent runtime wrapped with best-effort causal-spine recording: one agent_sessions row
+        /// per underlying session open (one-shot or persistent, including sessions opened inside DecisionSession
+        /// and the helper prompt runners), one agent_turns row per completed AgentTurnResult.</summary>
+        private IAgentRuntime? Runtime =>
+            _agentRuntime is null
+                ? null
+                : recordingRuntime ??= new RecordingAgentRuntime(_agentRuntime, this);
+
+        public async Task<PromptExecutionResult> DispatchAsync(
+            PersistedRenderedPromptFact persisted,
+            AuthorizedPromptDispatch dispatch,
+            CancellationToken cancellationToken)
+        {
+            RenderedPromptFact fact = persisted.Fact;
+            CurrentPromptFact = fact;
+            CurrentAuthorization = dispatch.Authorization;
+            WorkflowDefinition workflow = _workflowDefinitions.First(candidate =>
+                candidate.Transitions.Any(transition =>
+                    transition.Identity == dispatch.Authorization.Transition));
+            WorkflowTransitionDefinition definition = workflow.Transitions.Single(transition =>
+                transition.Identity == dispatch.Authorization.Transition);
+            WorkflowStageDefinition stage = workflow.Stages.Single(candidate =>
+                candidate.Transitions.Contains(definition.Identity));
+            var prompt = new RenderedPrompt(
+                fact.TemplateIdentity,
+                fact.PolicyProfileIdentity,
+                fact.RenderedContent,
+                $"rendered-prompt:{fact.Identity.Value}",
+                fact.TemplateSourceHash);
+            CurrentExecutionContext = new PromptExecutionContext(
+                dispatch.Authorization.Causality.Run.Value,
+                dispatch.Authorization.Causality.TransitionRun.Value,
+                dispatch.Authorization.Causality.Attempt.Value,
+                fact.ConsumedInputs);
+            var request = new PromptExecutionRequest(
+                dispatch.Authorization.Causality.Run.Value,
+                workflow.Identity,
+                stage.Identity,
+                definition.Identity,
+                definition,
+                prompt,
+                dispatch.Authorization.InputSnapshotHash,
+                new WorkflowInvocation(InvocationModeKind.DefaultChained),
+                new Dictionary<string, string>());
+            return await ExecuteAsync(request, cancellationToken);
+        }
+
+        private async Task<PromptExecutionResult> ExecuteAsync(
             PromptExecutionRequest request,
             CancellationToken cancellationToken)
         {
@@ -1208,7 +1756,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 string? primaryOutputBefore = primaryOutput is null
                     ? null
                     : HashFileIfPresent(ResolveRepositoryPath(_repository, primaryOutput));
-                AgentTurnResult result = await _agentRuntime.RunOneShotAsync(
+                AgentTurnResult result = await Runtime!.RunOneShotAsync(
                     AgentSpecs.BrainOperational(_repository, _brainConfiguration),
                     prompt.Text,
                     onChunk: null,
@@ -1320,7 +1868,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             IAgentSession? session = null;
             try
             {
-                session = await _agentRuntime.OpenSessionAsync(
+                session = await Runtime!.OpenSessionAsync(
                     AgentSpecs.Review(_repository, _brainConfiguration),
                     cancellationToken);
                 AgentTurnResult result = await session.RunTurnAsync(
@@ -1370,7 +1918,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             {
                 if (session is not null)
                 {
-                    await _agentRuntime.CloseSessionAsync(session);
+                    await Runtime!.CloseSessionAsync(session);
                 }
             }
         }
@@ -1385,10 +1933,13 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 new ProjectionManifestStore(artifacts),
                 new ProjectionValidator(registry),
                 new ProjectionPromptRunner(
-                    _agentRuntime ?? throw new InvalidOperationException("Projection prompt runner requires an agent runtime."),
-                    _repository,
-                    console,
-                    _brainConfiguration));
+                    CreateOneShotPromptGateway(),
+                    new CanonicalPromptComposer(),
+                    CurrentPromptPolicyProfile(),
+                    RequireCurrentAuthorization(),
+                    ConsumedInputManifestIdentity.New(),
+                    CurrentExecutionContext.ConsumedFiles ?? [],
+                    console));
         }
 
         private async Task<PromptExecutionResult> ExecutePlanScopedArtifactOperationAsync(
@@ -1428,7 +1979,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             try
             {
-                session = await _agentRuntime.OpenSessionAsync(
+                session = await Runtime!.OpenSessionAsync(
                     AgentSpecs.ScopedArtifactOperation(_repository, _brainConfiguration, profile),
                     cancellationToken);
                 AgentTurnResult result = await session.RunTurnAsync(
@@ -1504,7 +2055,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             {
                 if (session is not null)
                 {
-                    await _agentRuntime.CloseSessionAsync(session);
+                    await Runtime!.CloseSessionAsync(session);
                 }
             }
         }
@@ -1644,7 +2195,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         await ClosePlanSessionAsync();
                     }
 
-                    planAuthoringSession = await _agentRuntime.OpenSessionAsync(
+                    planAuthoringSession = await Runtime!.OpenSessionAsync(
                         AgentSpecs.PlanAuthoring(_repository, _brainConfiguration),
                         cancellationToken);
                 }
@@ -1717,10 +2268,14 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     resumedAfterRestart = true;
                 }
 
-                AgentTurnResult result = await planAuthoringSession.RunTurnAsync(
+                AgentTurnResult result = (await CreateDecisionPromptDispatcher().DispatchAsync(
+                    planAuthoringSession,
+                    prompt.TemplateIdentity.Value,
+                    prompt.TemplateSourceHash,
                     prompt.Text,
+                    CurrentExecutionContext.ConsumedFiles ?? [],
                     onChunk: null,
-                    cancellationToken);
+                    cancellationToken)).Result;
                 if (result.State != AgentTurnState.Completed)
                 {
                     await ClosePlanSessionAsync();
@@ -1880,15 +2435,15 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     ?? throw new InvalidOperationException("The configured agent runtime does not support decision continuity.");
                 string codexHome = Environment.GetEnvironmentVariable("CODEX_HOME")
                     ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
-                DecisionRecoveryPolicy recoveryPolicy = DecisionResumeComposition.RecoveryPolicy();
+                ResumeRecoveryStrategy recoveryPolicy = _policy.Resume.RecoveryStrategy;
                 var recoveryMechanisms = new List<IRecoveryMechanism>();
-                if (recoveryPolicy is DecisionRecoveryPolicy.Reconstructed or DecisionRecoveryPolicy.Certified)
+                if (recoveryPolicy is ResumeRecoveryStrategy.Reconstructed or ResumeRecoveryStrategy.Certified)
                 {
                     recoveryMechanisms.Add(new ThreadReadReconstructionMechanism());
                     recoveryMechanisms.Add(new RolloutReconstructionMechanism());
                     recoveryMechanisms.Add(new RepositoryReconstructionMechanism());
                 }
-                if (recoveryPolicy == DecisionRecoveryPolicy.Certified)
+                if (recoveryPolicy == ResumeRecoveryStrategy.Certified)
                 {
                     recoveryMechanisms.Add(new NativeForkRecoveryMechanism());
                 }
@@ -1905,7 +2460,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     new RecoveryMechanismCatalog(recoveryMechanisms),
                     new CanonicalRecoveryEnvelopeFactory());
                 executeDecisionSession ??= new DecisionSession(
-                    _agentRuntime,
+                    Runtime!,
                     new DecisionSessionRouter(),
                     CreateLoopArtifacts(),
                     console,
@@ -1914,16 +2469,18 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     _costModel: null,
                     _resumeStore: null,
                     _projectionService: null,
-                    _resumeEnabled: DecisionResumeComposition.IsEnabled(),
+                    _resumeEnabled: _policy.Resume.Enabled,
                     _continuityRuntime: continuityRuntime,
                     _recoveryStore: executeRecoveryStore,
                     _recoveryRuntime: recoveryRuntime,
                     _recoveryPolicyVersion: recoveryPolicy switch
                     {
-                        DecisionRecoveryPolicy.ResumeOnly => "decision-recovery-resume-only.v1",
-                        DecisionRecoveryPolicy.Reconstructed => "decision-recovery-reconstructed.v1",
+                        ResumeRecoveryStrategy.ResumeOnly => "decision-recovery-resume-only.v1",
+                        ResumeRecoveryStrategy.Reconstructed => "decision-recovery-reconstructed.v1",
                         _ => "decision-recovery-certified.v1",
-                    });
+                    },
+                    _operationalContextGrowthStreakWarningThreshold: _policy.OperationalContextGrowthWarningStreak,
+                    _promptDispatcher: CreateDecisionPromptDispatcher());
                 DecisionSessionScope scope = await new DecisionSessionScopeResolver(_repository)
                     .ResolveAsync(cancellationToken);
                 await executeDecisionSession.RunAsync(
@@ -2024,25 +2581,21 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 LoopArtifacts artifacts = CreateLoopArtifacts();
                 string? plan = await artifacts.ReadPlanAsync();
                 string? details = await artifacts.ReadDetailsAsync();
-                string? repositoryReadme = await artifactStore.ReadAsync(
-                    ResolveRepositoryPath(_repository, "README.md"));
-                ValidatedExecutionRecommendation recommendation =
-                    await artifacts.ReadValidatedExecutionRecommendationAsync();
-                string decisions = recommendation.Prompt;
+                (string? decisions, string? decisionsPath) = await artifacts.ReadLatestDecisionsAsync();
+                if (string.IsNullOrWhiteSpace(decisions))
+                {
+                    return Failed($"{OrchestrationArtifactPaths.Decisions} was not available for execution.");
+                }
 
                 MilestoneGate milestones = CreateMilestoneGate();
                 uncheckedMilestonesBeforeExecution = (await milestones.GetUntickedItemsAsync()).Count;
                 executionSliceBaseline = await CreateBaselineStore().CapturePreSliceAsync();
 
-                string executionPrompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-                    ContinueExecution.Render(
-                        plan,
-                        AppendRepositoryReadmeContext(details, repositoryReadme),
-                        decisions,
-                        "TODO"),
-                    ImplementationFirstPromptPolicyComposer.ComposeDefault());
-                executionSession = await _agentRuntime!.OpenSessionAsync(
-                    AgentSpecs.Execution(_repository, recommendation),
+                ResolvedRuntimeProfile effectiveProfile =
+                    await ResolveExecutionRuntimeProfileAsync(cancellationToken);
+                string executionPrompt = prompt.Text;
+                executionSession = await Runtime!.OpenSessionAsync(
+                    AgentSpecs.Execution(_repository, effectiveProfile),
                     cancellationToken);
 
                 AgentTurnResult work = await executionSession.RunTurnAsync(
@@ -2160,10 +2713,20 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     handoffPrompt = GenerateNoChangesHandoff.Render(string.Join("\n", unticked));
                 }
 
-                AgentTurnResult handoff = await executionSession.RunTurnAsync(
+                string handoffIdentity = changedPathsAfterExecution.Count > 0
+                    ? "GenerateHandoff"
+                    : "GenerateNoChangesHandoff";
+                string handoffHash = changedPathsAfterExecution.Count > 0
+                    ? GenerateHandoff.SourceHash
+                    : GenerateNoChangesHandoff.SourceHash;
+                AgentTurnResult handoff = (await CreateDecisionPromptDispatcher().DispatchAsync(
+                    executionSession,
+                    handoffIdentity,
+                    handoffHash,
                     handoffPrompt,
+                    [],
                     onChunk: null,
-                    cancellationToken);
+                    cancellationToken)).Result;
                 if (handoff.State != AgentTurnState.Completed)
                 {
                     await CloseExecutionSessionAsync();
@@ -2247,9 +2810,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     ["execution-warm-session:profile-incompatible"]);
             }
 
-            ValidatedExecutionRecommendation recommendation =
-                await CreateLoopArtifacts().ReadValidatedExecutionRecommendationAsync();
-            AgentSessionSpec fresh = AgentSpecs.Execution(_repository, recommendation);
+            ResolvedRuntimeProfile effectiveProfile =
+                await ResolveExecutionRuntimeProfileAsync(cancellationToken);
+            AgentSessionSpec fresh = AgentSpecs.Execution(_repository, effectiveProfile);
             var resumeSpec = new AgentSessionSpec(
                 fresh.SessionId,
                 fresh.RepositoryId,
@@ -2277,6 +2840,61 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             }
 
             return resumed.Session;
+        }
+
+        private async Task<ResolvedRuntimeProfile> ResolveExecutionRuntimeProfileAsync(
+            CancellationToken cancellationToken)
+        {
+            LoopHistoryRecord decisionFact = await new LedgerLoopHistoryStore(_repository)
+                .ReadLatestAsync(LoopHistoryKind.Decisions, cancellationToken)
+                ?? throw new InvalidOperationException("Canonical decision history fact was not found.");
+            var decisionProduct = new DecisionProductVersionIdentity(decisionFact.Identity.Value);
+            ExecutionRecommendationEvidence? recommendation =
+                await new CanonicalExecutionRecommendationEvidenceStore(_persistence)
+                    .ReadForDecisionAsync(decisionProduct, cancellationToken);
+            var fallback = new ResolvedRuntimeProfile(
+                new RuntimeProfileIdentity("runtime-fallback"),
+                "codex",
+                _brainConfiguration.Model,
+                _brainConfiguration.Effort,
+                "persistent-session",
+                "danger-full-access",
+                "execution-default",
+                "never",
+                "resume-or-recover",
+                TimeSpan.FromMinutes(30),
+                "default",
+                "reconcile-before-retry");
+            var evaluationStore = new CanonicalRuntimeProfileEvaluationStore(_persistence);
+            var policyService = new ExecutionRecommendationPolicyService(
+                new ExecutionRecommendationPolicyEvaluator(), evaluationStore);
+            RenderedPromptFact currentPrompt = CurrentPromptFact
+                ?? throw new InvalidOperationException("Execution prompt fact is unavailable.");
+            PromptDispatchAuthorization currentAuthorization = CurrentAuthorization
+                ?? throw new InvalidOperationException("Execution dispatch authorization is unavailable.");
+            (_, ExecutionAuthorization authorization) = await policyService.AuthorizeAsync(
+                new ExecutionRecommendationEvaluationRequest(
+                    recommendation,
+                    decisionProduct,
+                    currentAuthorization.Policy,
+                    new ProviderCapabilityEvidence(
+                        ProviderCapabilityEvidenceIdentity.New(),
+                        "codex",
+                        Enum.GetValues<AgentModel>(),
+                        AgentEffort.XHigh,
+                        DateTimeOffset.UtcNow),
+                    fallback,
+                    new ExecutionRecommendationPolicy(
+                        true,
+                        new HashSet<AgentModel>(Enum.GetValues<AgentModel>()),
+                        AgentEffort.XHigh,
+                        new HashSet<string> { ExecutionRecommendationEvidenceSchemas.Version1 })),
+                currentPrompt.Identity,
+                currentPrompt.ConsumedInputManifestIdentity,
+                currentAuthorization.Causality,
+                cancellationToken);
+            return await new ExecutionAuthorizationResolver(evaluationStore, evaluationStore)
+                .ResolveAsync(authorization, cancellationToken);
         }
 
         private async Task<ExecutionWarmSessionContinuity?> RestoreExecutionCheckpointAsync(
@@ -2359,7 +2977,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 CreateChangeDetector(),
                 _processRunner,
                 _repository,
-                console);
+                console,
+                _policy.MaxNoChangesCommits);
             bool stalled = await commitGate.CommitPushAndEvaluateAsync(
                 uncheckedMilestonesBeforeExecution,
                 uncheckedMilestonesAfterExecution,
@@ -2368,7 +2987,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 uncheckedMilestonesAfterExecution < uncheckedMilestonesBeforeExecution;
             int previousNoProgressCount = await ReadExecuteNoProgressCountAsync(cancellationToken);
             int noProgressCount = substantiveProgress ? 0 : previousNoProgressCount + 1;
-            stalled = stalled || noProgressCount > CommitGate.MaxNoChangesCount;
+            stalled = stalled || noProgressCount > _policy.MaxNoChangesCommits;
             string stallEvidence = await WriteExecuteStallEvidenceAsync(
                 previousNoProgressCount,
                 noProgressCount,
@@ -2440,7 +3059,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 |---|---|
                 | Previous No-Progress Count | {previousNoProgressCount} |
                 | Consecutive No-Progress Count | {noProgressCount} |
-                | Max No-Progress Count | {CommitGate.MaxNoChangesCount} |
+                | Max No-Progress Count | {_policy.MaxNoChangesCommits} |
                 | Substantive Progress | {substantiveProgress} |
                 | Stalled | {stalled} |
                 | Updated At | {DateTimeOffset.UtcNow:O} |
@@ -2541,8 +3160,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             {
                 completionRecoveryEvidencePaths = completionObserver.EvidencePaths;
                 throw new InvalidOperationException(
-                    "Non-implementation completion review blocked final evaluation: " +
-                    string.Join("; ", completionReview.BlockerMessages));
+                    "Non-implementation completion review stopped final evaluation: " +
+                    string.Join("; ", completionReview.UnresolvedMessages));
             }
 
             if (completionReview.AppliedDeletePaths.Count > 0)
@@ -2551,7 +3170,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     CreateChangeDetector(),
                     _processRunner,
                     _repository,
-                    console);
+                    console,
+                    _policy.MaxNoChangesCommits);
                 await commitGate.CommitPushIfChangedAsync(cancellationToken);
             }
 
@@ -2561,9 +3181,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 .ToArray();
 
             var promptRunner = new AgentCompletionPromptRunner(
-                _agentRuntime!,
-                _repository,
-                _brainConfiguration);
+                CreateOneShotPromptGateway(),
+                new CanonicalPromptComposer(),
+                CurrentPromptPolicyProfile(),
+                RequireCurrentAuthorization(),
+                ConsumedInputManifestIdentity.New(),
+                CurrentExecutionContext.ConsumedFiles ?? []);
             var executionEvidenceStore = new SqliteExecutionEvidenceStore(_repository);
             var archiveService = new CompletedEpicArchiveService(
                 artifactStore,
@@ -2703,7 +3326,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         | Created At | {DateTimeOffset.UtcNow:O} |
 
                         This marker records progress through canonical Execute completion. Recovery must inspect
-                        these phase markers together with transition runs, products, blockers, archive records,
+                        these phase markers together with transition runs, products, warnings, archive records,
                         and completion certification evidence before retrying interrupted closure work.
                         """);
                     evidencePaths.Add(relativePath);
@@ -2752,8 +3375,84 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     .Trim();
         }
 
+        // The ledger-backed history store makes decision/handoff/delta history ledger-authoritative
+        // on the canonical path; numbered files remain as derived projections only.
         private LoopArtifacts CreateLoopArtifacts() =>
-            new(artifactStore, _repository);
+            new(
+                artifactStore,
+                _repository,
+                new LedgerLoopHistoryStore(_repository),
+                new CanonicalExecutionRecommendationEvidenceStore(_persistence));
+
+        private PromptDispatchAuthorization RequireCurrentAuthorization() =>
+            CurrentAuthorization
+            ?? throw new InvalidOperationException("Nested prompt authorization is unavailable.");
+
+        private PromptPolicyProfile CurrentPromptPolicyProfile() =>
+            new(
+                RequireCurrentAuthorization().PolicyProfile,
+                "## Resolved Prompt Policy\n\nFollow the resolved operational and artifact policy.");
+
+        private IPromptDispatchGateway CreateOneShotPromptGateway()
+        {
+            var prompts = new CanonicalRenderedPromptFactStore(_persistence);
+            return new PromptDispatchGateway(
+                prompts,
+                new CanonicalPromptDispatchLifecycleStore(_persistence),
+                new LoadingPromptRuntimeDispatcher(
+                    prompts,
+                    new OneShotProviderTransport(
+                        Runtime ?? throw new InvalidOperationException("Agent runtime is unavailable."),
+                        _repository,
+                        _brainConfiguration)));
+        }
+
+        private IDecisionPromptTurnDispatcher CreateDecisionPromptDispatcher()
+        {
+            PromptDispatchAuthorization authorization = CurrentAuthorization
+                ?? throw new InvalidOperationException("Decision prompt authorization is unavailable.");
+            var prompts = new CanonicalRenderedPromptFactStore(_persistence);
+            return new CanonicalDecisionPromptTurnDispatcher(
+                prompts,
+                prompts,
+                new CanonicalPromptDispatchLifecycleStore(_persistence),
+                new CanonicalPromptComposer(),
+                new PromptPolicyProfile(
+                    authorization.PolicyProfile,
+                    "## Resolved Prompt Policy\n\nFollow the resolved operational and artifact policy."),
+                authorization);
+        }
+
+        private sealed class OneShotProviderTransport(
+            IAgentRuntime _runtime,
+            Repository _repository,
+            BrainConfiguration _brain) : IProviderPromptTransport
+        {
+            public async Task<PromptExecutionResult> DispatchAsync(
+                PersistedRenderedPromptFact prompt,
+                AuthorizedPromptDispatch dispatch,
+                CancellationToken cancellationToken)
+            {
+                AgentTurnResult result = await _runtime.RunOneShotAsync(
+                    AgentSpecs.BrainOperational(_repository, _brain),
+                    prompt.Fact.RenderedContent,
+                    onChunk: null,
+                    cancellationToken);
+                return new PromptExecutionResult(
+                    result.State == AgentTurnState.Completed
+                        ? PromptExecutionStatus.Completed
+                        : result.State == AgentTurnState.Canceled
+                            ? PromptExecutionStatus.Cancelled
+                            : PromptExecutionStatus.Failed,
+                    result.Output,
+                    TimeSpan.Zero,
+                    new Dictionary<string, string>
+                    {
+                        ["provider_turn_id"] = result.ProviderTurnId ?? string.Empty,
+                    },
+                    result.Diagnostics);
+            }
+        }
 
         private MilestoneGate CreateMilestoneGate() =>
             new(artifactStore, _repository);
@@ -2768,7 +3467,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         {
             var ledger = new NonImplementationReviewLedgerStore(artifactStore);
             var runner = new AgentNonImplementationReviewRunner(
-                _agentRuntime!,
+                Runtime!,
                 _repository,
                 _brainConfiguration);
             return new NonImplementationPostExecutionReviewService(
@@ -2782,7 +3481,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         {
             var ledger = new NonImplementationReviewLedgerStore(artifactStore);
             var runner = new AgentNonImplementationReviewRunner(
-                _agentRuntime!,
+                Runtime!,
                 _repository,
                 _brainConfiguration);
             return new NonImplementationCompletionReviewService(
@@ -2844,7 +3543,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             IAgentSession session = planAuthoringSession;
             planAuthoringSession = null;
-            await _agentRuntime.CloseSessionAsync(session);
+            await Runtime!.CloseSessionAsync(session);
         }
 
         private async ValueTask CloseExecutionSessionAsync()
@@ -2857,7 +3556,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             IAgentSession session = executionSession;
             executionSession = null;
-            await _agentRuntime.CloseSessionAsync(session);
+            await Runtime!.CloseSessionAsync(session);
         }
 
         private static string WithDiagnostics(string message, string? diagnostics) =>
@@ -2873,6 +3572,191 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             {
                 await executeDecisionSession.DisposeAsync();
                 executeDecisionSession = null;
+            }
+        }
+
+        /// <summary>Best-effort agent_sessions/agent_turns spine writes. Every method swallows store failures:
+        /// prompt execution must never fail because session evidence recording failed.</summary>
+        private sealed class SessionSpineRecorder(CanonicalWorkflowPersistenceStore _store)
+        {
+            public async Task<AgentSessionRecord?> TryBeginSessionAsync(
+                AgentSessionSpec spec,
+                PromptExecutionContext context,
+                CancellationToken cancellationToken)
+            {
+                try
+                {
+                    var record = new AgentSessionRecord(
+                        AgentSessionIdentity.New().Value,
+                        context.AttemptId,
+                        null,
+                        "codex",
+                        spec.ResumeThreadId,
+                        spec.Role.ToString(),
+                        spec.SessionId.Value.ToString("D"),
+                        DateTimeOffset.UtcNow,
+                        null,
+                        AgentConfigurationCatalog.Format(spec.Effort),
+                        spec.Sandbox.Identifier);
+                    await _store.UpsertAgentSessionAsync(record, cancellationToken);
+                    return record;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            public async Task TryRecordTurnAsync(
+                AgentSessionRecord? session,
+                AgentTurnResult result,
+                CancellationToken cancellationToken)
+            {
+                if (session is null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await _store.AppendAgentTurnAsync(
+                        new AgentTurnRecord(
+                            TurnIdentity.New().Value,
+                            session.SessionId,
+                            result.TurnIndex,
+                            DateTimeOffset.UtcNow),
+                        cancellationToken);
+                }
+                catch
+                {
+                    // Duplicate turn indexes (resume edge) and store failures are tolerated silently.
+                }
+            }
+
+            public async Task TryCompleteSessionAsync(
+                AgentSessionRecord? session,
+                string? providerThreadId)
+            {
+                if (session is null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await _store.UpsertAgentSessionAsync(
+                        session with
+                        {
+                            ProviderThreadId = providerThreadId ?? session.ProviderThreadId,
+                            CompletedAt = DateTimeOffset.UtcNow,
+                        },
+                        CancellationToken.None);
+                }
+                catch
+                {
+                    // Session completion is supporting evidence only.
+                }
+            }
+        }
+
+        /// <summary>Wraps the real agent runtime so every underlying session open (including opens made by
+        /// DecisionSession and the helper prompt runners) records one agent_sessions row tied to the ambient
+        /// PromptExecutionContext, and every completed turn records one agent_turns row. A resumed session gets
+        /// a NEW row whose provider_thread_id is the resumed thread id.</summary>
+        private sealed class RecordingAgentRuntime(
+            IAgentRuntime _inner,
+            UnifiedPromptExecutor _executor) : IAgentRuntime
+        {
+            public async Task<IAgentSession> OpenSessionAsync(
+                AgentSessionSpec spec,
+                CancellationToken cancellationToken = default)
+            {
+                IAgentSession session = await _inner.OpenSessionAsync(spec, cancellationToken);
+                AgentSessionRecord? record = await _executor.sessionRecorder.TryBeginSessionAsync(
+                    spec,
+                    _executor.CurrentExecutionContext,
+                    cancellationToken);
+                return new RecordingAgentSession(session, _executor.sessionRecorder, record);
+            }
+
+            public async Task<AgentTurnResult> RunOneShotAsync(
+                AgentSessionSpec spec,
+                string prompt,
+                Func<AgentStreamChunk, Task>? onChunk = null,
+                CancellationToken cancellationToken = default)
+            {
+                AgentSessionRecord? record = await _executor.sessionRecorder.TryBeginSessionAsync(
+                    spec,
+                    _executor.CurrentExecutionContext,
+                    cancellationToken);
+                try
+                {
+                    AgentTurnResult result = await _inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
+                    await _executor.sessionRecorder.TryRecordTurnAsync(record, result, cancellationToken);
+                    return result;
+                }
+                finally
+                {
+                    await _executor.sessionRecorder.TryCompleteSessionAsync(record, providerThreadId: null);
+                }
+            }
+
+            public async ValueTask CloseSessionAsync(IAgentSession session)
+            {
+                if (session is RecordingAgentSession recording)
+                {
+                    await recording.CompleteAsync();
+                    await _inner.CloseSessionAsync(recording.Inner);
+                    return;
+                }
+
+                await _inner.CloseSessionAsync(session);
+            }
+        }
+
+        private sealed class RecordingAgentSession(
+            IAgentSession _inner,
+            SessionSpineRecorder _recorder,
+            AgentSessionRecord? _record) : IAgentSession
+        {
+            public IAgentSession Inner => _inner;
+
+            public SessionIdentity SessionId => _inner.SessionId;
+
+            public string RepositoryId => _inner.RepositoryId;
+
+            public SessionRole Role => _inner.Role;
+
+            public AgentSessionMode Mode => _inner.Mode;
+
+            public AgentProcessState State => _inner.State;
+
+            public int CompletedTurns => _inner.CompletedTurns;
+
+            public AgentTokenUsage TotalUsage => _inner.TotalUsage;
+
+            public string? ThreadId => _inner.ThreadId;
+
+            public async Task<AgentTurnResult> RunTurnAsync(
+                string prompt,
+                Func<AgentStreamChunk, Task>? onChunk = null,
+                CancellationToken cancellationToken = default)
+            {
+                AgentTurnResult result = await _inner.RunTurnAsync(prompt, onChunk, cancellationToken);
+                await _recorder.TryRecordTurnAsync(_record, result, cancellationToken);
+                return result;
+            }
+
+            public Task CancelAsync(CancellationToken cancellationToken = default) =>
+                _inner.CancelAsync(cancellationToken);
+
+            public Task CompleteAsync() =>
+                _recorder.TryCompleteSessionAsync(_record, _inner.ThreadId);
+
+            public async ValueTask DisposeAsync()
+            {
+                await CompleteAsync();
+                await _inner.DisposeAsync();
             }
         }
     }
@@ -2917,7 +3801,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 if (string.IsNullOrWhiteSpace(executionResult.RawOutput))
                 {
                     return new InterpretedTransitionOutput(
-                        OutputInterpretationStatus.Blocked,
+                        OutputInterpretationStatus.Unavailable,
                         [],
                         $"Eval prompt `{definition.Identity}` returned no output.",
                         []);
@@ -2946,7 +3830,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 if (string.IsNullOrWhiteSpace(executionResult.RawOutput))
                 {
                     return new InterpretedTransitionOutput(
-                        OutputInterpretationStatus.Blocked,
+                        OutputInterpretationStatus.Unavailable,
                         [],
                         $"Traditional roadmap prompt `{definition.Identity}` returned no output.",
                         []);
@@ -2986,7 +3870,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         line.Trim().StartsWith("# FILE:", StringComparison.OrdinalIgnoreCase));
                     int specHeadings = normalized.Split("# Milestone Spec:", StringSplitOptions.None).Length - 1;
                     return new InterpretedTransitionOutput(
-                        OutputInterpretationStatus.Blocked,
+                        OutputInterpretationStatus.Incomplete,
                         [],
                         $"Milestone deep-dive output contained no valid `.agents/specs/*.md` file bundle " +
                         $"(length={executionResult.RawOutput.Length}, file-markers={fileMarkers}, spec-headings={specHeadings}).",
@@ -3010,7 +3894,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 if (string.IsNullOrWhiteSpace(executionResult.RawOutput))
                 {
                     return new InterpretedTransitionOutput(
-                        OutputInterpretationStatus.Blocked,
+                        OutputInterpretationStatus.Unavailable,
                         [],
                         "Adversarial review output was empty.",
                         []);
@@ -3062,7 +3946,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 !LocalArtifactTransitions.Supports(definition))
             {
                 return new InterpretedTransitionOutput(
-                    OutputInterpretationStatus.Blocked,
+                    OutputInterpretationStatus.Unavailable,
                     [],
                     "Output interpretation is not wired because prompt execution did not run.",
                     []);
@@ -3187,7 +4071,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             if (string.IsNullOrWhiteSpace(executionResult.RawOutput))
             {
                 return new InterpretedTransitionOutput(
-                    OutputInterpretationStatus.Blocked,
+                    OutputInterpretationStatus.Unavailable,
                     [],
                     $"Execute transition `{definition.Identity}` returned no output.",
                     []);
@@ -3896,11 +4780,47 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     private sealed class UnifiedEffectExecutor(
         Repository _repository,
         CanonicalWorkflowPersistenceStore _store,
-        IReadOnlyList<WorkflowDefinition> _definitions) : IEffectExecutor
+        IReadOnlyList<WorkflowDefinition> _definitions) : IEffectExecutor, ITransitionEffectIntentExecutor
     {
+        public async Task<EffectExecutionRecord> ExecuteAsync(
+            CanonicalCausalContext causality,
+            EffectIdentity effect,
+            CancellationToken cancellationToken)
+        {
+            WorkflowTransitionDefinition definition = _definitions
+                .SelectMany(workflow => workflow.Transitions)
+                .Single(transition => transition.Effects.Any(candidate => candidate.Identity == effect));
+            RepositoryObservation observation = await new RepositoryObserver()
+                .ObserveAsync(_repository.Path, cancellationToken);
+            HashSet<ProductIdentity> produced = definition.ProducedProducts
+                .Select(product => product.Identity)
+                .ToHashSet();
+            ProductRecord[] products = observation.Products
+                .Where(product => produced.Contains(product.Product.Identity))
+                .Select(product => product.Product)
+                .ToArray();
+            var validation = new ProductValidationResult(
+                ProductValidationStatus.Valid,
+                products,
+                [],
+                [],
+                [],
+                [],
+                "Canonical committed products were re-observed for effect execution.",
+                [causality.TransitionRun.Value]);
+            EffectExecutionResult result = await ExecuteAsync(
+                definition,
+                validation,
+                new EffectExecutionContext(causality),
+                cancellationToken);
+            return result.Effects.FirstOrDefault(record => record.Effect == effect)
+                ?? new EffectExecutionRecord(effect, result.Status, result.Explanation, result.Evidence);
+        }
+
         public async Task<EffectExecutionResult> ExecuteAsync(
             WorkflowTransitionDefinition definition,
             ProductValidationResult validation,
+            EffectExecutionContext context,
             CancellationToken cancellationToken)
         {
             if (LocalArtifactTransitions.Supports(definition))
@@ -3917,6 +4837,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? PlanWarmSessionTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Plan warm-session",
+                    context,
                     cancellationToken);
             }
 
@@ -3929,6 +4850,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? PlanProjectionTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Plan projection",
+                    context,
                     cancellationToken);
             }
 
@@ -3941,6 +4863,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? EvalPromptTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Eval prompt",
+                    context,
                     cancellationToken);
             }
 
@@ -3953,6 +4876,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? TraditionalRoadmapPromptTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Traditional roadmap prompt",
+                    context,
                     cancellationToken);
             }
 
@@ -3965,6 +4889,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? MilestoneDeepDiveTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Milestone deep-dive",
+                    context,
                     cancellationToken);
             }
 
@@ -3977,6 +4902,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? PlanReadOnlyReviewTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Plan read-only review",
+                    context,
                     cancellationToken);
             }
 
@@ -3989,6 +4915,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? PlanScopedArtifactTransitions.Evidence(definition)
                         : validation.Evidence,
                     "Plan scoped artifact",
+                    context,
                     cancellationToken);
             }
 
@@ -4004,6 +4931,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         ? ExecuteEvidence(definition)
                         : validation.Evidence,
                     "Execute transition",
+                    context,
                     cancellationToken);
             }
 
@@ -4026,6 +4954,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 validation,
                 evidence,
                 "Local verification",
+                context,
                 cancellationToken);
         }
 
@@ -4034,6 +4963,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             ProductValidationResult validation,
             IReadOnlyList<string> evidence,
             string evidenceTitle,
+            EffectExecutionContext context,
             CancellationToken cancellationToken)
         {
             WorkflowDefinition workflow = WorkflowFor(definition);
@@ -4119,7 +5049,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 ExecuteRepositoryStateTransitions.Supports(definition) ||
                 ExecuteReviewTransitions.Supports(definition))
             {
-                await MaterializeExecuteTransitionEvidenceAsync(workflow, definition, validation, effectEvidence, cancellationToken);
+                await MaterializeExecuteTransitionEvidenceAsync(workflow, definition, validation, effectEvidence, context, cancellationToken);
             }
             else
             {
@@ -4422,7 +5352,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 | Parser | TraditionalRoadmap transition-specific parser validated the primary output artifact. |
                 | Output Validator | {validation.Explanation} |
                 | Effects | Product, stage, workflow, effect-record, and evidence persistence are owned by the canonical effect executor. |
-                | Blocker and Recovery Metadata | Failed, blocked, cancelled, and partial effect outcomes are recorded through canonical blocker and recovery stores. |
+                | Warning and Recovery Metadata | Failed, cannot-proceed, cancelled, and partial effect outcomes are recorded through canonical warning and recovery stores. |
                 | Transition Ordering | Declared by `{stage.Identity}` stage transition order in the workflow definition. |
                 | Prompt Execution Sequencing | Owned by `TransitionRuntime`; prompt success alone does not advance workflow state. |
                 | Transition Persistence Sequencing | Started, raw output, interpretation, validation, effects, and completion are persisted by canonical transition stores. |
@@ -4435,7 +5365,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 | Artifact Promotion Validation | Primary output validation must pass before `PreparedEpic`, `StrategicInitiativeSelection`, or context products become gate-usable. |
                 | Decision Ledger | Canonical transition/effect records replace legacy decision-ledger authority for active orchestration. |
                 | Split Lineage | Split transition output is represented as canonical product/evidence lineage instead of state-machine control flow. |
-                | Blocker Evidence | Canonical failed/blocked transition evidence remains repository-owned and resolvable. |
+                | Warning Evidence | Canonical failed/unsatisfied transition evidence remains repository-owned and resolvable. |
                 | Recovery Intent | Canonical recovery markers identify rerun/resume paths without silent repair. |
                 | Created At | {DateTimeOffset.UtcNow:O} |
                 """,
@@ -4454,38 +5384,20 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             DateTimeOffset recordedAt,
             CancellationToken cancellationToken)
         {
-            await _store.UpsertStageStateAsync(
-                new CanonicalStageStateRecord(
-                    workflow.Identity,
-                    stage.Identity,
-                    WorkflowResolutionState.Blocked,
-                    recordedAt,
-                    evidence),
-                cancellationToken);
-            await _store.UpsertWorkflowStateAsync(
-                new CanonicalWorkflowStateRecord(
-                    workflow.Identity,
-                    WorkflowResolutionState.Blocked,
-                    stage.Identity,
-                    RuntimeOutcomeKind.Stalled,
-                    recordedAt,
-                    evidence),
-                cancellationToken);
-            await _store.UpsertBlockerAsync(
-                new CanonicalBlockerRecord(
-                    $"{workflow.Identity.Value}:{definition.Identity.Value}:stalled",
+            // Stalls are derived, never latched: the stall evidence is appended as a warning and the
+            // next invocation re-evaluates gates without any manual clearing step.
+            await _store.AppendWarningAsync(
+                new CanonicalWarningRecord(
+                    CausalUlid.NewId("warn"),
                     workflow.Identity,
                     stage.Identity,
                     definition.Identity,
-                    new ResolutionBlocker(
-                        BlockerCategory.Repository,
-                        "Execute commit evaluation detected repeated no-substantive-change iterations.",
-                        "Execute commit gate",
-                        "Make substantive repository or milestone progress, or explicitly recover after inspecting stall evidence.",
-                        Recoverable: true,
-                        evidence),
-                    recordedAt,
-                    null),
+                    WarningCategory.Repository,
+                    "Execute commit evaluation detected repeated no-substantive-change iterations.",
+                    "Execute commit gate",
+                    "Make substantive repository or milestone progress, or rerun after inspecting stall evidence.",
+                    evidence,
+                    recordedAt),
                 cancellationToken);
         }
 
@@ -4684,10 +5596,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             WorkflowTransitionDefinition definition,
             ProductValidationResult validation,
             IReadOnlyList<string> evidence,
+            EffectExecutionContext context,
             CancellationToken cancellationToken)
         {
             IReadOnlyList<string> loopArtifactEffects =
-                await ApplyExecuteLoopArtifactEffectsAsync(definition, cancellationToken);
+                await ApplyExecuteLoopArtifactEffectsAsync(definition, context, cancellationToken);
             foreach (string relativePath in ExecuteEvidence(definition))
             {
                 string path = ResolveRepositoryPath(relativePath);
@@ -4713,23 +5626,32 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
         private async Task<IReadOnlyList<string>> ApplyExecuteLoopArtifactEffectsAsync(
             WorkflowTransitionDefinition definition,
+            EffectExecutionContext context,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var artifacts = new LoopArtifacts(new FileSystemArtifactStore(), _repository);
+            var fileStore = new FileSystemArtifactStore();
+            var artifacts = new LoopArtifacts(
+                fileStore,
+                _repository,
+                new LedgerLoopHistoryStore(_repository),
+                new CanonicalExecutionRecommendationEvidenceStore(_store));
+            CanonicalCausalContext causality = context.Causality;
             return definition.Identity.Value switch
             {
                 "GenerateDecision" or "TransferDecisionSession" or "ContinueDecisionSession" =>
-                    await RotateLiveHandoffEffectAsync(artifacts),
+                    await RotateLiveHandoffEffectAsync(artifacts, causality),
                 "GenerateHandoff" => await RetireLiveDecisionsEffectAsync(artifacts),
-                "UpdateOperationalContext" => await RotateOperationalDeltaEffectAsync(artifacts),
+                "UpdateOperationalContext" => await RotateOperationalDeltaEffectAsync(artifacts, causality),
                 _ => [],
             };
         }
 
-        private static async Task<IReadOnlyList<string>> RotateLiveHandoffEffectAsync(LoopArtifacts artifacts)
+        private static async Task<IReadOnlyList<string>> RotateLiveHandoffEffectAsync(
+            LoopArtifacts artifacts,
+            CanonicalCausalContext causality)
         {
-            string? content = await artifacts.RotateLiveHandoffAsync();
+            string? content = await artifacts.RotateLiveHandoffAsync(causality);
             return content is null
                 ? ["No live handoff was present to rotate."]
                 : ["Rotated live handoff into handoff history."];
@@ -4743,9 +5665,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 : ["No live decisions were present to retire."];
         }
 
-        private static async Task<IReadOnlyList<string>> RotateOperationalDeltaEffectAsync(LoopArtifacts artifacts)
+        private static async Task<IReadOnlyList<string>> RotateOperationalDeltaEffectAsync(
+            LoopArtifacts artifacts,
+            CanonicalCausalContext causality)
         {
-            string? content = await artifacts.RotateOperationalDeltaAsync();
+            string? content = await artifacts.RotateOperationalDeltaAsync(causality);
             return content is null
                 ? ["No live operational delta was present to rotate."]
                 : ["Rotated live operational delta into delta history."];
@@ -4848,7 +5772,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             product.Freshness,
             product.ValidationState,
             product.Lifecycle,
-            evidence);
+            evidence,
+            product.SchemaVersion);
 
     private static IReadOnlyList<string> PlanScopedStorageRepresentations(
         ProductDefinition product,

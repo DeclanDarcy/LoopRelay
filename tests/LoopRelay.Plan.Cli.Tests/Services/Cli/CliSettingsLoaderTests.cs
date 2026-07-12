@@ -18,7 +18,7 @@ public sealed class CliSettingsLoaderTests
 
         Assert.Equal(Path.Combine(directory, CliSettingsLoader.ConsumerSettingsFileName), result.Path);
         Assert.False(result.IsDefaultTemplate);
-        Assert.Contains("dotnet", result.Permissions.CommandsWithSubcommands);
+        Assert.Contains("dotnet", result.PermissionInputs.CommandsWithSubcommands);
     }
 
     private static string DefaultSettingsPath()

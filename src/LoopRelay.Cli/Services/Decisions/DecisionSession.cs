@@ -6,21 +6,24 @@ using LoopRelay.Agents.Services.Codex;
 using LoopRelay.Agents.Services.Codex.Compatibility;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Cli.Abstractions;
+using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
 using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Cli.Services.Decisions.Recovery;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
+using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Primitives;
+using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Orchestration.Recovery;
-using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Models.Policy;
 using LoopRelay.Projections.Abstractions;
@@ -62,8 +65,12 @@ internal sealed class DecisionSession(
     SessionContinuityProfile? _continuityProfile = null,
     IRecoveryStore? _recoveryStore = null,
     IRecoveryRuntime? _recoveryRuntime = null,
-    string _recoveryPolicyVersion = "decision-recovery-resume-only.v1") : IAsyncDisposable
+    string _recoveryPolicyVersion = "decision-recovery-resume-only.v1",
+    int _operationalContextGrowthStreakWarningThreshold =
+        OperationalPolicyResolver.DefaultOperationalContextGrowthWarningStreak,
+    IDecisionPromptTurnDispatcher? _promptDispatcher = null) : IAsyncDisposable
 {
+    private const string TemplateOwnedPromptPolicy = "template-owned-implementation-first.v1";
     private IAgentSession? session;
     private bool seeded;
     private bool resumeAttempted;
@@ -73,7 +80,6 @@ internal sealed class DecisionSession(
     private SessionContinuityProfile? durableProfile;
 
     // Operational-context size-health state (Stage 2, mirrors RepositoryOrchestrator). Single-threaded, no lock.
-    private const int OperationalContextGrowthStreakWarningThreshold = 2;
     private int? previousOperationalContextSize;
     private int operationalContextGrowthStreak;
 
@@ -128,26 +134,33 @@ internal sealed class DecisionSession(
 
         session ??= await OpenOrResumeSessionAsync(cancellationToken);
 
-        (string? handoff, _) = await _artifacts.ReadLatestHandoffAsync();
-        string proposalPrompt = await BuildProposalPromptAsync(handoff, cancellationToken);
+        (string? handoff, string? handoffPath) = await _artifacts.ReadLatestHandoffAsync();
+        ProposalPrompt proposal = await BuildProposalPromptAsync(handoff, handoffPath, cancellationToken);
 
         // Own phase header so post-transfer proposal output no longer prints under the last
         // "Decision: Transfer/…" header.
         _console.Phase("Decision: Propose");
         var proposalRenderer = new ConsoleTurnRenderer(_console);
         DurableTurnProgressObserver? durableTurn = await BeginDurableTurnAsync(cancellationToken);
-        AgentTurnResult proposed;
+        DecisionPromptTurnResult proposedTurn;
         try
         {
             using IDisposable progressScope = AgentTurnProgress.Use(durableTurn);
-            proposed = await session.RunTurnAsync(
-                proposalPrompt, proposalRenderer.Stream, cancellationToken);
+            proposedTurn = await DispatchPromptAsync(
+                session,
+                proposal.PromptIdentity,
+                proposal.TemplateSourceHash,
+                proposal.Prompt,
+                proposal.ConsumedInputs,
+                proposalRenderer.Stream,
+                cancellationToken);
         }
         catch
         {
             durableTurn?.MarkUnknown();
             throw;
         }
+        AgentTurnResult proposed = proposedTurn.Result;
 
         if (proposed.State != AgentTurnState.Completed)
         {
@@ -158,7 +171,7 @@ internal sealed class DecisionSession(
 
         // Any completed proposal supersedes the previous live recommendation. Invalidating first ensures an
         // empty proposal cannot leave the previous pair launchable after this transition has failed.
-        await _artifacts.InvalidateExecutionRecommendationAsync();
+        await _artifacts.InvalidateExecutionRecommendationProjectionAsync();
 
         if (string.IsNullOrWhiteSpace(proposed.Output))
         {
@@ -173,10 +186,15 @@ internal sealed class DecisionSession(
 
         _console.Phase("Decision: Recommend execution configuration");
         var recommendationRenderer = new ConsoleTurnRenderer(_console);
-        AgentTurnResult recommended = await session.RunTurnAsync(
+        DecisionPromptTurnResult recommendedTurn = await DispatchPromptAsync(
+            session,
+            "ExecutionRecommendation",
+            templateSourceHash: null,
             ExecutionRecommendationContract.RenderPrompt(proposed.Output),
+            [],
             recommendationRenderer.Stream,
             cancellationToken);
+        AgentTurnResult recommended = recommendedTurn.Result;
         if (recommended.State != AgentTurnState.Completed)
         {
             await CloseAsync();
@@ -205,13 +223,26 @@ internal sealed class DecisionSession(
                 durableTurn.Record,
                 proposed.Output,
                 recommendation,
+                recommendedTurn,
                 cancellationToken);
         }
         else
         {
             await PersistResumeStateAsync(cancellationToken);
             // Auto-submit: persist the exact prompt and its correlated, validated recommendation as the live pair.
-            await _artifacts.PersistDecisionsAsync(proposed.Output, recommendation);
+            await _artifacts.PersistDecisionsAsync(
+                proposed.Output,
+                recommendation,
+                recommendedTurn.Causality,
+                recommendedTurn.Session,
+                recommendedTurn.Turn,
+                "Decision agent advisory model/effort recommendation.",
+                new HistoryEvidenceAttachments(
+                    Provider: new HistoryProviderEvidence(
+                        "codex",
+                        recommendedTurn.Session.Value,
+                        recommended.ProviderTurnId ?? recommendedTurn.Turn.Value)),
+                cancellationToken);
         }
         if (_hitlRequestCapture is not null)
         {
@@ -231,30 +262,77 @@ internal sealed class DecisionSession(
     // authors the NEXT agent's, folding in the previous session's handoff. A FRESH process is also primed with
     // the operational context in this same turn (there is no separate seed) — a WARM process already carries it
     // from its first proposal, so its later proposals send only the handoff delta.
-    private async Task<string> BuildProposalPromptAsync(string? handoff, CancellationToken cancellationToken)
+    // One composed proposal prompt plus the identity evidence needed to append its
+    // rendered-prompt fact: the generated template it came from (whose build-time source hash is
+    // the policy-complete prompt version) and the collaboration files whose content fed the holes.
+    private sealed record ProposalPrompt(
+        string Prompt,
+        string PromptIdentity,
+        string TemplateSourceHash,
+        IReadOnlyList<ConsumedInputFile> ConsumedInputs);
+
+    private async Task<ProposalPrompt> BuildProposalPromptAsync(
+        string? handoff,
+        string? handoffPath,
+        CancellationToken cancellationToken)
     {
+        // Warm process: the projection and operational context are already in this process's history,
+        // so both declared template holes render empty and the turn carries only the handoff delta.
         string decisionSessionProjection = seeded
             ? string.Empty
             : (await EnsureDecisionProjectionAsync(cancellationToken)).Content;
-        string baseline = handoff is null
-            ? GenerateSystemPromptForFirstExecutionAgent.Render(decisionSessionProjection)
-            : GenerateSystemPromptForNextExecutionAgent.Render(decisionSessionProjection, handoff);
-        baseline = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(baseline, (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()));
-
-        if (seeded)
+        string operationalContext = string.Empty;
+        List<ConsumedInputFile> consumedInputs = [];
+        if (!seeded)
         {
-            return baseline; // warm process: the projection and operational context are already in this process's history
+            await _artifacts.EnsureOperationalContextAsync();
+            operationalContext = await _artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
+            consumedInputs.Add(ConsumedInputFile.FromContent(OrchestrationArtifactPaths.OperationalContext, operationalContext));
+
+            if (string.IsNullOrWhiteSpace(operationalContext))
+            {
+                _console.Warn("Operational context is empty — the decision agent has no context to work from.");
+            }
         }
 
-        await _artifacts.EnsureOperationalContextAsync();
-        string operationalContext = await _artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
-
-        if (string.IsNullOrWhiteSpace(operationalContext))
+        if (handoff is not null)
         {
-            _console.Warn("Operational context is empty — the decision agent has no context to work from.");
+            consumedInputs.Add(ConsumedInputFile.FromContent(handoffPath ?? OrchestrationArtifactPaths.LiveHandoff, handoff));
         }
 
-        return $"{operationalContext}\n\n{baseline}";
+        return handoff is null
+            ? new ProposalPrompt(
+                GenerateSystemPromptForFirstExecutionAgent.Render(operationalContext, decisionSessionProjection),
+                "GenerateSystemPromptForFirstExecutionAgent",
+                GenerateSystemPromptForFirstExecutionAgent.SourceHash,
+                consumedInputs)
+            : new ProposalPrompt(
+                GenerateSystemPromptForNextExecutionAgent.Render(operationalContext, decisionSessionProjection, handoff),
+                "GenerateSystemPromptForNextExecutionAgent",
+                GenerateSystemPromptForNextExecutionAgent.SourceHash,
+                consumedInputs);
+    }
+
+    private Task<DecisionPromptTurnResult> DispatchPromptAsync(
+        IAgentSession targetSession,
+        string promptIdentity,
+        string? templateSourceHash,
+        string renderedText,
+        IReadOnlyList<ConsumedInputFile> consumedInputs,
+        Func<AgentStreamChunk, Task>? onChunk,
+        CancellationToken cancellationToken)
+    {
+        IDecisionPromptTurnDispatcher dispatcher = _promptDispatcher
+            ?? throw new LoopStepException(
+                "Decision prompt dispatch is not configured; provider dispatch is blocked before submission.");
+        return dispatcher.DispatchAsync(
+            targetSession,
+            promptIdentity,
+            templateSourceHash,
+            renderedText,
+            consumedInputs,
+            onChunk,
+            cancellationToken);
     }
 
     /// <summary>
@@ -467,7 +545,7 @@ internal sealed class DecisionSession(
             "Fresh", RecoveryCompleteness.Full, null, durableProfile.Digest, null, now, now, null, "Authoritative");
         durableActiveState = new DecisionSessionActiveState(
             scope.ScopeId.Value, lineageId, CurrentAccounting(),
-            Hash(_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()),
+            Hash(_promptPolicy ?? TemplateOwnedPromptPolicy),
             null, 0, now);
         RecoveryStoreWriteResult persisted = await _recoveryStore!.CreateScopeAndActivateAsync(
             scopeRecord, durableLineage, durableActiveState, durableProfile, cancellationToken);
@@ -621,6 +699,7 @@ internal sealed class DecisionSession(
         DecisionSessionTurnRecord turn,
         string output,
         ExecutionRecommendation recommendation,
+        DecisionPromptTurnResult recommendationTurn,
         CancellationToken cancellationToken)
     {
         DecisionTurnCommitResult commit = await _recoveryStore!.CommitDecisionOutputAsync(
@@ -628,7 +707,7 @@ internal sealed class DecisionSession(
             durableActiveState!,
             CurrentAccounting(),
             output,
-            Hash(_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault()),
+            Hash(_promptPolicy ?? TemplateOwnedPromptPolicy),
             cancellationToken);
         if (!commit.Write.Succeeded || commit.Turn is null || commit.Active is null)
         {
@@ -641,7 +720,15 @@ internal sealed class DecisionSession(
         {
             await _artifacts.WriteAsync(historyPath, output);
         }
-        await _artifacts.PersistExecutionRecommendationAsync(output, recommendation);
+        await _artifacts.PersistRecommendationEvidenceAsync(
+            new DecisionProductVersionIdentity(commit.Turn.TurnRecordId),
+            output,
+            recommendation,
+            recommendationTurn.Causality,
+            recommendationTurn.Session,
+            recommendationTurn.Turn,
+            "Decision agent advisory model/effort recommendation.",
+            cancellationToken);
         RecoveryStoreWriteResult materialized = await _recoveryStore.MarkDecisionArtifactMaterializedAsync(
             commit.Turn, cancellationToken);
         if (!materialized.Succeeded)
@@ -692,7 +779,7 @@ internal sealed class DecisionSession(
     {
         DecisionSessionScope scope = decisionExecutionContext!.Scope;
         DecisionSessionAccounting accounting = CurrentAccounting();
-        string policyDigest = Hash(_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault());
+        string policyDigest = Hash(_promptPolicy ?? TemplateOwnedPromptPolicy);
         if (durableActiveState is null)
         {
             IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
@@ -797,8 +884,15 @@ internal sealed class DecisionSession(
     {
         _console.Phase("Decision: Transfer/ProduceOperationalDelta");
         var deltaRenderer = new ConsoleTurnRenderer(_console);
-        AgentTurnResult delta = await session!.RunTurnAsync(
-            ProduceOperationalDelta.Text, deltaRenderer.Stream, cancellationToken);
+        DecisionPromptTurnResult deltaTurn = await DispatchPromptAsync(
+            session!,
+            "ProduceOperationalDelta",
+            ProduceOperationalDelta.SourceHash,
+            ProduceOperationalDelta.Text,
+            [],
+            deltaRenderer.Stream,
+            cancellationToken);
+        AgentTurnResult delta = deltaTurn.Result;
         if (delta.State != AgentTurnState.Completed)
         {
             await CloseAsync();
@@ -827,7 +921,8 @@ internal sealed class DecisionSession(
         string? archived;
         try
         {
-            archived = await _artifacts.RotateOperationalDeltaAsync();
+            archived = await _artifacts.RotateOperationalDeltaAsync(
+                deltaTurn.Causality);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -859,6 +954,8 @@ internal sealed class DecisionSession(
 
         var operation = new DecisionArtifactOperation(
             Label: "operational-context-evolution",
+            PromptIdentity: "UpdateOperationalContext",
+            TemplateSourceHash: UpdateOperationalContext.SourceHash,
             Prompt: UpdateOperationalContext.Text,
             Profile: new OperationPermissionProfile(
                 "operational-context-evolution",
@@ -900,6 +997,8 @@ internal sealed class DecisionSession(
 
         var operation = new DecisionArtifactOperation(
             Label: "operational-documents-optimization",
+            PromptIdentity: "OptimizeOperationalDocuments",
+            TemplateSourceHash: OptimizeOperationalDocuments.SourceHash,
             Prompt: OptimizeOperationalDocuments.Text,
             Profile: new OperationPermissionProfile(
                 "operational-documents-optimization",
@@ -957,10 +1056,14 @@ internal sealed class DecisionSession(
                     _brainConfiguration,
                     operation.Profile),
                 cancellationToken);
-            AgentTurnResult result = await scopedSession.RunTurnAsync(
+            AgentTurnResult result = (await DispatchPromptAsync(
+                scopedSession,
+                operation.PromptIdentity,
+                operation.TemplateSourceHash,
                 operation.Prompt,
+                [],
                 renderer.Stream,
-                cancellationToken);
+                cancellationToken)).Result;
             if (result.State != AgentTurnState.Completed)
             {
                 throw new LoopStepException(WithDiagnostics(
@@ -1016,6 +1119,8 @@ internal sealed class DecisionSession(
 
     private sealed record DecisionArtifactOperation(
         string Label,
+        string PromptIdentity,
+        string? TemplateSourceHash,
         string Prompt,
         OperationPermissionProfile Profile,
         IReadOnlyList<string> RequiredOutputs,
@@ -1142,7 +1247,7 @@ internal sealed class DecisionSession(
             ? operationalContextGrowthStreak + 1
             : 0;
         previousOperationalContextSize = newSize;
-        if (operationalContextGrowthStreak >= OperationalContextGrowthStreakWarningThreshold)
+        if (operationalContextGrowthStreak >= _operationalContextGrowthStreakWarningThreshold)
         {
             _console.Warn($"Operational context has grown for {operationalContextGrowthStreak} consecutive transfers (now {newSize} chars) — check for bloat.");
         }

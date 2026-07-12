@@ -2,7 +2,6 @@ using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Roadmap.Cli.Abstractions;
 using LoopRelay.Roadmap.Cli.Models.Execution;
 using LoopRelay.Roadmap.Cli.Models.Projections;
@@ -13,8 +12,7 @@ namespace LoopRelay.Roadmap.Cli.Services.Prompts;
 internal sealed class RoadmapPromptRunner(
     IAgentRuntime _runtime,
     Repository _repository,
-    ILoopConsole _console,
-    RoadmapRuntimePromptPolicy? _runtimePromptPolicy = null)
+    ILoopConsole _console)
 {
 
     public async Task<string> RunProjectionPromptAsync(
@@ -32,19 +30,10 @@ internal sealed class RoadmapPromptRunner(
         string secondaryInput,
         CancellationToken cancellationToken)
     {
-        RoadmapRuntimePromptPolicy effectivePolicy = _runtimePromptPolicy ?? RoadmapRuntimePromptPolicy.Default;
         string prompt = RoadmapPromptCatalog.RenderRuntime(
             runtimePromptName,
             projectContext,
-            secondaryInput,
-            effectivePolicy);
-        if (!RoadmapPromptCatalog.UsesPromptOwnedNonImplementationPolicy(runtimePromptName))
-        {
-            prompt = ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-                prompt,
-                effectivePolicy.LegacyImplementationFirstPromptPolicy);
-        }
-
+            secondaryInput);
         return await RunOneShotAsync(runtimePromptName, prompt, cancellationToken);
     }
 

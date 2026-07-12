@@ -3,7 +3,6 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Plan.Cli.Primitives;
 using LoopRelay.Plan.Cli.Services.Agents;
 using LoopRelay.Plan.Cli.Services.Execution;
@@ -22,11 +21,6 @@ public class PlanPipelineTests
 
     private static string MilestonePath(string fileName) =>
         ArtifactPath.CombineRelative(OrchestrationArtifactPaths.MilestonesDirectory, fileName);
-
-    private static string WithPromptPolicy(string prompt) =>
-        ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(
-            prompt,
-            ImplementationFirstPromptPolicyComposer.ComposeDefault());
 
     private sealed record Harness(
         PlanPipeline Pipeline,
@@ -92,7 +86,7 @@ public class PlanPipelineTests
         // same warm planning session).
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
         {
-            Assert.Equal(WithPromptPolicy(WritePlan.Text), prompt);
+            Assert.Equal(WritePlan.Text, prompt);
             s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN V1").Wait();
             return Turns.Completed("wrote plan");
         }));
@@ -109,7 +103,7 @@ public class PlanPipelineTests
         h.Runtime.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
         {
             seenFeedbackAtRevise = RevisePlan.Render(reviewOutput);
-            Assert.Equal(WithPromptPolicy(seenFeedbackAtRevise), prompt);
+            Assert.Equal(seenFeedbackAtRevise, prompt);
             s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN V2 REVISED").Wait();
             return Turns.Completed("revised plan");
         }));

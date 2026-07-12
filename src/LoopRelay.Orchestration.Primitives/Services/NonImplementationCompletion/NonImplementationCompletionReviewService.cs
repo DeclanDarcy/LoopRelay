@@ -62,7 +62,7 @@ public sealed class NonImplementationCompletionReviewService(
                     document,
                     unresolved,
                     readySummary,
-                    blockerMessages: []));
+                    unresolvedMessages: []));
             return new NonImplementationCompletionReviewResult(
                 NonImplementationCompletionReviewStatus.Ready,
                 ReviewArtifactPath,
@@ -70,7 +70,7 @@ public sealed class NonImplementationCompletionReviewService(
                 EvidencePaths: [ReviewArtifactPath, OrchestrationArtifactPaths.NonImplementationLedger],
                 AppliedDeletePaths: [],
                 readySummary,
-                BlockerMessages: []);
+                UnresolvedMessages: []);
         }
 
         string? decisionContent = await _artifacts.ReadAsync(DecisionArtifactPath);
@@ -83,7 +83,7 @@ public sealed class NonImplementationCompletionReviewService(
             NonImplementationCompletionReviewSummary blockedSummary =
                 BuildSummary(refresh, unresolved, resolvedFileDecisionCount: 0, appliedDeleteCount: 0,
                     synthesisDecisionRequired, document.SynthesisDecision?.Decision);
-            IReadOnlyList<string> blockers =
+            IReadOnlyList<string> unresolvedMessages =
             [
                 $"Human decisions are required in `{DecisionArtifactPath}` before completion evaluation can proceed.",
             ];
@@ -95,7 +95,7 @@ public sealed class NonImplementationCompletionReviewService(
                     document,
                     unresolved,
                     blockedSummary,
-                    blockers));
+                    unresolvedMessages));
             return new NonImplementationCompletionReviewResult(
                 NonImplementationCompletionReviewStatus.Blocked,
                 ReviewArtifactPath,
@@ -103,7 +103,7 @@ public sealed class NonImplementationCompletionReviewService(
                 EvidencePaths: [ReviewArtifactPath, DecisionArtifactPath, OrchestrationArtifactPaths.NonImplementationLedger],
                 AppliedDeletePaths: [],
                 blockedSummary,
-                blockers);
+                unresolvedMessages);
         }
 
         string decisionSourceHash = Sha256Text(decisionContent);
@@ -169,7 +169,7 @@ public sealed class NonImplementationCompletionReviewService(
         NonImplementationCompletionReviewStatus status = remainingUnresolved.Count == 0
             ? NonImplementationCompletionReviewStatus.Ready
             : NonImplementationCompletionReviewStatus.Blocked;
-        IReadOnlyList<string> remainingBlockers = remainingUnresolved.Count == 0
+        IReadOnlyList<string> remainingUnresolvedMessages = remainingUnresolved.Count == 0
             ? []
             : remainingUnresolved
                 .Select(entry => $"Ledger entry `{entry.EntryId}` remains unresolved after decision application.")
@@ -185,7 +185,7 @@ public sealed class NonImplementationCompletionReviewService(
                 updatedDocument,
                 remainingUnresolved,
                 summary,
-                remainingBlockers));
+                remainingUnresolvedMessages));
 
         return new NonImplementationCompletionReviewResult(
             status,
@@ -194,7 +194,7 @@ public sealed class NonImplementationCompletionReviewService(
             EvidencePaths: [ReviewArtifactPath, DecisionArtifactPath, OrchestrationArtifactPaths.NonImplementationLedger],
             AppliedDeletePaths: appliedDeletes,
             summary,
-            remainingBlockers);
+            remainingUnresolvedMessages);
     }
 
     private async Task<CompletionRefresh> RefreshCurrentRepositoryStateAsync(
@@ -683,7 +683,7 @@ public sealed class NonImplementationCompletionReviewService(
         NonImplementationReviewLedgerDocument document,
         IReadOnlyList<NonImplementationReviewLedgerEntry> unresolved,
         NonImplementationCompletionReviewSummary summary,
-        IReadOnlyList<string> blockerMessages)
+        IReadOnlyList<string> unresolvedMessages)
     {
         var lines = new List<string>
         {
@@ -707,19 +707,19 @@ public sealed class NonImplementationCompletionReviewService(
             $"| Synthesis Decision Required | {summary.SynthesisDecisionRequired} |",
             $"| Synthesis Decision | {summary.SynthesisDecision?.ToString() ?? "None"} |",
             string.Empty,
-            "## Blockers",
+            "## Unresolved",
             string.Empty,
         };
 
-        if (blockerMessages.Count == 0)
+        if (unresolvedMessages.Count == 0)
         {
             lines.Add("None.");
         }
         else
         {
-            foreach (string blocker in blockerMessages)
+            foreach (string message in unresolvedMessages)
             {
-                lines.Add($"- {Escape(blocker)}");
+                lines.Add($"- {Escape(message)}");
             }
         }
 

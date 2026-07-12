@@ -89,10 +89,8 @@ internal static class RoadmapPromptCatalog
     public static string RenderRuntime(
         string runtimePromptName,
         string projectContext,
-        string secondaryInput = "",
-        RoadmapRuntimePromptPolicy? policy = null)
+        string secondaryInput = "")
     {
-        RoadmapRuntimePromptPolicy effectivePolicy = policy ?? RoadmapRuntimePromptPolicy.Default;
         return runtimePromptName switch
         {
             "CreateRoadmapCompletionContext" =>
@@ -104,15 +102,15 @@ internal static class RoadmapPromptCatalog
             "EpicPreparationAudit" =>
                 Core.Prompts.Planning.EpicPreparationAudit.Render(projectContext, secondaryInput),
             "RealignEpic" =>
-                RenderRealignEpic(projectContext, secondaryInput, effectivePolicy),
+                Core.Prompts.Planning.RealignEpic.Render(projectContext, secondaryInput),
             "ReimagineEpic" =>
-                RenderReimagineEpic(projectContext, secondaryInput, effectivePolicy),
+                Core.Prompts.Planning.ReimagineEpic.Render(projectContext, secondaryInput),
             "CreateNewEpic" =>
-                RenderCreateNewEpic(projectContext, secondaryInput, effectivePolicy),
+                Core.Prompts.Planning.CreateNewEpic.Render(projectContext, secondaryInput),
             "SplitEpic" =>
-                RenderSplitEpic(projectContext, secondaryInput, effectivePolicy),
+                Core.Prompts.Planning.SplitEpic.Render(projectContext, secondaryInput),
             "GenerateMilestoneDeepDivesForEpic" =>
-                RenderGenerateMilestoneDeepDivesForEpic(projectContext, effectivePolicy),
+                Core.Prompts.Planning.GenerateMilestoneDeepDivesForEpic.Render(projectContext),
             "EvaluateEpicCompletionAndDrift" =>
                 Core.Prompts.Planning.EvaluateEpicCompletionAndDrift.Render(projectContext),
             "SynthesizeCompletedEpic" =>
@@ -121,89 +119,25 @@ internal static class RoadmapPromptCatalog
         };
     }
 
-    public static bool UsesPromptOwnedNonImplementationPolicy(string runtimePromptName) =>
+    // The build-time source hash of the template behind a runtime prompt. With the prompt
+    // policy template-owned (M6), this hash is the policy-complete prompt version that the
+    // transition journal stamps into input snapshots.
+    public static string RuntimeTemplateSourceHash(string runtimePromptName) =>
         runtimePromptName switch
         {
-            "CreateNewEpic" => true,
-            "RealignEpic" => true,
-            "ReimagineEpic" => true,
-            "GenerateMilestoneDeepDivesForEpic" => true,
-            "SplitEpic" => true,
-            _ => false,
+            "CreateRoadmapCompletionContext" => Core.Prompts.Planning.CreateRoadmapCompletionContext.SourceHash,
+            "UpdateRoadmapCompletionContext" => Core.Prompts.Planning.UpdateRoadmapCompletionContext.SourceHash,
+            "SelectNextEpic" => Core.Prompts.Planning.SelectNextEpic.SourceHash,
+            "EpicPreparationAudit" => Core.Prompts.Planning.EpicPreparationAudit.SourceHash,
+            "RealignEpic" => Core.Prompts.Planning.RealignEpic.SourceHash,
+            "ReimagineEpic" => Core.Prompts.Planning.ReimagineEpic.SourceHash,
+            "CreateNewEpic" => Core.Prompts.Planning.CreateNewEpic.SourceHash,
+            "SplitEpic" => Core.Prompts.Planning.SplitEpic.SourceHash,
+            "GenerateMilestoneDeepDivesForEpic" => Core.Prompts.Planning.GenerateMilestoneDeepDivesForEpic.SourceHash,
+            "EvaluateEpicCompletionAndDrift" => Core.Prompts.Planning.EvaluateEpicCompletionAndDrift.SourceHash,
+            "SynthesizeCompletedEpic" => Core.Prompts.Planning.SynthesizeCompletedEpic.SourceHash,
+            _ => throw new ArgumentOutOfRangeException(nameof(runtimePromptName), runtimePromptName, "Unknown runtime prompt."),
         };
-
-    private static string RenderCreateNewEpic(
-        string projectContext,
-        string secondaryInput,
-        RoadmapRuntimePromptPolicy policy)
-    {
-        CreateNewEpicPromptSectionSet sections =
-            CreateNewEpicPromptSections.ForAuxiliaryArtifactPolicy(
-                policy.AllowAuxiliaryNonImplementationFiles);
-        return Core.Prompts.Planning.CreateNewEpic.Render(
-            projectContext,
-            secondaryInput,
-            sections.EpicImplementationFirstGuidance,
-            sections.EpicAuxiliaryArtifactLimits);
-    }
-
-    private static string RenderRealignEpic(
-        string projectContext,
-        string secondaryInput,
-        RoadmapRuntimePromptPolicy policy)
-    {
-        RealignEpicPromptSectionSet sections =
-            RealignEpicPromptSections.ForAuxiliaryArtifactPolicy(
-                policy.AllowAuxiliaryNonImplementationFiles);
-        return Core.Prompts.Planning.RealignEpic.Render(
-            projectContext,
-            secondaryInput,
-            sections.RealignEpicImplementationFirstGuidance,
-            sections.RealignEpicAuxiliaryArtifactLimits);
-    }
-
-    private static string RenderReimagineEpic(
-        string projectContext,
-        string secondaryInput,
-        RoadmapRuntimePromptPolicy policy)
-    {
-        ReimagineEpicPromptSectionSet sections =
-            ReimagineEpicPromptSections.ForAuxiliaryArtifactPolicy(
-                policy.AllowAuxiliaryNonImplementationFiles);
-        return Core.Prompts.Planning.ReimagineEpic.Render(
-            projectContext,
-            secondaryInput,
-            sections.ReimagineEpicImplementationFirstGuidance,
-            sections.ReimagineEpicAuxiliaryArtifactLimits);
-    }
-
-    private static string RenderGenerateMilestoneDeepDivesForEpic(
-        string projectContext,
-        RoadmapRuntimePromptPolicy policy)
-    {
-        GenerateMilestoneDeepDivesForEpicPromptSectionSet sections =
-            GenerateMilestoneDeepDivesForEpicPromptSections.ForAuxiliaryArtifactPolicy(
-                policy.AllowAuxiliaryNonImplementationFiles);
-        return Core.Prompts.Planning.GenerateMilestoneDeepDivesForEpic.Render(
-            projectContext,
-            sections.GenerateMilestoneDeepDivesForEpicImplementationFirstGuidance,
-            sections.GenerateMilestoneDeepDivesForEpicAuxiliaryArtifactLimits);
-    }
-
-    private static string RenderSplitEpic(
-        string projectContext,
-        string secondaryInput,
-        RoadmapRuntimePromptPolicy policy)
-    {
-        SplitEpicPromptSectionSet sections =
-            SplitEpicPromptSections.ForAuxiliaryArtifactPolicy(
-                policy.AllowAuxiliaryNonImplementationFiles);
-        return Core.Prompts.Planning.SplitEpic.Render(
-            projectContext,
-            secondaryInput,
-            sections.SplitEpicImplementationFirstGuidance,
-            sections.SplitEpicAuxiliaryArtifactLimits);
-    }
 
     private static ProjectionPromptMetadata Metadata(string promptName, string? promptType, string sourceHash) =>
         new(promptName, promptType ?? promptName, sourceHash);

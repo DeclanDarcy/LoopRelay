@@ -51,8 +51,8 @@ public sealed class PlanWorkflowStateClassifierTests
                 Product(ProductIdentity.ExecutionReadiness),
             ]));
         AssertState(
-            PlanWorkflowStateKind.Blocked,
-            Observation(workflow: Workflow(WorkflowResolutionState.Blocked, "Planning")));
+            PlanWorkflowStateKind.PlanningInProgress,
+            Observation(workflow: Workflow(WorkflowResolutionState.Resumable, "Planning")));
         AssertState(
             PlanWorkflowStateKind.Cancelled,
             Observation(workflow: Workflow(WorkflowResolutionState.Cancelled, "Planning")));

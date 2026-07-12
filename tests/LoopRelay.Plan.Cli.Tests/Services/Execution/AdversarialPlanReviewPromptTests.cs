@@ -6,44 +6,20 @@ namespace LoopRelay.Plan.Cli.Tests.Services.Execution;
 public class AdversarialPlanReviewPromptTests
 {
     [Fact]
-    public void Render_ReplacesPolicySlotsAndInputs()
+    public void Render_ReplacesInputsAndCarriesTemplateOwnedReviewSemantics()
     {
-        string prompt = AdversarialPlanReview.Render(
-            "P1",
-            "P2",
-            "P3",
-            "P4",
-            "P5",
-            "P6",
-            "P7",
-            "PROJECTION",
-            "PLAN");
+        string prompt = AdversarialPlanReview.Render("PROJECTION", "PLAN");
 
-        string[] renderedValues =
-        [
-            "P1",
-            "P2",
-            "P3",
-            "P4",
-            "P5",
-            "P6",
-            "P7",
-            "PROJECTION",
-            "PLAN"
-        ];
-
-        foreach (string renderedValue in renderedValues)
-        {
-            Assert.Contains(renderedValue, prompt, StringComparison.Ordinal);
-        }
-
+        Assert.Contains("PROJECTION", prompt, StringComparison.Ordinal);
+        Assert.Contains("PLAN", prompt, StringComparison.Ordinal);
+        AdversarialPlanReviewPromptTestAssertions.AssertContainsImplementationFirstReviewSemantics(prompt);
         AdversarialPlanReviewPromptTestAssertions.AssertNoUnresolvedPlaceholders(prompt);
     }
 
     [Fact]
     public void Render_PreservesReviewOutputCompatibility()
     {
-        string prompt = AdversarialPlanReviewPromptTestAssertions.RenderWithEmptyPolicySlots();
+        string prompt = AdversarialPlanReview.Render("PROJECTION", "PLAN");
 
         string[] requiredHeadings =
         [
@@ -79,20 +55,6 @@ public class AdversarialPlanReviewPromptTests
 
 internal static class AdversarialPlanReviewPromptTestAssertions
 {
-    public static string RenderWithEmptyPolicySlots(
-        string projectContextProjection = "PROJECTION",
-        string planToReview = "PLAN") =>
-        AdversarialPlanReview.Render(
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            string.Empty,
-            projectContextProjection,
-            planToReview);
-
     public static void AssertContainsImplementationFirstReviewSemantics(string prompt)
     {
         string[] semanticAnchors =
@@ -115,13 +77,6 @@ internal static class AdversarialPlanReviewPromptTestAssertions
     {
         string[] placeholders =
         [
-            "{p1}",
-            "{p2}",
-            "{p3}",
-            "{p4}",
-            "{p5}",
-            "{p6}",
-            "{p7}",
             "{projectContextProjection}",
             "{planToReview}"
         ];

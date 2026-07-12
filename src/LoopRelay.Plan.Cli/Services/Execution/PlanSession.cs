@@ -5,7 +5,6 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Services.Hitl;
-using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Plan.Cli.Abstractions;
 using LoopRelay.Plan.Cli.Models;
 using LoopRelay.Plan.Cli.Services.Cli;
@@ -26,7 +25,6 @@ internal sealed class PlanSession(
     PlanArtifacts _artifacts,
     ILoopConsole _console,
     Repository _repository,
-    string? _promptPolicy = null,
     ExplicitHitlNonImplementationRequestCaptureService? _hitlRequestCapture = null) : IAsyncDisposable
 {
     private IAgentSession? session;
@@ -39,7 +37,7 @@ internal sealed class PlanSession(
 
         var renderer = new ConsoleTurnRenderer(_console);
         AgentTurnResult result = await session.RunTurnAsync(
-            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(WritePlan.Text, (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault())),
+            WritePlan.Text,
             renderer.Stream,
             cancellationToken);
         if (result.State != AgentTurnState.Completed)
@@ -66,7 +64,7 @@ internal sealed class PlanSession(
         // sends only the review-feedback delta rather than re-sending the whole transcript.
         var renderer = new ConsoleTurnRenderer(_console);
         AgentTurnResult result = await session.RunTurnAsync(
-            ImplementationFirstPromptPolicyComposer.AppendPromptPolicy(RevisePlan.Render(feedback), (_promptPolicy ?? ImplementationFirstPromptPolicyComposer.ComposeDefault())),
+            RevisePlan.Render(feedback),
             renderer.Stream,
             cancellationToken);
         if (result.State != AgentTurnState.Completed)

@@ -25,6 +25,17 @@ internal sealed record DecisionExecutionContext(
     DecisionSessionScope Scope,
     PromptExecutionRequest PromptExecution);
 
+internal sealed record PromptExecutionRequest(
+    string RunId,
+    WorkflowIdentity Workflow,
+    WorkflowStageIdentity Stage,
+    WorkflowTransitionIdentity Transition,
+    WorkflowTransitionDefinition Definition,
+    RenderedPrompt RenderedPrompt,
+    string InputSnapshotHash,
+    WorkflowInvocation RootInvocation,
+    IReadOnlyDictionary<string, string> Metadata);
+
 internal sealed class DecisionSessionScopeResolver(Repository _repository, RepositoryObserver? _observer = null)
 {
     public const string ScopeContractVersion = "decision-session-scope.v1";
@@ -33,14 +44,14 @@ internal sealed class DecisionSessionScopeResolver(Repository _repository, Repos
     {
         RepositoryObservation observation = await (_observer ?? new RepositoryObserver())
             .ObserveAsync(_repository.Path, cancellationToken);
-        if (observation.StorageVerification.IsBlocked)
+        if (observation.StorageVerification.IsUnusable)
         {
             throw new InvalidOperationException("Execute continuity scope cannot be resolved from blocked storage authority.");
         }
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
         await using Microsoft.Data.Sqlite.SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
-        string workspaceId = await LoopRelayWorkspaceDatabase.ReadWorkspaceIdAsync(connection, cancellationToken);
+        string workspaceId = await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection, cancellationToken);
         return Resolve(
             workspaceId,
             observation.Products

@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Services.Agents;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services;
@@ -15,13 +16,19 @@ public class AgentSpecsTests
     private static readonly Repository Repo = new() { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
     private static readonly BrainConfiguration Brain =
         new(AgentModel.Gpt56Luna, AgentEffort.Low);
-    private static readonly ValidatedExecutionRecommendation Execution =
-        ExecutionRecommendationContract.ValidatePair(
-            "prompt",
-            ExecutionRecommendationContract.SerializePersisted(
-                ExecutionRecommendationContract.Bind(
-                    "prompt",
-                    new ExecutionRecommendation(AgentModel.Gpt56Terra, AgentEffort.Medium))));
+    private static readonly ResolvedRuntimeProfile Execution = new(
+        new RuntimeProfileIdentity("runtime_test"),
+        "codex",
+        AgentModel.Gpt56Terra,
+        AgentEffort.Medium,
+        "persistent-session",
+        "danger-full-access",
+        "execution",
+        "never",
+        "resume",
+        TimeSpan.FromMinutes(30),
+        "test",
+        "fail-closed");
 
     [Fact]
     public void BrainOperational_UsesInjectedBrainConfiguration()
@@ -40,7 +47,7 @@ public class AgentSpecsTests
     }
 
     [Fact]
-    public void Execution_UsesValidatedRecommendationAndFullAccess()
+    public void Execution_UsesPolicyResolvedRuntimeProfileAndFullAccess()
     {
         AgentSessionSpec spec = AgentSpecs.Execution(Repo, Execution);
 
@@ -51,7 +58,7 @@ public class AgentSpecsTests
         Assert.False(spec.Sandbox.RequiresApproval);
         Assert.Equal(AgentModel.Gpt56Terra, spec.Model);
         Assert.Equal(AgentEffort.Medium, spec.Effort);
-        Assert.Equal(AgentConfigurationAuthority.Execution, spec.ConfigurationAuthority);
+        Assert.Equal(AgentConfigurationAuthority.Policy, spec.ConfigurationAuthority);
     }
 
     [Fact]

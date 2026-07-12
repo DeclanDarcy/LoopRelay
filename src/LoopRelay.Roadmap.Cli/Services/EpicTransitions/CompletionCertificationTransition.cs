@@ -233,9 +233,9 @@ internal sealed class CompletionCertificationTransition(
         detailsLines.AddRange(review.EvidencePaths.Select(path => $"- {path}"));
         detailsLines.Add(string.Empty);
         detailsLines.Add("Blockers:");
-        detailsLines.AddRange(review.BlockerMessages.Count == 0
+        detailsLines.AddRange(review.UnresolvedMessages.Count == 0
             ? ["- Human review decisions are pending."]
-            : review.BlockerMessages.Select(message => $"- {message}"));
+            : review.UnresolvedMessages.Select(message => $"- {message}"));
         string details = string.Join(Environment.NewLine, detailsLines);
         string blockerPath = await _artifacts.WriteNumberedEvidenceAsync(
             RoadmapArtifactPaths.BlockerEvidenceDirectory,

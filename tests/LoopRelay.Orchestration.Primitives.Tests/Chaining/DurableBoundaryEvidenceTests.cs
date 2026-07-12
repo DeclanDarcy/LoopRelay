@@ -1,3 +1,4 @@
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Persistence;
@@ -8,26 +9,29 @@ namespace LoopRelay.Orchestration.Tests.Chaining;
 public sealed class DurableBoundaryEvidenceTests
 {
     [Fact]
-    public async Task BoundaryEvidenceSurvivesRestartAndDuplicateWriteIsIdempotent()
+    public async Task BoundaryEvidenceSurvivesRestartAsAppendOnlyFacts()
     {
         string root = Directory.CreateTempSubdirectory("looprelay-boundary-").FullName;
         try
         {
             var repository = new Repository { Id = Guid.NewGuid(), Name = "boundary", Path = root };
             var store = new CanonicalWorkflowPersistenceStore(repository);
-            var writer = new WorkflowBoundaryEvidenceWriter(store);
+            var writer = new WorkflowBoundaryEvidenceWriter(new CanonicalChainBoundaryEvidenceStore(store));
             WorkflowBoundaryEvaluation boundary = Boundary();
+            RunIdentity run = RunIdentity.New();
 
-            await writer.WriteAsync(boundary, "TraditionalRoadmapToExecute", CancellationToken.None);
-            await writer.WriteAsync(boundary, "TraditionalRoadmapToExecute", CancellationToken.None);
-            CanonicalWorkflowPersistenceSnapshot restarted = await new CanonicalWorkflowPersistenceStore(repository)
-                .LoadSnapshotAsync(CancellationToken.None);
+            await writer.WriteAsync(boundary, run, "TraditionalRoadmapToExecute", CancellationToken.None);
+            await writer.WriteAsync(boundary, run, "TraditionalRoadmapToExecute", CancellationToken.None);
+            IReadOnlyList<CanonicalChainBoundaryEventRecord> restarted =
+                await new CanonicalWorkflowPersistenceStore(repository)
+                    .ReadChainBoundaryEventsAsync(CancellationToken.None);
 
-            CanonicalWorkflowChainRunRecord record = Assert.Single(restarted.WorkflowChainRuns);
+            Assert.Equal(2, restarted.Count);
+            CanonicalChainBoundaryEventRecord record = restarted[0];
             Assert.Equal("TraditionalRoadmapToExecute", record.ChainIdentity);
-            Assert.Equal(WorkflowIdentity.Plan, record.CurrentWorkflow);
-            Assert.Equal(RuntimeOutcomeKind.Completed, record.Status);
-            Assert.Contains("boundary:TraditionalRoadmap->Plan", record.Evidence);
+            Assert.Equal(run.Value, record.RunId);
+            Assert.Equal(WorkflowIdentity.Plan, record.TargetWorkflow);
+            Assert.Equal("Advanced", record.Decision);
         }
         finally
         {

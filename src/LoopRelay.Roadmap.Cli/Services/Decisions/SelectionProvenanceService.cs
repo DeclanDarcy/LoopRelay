@@ -8,6 +8,7 @@ using LoopRelay.Roadmap.Cli.Services.Artifacts;
 using LoopRelay.Roadmap.Cli.Services.DerivedArtifacts;
 using LoopRelay.Roadmap.Cli.Services.Prompts;
 using LoopRelay.Roadmap.Cli.Services.State;
+using LoopRelay.Roadmap.Cli.Services.TransitionCoordination;
 using LoopRelay.Roadmap.Cli.Services.TransitionState;
 
 namespace LoopRelay.Roadmap.Cli.Services.Decisions;
@@ -16,8 +17,7 @@ internal sealed class SelectionProvenanceService(
     RoadmapArtifacts _artifacts,
     ISelectionProvenanceManifestStore _manifestStore,
     RoadmapPromptContextBuilder _contextBuilder,
-    TransitionInputResolver _inputResolver,
-    RoadmapRuntimePromptPolicy? _runtimePromptPolicy = null)
+    TransitionInputResolver _inputResolver)
 {
     public const string SelectionArtifactKind = "SelectionDecision";
     public const string SelectionGenerator = "SelectNextEpic:v1";
@@ -38,7 +38,6 @@ internal sealed class SelectionProvenanceService(
     {
         cancellationToken.ThrowIfCancellationRequested();
         string context = await _contextBuilder.BuildSelectionContextAsync(projectionContent, retiredEpics);
-        RoadmapRuntimePromptPolicy effectivePolicy = _runtimePromptPolicy ?? RoadmapRuntimePromptPolicy.Default;
         return await _inputResolver.ResolveAsync(new TransitionInputRequest(
             "SelectNextEpic",
             RoadmapArtifactPaths.ProjectionPaths["SelectNextEpic"],
@@ -46,7 +45,7 @@ internal sealed class SelectionProvenanceService(
             string.Empty,
             TransitionInputContext.Empty)
         {
-            PromptPolicy = effectivePolicy.CreateIdentity("SelectNextEpic"),
+            PromptPolicy = RoadmapPromptTransitionRunner.TemplateOwnedPromptIdentity("SelectNextEpic"),
         });
     }
 

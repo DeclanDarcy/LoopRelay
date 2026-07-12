@@ -11,7 +11,8 @@ public sealed record PlanPromptContextResult(
     IReadOnlyList<PromptContextSection> Sections,
     IReadOnlyDictionary<string, string> Metadata,
     string Explanation,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    IReadOnlyList<ConsumedInputFile> ConsumedFiles);
 
 public static class PlanPromptContext
 {
@@ -99,6 +100,7 @@ public static class PlanPromptContext
         };
         var evidence = new List<string>();
         var blockers = new List<string>();
+        var consumedFiles = new List<ConsumedInputFile>();
 
         if (PlanScopedArtifactOperationCatalog.TryGet(definition.Identity, out PlanScopedArtifactOperationSpec operation))
         {
@@ -125,6 +127,7 @@ public static class PlanPromptContext
                 }
 
                 string content = File.ReadAllText(absolutePath);
+                consumedFiles.Add(ConsumedInputFile.FromContent(relativePath, content));
                 if (string.IsNullOrWhiteSpace(content))
                 {
                     blockers.Add($"{source.Title} source `{relativePath}` is empty.");
@@ -150,8 +153,9 @@ public static class PlanPromptContext
                 IsUsable: false,
                 Sections: sections,
                 Metadata: metadata,
-                Explanation: "Plan prompt context is blocked: " + string.Join("; ", blockers),
-                Evidence: evidence.Distinct(StringComparer.Ordinal).ToArray());
+                Explanation: "Plan prompt context is unavailable: " + string.Join("; ", blockers),
+                Evidence: evidence.Distinct(StringComparer.Ordinal).ToArray(),
+                ConsumedFiles: consumedFiles);
         }
 
         return new PlanPromptContextResult(
@@ -159,7 +163,8 @@ public static class PlanPromptContext
             Sections: sections,
             Metadata: metadata,
             Explanation: $"Plan prompt context loaded for `{definition.Identity}`.",
-            Evidence: evidence.Distinct(StringComparer.Ordinal).ToArray());
+            Evidence: evidence.Distinct(StringComparer.Ordinal).ToArray(),
+            ConsumedFiles: consumedFiles);
     }
 
     private static PlanPromptContextSource Product(

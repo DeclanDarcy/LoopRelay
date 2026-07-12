@@ -123,8 +123,8 @@ internal sealed class LoopRunner(
                 {
                     await _decision.RunAsync(cancellationToken);
 
-                    // Archive the handoff the decision just consumed so execution writes onto a clean slate.
-                    await _artifacts.RotateLiveHandoffAsync();
+                    // The canonical workflow rotates consumed history with its attempt causality. This
+                    // compatibility runner has no canonical attempt identity and must not fabricate one.
                 }
 
                 // ---- Persist context BEFORE invoking codex ----

@@ -95,7 +95,6 @@ public enum GateStatus
 {
     Satisfied,
     Unsatisfied,
-    Blocked,
     Waiting,
     Invalid,
     Ambiguous,
@@ -105,12 +104,21 @@ public enum RuntimeOutcomeKind
 {
     Completed,
     Paused,
-    Blocked,
+    MissingRequiredInput,
+    DirtyInputSurface,
+    UnversionedInputSurface,
     Failed,
     Cancelled,
     Waiting,
     Stalled,
     Ambiguous,
+    EffectsPending,
+    RecoveryRequired,
+    InputInvalidated,
+    ConcurrentStateConflict,
+    HumanDecisionRequired,
+    UnsupportedProviderCapability,
+    CompatibilityImportRequired,
 }
 
 public enum ExecutionPostureKind
@@ -201,7 +209,7 @@ public sealed record WorkflowDefinition(
     GateDefinition ExitGate,
     WorkflowIdentity? DownstreamWorkflow,
     WorkflowCompletionDefinition Completion,
-    BlockerDefinition Blocker,
+    WarningDefinition Warning,
     RecoveryDefinition Recovery);
 
 public sealed record WorkflowStageDefinition(
@@ -254,7 +262,8 @@ public sealed record ProductDefinition(
     ProductValidationState ValidationState,
     ProductFreshness Freshness,
     IReadOnlyList<TransitionDependency> Dependencies,
-    IReadOnlyList<string> StorageRepresentations);
+    IReadOnlyList<string> StorageRepresentations,
+    string SchemaVersion = "1");
 
 public sealed record ProductRequirement(
     ProductIdentity Product,
@@ -275,7 +284,8 @@ public sealed record GateRequirementDefinition(
     string Description,
     ProductIdentity? Product,
     DependencyStrength Strength,
-    bool BlocksProgress);
+    bool BlocksProgress,
+    string? InputSurface = null);
 
 public sealed record GateResult(
     GateStatus Status,
@@ -286,32 +296,15 @@ public sealed record GateResult(
     public bool IsSatisfied => Status == GateStatus.Satisfied;
 }
 
+// UnsatisfiedOutcome is the typed cannot-proceed discriminator: the evaluator that observed the
+// actual failure names the specific outcome, so no consumer ever has to string-match explanations.
+// Null means the requirement declares no specific label and shape-based mapping applies.
 public sealed record GateRequirementResult(
     string RequirementIdentity,
     GateStatus Status,
     string Explanation,
-    IReadOnlyList<string> Evidence);
-
-public sealed record WorkflowOutcome(
-    RuntimeOutcomeKind Status,
-    WorkflowIdentity Workflow,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
-
-public sealed record StageOutcome(
-    RuntimeOutcomeKind Status,
-    WorkflowIdentity Workflow,
-    WorkflowStageIdentity Stage,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
-
-public sealed record TransitionOutcome(
-    RuntimeOutcomeKind Status,
-    WorkflowIdentity Workflow,
-    WorkflowStageIdentity Stage,
-    WorkflowTransitionIdentity Transition,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    RuntimeOutcomeKind? UnsatisfiedOutcome = null);
 
 public sealed record EffectDefinition(
     EffectIdentity Identity,
@@ -322,7 +315,7 @@ public sealed record EffectDefinition(
     int Order,
     string FailureSemantics);
 
-public sealed record BlockerDefinition(
+public sealed record WarningDefinition(
     string Identity,
     string Semantics,
     RuntimeOutcomeKind Outcome,
@@ -352,4 +345,5 @@ public sealed record ProductRecord(
     ProductFreshness Freshness,
     ProductValidationState ValidationState,
     ProductLifecycle Lifecycle,
-    IReadOnlyList<string> EvidenceLocations);
+    IReadOnlyList<string> EvidenceLocations,
+    string SchemaVersion = "1");

@@ -56,7 +56,7 @@ public class LoopRunnerTests
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = new LoopArtifacts(store, repo);
+        var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions());
@@ -70,10 +70,13 @@ public class LoopRunnerTests
         // These tests exercise loop orchestration only; usage-limit detection is unit-tested separately
         // (UsageLimitDetectorTests) and its per-turn retry seam in GatedAgentRuntimeTests, so the loop
         // runs unwatched.
+        var executionAuthorization = CanonicalTestStores.ExecutionAuthorization();
         var exec = new ExecutionStep(
-            rt, art, con, repo, detector, gate, TestAgentConfiguration.ValidatedExecution);
+            rt, art, con, repo, detector, gate,
+            executionAuthorization.Authorization, executionAuthorization.Resolver);
         var dec = new DecisionSession(
-            rt, router, art, con, repo, TestAgentConfiguration.Brain);
+            rt, router, art, con, repo, TestAgentConfiguration.Brain,
+            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcher);
         // CommitGate IGNORES `.agents`; the submodule is committed+pushed only by the publisher (pre-codex).
         var submodulePublisher = new AgentsSubmodulePublisher(git, repo, con);
         var commitGate = new CommitGate(detector, git, repo, con);
@@ -745,21 +748,24 @@ public class LoopRunnerTests
         using var temp = TempLoopRepository.Create();
         var store = new FileSystemArtifactStore();
         var repo = temp.Repository;
-        var artifacts = new LoopArtifacts(store, repo);
+        var artifacts = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var console = new RecordingLoopConsole();
         var runtime = new FakeAgentRuntime(store);
         var git = new FakeProcessRunner();
         var detector = new WorkingTreeChangeDetector(git, repo);
         var gate = new MilestoneGate(store, repo);
+        var executionAuthorization = CanonicalTestStores.ExecutionAuthorization();
         var execution = new ExecutionStep(
-            runtime, artifacts, console, repo, detector, gate, TestAgentConfiguration.ValidatedExecution);
+            runtime, artifacts, console, repo, detector, gate,
+            executionAuthorization.Authorization, executionAuthorization.Resolver);
         var decision = new DecisionSession(
             runtime,
             new DecisionSessionRouter(new DecisionSessionRouterOptions()),
             artifacts,
             console,
             repo,
-            TestAgentConfiguration.Brain);
+            TestAgentConfiguration.Brain,
+            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcher);
         var submodulePublisher = new AgentsSubmodulePublisher(git, repo, console);
         var commitGate = new CommitGate(detector, git, repo, console);
         var resume = new FakeDecisionSessionResumeStore();
@@ -934,7 +940,7 @@ public class LoopRunnerTests
                     AppliedDeleteCount: 0,
                     SynthesisDecisionRequired: false,
                     SynthesisDecision: null),
-                BlockerMessages: []);
+                UnresolvedMessages: []);
 
         public List<NonImplementationCompletionReviewResult> ResultsReturned { get; } = [];
 
@@ -1166,7 +1172,7 @@ public class LoopRunnerTests
                     AppliedDeleteCount: 0,
                     SynthesisDecisionRequired: false,
                     SynthesisDecision: null),
-                BlockerMessages: ["Human decisions are required."]),
+                UnresolvedMessages: ["Human decisions are required."]),
         };
         var h = New(completionReview: completionReview);
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");

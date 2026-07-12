@@ -6,15 +6,21 @@ using LoopRelay.Orchestration.Services;
 
 namespace LoopRelay.Cli.Services.Execution;
 
-internal sealed class FileBackedLoopHistoryStore(IArtifactStore _store, Repository _repository) : ILoopHistoryStore
+/// <summary>
+/// Explicit legacy numbered-file boundary. Canonical runtime code cannot append through this
+/// type; Compatibility Authority reads it and imports facts into the canonical history ledger.
+/// </summary>
+internal sealed class FileBackedLoopHistoryStore(IArtifactStore _store, Repository _repository)
+    : ILegacyLoopHistoryStore
 {
-    public async Task<LoopHistoryRecord> AppendAsync(
+    public async Task<LegacyLoopHistoryRecord> AppendLegacyAsync(
         LoopHistoryKind kind,
         string content,
-        LoopHistoryProducerCorrelation? producer = null)
+        CancellationToken cancellationToken = default)
     {
         LoopHistorySpec spec = GetSpec(kind);
-        int sequence = await NextSequenceAsync(spec);
+        IReadOnlyList<LegacyLoopHistoryRecord> existing = await ReadAllLegacyAsync(kind, cancellationToken);
+        int sequence = existing.Count == 0 ? 1 : existing.Max(record => record.Sequence) + 1;
         string relativePath = spec.HistoricalPath(sequence);
         string target = Resolve(relativePath);
         if (await _store.ExistsAsync(target))
@@ -23,69 +29,67 @@ internal sealed class FileBackedLoopHistoryStore(IArtifactStore _store, Reposito
         }
 
         await _store.WriteAsync(target, content);
-        return new LoopHistoryRecord(kind, sequence, relativePath, content, producer);
+        return new LegacyLoopHistoryRecord(kind, sequence, relativePath, content);
     }
 
-    public async Task<LoopHistoryRecord?> ReadLatestAsync(LoopHistoryKind kind)
+    public async Task<LegacyLoopHistoryRecord?> ReadLatestLegacyAsync(
+        LoopHistoryKind kind,
+        CancellationToken cancellationToken = default)
     {
+        IReadOnlyList<LegacyLoopHistoryRecord> records = await ReadAllLegacyAsync(kind, cancellationToken);
+        return records.Count == 0 ? null : records[^1];
+    }
+
+    public async Task<IReadOnlyList<LegacyLoopHistoryRecord>> ReadAllLegacyAsync(
+        LoopHistoryKind kind,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         LoopHistorySpec spec = GetSpec(kind);
-        int sequence = await HighestSequenceAsync(spec);
-        if (sequence == 0)
+        IReadOnlyList<string> files = await _store.ListAsync(Resolve(spec.Directory), spec.SearchPattern);
+        var records = new List<LegacyLoopHistoryRecord>();
+        foreach (string file in files)
         {
-            return null;
+            cancellationToken.ThrowIfCancellationRequested();
+            string[] parts = Path.GetFileName(file).Split('.');
+            if (parts.Length < 3 || !string.Equals(parts[0], spec.BaseName, StringComparison.Ordinal) ||
+                !int.TryParse(parts[^2], out int sequence) || sequence <= 0)
+            {
+                continue;
+            }
+
+            string relativePath = spec.HistoricalPath(sequence);
+            records.Add(new LegacyLoopHistoryRecord(
+                kind,
+                sequence,
+                relativePath,
+                await _store.ReadAsync(Resolve(relativePath))));
         }
 
-        string relativePath = spec.HistoricalPath(sequence);
-        string? content = await _store.ReadAsync(Resolve(relativePath));
-        return new LoopHistoryRecord(kind, sequence, relativePath, content);
+        return records.OrderBy(record => record.Sequence).ToArray();
     }
 
     private string Resolve(string relativePath) =>
         ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
 
-    private async Task<int> NextSequenceAsync(LoopHistorySpec spec) =>
-        await HighestSequenceAsync(spec) + 1;
-
-    private async Task<int> HighestSequenceAsync(LoopHistorySpec spec)
-    {
-        IReadOnlyList<string> files = await _store.ListAsync(Resolve(spec.Directory), spec.SearchPattern);
-        int max = 0;
-        foreach (string file in files)
-        {
-            string[] parts = Path.GetFileName(file).Split('.');
-            if (parts.Length < 3 || !string.Equals(parts[0], spec.BaseName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            string segment = parts[^2];
-            if (segment.Length == 4 && int.TryParse(segment, out int parsed) && parsed > 0)
-            {
-                max = Math.Max(max, parsed);
-            }
-        }
-
-        return max;
-    }
-
     private static LoopHistorySpec GetSpec(LoopHistoryKind kind) => kind switch
     {
-        LoopHistoryKind.Decisions => new LoopHistorySpec(
+        LoopHistoryKind.Decisions => new(
             OrchestrationArtifactPaths.DecisionsDirectory,
             OrchestrationArtifactPaths.HistoricalDecisionSearchPattern,
             "decisions",
             OrchestrationArtifactPaths.HistoricalDecision),
-        LoopHistoryKind.Handoff => new LoopHistorySpec(
+        LoopHistoryKind.Handoff => new(
             OrchestrationArtifactPaths.HandoffsDirectory,
             OrchestrationArtifactPaths.HistoricalHandoffSearchPattern,
             "handoff",
             OrchestrationArtifactPaths.HistoricalHandoff),
-        LoopHistoryKind.OperationalDelta => new LoopHistorySpec(
+        LoopHistoryKind.OperationalDelta => new(
             OrchestrationArtifactPaths.DeltasDirectory,
             OrchestrationArtifactPaths.HistoricalDeltaSearchPattern,
             "operational_delta",
             OrchestrationArtifactPaths.HistoricalDelta),
-        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 
     private readonly record struct LoopHistorySpec(

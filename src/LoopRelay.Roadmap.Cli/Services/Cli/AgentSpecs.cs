@@ -12,12 +12,20 @@ internal static class AgentSpecs
 {
     // Retired CLI compatibility paths; active unified composition injects BrainConfiguration directly.
     public static AgentSessionSpec ReadOnlyPlanning(Repository repository) =>
-        ReadOnlyPlanning(repository, CliSettingsLoader.Load().Brain);
+        ReadOnlyPlanning(repository, LoadBrain());
 
     public static AgentSessionSpec ExecutionBridge(
         Repository repository,
         RoadmapExecutionOptions? options = null) =>
-        ExecutionBridge(repository, CliSettingsLoader.Load().Brain, options);
+        ExecutionBridge(repository, LoadBrain(), options);
+
+    private static BrainConfiguration LoadBrain()
+    {
+        ConfiguredBrainFacts configured = CliSettingsLoader.Load().Runtime.Brain;
+        return configured.Model is { } model && configured.Effort is { } effort
+            ? new BrainConfiguration(model, effort)
+            : throw new CliSettingsException("runtime.brain.model and runtime.brain.effort are required.");
+    }
 
     public static AgentSessionSpec ReadOnlyPlanning(Repository repository, BrainConfiguration brain) =>
         new(

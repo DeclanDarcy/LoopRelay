@@ -27,6 +27,145 @@ public sealed class WorkflowDefinitionValidatorTests
     }
 
     [Fact]
+    public void Disk_reading_transitions_declare_exactly_their_clean_input_surfaces()
+    {
+        IReadOnlyList<WorkflowDefinition> definitions = CanonicalWorkflowDefinitionSketches.CreateAll();
+        IReadOnlyDictionary<(string Workflow, string Transition), string[]> expected =
+            new Dictionary<(string Workflow, string Transition), string[]>
+            {
+                [("Plan", "WriteExecutablePlan")] = [".agents/"],
+                [("Plan", "RunAdversarialReview")] = [".agents/plan.md", ".agents/projections/"],
+                [("Plan", "RevisePlan")] = [".agents/plan.md", ".agents/projections/"],
+                [("Plan", "GenerateOperationalContext")] = [".agents/plan.md"],
+                [("Plan", "CollectExecutionDetails")] = [".agents/plan.md", ".agents/specs/"],
+                [("Plan", "GenerateExecutionMilestones")] = [".agents/plan.md"],
+                [("Plan", "RefineExecutionDetails")] = [".agents/details.md", ".agents/milestones/"],
+                [("EvalRoadmap", "GenerateMilestoneDeepDivesForEpic")] = [".agents/epic.md"],
+            };
+
+        foreach (WorkflowDefinition definition in definitions)
+        {
+            foreach (WorkflowTransitionDefinition transition in definition.Transitions)
+            {
+                GateRequirementDefinition[] surfaced = transition.InputGate.Requirements
+                    .Where(requirement => requirement.InputSurface is not null)
+                    .ToArray();
+                string[] declared = surfaced
+                    .Select(requirement => requirement.InputSurface!)
+                    .ToArray();
+                string[] expectedSurfaces = expected.TryGetValue(
+                    (definition.Identity.Value, transition.Identity.Value),
+                    out string[]? surfaces)
+                    ? surfaces
+                    : [];
+                string[] expectedIdentities = expectedSurfaces.Length == 1
+                    ? [$"{transition.Identity.Value}.CleanInput"]
+                    : expectedSurfaces
+                        .Select(surface => $"{transition.Identity.Value}.CleanInput:{surface}")
+                        .ToArray();
+
+                Assert.Equal(expectedSurfaces, declared);
+                Assert.Equal(expectedIdentities, surfaced.Select(requirement => requirement.Identity).ToArray());
+                Assert.All(surfaced, requirement =>
+                {
+                    Assert.Null(requirement.Product);
+                    Assert.True(requirement.BlocksProgress);
+                });
+            }
+        }
+    }
+
+    [Fact]
+    public void Validate_rejects_a_gate_requirement_declaring_both_product_and_input_surface()
+    {
+        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowTransitionDefinition transition = Assert.Single(
+            definition.Transitions,
+            item => item.Identity == new WorkflowTransitionIdentity("WriteExecutablePlan"));
+        GateRequirementDefinition cleanInput = Assert.Single(
+            transition.InputGate.Requirements,
+            item => item.InputSurface is not null);
+        GateRequirementDefinition dualShape = cleanInput with { Product = ProductIdentity.PreparedEpic };
+        GateDefinition inputGate = transition.InputGate with
+        {
+            Requirements = transition.InputGate.Requirements
+                .Select(item => item.Identity == cleanInput.Identity ? dualShape : item)
+                .ToArray(),
+        };
+        WorkflowTransitionDefinition mutatedTransition = transition with { InputGate = inputGate };
+        WorkflowDefinition mutatedDefinition = definition with
+        {
+            Transitions = definition.Transitions
+                .Select(item => item.Identity == transition.Identity ? mutatedTransition : item)
+                .ToArray(),
+        };
+
+        WorkflowDefinitionValidationResult result = WorkflowDefinitionValidator.Validate(mutatedDefinition);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("WriteExecutablePlan.CleanInput", StringComparison.Ordinal) &&
+                error.Contains("must not declare both a product and an input surface", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("", "must not be empty")]
+    [InlineData("   ", "must not be empty")]
+    [InlineData("/absolute/surface/", "must be repository-relative, not rooted")]
+    [InlineData("C:/absolute/surface/", "must be repository-relative, not rooted")]
+    [InlineData(".agents\\plan.md", "must be forward-slash normalized")]
+    [InlineData(".agents/../secrets/", "must not contain '..' segments")]
+    [InlineData("..", "must not contain '..' segments")]
+    public void Validate_rejects_malformed_input_surfaces(string surface, string expectedError)
+    {
+        WorkflowDefinition definition = WithWriteExecutablePlanSurface(surface);
+
+        WorkflowDefinitionValidationResult result = WorkflowDefinitionValidator.Validate(definition);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("WriteExecutablePlan.CleanInput", StringComparison.Ordinal) &&
+                error.Contains(expectedError, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Validate_accepts_the_canonical_relative_forward_slash_surfaces()
+    {
+        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan();
+
+        WorkflowDefinitionValidationResult result = WorkflowDefinitionValidator.Validate(definition);
+
+        Assert.True(result.IsValid, string.Join(Environment.NewLine, result.Errors));
+    }
+
+    private static WorkflowDefinition WithWriteExecutablePlanSurface(string surface)
+    {
+        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowTransitionDefinition transition = Assert.Single(
+            definition.Transitions,
+            item => item.Identity == new WorkflowTransitionIdentity("WriteExecutablePlan"));
+        GateRequirementDefinition cleanInput = Assert.Single(
+            transition.InputGate.Requirements,
+            item => item.InputSurface is not null);
+        GateRequirementDefinition mutated = cleanInput with { InputSurface = surface };
+        GateDefinition inputGate = transition.InputGate with
+        {
+            Requirements = transition.InputGate.Requirements
+                .Select(item => item.Identity == cleanInput.Identity ? mutated : item)
+                .ToArray(),
+        };
+        WorkflowTransitionDefinition mutatedTransition = transition with { InputGate = inputGate };
+        return definition with
+        {
+            Transitions = definition.Transitions
+                .Select(item => item.Identity == transition.Identity ? mutatedTransition : item)
+                .ToArray(),
+        };
+    }
+
+    [Fact]
     public void Canonical_chains_express_traditional_and_eval_routes_into_the_same_plan_and_execute_workflows()
     {
         IReadOnlyList<WorkflowChainDefinition> chains = CanonicalWorkflowDefinitionSketches.CreateChains();
@@ -317,7 +456,6 @@ public sealed class WorkflowDefinitionValidatorTests
             [
                 GateStatus.Satisfied,
                 GateStatus.Unsatisfied,
-                GateStatus.Blocked,
                 GateStatus.Waiting,
                 GateStatus.Invalid,
                 GateStatus.Ambiguous,
@@ -332,12 +470,21 @@ public sealed class WorkflowDefinitionValidatorTests
             [
                 RuntimeOutcomeKind.Completed,
                 RuntimeOutcomeKind.Paused,
-                RuntimeOutcomeKind.Blocked,
+                RuntimeOutcomeKind.MissingRequiredInput,
+                RuntimeOutcomeKind.DirtyInputSurface,
+                RuntimeOutcomeKind.UnversionedInputSurface,
                 RuntimeOutcomeKind.Failed,
                 RuntimeOutcomeKind.Cancelled,
                 RuntimeOutcomeKind.Waiting,
                 RuntimeOutcomeKind.Stalled,
                 RuntimeOutcomeKind.Ambiguous,
+                RuntimeOutcomeKind.EffectsPending,
+                RuntimeOutcomeKind.RecoveryRequired,
+                RuntimeOutcomeKind.InputInvalidated,
+                RuntimeOutcomeKind.ConcurrentStateConflict,
+                RuntimeOutcomeKind.HumanDecisionRequired,
+                RuntimeOutcomeKind.UnsupportedProviderCapability,
+                RuntimeOutcomeKind.CompatibilityImportRequired,
             ],
             Enum.GetValues<RuntimeOutcomeKind>());
     }

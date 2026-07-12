@@ -1,286 +1,310 @@
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Workflows;
+using Microsoft.Data.Sqlite;
+using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Orchestration.Tests.Persistence;
 
 public sealed class CanonicalTransitionPersistenceStoresTests
 {
     [Fact]
-    public async Task Transition_run_store_persists_started_state_updates_and_completion()
+    public async Task Recommendation_and_policy_evaluation_round_trip_as_separate_causal_facts()
     {
         Repository repository = CreateRepository();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var runStore = new CanonicalTransitionRunStore(persistence);
-        WorkflowTransitionDefinition transition = PlanTransition("WriteExecutablePlan");
-        var stage = new WorkflowStageIdentity("Planning");
-        DateTimeOffset startedAt = new(2026, 7, 10, 12, 0, 0, TimeSpan.Zero);
-        var started = new TransitionRunStarted(
-            "run-adapter-001",
-            startedAt,
-            new TransitionRuntimeRequest(
-                WorkflowIdentity.Plan,
-                stage,
-                transition.Identity,
-                new Dictionary<string, string> { ["purpose"] = "adapter-test" }),
-            transition,
-            new TransitionInputSnapshot("input-hash", [], new Dictionary<string, string> { ["purpose"] = "adapter-test" }, []),
-            new RenderedPrompt(transition.PromptIdentity, "prompt text", "prompts/plan.md"));
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        var recommendationStore = new CanonicalExecutionRecommendationEvidenceStore(persistence);
+        var evaluationStore = new CanonicalRuntimeProfileEvaluationStore(persistence);
+        DecisionProductVersionIdentity decision = DecisionProductVersionIdentity.New();
+        var recommendation = new ExecutionRecommendationEvidence(
+            ExecutionRecommendationIdentity.New(), decision, causality,
+            AgentSessionIdentity.New(), TurnIdentity.New(), AgentModel.Gpt56Terra,
+            AgentEffort.High, "Prefer the balanced execution model.", DateTimeOffset.UtcNow);
+        await recommendationStore.AppendAsync(recommendation);
+        var profile = new ResolvedRuntimeProfile(
+            new RuntimeProfileIdentity("runtime-test"), "codex", AgentModel.Gpt56Terra,
+            AgentEffort.High, "persistent", "danger-full-access", "execution",
+            "never", "resume", TimeSpan.FromMinutes(10), "default", "reconcile");
+        var evaluation = new RuntimeProfileEvaluation(
+            RuntimeProfileEvaluationIdentity.New(), recommendation.Identity, decision,
+            new PolicyIdentity("policy-test"), Capabilities(),
+            RuntimeProfileEvaluationOutcome.Accepted, profile, ["allowed"], DateTimeOffset.UtcNow);
+        await evaluationStore.AppendAsync(evaluation);
 
-        await runStore.PersistStartedAsync(started, CancellationToken.None);
-        await runStore.PersistStateAsync(
-            new TransitionRunStateUpdate(
-                started.RunId,
-                startedAt.AddSeconds(10),
-                transition.Identity,
-                TransitionDurableState.OutputValidated,
-                "Output validated.",
-                ["validation.md"]),
-            CancellationToken.None);
-        await runStore.PersistCompletedAsync(
-            new TransitionRunCompleted(
-                started.RunId,
-                startedAt.AddSeconds(20),
-                transition.Identity,
-                new TransitionRuntimeResult(
-                    RuntimeOutcomeKind.Completed,
-                    TransitionDurableState.Completed,
-                    transition.Identity,
-                    null,
-                    null,
-                    null,
-                    null,
-                    [],
-                    "Transition completed.",
-                    ["completed.md"])),
-            CancellationToken.None);
+        ExecutionRecommendationEvidence readRecommendation =
+            Assert.IsType<ExecutionRecommendationEvidence>(await recommendationStore.ReadAsync(recommendation.Identity));
+        RuntimeProfileEvaluation readEvaluation =
+            Assert.IsType<RuntimeProfileEvaluation>(await evaluationStore.ReadAsync(evaluation.Identity));
+        ResolvedRuntimeProfile readProfile = Assert.IsType<ResolvedRuntimeProfile>(
+            await ((IResolvedRuntimeProfileStore)evaluationStore).ReadAsync(profile.Identity));
 
-        CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
-        CanonicalTransitionRunRecord run = Assert.Single(snapshot.TransitionRuns);
-        Assert.Equal(started.RunId, run.RunId);
-        Assert.Equal(WorkflowIdentity.Plan, run.Workflow);
-        Assert.Equal(stage, run.Stage);
-        Assert.Equal(transition.Identity, run.Transition);
-        Assert.Equal(TransitionDurableState.Completed, run.State);
-        Assert.Equal(RuntimeOutcomeKind.Completed, run.Outcome);
-        Assert.Equal(startedAt, run.StartedAt);
-        Assert.Equal(startedAt.AddSeconds(20), run.CompletedAt);
-        Assert.Equal("input-hash", run.InputSnapshotHash);
-        Assert.Equal("Transition completed.", run.Explanation);
-        Assert.Equal(["completed.md"], run.Evidence);
+        Assert.Equal(decision, readRecommendation.DecisionProduct);
+        Assert.Equal(causality.Attempt, readRecommendation.SourceCausality.Attempt);
+        Assert.Equal(recommendation.Identity, readEvaluation.Recommendation);
+        Assert.Equal(profile.Identity, readProfile.Identity);
+    }
+
+    private static ProviderCapabilityEvidence Capabilities() => new(
+        ProviderCapabilityEvidenceIdentity.New(), "codex",
+        Enum.GetValues<AgentModel>(), AgentEffort.XHigh, DateTimeOffset.UtcNow);
+
+    [Fact]
+    public async Task Candidate_registration_is_non_promoting_and_bound_to_the_attempt()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+
+        await new CanonicalCandidateProductStore(persistence)
+            .RegisterAsync(causality, [Product(causality)], CancellationToken.None);
+
+        ProductRecord candidate = Assert.Single((await persistence.LoadSnapshotAsync()).Products);
+        Assert.Equal(ProductLifecycle.Proposed, candidate.Lifecycle);
+        Assert.Equal(ProductValidationState.Unknown, candidate.ValidationState);
+        Assert.Equal(ProductFreshness.Unknown, candidate.Freshness);
+        Assert.Equal(causality.Attempt.Value, candidate.CausalIdentity);
     }
 
     [Fact]
-    public async Task Transition_evidence_store_appends_structured_events_raw_output_and_failures()
+    public async Task Run_and_prompt_facts_round_trip_with_full_causal_identity()
     {
         Repository repository = CreateRepository();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var evidenceStore = new CanonicalTransitionEvidenceStore(persistence);
-        WorkflowTransitionIdentity transition = PlanTransition("WriteExecutablePlan").Identity;
-        DateTimeOffset recordedAt = new(2026, 7, 10, 12, 1, 0, TimeSpan.Zero);
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        TransitionRuntimeRequest request = Request(causality);
+        WorkflowTransitionDefinition definition = Definition(withEffect: false);
+        PersistedRenderedPromptFact prompt = await new CanonicalRenderedPromptFactStore(persistence)
+            .AppendAsync(PromptFact(causality), CancellationToken.None);
+        var runs = new CanonicalTransitionRunStore(persistence);
 
-        await evidenceStore.RecordEventAsync(
-            new TransitionEvidenceEvent(
-                "run-evidence-001",
-                recordedAt,
-                transition,
-                TransitionDurableState.OutputValidated,
-                "OutputValidated",
-                "Output validated.",
-                ["validation.md"]),
-            CancellationToken.None);
-        await evidenceStore.RecordRawOutputAsync(
-            "run-evidence-001",
-            transition,
-            new PromptExecutionResult(
-                PromptExecutionStatus.Completed,
-                "raw prompt output",
-                TimeSpan.FromMilliseconds(25),
-                new Dictionary<string, string> { ["model"] = "test-model" }),
-            CancellationToken.None);
-        await evidenceStore.RecordFailureAsync(
-            "run-evidence-001",
-            transition,
-            "validation failed",
-            CancellationToken.None);
+        await runs.PersistStartedAsync(new TransitionRunStarted(
+            causality,
+            DateTimeOffset.UtcNow,
+            request,
+            definition,
+            new TransitionInputSnapshot("snapshot", [], new Dictionary<string, string>(), []),
+            prompt), CancellationToken.None);
 
         CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
-        Assert.Equal(
-            ["OutputValidated", "RawPromptOutputCaptured", "TransitionFailure"],
-            snapshot.TransitionEvidence.Select(evidence => evidence.EventName).ToArray());
-        Assert.Equal(TransitionDurableState.OutputValidated, snapshot.TransitionEvidence[0].State);
-        Assert.Equal(TransitionDurableState.PromptCompleted, snapshot.TransitionEvidence[1].State);
-        Assert.Equal(TransitionDurableState.Failed, snapshot.TransitionEvidence[2].State);
-        Assert.Contains("raw prompt output", snapshot.TransitionEvidence[1].DocumentJson, StringComparison.Ordinal);
-        Assert.Contains("validation failed", snapshot.TransitionEvidence[2].DocumentJson, StringComparison.Ordinal);
+        CanonicalTransitionRunRecord stored = Assert.Single(snapshot.TransitionRuns);
+        Assert.Equal(causality.TransitionRun.Value, stored.RunId);
+        Assert.Equal("snapshot", stored.InputSnapshotHash);
+        CanonicalRenderedPromptRecord rendered = Assert.Single(await persistence.ReadRenderedPromptsAsync());
+        Assert.Equal(causality.Attempt.Value, rendered.AttemptId);
+        Assert.Equal(prompt.Fact.ContentHash, rendered.RenderedSha256);
     }
 
     [Fact]
-    public async Task Transition_blocker_store_persists_recoverable_canonical_blocker()
+    public async Task Atomic_commit_promotes_products_completes_attempt_and_enqueues_effect_intent()
     {
         Repository repository = CreateRepository();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var blockerStore = new CanonicalTransitionBlockerStore(persistence);
-        WorkflowTransitionIdentity transition = PlanTransition("WriteExecutablePlan").Identity;
-        var stage = new WorkflowStageIdentity("Planning");
-        DateTimeOffset recordedAt = new(2026, 7, 10, 12, 2, 0, TimeSpan.Zero);
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        TransitionRuntimeRequest request = Request(causality);
+        WorkflowTransitionDefinition definition = Definition(withEffect: true);
+        PersistedRenderedPromptFact prompt = await new CanonicalRenderedPromptFactStore(persistence)
+            .AppendAsync(PromptFact(causality), CancellationToken.None);
+        await new CanonicalTransitionRunStore(persistence).PersistStartedAsync(
+            new TransitionRunStarted(
+                causality,
+                DateTimeOffset.UtcNow,
+                request,
+                definition,
+                new TransitionInputSnapshot("snapshot", [], new Dictionary<string, string>(), []),
+                prompt),
+            CancellationToken.None);
+        ProductRecord product = Product(causality);
+        ProductValidationResult validation = new(
+            ProductValidationStatus.Valid, [product], [], [], [], [], "valid", ["validator"]);
+        GateResult outputGate = new(GateStatus.Satisfied, [], "satisfied", ["gate"]);
 
-        await blockerStore.RecordBlockerAsync(
-            new TransitionBlockerCapture(
-                "run-blocker-001",
-                recordedAt,
-                new TransitionRuntimeRequest(WorkflowIdentity.Plan, stage, transition),
-                transition,
-                BlockerCategory.Validation,
-                "Input gate blocked.",
-                "Provide required products.",
-                Recoverable: true,
-                ["input-gate.md"]),
+        await new CanonicalTransitionCommitStore(persistence).CommitAsync(
+            new TransitionCommitCapture(
+                causality,
+                request,
+                definition,
+                validation,
+                outputGate,
+                [],
+                DateTimeOffset.UtcNow),
             CancellationToken.None);
 
         CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
-        CanonicalBlockerRecord blocker = Assert.Single(snapshot.Blockers);
-        Assert.Equal("run-blocker-001:WriteExecutablePlan", blocker.BlockerId);
-        Assert.Equal(WorkflowIdentity.Plan, blocker.Workflow);
-        Assert.Equal(stage, blocker.Stage);
-        Assert.Equal(transition, blocker.Transition);
-        Assert.Equal(BlockerCategory.Validation, blocker.Blocker.Category);
-        Assert.Equal("canonical transition runtime", blocker.Blocker.Authority);
-        Assert.Equal(["input-gate.md"], blocker.Blocker.Evidence);
-        Assert.True(blocker.Blocker.Recoverable);
-        Assert.Null(blocker.ResolvedAt);
+        Assert.Equal(product.Identity, Assert.Single(snapshot.Products).Identity);
+        Assert.Equal(TransitionDurableState.EffectsPending, Assert.Single(snapshot.TransitionRuns).State);
+        Assert.Equal(EffectExecutionStatus.Planned, Assert.Single(snapshot.EffectRecords).Status);
+        Assert.Equal("EffectsPending", Assert.Single(await persistence.ReadAttemptsAsync()).Outcome);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(
+            LoopRelayWorkspaceDatabase.Resolve(repository));
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT status FROM canonical_effect_intents;";
+        Assert.Equal("Planned", Convert.ToString(await command.ExecuteScalarAsync()));
     }
 
     [Fact]
-    public async Task Transition_recovery_store_persists_canonical_recovery_marker()
+    public async Task Recovery_coordinator_persists_typed_retry_plan_without_executing_work()
     {
         Repository repository = CreateRepository();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var recoveryStore = new CanonicalTransitionRecoveryStore(persistence);
-        WorkflowTransitionIdentity transition = PlanTransition("WriteExecutablePlan").Identity;
-        var stage = new WorkflowStageIdentity("Planning");
-        DateTimeOffset recordedAt = new(2026, 7, 10, 12, 3, 0, TimeSpan.Zero);
-
-        await recoveryStore.RecordRecoveryMarkerAsync(
-            new TransitionRecoveryMarkerCapture(
-                "run-recovery-001",
-                recordedAt,
-                new TransitionRuntimeRequest(WorkflowIdentity.Plan, stage, transition),
-                transition,
-                TransitionDurableState.Failed,
-                RuntimeOutcomeKind.Failed,
-                new RecoveryDefinition(
-                    "PlanTransitionRecovery",
-                    "Recover by rerunning after inspecting failed transition evidence.",
-                    ["rerun", "repair-inputs"],
-                    ["silent repair"]),
-                "Transition failed.",
-                ["failure.md"]),
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        TransitionRuntimeRequest request = Request(causality);
+        WorkflowTransitionDefinition definition = Definition(withEffect: false);
+        PersistedRenderedPromptFact prompt = await new CanonicalRenderedPromptFactStore(persistence)
+            .AppendAsync(PromptFact(causality), CancellationToken.None);
+        var runs = new CanonicalTransitionRunStore(persistence);
+        await runs.PersistStartedAsync(new TransitionRunStarted(
+            causality,
+            DateTimeOffset.UtcNow,
+            request,
+            definition,
+            new TransitionInputSnapshot("snapshot", [], new Dictionary<string, string>(), []),
+            prompt), CancellationToken.None);
+        await new CanonicalTransitionBoundaryJournal(persistence).RecordAsync(
+            new TransitionBoundaryObservation(
+                causality,
+                definition.Identity,
+                TransitionBoundaryKind.PreSubmission,
+                1,
+                DateTimeOffset.UtcNow,
+                "snapshot",
+                null,
+                []),
             CancellationToken.None);
+        var coordinator = new TransitionRecoveryCoordinator(
+            runs,
+            new CanonicalTransitionRecoveryPlanStore(persistence));
 
-        CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
-        CanonicalRecoveryMarkerRecord marker = Assert.Single(snapshot.RecoveryMarkers);
-        Assert.Equal("run-recovery-001:WriteExecutablePlan:Failed", marker.MarkerId);
-        Assert.Equal(WorkflowIdentity.Plan, marker.Workflow);
-        Assert.Equal(stage, marker.Stage);
-        Assert.Equal(transition, marker.Transition);
-        Assert.Equal(marker.MarkerId, marker.Recovery.Identity);
-        Assert.Equal("Recover by rerunning after inspecting failed transition evidence.", marker.Recovery.Semantics);
-        Assert.Equal(["rerun", "repair-inputs"], marker.Recovery.SupportedActions);
-        Assert.Equal(["silent repair"], marker.Recovery.UnsupportedActions);
-        Assert.Equal(["failure.md"], marker.Evidence);
-        Assert.Equal(recordedAt, marker.RecordedAt);
+        TransitionRecoveryPlan plan = await coordinator.PlanAsync(causality.TransitionRun);
+
+        Assert.Equal(TransitionRecoveryAction.RetryAsNewAttempt, plan.Action);
+        Assert.Equal(RecoveryAttemptMode.RetryExistingTransitionRun, plan.ResultingAttemptMode);
+        Assert.Equal(causality.Attempt, plan.SourceCausality.Attempt);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(
+            LoopRelayWorkspaceDatabase.Resolve(repository));
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT action FROM transition_recovery_plans WHERE recovery_id = $id;";
+        command.Parameters.AddWithValue("$id", plan.RecoveryIdentity.Value);
+        Assert.Equal("RetryAsNewAttempt", Convert.ToString(await command.ExecuteScalarAsync()));
     }
 
-    [Fact]
-    public async Task Transition_gate_evaluation_store_persists_canonical_gate_evaluation()
+    private static async Task<CanonicalCausalContext> SeedCausalityAsync(
+        CanonicalWorkflowPersistenceStore persistence)
     {
-        Repository repository = CreateRepository();
-        var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var gateStore = new CanonicalTransitionGateEvaluationStore(persistence);
-        WorkflowTransitionDefinition transition = PlanTransition("WriteExecutablePlan");
-        var stage = new WorkflowStageIdentity("Planning");
-        DateTimeOffset evaluatedAt = new(2026, 7, 10, 12, 4, 0, TimeSpan.Zero);
-        var result = new GateResult(
-            GateStatus.Blocked,
-            [
-                new GateRequirementResult(
-                    "plan-input",
-                    GateStatus.Blocked,
-                    "Plan input is missing.",
-                    ["input.md"]),
-            ],
-            "Input gate blocked.",
-            ["input.md"]);
-
-        await gateStore.RecordGateEvaluationAsync(
-            new TransitionGateEvaluationCapture(
-                "run-gate-001",
-                evaluatedAt,
-                new TransitionRuntimeRequest(WorkflowIdentity.Plan, stage, transition.Identity),
-                transition.Identity,
-                transition.InputGate,
-                result),
-            CancellationToken.None);
-
-        CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
-        CanonicalGateEvaluationRecord evaluation = Assert.Single(snapshot.GateEvaluations);
-        Assert.Equal(WorkflowIdentity.Plan, evaluation.Workflow);
-        Assert.Equal(stage, evaluation.Stage);
-        Assert.Equal(transition.Identity, evaluation.Transition);
-        Assert.Equal(transition.InputGate.Identity, evaluation.Gate);
-        Assert.Equal(GateStatus.Blocked, evaluation.Status);
-        Assert.Equal(evaluatedAt, evaluation.EvaluatedAt);
-        GateRequirementResult requirement = Assert.Single(evaluation.Requirements);
-        Assert.Equal("plan-input", requirement.RequirementIdentity);
-        Assert.Equal("Input gate blocked.", evaluation.Explanation);
-        Assert.Equal(["input.md"], evaluation.Evidence);
+        WorkspaceIdentity workspace = new(await persistence.ReadWorkspaceIdentityAsync());
+        RunIdentity run = RunIdentity.New();
+        WorkflowInstanceIdentity instance = WorkflowInstanceIdentity.New();
+        TransitionRunIdentity transition = TransitionRunIdentity.New();
+        AttemptIdentity attempt = AttemptIdentity.New();
+        await persistence.UpsertRunAsync(new RunRecord(
+            run.Value,
+            workspace.Value,
+            "test-chain",
+            InvocationModeKind.BoundedPlan.ToString(),
+            "Active",
+            DateTimeOffset.UtcNow,
+            null,
+            null,
+            "test"));
+        await persistence.UpsertWorkflowInstanceAsync(new WorkflowInstanceRecord(
+            instance.Value,
+            run.Value,
+            WorkflowIdentity.Plan,
+            "test",
+            "Active",
+            DateTimeOffset.UtcNow,
+            null,
+            null));
+        await persistence.UpsertAttemptAsync(new AttemptRecord(
+            attempt.Value,
+            transition.Value,
+            instance.Value,
+            run.Value,
+            1,
+            DateTimeOffset.UtcNow,
+            null,
+            null,
+            "policy_test"));
+        return new CanonicalCausalContext(workspace, run, instance, transition, attempt);
     }
 
-    [Fact]
-    public async Task Transition_effect_store_persists_canonical_effect_record()
+    private static TransitionRuntimeRequest Request(CanonicalCausalContext causality)
     {
-        Repository repository = CreateRepository();
-        var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var effectStore = new CanonicalTransitionEffectStore(persistence);
-        WorkflowTransitionIdentity transition = PlanTransition("WriteExecutablePlan").Identity;
-        var stage = new WorkflowStageIdentity("Planning");
-        DateTimeOffset recordedAt = new(2026, 7, 10, 12, 5, 0, TimeSpan.Zero);
-
-        await effectStore.RecordEffectAsync(
-            new TransitionEffectRecordCapture(
-                "run-effect-001",
-                recordedAt,
-                new TransitionRuntimeRequest(WorkflowIdentity.Plan, stage, transition),
-                transition,
-                new EffectIdentity("persist-plan"),
-                EffectCategory.ProductPersistence,
-                EffectExecutionStatus.Succeeded,
-                "Plan persisted.",
-                ["effect.md"]),
-            CancellationToken.None);
-
-        CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
-        CanonicalEffectRecord effect = Assert.Single(snapshot.EffectRecords);
-        Assert.Equal("run-effect-001", effect.RunId);
-        Assert.Equal(new EffectIdentity("persist-plan"), effect.Effect);
-        Assert.Equal(EffectCategory.ProductPersistence, effect.Category);
-        Assert.Equal(EffectExecutionStatus.Succeeded, effect.Status);
-        Assert.Equal(recordedAt, effect.RecordedAt);
-        Assert.Equal("Plan persisted.", effect.Explanation);
-        Assert.Equal(["effect.md"], effect.Evidence);
+        var execution = new CanonicalTransitionExecutionContext(
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            causality.Workspace,
+            causality.Run,
+            causality.WorkflowInstance,
+            new PolicyIdentity("policy_test"),
+            new RuntimeProfileIdentity("runtime_test"),
+            new PromptPolicyProfileIdentity("prompt_policy_test"));
+        return new TransitionRuntimeRequest(
+            WorkflowIdentity.Plan,
+            new WorkflowStageIdentity("Planning"),
+            new WorkflowTransitionIdentity("WritePlan"),
+            execution,
+            FreshAttemptAuthorization.Instance);
     }
 
-    private static WorkflowTransitionDefinition PlanTransition(string identity) =>
-        CanonicalWorkflowDefinitionSketches.CreatePlan()
-            .Transitions
-            .Single(transition => transition.Identity.Value == identity);
+    private static RenderedPromptFact PromptFact(CanonicalCausalContext causality)
+    {
+        const string content = "rendered";
+        return new RenderedPromptFact(
+            RenderedPromptFactIdentity.New(),
+            causality,
+            content,
+            RenderedPromptFact.ComputeContentHash(content),
+            new PromptTemplateIdentity("template"),
+            "source-hash",
+            new PolicyIdentity("policy_test"),
+            new PromptPolicyProfileIdentity("prompt_policy_test"),
+            ConsumedInputManifestIdentity.New(),
+            [new ConsumedInputFile("plan.md", new string('a', 64))],
+            DateTimeOffset.UtcNow);
+    }
+
+    private static WorkflowTransitionDefinition Definition(bool withEffect) => new(
+        new WorkflowTransitionIdentity("WritePlan"),
+        "write plan",
+        [],
+        new GateDefinition(new GateIdentity("input"), "input", [], "test", "fail"),
+        "WritePlan",
+        ExecutionPosture.OneShotAgentPrompt,
+        [],
+        new GateDefinition(new GateIdentity("output"), "output", [], "test", "fail"),
+        [],
+        withEffect
+            ? [new EffectDefinition(new EffectIdentity("publish"), EffectCategory.Publication,
+                "validated", [], [], 1, "retry")]
+            : [],
+        [], [],
+        new RecoveryDefinition("recovery", "recover", ["retry"], []));
+
+    private static ProductRecord Product(CanonicalCausalContext causality) => new(
+        new ProductIdentity("plan"),
+        WorkflowIdentity.Plan,
+        new WorkflowTransitionIdentity("WritePlan"),
+        [WorkflowIdentity.Execute],
+        "repository",
+        "test",
+        ["plan.md"],
+        causality.Attempt.Value,
+        ProductFreshness.Fresh,
+        ProductValidationState.Valid,
+        ProductLifecycle.Active,
+        ["plan.md"]);
 
     private static Repository CreateRepository()
     {
-        string path = Directory.CreateTempSubdirectory("looprelay-canonical-transition-").FullName;
+        string path = Directory.CreateTempSubdirectory("looprelay-transition-persistence-").FullName;
         return new Repository
         {
             Id = Guid.NewGuid(),

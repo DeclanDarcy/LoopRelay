@@ -18,7 +18,7 @@ public sealed class CliSettingsLoaderTests
 
         Assert.Equal(Path.Combine(directory, CliSettingsLoader.ConsumerSettingsFileName), result.Path);
         Assert.False(result.IsDefaultTemplate);
-        Assert.Contains("git", result.Permissions.CommandsWithSubcommands);
+        Assert.Contains("git", result.PermissionInputs.CommandsWithSubcommands);
     }
 
     private static string DefaultSettingsPath()

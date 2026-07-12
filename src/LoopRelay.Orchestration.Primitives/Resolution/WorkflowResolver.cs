@@ -13,35 +13,34 @@ public sealed class WorkflowResolver
         WorkflowDefinition? definition = definitions.FirstOrDefault(item => item.Identity == selection.SelectedWorkflow);
         if (definition is null)
         {
-            return BlockedResult(
+            return StoppedResult(
                 RepositoryClassification.Unsupported,
                 selection,
                 WorkflowResolutionState.Invalid,
                 null,
                 observation,
-                [new ResolutionBlocker(
-                    BlockerCategory.Workflow,
+                [new ResolutionWarning(
+                    WarningCategory.Workflow,
                     $"Workflow definition '{selection.SelectedWorkflow}' is not registered.",
                     "workflow resolver",
                     "Register the workflow definition before resolving execution.",
-                    Recoverable: true,
                     [])],
                 []);
         }
 
-        if (observation.StorageVerification.IsBlocked)
+        if (observation.StorageVerification.IsUnusable)
         {
             RepositoryClassification storageClassification = observation.StorageVerification.Authority switch
             {
                 StorageAuthorityKind.Corrupt => RepositoryClassification.Corrupt,
                 StorageAuthorityKind.Unsupported => RepositoryClassification.Unsupported,
                 StorageAuthorityKind.Ambiguous => RepositoryClassification.Ambiguous,
-                _ => RepositoryClassification.Blocked,
+                _ => RepositoryClassification.StorageUnusable,
             };
-            return BlockedResult(
+            return StoppedResult(
                 storageClassification,
                 selection,
-                WorkflowResolutionState.Blocked,
+                WorkflowResolutionState.Invalid,
                 null,
                 observation,
                 observation.StorageVerification.BlockingConditions,
@@ -58,7 +57,7 @@ public sealed class WorkflowResolver
                 $"Multiple states were observed for workflow '{selection.SelectedWorkflow}'.",
                 observedWorkflowStates.SelectMany(state => state.Evidence).ToArray(),
                 observedWorkflowStates.SelectMany(state => state.Evidence).ToArray());
-            return BlockedResult(
+            return StoppedResult(
                 RepositoryClassification.Ambiguous,
                 selection,
                 WorkflowResolutionState.Ambiguous,
@@ -76,10 +75,10 @@ public sealed class WorkflowResolver
                 ? []
                 : ResolveTransitions(definition, selectedStage.Value, observation);
         RepositoryClassification classification = Classify(state, transitionEligibility, observation.StorageAuthority.Authority);
-        IReadOnlyList<ResolutionBlocker> blockers = observed?.Blockers
-            .Concat(transitionEligibility.SelectMany(transition => transition.Blockers))
+        IReadOnlyList<ResolutionWarning> warnings = observed?.Warnings
+            .Concat(transitionEligibility.SelectMany(transition => transition.Warnings))
             .ToArray()
-            ?? transitionEligibility.SelectMany(transition => transition.Blockers).ToArray();
+            ?? transitionEligibility.SelectMany(transition => transition.Warnings).ToArray();
         IReadOnlyList<string> satisfied = transitionEligibility.SelectMany(transition => transition.SatisfiedGates).Distinct(StringComparer.Ordinal).ToArray();
         IReadOnlyList<string> unsatisfied = transitionEligibility.SelectMany(transition => transition.UnsatisfiedGates).Distinct(StringComparer.Ordinal).ToArray();
         IReadOnlyList<string> evidence = selection.Evidence
@@ -105,7 +104,7 @@ public sealed class WorkflowResolver
                     .ToArray(),
                 satisfied,
                 unsatisfied,
-                blockers,
+                warnings,
                 evidence,
                 observation.StorageAuthority,
                 observation.Evidence.Where(item => item.Ignored).Select(item => item.Location).ToArray(),
@@ -126,7 +125,9 @@ public sealed class WorkflowResolver
             return WorkflowResolutionState.EligibleToStart;
         }
 
-        return WorkflowResolutionState.Blocked;
+        // Unsatisfied entry requirements are derived facts; the transition input gates report the
+        // specific missing products on the next invocation instead of a latched cannot-proceed state.
+        return WorkflowResolutionState.Absent;
     }
 
     private static WorkflowStageIdentity? SelectStage(
@@ -172,12 +173,11 @@ public sealed class WorkflowResolver
                     TransitionEligibilityState.Invalid,
                     [],
                     [$"{selectedStage}.TransitionReference"],
-                    [new ResolutionBlocker(
-                        BlockerCategory.Stage,
+                    [new ResolutionWarning(
+                        WarningCategory.Stage,
                         $"Stage '{selectedStage}' references missing transition '{transitionIdentity}'.",
                         "workflow definition",
                         "Fix workflow definition before execution.",
-                        Recoverable: true,
                         [])],
                     []));
                 continue;
@@ -216,18 +216,17 @@ public sealed class WorkflowResolver
             {
                 results.Add(new TransitionEligibility(
                     transition.Identity,
-                    TransitionEligibilityState.Blocked,
+                    TransitionEligibilityState.MissingRequiredInput,
                     transition.RequiredInputProducts
                         .Except(missing)
                         .Select(requirement => $"{transition.Identity}.{requirement.Product}.Input")
                         .ToArray(),
                     missing.Select(requirement => $"{transition.Identity}.{requirement.Product}.Input").ToArray(),
-                    missing.Select(requirement => new ResolutionBlocker(
-                        BlockerCategory.Validation,
+                    missing.Select(requirement => new ResolutionWarning(
+                        WarningCategory.Validation,
                         $"Required product '{requirement.Product}' is missing, stale, invalid, ambiguous, or not gate usable.",
                         "workflow resolver",
                         $"Produce and validate '{requirement.Product}' before running '{transition.Identity}'.",
-                        Recoverable: true,
                         [])).ToArray(),
                     ProductEvidence(transition.RequiredInputProducts, observation.Products)));
             }
@@ -296,7 +295,6 @@ public sealed class WorkflowResolver
             WorkflowResolutionState.Absent or WorkflowResolutionState.EligibleToStart => RepositoryClassification.Fresh,
             WorkflowResolutionState.Active or WorkflowResolutionState.Resumable => RepositoryClassification.InProgress,
             WorkflowResolutionState.Completed => RepositoryClassification.Completed,
-            WorkflowResolutionState.Blocked => RepositoryClassification.Blocked,
             WorkflowResolutionState.Waiting => RepositoryClassification.Waiting,
             WorkflowResolutionState.Cancelled => RepositoryClassification.Cancelled,
             WorkflowResolutionState.Failed => RepositoryClassification.Failed,
@@ -306,13 +304,13 @@ public sealed class WorkflowResolver
         };
     }
 
-    private static WorkflowResolutionResult BlockedResult(
+    private static WorkflowResolutionResult StoppedResult(
         RepositoryClassification classification,
         WorkflowSelectionResult selection,
         WorkflowResolutionState workflowState,
         WorkflowStageIdentity? selectedStage,
         RepositoryObservation observation,
-        IReadOnlyList<ResolutionBlocker> blockers,
+        IReadOnlyList<ResolutionWarning> warnings,
         IReadOnlyList<ResolutionAmbiguity> ambiguities) =>
         new(
             classification,
@@ -327,14 +325,14 @@ public sealed class WorkflowResolver
                 [],
                 [],
                 [],
-                blockers,
+                warnings,
                 selection.Evidence.Concat(observation.StorageAuthority.Evidence).ToArray(),
                 observation.StorageAuthority,
                 observation.Evidence.Where(item => item.Ignored).Select(item => item.Location).ToArray(),
                 observation.StorageVerification.Conflicts,
                 ambiguities,
                 observation.StorageAuthority.ConfidenceQualifier,
-                ambiguities.Count > 0 ? "Ambiguity requires explicit resolution." : "Blocked until required action is complete."));
+                ambiguities.Count > 0 ? "Ambiguity requires explicit resolution." : "Resolution stops until the remediation in the warnings is complete."));
 }
 
 public static class InvocationModeResolver

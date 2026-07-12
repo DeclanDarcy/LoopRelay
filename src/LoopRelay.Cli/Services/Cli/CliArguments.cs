@@ -1,4 +1,5 @@
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Resolution;
 
 namespace LoopRelay.Cli.Services.Cli;
@@ -7,7 +8,6 @@ internal enum UnifiedCliCommandKind
 {
     Run,
     Status,
-    Unblock,
     StorageInit,
     StorageImport,
     StorageExport,
@@ -22,7 +22,6 @@ internal sealed record UnifiedCliCommand(
 {
     public bool RequiresStorageVerification =>
         Kind is UnifiedCliCommandKind.Run
-            or UnifiedCliCommandKind.Unblock
             or UnifiedCliCommandKind.StorageInit
             or UnifiedCliCommandKind.StorageImport
             or UnifiedCliCommandKind.StorageExport
@@ -32,7 +31,8 @@ internal sealed record UnifiedCliCommand(
 internal sealed record UnifiedCliInvocation(
     Repository Repository,
     WorkflowInvocation WorkflowInvocation,
-    UnifiedCliCommand Command);
+    UnifiedCliCommand Command,
+    IReadOnlyList<PolicyOverride>? PolicyOverrides = null);
 
 /// <summary>Parses the public LoopRelay CLI contract into repository, workflow mode, and command.</summary>
 internal static class CliArguments
@@ -68,6 +68,7 @@ internal static class CliArguments
         bool forceEval = false;
         bool forceTraditional = false;
         var positional = new List<string>();
+        var policyOverrides = new List<PolicyOverride>();
         for (int index = 0; index < args.Length; index++)
         {
             string arg = args[index];
@@ -75,11 +76,35 @@ internal static class CliArguments
             {
                 if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
                 {
-                    error = "Usage: looprelay [--repo <path>] [--eval|--traditional] [status|unblock|storage <init|import|export|sync|verify>|eval|traditional|plan|execute]";
+                    error = "Usage: looprelay [--repo <path>] [--eval|--traditional] [--policy <key>=<value>] [status|storage <init|import|export|sync|verify>|eval|traditional|plan|execute]";
                     return false;
                 }
 
                 repoArgument = args[++index];
+                continue;
+            }
+
+            if (arg.Equals("--policy", StringComparison.Ordinal))
+            {
+                if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
+                {
+                    error = "Usage: --policy <key>=<value>";
+                    return false;
+                }
+
+                string assignment = args[++index];
+                int separator = assignment.IndexOf('=', StringComparison.Ordinal);
+                if (separator <= 0 || separator == assignment.Length - 1)
+                {
+                    error = $"Invalid --policy override `{assignment}`; expected <key>=<value>.";
+                    return false;
+                }
+
+                policyOverrides.Add(new PolicyOverride(
+                    assignment[..separator].Trim(),
+                    assignment[(separator + 1)..].Trim(),
+                    "flag:--policy",
+                    IsExplicit: true));
                 continue;
             }
 
@@ -144,7 +169,7 @@ internal static class CliArguments
             Path = repositoryPath,
         };
 
-        invocation = new UnifiedCliInvocation(parsedRepository, workflowInvocation, command);
+        invocation = new UnifiedCliInvocation(parsedRepository, workflowInvocation, command, policyOverrides);
         error = string.Empty;
         return true;
     }
@@ -170,7 +195,6 @@ internal static class CliArguments
             "plan" => NoExtra(UnifiedCliCommandKind.Run, rest, InvocationModeKind.BoundedPlan, out error),
             "execute" => NoExtra(UnifiedCliCommandKind.Run, rest, InvocationModeKind.BoundedExecute, out error),
             "status" => new UnifiedCliCommand(UnifiedCliCommandKind.Status, rest),
-            "unblock" => new UnifiedCliCommand(UnifiedCliCommandKind.Unblock, rest),
             "storage" => ParseStorage(rest, out error),
             _ => Unknown(verb, out error),
         };
@@ -281,7 +305,6 @@ internal static class CliArguments
             or "plan"
             or "execute"
             or "status"
-            or "unblock"
             or "storage";
 
     private static bool IsPathLike(string value) =>

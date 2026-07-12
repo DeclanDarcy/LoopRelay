@@ -23,8 +23,8 @@ public sealed class RoadmapWorkflowStateClassifierTests
                 Product(ProductIdentity.MilestoneSpecificationSet),
             ]));
         AssertState(
-            RoadmapWorkflowStateKind.Blocked,
-            Observation(workflow: Workflow(WorkflowResolutionState.Blocked, "Epic Preparation")));
+            RoadmapWorkflowStateKind.EpicPreparationInProgress,
+            Observation(workflow: Workflow(WorkflowResolutionState.Resumable, "Epic Preparation")));
         AssertState(
             RoadmapWorkflowStateKind.Cancelled,
             Observation(workflow: Workflow(WorkflowResolutionState.Cancelled, "Epic Preparation")));
