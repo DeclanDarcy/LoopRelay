@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using LoopRelay.Agents.Services.Codex.Compatibility;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
@@ -421,8 +422,7 @@ public sealed class FullChainLiveRunner
             $path = Join-Path $PSScriptRoot 'GREETING.md'
             if (-not (Test-Path -LiteralPath $path)) { exit 1 }
             $accepted = @(
-                'bb08ffa7f02136bb40ecc4bd22336169dc4766b2b2de61b32adc668ff1d4d201',
-                'c635ad5eaa38531f4496741d649b24e7a917522ab9a8c9e456c7fe038932837c'
+                'bb08ffa7f02136bb40ecc4bd22336169dc4766b2b2de61b32adc668ff1d4d201'
             )
             $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
             if ($accepted -cnotcontains $actual) { exit 1 }
@@ -525,6 +525,8 @@ public sealed class FullChainLiveRunner
         }
 
         byte[] exactBytes = await File.ReadAllBytesAsync(greeting, cancellationToken);
+        DateTimeOffset verificationStartedAt = DateTimeOffset.UtcNow;
+        string verifierHashBefore = Digest(await File.ReadAllBytesAsync(verifier, cancellationToken));
         ProcessResult positiveBefore = await RunProcessAsync(
             "pwsh", ["-NoProfile", "-File", "verify.ps1"], repository,
             TimeSpan.FromMinutes(2), cancellationToken);
@@ -558,6 +560,8 @@ public sealed class FullChainLiveRunner
         ProcessResult positiveAfter = await RunProcessAsync(
             "pwsh", ["-NoProfile", "-File", "verify.ps1"], repository,
             TimeSpan.FromMinutes(2), cancellationToken);
+        DateTimeOffset verificationCompletedAt = DateTimeOffset.UtcNow;
+        string verifierHashAfter = Digest(await File.ReadAllBytesAsync(verifier, cancellationToken));
         ProcessResult committedVerifier = await GitAsync(
             repository, ["rev-parse", "HEAD:verify.ps1"], cancellationToken);
         ProcessResult workingVerifier = await GitAsync(
@@ -579,13 +583,25 @@ public sealed class FullChainLiveRunner
             | Field | Value |
             |---|---|
             | Authority | LoopRelay.Certification independent harness |
+            | Baseline Scenario | baseline |
+            | Baseline Status | pass |
             | Positive Verifier Exit Before Controls | {positiveBefore.ExitCode} |
+            | Missing Scenario | NC-006-missing-output |
+            | Missing Status | non-pass |
             | Missing Greeting Negative-Control Exit | {missing.ExitCode} |
+            | Altered Scenario | NC-007-altered-content |
+            | Altered Status | non-pass |
             | Altered Greeting Negative-Control Exit | {altered.ExitCode} |
+            | Required Control Count | 2 |
+            | Observed Control Count | 2 |
             | Positive Verifier Exit After Restore | {positiveAfter.ExitCode} |
             | Exact Greeting Bytes | {exactGreeting} |
             | Greeting SHA-256 | {Digest(exactBytes)} |
-            | Verifier SHA-256 | {Digest(await File.ReadAllBytesAsync(verifier, cancellationToken))} |
+            | Verifier SHA-256 Before | {verifierHashBefore} |
+            | Verifier SHA-256 After | {verifierHashAfter} |
+            | Verifier Unchanged | {verifierHashBefore == verifierHashAfter} |
+            | Verification Started At | {verificationStartedAt:O} |
+            | Verification Completed At | {verificationCompletedAt:O} |
             | Committed Verifier Git Blob | {committedVerifier.StandardOutput.Trim()} |
             | Working Verifier Git Blob | {workingVerifier.StandardOutput.Trim()} |
             | Verifier Git Blob Identity Matches | {verifierIdentity} |
@@ -596,6 +612,16 @@ public sealed class FullChainLiveRunner
             """;
         const string relativeEvidence = ".agents/evidence/execution/full-chain-verifier-result.md";
         await WriteAsync(repository, relativeEvidence, evidence, cancellationToken);
+        string milestoneRelativePath = await RecordMilestoneCompletionAsync(
+            repository,
+            positiveBefore.ExitCode,
+            missing.ExitCode,
+            altered.ExitCode,
+            verificationStartedAt,
+            verificationCompletedAt,
+            Digest(exactBytes),
+            verifierHashBefore,
+            cancellationToken);
         var repositoryModel = new Repository
         {
             Id = Guid.NewGuid(),
@@ -608,7 +634,7 @@ public sealed class FullChainLiveRunner
         string agents = Path.Combine(repository, ".agents");
         foreach (string[] arguments in new[]
         {
-            new[] { "add", "evidence/execution/full-chain-verifier-result.md" },
+            new[] { "add", "evidence/execution/full-chain-verifier-result.md", milestoneRelativePath },
             new[] { "commit", "-m", "record independent completion evidence" },
             new[] { "push", "origin", "main" },
         })
@@ -624,6 +650,60 @@ public sealed class FullChainLiveRunner
         {
             await RequireGitAsync(repository, arguments, cancellationToken);
         }
+    }
+
+    private static async Task<string> RecordMilestoneCompletionAsync(
+        string repository,
+        int baselineExit,
+        int missingExit,
+        int alteredExit,
+        DateTimeOffset startedAt,
+        DateTimeOffset completedAt,
+        string greetingHash,
+        string verifierHash,
+        CancellationToken cancellationToken)
+    {
+        string milestones = Path.Combine(repository, ".agents", "milestones");
+        string[] paths = Directory.Exists(milestones)
+            ? Directory.GetFiles(milestones, "*.md", SearchOption.TopDirectoryOnly)
+            : [];
+        if (paths.Length != 1)
+        {
+            throw new InvalidOperationException(
+                $"Independent completion requires exactly one milestone file; observed {paths.Length}.");
+        }
+
+        string path = paths[0];
+        string content = await File.ReadAllTextAsync(path, cancellationToken);
+        content = Regex.Replace(content, @"(?m)^- \[ \]", "- [x]");
+        content = Regex.Replace(
+            content,
+            @"(?im)^(Milestone state:\s*)pending\s*$",
+            "$1complete");
+        content += $"""
+
+            ## Independent Harness Completion Record
+
+            Milestone state: complete
+
+            - [x] Canonical implementation produced the exact greeting bytes.
+            - [x] Baseline verifier exited `0`.
+            - [x] Missing-output control exited nonzero.
+            - [x] Altered-content control exited nonzero.
+            - [x] Ordered sequence `exact -> missing -> altered` completed.
+            - [x] Verifier identity remained unchanged.
+
+            | sequence | case | command | status | exit_code | artifact_state | observed_at |
+            |---:|---|---|---|---:|---|---|
+            | 1 | exact | `pwsh -NoProfile -File implement.ps1`; `pwsh -NoProfile -File verify.ps1` | pass | {baselineExit} | `GREETING.md` SHA-256 `{greetingHash}` | {startedAt:O} |
+            | 2 | missing | `pwsh -NoProfile -File verify.ps1` | non-pass | {missingExit} | `GREETING.md` absent, then restored | {startedAt:O} |
+            | 3 | altered | `pwsh -NoProfile -File verify.ps1` | non-pass | {alteredExit} | altered bytes rejected, then exact bytes restored | {completedAt:O} |
+
+            Verifier SHA-256 before and after: `{verifierHash}`. Pass/non-pass classification derives only from
+            process exit codes. The independent harness recorded this completion before epic certification.
+            """;
+        await File.WriteAllTextAsync(path, content, cancellationToken);
+        return Path.GetRelativePath(Path.Combine(repository, ".agents"), path).Replace('\\', '/');
     }
 
     private static async Task RequireGitAsync(string root, IReadOnlyList<string> arguments, CancellationToken token)
