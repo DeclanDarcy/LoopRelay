@@ -2,6 +2,7 @@ using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Infrastructure.Services.Artifacts;
 
 namespace LoopRelay.Core.Tests.Services;
 
@@ -11,7 +12,7 @@ public sealed class FileBackedExecutionEvidenceStoreTests
     public async Task WriteAsync_AppendsExpectedPathAndPreservesContent()
     {
         using TempRepo repo = TempRepo.Create();
-        var evidence = new FileBackedExecutionEvidenceStore(repo.Store, repo.Repository);
+        var evidence = Evidence(repo);
         const string content = "# Evidence\r\n\r\nOpaque body.";
 
         ExecutionEvidenceRecord record = await evidence.WriteAsync("execution-result", content);
@@ -31,7 +32,7 @@ public sealed class FileBackedExecutionEvidenceStoreTests
         await repo.WriteAsync(".agents/evidence/execution/execution-result.0010.md", "old 10");
         await repo.WriteAsync(".agents/evidence/execution/execution-result.invalid.md", "ignored");
         await repo.WriteAsync(".agents/evidence/execution/other.9999.md", "other stem");
-        var evidence = new FileBackedExecutionEvidenceStore(repo.Store, repo.Repository);
+        var evidence = Evidence(repo);
 
         ExecutionEvidenceRecord record = await evidence.WriteAsync("execution-result", "new");
 
@@ -44,7 +45,7 @@ public sealed class FileBackedExecutionEvidenceStoreTests
     public async Task NextPathAsync_DoesNotWriteEvidence()
     {
         using TempRepo repo = TempRepo.Create();
-        var evidence = new FileBackedExecutionEvidenceStore(repo.Store, repo.Repository);
+        var evidence = Evidence(repo);
 
         string path = await evidence.NextPathAsync("execution-result");
 
@@ -59,7 +60,7 @@ public sealed class FileBackedExecutionEvidenceStoreTests
         await repo.WriteAsync(".agents/evidence/execution/execution-result.0002.md", "old 2");
         await repo.WriteAsync(".agents/evidence/execution/execution-result.0010.md", "old 10");
         await repo.WriteAsync(".agents/evidence/execution/other.0001.md", "other");
-        var evidence = new FileBackedExecutionEvidenceStore(repo.Store, repo.Repository);
+        var evidence = Evidence(repo);
 
         IReadOnlyList<ExecutionEvidenceRecord> records = await evidence.ListAsync("execution-result.*.md");
 
@@ -107,4 +108,7 @@ public sealed class FileBackedExecutionEvidenceStoreTests
             }
         }
     }
+
+    private static FileBackedExecutionEvidenceStore Evidence(TempRepo repo) =>
+        new(new RepositoryArtifactStore(repo.Store, repo.Repository));
 }

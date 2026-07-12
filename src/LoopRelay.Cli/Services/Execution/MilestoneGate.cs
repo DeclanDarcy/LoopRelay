@@ -1,6 +1,6 @@
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 
 namespace LoopRelay.Cli.Services.Execution;
@@ -40,7 +40,6 @@ namespace LoopRelay.Cli.Services.Execution;
 internal sealed class MilestoneGate
 {
     private readonly IArtifactStore _store;
-    private readonly Repository _repository;
     private readonly Func<string, DateTime?> _lastWriteTime;
 
     /// <summary>What the last parse of a still-incomplete file produced, keyed by the last-write time
@@ -57,13 +56,16 @@ internal sealed class MilestoneGate
 
     public MilestoneGate(IArtifactStore store, Repository repository, Func<string, DateTime?>? lastWriteTime = null)
     {
-        _store = store;
-        _repository = repository;
+        _store = store is RepositoryArtifactStore
+            ? store
+            : new RepositoryArtifactStore(store, repository);
         // The CLI always runs FileSystemArtifactStore over real paths, so default to the filesystem.
         // File.GetLastWriteTimeUtc returns a 1601 sentinel (not an exception) for a missing file, so the
         // File.Exists guard is REQUIRED: surface null (meaning unknown) for an absent file.
         _lastWriteTime = lastWriteTime
-            ?? (path => File.Exists(path) ? File.GetLastWriteTimeUtc(path) : (DateTime?)null);
+            ?? (_store is IRepositoryArtifactMetadata metadata
+                ? metadata.GetLastWriteTimeUtc
+                : _ => null);
     }
 
     public async Task<bool> IsEpicCompleteAsync()
@@ -84,8 +86,9 @@ internal sealed class MilestoneGate
         int total = 0;
         int completed = 0;
 
-        string dir = ArtifactPath.ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.MilestonesDirectory);
-        IReadOnlyList<string> files = await _store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);
+        IReadOnlyList<string> files = await _store.ListAsync(
+            OrchestrationArtifactPaths.MilestonesDirectory,
+            OrchestrationArtifactPaths.MilestoneSearchPattern);
         foreach (string file in files)
         {
             // Capture the stamp BEFORE the read so a write racing the read records an older stamp and forces a
@@ -108,8 +111,9 @@ internal sealed class MilestoneGate
     public async Task<IReadOnlyList<string>> GetUntickedItemsAsync()
     {
         var items = new List<string>();
-        string dir = ArtifactPath.ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.MilestonesDirectory);
-        IReadOnlyList<string> files = await _store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);
+        IReadOnlyList<string> files = await _store.ListAsync(
+            OrchestrationArtifactPaths.MilestonesDirectory,
+            OrchestrationArtifactPaths.MilestoneSearchPattern);
         foreach (string file in files)
         {
             // Same stamp discipline as the full parse: capture BEFORE the read, never cache an unknown stamp.

@@ -1,6 +1,4 @@
 using LoopRelay.Core.Abstractions.Artifacts;
-using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Models.Policy;
 
@@ -9,20 +7,17 @@ namespace LoopRelay.Orchestration.Services;
 public sealed class ArtifactMutationTransaction
 {
     private readonly IArtifactStore _store;
-    private readonly Repository _repository;
     private readonly OperationPermissionProfile _profile;
     private readonly Dictionary<string, string> _snapshots;
     private readonly HashSet<string> _absentExactWrites;
 
     private ArtifactMutationTransaction(
         IArtifactStore store,
-        Repository repository,
         OperationPermissionProfile profile,
         Dictionary<string, string> snapshots,
         HashSet<string> absentExactWrites)
     {
         _store = store;
-        _repository = repository;
         _profile = profile;
         _snapshots = snapshots;
         _absentExactWrites = absentExactWrites;
@@ -30,7 +25,6 @@ public sealed class ArtifactMutationTransaction
 
     public static async Task<ArtifactMutationTransaction> CaptureAsync(
         IArtifactStore store,
-        Repository repository,
         OperationPermissionProfile profile)
     {
         var snapshots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -38,22 +32,20 @@ public sealed class ArtifactMutationTransaction
 
         foreach (string relative in profile.AllowedWrites)
         {
-            string absolute = Resolve(repository, relative);
-            string? content = await store.ReadAsync(absolute);
+            string? content = await store.ReadAsync(relative);
             if (content is null)
             {
-                absentExactWrites.Add(absolute);
+                absentExactWrites.Add(relative);
             }
             else
             {
-                snapshots[absolute] = content;
+                snapshots[relative] = content;
             }
         }
 
         foreach (OperationPathGlob glob in profile.AllowedWriteGlobs)
         {
-            string directory = Resolve(repository, glob.Directory);
-            IReadOnlyList<string> matches = await store.ListAsync(directory, glob.Pattern);
+            IReadOnlyList<string> matches = await store.ListAsync(glob.Directory, glob.Pattern);
             foreach (string match in matches)
             {
                 string? content = await store.ReadAsync(match);
@@ -64,7 +56,7 @@ public sealed class ArtifactMutationTransaction
             }
         }
 
-        return new ArtifactMutationTransaction(store, repository, profile, snapshots, absentExactWrites);
+        return new ArtifactMutationTransaction(store, profile, snapshots, absentExactWrites);
     }
 
     public async Task RestoreAsync()
@@ -84,8 +76,7 @@ public sealed class ArtifactMutationTransaction
 
         foreach (OperationPathGlob glob in _profile.AllowedWriteGlobs)
         {
-            string directory = Resolve(_repository, glob.Directory);
-            IReadOnlyList<string> matches = await _store.ListAsync(directory, glob.Pattern);
+            IReadOnlyList<string> matches = await _store.ListAsync(glob.Directory, glob.Pattern);
             foreach (string match in matches)
             {
                 if (!_snapshots.ContainsKey(match))
@@ -99,17 +90,14 @@ public sealed class ArtifactMutationTransaction
     public async Task<IReadOnlyList<string>> DeletedSnapshotFilesAsync()
     {
         var deleted = new List<string>();
-        foreach (string absolute in _snapshots.Keys)
+        foreach (string relative in _snapshots.Keys)
         {
-            if (!await _store.ExistsAsync(absolute))
+            if (!await _store.ExistsAsync(relative))
             {
-                deleted.Add(ArtifactPath.ToRepositoryRelativePath(_repository, absolute));
+                deleted.Add(relative);
             }
         }
 
         return deleted;
     }
-
-    private static string Resolve(Repository repository, string relativePath) =>
-        ArtifactPath.ResolveRepositoryPath(repository, relativePath);
 }

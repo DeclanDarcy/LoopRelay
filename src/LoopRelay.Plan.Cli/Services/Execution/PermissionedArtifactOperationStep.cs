@@ -15,7 +15,6 @@ namespace LoopRelay.Plan.Cli.Services.Execution;
 
 internal sealed class PermissionedArtifactOperationStep(
     IAgentRuntime _runtime,
-    IArtifactStore _store,
     PlanArtifacts _artifacts,
     ILoopConsole _console,
     Repository _repository)
@@ -47,7 +46,7 @@ internal sealed class PermissionedArtifactOperationStep(
 
         OperationPermissionProfile profile = operation.ToPermissionProfile(_repository);
         ArtifactMutationTransaction transaction =
-            await ArtifactMutationTransaction.CaptureAsync(_store, _repository, profile);
+            await ArtifactMutationTransaction.CaptureAsync(_artifacts.Store, profile);
 
         IAgentSession? session = null;
         bool keepChanges = false;

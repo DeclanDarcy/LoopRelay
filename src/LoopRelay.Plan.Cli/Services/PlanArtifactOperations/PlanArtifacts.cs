@@ -1,6 +1,7 @@
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 
 namespace LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
@@ -11,31 +12,35 @@ namespace LoopRelay.Plan.Cli.Services.PlanArtifactOperations;
 /// </summary>
 internal sealed class PlanArtifacts(IArtifactStore _store, Repository _repository)
 {
+    private readonly IArtifactStore repositoryArtifacts = _store is RepositoryArtifactStore
+        ? _store
+        : new RepositoryArtifactStore(_store, _repository);
+
     // Derived from SpecsEpic rather than restated, per the plan's "never restate .agents/... literals" rule.
     private static readonly string SpecsDirectory =
         Path.GetDirectoryName(OrchestrationArtifactPaths.SpecsEpic)!.Replace('\\', '/');
 
+    public IArtifactStore Store => repositoryArtifacts;
+
     public Task<bool> ExistsAsync(string relativePath) =>
-        _store.ExistsAsync(Resolve(relativePath));
+        repositoryArtifacts.ExistsAsync(relativePath);
 
     public Task<string?> ReadAsync(string relativePath) =>
-        _store.ReadAsync(Resolve(relativePath));
+        repositoryArtifacts.ReadAsync(relativePath);
 
     public Task WriteAsync(string relativePath, string content) =>
-        _store.WriteAsync(Resolve(relativePath), content);
+        repositoryArtifacts.WriteAsync(relativePath, content);
 
     public async Task<IReadOnlyList<string>> ListSpecsRelativeAsync()
     {
-        IReadOnlyList<string> files = await _store.ListAsync(Resolve(SpecsDirectory), "*.md");
-        return ToRepositoryRelative(files);
+        return await repositoryArtifacts.ListAsync(SpecsDirectory, "*.md");
     }
 
     public async Task<IReadOnlyList<string>> ListMilestonesRelativeAsync()
     {
-        IReadOnlyList<string> files = await _store.ListAsync(
-            Resolve(OrchestrationArtifactPaths.MilestonesDirectory),
+        return await repositoryArtifacts.ListAsync(
+            OrchestrationArtifactPaths.MilestonesDirectory,
             OrchestrationArtifactPaths.MilestoneSearchPattern);
-        return ToRepositoryRelative(files);
     }
 
     // Sandbox workspaces live outside the repository root; these never go through the relative Resolve helper.
@@ -48,8 +53,4 @@ internal sealed class PlanArtifacts(IArtifactStore _store, Repository _repositor
     public Task<IReadOnlyList<string>> ListAbsoluteAsync(string absoluteDirectory, string searchPattern) =>
         _store.ListAsync(absoluteDirectory, searchPattern);
 
-    private string Resolve(string relativePath) => ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
-
-    private IReadOnlyList<string> ToRepositoryRelative(IReadOnlyList<string> fullPaths) =>
-        fullPaths.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToList();
 }

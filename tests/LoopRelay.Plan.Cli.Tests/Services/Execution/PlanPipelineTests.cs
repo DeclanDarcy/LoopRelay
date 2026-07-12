@@ -46,7 +46,7 @@ public class PlanPipelineTests
         var preflight = new PreflightGate(artifacts);
         var planSession = new PlanSession(runtime, artifacts, console, repo);
         var review = new ReviewStep(runtime, artifacts, console, repo);
-        var artifactOperation = new PermissionedArtifactOperationStep(runtime, store, artifacts, console, repo);
+        var artifactOperation = new PermissionedArtifactOperationStep(runtime, artifacts, console, repo);
         var publisher = new AgentsSubmodulePublisher(git, repo, console);
         var pipeline = new PlanPipeline(
             preflight, planSession, review, projection, artifactOperation, publisher, artifacts, console);

@@ -7,6 +7,7 @@ using LoopRelay.Agents.Services.Codex.Compatibility;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.ProjectContext;
+using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
@@ -355,7 +356,9 @@ public sealed class MilestoneFiveRunner
             operation.AllowedWrites,
             operation.AllowedWriteGlobs);
         var store = new FileSystemArtifactStore();
-        ArtifactMutationTransaction transaction = await ArtifactMutationTransaction.CaptureAsync(store, repository, profile);
+        ArtifactMutationTransaction transaction = await ArtifactMutationTransaction.CaptureAsync(
+            new RepositoryArtifactStore(store, repository),
+            profile);
         await WriteAsync(root, ".agents/plan.md", "# Invalid rewritten plan\n", default);
         await WriteAsync(root, ".agents/milestones/m1.md", "# Invalid milestone without checkbox\n", default);
         await transaction.RestoreAsync();

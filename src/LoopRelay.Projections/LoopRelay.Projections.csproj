@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LoopRelay.Core\LoopRelay.Core.csproj" />
+    <ProjectReference Include="..\LoopRelay.Infrastructure\LoopRelay.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

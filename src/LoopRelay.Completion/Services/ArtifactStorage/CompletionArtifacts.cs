@@ -5,6 +5,7 @@ using LoopRelay.Core.Abstractions.Persistence;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Infrastructure.Services.Artifacts;
 using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Completion.Services.ArtifactStorage;
@@ -14,20 +15,24 @@ public sealed partial class CompletionArtifacts(
     Repository _repository,
     IExecutionEvidenceStore? executionEvidenceStore = null)
 {
+    private readonly IArtifactStore artifacts = _store is RepositoryArtifactStore
+        ? _store
+        : new RepositoryArtifactStore(_store, _repository);
     private readonly IExecutionEvidenceStore _executionEvidenceStore =
-        executionEvidenceStore ?? new FileBackedExecutionEvidenceStore(_store, _repository);
+        executionEvidenceStore ?? new FileBackedExecutionEvidenceStore(
+            _store is RepositoryArtifactStore ? _store : new RepositoryArtifactStore(_store, _repository));
 
     public Repository Repository => _repository;
 
     public IExecutionEvidenceStore ExecutionEvidenceStore => _executionEvidenceStore;
 
-    public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));
+    public Task<bool> ExistsAsync(string relativePath) => artifacts.ExistsAsync(relativePath);
 
-    public Task<string?> ReadAsync(string relativePath) => _store.ReadAsync(Resolve(relativePath));
+    public Task<string?> ReadAsync(string relativePath) => artifacts.ReadAsync(relativePath);
 
-    public Task WriteAsync(string relativePath, string content) => _store.WriteAsync(Resolve(relativePath), content);
+    public Task WriteAsync(string relativePath, string content) => artifacts.WriteAsync(relativePath, content);
 
-    public Task DeleteAsync(string relativePath) => _store.DeleteAsync(Resolve(relativePath));
+    public Task DeleteAsync(string relativePath) => artifacts.DeleteAsync(relativePath);
 
     public async Task<IReadOnlyList<string>> ListAsync(string relativeDirectory, string searchPattern)
     {
@@ -39,10 +44,7 @@ public sealed partial class CompletionArtifacts(
                 .ToArray();
         }
 
-        IReadOnlyList<string> files = await _store.ListAsync(Resolve(relativeDirectory), searchPattern);
-        string[] filesystemPaths = files
-            .Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path))
-            .ToArray();
+        IReadOnlyList<string> filesystemPaths = await artifacts.ListAsync(relativeDirectory, searchPattern);
 
         if (TryLoopHistoryKind(relativeDirectory, out string? kind) &&
             kind is not null &&
@@ -59,8 +61,7 @@ public sealed partial class CompletionArtifacts(
 
     public async Task<IReadOnlyList<string>> ListDirectoriesAsync(string relativeDirectory)
     {
-        IReadOnlyList<string> directories = await _store.ListDirectoriesAsync(Resolve(relativeDirectory));
-        return directories.Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path)).ToArray();
+        return await artifacts.ListDirectoriesAsync(relativeDirectory);
     }
 
     public async Task<string> ReadRequiredAsync(string relativePath)
@@ -149,8 +150,6 @@ public sealed partial class CompletionArtifacts(
             await MoveFileIfPresentAsync(sourcePath, Join(targetDirectory, relativeSuffix));
         }
     }
-
-    public string Resolve(string relativePath) => ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
 
     private static bool IsExecutionEvidenceDirectory(string evidenceDirectory) =>
         string.Equals(

@@ -25,7 +25,7 @@ public class PermissionedArtifactOperationStepTests
         var artifacts = new PlanArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        return (new PermissionedArtifactOperationStep(rt, store, artifacts, con, repo), rt, store, repo);
+        return (new PermissionedArtifactOperationStep(rt, artifacts, con, repo), rt, store, repo);
     }
 
     private static string Resolve(Repository repo, string rel) => ArtifactPath.ResolveRepositoryPath(repo, rel);

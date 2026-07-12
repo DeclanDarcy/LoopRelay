@@ -2,7 +2,7 @@ using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services;
 
@@ -18,15 +18,16 @@ internal sealed class LoopArtifacts(
     ILoopHistoryStore _historyStore,
     IExecutionRecommendationEvidenceStore _recommendations)
 {
-    public Repository Repository => _repository;
-    public IArtifactStore Store => _store;
+    private readonly IArtifactStore artifacts = _store is RepositoryArtifactStore
+        ? _store
+        : new RepositoryArtifactStore(_store, _repository);
 
-    public Task<bool> ExistsAsync(string relativePath) => _store.ExistsAsync(Resolve(relativePath));
-    public Task<string?> ReadAsync(string relativePath) => _store.ReadAsync(Resolve(relativePath));
-    public Task WriteAsync(string relativePath, string content) => _store.WriteAsync(Resolve(relativePath), content);
-    public Task<bool> ExistsAbsoluteAsync(string absolutePath) => _store.ExistsAsync(absolutePath);
-    public Task<string?> ReadAbsoluteAsync(string absolutePath) => _store.ReadAsync(absolutePath);
-    public Task WriteAbsoluteAsync(string absolutePath, string content) => _store.WriteAsync(absolutePath, content);
+    public Repository Repository => _repository;
+    public IArtifactStore Store => artifacts;
+
+    public Task<bool> ExistsAsync(string relativePath) => artifacts.ExistsAsync(relativePath);
+    public Task<string?> ReadAsync(string relativePath) => artifacts.ReadAsync(relativePath);
+    public Task WriteAsync(string relativePath, string content) => artifacts.WriteAsync(relativePath, content);
     public Task<string?> ReadPlanAsync() => ReadAsync(OrchestrationArtifactPaths.Plan);
     public Task<string?> ReadDetailsAsync() => ReadAsync(OrchestrationArtifactPaths.Details);
 
@@ -58,9 +59,9 @@ internal sealed class LoopArtifacts(
 
     public async Task<bool> RetireLiveDecisionsAsync()
     {
-        string live = Resolve(OrchestrationArtifactPaths.Decisions);
-        bool existed = await _store.ExistsAsync(live);
-        if (existed) await _store.DeleteAsync(live);
+        string live = OrchestrationArtifactPaths.Decisions;
+        bool existed = await artifacts.ExistsAsync(live);
+        if (existed) await artifacts.DeleteAsync(live);
         await InvalidateExecutionRecommendationProjectionAsync();
         return existed;
     }
@@ -103,11 +104,11 @@ internal sealed class LoopArtifacts(
 
         // The live files are compatibility projections only. Runtime and Policy Authority read
         // canonical history/evidence stores, never these files.
-        await _store.WriteAsync(Resolve(OrchestrationArtifactPaths.Decisions), decisions);
+        await artifacts.WriteAsync(OrchestrationArtifactPaths.Decisions, decisions);
         PersistedExecutionRecommendation projection =
             ExecutionRecommendationContract.Bind(decisions, recommendation);
-        await _store.WriteAsync(
-            Resolve(OrchestrationArtifactPaths.ExecutionRecommendation),
+        await artifacts.WriteAsync(
+            OrchestrationArtifactPaths.ExecutionRecommendation,
             ExecutionRecommendationContract.SerializePersisted(projection));
         return (decision, recommendationEvidence);
     }
@@ -128,16 +129,16 @@ internal sealed class LoopArtifacts(
         await _recommendations.AppendAsync(evidence, cancellationToken);
         PersistedExecutionRecommendation projection =
             ExecutionRecommendationContract.Bind(decisions, recommendation);
-        await _store.WriteAsync(
-            Resolve(OrchestrationArtifactPaths.ExecutionRecommendation),
+        await artifacts.WriteAsync(
+            OrchestrationArtifactPaths.ExecutionRecommendation,
             ExecutionRecommendationContract.SerializePersisted(projection));
         return evidence;
     }
 
     public async Task InvalidateExecutionRecommendationProjectionAsync()
     {
-        string path = Resolve(OrchestrationArtifactPaths.ExecutionRecommendation);
-        if (await _store.ExistsAsync(path)) await _store.DeleteAsync(path);
+        string path = OrchestrationArtifactPaths.ExecutionRecommendation;
+        if (await artifacts.ExistsAsync(path)) await artifacts.DeleteAsync(path);
     }
 
     public async Task EnsureOperationalContextAsync()
@@ -147,18 +148,16 @@ internal sealed class LoopArtifacts(
         if (plan is not null) await WriteAsync(OrchestrationArtifactPaths.OperationalContext, plan);
     }
 
-    private string Resolve(string relativePath) => ArtifactPath.ResolveRepositoryPath(_repository, relativePath);
-
     private async Task<string?> RotateAsync(
         string liveRelative,
         LoopHistoryKind kind,
         CanonicalCausalContext causality,
         HistoryEvidenceAttachments? evidence)
     {
-        string? content = await _store.ReadAsync(Resolve(liveRelative));
+        string? content = await artifacts.ReadAsync(liveRelative);
         if (content is null) return null;
         await _historyStore.AppendAsync(new LoopHistoryAppendRequest(kind, content, causality, evidence));
-        await _store.DeleteAsync(Resolve(liveRelative));
+        await artifacts.DeleteAsync(liveRelative);
         return content;
     }
 
@@ -166,7 +165,7 @@ internal sealed class LoopArtifacts(
         string liveRelative,
         LoopHistoryKind kind)
     {
-        string? live = await _store.ReadAsync(Resolve(liveRelative));
+        string? live = await artifacts.ReadAsync(liveRelative);
         if (live is not null) return (live, liveRelative);
         LoopHistoryRecord? latest = await _historyStore.ReadLatestAsync(kind);
         return latest is null ? (null, null) : (latest.Content, latest.MaterializedRelativePath);

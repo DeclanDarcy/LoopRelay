@@ -30,3 +30,12 @@ public interface IArtifactStore
 
     Task<IReadOnlyList<string>> ListDirectoriesAsync(string path);
 }
+
+/// <summary>
+/// Repository-relative filesystem metadata exposed by the infrastructure artifact authority.
+/// Callers never resolve an absolute filesystem path to obtain metadata.
+/// </summary>
+public interface IRepositoryArtifactMetadata
+{
+    DateTime? GetLastWriteTimeUtc(string relativePath);
+}

@@ -39,7 +39,6 @@ internal static class RoadmapLogicalArtifactServices
         {
             new RetainedFilesystemLogicalArtifactProvider(
                 store,
-                repository,
                 RetainedExactPaths(),
                 RetainedPatterns()),
         };
@@ -56,7 +55,6 @@ internal static class RoadmapLogicalArtifactServices
 
         providers.Add(new FileBackedMigratedDomainLogicalArtifactProvider(
             store,
-            repository,
             FileBackedMigratedExactPaths(),
             FileBackedMigratedPatterns()));
         providers.Add(new FileBackedExecutionEvidenceLogicalArtifactProvider(executionEvidenceStore));

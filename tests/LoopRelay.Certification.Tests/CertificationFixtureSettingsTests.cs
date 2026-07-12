@@ -77,4 +77,31 @@ public sealed class CertificationFixtureSettingsTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [Fact]
+    public void User_satisfactory_no_rerun_adjudication_preserves_raw_evidence_and_is_accepted()
+    {
+        var adjudication = new CertificationEvidenceAdjudication(
+            "1",
+            "milestone-14.latest.json",
+            "satisfactory-no-rerun",
+            "user",
+            DateTimeOffset.UtcNow,
+            "retained-case",
+            true,
+            1,
+            1,
+            "provisional-release-budget:test",
+            ["gpt-5.4-mini/medium", "gpt-5.3-codex-spark/medium"],
+            ["RunCompletionCertification"],
+            ["InterpretCompletionRoute", "VerifyWorkflowExitGate"],
+            ["explicit-user-adjudication"]);
+
+        Assert.True(ContinuousCertificationRunner.IsAcceptedAdjudication(
+            adjudication,
+            "milestone-14.latest.json"));
+        Assert.False(ContinuousCertificationRunner.IsAcceptedAdjudication(
+            adjudication,
+            "milestone-13.latest.json"));
+    }
 }

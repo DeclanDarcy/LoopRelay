@@ -26,6 +26,35 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 public sealed class UnifiedCliCompositionTests
 {
     [Fact]
+    public void Execute_entry_rejects_milestone_cardinality_that_conflicts_with_strategic_context()
+    {
+        string root = Directory.CreateTempSubdirectory("looprelay-plan-cardinality").FullName;
+        try
+        {
+            string context = Path.Combine(root, ".agents", "ctx");
+            string milestones = Path.Combine(root, ".agents", "milestones");
+            Directory.CreateDirectory(context);
+            Directory.CreateDirectory(milestones);
+            File.WriteAllText(
+                Path.Combine(context, "04-strategic-structure.md"),
+                "# Strategic Structure\n\nCreate exactly one implementation milestone.\n");
+            File.WriteAllText(Path.Combine(milestones, "m1.md"), "# M1\n");
+            File.WriteAllText(Path.Combine(milestones, "m2.md"), "# M2\n");
+
+            Assert.True(UnifiedCliComposition.ExplicitSingleMilestoneInvariantViolated(root, out int actual));
+            Assert.Equal(2, actual);
+
+            File.Delete(Path.Combine(milestones, "m2.md"));
+            Assert.False(UnifiedCliComposition.ExplicitSingleMilestoneInvariantViolated(root, out actual));
+            Assert.Equal(1, actual);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Create_wires_canonical_observation_resolution_definitions_and_chains()
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-composition").FullName;

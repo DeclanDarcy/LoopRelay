@@ -1,23 +1,19 @@
 using LoopRelay.Core.Abstractions.Artifacts;
-using LoopRelay.Core.Models.Repositories;
 
 namespace LoopRelay.Core.Services.Artifacts;
 
 public sealed class RetainedFilesystemLogicalArtifactProvider : ILogicalArtifactProvider
 {
     private readonly IArtifactStore _store;
-    private readonly Repository _repository;
     private readonly IReadOnlyDictionary<string, LogicalArtifactDomain> _exactPaths;
     private readonly IReadOnlyList<LogicalArtifactPathPattern> _patterns;
 
     public RetainedFilesystemLogicalArtifactProvider(
         IArtifactStore store,
-        Repository repository,
         IEnumerable<string> exactPaths,
         IEnumerable<LogicalArtifactPathPattern>? patterns = null)
         : this(
             store,
-            repository,
             exactPaths.ToDictionary(
                 LogicalArtifactPath.NormalizeKnownRelative,
                 _ => LogicalArtifactDomain.RetainedFile,
@@ -28,12 +24,10 @@ public sealed class RetainedFilesystemLogicalArtifactProvider : ILogicalArtifact
 
     public RetainedFilesystemLogicalArtifactProvider(
         IArtifactStore store,
-        Repository repository,
         IReadOnlyDictionary<string, LogicalArtifactDomain> exactPaths,
         IEnumerable<LogicalArtifactPathPattern>? patterns = null)
     {
         _store = store;
-        _repository = repository;
         _exactPaths = exactPaths.ToDictionary(
             pair => LogicalArtifactPath.NormalizeKnownRelative(pair.Key),
             pair => pair.Value,
@@ -58,7 +52,7 @@ public sealed class RetainedFilesystemLogicalArtifactProvider : ILogicalArtifact
         cancellationToken.ThrowIfCancellationRequested();
         string normalizedPath = LogicalArtifactPath.NormalizeKnownRelative(relativePath);
         LogicalArtifactDescriptor descriptor = DescriptorFor(normalizedPath);
-        string? content = await _store.ReadAsync(ArtifactPath.ResolveRepositoryPath(_repository, normalizedPath));
+        string? content = await _store.ReadAsync(normalizedPath);
         if (content is null)
         {
             return LogicalArtifactResolutionResult.Unresolved(

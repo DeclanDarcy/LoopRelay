@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\LoopRelay.Agents\LoopRelay.Agents.csproj" />
     <ProjectReference Include="..\LoopRelay.Core\LoopRelay.Core.csproj" />
+    <ProjectReference Include="..\LoopRelay.Infrastructure\LoopRelay.Infrastructure.csproj" />
     <ProjectReference Include="..\LoopRelay.Orchestration.Primitives\LoopRelay.Orchestration.csproj" />
     <ProjectReference Include="..\LoopRelay.Projections\LoopRelay.Projections.csproj" />
   </ItemGroup>

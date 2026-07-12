@@ -1043,7 +1043,7 @@ internal sealed class DecisionSession(
         }
 
         ArtifactMutationTransaction transaction =
-            await ArtifactMutationTransaction.CaptureAsync(_artifacts.Store, _repository, operation.Profile);
+            await ArtifactMutationTransaction.CaptureAsync(_artifacts.Store, operation.Profile);
 
         IAgentSession? scopedSession = null;
         bool keepChanges = false;

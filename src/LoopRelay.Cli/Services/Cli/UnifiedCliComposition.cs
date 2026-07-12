@@ -34,6 +34,7 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Models.NonImplementationCompletion;
@@ -923,7 +924,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             }
             else if (request.Workflow == WorkflowIdentity.TraditionalRoadmap)
             {
-                var artifacts = new ProjectionArtifacts(new FileSystemArtifactStore(), _repository);
+                var artifacts = new ProjectionArtifacts(
+                    new RepositoryArtifactStore(new FileSystemArtifactStore(), _repository),
+                    _repository);
                 ProjectContext projectContext = await new ProjectContextLoader(artifacts)
                     .LoadAsync(cancellationToken);
                 sections.Add(new PromptContextSection(
@@ -1083,6 +1086,30 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
         public static IReadOnlyList<string> Evidence(WorkflowTransitionDefinition definition) =>
             [$".LoopRelay/evidence/local-verification/{definition.Identity}.md"];
+    }
+
+    internal static bool ExplicitSingleMilestoneInvariantViolated(
+        string repositoryPath,
+        out int actualMilestoneCount)
+    {
+        string strategicStructure = Path.Combine(
+            repositoryPath,
+            ".agents",
+            "ctx",
+            "04-strategic-structure.md");
+        actualMilestoneCount = 0;
+        if (!File.Exists(strategicStructure)) return false;
+
+        string content = File.ReadAllText(strategicStructure);
+        bool requiresExactlyOne = content.Contains("exactly one", StringComparison.OrdinalIgnoreCase) &&
+            content.Contains("milestone", StringComparison.OrdinalIgnoreCase);
+        if (!requiresExactlyOne) return false;
+
+        string milestones = Path.Combine(repositoryPath, ".agents", "milestones");
+        actualMilestoneCount = Directory.Exists(milestones)
+            ? Directory.GetFiles(milestones, "*.md", SearchOption.TopDirectoryOnly).Length
+            : 0;
+        return actualMilestoneCount != 1;
     }
 
     private static class LocalArtifactTransitions
@@ -1554,7 +1581,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             public IReadOnlyList<string> Evidence { get; } = evidence;
         }
 
-        private readonly IArtifactStore artifactStore = new FileSystemArtifactStore();
+        private readonly IArtifactStore artifactStore = new RepositoryArtifactStore(
+            new FileSystemArtifactStore(),
+            _repository);
         private readonly SessionSpineRecorder sessionRecorder = new(_persistence);
         private IAgentRuntime? recordingRuntime;
         private IAgentSession? planAuthoringSession;
@@ -1973,7 +2002,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             OperationPermissionProfile profile = ToPermissionProfile(operation);
             ArtifactMutationTransaction transaction =
-                await ArtifactMutationTransaction.CaptureAsync(artifactStore, _repository, profile);
+                await ArtifactMutationTransaction.CaptureAsync(artifactStore, profile);
             IAgentSession? session = null;
             bool keepChanges = false;
 
@@ -2066,8 +2095,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             string? changedGuardSnapshot = null;
             foreach (string read in operation.AllowedReads)
             {
-                string absolutePath = ResolveRepositoryPath(_repository, read);
-                string? content = await artifactStore.ReadAsync(absolutePath);
+                string? content = await artifactStore.ReadAsync(read);
                 if (content is null)
                 {
                     return (
@@ -2107,7 +2135,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             foreach (string requiredOutput in operation.RequiredOutputs)
             {
-                if (!await artifactStore.ExistsAsync(ResolveRepositoryPath(_repository, requiredOutput)))
+                if (!await artifactStore.ExistsAsync(requiredOutput))
                 {
                     return $"{operation.Label} did not produce {requiredOutput}.";
                 }
@@ -2115,7 +2143,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             if (operation.RequiredOutputGlob is { } requiredGlob)
             {
-                IReadOnlyList<string> matches = await ListAbsoluteAsync(requiredGlob);
+                IReadOnlyList<string> matches = await ListRelativeAsync(requiredGlob);
                 if (matches.Count == 0)
                 {
                     return $"{operation.Label} produced no files matching {requiredGlob.Directory}/{requiredGlob.Pattern}.";
@@ -2140,13 +2168,12 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
 
             if (operation.ChangedGuard is { } changedGuard)
             {
-                string absolutePath = ResolveRepositoryPath(_repository, changedGuard);
-                if (!await artifactStore.ExistsAsync(absolutePath))
+                if (!await artifactStore.ExistsAsync(changedGuard))
                 {
                     return $"{operation.Label} left {changedGuard} missing - it must remain present.";
                 }
 
-                string changedContent = await artifactStore.ReadAsync(absolutePath) ?? string.Empty;
+                string changedContent = await artifactStore.ReadAsync(changedGuard) ?? string.Empty;
                 if (string.Equals(changedContent, changedGuardSnapshot ?? string.Empty, StringComparison.Ordinal))
                 {
                     return $"{operation.Label} left {changedGuard} unchanged - the expected rewrite did not happen.";
@@ -2156,8 +2183,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             return null;
         }
 
-        private async Task<IReadOnlyList<string>> ListAbsoluteAsync(OperationPathGlob glob) =>
-            await artifactStore.ListAsync(ResolveRepositoryPath(_repository, glob.Directory), glob.Pattern);
+        private async Task<IReadOnlyList<string>> ListRelativeAsync(OperationPathGlob glob) =>
+            await artifactStore.ListAsync(glob.Directory, glob.Pattern);
 
         private OperationPermissionProfile ToPermissionProfile(PlanScopedArtifactOperationSpec operation) =>
             new(
@@ -2738,7 +2765,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                         WithDiagnostics($"Handoff turn ended in state {handoff.State}.", handoff.Diagnostics));
                 }
 
-                if (!await artifactStore.ExistsAsync(ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.LiveHandoff)))
+                if (!await artifactStore.ExistsAsync(OrchestrationArtifactPaths.LiveHandoff))
                 {
                     await CloseExecutionSessionAsync();
                     return Failed($"Execution completed but {OrchestrationArtifactPaths.LiveHandoff} was not written.");
@@ -4207,6 +4234,20 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     []);
             }
 
+            if (definition.Identity.Value == "VerifyExecuteEntryContract" &&
+                ExplicitSingleMilestoneInvariantViolated(_repository.Path, out int milestoneCount))
+            {
+                return new ProductValidationResult(
+                    ProductValidationStatus.Invalid,
+                    output.CandidateProducts,
+                    [],
+                    [ProductIdentity.ExecutionMilestoneSet],
+                    [],
+                    [],
+                    $"The authoritative strategic structure requires exactly one execution milestone, but `.agents/milestones` contains {milestoneCount} Markdown files.",
+                    output.Evidence);
+            }
+
             HashSet<ProductIdentity> actual = output.CandidateProducts
                 .Select(product => product.Identity)
                 .ToHashSet();
@@ -5630,9 +5671,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var fileStore = new FileSystemArtifactStore();
             var artifacts = new LoopArtifacts(
-                fileStore,
+                new RepositoryArtifactStore(new FileSystemArtifactStore(), _repository),
                 _repository,
                 new LedgerLoopHistoryStore(_repository),
                 new CanonicalExecutionRecommendationEvidenceStore(_store));

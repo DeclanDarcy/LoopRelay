@@ -92,7 +92,11 @@ public class MilestoneGateTests
         var store = new CountingStore(new MemoryArtifactStore());
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
         var mtimes = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-        DateTime? Mtime(string path) => mtimes.TryGetValue(path, out var v) ? v : (DateTime?)null;
+        DateTime? Mtime(string path)
+        {
+            string absolutePath = Path.IsPathRooted(path) ? path : Resolve(repo, path);
+            return mtimes.TryGetValue(absolutePath, out var value) ? value : (DateTime?)null;
+        }
         return (new MilestoneGate(store, repo, Mtime), store, repo, mtimes);
     }
 

@@ -4,8 +4,13 @@ namespace LoopRelay.Core.Services.Artifacts;
 
 public static class ArtifactPath
 {
+    private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
+
     public static string ResolveRepositoryPath(Repository repository, string relativePath)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         if (Path.IsPathRooted(relativePath))
         {
             throw new ArgumentException("Artifact path must be repository-relative.", nameof(relativePath));
@@ -15,8 +20,8 @@ public static class ArtifactPath
         string resolvedPath = Path.GetFullPath(Path.Combine(repositoryRoot, relativePath));
         string rootWithSeparator = repositoryRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
-        if (!resolvedPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(resolvedPath, repositoryRoot, StringComparison.OrdinalIgnoreCase))
+        if (!resolvedPath.StartsWith(rootWithSeparator, PathComparison) &&
+            !string.Equals(resolvedPath, repositoryRoot, PathComparison))
         {
             throw new ArgumentException("Artifact path must stay within the repository root.", nameof(relativePath));
         }

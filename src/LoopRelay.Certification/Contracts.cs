@@ -419,6 +419,22 @@ public sealed record FullChainCertificationResult(
     IReadOnlyList<string> PrivacyFindings,
     IReadOnlyList<string> Evidence);
 
+public sealed record CertificationEvidenceAdjudication(
+    string SchemaVersion,
+    string EvidenceFile,
+    string Disposition,
+    string ApprovedBy,
+    DateTimeOffset ApprovedAtUtc,
+    string RetainedCase,
+    bool PreservesRawEvidence,
+    long TotalElapsedMilliseconds,
+    long ProviderEvidenceBytes,
+    string BudgetDecision,
+    IReadOnlyList<string> ModelProfiles,
+    IReadOnlyList<string> RawFailedTransitions,
+    IReadOnlyList<string> RawNotRunTransitions,
+    IReadOnlyList<string> Evidence);
+
 public sealed record PlatformCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,

@@ -5,6 +5,7 @@ using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Infrastructure.Services.Artifacts;
 
 namespace LoopRelay.Core.Tests.Services;
 
@@ -45,8 +46,7 @@ public sealed class LogicalArtifactResolverTests
         var resolver = new LogicalArtifactResolver(
         [
             new FileBackedMigratedDomainLogicalArtifactProvider(
-                repo.Store,
-                repo.Repository,
+                new RepositoryArtifactStore(repo.Store, repo.Repository),
                 new Dictionary<string, LogicalArtifactDomain>(),
                 [
                     new(".agents/decisions", "decisions.*.md", LogicalArtifactDomain.LoopHistory, "decisions"),
@@ -74,7 +74,8 @@ public sealed class LogicalArtifactResolverTests
     public async Task Execution_evidence_resolves_through_file_backed_evidence_store()
     {
         var repo = new TestRepo();
-        var evidence = new FileBackedExecutionEvidenceStore(repo.Store, repo.Repository);
+        var evidence = new FileBackedExecutionEvidenceStore(
+            new RepositoryArtifactStore(repo.Store, repo.Repository));
         var resolver = new LogicalArtifactResolver(
         [
             new FileBackedExecutionEvidenceLogicalArtifactProvider(evidence),
@@ -94,7 +95,8 @@ public sealed class LogicalArtifactResolverTests
     public async Task Missing_paths_keep_retained_and_migrated_statuses_distinct()
     {
         var repo = new TestRepo();
-        var evidence = new FileBackedExecutionEvidenceStore(repo.Store, repo.Repository);
+        var evidence = new FileBackedExecutionEvidenceStore(
+            new RepositoryArtifactStore(repo.Store, repo.Repository));
         var resolver = new LogicalArtifactResolver(
         [
             RetainedProvider(repo),
@@ -129,8 +131,7 @@ public sealed class LogicalArtifactResolverTests
 
     private static RetainedFilesystemLogicalArtifactProvider RetainedProvider(TestRepo repo) =>
         new(
-            repo.Store,
-            repo.Repository,
+            new RepositoryArtifactStore(repo.Store, repo.Repository),
             new Dictionary<string, LogicalArtifactDomain>
             {
                 [".agents/specs/epic.md"] = LogicalArtifactDomain.RetainedFile,
