@@ -9,22 +9,6 @@ namespace LoopRelay.Certification;
 
 public sealed class MilestoneEightRunner
 {
-    private static readonly string[] ExpectedTables =
-    [
-        "artifact_lifecycle", "canonical_blockers", "canonical_effect_records", "canonical_gate_evaluations",
-        "canonical_product_records", "canonical_recovery_markers", "canonical_stage_states",
-        "canonical_transition_evidence", "canonical_transition_runs", "canonical_workflow_chain_runs",
-        "canonical_workflow_states", "completed_epic_archives", "completed_epic_records", "decision_ledger",
-        "decision_session_active", "decision_session_legacy_imports", "decision_session_lineage",
-        "decision_session_resume", "decision_session_scopes", "decision_session_turns", "execution_evidence",
-        "execution_preparation_manifest", "loop_history", "projection_manifest_entries", "roadmap_state",
-        "schema_metadata", "selection_provenance_manifest", "session_continuity_profiles",
-        "session_recovery_attempts", "session_recovery_plans", "session_recovery_sources",
-        "session_telemetry_events", "session_transition_correlations", "split_families",
-        "split_family_children", "split_family_dependency_order", "sync_markers", "transition_journal",
-        "workflow_transactions", "workspace_metadata",
-    ];
-
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     public async Task<MilestoneEightCertificationResult> RunAsync(
@@ -44,8 +28,14 @@ public sealed class MilestoneEightRunner
             ProcessResult init = await RunCliAsync(cliPath, healthy, ["storage", "init"], cancellationToken);
             string database = Database(healthy);
             (tables, columns) = await InspectSchemaAsync(database, cancellationToken);
-            bool exactInventory = tables.SequenceEqual(ExpectedTables, StringComparer.Ordinal) &&
-                columns.Count == ExpectedTables.Length && columns.All(pair => pair.Value.Count > 0);
+            WorkspaceSchemaInspection schemaInspection = await InspectCanonicalSchemaAsync(database, cancellationToken);
+            bool canonicalInventory = schemaInspection.Version == LoopRelayWorkspaceDatabase.CurrentSchemaVersion &&
+                schemaInspection.Shape == WorkspaceSchemaShape.CanonicalV9Complete &&
+                string.Equals(
+                    schemaInspection.ShapeFingerprint,
+                    LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint,
+                    StringComparison.Ordinal) &&
+                columns.Count == tables.Count && columns.All(pair => pair.Value.Count > 0);
             string workspaceIdBefore = await WorkspaceIdAsync(database, cancellationToken);
             ProcessResult sync = await RunCliAsync(cliPath, healthy, ["storage", "sync"], cancellationToken);
             string workspaceIdAfter = await WorkspaceIdAsync(database, cancellationToken);
@@ -53,11 +43,14 @@ public sealed class MilestoneEightRunner
                 "schema-and-workspace-identity-inventory",
                 true,
                 nonMutating: false,
-                init.ExitCode == 0 && sync.ExitCode == 0 && exactInventory &&
-                    workspaceIdBefore == workspaceIdAfter && workspaceIdBefore.Length == 32,
+                init.ExitCode == 0 && sync.ExitCode == 0 && canonicalInventory &&
+                    workspaceIdBefore == workspaceIdAfter &&
+                    workspaceIdBefore.StartsWith("ws_", StringComparison.Ordinal),
                 $"tables:{tables.Count}",
                 $"columns:{columns.Sum(pair => pair.Value.Count)}",
                 $"schema-version:{await SchemaVersionAsync(database, cancellationToken)}",
+                $"schema-shape:{schemaInspection.Shape}",
+                $"shape-fingerprint-match:{string.Equals(schemaInspection.ShapeFingerprint, LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint, StringComparison.Ordinal)}",
                 $"workspace-id-digest:{Hash(workspaceIdBefore)}"));
 
             Dictionary<string, string> verifyBefore = SnapshotFiles(healthy);
@@ -86,7 +79,9 @@ public sealed class MilestoneEightRunner
 
             string imported = NewCase(root, "missing-import");
             ProcessResult import = await RunCliAsync(cliPath, imported, ["storage", "import"], cancellationToken);
-            bool importCreated = File.Exists(Database(imported)) && await SchemaVersionAsync(Database(imported), cancellationToken) == 3;
+            bool importCreated = File.Exists(Database(imported)) &&
+                await SchemaVersionAsync(Database(imported), cancellationToken) ==
+                    LoopRelayWorkspaceDatabase.CurrentSchemaVersion;
             cases.Add(Case(
                 "public-import-creates-current-canonical-authority",
                 true,
@@ -107,7 +102,7 @@ public sealed class MilestoneEightRunner
                 true,
                 unsupportedStable,
                 unsupportedVerify.ExitCode == 4 && unsupportedStable &&
-                    unsupportedVerify.StandardOutput.Contains("999", StringComparison.Ordinal),
+                    CombinedOutput(unsupportedVerify).Contains("999", StringComparison.Ordinal),
                 $"exit:{unsupportedVerify.ExitCode}",
                 $"stable:{unsupportedStable}"));
 
@@ -251,6 +246,18 @@ public sealed class MilestoneEightRunner
         command.CommandText = "SELECT value FROM schema_metadata WHERE key='schema_version';";
         return int.Parse(Convert.ToString(await command.ExecuteScalarAsync(token))!);
     }
+
+    private static async Task<WorkspaceSchemaInspection> InspectCanonicalSchemaAsync(
+        string database,
+        CancellationToken token)
+    {
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(database);
+        await connection.OpenAsync(token);
+        return await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection, token);
+    }
+
+    private static string CombinedOutput(ProcessResult result) =>
+        $"{result.StandardOutput}\n{result.StandardError}";
 
     private static async Task ExecuteAsync(string database, string sql, CancellationToken token)
     {

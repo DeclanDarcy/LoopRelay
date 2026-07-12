@@ -337,6 +337,48 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                    COALESCE($failure, 'Effect state updated.'), '[]'
             FROM canonical_effect_intents
             WHERE transition_run_id = $run AND effect_identity = $effect;
+            UPDATE canonical_transition_runs
+            SET state = CASE
+                    WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'EffectsPartiallyApplied'
+                    WHEN $status = 'Failed' THEN 'Failed'
+                    ELSE state
+                END,
+                outcome = CASE
+                    WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'RecoveryRequired'
+                    WHEN $status = 'Failed' THEN 'Failed'
+                    ELSE outcome
+                END,
+                completed_at = CASE
+                    WHEN $status IN ('PartiallyFailed', 'Failed') THEN $now
+                    ELSE completed_at
+                END,
+                explanation = CASE
+                    WHEN $status IN ('Unknown', 'PartiallyFailed')
+                        THEN 'An effect outcome is uncertain and requires reconciliation.'
+                    WHEN $status = 'Failed' THEN COALESCE($failure, 'A required effect failed.')
+                    ELSE explanation
+                END
+            WHERE run_id = $run
+              AND $status IN ('Unknown', 'PartiallyFailed', 'Failed');
+            UPDATE canonical_transition_runs
+            SET state = 'Completed',
+                outcome = 'Completed',
+                completed_at = $now,
+                explanation = 'All required effect intents completed.'
+            WHERE run_id = $run
+              AND $status = 'Succeeded'
+              AND NOT EXISTS (
+                  SELECT 1 FROM canonical_effect_intents
+                  WHERE transition_run_id = $run AND status <> 'Succeeded'
+              );
+            UPDATE attempts
+            SET outcome = 'Completed', completed_at = COALESCE(completed_at, $now)
+            WHERE transition_run_id = $run
+              AND $status = 'Succeeded'
+              AND NOT EXISTS (
+                  SELECT 1 FROM canonical_effect_intents
+                  WHERE transition_run_id = $run AND status <> 'Succeeded'
+              );
             """,
             cancellationToken,
             ("$status", status.ToString()),
@@ -1926,6 +1968,30 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             WHERE decision_product_id = $decision ORDER BY rowid DESC LIMIT 1;
             """;
         command.Parameters.AddWithValue("$decision", decisionProductId);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? new CanonicalExecutionRecommendationEvidenceRecord(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                reader.GetString(8), reader.GetString(9), reader.GetString(10), reader.GetString(11),
+                reader.GetString(12), ParseDate(reader.GetString(13)))
+            : null;
+    }
+
+    public async Task<CanonicalExecutionRecommendationEvidenceRecord?> ReadLatestExecutionRecommendationAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath)) return null;
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT recommendation_id, decision_product_id, workspace_id, run_id,
+                   workflow_instance_id, transition_run_id, attempt_id, session_id, turn_id,
+                   recommended_model, recommended_effort, rationale, schema_version, created_at
+            FROM execution_recommendation_evidence ORDER BY rowid DESC LIMIT 1;
+            """;
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken)
             ? new CanonicalExecutionRecommendationEvidenceRecord(

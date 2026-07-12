@@ -81,7 +81,7 @@ public sealed class MilestoneTwelveTests
     private static string FindWorkspace()
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "roadmap.md")))
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "LoopRelay.slnx")))
         {
             directory = directory.Parent;
         }

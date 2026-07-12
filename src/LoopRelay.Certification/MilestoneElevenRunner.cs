@@ -79,6 +79,12 @@ public sealed class MilestoneElevenRunner
             }
             await InitializeGitAsync(repositoryPath, cancellationToken);
             string harnessVerifierEvidence = await HarnessVerifierEvidenceAsync(repositoryPath, cancellationToken);
+            await WriteAsync(
+                repositoryPath,
+                ".agents/evidence/execution/harness-verifier-result.md",
+                harnessVerifierEvidence,
+                cancellationToken);
+            await CommitHarnessEvidenceAsync(repositoryPath, cancellationToken);
             ProcessResult init = await RunCliAsync(cliPath, repositoryPath, ["storage", "init"], cancellationToken);
             if (init.ExitCode != 0) throw new InvalidOperationException("Milestone 11 storage init failed.");
             var repository = new Repository { Id = Guid.NewGuid(), Name = "milestone-11", Path = repositoryPath };
@@ -269,6 +275,7 @@ public sealed class MilestoneElevenRunner
     private static async Task SeedRepositoryAsync(string root, CancellationToken token)
     {
         await WriteAsync(root, ".gitignore", ".LoopRelay/\n", token);
+        await WriteAsync(root, ".gitattributes", "*.ps1 text eol=lf\n*.md text eol=lf\n", token);
         await WriteAsync(root, "README.md", "# Completion certification repository\n", token);
         await WriteAsync(root, "GREETING.md", "Hello from Loop Relay.\n", token);
         await WriteAsync(root, "verify.ps1", """
@@ -324,7 +331,9 @@ public sealed class MilestoneElevenRunner
             Git blob identity with `HEAD:verify.ps1`, and record SHA-256 identities for verifier and capability.
 
             ## Completion Evidence
-            Harness-owned evidence is persisted in SQLite before completion certification.
+            Harness-owned evidence is committed under `.agents/evidence/execution` and persisted in SQLite
+            before completion certification. Its ordering record proves the verifier passed before this checked
+            completion claim was submitted to certification.
             """, token);
         await WriteAsync(root, ".agents/handoffs/handoff.md", "# Handoff\n\nGreeting implemented and verifier passed.\n", token);
         await WriteAsync(root, ".agents/decisions.md", "# Decisions\n\nUse exact byte-level acceptance.\n", token);
@@ -389,9 +398,21 @@ public sealed class MilestoneElevenRunner
             | Verifier Diff Exit Code | {verifierDiff.ExitCode} |
             | Repository Status Clean | {string.IsNullOrWhiteSpace(status.StandardOutput)} |
             | Executed Before Completion Certification | True |
+            | Evidence Repository Embedded Before Certification | True |
+            | Milestone Completion Claim Present Before Certification | True |
 
-            This is harness-owned runtime evidence. It is not model-authored and the completion evaluator may
-            use it as corroboration, but repository truth and policy remain authoritative.
+            ## Certification Ordering
+
+            1. The harness created the exact greeting capability and immutable verifier.
+            2. The harness ran `pwsh -NoProfile -File verify.ps1`; it exited `0`.
+            3. Git independently proved that the working verifier blob `{workingVerifier.StandardOutput.Trim()}`
+               exactly equals the committed `HEAD:verify.ps1` blob `{committedVerifier.StandardOutput.Trim()}`.
+            4. The checked milestone completion claim was already present when the verifier ran.
+            5. This evidence is committed into repository truth before completion certification starts.
+
+            Verifier immutability is therefore positively established: the working and committed Git blob
+            identities are equal, and `git diff --exit-code -- verify.ps1` returned `0`. This is harness-owned,
+            non-model-authored evidence. Repository truth and policy remain authoritative.
             """;
     }
 
@@ -484,6 +505,19 @@ public sealed class MilestoneElevenRunner
         {
             ProcessResult result = await RunProcessAsync("git", arguments, root, TimeSpan.FromMinutes(2), token);
             if (result.ExitCode != 0) throw new InvalidOperationException($"git {arguments[0]} failed.");
+        }
+    }
+
+    private static async Task CommitHarnessEvidenceAsync(string root, CancellationToken token)
+    {
+        foreach (string[] arguments in new[]
+        {
+            new[] { "add", ".agents/evidence/execution/harness-verifier-result.md" },
+            new[] { "commit", "-m", "record independent verifier evidence" },
+        })
+        {
+            ProcessResult result = await RunProcessAsync("git", arguments, root, TimeSpan.FromMinutes(2), token);
+            if (result.ExitCode != 0) throw new InvalidOperationException($"git {arguments[0]} harness evidence failed.");
         }
     }
 

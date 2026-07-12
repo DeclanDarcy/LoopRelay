@@ -18,7 +18,7 @@ public sealed class InputWaitProgressAgentRuntime(
     IAgentRuntime _inner,
     IAgentTokenEstimator _tokenEstimator,
     IInputWaitProgressRenderer _renderer,
-    IInputWaitObservationSink? _observationSink = null) : IAgentRuntime
+    IInputWaitObservationSink? _observationSink = null) : IAgentRuntime, IAgentSessionContinuityRuntime
 {
     private readonly IInputWaitObservationSink _observationSinkField =
         _observationSink ?? NullInputWaitObservationSink.Instance;
@@ -51,6 +51,67 @@ public sealed class InputWaitProgressAgentRuntime(
 
     public ValueTask CloseSessionAsync(IAgentSession session) =>
         _inner.CloseSessionAsync(session is InputWaitProgressAgentSession progress ? progress.Inner : session);
+
+    public Task<SessionContinuityNegotiationResult> NegotiateAsync(
+        SessionContinuityNegotiationRequest request,
+        CancellationToken cancellationToken = default) =>
+        Continuity.NegotiateAsync(request, cancellationToken);
+
+    public async Task<SessionCreateResult> CreateSessionAsync(
+        SessionCreateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        SessionCreateResult result = await Continuity.CreateSessionAsync(request, cancellationToken);
+        return result.Session is null
+            ? result
+            : result with { Session = Wrap(result.Session, request.SessionSpec) };
+    }
+
+    public async Task<SessionResumeResult> ResumeSessionAsync(
+        SessionResumeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        SessionResumeResult result = await Continuity.ResumeSessionAsync(request, cancellationToken);
+        return result.Session is null
+            ? result
+            : result with { Session = Wrap(result.Session, request.SessionSpec) };
+    }
+
+    public Task<SessionContentResult> ReadSessionAsync(
+        SessionContentRequest request,
+        CancellationToken cancellationToken = default) =>
+        Continuity.ReadSessionAsync(request, cancellationToken);
+
+    public Task<SessionSeedResult> SeedSessionAsync(
+        SessionSeedRequest request,
+        CancellationToken cancellationToken = default) =>
+        Continuity.SeedSessionAsync(
+            request.Target is InputWaitProgressAgentSession progress
+                ? request with { Target = progress.Inner }
+                : request,
+            cancellationToken);
+
+    public async Task<SessionForkResult> ForkSessionAsync(
+        SessionForkRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        SessionForkResult result = await Continuity.ForkSessionAsync(request, cancellationToken);
+        return result.Session is null
+            ? result
+            : result with { Session = Wrap(result.Session, request.SessionSpec) };
+    }
+
+    public Task<SessionReconcileResult> ReconcileAsync(
+        SessionReconcileRequest request,
+        CancellationToken cancellationToken = default) =>
+        Continuity.ReconcileAsync(request, cancellationToken);
+
+    private IAgentSessionContinuityRuntime Continuity => _inner as IAgentSessionContinuityRuntime
+        ?? throw new InvalidOperationException(
+            "The inner agent runtime does not support continuity operations.");
+
+    private IAgentSession Wrap(IAgentSession session, AgentSessionSpec spec) =>
+        new InputWaitProgressAgentSession(this, session, AgentConfigurationCatalog.Format(spec.Model));
 
     private async Task<AgentTurnResult> RunWithProgressAsync(
         string repositoryId,

@@ -51,13 +51,18 @@ public sealed class CompletedEpicArchiveService(
 
         (_observer ?? NullCompletionObserver.Instance).Phase("Synthesize completed epic");
         string label = index.ToString(CultureInfo.InvariantCulture);
-        _ = await _promptRunner.RunAsync(
+        string synthesisOutput = await _promptRunner.RunAsync(
             new CompletionRuntimePromptInvocation(
                 CompletionRuntimePromptNames.SynthesizeCompletedEpic,
                 Label: label),
             cancellationToken);
 
         string? synthesis = await artifacts.ReadAsync(synthesisPath);
+        if (string.IsNullOrWhiteSpace(synthesis) && !string.IsNullOrWhiteSpace(synthesisOutput))
+        {
+            await artifacts.WriteAsync(synthesisPath, synthesisOutput);
+            synthesis = synthesisOutput;
+        }
         if (string.IsNullOrWhiteSpace(synthesis))
         {
             throw new CompletionCertificationException(

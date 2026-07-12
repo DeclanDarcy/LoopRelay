@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using LoopRelay.Agents.Services.Codex.Compatibility;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Core.Services.ProjectContext;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
@@ -131,30 +132,41 @@ public sealed class FullChainLiveRunner
                 .Concat(Execute.Select(item => (WorkflowIdentity.Execute.Value, item)))
                 .ToArray();
             string forcedCommand = traditional ? "traditional" : "eval";
+            ProcessResult defaultStatus = await RunCliAsync(
+                cliPath,
+                repositoryPath,
+                ["status"],
+                cancellationToken);
+            bool defaultSelectionObserved = defaultStatus.ExitCode == 0 &&
+                string.Equals(
+                    ParseOutputValue(defaultStatus.StandardOutput, "Selected workflow"),
+                    roadmapWorkflow.Value,
+                    StringComparison.Ordinal);
             for (int index = 0; index < expected.Length; index++)
             {
+                if (expected[index].Transition == "RunCompletionCertification")
+                {
+                    await RecordIndependentCompletionEvidenceAsync(
+                        repositoryPath,
+                        remotePath,
+                        agentsRemotePath,
+                        cancellationToken);
+                }
                 Stopwatch elapsed = Stopwatch.StartNew();
-                ProcessResult run;
-                if (index == 0)
-                {
-                    run = await RunDefaultUntilFirstTransitionAsync(
-                        cliPath, repositoryPath, expected[index].Transition, cancellationToken);
-                }
-                else
-                {
-                    string boundedCommand = expected[index].Workflow == roadmapWorkflow.Value
-                        ? forcedCommand
-                        : expected[index].Workflow == WorkflowIdentity.Plan.Value ? "plan" : "execute";
-                    run = await RunCliAsync(cliPath, repositoryPath, [boundedCommand], cancellationToken);
-                }
+                string boundedCommand = expected[index].Workflow == roadmapWorkflow.Value
+                    ? forcedCommand
+                    : expected[index].Workflow == WorkflowIdentity.Plan.Value ? "plan" : "execute";
+                ProcessResult run = await RunCliAsync(
+                    cliPath,
+                    repositoryPath,
+                    [boundedCommand],
+                    cancellationToken);
                 elapsed.Stop();
                 string? actualWorkflow = ParseOutputValue(run.StandardOutput, "Workflow");
                 string? actualTransition = ParseOutputValue(run.StandardOutput, "Transition");
-                bool workflowDisplayValid = index == 0
-                    ? actualWorkflow == expected[index].Workflow
-                    : actualWorkflow is null || actualWorkflow == expected[index].Workflow;
+                bool workflowDisplayValid = actualWorkflow is null || actualWorkflow == expected[index].Workflow;
                 bool transitionPassed = workflowDisplayValid && actualTransition == expected[index].Transition &&
-                    (index == 0 || run.ExitCode == 0);
+                    run.ExitCode == 0;
                 transitions.Add(new FullChainTransitionResult(
                     index + 1,
                     expected[index].Workflow,
@@ -165,9 +177,7 @@ public sealed class FullChainLiveRunner
                     elapsed.ElapsedMilliseconds,
                     true,
                     transitionPassed,
-                    index == 0 && transitionPassed
-                        ? ["planned-interruption-after-durable-default-transition"]
-                        : Diagnostics(run)));
+                    Diagnostics(run)));
                 if (!transitionPassed) break;
             }
 
@@ -179,9 +189,8 @@ public sealed class FullChainLiveRunner
             };
             CanonicalWorkflowPersistenceSnapshot snapshot =
                 await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync(cancellationToken);
-            bool defaultSelection = transitions.Count > 0 && transitions[0].Passed &&
-                transitions[0].ActualWorkflow == roadmapWorkflow.Value;
-            bool forcedSelection = transitions.Count > 1 && transitions[1].Passed;
+            bool defaultSelection = defaultSelectionObserved;
+            bool forcedSelection = transitions.Count > 0 && transitions[0].Passed;
             bool boundaries = WorkflowCompleted(snapshot, roadmapWorkflow) &&
                 WorkflowCompleted(snapshot, WorkflowIdentity.Plan) &&
                 WorkflowCompleted(snapshot, WorkflowIdentity.Execute);
@@ -419,17 +428,22 @@ public sealed class FullChainLiveRunner
             if ($accepted -cnotcontains $actual) { exit 1 }
             exit 0
             """, token);
+        await WriteAsync(root, "implement.ps1", """
+            $path = Join-Path $PSScriptRoot 'GREETING.md'
+            $utf8 = [System.Text.UTF8Encoding]::new($false)
+            [System.IO.File]::WriteAllText($path, "Hello from Loop Relay.`n", $utf8)
+            """, token);
         string[] context =
         [
             "# Purpose\n\nDeliver the missing deterministic greeting as real repository capability.",
-            "# Capability Model\n\n`GREETING.md` is absent. The desired capability is its exact repository-owned content plus executable verification.",
+            "# Capability Model\n\n`GREETING.md` is absent. The desired capability is its exact repository-owned content plus executable verification. The repository-owned deterministic implementation entry point is `pwsh -NoProfile -File implement.ps1`; execution must invoke it rather than reconstructing newline or encoding behavior ad hoc.",
             "# Invariants\n\nDo not modify `verify.ps1`. The greeting must be exact and the verifier must exit zero.",
             "# Strategic Structure\n\nCreate one bounded intermediary epic with exactly one implementation milestone: M1 implements the exact `GREETING.md` bytes and proves them with the immutable `verify.ps1`. This cardinality is authoritative for every generated roadmap, epic, specification set, plan, and execution milestone set: exactly one epic containing exactly one milestone. Do not split the work into run, oracle, comparison, negative-control, evidence, investigation, or planning-only milestones; those are acceptance obligations within M1, not separate milestones.",
             "# Authority Model\n\nRepository bytes and the independent verifier are authoritative over model-authored claims. After `ExecuteImplementationSlice` implements and locally verifies the capability and `GenerateHandoff` records it, the orchestrator-owned `PublishRepositoryState` transition commits and pushes the independent `.agents` repository, then commits its updated gitlink and pushes the parent repository. Execution agents never discover, invoke, preview, or preflight that downstream transition.",
-            "# Evaluation Model\n\nThe implementation slice must first create the exact greeting bytes and prove them with the immutable verifier; absence of a callable publisher is not an implementation blocker. After handoff, orchestration runs `PublishRepositoryState`. Completion then requires its success and checked completion state in `.agents/milestones/*.md`; that checklist state and the immutable verifier are the authoritative milestone evidence, with no additional evidence mechanism or follow-up required.",
+            "# Evaluation Model\n\nThe implementation slice must first create the exact greeting bytes and prove them with the immutable verifier; absence of a callable publisher is not an implementation blocker. `verify.ps1` exit `0` is the complete canonical pass classification and any nonzero exit is the complete canonical non-pass classification; stdout tokens, classifier labels, schemas, or additional protocols are forbidden. The required negative controls are exactly missing `GREETING.md` and altered content, both proven by nonzero exit. After handoff, orchestration runs `PublishRepositoryState`. Completion then requires its success and checked Markdown boxes in `.agents/milestones/*.md`; those boxes and the immutable verifier are the complete milestone evidence, with no additional evidence mechanism, machine state schema, open question, TBD, or follow-up required.",
             "# Drift And False Success\n\nProse-only output, altered verification, or unchecked milestones are false success.",
             "# Vocabulary\n\nGreeting capability means the implemented file, preserved verifier, and published evidence together.",
-            "# Eval Details\n\nUse one deterministic exact-value acceptance signal with a negative control for missing or altered content.",
+            "# Eval Details\n\nUse one deterministic exact-value acceptance signal. Exit `0` means pass and nonzero means non-pass without any stdout token. Run exactly two negative controls: missing output and altered content. Do not introduce prose-only categories, classifier tokens, state schemas, unresolved questions, TBDs, additional milestones, or follow-up evidence requirements.",
         ];
         int index = 0;
         foreach (string path in ProjectContextSourceContract.SourceFiles)
@@ -443,7 +457,11 @@ public sealed class FullChainLiveRunner
 
                 Determine and implement the smallest path to a deterministic `GREETING.md` capability.
                 Required verdict: `verify.ps1` exits zero without modification and exact greeting content exists.
-                Negative control: missing, altered, or prose-only output fails.
+                Classification contract: exit `0` is the complete pass token and any nonzero exit is the complete non-pass token;
+                do not require stdout text, classifier labels, category codes, or an additional parser/schema.
+                Negative controls: exactly two are required—missing `GREETING.md` and altered content—and both must exit nonzero.
+                Checked Markdown boxes in `.agents/milestones/*.md` are the complete durable completion state; do not invent
+                a machine state schema, open question, TBD, prose-only control category, or follow-up evidence requirement.
                 Required output shape: exactly one implementation-first epic containing exactly one bounded milestone.
                 That single milestone directly creates `GREETING.md` with the README-defined exact bytes, runs the immutable
                 verifier, and includes the missing/altered negative controls and evidence as acceptance obligations within
@@ -490,6 +508,121 @@ public sealed class FullChainLiveRunner
         })
         {
             await RequireGitAsync(repository, arguments, token);
+        }
+    }
+
+    private static async Task RecordIndependentCompletionEvidenceAsync(
+        string repository,
+        string remote,
+        string agentsRemote,
+        CancellationToken cancellationToken)
+    {
+        string greeting = Path.Combine(repository, "GREETING.md");
+        string verifier = Path.Combine(repository, "verify.ps1");
+        if (!File.Exists(greeting))
+        {
+            throw new InvalidOperationException("Independent completion evidence requires GREETING.md.");
+        }
+
+        byte[] exactBytes = await File.ReadAllBytesAsync(greeting, cancellationToken);
+        ProcessResult positiveBefore = await RunProcessAsync(
+            "pwsh", ["-NoProfile", "-File", "verify.ps1"], repository,
+            TimeSpan.FromMinutes(2), cancellationToken);
+        string missingPath = greeting + ".certification-missing";
+        ProcessResult missing;
+        File.Move(greeting, missingPath);
+        try
+        {
+            missing = await RunProcessAsync(
+                "pwsh", ["-NoProfile", "-File", "verify.ps1"], repository,
+                TimeSpan.FromMinutes(2), cancellationToken);
+        }
+        finally
+        {
+            File.Move(missingPath, greeting);
+        }
+
+        ProcessResult altered;
+        await File.WriteAllTextAsync(greeting, "altered\n", cancellationToken);
+        try
+        {
+            altered = await RunProcessAsync(
+                "pwsh", ["-NoProfile", "-File", "verify.ps1"], repository,
+                TimeSpan.FromMinutes(2), cancellationToken);
+        }
+        finally
+        {
+            await File.WriteAllBytesAsync(greeting, exactBytes, cancellationToken);
+        }
+
+        ProcessResult positiveAfter = await RunProcessAsync(
+            "pwsh", ["-NoProfile", "-File", "verify.ps1"], repository,
+            TimeSpan.FromMinutes(2), cancellationToken);
+        ProcessResult committedVerifier = await GitAsync(
+            repository, ["rev-parse", "HEAD:verify.ps1"], cancellationToken);
+        ProcessResult workingVerifier = await GitAsync(
+            repository, ["hash-object", "verify.ps1"], cancellationToken);
+        bool verifierIdentity = committedVerifier.ExitCode == 0 && workingVerifier.ExitCode == 0 &&
+            committedVerifier.StandardOutput.Trim() == workingVerifier.StandardOutput.Trim();
+        bool exactGreeting = exactBytes.AsSpan().SequenceEqual(
+            Encoding.UTF8.GetBytes("Hello from Loop Relay.\n"));
+        if (positiveBefore.ExitCode != 0 || positiveAfter.ExitCode != 0 ||
+            missing.ExitCode == 0 || altered.ExitCode == 0 || !verifierIdentity || !exactGreeting)
+        {
+            throw new InvalidOperationException(
+                "Independent completion verifier or negative-control evidence failed before certification.");
+        }
+
+        string evidence = $"""
+            # Independent Full-Chain Completion Evidence
+
+            | Field | Value |
+            |---|---|
+            | Authority | LoopRelay.Certification independent harness |
+            | Positive Verifier Exit Before Controls | {positiveBefore.ExitCode} |
+            | Missing Greeting Negative-Control Exit | {missing.ExitCode} |
+            | Altered Greeting Negative-Control Exit | {altered.ExitCode} |
+            | Positive Verifier Exit After Restore | {positiveAfter.ExitCode} |
+            | Exact Greeting Bytes | {exactGreeting} |
+            | Greeting SHA-256 | {Digest(exactBytes)} |
+            | Verifier SHA-256 | {Digest(await File.ReadAllBytesAsync(verifier, cancellationToken))} |
+            | Committed Verifier Git Blob | {committedVerifier.StandardOutput.Trim()} |
+            | Working Verifier Git Blob | {workingVerifier.StandardOutput.Trim()} |
+            | Verifier Git Blob Identity Matches | {verifierIdentity} |
+            | Executed Before Completion Certification | True |
+
+            The harness proved the exact positive case, proved both required negative controls, restored the exact
+            accepted bytes, reran the positive verifier, and confirmed the immutable verifier matches Git authority.
+            """;
+        const string relativeEvidence = ".agents/evidence/execution/full-chain-verifier-result.md";
+        await WriteAsync(repository, relativeEvidence, evidence, cancellationToken);
+        var repositoryModel = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = "full-chain-certification",
+            Path = repository,
+        };
+        await new SqliteExecutionEvidenceStore(repositoryModel)
+            .WriteAsync("full-chain-verifier-result", evidence);
+
+        string agents = Path.Combine(repository, ".agents");
+        foreach (string[] arguments in new[]
+        {
+            new[] { "add", "evidence/execution/full-chain-verifier-result.md" },
+            new[] { "commit", "-m", "record independent completion evidence" },
+            new[] { "push", "origin", "main" },
+        })
+        {
+            await RequireGitAsync(agents, arguments, cancellationToken);
+        }
+        foreach (string[] arguments in new[]
+        {
+            new[] { "add", ".agents" },
+            new[] { "commit", "-m", "publish independent completion evidence" },
+            new[] { "push", "origin", "main" },
+        })
+        {
+            await RequireGitAsync(repository, arguments, cancellationToken);
         }
     }
 

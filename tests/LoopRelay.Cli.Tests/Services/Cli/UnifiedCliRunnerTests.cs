@@ -232,6 +232,31 @@ public sealed class UnifiedCliRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_corrupt_workspace_database_fails_closed_without_crashing_or_leaking_paths()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await File.WriteAllTextAsync(databasePath, "not-a-sqlite-database");
+        var invocation = new UnifiedCliInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.DefaultChained),
+            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+
+        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(4, exitCode);
+        Assert.Contains("Storage authority: Corrupt", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Corruption: SQLite authority is unreadable", output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(repository.Path, output.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(string.Empty, error.ToString());
+        Assert.Equal("not-a-sqlite-database", await File.ReadAllTextAsync(databasePath));
+    }
+
+    [Fact]
     public async Task RunAsync_status_migrates_pre_m2_database_with_latched_blocked_row_before_any_read()
     {
         Repository repository = CreateRepository();

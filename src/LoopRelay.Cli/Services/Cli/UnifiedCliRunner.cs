@@ -139,6 +139,23 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
             await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
             return null;
         }
+        catch (SqliteException exception)
+        {
+            // A corrupt/non-SQLite authority is an expected fail-closed product outcome, not an
+            // unhandled process crash. Keep diagnostics bounded and path-free for retained
+            // certification evidence.
+            _output.WriteLine("Storage authority: Corrupt");
+            _output.WriteLine("Usable authority: False");
+            _output.WriteLine("Evidence: (none)");
+            _output.WriteLine("Stale exports: (none)");
+            _output.WriteLine("Conflicts: (none)");
+            _output.WriteLine($"Corruption: SQLite authority is unreadable (error {exception.SqliteErrorCode}).");
+            _output.WriteLine("Unsupported schema: (none)");
+            _output.WriteLine("Unresolved references: (none)");
+            _output.WriteLine("Partial transactions: (none)");
+            _output.WriteLine("Warnings: Repair or replace the corrupt workspace database before continuing.");
+            return 4;
+        }
         catch (InvalidOperationException exception)
         {
             _error.WriteLine(exception.Message);
@@ -183,6 +200,8 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
             : [];
         CanonicalWorkflowPersistenceSnapshot persisted = await _composition.Persistence.LoadSnapshotAsync(cancellationToken);
         IReadOnlyList<string> pendingEffects = persisted.EffectRecords
+            .GroupBy(effect => (effect.RunId, effect.Effect))
+            .Select(group => group.OrderByDescending(effect => effect.RecordId).First())
             .Where(effect => effect.Status is not EffectExecutionStatus.Succeeded)
             .Select(effect => $"{effect.Effect}:{effect.Status}")
             .ToArray();
@@ -307,6 +326,22 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
         RepositoryObservation observation,
         CancellationToken cancellationToken)
     {
+        WorkflowStopReason? lastStopReason = null;
+        bool certifiedTerminalState = observation.Products.Any(product =>
+                product.Product.Identity == ProductIdentity.CertifiedCompletion && product.GateUsable) &&
+            observation.WorkflowStates.Any(state =>
+                state.Workflow == WorkflowIdentity.Execute &&
+                state.State == WorkflowResolutionState.Completed &&
+                state.CurrentStage is null);
+        if (certifiedTerminalState)
+        {
+            lastStopReason = WorkflowStopReason.BoundedWorkflowCompleted;
+            _output.WriteLine($"Stop reason: {WorkflowStopReason.BoundedWorkflowCompleted}");
+            _output.WriteLine(
+                "Explanation: CertifiedCompletion is already durable; no workflow, provider, or effect work is required.");
+            return 0;
+        }
+
         int guard = invocation.WorkflowInvocation.IsBounded
             ? 1
             : _composition.Policy.MaxUnboundedContinuationSteps;
@@ -364,7 +399,6 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
         {
         }
 
-        WorkflowStopReason? lastStopReason = null;
         try
         {
             for (int step = 0; step < guard; step++)

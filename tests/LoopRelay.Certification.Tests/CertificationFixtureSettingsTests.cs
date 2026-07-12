@@ -20,14 +20,19 @@ public sealed class CertificationFixtureSettingsTests
             await File.WriteAllTextAsync(cliPath, string.Empty);
             await File.WriteAllTextAsync(
                 Path.Combine(cliDirectory, "settings.default.json"),
-                """{"brainModel":"gpt-5.6-sol","brainEffort":"xhigh","artifactPolicy":{}}""");
+                """{"schemaVersion":"settings-v3","runtime":{"brain":{"model":"gpt-5.6-sol","effort":"xhigh"}},"permissions":{}}""");
 
             string path = await CertificationFixtureSettings.WriteAsync(caseDirectory, cliPath);
             JsonNode settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
 
-            Assert.Equal(CertificationFixtureSettings.BrainModel, settings["brainModel"]?.GetValue<string>());
-            Assert.Equal(CertificationFixtureSettings.BrainEffort, settings["brainEffort"]?.GetValue<string>());
-            Assert.NotNull(settings["artifactPolicy"]);
+            Assert.Equal(
+                CertificationFixtureSettings.BrainModel,
+                settings["runtime"]?["brain"]?["model"]?.GetValue<string>());
+            Assert.Equal(
+                CertificationFixtureSettings.BrainEffort,
+                settings["runtime"]?["brain"]?["effort"]?.GetValue<string>());
+            Assert.Null(settings["brainModel"]);
+            Assert.Null(settings["brainEffort"]);
         }
         finally
         {

@@ -73,6 +73,20 @@ public sealed class OperationalRuntimeCompositionTests
         Assert.IsType<GatedAgentRuntime>(composed);
     }
 
+    [Fact]
+    public async Task Full_operational_chain_preserves_continuity_operations()
+    {
+        var runtime = new ContinuityRuntime();
+        IAgentRuntime composed = Compose(runtime);
+        var continuity = Assert.IsAssignableFrom<IAgentSessionContinuityRuntime>(composed);
+
+        SessionContinuityNegotiationResult result = await continuity.NegotiateAsync(
+            new SessionContinuityNegotiationRequest(
+                "test", "client", "server", null, null, null, default, false));
+
+        Assert.Equal("forwarded", result.Evidence);
+    }
+
     private static IAgentRuntime Compose(
         IAgentRuntime runtime,
         params (string Key, string Value)[] policyOverrides)
@@ -98,7 +112,7 @@ public sealed class OperationalRuntimeCompositionTests
             new ConsoleLoopConsole(TextWriter.Null, TextWriter.Null));
     }
 
-    private sealed class CapabilityOnlyRuntime : IAgentRuntime
+    private class CapabilityOnlyRuntime : IAgentRuntime
     {
         public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
 
@@ -115,5 +129,37 @@ public sealed class OperationalRuntimeCompositionTests
             throw new NotSupportedException("Composition tests never run turns.");
 
         public ValueTask CloseSessionAsync(IAgentSession session) => ValueTask.CompletedTask;
+    }
+
+    private sealed class ContinuityRuntime : CapabilityOnlyRuntime, IAgentSessionContinuityRuntime
+    {
+        public Task<SessionContinuityNegotiationResult> NegotiateAsync(
+            SessionContinuityNegotiationRequest request,
+            CancellationToken cancellationToken = default) => Task.FromResult(
+                new SessionContinuityNegotiationResult(null!, false, "forwarded"));
+
+        public Task<SessionCreateResult> CreateSessionAsync(
+            SessionCreateRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<SessionResumeResult> ResumeSessionAsync(
+            SessionResumeRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<SessionContentResult> ReadSessionAsync(
+            SessionContentRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<SessionSeedResult> SeedSessionAsync(
+            SessionSeedRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<SessionForkResult> ForkSessionAsync(
+            SessionForkRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<SessionReconcileResult> ReconcileAsync(
+            SessionReconcileRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

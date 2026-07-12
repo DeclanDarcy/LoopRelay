@@ -446,8 +446,7 @@ public sealed class CompletionCertificationServiceTests
 
             if (invocation.RuntimePromptName == CompletionRuntimePromptNames.SynthesizeCompletedEpic)
             {
-                await h.WriteAsync($".agents/archive/epics/{invocation.Label}.md", "# Completed Epic 2");
-                return "synthesized";
+                return "# Completed Epic 2";
             }
 
             if (invocation.RuntimePromptName == CompletionRuntimePromptNames.UpdateRoadmapCompletionContext)
@@ -466,6 +465,7 @@ public sealed class CompletionCertificationServiceTests
             h.Prompts.Invocations,
             invocation => invocation.RuntimePromptName == CompletionRuntimePromptNames.SynthesizeCompletedEpic).Label);
         Assert.Equal("PLAN", await h.ReadAsync(".agents/archive/epics/2/plan.md"));
+        Assert.Equal("# Completed Epic 2", await h.ReadAsync(".agents/archive/epics/2.md"));
     }
 
     [Fact]

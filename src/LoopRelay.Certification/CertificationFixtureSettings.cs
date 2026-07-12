@@ -22,8 +22,12 @@ public static class CertificationFixtureSettings
         string source = Path.Combine(Path.GetDirectoryName(cliPath)!, "settings.default.json");
         JsonNode settings = JsonNode.Parse(await File.ReadAllTextAsync(source, cancellationToken))
             ?? throw new InvalidOperationException("CLI settings template was empty.");
-        settings["brainModel"] = BrainModel;
-        settings["brainEffort"] = BrainEffort;
+        JsonObject runtime = settings["runtime"]?.AsObject()
+            ?? throw new InvalidOperationException("CLI settings template has no canonical runtime section.");
+        JsonObject brain = runtime["brain"]?.AsObject()
+            ?? throw new InvalidOperationException("CLI settings template has no canonical runtime brain section.");
+        brain["model"] = BrainModel;
+        brain["effort"] = BrainEffort;
         string path = Path.Combine(root, "settings.json");
         await File.WriteAllTextAsync(path, settings.ToJsonString(JsonOptions), cancellationToken);
         return path;

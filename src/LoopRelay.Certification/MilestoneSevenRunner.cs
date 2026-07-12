@@ -149,6 +149,8 @@ public sealed class MilestoneSevenRunner
                     $"parent-commits:{parentCountBefore}->{parentCountAfter}",
                     $"agents-commits:{agentsCountBefore}->{agentsCountAfter}",
                     $"gitlink-mode:{(gitlinkExpected ? "160000" : "unexpected")}",
+                    $"cli-stdout:{EvidenceNormalizer.Normalize(run.StandardOutput, repositoryPath)}",
+                    $"cli-stderr:{EvidenceNormalizer.Normalize(run.StandardError, repositoryPath)}",
                 ]);
         }
 
@@ -208,6 +210,8 @@ public sealed class MilestoneSevenRunner
                     $"remote-unchanged:{remoteExpected}",
                     $"dirty-preserved:{dirtyPreserved}",
                     $"explicit-topology-failure:{explicitFailure}",
+                    $"cli-stdout:{EvidenceNormalizer.Normalize(run.StandardOutput, repositoryPath)}",
+                    $"cli-stderr:{EvidenceNormalizer.Normalize(run.StandardError, repositoryPath)}",
                 ]);
         }
     }

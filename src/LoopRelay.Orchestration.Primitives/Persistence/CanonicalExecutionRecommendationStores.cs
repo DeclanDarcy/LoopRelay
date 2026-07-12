@@ -51,6 +51,14 @@ public sealed class CanonicalExecutionRecommendationEvidenceStore(CanonicalWorkf
         return record is null ? null : ToEvidence(record);
     }
 
+    public async Task<ExecutionRecommendationEvidence?> ReadLatestAsync(
+        CancellationToken cancellationToken = default)
+    {
+        CanonicalExecutionRecommendationEvidenceRecord? record =
+            await _store.ReadLatestExecutionRecommendationAsync(cancellationToken);
+        return record is null ? null : ToEvidence(record);
+    }
+
     private static ExecutionRecommendationEvidence ToEvidence(
         CanonicalExecutionRecommendationEvidenceRecord record) => new(
             new ExecutionRecommendationIdentity(record.RecommendationId),

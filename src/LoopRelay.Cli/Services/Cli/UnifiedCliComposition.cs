@@ -15,6 +15,7 @@ using LoopRelay.Agents.Services.Codex.Compatibility;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Abstractions.Persistence;
+using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
 using LoopRelay.Cli.Services.Decisions;
@@ -343,9 +344,10 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             throw new InvalidOperationException("Canonical prompt catalog contains an empty prompt identity.");
         }
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var loopConsole = new ConsoleLoopConsole(output ?? TextWriter.Null, error ?? TextWriter.Null);
         var promptExecutor = new UnifiedPromptExecutor(
             repository, agentRuntime, processRunner,
-            new ConsoleLoopConsole(output ?? TextWriter.Null, error ?? TextWriter.Null),
+            loopConsole,
             continuityRuntime ?? agentRuntime as IAgentSessionContinuityRuntime,
             brainConfiguration,
             persistence,
@@ -380,7 +382,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             new CanonicalTransitionGateEvaluationStore(persistence),
             new CanonicalTransitionCommitStore(persistence),
             transitionBoundaryJournal);
-        var effectExecutor = new UnifiedEffectExecutor(repository, persistence, workflowDefinitions);
+        var effectExecutor = new UnifiedEffectExecutor(
+            repository, persistence, workflowDefinitions, processRunner, loopConsole);
         var effectCoordinator = new TransitionEffectCoordinator(
             effectExecutor,
             new CanonicalTransitionEffectIntentStateStore(persistence));
@@ -934,7 +937,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                     }
                 }
 
-                if (sections.Count == 0 && inputs.Products.Any(product =>
+                if (!sections.Any(section => section.Title.StartsWith("Input Product:", StringComparison.Ordinal)) &&
+                    inputs.Products.Any(product =>
                     product.Identity == ProductIdentity.EvaluationIntent))
                 {
                     string inputDirectory = ResolveRepositoryPath(
@@ -958,6 +962,17 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                             files.Select(file => ArtifactPath.ToRepositoryRelativePath(_repository, file)).ToArray()));
                     }
                 }
+
+                var artifacts = new ProjectionArtifacts(
+                    new RepositoryArtifactStore(new FileSystemArtifactStore(), _repository),
+                    _repository);
+                ProjectContext projectContext = await new ProjectContextLoader(artifacts)
+                    .LoadAsync(cancellationToken);
+                sections.Insert(0, new PromptContextSection(
+                    "Project Context",
+                    projectContext.Content,
+                    "ProjectContext",
+                    projectContext.SourceFiles));
             }
             else if (request.Workflow == WorkflowIdentity.Plan &&
                 PlanPromptContext.Supports(definition.Identity))
@@ -1374,7 +1389,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             definition.Identity.Value is "ExecuteImplementationSlice" or "GenerateHandoff";
 
         public static IReadOnlyList<string> Evidence(WorkflowTransitionDefinition definition) =>
-            [$".LoopRelay/evidence/execute-implementation/{definition.Identity}.md"];
+            definition.Identity.Value == "ExecuteImplementationSlice"
+                ? [".agents/evidence/execution/execution.md"]
+                : [$".LoopRelay/evidence/execute-implementation/{definition.Identity}.md"];
     }
 
     private static class ExecuteRepositoryStateTransitions
@@ -2941,13 +2958,11 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         private async Task<ResolvedRuntimeProfile> ResolveExecutionRuntimeProfileAsync(
             CancellationToken cancellationToken)
         {
-            LoopHistoryRecord decisionFact = await new LedgerLoopHistoryStore(_repository)
-                .ReadLatestAsync(LoopHistoryKind.Decisions, cancellationToken)
-                ?? throw new InvalidOperationException("Canonical decision history fact was not found.");
-            var decisionProduct = new DecisionProductVersionIdentity(decisionFact.Identity.Value);
-            ExecutionRecommendationEvidence? recommendation =
-                await new CanonicalExecutionRecommendationEvidenceStore(_persistence)
-                    .ReadForDecisionAsync(decisionProduct, cancellationToken);
+            var recommendationStore = new CanonicalExecutionRecommendationEvidenceStore(_persistence);
+            ExecutionRecommendationEvidence recommendation =
+                await recommendationStore.ReadLatestAsync(cancellationToken)
+                ?? throw new InvalidOperationException("Canonical execution recommendation evidence was not found.");
+            DecisionProductVersionIdentity decisionProduct = recommendation.DecisionProduct;
             var fallback = new ResolvedRuntimeProfile(
                 new RuntimeProfileIdentity("runtime-fallback"),
                 "codex",
@@ -3054,15 +3069,13 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             return "No live operational delta was present; operational context remains current.";
         }
 
-        private async Task<string> ExecuteRepositoryPublicationAsync(CancellationToken cancellationToken)
+        private Task<string> ExecuteRepositoryPublicationAsync(CancellationToken cancellationToken)
         {
             var publisher = new AgentsSubmodulePublisher(_processRunner, _repository, console);
-            bool committed = await publisher.PublishAsync(
-                AgentsSubmodulePublisher.ExecutionHandoffMessage,
-                cancellationToken);
-            return committed
-                ? "Published .agents repository state and recorded parent gitlink."
-                : "Repository state publication found no .agents changes to commit.";
+            publisher.EnsureSupportedTopology();
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                "Repository publication topology is valid; publication is authorized only in the durable effect phase.");
         }
 
         private async Task<string> ExecuteCommitEvaluationAsync(CancellationToken cancellationToken)
@@ -5194,7 +5207,9 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     private sealed class UnifiedEffectExecutor(
         Repository _repository,
         CanonicalWorkflowPersistenceStore _store,
-        IReadOnlyList<WorkflowDefinition> _definitions) : IEffectExecutor, ITransitionEffectIntentExecutor
+        IReadOnlyList<WorkflowDefinition> _definitions,
+        IProcessRunner _processRunner,
+        ILoopConsole _console) : IEffectExecutor, ITransitionEffectIntentExecutor
     {
         public async Task<EffectExecutionRecord> ExecuteAsync(
             CanonicalCausalContext causality,
@@ -5204,14 +5219,13 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             WorkflowTransitionDefinition definition = _definitions
                 .SelectMany(workflow => workflow.Transitions)
                 .Single(transition => transition.Effects.Any(candidate => candidate.Identity == effect));
-            RepositoryObservation observation = await new RepositoryObserver()
-                .ObserveAsync(_repository.Path, cancellationToken);
+            EffectDefinition requestedEffect = definition.Effects.Single(candidate => candidate.Identity == effect);
             HashSet<ProductIdentity> produced = definition.ProducedProducts
                 .Select(product => product.Identity)
                 .ToHashSet();
-            ProductRecord[] products = observation.Products
-                .Where(product => produced.Contains(product.Product.Identity))
-                .Select(product => product.Product)
+            CanonicalWorkflowPersistenceSnapshot snapshot = await _store.LoadSnapshotAsync(cancellationToken);
+            ProductRecord[] products = snapshot.Products
+                .Where(product => produced.Contains(product.Identity))
                 .ToArray();
             var validation = new ProductValidationResult(
                 ProductValidationStatus.Valid,
@@ -5222,6 +5236,35 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
                 [],
                 "Canonical committed products were re-observed for effect execution.",
                 [causality.TransitionRun.Value]);
+            if (requestedEffect.Category == EffectCategory.Publication)
+            {
+                var publisher = new AgentsSubmodulePublisher(_processRunner, _repository, _console);
+                try
+                {
+                    publisher.EnsureSupportedTopology();
+                }
+                catch (LoopStepException exception)
+                {
+                    return new EffectExecutionRecord(
+                        effect,
+                        EffectExecutionStatus.Failed,
+                        exception.Message,
+                        ["publication-topology:unsupported"]);
+                }
+
+                // This is the external publication boundary. Any exception after preflight is
+                // allowed to escape so the coordinator records Unknown rather than retrying a
+                // potentially successful push.
+                await publisher.PublishAsync(
+                    PublicationMessage(definition),
+                    cancellationToken);
+                return new EffectExecutionRecord(
+                    effect,
+                    EffectExecutionStatus.Succeeded,
+                    "Repository publication completed.",
+                    [causality.TransitionRun.Value, $"transition:{definition.Identity.Value}"]);
+            }
+
             EffectExecutionResult result = await ExecuteAsync(
                 definition,
                 validation,
@@ -5230,6 +5273,16 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             return result.Effects.FirstOrDefault(record => record.Effect == effect)
                 ?? new EffectExecutionRecord(effect, result.Status, result.Explanation, result.Evidence);
         }
+
+        private static string PublicationMessage(WorkflowTransitionDefinition definition) =>
+            definition.Identity.Value switch
+            {
+                "PublishRepositoryState" => AgentsSubmodulePublisher.ExecutionHandoffMessage,
+                "UpdateOperationalContext" or "GenerateOperationalContext" =>
+                    AgentsSubmodulePublisher.ContextUpdateMessage,
+                "RunCompletionCertification" => AgentsSubmodulePublisher.CompletionCertificationMessage,
+                _ => $"Orchestration loop: publish {definition.Identity.Value}",
+            };
 
         public async Task<EffectExecutionResult> ExecuteAsync(
             WorkflowTransitionDefinition definition,

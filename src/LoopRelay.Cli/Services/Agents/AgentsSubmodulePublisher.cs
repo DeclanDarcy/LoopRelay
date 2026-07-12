@@ -135,7 +135,7 @@ internal sealed class AgentsSubmodulePublisher
         }
     }
 
-    private void EnsureSupportedTopology()
+    internal void EnsureSupportedTopology()
     {
         // Scripted runners have their own topology assertions. The active production runner must prove that
         // `.agents` is an independent Git worktree before any `git add -A` can execute there; otherwise Git

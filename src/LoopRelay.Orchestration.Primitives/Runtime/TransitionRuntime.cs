@@ -171,12 +171,68 @@ public sealed class TransitionRuntime(
             cancellationToken);
 
         PromptExecutionResult executionResult;
+        async Task<TransitionRuntimeResult> CompleteInjectedFaultAsync(TransitionFaultInjectedException fault)
+        {
+            TransitionDurableState state = fault.Observation.Boundary switch
+            {
+                TransitionBoundaryKind.PreSubmission => TransitionDurableState.Cancelled,
+                TransitionBoundaryKind.ProviderCompleted => TransitionDurableState.PromptCompleted,
+                _ => TransitionDurableState.ProviderOutcomeUnknown,
+            };
+            RuntimeOutcomeKind outcome = state == TransitionDurableState.Cancelled
+                ? RuntimeOutcomeKind.Cancelled
+                : RuntimeOutcomeKind.RecoveryRequired;
+            string explanation =
+                $"Certification interrupted the transition at the durable {fault.Observation.Boundary} boundary.";
+            string[] faultEvidence =
+            [
+                fault.GetType().Name,
+                $"boundary:{fault.Observation.Boundary}",
+                prepared.Dispatch.Dispatch.Value,
+            ];
+            await _evidenceStore.RecordFailureAsync(
+                causality,
+                definition.Identity,
+                explanation,
+                CancellationToken.None);
+            await _runStore.PersistStateAsync(
+                State(causality, definition.Identity, state, explanation, faultEvidence),
+                CancellationToken.None);
+            await _attemptStore.PersistAttemptCompletedAsync(
+                attempt,
+                DateTimeOffset.UtcNow,
+                outcome.ToString(),
+                CancellationToken.None);
+            return Result(
+                outcome,
+                state,
+                definition.Identity,
+                inputGate,
+                null,
+                null,
+                null,
+                [],
+                explanation,
+                faultEvidence,
+                causality,
+                attemptCompleted: true);
+        }
+
         try
         {
             executionResult = await _promptGateway.DispatchAsync(prepared, cancellationToken);
         }
+        catch (TransitionFaultInjectedException fault)
+        {
+            return await CompleteInjectedFaultAsync(fault);
+        }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
+            if (FindInjectedFault(exception) is { } fault)
+            {
+                return await CompleteInjectedFaultAsync(fault);
+            }
+
             string diagnostic = exception.InnerException?.Message ?? exception.Message;
             string explanation =
                 "Provider dispatch did not return a normalized outcome; Recovery Authority must reconcile it before any repeat execution. " +
@@ -536,6 +592,27 @@ public sealed class TransitionRuntime(
             GateStatus.Invalid => RuntimeOutcomeKind.Failed,
             _ => RuntimeOutcomeKind.Failed,
         };
+    }
+
+    private static TransitionFaultInjectedException? FindInjectedFault(Exception exception)
+    {
+        if (exception is TransitionFaultInjectedException fault)
+        {
+            return fault;
+        }
+
+        if (exception is AggregateException aggregate)
+        {
+            foreach (Exception inner in aggregate.Flatten().InnerExceptions)
+            {
+                if (FindInjectedFault(inner) is { } nested)
+                {
+                    return nested;
+                }
+            }
+        }
+
+        return exception.InnerException is null ? null : FindInjectedFault(exception.InnerException);
     }
 
     private static TransitionDurableState DurableStateFor(RuntimeOutcomeKind outcome) => outcome switch

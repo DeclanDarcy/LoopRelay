@@ -75,7 +75,11 @@ public sealed class MilestoneSixRunner
 
             Directory.CreateDirectory(repositoryPath);
             await SeedRepositoryAsync(repositoryPath, cancellationToken);
-            await InitializeGitAsync(repositoryPath, cancellationToken);
+            await InitializeGitAsync(
+                repositoryPath,
+                Path.Combine(root, "repository-remote.git"),
+                Path.Combine(root, "agents-remote.git"),
+                cancellationToken);
             string verifierHash = Digest(await File.ReadAllBytesAsync(Path.Combine(repositoryPath, "verify.ps1"), cancellationToken));
             ProcessResult init = await RunCliAsync(cliPath, repositoryPath, ["storage", "init"], cancellationToken);
             if (init.ExitCode != 0)
@@ -359,8 +363,30 @@ public sealed class MilestoneSixRunner
             root.TryGetProperty("handoffCompleted", out JsonElement handoff) && handoff.GetBoolean();
     }
 
-    private static async Task InitializeGitAsync(string root, CancellationToken token)
+    private static async Task InitializeGitAsync(
+        string root,
+        string remote,
+        string agentsRemote,
+        CancellationToken token)
     {
+        Directory.CreateDirectory(remote);
+        Directory.CreateDirectory(agentsRemote);
+        await RequireGitAsync(Path.GetDirectoryName(remote)!, ["init", "--bare", "--initial-branch=main", remote], token);
+        await RequireGitAsync(Path.GetDirectoryName(agentsRemote)!, ["init", "--bare", "--initial-branch=main", agentsRemote], token);
+        string agents = Path.Combine(root, ".agents");
+        foreach (string[] arguments in new[]
+        {
+            new[] { "init", "-b", "main" },
+            new[] { "config", "user.email", "certification@looprelay.invalid" },
+            new[] { "config", "user.name", "LoopRelay Certification" },
+            new[] { "add", "." },
+            new[] { "commit", "-m", "seed execute agent artifacts" },
+            new[] { "remote", "add", "origin", agentsRemote },
+            new[] { "push", "-u", "origin", "main" },
+        })
+        {
+            await RequireGitAsync(agents, arguments, token);
+        }
         foreach (string[] arguments in new[]
         {
             new[] { "init", "-b", "main" },
@@ -368,16 +394,30 @@ public sealed class MilestoneSixRunner
             new[] { "config", "user.name", "LoopRelay Certification" },
             new[] { "add", "." },
             new[] { "commit", "-m", "seed execute certification" },
+            new[] { "remote", "add", "origin", remote },
+            new[] { "push", "-u", "origin", "main" },
         })
         {
-            ProcessResult result = await RunProcessAsync("git", arguments, root, token);
-            if (result.ExitCode != 0) throw new InvalidOperationException($"git {arguments[0]} failed: {result.StandardError}");
+            await RequireGitAsync(root, arguments, token);
+        }
+    }
+
+    private static async Task RequireGitAsync(
+        string root,
+        IReadOnlyList<string> arguments,
+        CancellationToken token)
+    {
+        ProcessResult result = await RunProcessAsync("git", arguments, root, token);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"git {arguments[0]} failed: {result.StandardError}");
         }
     }
 
     private static Dictionary<string, string> SnapshotRepository(string root) =>
         Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
             .Where(path => !Path.GetRelativePath(root, path).Replace('\\', '/').StartsWith(".git/", StringComparison.Ordinal) &&
+                !Path.GetRelativePath(root, path).Replace('\\', '/').StartsWith(".agents/.git/", StringComparison.Ordinal) &&
                 !Path.GetRelativePath(root, path).Replace('\\', '/').StartsWith(".LoopRelay/", StringComparison.Ordinal))
             .ToDictionary(
                 path => Path.GetRelativePath(root, path).Replace('\\', '/'),

@@ -10,6 +10,7 @@ using LoopRelay.Agents.Services.Process;
 using LoopRelay.Agents.Services.Usage;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
@@ -142,25 +143,91 @@ public sealed class MilestoneFourRunner
             await File.WriteAllTextAsync(Path.Combine(repositoryPath, "README.md"), "# recovery canary\n", cancellationToken);
             var repository = new Repository { Id = Guid.NewGuid(), Name = caseIdentity, Path = repositoryPath };
             string runId = $"m4-{caseIdentity}";
+            var persistence = new CanonicalWorkflowPersistenceStore(repository);
+            CanonicalTransitionExecutionContext execution = await SeedExecutionContextAsync(
+                persistence,
+                runId,
+                cancellationToken);
             var live = new LivePromptExecutor(codexExecutable, repositoryPath);
-            var effects = new MarkerEffectExecutor(Path.Combine(repositoryPath, ".LoopRelay", "evidence", "recovery-effect.marker"));
+            var journal = new CanonicalTransitionBoundaryJournal(persistence, fault);
+            var effects = new MarkerEffectExecutor(
+                Path.Combine(repositoryPath, ".LoopRelay", "evidence", "recovery-effect.marker"),
+                journal);
 
-            TransitionRuntime firstRuntime = CreateRuntime(repository, live, effects, fault);
+            TransitionRuntime firstRuntime = CreateRuntime(repository, live, journal);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromMinutes(2));
-            TransitionRuntimeResult initial = await firstRuntime.RunAsync(Request(runId), timeout.Token);
+            TransitionRuntimeResult initial = await firstRuntime.RunAsync(
+                Request(execution, FreshAttemptAuthorization.Instance),
+                timeout.Token);
             TransitionRunIdentity transitionRun = initial.TransitionRun
                 ?? throw new InvalidOperationException("Initial transition run identity was not recorded.");
+            if (initial.RequiredEffectsPending)
+            {
+                await CoordinateEffectsAsync(
+                    initial,
+                    execution,
+                    persistence,
+                    effects,
+                    journal,
+                    timeout.Token);
+            }
 
             var restartedStore = new CanonicalTransitionRunStore(new CanonicalWorkflowPersistenceStore(repository));
             TransitionRunRecoverySnapshot snapshot = await restartedStore.LoadRecoveryAsync(transitionRun, cancellationToken)
                 ?? throw new InvalidOperationException("Recovery snapshot was not durable across runtime reconstruction.");
             TransitionRecoveryDecision decision = TransitionRecoveryClassifier.Classify(snapshot);
-            TransitionRuntime restartedRuntime = CreateRuntime(repository, live, effects, interruptAt: null);
-            TransitionRuntimeResult restarted = await restartedRuntime.RunAsync(Request(runId), timeout.Token);
+            TransitionRecoveryPlan recoveryPlan = await new TransitionRecoveryCoordinator(
+                    restartedStore,
+                    new CanonicalTransitionRecoveryPlanStore(persistence))
+                .PlanAsync(transitionRun, cancellationToken);
+            var restartJournal = new CanonicalTransitionBoundaryJournal(persistence);
+            if (decision.Disposition == TransitionRecoveryDisposition.SafeRetry)
+            {
+                TransitionRuntime restartedRuntime = CreateRuntime(repository, live, restartJournal);
+                TransitionRuntimeResult restarted = await restartedRuntime.RunAsync(
+                    Request(execution, new RecoveryAttemptAuthorization(recoveryPlan)),
+                    timeout.Token);
+                if (restarted.RequiredEffectsPending)
+                {
+                    await CoordinateEffectsAsync(
+                        restarted,
+                        execution,
+                        persistence,
+                        effects,
+                        restartJournal,
+                        timeout.Token);
+                }
+            }
+            else if (decision.Disposition == TransitionRecoveryDisposition.MaterializeCommittedOutput)
+            {
+                PromptExecutionResult persistedRaw = snapshot.RawOutput
+                    ?? throw new InvalidOperationException("Materialization recovery requires durable raw output.");
+                var deterministicTransport = new PersistedPromptExecutor(persistedRaw);
+                TransitionRuntime restartedRuntime = CreateRuntime(repository, deterministicTransport, restartJournal);
+                TransitionRecoveryPlan deterministicContinuation = recoveryPlan with
+                {
+                    Action = TransitionRecoveryAction.RetryAsNewAttempt,
+                    ResultingAttemptMode = RecoveryAttemptMode.RetryExistingTransitionRun,
+                    NextAttemptIndex = 2,
+                };
+                TransitionRuntimeResult restarted = await restartedRuntime.RunAsync(
+                    Request(execution, new RecoveryAttemptAuthorization(deterministicContinuation)),
+                    timeout.Token);
+                if (restarted.RequiredEffectsPending)
+                {
+                    await CoordinateEffectsAsync(
+                        restarted,
+                        execution,
+                        persistence,
+                        effects,
+                        restartJournal,
+                        timeout.Token);
+                }
+            }
             TransitionRunRecoverySnapshot afterRestart = await new CanonicalTransitionRunStore(
                 new CanonicalWorkflowPersistenceStore(repository)).LoadRecoveryAsync(
-                    restarted.TransitionRun ?? transitionRun,
+                    transitionRun,
                     cancellationToken)
                 ?? throw new InvalidOperationException("Restarted recovery snapshot was missing.");
 
@@ -170,19 +237,29 @@ public sealed class MilestoneFourRunner
             {
                 ProcessResult status = await RunCli(cliPath, repositoryPath, ["status"], cancellationToken);
                 ProcessResult unblock = await RunCli(cliPath, repositoryPath, ["unblock"], cancellationToken);
-                statusExposed = status.ExitCode == 0 &&
-                    status.StandardOutput.Contains("Transition recovery markers:", StringComparison.Ordinal) &&
-                    !status.StandardOutput.Contains("Transition recovery markers: (none)", StringComparison.Ordinal);
-                unblockFailedClosed = unblock.ExitCode == 4 &&
-                    unblock.StandardOutput.Contains("Non-recoverable blockers remain:", StringComparison.Ordinal);
+                statusExposed = status.ExitCode == 0 && decision.Disposition switch
+                {
+                    TransitionRecoveryDisposition.ReconcileProvider =>
+                        status.StandardOutput.Contains("Pending dispatches:", StringComparison.Ordinal) &&
+                        !status.StandardOutput.Contains("Pending dispatches: (none)", StringComparison.Ordinal),
+                    TransitionRecoveryDisposition.FailClosedUnknownSideEffect =>
+                        status.StandardOutput.Contains("Pending effects:", StringComparison.Ordinal) &&
+                        status.StandardOutput.Contains("write-recovery-marker:Unknown", StringComparison.Ordinal),
+                    _ => true,
+                };
+                string unblockOutput = unblock.StandardOutput + "\n" + unblock.StandardError;
+                unblockFailedClosed = unblock.ExitCode != 0 &&
+                    unblockOutput.Contains("Unknown command: unblock", StringComparison.Ordinal);
             }
 
             bool duplicateProvider = live.Calls > expectedProviderCalls;
             bool duplicateEffect = effects.Calls > expectedEffectCalls;
-            bool singleRun = afterRestart.Causality.TransitionRun == transitionRun;
-            bool passed = initial.DurableState == expectedInitial &&
+            bool singleRun = afterRestart.Causality.TransitionRun == transitionRun &&
+                afterRestart.Causality.Run == execution.Run &&
+                afterRestart.Causality.WorkflowInstance == execution.WorkflowInstance;
+            bool passed = snapshot.State == expectedInitial &&
                 decision.Disposition == expectedDisposition &&
-                restarted.DurableState == expectedRestart &&
+                afterRestart.State == expectedRestart &&
                 live.Calls == expectedProviderCalls &&
                 effects.Calls == expectedEffectCalls &&
                 !duplicateProvider && !duplicateEffect && singleRun &&
@@ -190,9 +267,9 @@ public sealed class MilestoneFourRunner
             return new RecoveryBoundaryCaseResult(
                 caseIdentity,
                 fault.ToString(),
-                initial.DurableState.ToString(),
+                snapshot.State.ToString(),
                 decision.Disposition.ToString(),
-                restarted.DurableState.ToString(),
+                afterRestart.State.ToString(),
                 live.Calls,
                 effects.Calls,
                 duplicateProvider,
@@ -226,19 +303,17 @@ public sealed class MilestoneFourRunner
 
     private static TransitionRuntime CreateRuntime(
         Repository repository,
-        LivePromptExecutor live,
-        MarkerEffectExecutor effects,
-        TransitionBoundaryKind? interruptAt)
+        IProviderPromptTransport promptTransport,
+        ITransitionBoundaryJournal journal)
     {
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
         var runs = new CanonicalTransitionRunStore(persistence);
         var evidence = new CanonicalTransitionEvidenceStore(persistence);
-        var journal = new CanonicalTransitionBoundaryJournal(persistence, interruptAt);
         var products = new EmptyProductResolver();
         var context = new ContextBuilder();
         var promptStore = new CanonicalRenderedPromptFactStore(persistence);
         var promptRuntime = new FaultInjectingPromptExecutor(
-            new LoadingPromptRuntimeDispatcher(promptStore, live),
+            new LoadingPromptRuntimeDispatcher(promptStore, promptTransport),
             evidence,
             journal);
         var promptGateway = new PromptDispatchGateway(
@@ -265,23 +340,55 @@ public sealed class MilestoneFourRunner
             journal);
     }
 
-    private static TransitionRuntimeRequest Request(string runId)
+    private static TransitionRuntimeRequest Request(
+        CanonicalTransitionExecutionContext execution,
+        AttemptAuthorization authorization)
     {
-        var invocation = new WorkflowInvocation(InvocationModeKind.BoundedTraditional);
         return new TransitionRuntimeRequest(
             WorkflowIdentity.TraditionalRoadmap,
             new WorkflowStageIdentity("Live Recovery"),
             Transition,
-            new CanonicalTransitionExecutionContext(
-                invocation,
-                WorkspaceIdentity.New(),
-                new RunIdentity(runId),
-                WorkflowInstanceIdentity.New(),
-                new PolicyIdentity("policy_milestone_4"),
-                new RuntimeProfileIdentity("runtime_milestone_4"),
-                new PromptPolicyProfileIdentity("prompt_policy_milestone_4")),
-            FreshAttemptAuthorization.Instance,
+            execution,
+            authorization,
             new Dictionary<string, string> { ["case"] = "milestone-4" });
+    }
+
+    private static async Task<CanonicalTransitionExecutionContext> SeedExecutionContextAsync(
+        CanonicalWorkflowPersistenceStore persistence,
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        WorkspaceIdentity workspace = new(await persistence.ReadWorkspaceIdentityAsync(cancellationToken));
+        var run = new RunIdentity(runId);
+        WorkflowInstanceIdentity instance = WorkflowInstanceIdentity.New();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await persistence.UpsertRunAsync(new RunRecord(
+            run.Value,
+            workspace.Value,
+            "milestone-4-live-recovery",
+            InvocationModeKind.BoundedTraditional.ToString(),
+            "Active",
+            now,
+            null,
+            null,
+            "certification"), cancellationToken);
+        await persistence.UpsertWorkflowInstanceAsync(new WorkflowInstanceRecord(
+            instance.Value,
+            run.Value,
+            WorkflowIdentity.TraditionalRoadmap,
+            "milestone-4",
+            "Active",
+            now,
+            null,
+            null), cancellationToken);
+        return new CanonicalTransitionExecutionContext(
+            new WorkflowInvocation(InvocationModeKind.BoundedTraditional),
+            workspace,
+            run,
+            instance,
+            new PolicyIdentity("policy_milestone_4"),
+            new RuntimeProfileIdentity("runtime_milestone_4"),
+            new PromptPolicyProfileIdentity("prompt_policy_milestone_4"));
     }
 
     private static WorkflowTransitionDefinition CreateDefinition()
@@ -387,6 +494,14 @@ public sealed class MilestoneFourRunner
         }
     }
 
+    private sealed class PersistedPromptExecutor(PromptExecutionResult result) : IProviderPromptTransport
+    {
+        public Task<PromptExecutionResult> DispatchAsync(
+            PersistedRenderedPromptFact prompt,
+            AuthorizedPromptDispatch dispatch,
+            CancellationToken token) => Task.FromResult(result);
+    }
+
     private sealed class OutputInterpreter : IOutputInterpreter
     {
         public Task<InterpretedTransitionOutput> InterpretAsync(
@@ -423,22 +538,95 @@ public sealed class MilestoneFourRunner
             Task.CompletedTask;
     }
 
-    private sealed class MarkerEffectExecutor(string path) : IEffectExecutor
+    private sealed class MarkerEffectExecutor(
+        string path,
+        ITransitionBoundaryJournal journal) : ITransitionEffectIntentExecutor
     {
         public int Calls { get; private set; }
-        public async Task<EffectExecutionResult> ExecuteAsync(
-            WorkflowTransitionDefinition definition,
-            ProductValidationResult validation,
-            EffectExecutionContext context,
+        public async Task<EffectExecutionRecord> ExecuteAsync(
+            CanonicalCausalContext causality,
+            EffectIdentity effect,
             CancellationToken token)
         {
             Calls++;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, "effect-applied\n", token);
-            EffectExecutionRecord record = new(
-                new EffectIdentity("write-recovery-marker"), EffectExecutionStatus.Succeeded,
+            var boundary = new TransitionBoundaryObservation(
+                causality,
+                Transition,
+                TransitionBoundaryKind.DuringEffects,
+                100 + Calls,
+                DateTimeOffset.UtcNow,
+                "effect-coordinator",
+                null,
+                [effect.Value]);
+            await journal.RecordAsync(boundary, CancellationToken.None);
+            if (journal.ShouldInterrupt(boundary))
+            {
+                throw new TransitionFaultInjectedException(boundary);
+            }
+            return new EffectExecutionRecord(
+                effect, EffectExecutionStatus.Succeeded,
                 "Independent effect marker written.", ["recovery-effect.marker"]);
-            return new EffectExecutionResult(EffectExecutionStatus.Succeeded, [record], "Effect applied.", record.Evidence);
+        }
+    }
+
+    private static async Task CoordinateEffectsAsync(
+        TransitionRuntimeResult attempt,
+        CanonicalTransitionExecutionContext execution,
+        CanonicalWorkflowPersistenceStore persistence,
+        MarkerEffectExecutor effects,
+        ITransitionBoundaryJournal journal,
+        CancellationToken cancellationToken)
+    {
+        if (attempt.TransitionRun is not { } transitionRun || attempt.Attempt is not { } attemptIdentity)
+        {
+            throw new InvalidOperationException("Effect coordination requires durable causal identities.");
+        }
+
+        var causality = new CanonicalCausalContext(
+            execution.Workspace,
+            execution.Run,
+            execution.WorkflowInstance,
+            transitionRun,
+            attemptIdentity);
+        await ObserveAsync(TransitionBoundaryKind.BeforeEffects, 90);
+        TransitionEffectCoordinationResult result = await new TransitionEffectCoordinator(
+                effects,
+                new CanonicalTransitionEffectIntentStateStore(persistence))
+            .CoordinateAsync(attempt, execution, cancellationToken);
+        if (result.RequiredEffectsPending || result.Failed)
+        {
+            return;
+        }
+
+        await ObserveAsync(TransitionBoundaryKind.EffectsApplied, 190);
+        try
+        {
+            await ObserveAsync(TransitionBoundaryKind.CompletionPersisted, 200);
+        }
+        catch (TransitionFaultInjectedException)
+        {
+            // Completion was already committed by the effect state store. The injected process
+            // boundary models a crash immediately after that durable write.
+        }
+
+        async Task ObserveAsync(TransitionBoundaryKind boundaryKind, int sequence)
+        {
+            var observation = new TransitionBoundaryObservation(
+                causality,
+                Transition,
+                boundaryKind,
+                sequence,
+                DateTimeOffset.UtcNow,
+                "effect-coordinator",
+                null,
+                [boundaryKind.ToString()]);
+            await journal.RecordAsync(observation, CancellationToken.None);
+            if (journal.ShouldInterrupt(observation))
+            {
+                throw new TransitionFaultInjectedException(observation);
+            }
         }
     }
 

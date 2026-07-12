@@ -59,6 +59,11 @@ public sealed class RoadmapLiveRunner
 
             Directory.CreateDirectory(repositoryPath);
             await SeedAsync(repositoryPath, traditional, cancellationToken);
+            await InitializeGitAsync(
+                repositoryPath,
+                Path.Combine(root, "repository-remote.git"),
+                Path.Combine(root, "agents-remote.git"),
+                cancellationToken);
             ProcessResult init = await RunCliAsync(cliPath, repositoryPath, ["storage", "init"], cancellationToken);
             if (init.ExitCode != 0) throw new InvalidOperationException("Roadmap storage init failed.");
             if (traditional)
@@ -351,6 +356,58 @@ public sealed class RoadmapLiveRunner
         .Select(line => line[(label.Length + 2)..])
         .LastOrDefault();
 
+    private static async Task InitializeGitAsync(
+        string root,
+        string remote,
+        string agentsRemote,
+        CancellationToken token)
+    {
+        Directory.CreateDirectory(remote);
+        Directory.CreateDirectory(agentsRemote);
+        await RequireGitAsync(Path.GetDirectoryName(remote)!, ["init", "--bare", "--initial-branch=main", remote], token);
+        await RequireGitAsync(Path.GetDirectoryName(agentsRemote)!, ["init", "--bare", "--initial-branch=main", agentsRemote], token);
+        string agents = Path.Combine(root, ".agents");
+        Directory.CreateDirectory(agents);
+        foreach (string[] arguments in new[]
+        {
+            new[] { "init", "-b", "main" },
+            new[] { "config", "user.email", "certification@looprelay.invalid" },
+            new[] { "config", "user.name", "LoopRelay Certification" },
+            new[] { "add", "." },
+            new[] { "commit", "--allow-empty", "-m", "seed roadmap agent artifacts" },
+            new[] { "remote", "add", "origin", agentsRemote },
+            new[] { "push", "-u", "origin", "main" },
+        })
+        {
+            await RequireGitAsync(agents, arguments, token);
+        }
+        foreach (string[] arguments in new[]
+        {
+            new[] { "init", "-b", "main" },
+            new[] { "config", "user.email", "certification@looprelay.invalid" },
+            new[] { "config", "user.name", "LoopRelay Certification" },
+            new[] { "add", "." },
+            new[] { "commit", "-m", "seed roadmap certification" },
+            new[] { "remote", "add", "origin", remote },
+            new[] { "push", "-u", "origin", "main" },
+        })
+        {
+            await RequireGitAsync(root, arguments, token);
+        }
+    }
+
+    private static async Task RequireGitAsync(
+        string root,
+        IReadOnlyList<string> arguments,
+        CancellationToken token)
+    {
+        ProcessResult result = await RunProcessAsync("git", arguments, root, TimeSpan.FromMinutes(2), token);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"git {arguments[0]} failed: {result.StandardError}");
+        }
+    }
+
     private static async Task<ProcessResult> RunCliAsync(
         string cliPath, string repository, IReadOnlyList<string> arguments, CancellationToken token)
     {
@@ -363,21 +420,31 @@ public sealed class RoadmapLiveRunner
         }
         all.AddRange(["--repo", repository]);
         all.AddRange(arguments);
+        return await RunProcessAsync(file, all, repository, CertificationFixtureSettings.ProviderTurnTimeout, token);
+    }
+
+    private static async Task<ProcessResult> RunProcessAsync(
+        string file,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        TimeSpan timeoutValue,
+        CancellationToken token)
+    {
         var start = new ProcessStartInfo
         {
             FileName = file,
-            WorkingDirectory = repository,
+            WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (string argument in all) start.ArgumentList.Add(argument);
+        foreach (string argument in arguments) start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new InvalidOperationException("CLI did not start.");
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(token);
         Task<string> stderr = process.StandardError.ReadToEndAsync(token);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(CertificationFixtureSettings.ProviderTurnTimeout);
+        timeout.CancelAfter(timeoutValue);
         try
         {
             await process.WaitForExitAsync(timeout.Token);
@@ -387,7 +454,7 @@ public sealed class RoadmapLiveRunner
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync(CancellationToken.None);
-            return new ProcessResult(124, string.Empty, "Roadmap transition exceeded 12 minutes.");
+            return new ProcessResult(124, string.Empty, $"Process exceeded {timeoutValue.TotalMinutes:0} minutes.");
         }
     }
 

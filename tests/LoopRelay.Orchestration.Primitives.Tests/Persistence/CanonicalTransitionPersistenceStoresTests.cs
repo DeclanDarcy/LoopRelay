@@ -40,12 +40,15 @@ public sealed class CanonicalTransitionPersistenceStoresTests
 
         ExecutionRecommendationEvidence readRecommendation =
             Assert.IsType<ExecutionRecommendationEvidence>(await recommendationStore.ReadAsync(recommendation.Identity));
+        ExecutionRecommendationEvidence latestRecommendation =
+            Assert.IsType<ExecutionRecommendationEvidence>(await recommendationStore.ReadLatestAsync());
         RuntimeProfileEvaluation readEvaluation =
             Assert.IsType<RuntimeProfileEvaluation>(await evaluationStore.ReadAsync(evaluation.Identity));
         ResolvedRuntimeProfile readProfile = Assert.IsType<ResolvedRuntimeProfile>(
             await ((IResolvedRuntimeProfileStore)evaluationStore).ReadAsync(profile.Identity));
 
         Assert.Equal(decision, readRecommendation.DecisionProduct);
+        Assert.Equal(recommendation.Identity, latestRecommendation.Identity);
         Assert.Equal(causality.Attempt, readRecommendation.SourceCausality.Attempt);
         Assert.Equal(recommendation.Identity, readEvaluation.Recommendation);
         Assert.Equal(profile.Identity, readProfile.Identity);
@@ -147,6 +150,17 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT status FROM canonical_effect_intents;";
         Assert.Equal("Planned", Convert.ToString(await command.ExecuteScalarAsync()));
+
+        await new CanonicalTransitionEffectIntentStateStore(persistence).RecordStateAsync(
+            causality.TransitionRun,
+            definition.Effects.Single().Identity,
+            EffectExecutionStatus.Succeeded,
+            null,
+            CancellationToken.None);
+
+        snapshot = await persistence.LoadSnapshotAsync();
+        Assert.Equal(TransitionDurableState.Completed, Assert.Single(snapshot.TransitionRuns).State);
+        Assert.Equal("Completed", Assert.Single(await persistence.ReadAttemptsAsync()).Outcome);
     }
 
     [Fact]

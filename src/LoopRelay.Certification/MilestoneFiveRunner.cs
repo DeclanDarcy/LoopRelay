@@ -123,6 +123,11 @@ public sealed class MilestoneFiveRunner
             string repositoryPath = Path.Combine(root, caseIdentity, "repository");
             Directory.CreateDirectory(repositoryPath);
             await SeedRepositoryAsync(repositoryPath, cancellationToken);
+            await InitializeGitAsync(
+                repositoryPath,
+                Path.Combine(root, caseIdentity, "repository-remote.git"),
+                Path.Combine(root, caseIdentity, "agents-remote.git"),
+                cancellationToken);
             HashSet<int> initialCodex = CodexProcessIds();
             ProcessResult init = await RunCliAsync(cliPath, repositoryPath, ["storage", "init"], cancellationToken);
             if (init.ExitCode != 0)
@@ -366,6 +371,57 @@ public sealed class MilestoneFiveRunner
             !File.Exists(Path.Combine(root, ".agents", "milestones", "m1.md"));
     }
 
+    private static async Task InitializeGitAsync(
+        string root,
+        string remote,
+        string agentsRemote,
+        CancellationToken token)
+    {
+        Directory.CreateDirectory(remote);
+        Directory.CreateDirectory(agentsRemote);
+        await RequireGitAsync(Path.GetDirectoryName(remote)!, ["init", "--bare", "--initial-branch=main", remote], token);
+        await RequireGitAsync(Path.GetDirectoryName(agentsRemote)!, ["init", "--bare", "--initial-branch=main", agentsRemote], token);
+        string agents = Path.Combine(root, ".agents");
+        foreach (string[] arguments in new[]
+        {
+            new[] { "init", "-b", "main" },
+            new[] { "config", "user.email", "certification@looprelay.invalid" },
+            new[] { "config", "user.name", "LoopRelay Certification" },
+            new[] { "add", "." },
+            new[] { "commit", "-m", "seed plan agent artifacts" },
+            new[] { "remote", "add", "origin", agentsRemote },
+            new[] { "push", "-u", "origin", "main" },
+        })
+        {
+            await RequireGitAsync(agents, arguments, token);
+        }
+        foreach (string[] arguments in new[]
+        {
+            new[] { "init", "-b", "main" },
+            new[] { "config", "user.email", "certification@looprelay.invalid" },
+            new[] { "config", "user.name", "LoopRelay Certification" },
+            new[] { "add", "." },
+            new[] { "commit", "-m", "seed plan certification" },
+            new[] { "remote", "add", "origin", remote },
+            new[] { "push", "-u", "origin", "main" },
+        })
+        {
+            await RequireGitAsync(root, arguments, token);
+        }
+    }
+
+    private static async Task RequireGitAsync(
+        string root,
+        IReadOnlyList<string> arguments,
+        CancellationToken token)
+    {
+        ProcessResult result = await RunProcessAsync("git", arguments, root, token, TimeSpan.FromMinutes(2));
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"git {arguments[0]} failed: {result.StandardError}");
+        }
+    }
+
     private static (string? ThreadId, string? Continuity) PromptMetadata(
         CanonicalWorkflowPersistenceSnapshot snapshot,
         string transition)
@@ -422,6 +478,8 @@ public sealed class MilestoneFiveRunner
         string agents = Path.Combine(root, ".agents");
         if (!Directory.Exists(agents)) return new Dictionary<string, string>(StringComparer.Ordinal);
         return Directory.EnumerateFiles(agents, "*", SearchOption.AllDirectories)
+            .Where(path => !Path.GetRelativePath(agents, path).Replace('\\', '/')
+                .StartsWith(".git/", StringComparison.Ordinal))
             .ToDictionary(
                 path => Path.GetRelativePath(root, path).Replace('\\', '/'),
                 path => Digest(File.ReadAllBytes(path)),
@@ -470,24 +528,40 @@ public sealed class MilestoneFiveRunner
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
+        var all = new List<string>();
+        string file = cliPath;
+        if (cliPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        {
+            file = "dotnet";
+            all.Add(cliPath);
+        }
+        all.AddRange(["--repo", repository]);
+        all.AddRange(arguments);
+        return await RunProcessAsync(file, all, repository, cancellationToken, CertificationFixtureSettings.ProviderTurnTimeout);
+    }
+
+    private static async Task<ProcessResult> RunProcessAsync(
+        string file,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken cancellationToken,
+        TimeSpan timeoutValue)
+    {
         var start = new ProcessStartInfo
         {
-            FileName = cliPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ? "dotnet" : cliPath,
-            WorkingDirectory = repository,
+            FileName = file,
+            WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        if (cliPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) start.ArgumentList.Add(cliPath);
-        start.ArgumentList.Add("--repo");
-        start.ArgumentList.Add(repository);
         foreach (string argument in arguments) start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new InvalidOperationException("CLI did not start.");
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
         Task<string> stderr = process.StandardError.ReadToEndAsync(cancellationToken);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(CertificationFixtureSettings.ProviderTurnTimeout);
+        timeout.CancelAfter(timeoutValue);
         try
         {
             await process.WaitForExitAsync(timeout.Token);
@@ -500,7 +574,7 @@ public sealed class MilestoneFiveRunner
             return new ProcessResult(
                 124,
                 await ReadCompletedOrEmptyAsync(stdout),
-                $"Milestone 5 transition exceeded the {CertificationFixtureSettings.ProviderTurnTimeout.TotalMinutes:0}-minute live-provider timeout.");
+                $"Process exceeded the {timeoutValue.TotalMinutes:0}-minute timeout.");
         }
         catch
         {

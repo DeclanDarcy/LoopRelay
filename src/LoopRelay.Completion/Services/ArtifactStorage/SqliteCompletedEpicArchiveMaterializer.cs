@@ -178,10 +178,9 @@ public sealed partial class SqliteCompletedEpicArchiveMaterializer(
             }
         }
 
-        string completionContextPath = ArtifactPath.ResolveRepositoryPath(
-            repository,
+        var artifacts = new CompletionArtifacts(store, repository);
+        string? completionContext = await artifacts.ReadAsync(
             CompletionArtifactPaths.RoadmapCompletionContext);
-        string? completionContext = await store.ReadAsync(completionContextPath);
         if (!string.IsNullOrWhiteSpace(completionContext))
         {
             AddMigratedPaths(completionContext, associated);
