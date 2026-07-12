@@ -20,3 +20,12 @@
 - [ ] Build and component suites pass without unexpected warnings.
 - [ ] No M8+ authority is claimed by this gate.
 
+### Ratification and specification-integrity details
+
+- [ ] Treat D1–D4 as blocking proposals until the owner accepts them and the acceptance is encoded
+  in enduring ADRs and executable architecture tests. M8 cannot begin before that evidence exists.
+- [ ] Correct the generated deep-dive roadmap links so they resolve to the selected durable roadmap
+  path. The supplied roadmap currently lives at `.agents/specs/epic.md`, not `.agents/epic.md`.
+- [ ] Either restore/generate the indexed M0–M7 preservation specifications or remove those links
+  and state that their accepted commits plus the roadmap are the preservation authority. This
+  input-integrity correction does not reopen M0–M7.

@@ -31,3 +31,30 @@ Replace the narrow `CanonicalPersistenceReadModel`/`CanonicalCliStatusSnapshot` 
 
 - [ ] Query a fixture containing a pending push, unknown effect, recovery plan, interaction, migration-required storage, import conflict, and partial completion closure. One snapshot must expose all identities/actions. Render twice and prove byte/storage non-mutation. Trace every displayed claim to a fact. Read-model rebuild after restart must be semantically identical and must not repair state.
 
+### Consistent snapshot and claim shape
+
+Compose owner projections under one SQLite read transaction where they share the canonical store.
+For independent filesystem/Git/provider evidence, capture before/after watermarks; retry a bounded
+number of times if they change, then return explicit staleness/conflict rather than combine
+incompatible moments. Compute snapshot identity from workspace, schema/catalog identity, ordered
+owner watermarks, and external observation identities.
+
+Represent every operational claim as value/status plus owner, source fact/evidence IDs, source
+watermark, observed version, and one of `Known`, `Unknown(reason)`, `Conflict(source set)`, or
+`Stale(reason)`. The aggregate composer may join and expose conflicts but cannot choose an owner,
+fill a default, trigger migration, or repair state.
+
+### Determinism, evidence credit, and profile retirement
+
+All collections exposed to renderers have canonical ordering. Given one snapshot, text/JSON/export
+rendering is byte-deterministic and has no repository, database, provider, clock, or environment
+dependency.
+
+Evidence credit requires an exact obligation key/content version plus
+catalog/schema/asset/profile scope and evidence tier. Evidence for an older content version is
+stale/uncredited, not inherited. Exact provider profiles may be retired only after no active root,
+attempt, session, recovery plan, or evidence claim references them and D10 replacement evidence
+exists.
+
+D9 and D10 remain owner rulings. Until D9 is accepted, release claims sourced only from `.tmp` are
+visibly `LocalOnly` and cannot support cross-machine provenance.

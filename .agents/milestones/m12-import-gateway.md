@@ -28,3 +28,40 @@ Implement ingress-only adapters for D8. Distinguish schema convergence from doma
 
 - [ ] For each portfolio fixture test no-write detection/preview, ambiguity, conflict, malformed input, rollback, crash/restart, semantic fidelity, receipt idempotency, no dual write, and canonical-only runtime. The acceptance fixture disables/removes the legacy reader after import and proves behavior is unchanged.
 
+### Accepted portfolio registry
+
+M12 consumes M11's canonical export codec and decoder where canonical packages are involved; it
+does not redefine their schema, fingerprint, or storage semantics.
+
+For every owner-approved format, register source kind/family/version, unambiguous detector,
+read-only reader, source fingerprint algorithm, mapped domains/identity rules, unsupported fields,
+conflict rules, semantic comparator, fixture identities, and retirement/exhaustion criteria.
+Unknown, mixed, or overlapping detector matches fail closed. D8's list becomes executable only
+after owner acceptance and a fixture for each actual owned workspace family.
+
+### Import ordering and partial external work
+
+`All-or-nothing canonical writes/effects` does not imply an atomic transaction across SQLite and
+external targets. Use this ordering:
+
+1. detect and preview without writes; bind preview to a complete source fingerprint;
+2. validate explicit approval or a resolved M10 interaction and persist an immutable plan;
+3. re-hash the source and reject stale preview before any canonical write;
+4. map and stage canonical facts in one database transaction, preserving valid identities and
+   recording correspondence for remapped IDs;
+5. validate the staged target projection and commit canonical facts plus verification evidence;
+6. execute outward/projection work as ordered M8 effects and recover it through M9;
+7. append the import receipt only after semantic verification and required effects settle, then
+   append the monotonic canonical-only/source-non-authoritative facts; and
+8. permit normal runtime only from the canonical source.
+
+Failure before the canonical transaction commits rolls back. Failure afterward leaves one pending
+import operation and resumes/reconciles it; it does not delete verified facts or repeat settled
+effects. A repeated identical import returns the same receipt. Preserve a source identity collision
+only when type, scope, and semantics agree; otherwise mint a canonical ID and store immutable
+source-to-target correspondence.
+
+An adapter exhaustion fact is keyed by adapter/version and accepted portfolio snapshot. It links
+every owned fixture to a successful receipt, canonical-only run, and adapter-disabled result. A
+newly discovered owned format invalidates/supersedes the exhaustion fact; it does not silently
+reactivate a deleted fallback.

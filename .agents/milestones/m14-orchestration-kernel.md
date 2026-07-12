@@ -32,3 +32,35 @@ observe -> resolve -> gate -> interact -> authorize attempt -> dispatch one atte
 
 - [ ] Fault-inject after every durable lifecycle phase for both chains. Restart must preserve lineage and avoid duplicate provider/effect work. Test every success/non-success outcome, freshness conflict, no eligible transition, ambiguous selection, interaction, recovery, chain boundary, and required-write failure. Architecture tests must prove no feature runner or client advances canonical state and there is one reachable production kernel.
 
+### Durable decisions and re-entry
+
+Persist an immutable kernel-decision/boundary fact for each observation cycle: decision ID,
+catalog identity, snapshot/watermarks, root/workflow/transition/attempt identities, eligible and
+rejected alternatives with gate evidence, selected action, and outcome/reason. This is distinct
+from the rebuildable read model.
+
+At invocation, locate the single nonterminal root run for the workspace and requested chain. Zero
+creates a new authorized root; one re-enters it; more than one returns ambiguity/corruption and no
+work starts. A successor workflow gets a new workflow-instance ID under the same root. A terminal
+root short-circuits from facts and creates no attempt, provider session, or effect.
+
+### Resolution, bounded execution, and handler boundaries
+
+No eligible transition is not automatically failure: use catalog terminal evidence to return
+completed, known wait conditions to return waiting/human/effect/recovery required, conflicting
+eligible paths to return ambiguous, and missing/invalid prerequisites to return the specific
+cannot-proceed result. Persist rejected alternatives and their evidence.
+
+A bounded run supplies a maximum observation/transition budget as invocation policy. Budget
+exhaustion returns passive waiting with the causal snapshot and next eligible work; it does not
+persist a workflow stall or manual latch. Reobserve after every attempt, effect, recovery action,
+or interaction resolution before spending the next unit.
+
+A required write failing before outward work returns failed/specific storage-unusable with no
+advance. Failure after outward start becomes `RecoveryRequired` with the last durable identity.
+Handlers are registry-owned pure candidate/evidence transformations: no progression choice,
+ambient configuration, prompt framing, policy resolution, persistence selection, external
+adapter, retry, interaction presentation, or completion settlement.
+
+Run both Traditional and Eval full chains because this milestone establishes shared chain
+behavior.

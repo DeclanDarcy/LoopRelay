@@ -38,3 +38,30 @@ The catalog/plan builder must explicitly order:
 
 - [ ] Test certified, continue, each specific cannot-proceed reason, failed, cancelled, effect-pending, and recovery-required through persistence, read model, application result, renderer, and exit code. Fault-inject at every closure step, including archive success/push failure and unknown Git result. After settlement, rerun must create zero provider sessions/turns/effects and no user-tree or Git mutation. Only then may `CertifiedCompletion` be promoted.
 
+### Certificate, closure, and terminal fact
+
+A `CompletionCertificate` records an accepted certified candidate and its evidence; it is not the
+public terminal claim. The public run is certified only after every required effect in the
+immutable closure plan has a verified receipt and the Completion/State settlement transaction
+appends the monotonic `CertifiedTerminal` fact.
+
+The terminal fact is authoritative ledger settlement, not an outward effect. Projection-file
+materialization may be an effect. This prevents an effect from claiming authoritative completion
+before effects are known settled. A later decision may supersede a nonterminal completion decision
+through a new attempt; it never edits the old decision or certificate.
+
+### Partial closure and cleanup
+
+Archive success followed by push failure remains `EffectsPending`, or `RecoveryRequired` when the
+push outcome is unknown, never certified. Retain settled closure effects rather than compensating
+them because a later effect failed. Cleanup/retirement runs only after archive, context update,
+nested and parent publication, and independent postconditions. Cleanup failure leaves the same
+closure plan recoverable. A terminal rerun reads the terminal fact and creates zero new provider
+sessions/turns, effect intents, user-tree writes, or Git mutations.
+
+D2 and M15's obstacle vocabulary and partial-effect/resume behavior remain owner rulings until
+accepted. The outcome matrix includes every specific cannot-proceed reason plus continue, waiting,
+failed, cancelled, effect-pending, recovery-required, and certified-terminal.
+
+Completion ambiguity activates M10's reserved typed interaction category and resolver contract; it
+does not create a completion-specific interaction store or accept raw response JSON directly.

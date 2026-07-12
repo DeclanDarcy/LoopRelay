@@ -17,3 +17,25 @@
 
 - [ ] Execute is explainable and restart-safe from readiness through certified terminal state. Cancellation, stall, unknown work, partial effects, partial closure, and specific cannot-proceed remain distinct; no blind repeat or legacy progression/policy path is reachable; deletion changes no supported behavior.
 
+### Execution-authorization freshness
+
+`ExecutionAuthorization` is an immutable fact/hash over decision product, recommendation evidence,
+policy evaluation, effective runtime profile, exact provider profile/capabilities, prompt-policy
+profile, rendered-prompt fact, consumed-input manifest, catalog transition,
+permission/approval/sandbox/network ceilings, and causal identities. Attempt authorization
+rechecks that every referenced fact is current. A stale or missing reference returns a specific
+result and cannot fall back to raw model/effort or recommendation values.
+
+### Stall predicate and sequence ruling
+
+D13's first-run/review order remains proposed. Once accepted, encode it in catalog successors and
+test all nonterminal routes. Define a catalog-owned deterministic `substantive change` predicate
+over current Git diff/commit evidence, promoted product versions, history/evaluation facts, and
+declared output surfaces. It identifies which evidence was unchanged and returns `Stalled` without
+incrementing a counter or setting a manual latch. Until the predicate and sequencing are accepted,
+M19 cannot delete the retained loop.
+
+Cancellation and unknown cases inherit the accepted M9 boundary matrix. An already certified root
+short-circuits without decision, provider, handler, completion, or effect work.
+
+Run both Traditional and Eval full chains for this shared-chain convergence milestone.

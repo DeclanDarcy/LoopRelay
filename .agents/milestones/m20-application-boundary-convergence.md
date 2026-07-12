@@ -31,3 +31,29 @@ The command/query matrix must cover:
 
 - [ ] Exercise the full command/query and typed-outcome matrix through the published CLI and directly through the application library. Assert delegation to the correct owner, renderer purity, cancellation forwarding, exact exit mapping, missing/duplicate composition failure, and absence of historical binaries. One boundary and one composition root must be reachable in the production graph.
 
+### Dependency direction and policy scope
+
+`LoopRelay.Application` references owner contract assemblies. Owner assemblies do not reference
+Application or CLI; temporary pre-M20 adapters live at the outer CLI/composition edge. The CLI
+references Application contracts plus pure rendering/parsing only. Infrastructure implementations
+are visible only to the composition root.
+
+`Resolve configuration and policy once` means parse/validate raw configuration and construct one
+policy resolver once per composition. It does not mean reuse one global effective policy for all
+attempts/sessions. Resolve and durably record effective policy/runtime profiles at their
+invocation/attempt/session scope using current inputs and provenance.
+
+### Request/result and composition guarantees
+
+Every application request has a correlation ID, explicit workspace/repository identity, invocation
+mode/limits, policy overrides, and cancellation. Every result carries the exact typed
+discriminant/reason, causal IDs when created, evidence links, warnings, pending effects,
+recovery/interaction/action identities, snapshot identity, and suggested exit code. Sharing an
+exit code never changes the discriminant.
+
+Composition validation runs before workspace/provider work and reports all missing, duplicate, or
+version-incompatible owner/registry dependencies. The production graph contains one configuration
+source, policy resolver, validated catalog snapshot, exact-profile registry, application service,
+and composition root. No alternate factory remains reachable.
+
+Run both Traditional and Eval full chains for this shared application-boundary milestone.

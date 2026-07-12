@@ -31,3 +31,30 @@ Add `Interactions/` to `LoopRelay.Orchestration.Primitives` with:
 
 - [ ] Every required human action has a stable request identity, exact response contract, visible policy, and restart-safe resolution. Status can name the action without relying on ephemeral console state.
 
+### State-machine and category-policy details
+
+Use the durable flow:
+
+```text
+Required -> Persisted -> Presented
+Presented -> valid Responded -> Validated -> Resolved -> ResumeAuthorized
+Presented -> Expired | Defaulted | Cancelled
+invalid/late/conflicting response -> Rejected event; request state unchanged
+```
+
+Presentation is idempotent and can recur after restart. Record an immutable response only after
+schema, request state, deadline, semantic idempotency, correlation, and compare-and-set checks
+succeed. An identical semantic duplicate returns the existing response/resolution IDs; a different
+duplicate appends a rejection and cannot replace the accepted response. Kernel or Recovery resumes
+only from `ResumeAuthorized`, never directly from submitted JSON.
+
+The registry reserves typed categories for dirty-input commit offer, import conflict, recovery
+ambiguity, and completion ambiguity. Each category declares question/presentation version,
+response JSON schema/hash, deadline behavior, allowed default, headless result, required
+authorization/trust evidence, and resolver owner. M10 production-wires only the dirty-input offer;
+later owners activate their categories without inventing another interaction store.
+
+D6's timeout/default, isolation depth, and trust-evidence choices remain owner rulings. Until
+accepted, use no hidden timeout/default and fail headless requests with the category-specific typed
+result. For dirty input, headless mode creates no request and no commit; it returns
+`DirtyInputSurface` with the declared surface and Git evidence.

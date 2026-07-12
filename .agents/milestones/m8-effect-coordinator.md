@@ -52,3 +52,48 @@ Core contracts:
 
 - [ ] Every required mutation is discoverable after restart, ordered, idempotent, receipted, independently reconcilable, and unable to produce a false completion claim. No supported feature body directly performs a required external mutation.
 
+### Lifecycle and retry-authority details
+
+Use an append-only lifecycle with a derived current state. The minimum legal flow is:
+
+```text
+Planned -> Leased -> Started -> Pending | Succeeded | Failed | Stalled | Cancelled | Unknown
+Unknown -> Reconciling -> Succeeded | Failed | Stalled | RetryAuthorized | HumanActionRequired
+Failed/Stalled -> RetryAuthorized only through policy/recovery -> Leased
+expired Leased with no Started fact -> Planned/lease-available
+expired Leased after Started or indeterminate executor evidence -> Unknown
+```
+
+`Pending` means known incomplete required-asynchronous work, not uncertainty. `Unknown` means the
+mutation may have occurred. Neither failed, stalled, cancelled, nor unknown work is automatically
+executed merely because the scanner finds it. Only an unstarted plan or a durable
+`RetryAuthorized` fact is executable. Every transition validates row version, lease owner/expiry,
+dependency settlement, executor version, and preconditions.
+
+A local output-surface commit is `BlockingLocal`. Its verified receipt permits the attempt to
+advance to the point allowed by the catalog. A push is a distinct `RequiredAsync` intent; the
+public result may expose it as pending, but Plan readiness, certified completion, and any catalog
+boundary that declares it required cannot settle until its postcondition is verified.
+
+### Receipt, reconciliation, and retirement details
+
+Every receipt needs intent and attempt identity, semantic operation/idempotency key, executor
+key/version, normalized target identity, before observation, after observation, postcondition
+verdict, external correlation (commit/ref/path/process identifier as applicable), evidence IDs,
+and observation time as diagnostic data. Reconciliation must use an independent observer rather
+than trusting the executor's returned success.
+
+The decisive negative fixture is mutation success followed by receipt-write loss: restart must
+observe the postcondition, append a receipt/reconciliation fact, and create no second semantic
+mutation. Add equivalent cases for duplicate leases, cancellation, dependency-order violation,
+unavailable remote push, and a crash after receipt but before state settlement.
+
+Inventory call sites for Git, filesystem writes/moves/deletes, archive materialization, exports,
+projection/history materialization, nested `.agents` publication, parent gitlink publication,
+checkpoint cleanup, and completion cleanup. The architecture registry must identify the
+allowlisted effect adapter for each operation and reject production calls from feature handlers,
+kernel, application, completion decision code, or CLI. A handler may construct typed payload data;
+it may not invoke the outward adapter or advance workflow state.
+
+M8 owns the first post-baseline logical schema version, v10. Existing v8 and partial-v9 cases remain
+ingress tests after the production version advances.

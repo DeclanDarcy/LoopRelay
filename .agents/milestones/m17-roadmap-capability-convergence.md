@@ -15,3 +15,17 @@
 
 - [ ] Traditional and Eval routes produce the same validated downstream products/gates under canonical authorities, with distinct provenance only. Default and forced selection, recovery, publication, and downstream Plan entry pass. Building and running after physical deletion changes no supported behavior.
 
+### Parity, producer neutrality, and retained evidence
+
+The shared `PreparedEpic` and `MilestoneSpecificationSet` schemas, gates, and semantic validators
+are identical for Traditional and Eval producers. Provenance remains a separate immutable fact and
+is not accepted as a Plan branching input. Add a cross-producer fixture that creates semantically
+equivalent outputs and proves identical downstream Plan eligibility.
+
+Retain parity evidence, route-reachability evidence, and the legacy-body deletion commit through
+M21. The three registered Eval prompt stubs must either have accepted complete contracts and
+hash-covered assets or be removed from the catalog before M17 acceptance. D11's
+`Planning/CreateNewRoadmap` ruling remains blocking; an unused asset is neither an implemented
+capability nor authority.
+
+Run both Traditional and Eval full chains for this shared-chain convergence milestone.

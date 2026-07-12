@@ -28,3 +28,31 @@ Extend declarations with typed, validated contracts for:
 
 - [ ] Build an invalid-catalog corpus for dangling references, duplicate IDs, unsupported capabilities, unowned validator, missing input/output surface, output without generated publication effects, cycles, unreachable terminal, missing prompt asset, and ambiguous successor. Production startup must return all validation errors before workspace access. All four workflows and both chains resolve from one catalog, and adding a fixture workflow requires declarations/handlers only—no kernel branch.
 
+### Canonical identity and stable obligation keys
+
+Define a versioned canonical serialization for the fully derived catalog. Normalize Unicode and
+repository-relative paths, use invariant enum/scalar encodings, sort maps and unordered sets by
+stable identity, preserve order only where workflow semantics require it, exclude diagnostics and
+process/type names, include referenced prompt/profile/schema/capability versions and structurally
+derived effects, then compute SHA-256. Store both the catalog ID and explicit semantic version on
+root runs and workflow instances.
+
+Derive an obligation key from owner + obligation kind + stable semantic path/identity, not array
+position or the whole catalog hash. Its content/version hash changes when its semantics change.
+Adding one declaration therefore changes only affected obligations and does not renumber the
+ledger.
+
+### Active-version availability and failure ordering
+
+On restart, an active run resolves the exact catalog ID/version it recorded. Keep accepted catalog
+snapshots/declarations available for all active durable lineages, or require an explicit catalog
+migration decision that proves semantic compatibility. Missing or mismatched identity is
+`RecoveryRequired`/a specific unsupported state, never a silent upgrade. New root runs use the
+current accepted snapshot.
+
+Validator, handler, effect, recovery, interaction, and capability references resolve through the
+unique owner registries. Catalog validation collects all deterministic, path-qualified errors,
+orders them stably, and runs before workspace access or provider/process initialization. Surface
+validation resolves repository target, normalized path, root escape, symlink ambiguity,
+nested-repository topology, ownership, commit policy, and push policy. An output surface without
+its derived publication obligations is invalid.

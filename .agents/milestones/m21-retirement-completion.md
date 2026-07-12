@@ -32,3 +32,40 @@ The verifier must report:
 
 - [ ] All metrics equal target, all former routes are absent, imported workspaces run with adapters disabled, both full chains pass from the published CLI, exact provider and platform evidence is truthful, and the owner accepts the single-authority production graph.
 
+### Verifier inputs and non-overridable output
+
+The architecture verifier consumes the solution/project graph, executable/publish outputs,
+production entrypoints, composition registrations, catalog snapshot, all owner registries, schema/
+migration/import manifests, prompt/generated asset manifests, public application claims, and
+adapter-exhaustion facts. Its immutable result is keyed by commit, build, catalog, schema,
+configuration, and exact-profile identities and calculates every final metric with itemized
+offenders. There is no manual pass override.
+
+Static calculation cannot prove `one plausible place to change behavior` by itself. Pair the
+generated graph with the roadmap §5 owner walk-through; record each behavior family, owner,
+production registration, implementation location, and zero alternate reachable locations in the
+acceptance manifest.
+
+### Deletion and platform-evidence boundaries
+
+Delete only after parity evidence and owner acceptance for the owning convergence milestone. Keep
+canonical behavior tests and exact-provider compatibility fixtures; `exhausted compatibility
+fixtures` refers only to retired legacy/import formats, not evidence still required to authorize a
+provider capability. An imported workspace runs with its adapter absent/disabled, not merely
+unused by the happy path.
+
+Retain M17 parity evidence, route-reachability evidence, and its legacy-body deletion commit
+through this milestone's final acceptance candidate.
+
+The current release aggregate lacks genuine Linux evidence. If release continues to claim Windows
+and Linux agreement, acceptance requires genuine evidence for both and stable evidence IDs. If
+Linux is no longer claimed, change the release contract and aggregate expectation explicitly;
+missing evidence cannot become a pass.
+
+Both roadmap full chains, former-route absence checks, adapter-disabled imports, unowned-asset and
+duplicate-owner sentinels, reduced-solution build/tests, and the privacy scan are required on the
+final deletion candidate.
+
+The acceptance candidate may accept cross-machine claims only from the D9-selected durable,
+scrubbed evidence owner. Ignored `.tmp` files remain diagnostic evidence, not durable release
+provenance.

@@ -30,3 +30,40 @@
 
 - [ ] Every interruption has one evidence-based classification and persisted plan; no recovery depends on an undiscoverable in-memory object; cancellation and unknown work remain distinct from failure and not-started.
 
+### Classification precedence
+
+Use one boundary taxonomy rather than overlapping `AcceptedUnknown` and `ProviderUnknown` meanings:
+
+| Last durable evidence | Classification | Minimum permitted next step |
+|---|---|---|
+| no authorized attempt/dispatch/effect start | `NotStarted` | authorize normal work |
+| authorized work, no outward-start fact | `InFlight` only while a valid lease/process correlation exists; otherwise reclassify from evidence | wait or inspect |
+| provider/effect start, no terminal observation | `AcceptedUnknown` | reconcile; never resend/re-execute |
+| normalized provider output durable, promotion absent | `SucceededUncommitted` | validate freshness and reuse output or supersede via a new plan |
+| durable explicit terminal failure | `Failed` | policy-gated new plan/attempt |
+| durable cancellation | `Cancelled` plus the boundary-specific salvage facts | apply accepted D5 ruling |
+| one or more effects settled and required work remains | `PartiallyEffected` | reconcile/resume the same effect plan |
+| completion closure partly settled | `CompletionPartiallyClosed` | resume the same closure plan |
+| facts conflict or required boundary evidence is absent/corrupt | `EvidenceIncomplete` or `Corrupt` | fail closed; repair/import/human decision |
+
+Classifications are immutable observations. New evidence appends a new classification that
+supersedes the prior identity; it never edits the prior fact. The planner must persist the exact
+source-evidence set and selected mechanism before action.
+
+### Action legality and cancellation ruling
+
+Each recovery action records plan/action identity, source attempt/effect/session/completion IDs,
+required capability/profile and policy evidence, pre/postconditions, idempotency key, and result.
+`ResumeSession`, `NativeFork`, and provider read are authorized only by the exact observed profile.
+`ReconstructContext` must bind the reconstructed input receipts and prompt facts.
+`RetryNewAttempt` keeps root run, workflow instance, and transition-run identity but mints a new
+immutable attempt. `ReuseRawOutput` never creates a second dispatch. `Compensate` is an effect plan,
+not an in-memory undo.
+
+Add the lost-provider-thread fixture with retained rollout evidence. It selects only a certified
+salvage/reconstruction path and does not infer resume/fork support from the interface alone.
+
+D5 remains a proposal until the owner rules cancellation before dispatch, after outward
+acceptance, after validated output, during partial effects, and during partial completion closure.
+Tests cover caller cancellation plus terminal evidence written with a non-cancelled evidence
+token. No ruling may erase accepted/unknown work or convert cancellation into ordinary failure.
