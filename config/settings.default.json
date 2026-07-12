@@ -10,6 +10,7 @@
     }
   },
   "policy": {
+    "schemaVersion": "policy-v4",
     "execution": {
       "maxUnboundedContinuationSteps": 32,
       "maxNoChangesCommits": 2,
@@ -20,6 +21,11 @@
     },
     "recovery": {
       "strategy": "resume-only"
+    },
+    "runtime": {
+      "sessionTelemetry": true,
+      "usageLimitWaitRetry": true,
+      "inputWaitReporting": true
     }
   },
   "permissions": {

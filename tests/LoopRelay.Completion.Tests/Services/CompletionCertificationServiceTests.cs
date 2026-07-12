@@ -940,6 +940,8 @@ public sealed class CompletionCertificationServiceTests
 
     private sealed class RecordingAgentRuntime(AgentTurnResult result) : IAgentRuntime
     {
+        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
         public List<string> Prompts { get; } = [];
         public List<AgentSessionSpec> Specs { get; } = [];
 

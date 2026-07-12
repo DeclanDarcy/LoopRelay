@@ -14,6 +14,8 @@ public static class CliSettingsLoader
     public const string ConsumerSettingsFileName = "settings.json";
     public const string DefaultSettingsFileName = "settings.default.json";
     public const string CurrentSchemaVersion = "settings-v3";
+    public const string CurrentPolicySchemaVersion = "policy-v4";
+    public const string CompatiblePolicySchemaVersion = "policy-v3";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -107,17 +109,11 @@ public static class CliSettingsLoader
                 : TranslateLegacyRuntimeFacts(document, warnings);
             PermissionPolicyOptions permissionInputs =
                 PermissionPolicyDocumentMapper.ToPolicy(document.Permissions);
-            CliPolicyDocument policyInputs = new(
-                document.Policy?.Execution?.MaxUnboundedContinuationSteps,
-                document.Policy?.Execution?.MaxNoChangesCommits,
-                document.Policy?.Execution?.OperationalContextGrowthWarningStreak,
-                document.Policy?.Decisions?.SessionResume ?? document.Continuity?.DecisionResume,
-                NormalizeOptional(document.Policy?.Recovery?.Strategy ?? document.Continuity?.RecoveryPolicy),
-                document.ArtifactPolicy is null
-                    ? null
-                    : new LegacyArtifactPolicyInputs(
-                        document.ArtifactPolicy.AllowHitlRequestedNonImplementationFiles,
-                        document.ArtifactPolicy.AllowAuxiliaryNonImplementationFiles));
+            CliPolicyDocument policyInputs = TranslatePolicyInputs(
+                document.Policy,
+                document.Continuity,
+                document.ArtifactPolicy,
+                warnings);
             if (document.ArtifactPolicy is not null)
             {
                 warnings.Add(new ConfigurationCompatibilityWarning(
@@ -177,6 +173,55 @@ public static class CliSettingsLoader
             NormalizeDistinctStrings(
                 "continuity.supportedCodexProfiles",
                 document.Continuity?.SupportedCodexProfiles));
+    }
+
+    private static CliPolicyDocument TranslatePolicyInputs(
+        PolicyDocument? policy,
+        LegacyContinuityDocument? continuity,
+        LegacyArtifactPolicyDocument? artifactPolicy,
+        List<ConfigurationCompatibilityWarning> warnings)
+    {
+        if (policy?.SchemaVersion is not null &&
+            !string.Equals(policy.SchemaVersion, CurrentPolicySchemaVersion, StringComparison.Ordinal) &&
+            !string.Equals(policy.SchemaVersion, CompatiblePolicySchemaVersion, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"policy.schemaVersion must be '{CurrentPolicySchemaVersion}' or the compatible '{CompatiblePolicySchemaVersion}'.",
+                nameof(policy.SchemaVersion));
+        }
+
+        bool translatePolicyV3 = string.Equals(
+            policy?.SchemaVersion,
+            CompatiblePolicySchemaVersion,
+            StringComparison.Ordinal);
+        if (translatePolicyV3)
+        {
+            if (policy?.Recovery is not null)
+            {
+                throw new ArgumentException(
+                    $"policy.recovery is not part of {CompatiblePolicySchemaVersion}; use {CurrentPolicySchemaVersion}.",
+                    nameof(policy.Recovery));
+            }
+
+            warnings.Add(new ConfigurationCompatibilityWarning(
+                "policy-v3-compatibility",
+                $"{CompatiblePolicySchemaVersion} inputs were translated to {CurrentPolicySchemaVersion} typed policy inputs."));
+        }
+
+        return new CliPolicyDocument(
+            policy?.Execution?.MaxUnboundedContinuationSteps,
+            policy?.Execution?.MaxNoChangesCommits,
+            policy?.Execution?.OperationalContextGrowthWarningStreak,
+            policy?.Decisions?.SessionResume ?? continuity?.DecisionResume,
+            NormalizeOptional(policy?.Recovery?.Strategy ?? continuity?.RecoveryPolicy),
+            policy?.Runtime?.SessionTelemetry,
+            policy?.Runtime?.UsageLimitWaitRetry,
+            policy?.Runtime?.InputWaitReporting,
+            artifactPolicy is null
+                ? null
+                : new LegacyArtifactPolicyInputs(
+                    artifactPolicy.AllowHitlRequestedNonImplementationFiles,
+                    artifactPolicy.AllowAuxiliaryNonImplementationFiles));
     }
 
     private static AgentModel? ParseOptionalModel(string path, string? value) =>
@@ -275,11 +320,15 @@ public static class CliSettingsLoader
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
     private sealed class PolicyDocument
     {
+        public string? SchemaVersion { get; set; }
+
         public PolicyExecutionDocument? Execution { get; set; }
 
         public PolicyDecisionsDocument? Decisions { get; set; }
 
         public PolicyRecoveryDocument? Recovery { get; set; }
+
+        public PolicyRuntimeDocument? Runtime { get; set; }
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -320,6 +369,16 @@ public static class CliSettingsLoader
         public bool? AllowHitlRequestedNonImplementationFiles { get; set; }
 
         public bool? AllowAuxiliaryNonImplementationFiles { get; set; }
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class PolicyRuntimeDocument
+    {
+        public bool? SessionTelemetry { get; set; }
+
+        public bool? UsageLimitWaitRetry { get; set; }
+
+        public bool? InputWaitReporting { get; set; }
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

@@ -16,6 +16,10 @@ Logical schema v8 remains the predecessor. Durable session continuity, recovery 
 
 Existing v8 workspaces upgrade in place through an explicit v8-to-v9 migration. Fresh workspace creation and upgraded workspaces must produce the same v9 invariants. Older supported formats enter through Compatibility Authority and are migrated forward; they do not become alternate runtime schemas.
 
+CanonicalWorkspace v9 is the complete union of the two provisional branch implementations. Its durable metadata records schema identity, family, logical version, and the complete physical-shape fingerprint. Inspection distinguishes `Merge4V9Partial`, `ArchitectureConvergenceV9Partial`, and `RecognizedMixedV9Partial` from `CanonicalV9Complete`; an unknown or stamped-but-incomplete v9 fails closed.
+
+Completing a recognized provisional v9 is schema convergence, not an ordinary `9 -> 9` version migration. Convergence runs transactionally, verifies the complete target manifest before recording a dedicated convergence receipt, and stamps canonical lineage and shape only as its final operation. Historical evidence that was not observed remains null, and an existing workspace identity is preserved verbatim.
+
 The v9 migration must preserve the v8 workspace, run, workflow, transition, attempt, session, turn, policy, prompt, product, and history identities. It may not create a second workspace identity or a parallel state authority.
 
 ## Consequences

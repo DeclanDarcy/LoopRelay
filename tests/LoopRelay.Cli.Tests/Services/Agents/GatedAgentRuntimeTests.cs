@@ -25,13 +25,14 @@ public class GatedAgentRuntimeTests
         GatedAgentRuntime Runtime, RecordingRuntime Inner, RecordingDetector Detector,
         RecordingSessionTelemetryRecorder Recorder, List<string> Log);
 
-    private static Fixture New()
+    private static Fixture New(bool retryOnUsageLimit = true)
     {
         var log = new List<string>();
         var inner = new RecordingRuntime(log);
         var detector = new RecordingDetector(log);
         var recorder = new RecordingSessionTelemetryRecorder();
-        var runtime = new GatedAgentRuntime(inner, detector, recorder, new FakeClock(), "myrepo");
+        var runtime = new GatedAgentRuntime(
+            inner, detector, recorder, new FakeClock(), "myrepo", _retryOnUsageLimit: retryOnUsageLimit);
         return new Fixture(runtime, inner, detector, recorder, log);
     }
 
@@ -90,6 +91,24 @@ public class GatedAgentRuntimeTests
         Assert.Equal(new[] { "turn", "detect", "wait", "turn", "detect" }, f.Log);
         Assert.Equal(new[] { "p", "p" }, f.Inner.LastSession.Prompts);
         Assert.Equal(2, f.Recorder.Calls.Count);
+    }
+
+    [Fact]
+    public async Task RunTurn_WithUsageLimitRetryDisabledByPolicy_RecordsTelemetryButSurfacesTheFailureImmediately()
+    {
+        // policy runtime.usageLimitWaitRetry=false (M7): telemetry keeps recording every attempt,
+        // but a usage-limit failure surfaces on the first attempt instead of being waited out.
+        var f = New(retryOnUsageLimit: false);
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+        f.Inner.LastSession!.TurnResult = Turns.Failed("limited", "usage limit");
+        f.Detector.Default = Hit();
+
+        AgentTurnResult result = await session.RunTurnAsync("p");
+
+        Assert.Equal(AgentTurnState.Failed, result.State);
+        Assert.Equal(new[] { "turn" }, f.Log);
+        Assert.Equal(0, f.Detector.Waits);
+        Assert.Single(f.Recorder.Calls);
     }
 
     [Fact]
@@ -337,6 +356,8 @@ public class GatedAgentRuntimeTests
 
     private sealed class RecordingRuntime(List<string> log) : IAgentRuntime
     {
+        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
         public RecordingSession? LastSession { get; private set; }
         public IAgentSession? ClosedSession { get; private set; }
         public AgentTurnResult OneShotResult { get; set; } = Turns.Completed("oneshot");

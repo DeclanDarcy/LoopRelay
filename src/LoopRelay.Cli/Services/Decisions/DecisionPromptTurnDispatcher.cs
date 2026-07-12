@@ -20,6 +20,22 @@ internal interface IDecisionPromptTurnDispatcher
         CancellationToken cancellationToken);
 }
 
+/// <summary>Explicit identity-bearing seam implemented by Runtime Authority decorators. It lets
+/// Prompt Authority bind an already-persisted prompt/dispatch to the exact runtime evidence row
+/// without ambient state or allowing Runtime Authority to create prompt facts.</summary>
+internal interface ICanonicalPromptEvidenceSession
+{
+    AgentSessionIdentity EvidenceSessionIdentity { get; }
+
+    Task<AgentTurnResult> RunCanonicalTurnAsync(
+        string prompt,
+        RenderedPromptFactIdentity promptFact,
+        PromptDispatchIdentity dispatch,
+        TurnIdentity turn,
+        Func<AgentStreamChunk, Task>? onChunk,
+        CancellationToken cancellationToken);
+}
+
 internal sealed record DecisionPromptTurnResult(
     AgentTurnResult Result,
     AgentSessionIdentity Session,
@@ -50,7 +66,9 @@ internal sealed class CanonicalDecisionPromptTurnDispatcher(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(session);
-        var sessionIdentity = new AgentSessionIdentity(session.SessionId.ToString());
+        AgentSessionIdentity sessionIdentity = session is ICanonicalPromptEvidenceSession evidenceSession
+            ? evidenceSession.EvidenceSessionIdentity
+            : new AgentSessionIdentity(session.SessionId.ToString());
         TurnIdentity turnIdentity = TurnIdentity.New();
         var authorization = new PromptDispatchAuthorization(
             _baseAuthorization.Causality,
@@ -103,10 +121,19 @@ internal sealed class CanonicalDecisionPromptTurnDispatcher(
             AuthorizedPromptDispatch dispatch,
             CancellationToken cancellationToken)
         {
-            Result = await _session.RunTurnAsync(
-                prompt.Fact.RenderedContent,
-                _onChunk,
-                cancellationToken);
+            Result = _session is ICanonicalPromptEvidenceSession evidenceSession &&
+                dispatch.Authorization.Turn is { } turn
+                ? await evidenceSession.RunCanonicalTurnAsync(
+                    prompt.Fact.RenderedContent,
+                    prompt.Fact.Identity,
+                    dispatch.Dispatch,
+                    turn,
+                    _onChunk,
+                    cancellationToken)
+                : await _session.RunTurnAsync(
+                    prompt.Fact.RenderedContent,
+                    _onChunk,
+                    cancellationToken);
             PromptExecutionStatus status = Result.State switch
             {
                 AgentTurnState.Completed => PromptExecutionStatus.Completed,

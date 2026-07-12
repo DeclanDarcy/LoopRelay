@@ -1,6 +1,6 @@
 namespace LoopRelay.Infrastructure.Primitives.Diagnostics;
 
-public enum RuntimeDiagnosticSeverity
+public enum RuntimePrerequisiteFindingSeverity
 {
     Info,
     Warning,

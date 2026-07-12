@@ -16,7 +16,10 @@ public sealed record CliPolicyDocument(
     int? OperationalContextGrowthWarningStreak,
     bool? DecisionSessionResume,
     string? DecisionRecoveryStrategy = null,
+    bool? SessionTelemetry = null,
+    bool? UsageLimitWaitRetry = null,
+    bool? InputWaitReporting = null,
     LegacyArtifactPolicyInputs? LegacyArtifactPolicy = null)
 {
-    public static CliPolicyDocument Empty { get; } = new(null, null, null, null, null, null);
+    public static CliPolicyDocument Empty { get; } = new(null, null, null, null);
 }

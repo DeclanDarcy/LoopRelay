@@ -30,6 +30,13 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         Assert.Equal("9", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.Equal(LoopRelayWorkspaceDatabase.SchemaIdentity, await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_identity';"));
         Assert.Equal(LoopRelayWorkspaceDatabase.SchemaFamily, await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_family';"));
+        Assert.Equal(
+            LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint,
+            await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_shape';"));
+        WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaFamily.CanonicalWorkspace, inspection.Family);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV9Complete, inspection.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint, inspection.ShapeFingerprint);
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist.");
@@ -76,6 +83,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "canonical_effect_intents",
             "persistence_projection_checkpoints",
             "workspace_schema_migrations",
+            "workspace_schema_convergences",
             "workspace_identity_metadata",
         ])
         {
@@ -301,6 +309,256 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         Assert.Contains("turn_id", await TableColumnsAsync(connection, "prompt_dispatch_events"));
         Assert.Contains("effort", await TableColumnsAsync(connection, "agent_sessions"));
         Assert.Contains("sandbox", await TableColumnsAsync(connection, "agent_sessions"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_FreshDatabase_CreatesTurnEvidenceColumnsAndRuntimePrerequisitesTable()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        string[] expectedTurnColumns =
+        [
+            "turn_id",
+            "session_id",
+            "turn_index",
+            "recorded_at",
+            "state",
+            "prompt_sha256",
+            "prompt_tokens",
+            "output_tokens",
+            "cached_input_tokens",
+            "diagnostics_kind",
+            "diagnostics",
+        ];
+        Assert.Equal(expectedTurnColumns, await TableColumnsAsync(connection, "agent_turns"));
+
+        Assert.True(
+            await TableExistsAsync(connection, "canonical_runtime_prerequisites"),
+            "Expected table `canonical_runtime_prerequisites` to exist.");
+        string[] expectedPrerequisiteColumns =
+        [
+            "prerequisite_check_id",
+            "run_id",
+            "checked_at",
+            "diagnostics_json",
+        ];
+        Assert.Equal(expectedPrerequisiteColumns, await TableColumnsAsync(connection, "canonical_runtime_prerequisites"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_ConvergesMerge4PartialV9WithoutRecordingFakeNineToNineMigration()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        string workspaceId = await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection);
+
+        await RemoveIncomingV9FeaturesAsync(connection);
+        await ExecuteAsync(
+            connection,
+            "DELETE FROM schema_metadata WHERE key = 'schema_shape'; DROP TABLE workspace_schema_convergences;");
+
+        WorkspaceSchemaInspection provisional = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaShape.Merge4V9Partial, provisional.Shape);
+
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        WorkspaceSchemaInspection complete = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV9Complete, complete.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint, complete.ShapeFingerprint);
+        Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
+        Assert.Equal(0L, await ScalarLongAsync(
+            connection,
+            "SELECT COUNT(*) FROM workspace_schema_migrations WHERE from_version = 9 AND to_version = 9;"));
+        Assert.Equal("Merge4V9Partial", await ScalarStringAsync(
+            connection,
+            "SELECT source_shape FROM workspace_schema_convergences;"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_ConvergesArchitecturePartialV9AndPreservesWorkspaceIdentity()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        string workspaceId = await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection);
+
+        await RemoveMerge4V9FeaturesAsync(connection);
+        await ExecuteAsync(
+            connection,
+            "DELETE FROM schema_metadata WHERE key IN ('schema_identity', 'schema_family', 'schema_shape');");
+
+        WorkspaceSchemaInspection provisional = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.False(provisional.HasExplicitLineage);
+        Assert.Equal(WorkspaceSchemaShape.ArchitectureConvergenceV9Partial, provisional.Shape);
+
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        WorkspaceSchemaInspection complete = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV9Complete, complete.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint, complete.ShapeFingerprint);
+        Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
+        Assert.Equal("ArchitectureConvergenceV9Partial", await ScalarStringAsync(
+            connection,
+            "SELECT source_shape FROM workspace_schema_convergences;"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_ConvergesRecognizedMixedV9BeforeStampingCompleteShape()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        string workspaceId = await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection);
+        await ExecuteAsync(
+            connection,
+            """
+            DELETE FROM schema_metadata WHERE key IN ('schema_identity', 'schema_family', 'schema_shape');
+            DROP TABLE workspace_schema_convergences;
+            """);
+
+        WorkspaceSchemaInspection provisional = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaShape.RecognizedMixedV9Partial, provisional.Shape);
+
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        WorkspaceSchemaInspection complete = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV9Complete, complete.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint, complete.ShapeFingerprint);
+        Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_RejectsUnknownOrContradictoryV9ShapesWithoutMutation()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await ExecuteAsync(
+            connection,
+            """
+            CREATE TABLE schema_metadata(key text primary key, value text not null);
+            INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '9');
+            CREATE TABLE unrelated_state(id text primary key);
+            """);
+
+        WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaShape.UnknownV9Shape, inspection.Shape);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));
+        Assert.False(await TableExistsAsync(connection, "workspace_identity"));
+        Assert.Null(await ScalarStringAsync(
+            connection,
+            "SELECT value FROM schema_metadata WHERE key = 'schema_shape';"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_RejectsStampedCanonicalV9WhenItsPhysicalShapeIsCorrupt()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        await ExecuteAsync(connection, "DROP TABLE canonical_runtime_prerequisites;");
+
+        WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV9, inspection.Shape);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_RollsBackAllConvergenceWorkWhenFinalShapeStampFails()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await ExecuteAsync(
+            connection,
+            """
+            CREATE TABLE schema_metadata(key text primary key, value text not null);
+            INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '8');
+            CREATE TRIGGER reject_shape_stamp BEFORE INSERT ON schema_metadata
+            WHEN NEW.key = 'schema_shape'
+            BEGIN
+                SELECT RAISE(ABORT, 'shape stamp rejected');
+            END;
+            """);
+
+        await Assert.ThrowsAsync<SqliteException>(
+            () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));
+
+        Assert.Equal("8", await ScalarStringAsync(
+            connection,
+            "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.False(await TableExistsAsync(connection, "workspace_schema_convergences"));
+        Assert.False(await TableExistsAsync(connection, "workspace_identity"));
+        Assert.Null(await ScalarStringAsync(
+            connection,
+            "SELECT value FROM schema_metadata WHERE key = 'schema_shape';"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_AddsTurnEvidenceColumnsToVersionEightTurnsWithoutRewritingFactRows()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using (SqliteConnection legacy = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await legacy.OpenAsync();
+            await ExecuteAsync(
+                legacy,
+                """
+                CREATE TABLE schema_metadata(key text primary key, value text not null);
+                CREATE TABLE workspace_metadata(key text primary key, value text not null);
+                INSERT INTO schema_metadata (key, value) VALUES ('schema_version', '8');
+
+                CREATE TABLE agent_turns(
+                    turn_id text primary key,
+                    session_id text not null,
+                    turn_index integer not null,
+                    recorded_at text not null,
+                    unique(session_id, turn_index)
+                );
+                INSERT INTO agent_turns (turn_id, session_id, turn_index, recorded_at)
+                VALUES ('turn_legacy_1', 'ses_legacy_1', 3, '2026-07-11T12:00:00.0000000Z');
+                """);
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        // Pre-v9 turns survive the migration with every pre-existing column value unchanged and
+        // null state/usage/diagnosis evidence: migrations never rewrite fact rows.
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM agent_turns;"));
+        Assert.Equal("ses_legacy_1", await ScalarStringAsync(connection, "SELECT session_id FROM agent_turns WHERE turn_id = 'turn_legacy_1';"));
+        Assert.Equal(3L, await ScalarLongAsync(connection, "SELECT turn_index FROM agent_turns WHERE turn_id = 'turn_legacy_1';"));
+        Assert.Equal("2026-07-11T12:00:00.0000000Z", await ScalarStringAsync(connection, "SELECT recorded_at FROM agent_turns WHERE turn_id = 'turn_legacy_1';"));
+        Assert.Null(await ScalarStringAsync(connection, "SELECT state FROM agent_turns WHERE turn_id = 'turn_legacy_1';"));
+        Assert.Null(await ScalarStringAsync(connection, "SELECT prompt_sha256 FROM agent_turns WHERE turn_id = 'turn_legacy_1';"));
+        Assert.Null(await ScalarStringAsync(connection, "SELECT prompt_tokens FROM agent_turns WHERE turn_id = 'turn_legacy_1';"));
+        Assert.Null(await ScalarStringAsync(connection, "SELECT diagnostics_kind FROM agent_turns WHERE turn_id = 'turn_legacy_1';"));
+
+        // The column additions are guarded: a second schema pass neither duplicates nor fails.
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        Assert.Equal(1, (await TableColumnsAsync(connection, "agent_turns")).Count(column => column == "state"));
+        Assert.Equal(1, (await TableColumnsAsync(connection, "agent_turns")).Count(column => column == "diagnostics"));
     }
 
     [Fact]
@@ -755,6 +1013,112 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
+    }
+
+    private static async Task RemoveIncomingV9FeaturesAsync(SqliteConnection connection)
+    {
+        await ExecuteAsync(connection, "DROP TABLE canonical_runtime_prerequisites;");
+        foreach (string column in new[]
+                 {
+                     "state",
+                     "prompt_sha256",
+                     "prompt_tokens",
+                     "output_tokens",
+                     "cached_input_tokens",
+                     "diagnostics_kind",
+                     "diagnostics",
+                 })
+        {
+            await ExecuteAsync(connection, $"ALTER TABLE agent_turns DROP COLUMN {column};");
+        }
+    }
+
+    private static async Task RemoveMerge4V9FeaturesAsync(SqliteConnection connection)
+    {
+        await ExecuteAsync(connection, "PRAGMA foreign_keys = OFF;");
+        foreach (string index in new[]
+                 {
+                     "idx_history_evidence_items_set",
+                     "idx_loop_history_history_id",
+                     "idx_history_evidence_provider",
+                     "idx_history_evidence_recovery",
+                     "idx_compatibility_import_events_operation",
+                     "idx_projection_effects_status",
+                     "idx_transition_recovery_plans_run",
+                     "idx_canonical_effect_intents_status",
+                     "idx_prompt_dispatch_events_dispatch",
+                     "idx_prompt_dispatch_events_attempt",
+                     "idx_execution_recommendation_decision",
+                     "idx_runtime_profile_evaluation_decision",
+                     "idx_decision_scope_lifecycle",
+                     "idx_decision_lineage_scope_authority",
+                     "idx_decision_lineage_parent",
+                     "idx_recovery_attempt_scope_status",
+                     "idx_decision_turn_transition",
+                 })
+        {
+            await ExecuteAsync(connection, $"DROP INDEX IF EXISTS {index};");
+        }
+
+        foreach (string table in new[]
+                 {
+                     "workspace_schema_convergences",
+                     "workspace_schema_migrations",
+                     "workspace_identity_metadata",
+                     "session_continuity_profiles",
+                     "decision_session_scopes",
+                     "decision_session_lineage",
+                     "decision_session_active",
+                     "session_recovery_plans",
+                     "session_recovery_attempts",
+                     "session_recovery_sources",
+                     "decision_session_turns",
+                     "session_transition_correlations",
+                     "decision_session_legacy_imports",
+                     "history_evidence_sets",
+                     "history_evidence_items",
+                     "compatibility_import_operations",
+                     "compatibility_import_events",
+                     "canonical_projection_effects",
+                     "transition_recovery_plans",
+                     "canonical_effect_intents",
+                     "execution_recommendation_evidence",
+                     "runtime_profile_evaluations",
+                     "prompt_dispatch_events",
+                     "persistence_projection_checkpoints",
+                 })
+        {
+            await ExecuteAsync(connection, $"DROP TABLE IF EXISTS {table};");
+        }
+
+        foreach ((string table, string column) in new (string Table, string Column)[]
+                 {
+                     ("loop_history", "workspace_id"),
+                     ("loop_history", "workflow_instance_id"),
+                     ("loop_history", "session_id"),
+                     ("loop_history", "turn_id"),
+                     ("loop_history", "supersedes_id"),
+                     ("loop_history", "producer_run_id"),
+                     ("loop_history", "producer_lineage_id"),
+                     ("loop_history", "provider_thread_id"),
+                     ("loop_history", "provider_turn_id"),
+                     ("loop_history", "recovery_attempt_id"),
+                     ("canonical_rendered_prompts", "persistence_id"),
+                     ("canonical_rendered_prompts", "prompt_policy_profile_id"),
+                     ("canonical_rendered_prompts", "consumed_input_manifest_id"),
+                     ("canonical_rendered_prompts", "rendered_encoding"),
+                     ("session_telemetry_events", "provider_thread_id"),
+                     ("session_telemetry_events", "lineage_id"),
+                     ("session_telemetry_events", "transition_run_id"),
+                     ("session_telemetry_events", "recovery_attempt_id"),
+                     ("session_telemetry_events", "continuity_event_type"),
+                     ("session_telemetry_events", "continuity_outcome"),
+                 })
+        {
+            await ExecuteAsync(connection, $"ALTER TABLE {table} DROP COLUMN {column};");
+        }
+
+        await ExecuteAsync(connection, "PRAGMA foreign_keys = ON;");
     }
 
     private static Repository CreateRepository()

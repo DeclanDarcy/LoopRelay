@@ -23,8 +23,40 @@ public sealed class PermissionSettingsTests
         Assert.Equal(2, result.PolicyInputs.OperationalContextGrowthWarningStreak);
         Assert.True(result.PolicyInputs.DecisionSessionResume);
         Assert.Equal("resume-only", result.PolicyInputs.DecisionRecoveryStrategy);
+        Assert.True(result.PolicyInputs.SessionTelemetry);
+        Assert.True(result.PolicyInputs.UsageLimitWaitRetry);
+        Assert.True(result.PolicyInputs.InputWaitReporting);
         Assert.Null(result.PolicyInputs.LegacyArtifactPolicy);
         Assert.Empty(result.CompatibilityWarnings);
+    }
+
+    [Fact]
+    public void Policy_v3_is_explicitly_translated_to_policy_v4_inputs()
+    {
+        JsonObject settings = DefaultSettings();
+        JsonObject policy = Object(settings, "policy");
+        policy["schemaVersion"] = "policy-v3";
+        policy.Remove("recovery");
+
+        CliSettingsLoadResult result = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
+
+        Assert.Null(result.PolicyInputs.DecisionRecoveryStrategy);
+        Assert.True(result.PolicyInputs.SessionTelemetry);
+        Assert.True(result.PolicyInputs.UsageLimitWaitRetry);
+        Assert.True(result.PolicyInputs.InputWaitReporting);
+        Assert.Contains(
+            result.CompatibilityWarnings,
+            warning => warning.Code == "policy-v3-compatibility");
+    }
+
+    [Fact]
+    public void Policy_v3_cannot_smuggle_policy_v4_recovery_fields()
+    {
+        JsonObject settings = DefaultSettings();
+        Object(settings, "policy")["schemaVersion"] = "policy-v3";
+
+        Assert.Throws<CliSettingsException>(() =>
+            CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
     }
 
     [Fact]

@@ -9,6 +9,7 @@ namespace LoopRelay.Cli.Tests.Services.Agents;
 
 internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime, IAgentSessionContinuityRuntime
 {
+    public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
     public Queue<ScriptedTurn> OneShotTurns { get; } = new();
     public Queue<ScriptedTurn> SessionTurns { get; } = new();
     public int OpenSessions { get; private set; }

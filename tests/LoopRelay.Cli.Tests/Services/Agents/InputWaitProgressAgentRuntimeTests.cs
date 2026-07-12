@@ -162,6 +162,8 @@ public class InputWaitProgressAgentRuntimeTests
     private sealed class ScriptedRuntime(
         Func<Func<AgentStreamChunk, Task>, Task<AgentTurnResult>> turn) : IAgentRuntime
     {
+        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
+
         public Task<IAgentSession> OpenSessionAsync(
             AgentSessionSpec spec,
             CancellationToken cancellationToken = default) =>

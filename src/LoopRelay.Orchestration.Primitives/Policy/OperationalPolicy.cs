@@ -4,7 +4,6 @@ using System.Text;
 using System.Text.Json;
 using LoopRelay.Permissions.Models.Configuration;
 using LoopRelay.Permissions.Models.Policy;
-using LoopRelay.Core.Models.Identity;
 
 namespace LoopRelay.Orchestration.Policy;
 
@@ -20,7 +19,16 @@ public enum PolicyLayer
     Invocation,
 }
 
-public sealed record PolicyFieldProvenance(string Field, PolicyLayer Layer, string Origin);
+public sealed record PolicyFieldProvenance(string Field, PolicyLayer Layer, string Origin)
+{
+    public string? ConfiguredValue { get; init; }
+
+    public required string EffectiveValue { get; init; }
+
+    public required string Reason { get; init; }
+
+    public IReadOnlyList<string> OverrideChain { get; init; } = [];
+}
 
 /// <summary>
 /// One invocation-layer override. <paramref name="IsExplicit"/> distinguishes explicit flags
@@ -36,19 +44,73 @@ public sealed record PolicyOverride(string Key, string Value, string Origin, boo
 /// <see cref="PolicyId"/>. <see cref="ResolvedJson"/> is the canonical serialization the
 /// identity hash covers — it is what the policy-resolution fact stores.
 /// </summary>
-public sealed record ResolvedOperationalPolicy(
-    string PolicyId,
-    string SchemaVersion,
+public sealed record ResolvedExecutionPolicy(
     int MaxUnboundedContinuationSteps,
     int MaxNoChangesCommits,
-    int OperationalContextGrowthWarningStreak,
-    bool DecisionSessionResume,
+    int OperationalContextGrowthWarningStreak);
+
+public enum TelemetryPolicyMode
+{
+    Disabled,
+    Enabled,
+    Required,
+}
+
+public sealed record TelemetryPolicy(TelemetryPolicyMode Mode);
+
+public enum InputWaitPolicyMode
+{
+    Disabled,
+    Enabled,
+}
+
+public sealed record InputWaitPolicy(InputWaitPolicyMode Mode);
+
+public sealed record RuntimePolicy(
+    TelemetryPolicy Telemetry,
+    InputWaitPolicy InputWait);
+
+public enum UsageLimitRetryMode
+{
+    Never,
+    Bounded,
+    Unlimited,
+}
+
+public sealed record UsageLimitRetryPolicy(
+    UsageLimitRetryMode Mode,
+    int MaxAttempts);
+
+public enum UnknownOutcomePolicy
+{
+    RequiresReconciliation,
+}
+
+public sealed record RecoveryPolicy(
+    ResumePolicy Resume,
+    UsageLimitRetryPolicy UsageLimitRetry,
+    UnknownOutcomePolicy UnknownOutcome);
+
+public sealed record ResolvedOperationalPolicy(
+    string PolicyId,
+    string PolicySchemaVersion,
+    ResolvedExecutionPolicy Execution,
+    RuntimePolicy Runtime,
+    RecoveryPolicy Recovery,
     PermissionPolicyOptions Permissions,
     IReadOnlyList<PolicyFieldProvenance> Provenance,
     string ResolvedJson,
     string SourceDescription)
 {
-    public ResumePolicy Resume { get; init; } = ResumePolicy.Create(true, ResumeRecoveryStrategy.ResumeOnly);
+    public string SchemaVersion => PolicySchemaVersion;
+    public int MaxUnboundedContinuationSteps => Execution.MaxUnboundedContinuationSteps;
+    public int MaxNoChangesCommits => Execution.MaxNoChangesCommits;
+    public int OperationalContextGrowthWarningStreak => Execution.OperationalContextGrowthWarningStreak;
+    public bool DecisionSessionResume => Recovery.Resume.Enabled;
+    public ResumePolicy Resume => Recovery.Resume;
+    public bool SessionTelemetry => Runtime.Telemetry.Mode != TelemetryPolicyMode.Disabled;
+    public bool UsageLimitWaitRetry => Recovery.UsageLimitRetry.Mode != UsageLimitRetryMode.Never;
+    public bool InputWaitReporting => Runtime.InputWait.Mode != InputWaitPolicyMode.Disabled;
 }
 
 public enum ResumeRecoveryStrategy
@@ -59,16 +121,11 @@ public enum ResumeRecoveryStrategy
 }
 
 public sealed record ResumePolicy(
-    ResumePolicyIdentity Identity,
     bool Enabled,
     ResumeRecoveryStrategy RecoveryStrategy)
 {
-    public static ResumePolicy Create(bool enabled, ResumeRecoveryStrategy strategy)
-    {
-        string canonical = $"resume-policy.v1|{enabled}|{strategy}";
-        string hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
-        return new ResumePolicy(new ResumePolicyIdentity($"resume_{hash[..32]}"), enabled, strategy);
-    }
+    public static ResumePolicy Create(bool enabled, ResumeRecoveryStrategy strategy) =>
+        new(enabled, strategy);
 }
 
 public sealed class PolicyResolutionException : Exception
@@ -88,21 +145,31 @@ public sealed class PolicyResolutionException : Exception
 /// implementation-first prompt policy is template-owned and unconditional, so there is no
 /// artifact-policy field to configure; a settings file or override that still names one is
 /// rejected as an unknown key.
+/// Schema policy-v4 consolidates recovery/resume and the M7 runtime controls as typed components
+/// under one identity. Every execution-affecting value is represented in the canonical document;
+/// compatibility inputs are translated before this authority resolves them.
 /// </summary>
 public static class OperationalPolicyResolver
 {
-    public const string SchemaVersion = "policy-v2";
+    public const string SchemaVersion = "policy-v4";
 
     public const string MaxUnboundedContinuationStepsKey = "execution.maxUnboundedContinuationSteps";
     public const string MaxNoChangesCommitsKey = "execution.maxNoChangesCommits";
     public const string OperationalContextGrowthWarningStreakKey = "execution.operationalContextGrowthWarningStreak";
     public const string DecisionSessionResumeKey = "decisions.sessionResume";
     public const string DecisionRecoveryPolicyKey = "decisions.recoveryPolicy";
+    public const string SessionTelemetryKey = "runtime.sessionTelemetry";
+    public const string UsageLimitWaitRetryKey = "runtime.usageLimitWaitRetry";
+    public const string InputWaitReportingKey = "runtime.inputWaitReporting";
 
     public const int DefaultMaxUnboundedContinuationSteps = 32;
     public const int DefaultMaxNoChangesCommits = 2;
     public const int DefaultOperationalContextGrowthWarningStreak = 2;
     public const bool DefaultDecisionSessionResume = true;
+    public const bool DefaultSessionTelemetry = true;
+    public const bool DefaultUsageLimitWaitRetry = true;
+    public const bool DefaultInputWaitReporting = true;
+    public const int DefaultUsageLimitRetryAttempts = 3;
 
     private const string BuiltInOrigin = "built-in";
 
@@ -155,6 +222,27 @@ public static class OperationalPolicyResolver
             workspaceSource,
             overrides,
             provenance);
+        bool sessionTelemetry = ResolveBool(
+            SessionTelemetryKey,
+            DefaultSessionTelemetry,
+            workspacePolicy.SessionTelemetry,
+            workspaceSource,
+            overrides,
+            provenance);
+        bool usageLimitWaitRetry = ResolveBool(
+            UsageLimitWaitRetryKey,
+            DefaultUsageLimitWaitRetry,
+            workspacePolicy.UsageLimitWaitRetry,
+            workspaceSource,
+            overrides,
+            provenance);
+        bool inputWaitReporting = ResolveBool(
+            InputWaitReportingKey,
+            DefaultInputWaitReporting,
+            workspacePolicy.InputWaitReporting,
+            workspaceSource,
+            overrides,
+            provenance);
 
         foreach (string key in overrides.Keys)
         {
@@ -165,6 +253,21 @@ public static class OperationalPolicyResolver
             }
         }
 
+        ResumePolicy resume = ResumePolicy.Create(decisionSessionResume, recoveryStrategy);
+        var execution = new ResolvedExecutionPolicy(
+            maxUnboundedContinuationSteps,
+            maxNoChangesCommits,
+            operationalContextGrowthWarningStreak);
+        var runtime = new RuntimePolicy(
+            new TelemetryPolicy(sessionTelemetry ? TelemetryPolicyMode.Enabled : TelemetryPolicyMode.Disabled),
+            new InputWaitPolicy(inputWaitReporting ? InputWaitPolicyMode.Enabled : InputWaitPolicyMode.Disabled));
+        var recovery = new RecoveryPolicy(
+            resume,
+            new UsageLimitRetryPolicy(
+                usageLimitWaitRetry ? UsageLimitRetryMode.Bounded : UsageLimitRetryMode.Never,
+                usageLimitWaitRetry ? DefaultUsageLimitRetryAttempts : 0),
+            UnknownOutcomePolicy.RequiresReconciliation);
+
         string resolvedJson = JsonSerializer.Serialize(
             new CanonicalPolicySnapshot(
                 SchemaVersion,
@@ -172,7 +275,15 @@ public static class OperationalPolicyResolver
                     maxUnboundedContinuationSteps,
                     maxNoChangesCommits,
                     operationalContextGrowthWarningStreak),
-                new CanonicalDecisionsPolicy(decisionSessionResume, recoveryStrategy),
+                new CanonicalRuntimePolicy(
+                    runtime.Telemetry.Mode.ToString(),
+                    runtime.InputWait.Mode.ToString()),
+                new CanonicalRecoveryPolicy(
+                    new CanonicalResumePolicy(resume.Enabled, resume.RecoveryStrategy.ToString()),
+                    new CanonicalUsageLimitRetryPolicy(
+                        recovery.UsageLimitRetry.Mode.ToString(),
+                        recovery.UsageLimitRetry.MaxAttempts),
+                    recovery.UnknownOutcome.ToString()),
                 CanonicalPermissions.From(permissions)),
             CanonicalJsonOptions);
         string policyId = ComputePolicyId(resolvedJson);
@@ -180,17 +291,13 @@ public static class OperationalPolicyResolver
         return new ResolvedOperationalPolicy(
             policyId,
             SchemaVersion,
-            maxUnboundedContinuationSteps,
-            maxNoChangesCommits,
-            operationalContextGrowthWarningStreak,
-            decisionSessionResume,
+            execution,
+            runtime,
+            recovery,
             permissions,
             provenance,
             resolvedJson,
-            workspaceSource)
-        {
-            Resume = ResumePolicy.Create(decisionSessionResume, recoveryStrategy),
-        };
+            workspaceSource);
     }
 
     private static readonly IReadOnlyList<string> KnownKeys =
@@ -200,6 +307,9 @@ public static class OperationalPolicyResolver
         OperationalContextGrowthWarningStreakKey,
         DecisionSessionResumeKey,
         DecisionRecoveryPolicyKey,
+        SessionTelemetryKey,
+        UsageLimitWaitRetryKey,
+        InputWaitReportingKey,
     ];
 
     private static ResumeRecoveryStrategy ResolveRecoveryStrategy(
@@ -211,21 +321,45 @@ public static class OperationalPolicyResolver
         if (overrides.TryGetValue(DecisionRecoveryPolicyKey, out PolicyOverride? value))
         {
             ResumeRecoveryStrategy invocation = ParseRecoveryStrategy(value.Value);
-            provenance.Add(new PolicyFieldProvenance(
-                DecisionRecoveryPolicyKey, PolicyLayer.Invocation, value.Origin));
+            provenance.Add(CreateProvenance(
+                DecisionRecoveryPolicyKey,
+                PolicyLayer.Invocation,
+                value.Origin,
+                value.Value,
+                FormatRecoveryStrategy(invocation),
+                "resume-only",
+                workspace,
+                workspaceSource,
+                overrides));
             return invocation;
         }
 
         if (workspace is not null)
         {
             ResumeRecoveryStrategy configured = ParseRecoveryStrategy(workspace);
-            provenance.Add(new PolicyFieldProvenance(
-                DecisionRecoveryPolicyKey, PolicyLayer.Workspace, workspaceSource));
+            provenance.Add(CreateProvenance(
+                DecisionRecoveryPolicyKey,
+                PolicyLayer.Workspace,
+                workspaceSource,
+                workspace,
+                FormatRecoveryStrategy(configured),
+                "resume-only",
+                workspace,
+                workspaceSource,
+                overrides));
             return configured;
         }
 
-        provenance.Add(new PolicyFieldProvenance(
-            DecisionRecoveryPolicyKey, PolicyLayer.BuiltIn, BuiltInOrigin));
+        provenance.Add(CreateProvenance(
+            DecisionRecoveryPolicyKey,
+            PolicyLayer.BuiltIn,
+            BuiltInOrigin,
+            null,
+            "resume-only",
+            "resume-only",
+            workspace,
+            workspaceSource,
+            overrides));
         return ResumeRecoveryStrategy.ResumeOnly;
     }
 
@@ -238,6 +372,13 @@ public static class OperationalPolicyResolver
             _ => throw new PolicyResolutionException(
                 $"Policy value `{value}` for `{DecisionRecoveryPolicyKey}` must be resume-only, reconstructed, or certified."),
         };
+
+    private static string FormatRecoveryStrategy(ResumeRecoveryStrategy strategy) => strategy switch
+    {
+        ResumeRecoveryStrategy.ResumeOnly => "resume-only",
+        ResumeRecoveryStrategy.Reconstructed => "reconstructed",
+        _ => "certified",
+    };
 
     private static IReadOnlyDictionary<string, PolicyOverride> IndexOverrides(
         IReadOnlyList<PolicyOverride> invocationOverrides)
@@ -269,11 +410,15 @@ public static class OperationalPolicyResolver
         IReadOnlyDictionary<string, PolicyOverride> overrides,
         List<PolicyFieldProvenance> provenance)
     {
+        string? workspaceText = workspace?.ToString().ToLowerInvariant();
+        string builtInText = builtIn.ToString().ToLowerInvariant();
         (string raw, PolicyLayer layer, string origin, bool resolvedFromText) = SelectLayer(
-            key, workspace?.ToString(), workspaceSource, overrides);
+            key, workspaceText, workspaceSource, overrides);
         if (!resolvedFromText)
         {
-            provenance.Add(new PolicyFieldProvenance(key, PolicyLayer.BuiltIn, BuiltInOrigin));
+            provenance.Add(CreateProvenance(
+                key, PolicyLayer.BuiltIn, BuiltInOrigin, null, builtInText,
+                builtInText, workspaceText, workspaceSource, overrides));
             return builtIn;
         }
 
@@ -284,7 +429,9 @@ public static class OperationalPolicyResolver
             _ => throw new PolicyResolutionException(
                 $"Policy value `{raw}` for `{key}` (from {origin}) is not a boolean; expected true/false."),
         };
-        provenance.Add(new PolicyFieldProvenance(key, layer, origin));
+        provenance.Add(CreateProvenance(
+            key, layer, origin, raw, value.ToString().ToLowerInvariant(),
+            builtInText, workspaceText, workspaceSource, overrides));
         return value;
     }
 
@@ -296,11 +443,15 @@ public static class OperationalPolicyResolver
         IReadOnlyDictionary<string, PolicyOverride> overrides,
         List<PolicyFieldProvenance> provenance)
     {
+        string? workspaceText = workspace?.ToString(CultureInfo.InvariantCulture);
+        string builtInText = builtIn.ToString(CultureInfo.InvariantCulture);
         (string raw, PolicyLayer layer, string origin, bool resolvedFromText) = SelectLayer(
-            key, workspace?.ToString(CultureInfo.InvariantCulture), workspaceSource, overrides);
+            key, workspaceText, workspaceSource, overrides);
         if (!resolvedFromText)
         {
-            provenance.Add(new PolicyFieldProvenance(key, PolicyLayer.BuiltIn, BuiltInOrigin));
+            provenance.Add(CreateProvenance(
+                key, PolicyLayer.BuiltIn, BuiltInOrigin, null, builtInText,
+                builtInText, workspaceText, workspaceSource, overrides));
             return builtIn;
         }
 
@@ -310,7 +461,9 @@ public static class OperationalPolicyResolver
                 $"Policy value `{raw}` for `{key}` (from {origin}) is not a positive integer.");
         }
 
-        provenance.Add(new PolicyFieldProvenance(key, layer, origin));
+        provenance.Add(CreateProvenance(
+            key, layer, origin, raw, value.ToString(CultureInfo.InvariantCulture),
+            builtInText, workspaceText, workspaceSource, overrides));
         return value;
     }
 
@@ -333,6 +486,43 @@ public static class OperationalPolicyResolver
         return (string.Empty, PolicyLayer.BuiltIn, BuiltInOrigin, false);
     }
 
+    private static PolicyFieldProvenance CreateProvenance(
+        string key,
+        PolicyLayer layer,
+        string origin,
+        string? configuredValue,
+        string effectiveValue,
+        string builtInValue,
+        string? workspaceValue,
+        string workspaceSource,
+        IReadOnlyDictionary<string, PolicyOverride> overrides)
+    {
+        var chain = new List<string> { $"built-in:{builtInValue}" };
+        if (workspaceValue is not null)
+        {
+            chain.Add($"workspace:{workspaceSource}={workspaceValue}");
+        }
+
+        if (overrides.TryGetValue(key, out PolicyOverride? invocation))
+        {
+            chain.Add($"invocation:{invocation.Origin}={invocation.Value}");
+        }
+
+        string reason = layer switch
+        {
+            PolicyLayer.Invocation => "Invocation override selected over workspace and built-in inputs.",
+            PolicyLayer.Workspace => "Workspace configuration selected over the built-in default.",
+            _ => "No workspace or invocation value was configured; the built-in default is effective.",
+        };
+        return new PolicyFieldProvenance(key, layer, origin)
+        {
+            ConfiguredValue = configuredValue,
+            EffectiveValue = effectiveValue,
+            Reason = reason,
+            OverrideChain = chain,
+        };
+    }
+
     // The `pol_v1_` prefix versions the identity SCHEME (sha256 over canonical JSON, first 32
     // hex); the field-set version lives inside the hashed JSON as SchemaVersion, so a schema
     // change already yields different identities without a new prefix.
@@ -351,7 +541,8 @@ public static class OperationalPolicyResolver
     private sealed record CanonicalPolicySnapshot(
         string SchemaVersion,
         CanonicalExecutionPolicy Execution,
-        CanonicalDecisionsPolicy Decisions,
+        CanonicalRuntimePolicy Runtime,
+        CanonicalRecoveryPolicy Recovery,
         CanonicalPermissions Permissions);
 
     private sealed record CanonicalExecutionPolicy(
@@ -359,9 +550,22 @@ public static class OperationalPolicyResolver
         int MaxNoChangesCommits,
         int OperationalContextGrowthWarningStreak);
 
-    private sealed record CanonicalDecisionsPolicy(
-        bool SessionResume,
-        ResumeRecoveryStrategy RecoveryStrategy);
+    private sealed record CanonicalRuntimePolicy(
+        string Telemetry,
+        string InputWait);
+
+    private sealed record CanonicalRecoveryPolicy(
+        CanonicalResumePolicy Resume,
+        CanonicalUsageLimitRetryPolicy UsageLimitRetry,
+        string UnknownOutcome);
+
+    private sealed record CanonicalResumePolicy(
+        bool Enabled,
+        string RecoveryStrategy);
+
+    private sealed record CanonicalUsageLimitRetryPolicy(
+        string Mode,
+        int MaxAttempts);
 
     // The permission options hold hash-ordered sets, and .NET randomizes string hashing per
     // process — serializing them directly would give the same configuration a different policy

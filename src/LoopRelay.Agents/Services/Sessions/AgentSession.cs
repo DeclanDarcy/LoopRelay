@@ -259,6 +259,8 @@ public sealed class AgentSession : IAgentSession
         }
     }
 
+    // Idempotent defense for bare-runtime callers; the gateway normalizes (and records) the
+    // transport text before it reaches this session — see AgentPromptTransport.
     private static string EnsureTrailingNewline(string prompt) =>
-        prompt.EndsWith('\n') ? prompt : prompt + "\n";
+        AgentPromptTransport.EnsureTrailingNewline(prompt);
 }

@@ -22,18 +22,40 @@ public sealed class OperationalPolicyResolverTests
         Assert.Equal(2, policy.MaxNoChangesCommits);
         Assert.Equal(2, policy.OperationalContextGrowthWarningStreak);
         Assert.True(policy.DecisionSessionResume);
+        // D3 (M7): the operational wrappers are product intent — active by default.
+        Assert.True(policy.SessionTelemetry);
+        Assert.True(policy.UsageLimitWaitRetry);
+        Assert.True(policy.InputWaitReporting);
         Assert.All(policy.Provenance, field => Assert.Equal(PolicyLayer.BuiltIn, field.Layer));
-        Assert.Equal(5, policy.Provenance.Count);
+        Assert.Equal(8, policy.Provenance.Count);
+        Assert.All(policy.Provenance, field =>
+        {
+            Assert.Null(field.ConfiguredValue);
+            Assert.NotEmpty(field.EffectiveValue);
+            Assert.NotEmpty(field.Reason);
+            Assert.NotEmpty(field.OverrideChain);
+        });
+        Assert.Equal(32, policy.Execution.MaxUnboundedContinuationSteps);
+        Assert.Equal(TelemetryPolicyMode.Enabled, policy.Runtime.Telemetry.Mode);
+        Assert.Equal(InputWaitPolicyMode.Enabled, policy.Runtime.InputWait.Mode);
         Assert.True(policy.Resume.Enabled);
         Assert.Equal(ResumeRecoveryStrategy.ResumeOnly, policy.Resume.RecoveryStrategy);
-        Assert.StartsWith("resume_", policy.Resume.Identity.Value, StringComparison.Ordinal);
+        Assert.Equal(UsageLimitRetryMode.Bounded, policy.Recovery.UsageLimitRetry.Mode);
+        Assert.Equal(
+            OperationalPolicyResolver.DefaultUsageLimitRetryAttempts,
+            policy.Recovery.UsageLimitRetry.MaxAttempts);
+        Assert.Equal(UnknownOutcomePolicy.RequiresReconciliation, policy.Recovery.UnknownOutcome);
     }
 
     [Fact]
     public void Workspace_values_override_built_in_defaults_with_workspace_provenance()
     {
         ResolvedOperationalPolicy policy = Resolve(
-            workspace: new CliPolicyDocument(64, null, 5, false));
+            workspace: new CliPolicyDocument(
+                MaxUnboundedContinuationSteps: 64,
+                MaxNoChangesCommits: null,
+                OperationalContextGrowthWarningStreak: 5,
+                DecisionSessionResume: false));
 
         Assert.Equal(64, policy.MaxUnboundedContinuationSteps);
         Assert.Equal(2, policy.MaxNoChangesCommits);
@@ -53,7 +75,11 @@ public sealed class OperationalPolicyResolverTests
     public void Invocation_overrides_beat_workspace_values_with_invocation_provenance()
     {
         ResolvedOperationalPolicy policy = Resolve(
-            workspace: new CliPolicyDocument(64, null, null, null),
+            workspace: new CliPolicyDocument(
+                MaxUnboundedContinuationSteps: 64,
+                MaxNoChangesCommits: null,
+                OperationalContextGrowthWarningStreak: null,
+                DecisionSessionResume: null),
             overrides:
             [
                 new PolicyOverride(
@@ -68,6 +94,11 @@ public sealed class OperationalPolicyResolverTests
             field => field.Field == OperationalPolicyResolver.MaxUnboundedContinuationStepsKey);
         Assert.Equal(PolicyLayer.Invocation, steps.Layer);
         Assert.Equal("flag:--policy", steps.Origin);
+        Assert.Equal("8", steps.ConfiguredValue);
+        Assert.Equal("8", steps.EffectiveValue);
+        Assert.Contains("built-in:32", steps.OverrideChain);
+        Assert.Contains($"workspace:{WorkspaceSource}=64", steps.OverrideChain);
+        Assert.Contains("invocation:flag:--policy=8", steps.OverrideChain);
     }
 
     [Fact]
@@ -104,7 +135,7 @@ public sealed class OperationalPolicyResolverTests
 
         Assert.Equal(ResumeRecoveryStrategy.Reconstructed, reconstructed.Resume.RecoveryStrategy);
         Assert.Equal(ResumeRecoveryStrategy.Certified, certified.Resume.RecoveryStrategy);
-        Assert.NotEqual(reconstructed.Resume.Identity, certified.Resume.Identity);
+        Assert.NotEqual(reconstructed.Resume, certified.Resume);
         Assert.NotEqual(reconstructed.PolicyId, certified.PolicyId);
         PolicyFieldProvenance provenance = reconstructed.Provenance.Single(
             field => field.Field == OperationalPolicyResolver.DecisionRecoveryPolicyKey);
@@ -167,6 +198,30 @@ public sealed class OperationalPolicyResolverTests
         Assert.Contains("Unknown policy override key", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("runtime.sessionTelemetry")]
+    [InlineData("runtime.usageLimitWaitRetry")]
+    [InlineData("runtime.inputWaitReporting")]
+    public void Runtime_wrapper_toggles_resolve_from_overrides_and_reject_garbage(string key)
+    {
+        // policy-v4: the D3 wrapper knobs are typed components of the single policy graph.
+        ResolvedOperationalPolicy policy = Resolve(
+            overrides: [new PolicyOverride(key, "false", "flag:--policy", IsExplicit: true)]);
+
+        bool value = key switch
+        {
+            OperationalPolicyResolver.SessionTelemetryKey => policy.SessionTelemetry,
+            OperationalPolicyResolver.UsageLimitWaitRetryKey => policy.UsageLimitWaitRetry,
+            _ => policy.InputWaitReporting,
+        };
+        Assert.False(value);
+        PolicyFieldProvenance provenance = policy.Provenance.Single(field => field.Field == key);
+        Assert.Equal(PolicyLayer.Invocation, provenance.Layer);
+
+        Assert.Throws<PolicyResolutionException>(() => Resolve(
+            overrides: [new PolicyOverride(key, "verbose", "flag:--policy", IsExplicit: true)]));
+    }
+
     [Fact]
     public void Policy_identity_is_deterministic_and_versioned()
     {
@@ -176,6 +231,7 @@ public sealed class OperationalPolicyResolverTests
         Assert.Equal(first.PolicyId, second.PolicyId);
         Assert.StartsWith("pol_v1_", first.PolicyId, StringComparison.Ordinal);
         Assert.Equal(OperationalPolicyResolver.SchemaVersion, first.SchemaVersion);
+        Assert.Equal("policy-v4", first.PolicySchemaVersion);
     }
 
     [Fact]
@@ -183,10 +239,14 @@ public sealed class OperationalPolicyResolverTests
     {
         string baseline = Resolve().PolicyId;
 
-        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(64, null, null, null)).PolicyId);
-        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, 3, null, null)).PolicyId);
-        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, null, 5, null)).PolicyId);
-        Assert.NotEqual(baseline, Resolve(workspace: new CliPolicyDocument(null, null, null, false)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: Policy(MaxUnboundedContinuationSteps: 64)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: Policy(MaxNoChangesCommits: 3)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: Policy(OperationalContextGrowthWarningStreak: 5)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: Policy(DecisionSessionResume: false)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: Policy(DecisionRecoveryStrategy: "reconstructed")).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: Policy(SessionTelemetry: false)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: Policy(UsageLimitWaitRetry: false)).PolicyId);
+        Assert.NotEqual(baseline, Resolve(workspace: Policy(InputWaitReporting: false)).PolicyId);
     }
 
     [Fact]
@@ -196,7 +256,15 @@ public sealed class OperationalPolicyResolverTests
         // each value: configuring the built-in default explicitly changes provenance only.
         ResolvedOperationalPolicy fromDefaults = Resolve();
         ResolvedOperationalPolicy fromWorkspace = Resolve(
-            workspace: new CliPolicyDocument(32, 2, 2, true));
+            workspace: new CliPolicyDocument(
+                MaxUnboundedContinuationSteps: 32,
+                MaxNoChangesCommits: 2,
+                OperationalContextGrowthWarningStreak: 2,
+                DecisionSessionResume: true,
+                DecisionRecoveryStrategy: "resume-only",
+                SessionTelemetry: true,
+                UsageLimitWaitRetry: true,
+                InputWaitReporting: true));
 
         Assert.Equal(fromDefaults.PolicyId, fromWorkspace.PolicyId);
         Assert.NotEqual(fromDefaults.Provenance, fromWorkspace.Provenance);
@@ -215,6 +283,11 @@ public sealed class OperationalPolicyResolverTests
             PermissionPolicyFactory.Default);
 
         using JsonDocument document = JsonDocument.Parse(policy.ResolvedJson);
+        Assert.Equal("policy-v4", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("Enabled", document.RootElement.GetProperty("runtime").GetProperty("telemetry").GetString());
+        Assert.Equal(
+            "Bounded",
+            document.RootElement.GetProperty("recovery").GetProperty("usageLimitRetry").GetProperty("mode").GetString());
         JsonElement permissions = document.RootElement.GetProperty("permissions");
         string[] safeBashCommands = permissions.GetProperty("safeBashCommands")
             .EnumerateArray()
@@ -264,6 +337,16 @@ public sealed class OperationalPolicyResolverTests
         Assert.Equal(
             OperationalPolicyResolver.DefaultDecisionSessionResume,
             template.PolicyInputs.DecisionSessionResume);
+        Assert.Equal(
+            OperationalPolicyResolver.DefaultSessionTelemetry,
+            template.PolicyInputs.SessionTelemetry);
+        Assert.Equal(
+            OperationalPolicyResolver.DefaultUsageLimitWaitRetry,
+            template.PolicyInputs.UsageLimitWaitRetry);
+        Assert.Equal(
+            OperationalPolicyResolver.DefaultInputWaitReporting,
+            template.PolicyInputs.InputWaitReporting);
+        Assert.Equal("resume-only", template.PolicyInputs.DecisionRecoveryStrategy);
 
         ResolvedOperationalPolicy fromTemplate = OperationalPolicyResolver.Resolve(
             template.PolicyInputs,
@@ -298,4 +381,23 @@ public sealed class OperationalPolicyResolverTests
             WorkspaceSource,
             overrides ?? [],
             Permissions);
+
+    private static CliPolicyDocument Policy(
+        int? MaxUnboundedContinuationSteps = null,
+        int? MaxNoChangesCommits = null,
+        int? OperationalContextGrowthWarningStreak = null,
+        bool? DecisionSessionResume = null,
+        string? DecisionRecoveryStrategy = null,
+        bool? SessionTelemetry = null,
+        bool? UsageLimitWaitRetry = null,
+        bool? InputWaitReporting = null) =>
+        new(
+            MaxUnboundedContinuationSteps,
+            MaxNoChangesCommits,
+            OperationalContextGrowthWarningStreak,
+            DecisionSessionResume,
+            DecisionRecoveryStrategy,
+            SessionTelemetry,
+            UsageLimitWaitRetry,
+            InputWaitReporting);
 }

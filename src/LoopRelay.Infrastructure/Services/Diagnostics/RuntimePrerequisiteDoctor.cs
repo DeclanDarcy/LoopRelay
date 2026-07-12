@@ -3,102 +3,81 @@ using LoopRelay.Infrastructure.Primitives.Diagnostics;
 
 namespace LoopRelay.Infrastructure.Services.Diagnostics;
 
-public sealed class RuntimePrerequisiteDoctor(
-    Func<string, string?>? _getEnvironmentVariable = null,
-    Func<string, bool>? _fileExists = null)
+/// <summary>
+/// Routes one resolved host-runtime profile to its provider-specific prerequisite inspector and
+/// produces immutable typed evidence. Policy configuration and policy-owned environment inputs
+/// never enter this authority.
+/// </summary>
+public sealed class RuntimePrerequisiteDoctor
 {
-    public const string CodexExecutableVariable = "CODEX_EXECUTABLE";
-    public const string DecisionResumeVariable = "LoopRelay_DECISION_RESUME";
-    public const string DecisionRecoveryPolicyVariable = "LoopRelay_DECISION_RECOVERY_POLICY";
+    private readonly IReadOnlyDictionary<string, IRuntimePrerequisiteInspector> _inspectors;
 
-    private readonly Func<string, string?> getEnvironmentVariable =
-        _getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
-    private readonly Func<string, bool> fileExists = _fileExists ?? File.Exists;
-
-    public IReadOnlyList<RuntimeDiagnostic> Inspect()
+    public RuntimePrerequisiteDoctor(
+        Func<string, string?>? getEnvironmentVariable = null,
+        Func<string, bool>? fileExists = null)
+        : this([new CodexRuntimePrerequisiteInspector(getEnvironmentVariable, fileExists)])
     {
-        var diagnostics = new List<RuntimeDiagnostic>();
-        InspectCodexExecutable(diagnostics);
-        InspectDecisionResume(diagnostics);
-        InspectDecisionRecoveryPolicy(diagnostics);
-        return diagnostics;
     }
 
-    private void InspectCodexExecutable(List<RuntimeDiagnostic> diagnostics)
+    public RuntimePrerequisiteDoctor(IEnumerable<IRuntimePrerequisiteInspector> inspectors)
     {
-        string? value = getEnvironmentVariable(CodexExecutableVariable);
-        if (string.IsNullOrWhiteSpace(value))
+        ArgumentNullException.ThrowIfNull(inspectors);
+        IRuntimePrerequisiteInspector[] configured = inspectors.ToArray();
+        if (configured.Any(inspector => string.IsNullOrWhiteSpace(inspector.Provider)))
         {
-            diagnostics.Add(new RuntimeDiagnostic(
-                "runtime.codex_executable.missing",
-                RuntimeDiagnosticSeverity.Error,
-                $"{CodexExecutableVariable} is not set."));
-            return;
+            throw new ArgumentException("Runtime prerequisite inspector provider must not be empty.", nameof(inspectors));
         }
 
-        if (LooksLikePath(value) && !fileExists(value))
+        string[] duplicates = configured
+            .GroupBy(inspector => inspector.Provider, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        if (duplicates.Length > 0)
         {
-            diagnostics.Add(new RuntimeDiagnostic(
-                "runtime.codex_executable.not_found",
-                RuntimeDiagnosticSeverity.Error,
-                $"{CodexExecutableVariable} points to a missing file: {value}."));
+            throw new ArgumentException(
+                $"Multiple runtime prerequisite inspectors were registered for: {string.Join(", ", duplicates)}.",
+                nameof(inspectors));
         }
+
+        _inspectors = configured.ToDictionary(
+            inspector => inspector.Provider,
+            StringComparer.OrdinalIgnoreCase);
     }
 
-    private void InspectDecisionResume(List<RuntimeDiagnostic> diagnostics)
+    public RuntimePrerequisiteInspection Inspect(
+        ResolvedRuntimeHostProfile profile,
+        DateTimeOffset inspectedAt)
     {
-        string? value = getEnvironmentVariable(DecisionResumeVariable);
-        if (string.IsNullOrWhiteSpace(value))
+        ArgumentNullException.ThrowIfNull(profile);
+        IReadOnlyList<RuntimePrerequisiteFinding> findings;
+        if (_inspectors.TryGetValue(profile.Provider, out IRuntimePrerequisiteInspector? inspector))
         {
-            diagnostics.Add(new RuntimeDiagnostic(
-                "runtime.decision_resume.default",
-                RuntimeDiagnosticSeverity.Info,
-                $"{DecisionResumeVariable} is not set; decision resume remains enabled by default."));
-            return;
+            findings = inspector.Inspect(profile);
+        }
+        else
+        {
+            findings =
+            [
+                new RuntimePrerequisiteFinding(
+                    RuntimePrerequisiteFindingCode.UnsupportedProvider,
+                    "runtime.provider.unsupported",
+                    RuntimePrerequisiteFindingSeverity.Error,
+                    $"No runtime prerequisite inspector is registered for provider '{profile.Provider}'."),
+            ];
         }
 
-        if (IsBooleanFlag(value))
-        {
-            return;
-        }
-
-        diagnostics.Add(new RuntimeDiagnostic(
-            "runtime.decision_resume.invalid",
-            RuntimeDiagnosticSeverity.Warning,
-            $"{DecisionResumeVariable} should be 0, 1, false, or true."));
+        RuntimePrerequisiteOverallStatus status = findings.Any(
+            finding => finding.Severity == RuntimePrerequisiteFindingSeverity.Error)
+            ? RuntimePrerequisiteOverallStatus.Unsatisfied
+            : findings.Count > 0
+                ? RuntimePrerequisiteOverallStatus.Degraded
+                : RuntimePrerequisiteOverallStatus.Satisfied;
+        return new RuntimePrerequisiteInspection(
+            profile.Identity,
+            profile.Provider,
+            inspectedAt,
+            findings,
+            status);
     }
-
-    private void InspectDecisionRecoveryPolicy(List<RuntimeDiagnostic> diagnostics)
-    {
-        string? value = getEnvironmentVariable(DecisionRecoveryPolicyVariable);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            diagnostics.Add(new RuntimeDiagnostic(
-                "runtime.decision_recovery_policy.default",
-                RuntimeDiagnosticSeverity.Info,
-                $"{DecisionRecoveryPolicyVariable} is not set; resume-only policy is active."));
-            return;
-        }
-
-        if (value is "resume-only" or "reconstructed" or "certified")
-        {
-            return;
-        }
-
-        diagnostics.Add(new RuntimeDiagnostic(
-            "runtime.decision_recovery_policy.invalid",
-            RuntimeDiagnosticSeverity.Warning,
-            $"{DecisionRecoveryPolicyVariable} must be resume-only, reconstructed, or certified."));
-    }
-
-    private static bool IsBooleanFlag(string value) =>
-        string.Equals(value, "0", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
-
-    private static bool LooksLikePath(string value) =>
-        value.Contains(Path.DirectorySeparatorChar)
-        || value.Contains(Path.AltDirectorySeparatorChar)
-        || Path.IsPathRooted(value);
 }

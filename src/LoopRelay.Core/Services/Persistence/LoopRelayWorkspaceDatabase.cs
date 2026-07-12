@@ -16,11 +16,27 @@ public enum WorkspaceSchemaFamily
     Unknown,
 }
 
+public enum WorkspaceSchemaShape
+{
+    Empty,
+    PreLineageCanonical,
+    LegacyContinuityV3,
+    Merge4V9Partial,
+    ArchitectureConvergenceV9Partial,
+    RecognizedMixedV9Partial,
+    CanonicalV9Complete,
+    UnknownV9Shape,
+    CorruptCanonicalV9,
+    Unknown,
+}
+
 public sealed record WorkspaceSchemaInspection(
     string? SchemaIdentity,
     WorkspaceSchemaFamily Family,
     int? Version,
     bool HasExplicitLineage,
+    WorkspaceSchemaShape Shape,
+    string? ShapeFingerprint,
     string Diagnostic);
 
 public sealed class WorkspaceCompatibilityImportRequiredException(
@@ -38,8 +54,12 @@ public static class LoopRelayWorkspaceDatabase
 {
     public const string SchemaIdentity = "looprelay.workspace-state";
     public const string SchemaFamily = "CanonicalWorkspace";
+    public const string SchemaShapeMetadataKey = "schema_shape";
     public const int CurrentSchemaVersion = 9;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
+
+    public static string CanonicalV9ShapeFingerprint =>
+        ComputeShapeFingerprint(CanonicalV9Requirements.Select(requirement => requirement.Token));
 
     public static string Resolve(Repository repository)
     {
@@ -78,10 +98,32 @@ public static class LoopRelayWorkspaceDatabase
                 $"Unsupported SQLite schema version `{inspection.Version}`; expected `1..{CurrentSchemaVersion}`.");
         }
 
+        string? preservedWorkspaceId = await ValidateExistingWorkspaceIdentityAsync(
+            connection,
+            cancellationToken);
+        bool structurallyComplete = inspection.Shape == WorkspaceSchemaShape.CanonicalV9Complete;
+        if (structurallyComplete && preservedWorkspaceId is null)
+        {
+            throw new InvalidOperationException(
+                "Canonical v9 is stamped complete but has no immutable workspace identity.");
+        }
+
         LegacyResumeImport? legacyResume = await ReadLegacyResumeAsync(connection, cancellationToken);
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         try
         {
+            if (structurallyComplete)
+            {
+                if (legacyResume is not null)
+                {
+                    await ImportLegacyResumeAsync(connection, transaction, legacyResume, cancellationToken);
+                }
+
+                await ExecuteAsync(connection, transaction, CanonicalDataRepairSql, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return;
+            }
+
             await EnsureCanonicalV8ShapeAsync(connection, transaction, cancellationToken);
             await ExecuteAsync(connection, transaction, SchemaV9Sql, cancellationToken);
             await EnsureV9ColumnsAsync(connection, transaction, cancellationToken);
@@ -89,12 +131,21 @@ public static class LoopRelayWorkspaceDatabase
             {
                 await ImportLegacyResumeAsync(connection, transaction, legacyResume, cancellationToken);
             }
+            await ExecuteAsync(connection, transaction, CanonicalDataRepairSql, cancellationToken);
             string workspaceId = await EnsureImmutableWorkspaceIdentityAsync(
                 connection,
                 transaction,
                 inspection,
+                preservedWorkspaceId,
                 cancellationToken);
-            await StampCanonicalSchemaAsync(connection, transaction, inspection, workspaceId, cancellationToken);
+            await VerifyCanonicalV9ShapeAsync(connection, transaction, cancellationToken);
+            await RecordSchemaConvergenceAsync(
+                connection,
+                transaction,
+                inspection,
+                workspaceId,
+                cancellationToken);
+            await StampCanonicalSchemaAsync(connection, transaction, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
         catch
@@ -112,26 +163,53 @@ public static class LoopRelayWorkspaceDatabase
         {
             long tableCount = await CountUserTablesAsync(connection, cancellationToken);
             return tableCount == 0
-                ? new WorkspaceSchemaInspection(null, WorkspaceSchemaFamily.Empty, null, false, "Empty database.")
-                : new WorkspaceSchemaInspection(null, WorkspaceSchemaFamily.Unknown, null, false,
+                ? new WorkspaceSchemaInspection(
+                    null, WorkspaceSchemaFamily.Empty, null, false,
+                    WorkspaceSchemaShape.Empty, null, "Empty database.")
+                : new WorkspaceSchemaInspection(
+                    null, WorkspaceSchemaFamily.Unknown, null, false,
+                    WorkspaceSchemaShape.Unknown, null,
                     "Database contains tables but no schema metadata.");
         }
 
         string? identity = await ReadMetadataValueAsync(connection, "schema_identity", cancellationToken);
         string? family = await ReadMetadataValueAsync(connection, "schema_family", cancellationToken);
+        string? stampedShape = await ReadMetadataValueAsync(connection, SchemaShapeMetadataKey, cancellationToken);
         int? version = await ReadExistingSchemaVersionAsync(connection, cancellationToken);
         if (identity is not null || family is not null)
         {
             bool canonical = string.Equals(identity, SchemaIdentity, StringComparison.Ordinal) &&
                 string.Equals(family, SchemaFamily, StringComparison.Ordinal);
+            if (!canonical)
+            {
+                return new WorkspaceSchemaInspection(
+                    identity,
+                    WorkspaceSchemaFamily.Unknown,
+                    version,
+                    true,
+                    WorkspaceSchemaShape.Unknown,
+                    stampedShape,
+                    $"Unrecognized schema lineage identity='{identity}', family='{family}'.");
+            }
+
+            if (version == CurrentSchemaVersion)
+            {
+                return await ClassifyV9ShapeAsync(
+                    connection,
+                    identity,
+                    hasExplicitLineage: true,
+                    stampedShape,
+                    cancellationToken);
+            }
+
             return new WorkspaceSchemaInspection(
                 identity,
-                canonical ? WorkspaceSchemaFamily.CanonicalWorkspace : WorkspaceSchemaFamily.Unknown,
+                WorkspaceSchemaFamily.CanonicalWorkspace,
                 version,
                 true,
-                canonical
-                    ? $"Canonical workspace schema v{version}."
-                    : $"Unrecognized schema lineage identity='{identity}', family='{family}'.");
+                WorkspaceSchemaShape.PreLineageCanonical,
+                stampedShape,
+                $"Canonical workspace schema v{version} requires canonical-v9 migration.");
         }
 
         bool legacyContinuity = version == 3 &&
@@ -145,7 +223,19 @@ public static class LoopRelayWorkspaceDatabase
                 WorkspaceSchemaFamily.LegacyContinuity,
                 version,
                 false,
+                WorkspaceSchemaShape.LegacyContinuityV3,
+                null,
                 "Detected branch-local LegacyContinuity v3 by structural fingerprint.");
+        }
+
+        if (version == CurrentSchemaVersion)
+        {
+            return await ClassifyV9ShapeAsync(
+                connection,
+                schemaIdentity: null,
+                hasExplicitLineage: false,
+                stampedShape,
+                cancellationToken);
         }
 
         // Numeric pre-lineage versions 1..8 belong to the historical canonical family unless
@@ -159,13 +249,194 @@ public static class LoopRelayWorkspaceDatabase
                 WorkspaceSchemaFamily.CanonicalWorkspace,
                 version,
                 false,
+                WorkspaceSchemaShape.PreLineageCanonical,
+                null,
                 $"Recognized pre-lineage canonical workspace schema v{version}.")
             : new WorkspaceSchemaInspection(
                 null,
                 WorkspaceSchemaFamily.Unknown,
                 version,
                 false,
+                WorkspaceSchemaShape.Unknown,
+                null,
                 $"Schema version {version?.ToString(CultureInfo.InvariantCulture) ?? "(missing)"} has an unknown structural fingerprint.");
+    }
+
+    private static async Task<WorkspaceSchemaInspection> ClassifyV9ShapeAsync(
+        SqliteConnection connection,
+        string? schemaIdentity,
+        bool hasExplicitLineage,
+        string? stampedShape,
+        CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection,
+            CanonicalV9Requirements,
+            transaction: null,
+            cancellationToken);
+        string observedFingerprint = ComputeShapeFingerprint(satisfied);
+        bool complete = HasAll(satisfied, CanonicalV9Requirements);
+        bool coreCanonical = HasAll(satisfied, CoreCanonicalSignatureRequirements);
+        bool merge4Complete = HasAll(satisfied, Merge4V9Requirements);
+        bool incomingComplete = HasAll(satisfied, ArchitectureConvergenceV9Requirements);
+        bool anyMerge4 = HasAny(satisfied, Merge4V9Requirements);
+        bool anyIncoming = HasAny(satisfied, ArchitectureConvergenceV9Requirements);
+
+        if (stampedShape is not null)
+        {
+            bool validStamp = hasExplicitLineage &&
+                string.Equals(stampedShape, CanonicalV9ShapeFingerprint, StringComparison.Ordinal) &&
+                complete;
+            if (!validStamp)
+            {
+                return new WorkspaceSchemaInspection(
+                    schemaIdentity,
+                    WorkspaceSchemaFamily.Unknown,
+                    CurrentSchemaVersion,
+                    hasExplicitLineage,
+                    WorkspaceSchemaShape.CorruptCanonicalV9,
+                    observedFingerprint,
+                    "Canonical-v9 shape stamp is missing its declared physical contract or lineage; mutation is blocked.");
+            }
+
+            return new WorkspaceSchemaInspection(
+                SchemaIdentity,
+                WorkspaceSchemaFamily.CanonicalWorkspace,
+                CurrentSchemaVersion,
+                true,
+                WorkspaceSchemaShape.CanonicalV9Complete,
+                observedFingerprint,
+                "Canonical workspace v9 lineage and complete physical-shape fingerprint verified.");
+        }
+
+        if (!coreCanonical)
+        {
+            return new WorkspaceSchemaInspection(
+                schemaIdentity,
+                WorkspaceSchemaFamily.Unknown,
+                CurrentSchemaVersion,
+                hasExplicitLineage,
+                hasExplicitLineage
+                    ? WorkspaceSchemaShape.CorruptCanonicalV9
+                    : WorkspaceSchemaShape.UnknownV9Shape,
+                observedFingerprint,
+                "Schema version 9 does not match the canonical workspace spine; mutation is blocked.");
+        }
+
+        WorkspaceSchemaShape shape;
+        if (merge4Complete && !anyIncoming)
+        {
+            shape = WorkspaceSchemaShape.Merge4V9Partial;
+        }
+        else if (incomingComplete && !anyMerge4)
+        {
+            shape = WorkspaceSchemaShape.ArchitectureConvergenceV9Partial;
+        }
+        else if ((merge4Complete && anyIncoming) || (incomingComplete && anyMerge4) || complete)
+        {
+            shape = WorkspaceSchemaShape.RecognizedMixedV9Partial;
+        }
+        else
+        {
+            return new WorkspaceSchemaInspection(
+                schemaIdentity,
+                WorkspaceSchemaFamily.Unknown,
+                CurrentSchemaVersion,
+                hasExplicitLineage,
+                hasExplicitLineage
+                    ? WorkspaceSchemaShape.CorruptCanonicalV9
+                    : WorkspaceSchemaShape.UnknownV9Shape,
+                observedFingerprint,
+                "Schema version 9 has an incomplete or contradictory physical shape that matches no supported provisional v9 contract.");
+        }
+
+        return new WorkspaceSchemaInspection(
+            schemaIdentity ?? SchemaIdentity,
+            WorkspaceSchemaFamily.CanonicalWorkspace,
+            CurrentSchemaVersion,
+            hasExplicitLineage,
+            shape,
+            observedFingerprint,
+            $"Recognized {shape} by strict canonical-v9 structural fingerprint; convergence is required.");
+    }
+
+    private static async Task<string?> ValidateExistingWorkspaceIdentityAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        string? canonical = await ReadOptionalWorkspaceIdentityAsync(
+            connection,
+            "workspace_identity",
+            "SELECT workspace_id FROM workspace_identity WHERE id = 1;",
+            cancellationToken);
+        string? legacy = await ReadOptionalWorkspaceIdentityAsync(
+            connection,
+            "workspace_metadata",
+            "SELECT value FROM workspace_metadata WHERE key = 'workspace_id';",
+            cancellationToken);
+        if ((canonical is not null && string.IsNullOrWhiteSpace(canonical)) ||
+            (legacy is not null && string.IsNullOrWhiteSpace(legacy)))
+        {
+            throw new InvalidOperationException("Workspace identity must not be empty.");
+        }
+
+        if (canonical is not null && legacy is not null &&
+            !string.Equals(canonical, legacy, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Workspace identity is immutable, but canonical and legacy identity records disagree.");
+        }
+
+        return canonical ?? legacy;
+    }
+
+    private static async Task<string?> ReadOptionalWorkspaceIdentityAsync(
+        SqliteConnection connection,
+        string table,
+        string query,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(connection, table, cancellationToken))
+        {
+            return null;
+        }
+
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = query;
+        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
+        return scalar is null or DBNull ? null : Convert.ToString(scalar, CultureInfo.InvariantCulture);
+    }
+
+    private static async Task VerifyCanonicalV9ShapeAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection,
+            CanonicalV9Requirements,
+            transaction,
+            cancellationToken);
+        string[] missing = CanonicalV9Requirements
+            .Where(requirement => !satisfied.Contains(requirement.Token))
+            .Select(requirement => requirement.Token)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(token => token, StringComparer.Ordinal)
+            .ToArray();
+        if (missing.Length > 0)
+        {
+            throw new InvalidOperationException(
+                "Canonical-v9 convergence verification failed. Missing contract requirements: " +
+                string.Join(", ", missing.Take(12)) +
+                (missing.Length > 12 ? $" (+{missing.Length - 12} more)." : "."));
+        }
+
+        string fingerprint = ComputeShapeFingerprint(satisfied);
+        if (!string.Equals(fingerprint, CanonicalV9ShapeFingerprint, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Canonical-v9 convergence produced fingerprint '{fingerprint}', expected '{CanonicalV9ShapeFingerprint}'.");
+        }
     }
 
     private static async Task EnsureCanonicalV8ShapeAsync(
@@ -206,12 +477,19 @@ public static class LoopRelayWorkspaceDatabase
             await AddColumnIfMissingAsync(
                 connection, transaction, table, column, "text", cancellationToken);
         }
+
+        foreach ((string column, string type) in V9TurnEvidenceColumns)
+        {
+            await AddColumnIfMissingAsync(
+                connection, transaction, "agent_turns", column, type, cancellationToken);
+        }
     }
 
     private static async Task<string> EnsureImmutableWorkspaceIdentityAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         WorkspaceSchemaInspection inspection,
+        string? preservedWorkspaceId,
         CancellationToken cancellationToken)
     {
         string? existing = await ScalarStringAsync(
@@ -224,7 +502,7 @@ public static class LoopRelayWorkspaceDatabase
             transaction,
             "SELECT value FROM workspace_metadata WHERE key = 'workspace_id';",
             cancellationToken);
-        string workspaceId = existing ?? legacy ?? WorkspaceIdentity.New().Value;
+        string workspaceId = preservedWorkspaceId ?? existing ?? legacy ?? WorkspaceIdentity.New().Value;
         if (string.IsNullOrWhiteSpace(workspaceId))
         {
             throw new InvalidOperationException("Workspace identity must not be empty.");
@@ -234,6 +512,15 @@ public static class LoopRelayWorkspaceDatabase
         {
             throw new InvalidOperationException(
                 "Workspace identity is immutable, but canonical and legacy identity records disagree.");
+        }
+
+
+        if (preservedWorkspaceId is not null &&
+            ((existing is not null && !string.Equals(existing, preservedWorkspaceId, StringComparison.Ordinal)) ||
+             (legacy is not null && !string.Equals(legacy, preservedWorkspaceId, StringComparison.Ordinal))))
+        {
+            throw new InvalidOperationException(
+                "Workspace identity changed between schema inspection and convergence.");
         }
 
         await ExecuteAsync(
@@ -264,7 +551,7 @@ public static class LoopRelayWorkspaceDatabase
             ("$identity_format", identityFormat),
             ("$migration_source", inspection.Family == WorkspaceSchemaFamily.Empty
                 ? "fresh-v9"
-                : $"{inspection.SchemaIdentity ?? SchemaIdentity}:v{inspection.Version}"),
+                : $"{inspection.Shape}:v{inspection.Version}"),
             ("$imported_at", inspection.Family == WorkspaceSchemaFamily.Empty
                 ? null
                 : DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)));
@@ -274,8 +561,6 @@ public static class LoopRelayWorkspaceDatabase
     private static async Task StampCanonicalSchemaAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
-        WorkspaceSchemaInspection inspection,
-        string workspaceId,
         CancellationToken cancellationToken)
     {
         foreach ((string key, string value) in (KeyValuePair<string, string>[])
@@ -283,6 +568,7 @@ public static class LoopRelayWorkspaceDatabase
             new("schema_identity", SchemaIdentity),
             new("schema_family", SchemaFamily),
             new("schema_version", CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture)),
+            new(SchemaShapeMetadataKey, CanonicalV9ShapeFingerprint),
         ])
         {
             await ExecuteAsync(
@@ -297,7 +583,15 @@ public static class LoopRelayWorkspaceDatabase
                 ("$key", key),
                 ("$value", value));
         }
+    }
 
+    private static async Task RecordSchemaConvergenceAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        WorkspaceSchemaInspection inspection,
+        string workspaceId,
+        CancellationToken cancellationToken)
+    {
         await ExecuteAsync(
             connection,
             transaction,
@@ -307,28 +601,57 @@ public static class LoopRelayWorkspaceDatabase
             ON CONFLICT(key) DO NOTHING;
             """,
             cancellationToken);
+
+        string completedAt = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+        if (inspection.Version != CurrentSchemaVersion)
+        {
+            await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                INSERT INTO workspace_schema_migrations (
+                    migration_id, schema_identity, schema_family, from_version, to_version,
+                    workspace_id, applied_at
+                )
+                VALUES (
+                    $migration_id, $schema_identity, $schema_family, $from_version, $to_version,
+                    $workspace_id, $applied_at
+                )
+                ON CONFLICT(migration_id) DO NOTHING;
+                """,
+                cancellationToken,
+                ("$migration_id", $"{SchemaIdentity}:{inspection.Version ?? 0}->{CurrentSchemaVersion}:{workspaceId}"),
+                ("$schema_identity", SchemaIdentity),
+                ("$schema_family", SchemaFamily),
+                ("$from_version", inspection.Version ?? 0),
+                ("$to_version", CurrentSchemaVersion),
+                ("$workspace_id", workspaceId),
+                ("$applied_at", completedAt));
+        }
+
+        string sourceFingerprint = inspection.ShapeFingerprint ?? "none";
         await ExecuteAsync(
             connection,
             transaction,
             """
-            INSERT INTO workspace_schema_migrations (
-                migration_id, schema_identity, schema_family, from_version, to_version,
-                workspace_id, applied_at
+            INSERT INTO workspace_schema_convergences (
+                convergence_id, source_shape, source_fingerprint, source_version,
+                target_fingerprint, workspace_id, completed_at
             )
             VALUES (
-                $migration_id, $schema_identity, $schema_family, $from_version, $to_version,
-                $workspace_id, $applied_at
+                $convergence_id, $source_shape, $source_fingerprint, $source_version,
+                $target_fingerprint, $workspace_id, $completed_at
             )
-            ON CONFLICT(migration_id) DO NOTHING;
+            ON CONFLICT(convergence_id) DO NOTHING;
             """,
             cancellationToken,
-            ("$migration_id", $"{SchemaIdentity}:{inspection.Version ?? 0}->{CurrentSchemaVersion}:{workspaceId}"),
-            ("$schema_identity", SchemaIdentity),
-            ("$schema_family", SchemaFamily),
-            ("$from_version", inspection.Version ?? 0),
-            ("$to_version", CurrentSchemaVersion),
+            ("$convergence_id", $"canonical-v9:{workspaceId}:{inspection.Shape}:{sourceFingerprint}"),
+            ("$source_shape", inspection.Shape.ToString()),
+            ("$source_fingerprint", sourceFingerprint),
+            ("$source_version", inspection.Version),
+            ("$target_fingerprint", CanonicalV9ShapeFingerprint),
             ("$workspace_id", workspaceId),
-            ("$applied_at", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)));
+            ("$completed_at", completedAt));
     }
 
     private static async Task AddColumnIfMissingAsync(
@@ -472,6 +795,292 @@ public static class LoopRelayWorkspaceDatabase
         ("session_telemetry_events", "continuity_event_type"),
         ("session_telemetry_events", "continuity_outcome"),
     ];
+
+    private static readonly (string Column, string Type)[] V9TurnEvidenceColumns =
+    [
+        ("state", "text"),
+        ("prompt_sha256", "text"),
+        ("prompt_tokens", "integer"),
+        ("output_tokens", "integer"),
+        ("cached_input_tokens", "integer"),
+        ("diagnostics_kind", "text"),
+        ("diagnostics", "text"),
+    ];
+
+    private static readonly string[] CanonicalCoreTableNames =
+    [
+        "schema_metadata",
+        "workspace_metadata",
+        "canonical_workflow_states",
+        "canonical_stage_states",
+        "canonical_transition_runs",
+        "canonical_transition_evidence",
+        "canonical_product_records",
+        "canonical_gate_evaluations",
+        "canonical_effect_records",
+        "evaluation_warnings",
+        "canonical_recovery_markers",
+        "canonical_chain_boundary_events",
+        "session_telemetry_events",
+        "canonical_policy_resolutions",
+        "canonical_rendered_prompts",
+        "workspace_identity",
+        "runs",
+        "workflow_instances",
+        "attempts",
+        "agent_sessions",
+        "agent_turns",
+        "read_receipts",
+    ];
+
+    private static readonly string[] Merge4V9TableNames =
+    [
+        "workspace_schema_migrations",
+        "workspace_identity_metadata",
+        "session_continuity_profiles",
+        "decision_session_scopes",
+        "decision_session_lineage",
+        "decision_session_active",
+        "session_recovery_plans",
+        "session_recovery_attempts",
+        "session_recovery_sources",
+        "decision_session_turns",
+        "session_transition_correlations",
+        "decision_session_legacy_imports",
+        "history_evidence_sets",
+        "history_evidence_items",
+        "compatibility_import_operations",
+        "compatibility_import_events",
+        "canonical_projection_effects",
+        "transition_recovery_plans",
+        "canonical_effect_intents",
+        "execution_recommendation_evidence",
+        "runtime_profile_evaluations",
+        "prompt_dispatch_events",
+        "persistence_projection_checkpoints",
+    ];
+
+    private static readonly string[] Merge4V9IndexNames =
+    [
+        "idx_history_evidence_items_set",
+        "idx_loop_history_history_id",
+        "idx_history_evidence_provider",
+        "idx_history_evidence_recovery",
+        "idx_compatibility_import_events_operation",
+        "idx_projection_effects_status",
+        "idx_transition_recovery_plans_run",
+        "idx_canonical_effect_intents_status",
+        "idx_prompt_dispatch_events_dispatch",
+        "idx_prompt_dispatch_events_attempt",
+        "idx_execution_recommendation_decision",
+        "idx_runtime_profile_evaluation_decision",
+        "idx_decision_scope_lifecycle",
+        "idx_decision_lineage_scope_authority",
+        "idx_decision_lineage_parent",
+        "idx_recovery_attempt_scope_status",
+        "idx_decision_turn_transition",
+    ];
+
+    private static IReadOnlyList<ShapeRequirement> CoreCanonicalSignatureRequirements =>
+    [
+        ShapeRequirement.Table("workspace_identity"),
+        ShapeRequirement.Table("runs"),
+        ShapeRequirement.Table("workflow_instances"),
+        ShapeRequirement.Table("attempts"),
+        ShapeRequirement.Table("agent_sessions"),
+        ShapeRequirement.Table("agent_turns"),
+        ShapeRequirement.Table("canonical_rendered_prompts"),
+    ];
+
+    private static IReadOnlyList<ShapeRequirement> Merge4V9Requirements =>
+        Merge4V9TableNames.Select(ShapeRequirement.Table)
+            .Concat(V9CausalColumns.Select(item => ShapeRequirement.Column(item.Table, item.Column, "text")))
+            .Concat(Merge4V9IndexNames.Select(ShapeRequirement.Index))
+            .Concat(
+            [
+                ShapeRequirement.ForeignKey("decision_session_lineage", "scope_id", "decision_session_scopes", "scope_id"),
+                ShapeRequirement.ForeignKey("decision_session_lineage", "parent_lineage_id", "decision_session_lineage", "lineage_id"),
+                ShapeRequirement.ForeignKey("session_recovery_attempts", "scope_id", "decision_session_scopes", "scope_id"),
+                ShapeRequirement.ForeignKey("decision_session_turns", "scope_id", "decision_session_scopes", "scope_id"),
+                ShapeRequirement.ForeignKey("history_evidence_items", "evidence_set_id", "history_evidence_sets", "evidence_set_id"),
+            ])
+            .ToArray();
+
+    private static IReadOnlyList<ShapeRequirement> ArchitectureConvergenceV9Requirements =>
+        V9TurnEvidenceColumns
+            .Select(item => ShapeRequirement.Column("agent_turns", item.Column, item.Type))
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_runtime_prerequisites"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "prerequisite_check_id", "text"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "run_id", "text"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "checked_at", "text"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "diagnostics_json", "text"),
+                ShapeRequirement.Index("idx_canonical_runtime_prerequisites_run"),
+            ])
+            .ToArray();
+
+    private static IReadOnlyList<ShapeRequirement> ConvergenceReceiptRequirements =>
+    [
+        ShapeRequirement.Table("workspace_schema_convergences"),
+        ShapeRequirement.Column("workspace_schema_convergences", "convergence_id", "text"),
+        ShapeRequirement.Column("workspace_schema_convergences", "source_shape", "text"),
+        ShapeRequirement.Column("workspace_schema_convergences", "source_fingerprint", "text"),
+        ShapeRequirement.Column("workspace_schema_convergences", "source_version", "integer"),
+        ShapeRequirement.Column("workspace_schema_convergences", "target_fingerprint", "text"),
+        ShapeRequirement.Column("workspace_schema_convergences", "workspace_id", "text"),
+        ShapeRequirement.Column("workspace_schema_convergences", "completed_at", "text"),
+    ];
+
+    private static IReadOnlyList<ShapeRequirement> CanonicalV9Requirements =>
+        CanonicalCoreTableNames.Select(ShapeRequirement.Table)
+            .Concat(Merge4V9Requirements)
+            .Concat(ArchitectureConvergenceV9Requirements)
+            .Concat(ConvergenceReceiptRequirements)
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+    private enum ShapeRequirementKind
+    {
+        Table,
+        Column,
+        Index,
+        ForeignKey,
+    }
+
+    private sealed record ShapeRequirement(
+        ShapeRequirementKind Kind,
+        string TableName,
+        string? ColumnName,
+        string? ExpectedType,
+        string? TargetTable,
+        string? TargetColumn,
+        string Token)
+    {
+        public static ShapeRequirement Table(string table) =>
+            new(ShapeRequirementKind.Table, table, null, null, null, null, $"table:{table}");
+
+        public static ShapeRequirement Column(string table, string column, string expectedType) =>
+            new(
+                ShapeRequirementKind.Column,
+                table,
+                column,
+                expectedType,
+                null,
+                null,
+                $"column:{table}.{column}:{expectedType.ToLowerInvariant()}");
+
+        public static ShapeRequirement Index(string index) =>
+            new(ShapeRequirementKind.Index, index, null, null, null, null, $"index:{index}");
+
+        public static ShapeRequirement ForeignKey(
+            string table,
+            string column,
+            string targetTable,
+            string targetColumn) =>
+            new(
+                ShapeRequirementKind.ForeignKey,
+                table,
+                column,
+                null,
+                targetTable,
+                targetColumn,
+                $"foreign-key:{table}.{column}->{targetTable}.{targetColumn}");
+    }
+
+    private static async Task<HashSet<string>> ReadSatisfiedRequirementsAsync(
+        SqliteConnection connection,
+        IReadOnlyList<ShapeRequirement> requirements,
+        SqliteTransaction? transaction,
+        CancellationToken cancellationToken)
+    {
+        var satisfied = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ShapeRequirement requirement in requirements.DistinctBy(item => item.Token, StringComparer.Ordinal))
+        {
+            if (await RequirementExistsAsync(connection, transaction, requirement, cancellationToken))
+            {
+                satisfied.Add(requirement.Token);
+            }
+        }
+
+        return satisfied;
+    }
+
+    private static async Task<bool> RequirementExistsAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
+        ShapeRequirement requirement,
+        CancellationToken cancellationToken)
+    {
+        switch (requirement.Kind)
+        {
+            case ShapeRequirementKind.Table:
+                return await TableExistsAsync(
+                    connection, requirement.TableName, cancellationToken, transaction);
+            case ShapeRequirementKind.Column:
+                await using (SqliteCommand command = connection.CreateCommand())
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "SELECT type FROM pragma_table_info($table) WHERE name = $column;";
+                    command.Parameters.AddWithValue("$table", requirement.TableName);
+                    command.Parameters.AddWithValue("$column", requirement.ColumnName!);
+                    object? scalar = await command.ExecuteScalarAsync(cancellationToken);
+                    string? actual = scalar is null or DBNull
+                        ? null
+                        : Convert.ToString(scalar, CultureInfo.InvariantCulture);
+                    return string.Equals(actual, requirement.ExpectedType, StringComparison.OrdinalIgnoreCase);
+                }
+            case ShapeRequirementKind.Index:
+                await using (SqliteCommand command = connection.CreateCommand())
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = $index;";
+                    command.Parameters.AddWithValue("$index", requirement.TableName);
+                    object? scalar = await command.ExecuteScalarAsync(cancellationToken);
+                    return Convert.ToInt64(scalar, CultureInfo.InvariantCulture) == 1;
+                }
+            case ShapeRequirementKind.ForeignKey:
+                await using (SqliteCommand command = connection.CreateCommand())
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = "SELECT [table], [from], [to] FROM pragma_foreign_key_list($table);";
+                    command.Parameters.AddWithValue("$table", requirement.TableName);
+                    await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+                    while (await reader.ReadAsync(cancellationToken))
+                    {
+                        if (string.Equals(reader.GetString(0), requirement.TargetTable, StringComparison.Ordinal) &&
+                            string.Equals(reader.GetString(1), requirement.ColumnName, StringComparison.Ordinal) &&
+                            string.Equals(reader.GetString(2), requirement.TargetColumn, StringComparison.Ordinal))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+            default:
+                throw new ArgumentOutOfRangeException(nameof(requirement));
+        }
+    }
+
+    private static bool HasAll(
+        IReadOnlySet<string> satisfied,
+        IReadOnlyList<ShapeRequirement> requirements) =>
+        requirements.All(requirement => satisfied.Contains(requirement.Token));
+
+    private static bool HasAny(
+        IReadOnlySet<string> satisfied,
+        IReadOnlyList<ShapeRequirement> requirements) =>
+        requirements.Any(requirement => satisfied.Contains(requirement.Token));
+
+    private static string ComputeShapeFingerprint(IEnumerable<string> tokens)
+    {
+        string manifest = string.Join(
+            '\n',
+            tokens.Distinct(StringComparer.Ordinal).OrderBy(token => token, StringComparer.Ordinal));
+        string hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(manifest)));
+        return $"canonical-v9-shape-{hash[..32]}";
+    }
 
     private static async Task<bool> ColumnExistsAsync(
         SqliteConnection connection,
@@ -689,6 +1298,16 @@ public static class LoopRelayWorkspaceDatabase
             to_version integer not null,
             workspace_id text not null,
             applied_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS workspace_schema_convergences(
+            convergence_id text primary key,
+            source_shape text not null,
+            source_fingerprint text not null,
+            source_version integer,
+            target_fingerprint text not null,
+            workspace_id text not null,
+            completed_at text not null
         );
 
         CREATE TABLE IF NOT EXISTS workspace_identity_metadata(
@@ -1029,6 +1648,13 @@ public static class LoopRelayWorkspaceDatabase
             model_hash text not null
         );
 
+        CREATE TABLE IF NOT EXISTS canonical_runtime_prerequisites(
+            prerequisite_check_id text primary key,
+            run_id text,
+            checked_at text not null,
+            diagnostics_json text not null
+        );
+
         CREATE INDEX IF NOT EXISTS idx_history_evidence_items_set
             ON history_evidence_items(evidence_set_id, evidence_kind);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_loop_history_history_id
@@ -1063,6 +1689,8 @@ public static class LoopRelayWorkspaceDatabase
             ON session_recovery_attempts(scope_id, status, updated_at);
         CREATE INDEX IF NOT EXISTS idx_decision_turn_transition
             ON decision_session_turns(transition_run_id);
+        CREATE INDEX IF NOT EXISTS idx_canonical_runtime_prerequisites_run
+            ON canonical_runtime_prerequisites(run_id);
         """;
 
     private const string SchemaSql = """
@@ -1312,8 +1940,6 @@ public static class LoopRelayWorkspaceDatabase
             evidence_json text not null
         );
 
-        drop table if exists canonical_blockers;
-
         CREATE TABLE IF NOT EXISTS evaluation_warnings(
             warning_id text primary key,
             workflow_identity text not null,
@@ -1505,10 +2131,14 @@ public static class LoopRelayWorkspaceDatabase
 
         CREATE INDEX IF NOT EXISTS idx_canonical_rendered_prompts_transition ON canonical_rendered_prompts(transition_run_id);
 
+        """;
+
+    private const string CanonicalDataRepairSql = """
         UPDATE canonical_workflow_states SET state = 'Resumable' WHERE state = 'Blocked';
         UPDATE canonical_workflow_states SET outcome = 'MissingRequiredInput' WHERE outcome = 'Blocked';
         UPDATE canonical_stage_states SET state = 'Resumable' WHERE state = 'Blocked';
         UPDATE canonical_transition_runs SET state = 'InputUnsatisfied' WHERE state = 'Blocked';
         UPDATE canonical_transition_runs SET outcome = 'MissingRequiredInput' WHERE outcome = 'Blocked';
+        DROP TABLE IF EXISTS canonical_blockers;
         """;
 }

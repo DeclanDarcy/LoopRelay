@@ -16,6 +16,14 @@ public sealed class AgentRuntime(
     IPermissionGateway? _permissionGateway = null,
     CodexSessionContinuityProfileResolver? _continuityProfileResolver = null) : IAgentRuntime, IAgentSessionContinuityRuntime
 {
+    // The Codex provider identity lives here, on the provider implementation itself — session
+    // evidence reads it from this declaration instead of repeating the literal (D5/M7).
+    public AgentRuntimeCapabilities Capabilities { get; } = new(
+        Provider: "codex",
+        OneShotExecution: true,
+        PersistentSessions: true,
+        SessionResume: true);
+
     public async Task<IAgentSession> OpenSessionAsync(
         AgentSessionSpec spec,
         CancellationToken cancellationToken = default)

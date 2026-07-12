@@ -1036,17 +1036,48 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             connection,
             """
             INSERT INTO agent_turns (
-                turn_id, session_id, turn_index, recorded_at
+                turn_id, session_id, turn_index, recorded_at, state, prompt_sha256,
+                prompt_tokens, output_tokens, cached_input_tokens, diagnostics_kind, diagnostics
             )
             VALUES (
-                $turn_id, $session_id, $turn_index, $recorded_at
+                $turn_id, $session_id, $turn_index, $recorded_at, $state, $prompt_sha256,
+                $prompt_tokens, $output_tokens, $cached_input_tokens, $diagnostics_kind, $diagnostics
             );
             """,
             cancellationToken,
             ("$turn_id", turn.TurnId),
             ("$session_id", turn.SessionId),
             ("$turn_index", turn.TurnIndex),
-            ("$recorded_at", Format(turn.RecordedAt)));
+            ("$recorded_at", Format(turn.RecordedAt)),
+            ("$state", turn.State),
+            ("$prompt_sha256", turn.PromptSha256),
+            ("$prompt_tokens", turn.PromptTokens),
+            ("$output_tokens", turn.OutputTokens),
+            ("$cached_input_tokens", turn.CachedInputTokens),
+            ("$diagnostics_kind", turn.DiagnosticsKind),
+            ("$diagnostics", turn.Diagnostics));
+    }
+
+    public async Task AppendRuntimePrerequisiteAsync(
+        CanonicalRuntimePrerequisiteRecord record,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO canonical_runtime_prerequisites (
+                prerequisite_check_id, run_id, checked_at, diagnostics_json
+            )
+            VALUES (
+                $prerequisite_check_id, $run_id, $checked_at, $diagnostics_json
+            );
+            """,
+            cancellationToken,
+            ("$prerequisite_check_id", record.PrerequisiteCheckId),
+            ("$run_id", record.RunId),
+            ("$checked_at", Format(record.CheckedAt)),
+            ("$diagnostics_json", record.DiagnosticsJson));
     }
 
     public async Task AppendReadReceiptAsync(
@@ -1306,12 +1337,25 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
 
+            // Pre-v9 databases opened read-only have no turn evidence columns; those turns read
+            // back with null state/usage/diagnosis evidence without migrating the database.
+            bool hasTurnEvidence = await ColumnExistsAsync(
+                connection, "agent_turns", "state", cancellationToken);
+
             var rows = new List<AgentTurnRecord>();
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT turn_id, session_id, turn_index, recorded_at
-                FROM agent_turns ORDER BY rowid;
-                """;
+            command.CommandText = hasTurnEvidence
+                ? """
+                  SELECT turn_id, session_id, turn_index, recorded_at, state, prompt_sha256,
+                         prompt_tokens, output_tokens, cached_input_tokens, diagnostics_kind, diagnostics
+                  FROM agent_turns ORDER BY rowid;
+                  """
+                : """
+                  SELECT turn_id, session_id, turn_index, recorded_at, NULL AS state, NULL AS prompt_sha256,
+                         NULL AS prompt_tokens, NULL AS output_tokens, NULL AS cached_input_tokens,
+                         NULL AS diagnostics_kind, NULL AS diagnostics
+                  FROM agent_turns ORDER BY rowid;
+                  """;
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -1319,7 +1363,48 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                     reader.GetString(0),
                     reader.GetString(1),
                     reader.GetInt32(2),
-                    ParseDate(reader.GetString(3))));
+                    ParseDate(reader.GetString(3)),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.IsDBNull(6) ? null : reader.GetInt64(6),
+                    reader.IsDBNull(7) ? null : reader.GetInt64(7),
+                    reader.IsDBNull(8) ? null : reader.GetInt64(8),
+                    reader.IsDBNull(9) ? null : reader.GetString(9),
+                    reader.IsDBNull(10) ? null : reader.GetString(10)));
+            }
+
+            return rows;
+        });
+    }
+
+    public async Task<IReadOnlyList<CanonicalRuntimePrerequisiteRecord>> ReadRuntimePrerequisitesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+
+            var rows = new List<CanonicalRuntimePrerequisiteRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT prerequisite_check_id, run_id, checked_at, diagnostics_json
+                FROM canonical_runtime_prerequisites ORDER BY rowid;
+                """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new CanonicalRuntimePrerequisiteRecord(
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    ParseDate(reader.GetString(2)),
+                    reader.GetString(3)));
             }
 
             return rows;

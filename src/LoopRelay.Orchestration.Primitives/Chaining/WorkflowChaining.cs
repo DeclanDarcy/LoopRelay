@@ -20,6 +20,7 @@ public enum WorkflowStopReason
     UnsupportedProviderCapability,
     ConcurrentStateConflict,
     InputInvalidated,
+    MissingRuntimePrerequisite,
     Waiting,
     Cancelled,
     Failed,
