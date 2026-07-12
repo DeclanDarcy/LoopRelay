@@ -34,14 +34,12 @@ public class PlanSessionTests
     private static string Resolve(Repository repo, string rel) => ArtifactPath.ResolveRepositoryPath(repo, rel);
 
     [Fact]
-    public void Plan_prompts_carry_the_template_owned_implementation_first_prompt_policy()
+    public void Plan_templates_do_not_embed_resolved_prompt_policy_profiles()
     {
-        Assert.Contains("## Implementation-First Prompt Policy", WritePlan.Text, StringComparison.Ordinal);
-        Assert.Contains("Repository growth is implementation-first", WritePlan.Text, StringComparison.Ordinal);
-        Assert.Contains(
-            "## Implementation-First Prompt Policy",
-            RevisePlan.Render("feedback"),
-            StringComparison.Ordinal);
+        Assert.DoesNotContain("## Implementation-First Prompt Policy", WritePlan.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Repository growth is implementation-first", WritePlan.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("## Resolved Prompt Policy", WritePlan.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("## Implementation-First Prompt Policy", RevisePlan.Render("feedback"), StringComparison.Ordinal);
     }
 
     [Fact]

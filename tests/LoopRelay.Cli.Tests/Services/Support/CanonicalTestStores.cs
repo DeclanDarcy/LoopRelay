@@ -7,6 +7,7 @@ using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
@@ -18,8 +19,10 @@ internal static class CanonicalTestStores
 {
     public static IDecisionPromptTurnDispatcher DecisionPromptDispatcher { get; } =
         new TestDecisionPromptTurnDispatcher();
+    public static IDecisionPromptTurnDispatcher DecisionPromptDispatcherFor(WorkspaceIdentity workspace) =>
+        new TestDecisionPromptTurnDispatcher(workspace);
     public static LoopArtifacts CreateLoopArtifacts(IArtifactStore store, Repository repository) =>
-        new(store, repository, new MemoryHistoryStore(), new MemoryRecommendationStore());
+        new(store, repository, new MemoryHistoryStore(store, repository), new MemoryRecommendationStore());
 
     public static LoopArtifacts CreateLoopArtifacts(
         IArtifactStore store,
@@ -55,8 +58,8 @@ internal static class CanonicalTestStores
         return (authorization, new FixedExecutionAuthorizationResolver(profile));
     }
 
-    private static CanonicalCausalContext NewAttempt() => new(
-        WorkspaceIdentity.New(),
+    private static CanonicalCausalContext NewAttempt(WorkspaceIdentity? workspace = null) => new(
+        workspace ?? WorkspaceIdentity.New(),
         RunIdentity.New(),
         WorkflowInstanceIdentity.New(),
         TransitionRunIdentity.New(),
@@ -70,7 +73,7 @@ internal static class CanonicalTestStores
             CancellationToken cancellationToken = default) => Task.FromResult(profile);
     }
 
-    private sealed class TestDecisionPromptTurnDispatcher : IDecisionPromptTurnDispatcher
+    private sealed class TestDecisionPromptTurnDispatcher(WorkspaceIdentity? _workspace = null) : IDecisionPromptTurnDispatcher
     {
         public async Task<DecisionPromptTurnResult> DispatchAsync(
             IAgentSession session,
@@ -83,7 +86,7 @@ internal static class CanonicalTestStores
         {
             AgentTurnResult result = await session.RunTurnAsync(
                 renderedTemplate, onChunk, cancellationToken);
-            CanonicalCausalContext causality = NewAttempt();
+            CanonicalCausalContext causality = NewAttempt(_workspace);
             return new DecisionPromptTurnResult(
                 result,
                 new AgentSessionIdentity(session.SessionId.ToString()),
@@ -94,27 +97,41 @@ internal static class CanonicalTestStores
         }
     }
 
-    private sealed class MemoryHistoryStore : ILoopHistoryStore
+    private sealed class MemoryHistoryStore(IArtifactStore _store, Repository _repository) : ILoopHistoryStore
     {
         private readonly List<LoopHistoryRecord> records = [];
 
-        public Task<LoopHistoryRecord> AppendAsync(
+        public async Task<LoopHistoryRecord> AppendAsync(
             LoopHistoryAppendRequest request,
             CancellationToken cancellationToken = default)
         {
+            int sequence = records.Count(item => item.Kind == request.Kind) + 1;
+            string projectionPath = request.Kind switch
+            {
+                LoopHistoryKind.Decisions => OrchestrationArtifactPaths.HistoricalDecision(sequence),
+                LoopHistoryKind.Handoff => OrchestrationArtifactPaths.HistoricalHandoff(sequence),
+                LoopHistoryKind.OperationalDelta => OrchestrationArtifactPaths.HistoricalDelta(sequence),
+                _ => throw new ArgumentOutOfRangeException(nameof(request), request.Kind, null),
+            };
             var record = new LoopHistoryRecord(
                 HistoryFactIdentity.New(),
                 request.Kind,
-                records.Count(item => item.Kind == request.Kind) + 1,
+                sequence,
                 DateTimeOffset.UtcNow,
                 request.Content,
                 LoopHistoryRecord.ComputeContentHash(request.Content),
                 request.Causality,
                 request.Evidence,
                 request.Supersedes,
-                $".agents/test-history/{request.Kind}/{records.Count + 1:0000}.md");
+                projectionPath);
             records.Add(record);
-            return Task.FromResult(record);
+            // This test double represents a successfully coordinated projection effect. The
+            // history record remains authoritative; the numbered file exists only so retained
+            // legacy-loop tests can verify their compatibility projection behavior.
+            await _store.WriteAsync(
+                ArtifactPath.ResolveRepositoryPath(_repository, projectionPath),
+                request.Content);
+            return record;
         }
 
         public Task<LoopHistoryRecord?> ReadLatestAsync(

@@ -5,6 +5,7 @@ using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Infrastructure.Models.Git;
 using Microsoft.Data.Sqlite;
 
@@ -27,13 +28,13 @@ internal sealed class SqliteAgentsSubmodulePublishPreflight(
     public async Task EnsureFreshExportAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!LoopWorkspaceDatabase.HasUsableLoopHistoryDatabase(_repository))
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
         {
             return;
         }
 
-        string databasePath = LoopWorkspaceDatabase.Resolve(_repository);
-        await using SqliteConnection connection = LoopWorkspaceDatabase.OpenReadOnly(databasePath);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
         await ExportTableAsync(
             connection,

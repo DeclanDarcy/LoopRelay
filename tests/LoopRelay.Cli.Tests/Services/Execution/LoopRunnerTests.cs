@@ -193,8 +193,11 @@ public class LoopRunnerTests
         // Decision proposal persisted then retired after execution consumed it — assert on the numbered snapshot.
         Assert.Equal("DEC-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
         Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
-        // The consumed handoff was rotated to handoff.0001.md before execution wrote the next live handoff.
-        Assert.Equal("H-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));
+        // Reading a live handoff no longer rotates it as an authoritative history write. The
+        // execution handoff replaces the compatibility projection after canonical prompt/read
+        // evidence captures the consumed input.
+        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));
+        Assert.Equal("H-NEXT", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff)));
     }
 
     [Fact]

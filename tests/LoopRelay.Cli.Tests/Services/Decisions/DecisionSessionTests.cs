@@ -15,6 +15,7 @@ using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
@@ -151,7 +152,7 @@ public class DecisionSessionTests
             Assert.Contains("OPCTX", prompt);
             Assert.Contains("HANDOFF", prompt);
             Assert.Contains("next execution agent", prompt);
-            Assert.Contains("Repository growth is implementation-first", prompt);
+            Assert.DoesNotContain("## Resolved Prompt Policy", prompt);
             return Turns.Completed("DECISIONS-TEXT");
         }));
 
@@ -629,7 +630,7 @@ public class DecisionSessionTests
     public async Task Run_Transfer_WritesOperationalDeltaHistoryToTheLedger()
     {
         using var repo = new TempFileRepo();
-        await InitializeLoopHistoryDatabaseAsync(repo.Repository);
+        WorkspaceIdentity workspace = await InitializeLoopHistoryDatabaseAsync(repo.Repository);
         var history = new LedgerLoopHistoryStore(repo.Repository);
         var art = CanonicalTestStores.CreateLoopArtifacts(repo.Store, repo.Repository, history);
         var con = new RecordingLoopConsole();
@@ -637,7 +638,7 @@ public class DecisionSessionTests
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo.Repository, TestAgentConfiguration.Brain, _costModel: null,
-            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcher);
+            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcherFor(workspace));
 
         await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -659,8 +660,9 @@ public class DecisionSessionTests
         LoopHistoryRecord latestDelta = (await history.ReadLatestAsync(LoopHistoryKind.OperationalDelta))!;
         Assert.Equal(OrchestrationArtifactPaths.HistoricalDelta(1), latestDelta.MaterializedRelativePath);
         Assert.Equal("DELTA-TEXT", latestDelta.Content);
-        // The numbered file exists as a derived projection of the ledger fact.
-        Assert.Equal("DELTA-TEXT", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
+        // The ledger append plans the numbered projection; projection materialization belongs to
+        // the effect coordinator and is intentionally absent from this history-authority test.
+        Assert.Null(await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalDelta)));
         Assert.Equal("OPCTX-1", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalContext)));
     }
@@ -1293,50 +1295,14 @@ public class DecisionSessionTests
         }
     }
 
-    private static async Task InitializeLoopHistoryDatabaseAsync(Repository repository)
+    private static async Task<WorkspaceIdentity> InitializeLoopHistoryDatabaseAsync(Repository repository)
     {
-        string databasePath = LoopWorkspaceDatabase.Resolve(repository);
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-            Pooling = false,
-        }.ToString());
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
         await connection.OpenAsync();
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            CREATE TABLE IF NOT EXISTS schema_metadata(
-                key text primary key,
-                value text not null
-            );
-
-            CREATE TABLE IF NOT EXISTS workspace_metadata(
-                key text primary key,
-                value text not null
-            );
-
-            CREATE TABLE IF NOT EXISTS loop_history(
-                kind text not null,
-                sequence integer not null,
-                logical_path text not null unique,
-                body text not null,
-                content_hash text not null,
-                created_at text not null,
-                primary key(kind, sequence)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_loop_history_kind_sequence_desc
-            ON loop_history(kind, sequence desc);
-
-            INSERT INTO schema_metadata (key, value)
-            VALUES ('schema_version', '1')
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
-
-            INSERT INTO workspace_metadata (key, value)
-            VALUES ('persistence_state', 'imported')
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
-            """;
-        await command.ExecuteNonQueryAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        return new WorkspaceIdentity(
+            await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
     }
 }

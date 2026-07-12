@@ -83,6 +83,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         RepositoryObserver repositoryObserver,
         WorkflowResolver workflowResolver,
         ITransitionRuntime transitionRuntime,
+        ITransitionEffectCoordinator effectCoordinator,
         WorkflowController workflowController,
         WorkflowChainRunner workflowChainRunner,
         WorkflowBoundaryEvidenceWriter boundaryEvidenceWriter,
@@ -99,6 +100,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
         RepositoryObserver = repositoryObserver;
         WorkflowResolver = workflowResolver;
         TransitionRuntime = transitionRuntime;
+        EffectCoordinator = effectCoordinator;
         WorkflowController = workflowController;
         WorkflowChainRunner = workflowChainRunner;
         BoundaryEvidenceWriter = boundaryEvidenceWriter;
@@ -124,6 +126,8 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
     public WorkflowResolver WorkflowResolver { get; }
 
     public ITransitionRuntime TransitionRuntime { get; }
+
+    internal ITransitionEffectCoordinator EffectCoordinator { get; }
 
     public WorkflowController WorkflowController { get; }
 
@@ -409,6 +413,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             repositoryObserver,
             workflowResolver,
             transitionRuntime,
+            effectCoordinator,
             workflowController,
             workflowChainRunner,
             boundaryEvidenceWriter,
@@ -5952,7 +5957,7 @@ internal sealed class UnifiedCliComposition : IAsyncDisposable
             IReadOnlyList<string> evidence,
             CancellationToken cancellationToken)
         {
-            foreach (string relativePath in evidence)
+            foreach (string relativePath in LocalVerificationTransitions.Evidence(definition))
             {
                 string path = ResolveRepositoryPath(relativePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);

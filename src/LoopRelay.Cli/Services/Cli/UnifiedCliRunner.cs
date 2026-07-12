@@ -420,6 +420,7 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
                     cancellationToken);
                 lastStopReason = result.StopReason;
                 PrintRunResult(result);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 RepositoryObservation? postTransitionObservation = null;
                 if (result.ControllerResult?.Transition is not null)

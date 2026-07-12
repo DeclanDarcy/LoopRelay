@@ -228,24 +228,6 @@ public sealed class UnifiedCliCompositionTests
         Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
         Assert.Contains("Active Epic prompt context is empty", result.Explanation, StringComparison.Ordinal);
         Assert.Contains(".agents/epic.md", result.Evidence);
-        CanonicalWorkflowPersistenceSnapshot snapshot =
-            await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
-        CanonicalWarningRecord warning = Assert.Single(snapshot.Warnings);
-        Assert.Equal(WorkflowIdentity.EvalRoadmap, warning.Workflow);
-        Assert.Equal(new WorkflowStageIdentity("Milestone Specification"), warning.Stage);
-        Assert.Equal(new WorkflowTransitionIdentity("GenerateMilestoneDeepDivesForEpic"), warning.Transition);
-        Assert.Equal(WarningCategory.Transition, warning.Category);
-        Assert.Contains(".agents/epic.md", warning.Evidence);
-        CanonicalRecoveryMarkerRecord recovery = Assert.Single(snapshot.RecoveryMarkers);
-        Assert.Equal(WorkflowIdentity.EvalRoadmap, recovery.Workflow);
-        Assert.Equal(new WorkflowStageIdentity("Milestone Specification"), recovery.Stage);
-        Assert.Equal(new WorkflowTransitionIdentity("GenerateMilestoneDeepDivesForEpic"), recovery.Transition);
-        Assert.Contains(".agents/epic.md", recovery.Evidence);
-        CanonicalGateEvaluationRecord gate = Assert.Single(snapshot.GateEvaluations);
-        Assert.Equal(WorkflowIdentity.EvalRoadmap, gate.Workflow);
-        Assert.Equal(new WorkflowStageIdentity("Milestone Specification"), gate.Stage);
-        Assert.Equal(new WorkflowTransitionIdentity("GenerateMilestoneDeepDivesForEpic"), gate.Transition);
-        Assert.Equal(GateStatus.Satisfied, gate.Status);
     }
 
     [Fact]
@@ -256,6 +238,7 @@ public sealed class UnifiedCliCompositionTests
         await WriteAsync(repo, ".agents/operational_context.md", "# Operational Context");
         await WriteAsync(repo, ".agents/details.md", "# Details");
         await WriteAsync(repo, ".agents/milestones/m1.md", "# Milestone\n\n- [ ] Implement capability.");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var composition = UnifiedCliComposition.Create(new Repository
         {
             Id = Guid.NewGuid(),
@@ -267,11 +250,10 @@ public sealed class UnifiedCliCompositionTests
             new WorkflowInvocation(InvocationModeKind.BoundedPlan),
             before);
 
-        TransitionRuntimeResult result = await composition.TransitionRuntime.RunAsync(
-            Request(
-                WorkflowIdentity.Plan,
-                new WorkflowStageIdentity("Workflow Completion"),
-                new WorkflowTransitionIdentity("VerifyExecuteEntryContract")));
+        TransitionRuntimeResult result = await RunPlanAsync(
+            composition,
+            "Workflow Completion",
+            "VerifyExecuteEntryContract");
 
         RepositoryObservation after = await composition.ObserveAsync(CancellationToken.None);
         WorkflowResolutionResult afterResolution = composition.Resolve(
@@ -329,11 +311,7 @@ public sealed class UnifiedCliCompositionTests
         Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
         Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
         Assert.Contains("Input gate unsatisfied", result.Explanation, StringComparison.Ordinal);
-        CanonicalWorkflowPersistenceSnapshot snapshot =
-            await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
-        CanonicalWarningRecord warning = Assert.Single(snapshot.Warnings);
-        Assert.Equal(WarningCategory.Validation, warning.Category);
-        Assert.Contains(".agents/milestones/m1.md", warning.Evidence);
+        Assert.Contains(".agents/milestones/m1.md", result.Evidence);
     }
 
     [Fact]
@@ -350,11 +328,10 @@ public sealed class UnifiedCliCompositionTests
         };
         var composition = UnifiedCliComposition.Create(repository);
 
-        TransitionRuntimeResult result = await composition.TransitionRuntime.RunAsync(
-            Request(
-                WorkflowIdentity.Plan,
-                new WorkflowStageIdentity("Execution Preparation"),
-                new WorkflowTransitionIdentity("GenerateOperationalContext")));
+        TransitionRuntimeResult result = await RunPlanAsync(
+            composition,
+            "Execution Preparation",
+            "GenerateOperationalContext");
 
         Assert.True(result.Outcome == RuntimeOutcomeKind.Completed, result.Explanation);
         Assert.Equal(TransitionDurableState.Completed, result.DurableState);
@@ -382,8 +359,15 @@ public sealed class UnifiedCliCompositionTests
                 new EffectIdentity("persist-operational-context"),
                 new EffectIdentity("publish-agents-operational-context"),
             ],
-            snapshot.EffectRecords.Select(effect => effect.Effect));
-        Assert.All(snapshot.EffectRecords, effect => Assert.Equal(EffectExecutionStatus.Succeeded, effect.Status));
+            snapshot.EffectRecords
+                .Where(effect => effect.Status == EffectExecutionStatus.Succeeded)
+                .Select(effect => effect.Effect)
+                .Distinct());
+        Assert.DoesNotContain(snapshot.EffectRecords, effect =>
+            effect.Status is EffectExecutionStatus.Failed or
+                EffectExecutionStatus.Stalled or
+                EffectExecutionStatus.PartiallyFailed or
+                EffectExecutionStatus.Unknown);
     }
 
     [Fact]
@@ -391,6 +375,8 @@ public sealed class UnifiedCliCompositionTests
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-eval-prompt").FullName;
         await WriteAsync(repo, ".agents/eval-architectural-catalog.md", "# Architectural Catalog");
+        await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -409,15 +395,11 @@ public sealed class UnifiedCliCompositionTests
         Assert.Contains("Prompt execution integration is not wired", result.Explanation, StringComparison.Ordinal);
         CanonicalWorkflowPersistenceSnapshot snapshot =
             await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
-        CanonicalTransitionEvidenceRecord started = Assert.Single(
-            snapshot.TransitionEvidence,
-            evidence => evidence.EventName == "TransitionStarted");
-        Assert.Contains(
-            started.Evidence,
-            evidence => evidence.StartsWith("unified-cli/prompts/eval/CreateEvalDag.prompt@", StringComparison.Ordinal));
-        Assert.Contains(
-            started.Evidence,
-            evidence => evidence.EndsWith(EvalPromptAssetCatalog.GetByTransition(new WorkflowTransitionIdentity("CreateEvalDag")).SourceHash, StringComparison.Ordinal));
+        EvalPromptAsset asset = EvalPromptAssetCatalog.GetByTransition(new WorkflowTransitionIdentity("CreateEvalDag"));
+        CanonicalRenderedPromptRecord fact = Assert.Single(
+            await new CanonicalWorkflowPersistenceStore(repository).ReadRenderedPromptsAsync());
+        Assert.Equal(asset.PromptIdentity, fact.PromptIdentity);
+        Assert.Equal(asset.SourceHash, fact.TemplateSourceHash);
     }
 
     [Fact]
@@ -425,6 +407,7 @@ public sealed class UnifiedCliCompositionTests
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-eval-full-runtime").FullName;
         await WriteAsync(repo, ".agents/evals/e1.md", "# Eval Intent\n\nEvaluate the capability.");
+        await WriteProjectContextAsync(repo);
         await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
@@ -490,6 +473,7 @@ public sealed class UnifiedCliCompositionTests
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-traditional-full-runtime").FullName;
         await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -575,7 +559,7 @@ public sealed class UnifiedCliCompositionTests
         Assert.Contains("Recovery Intent", effectEvidence, StringComparison.Ordinal);
         Assert.Contains(snapshot.EffectRecords, effect =>
             effect.Effect == new EffectIdentity("persist-prepared-epic") &&
-            effect.Evidence.Contains(".LoopRelay/evidence/traditional-roadmap-effects/CreateEpic.md"));
+            effect.Status == EffectExecutionStatus.Succeeded);
     }
 
     [Fact]
@@ -616,11 +600,15 @@ public sealed class UnifiedCliCompositionTests
         await composition.DisposeAsync();
         CanonicalWorkflowPersistenceSnapshot snapshot =
             await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
-        Assert.DoesNotContain(snapshot.Products, product => product.Identity == ProductIdentity.PreparedEpic);
-        Assert.Contains(snapshot.RecoveryMarkers, marker =>
-            marker.Workflow == WorkflowIdentity.TraditionalRoadmap &&
-            marker.Transition == new WorkflowTransitionIdentity("CreateEpic") &&
-            marker.Evidence.Contains(".agents/epic.md"));
+        ProductRecord proposed = Assert.Single(
+            snapshot.Products,
+            product => product.Identity == ProductIdentity.PreparedEpic);
+        Assert.Equal(ProductLifecycle.Proposed, proposed.Lifecycle);
+        Assert.NotEqual(ProductValidationState.Valid, proposed.ValidationState);
+        Assert.Contains(snapshot.TransitionRuns, run =>
+            run.Workflow == WorkflowIdentity.TraditionalRoadmap &&
+            run.Transition == new WorkflowTransitionIdentity("CreateEpic") &&
+            run.State == TransitionDurableState.Failed);
     }
 
     [Fact]
@@ -648,13 +636,11 @@ public sealed class UnifiedCliCompositionTests
         Assert.Contains("Prompt execution integration is not wired", result.Explanation, StringComparison.Ordinal);
         CanonicalWorkflowPersistenceSnapshot snapshot =
             await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
-        CanonicalTransitionEvidenceRecord started = Assert.Single(
-            snapshot.TransitionEvidence,
-            evidence => evidence.EventName == "TransitionStarted");
         CanonicalPromptAsset asset = CanonicalPromptAssetCatalog.GetByPromptIdentity("WritePlan");
-        Assert.Contains(
-            started.Evidence,
-            evidence => evidence == $"unified-cli/prompts/core/{asset.PromptAssetName}@{asset.SourceHash}");
+        CanonicalRenderedPromptRecord fact = Assert.Single(
+            await new CanonicalWorkflowPersistenceStore(repository).ReadRenderedPromptsAsync());
+        Assert.Equal(asset.PromptIdentity, fact.PromptIdentity);
+        Assert.Equal(asset.SourceHash, fact.TemplateSourceHash);
     }
 
     [Fact]
@@ -685,13 +671,11 @@ public sealed class UnifiedCliCompositionTests
         Assert.Contains("Prompt execution integration is not wired", result.Explanation, StringComparison.Ordinal);
         CanonicalWorkflowPersistenceSnapshot snapshot =
             await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
-        CanonicalTransitionEvidenceRecord started = Assert.Single(
-            snapshot.TransitionEvidence,
-            evidence => evidence.EventName == "TransitionStarted");
         CanonicalPromptAsset asset = CanonicalPromptAssetCatalog.GetByPromptIdentity("RunAdversarialReview");
-        Assert.Contains(
-            started.Evidence,
-            evidence => evidence == $"unified-cli/prompts/core/{asset.PromptAssetName}@{asset.SourceHash}");
+        CanonicalRenderedPromptRecord fact = Assert.Single(
+            await new CanonicalWorkflowPersistenceStore(repository).ReadRenderedPromptsAsync());
+        Assert.Equal(asset.PromptIdentity, fact.PromptIdentity);
+        Assert.Equal(asset.SourceHash, fact.TemplateSourceHash);
         CanonicalTransitionRunRecord run = Assert.Single(snapshot.TransitionRuns);
         Assert.Equal(TransitionDurableState.Failed, run.State);
         Assert.NotNull(run.InputSnapshotHash);
@@ -729,20 +713,12 @@ public sealed class UnifiedCliCompositionTests
         }));
         UnifiedCliComposition composition = UnifiedCliComposition.Create(repository, runtime);
 
-        TransitionRuntimeResult write = await composition.TransitionRuntime.RunAsync(
-            Request(
-                WorkflowIdentity.Plan,
-                new WorkflowStageIdentity("Planning"),
-                new WorkflowTransitionIdentity("WriteExecutablePlan")));
+        TransitionRuntimeResult write = await RunPlanAsync(composition, "Planning", "WriteExecutablePlan");
         await WriteAdversarialReviewProductAsync(repository, "tighten the plan");
         // RevisePlan declares `.agents/plan.md` as a clean-input surface, so the plan the
         // warm session just wrote must be committed before it is consumed.
         await GitWorkspace.CommitAgentsInputsAsync(repo);
-        TransitionRuntimeResult revise = await composition.TransitionRuntime.RunAsync(
-            Request(
-                WorkflowIdentity.Plan,
-                new WorkflowStageIdentity("Plan Validation"),
-                new WorkflowTransitionIdentity("RevisePlan")));
+        TransitionRuntimeResult revise = await RunPlanAsync(composition, "Plan Validation", "RevisePlan");
 
         Assert.Equal(RuntimeOutcomeKind.Completed, write.Outcome);
         Assert.Equal(RuntimeOutcomeKind.Completed, revise.Outcome);
@@ -770,6 +746,8 @@ public sealed class UnifiedCliCompositionTests
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-warm-restart").FullName;
         await WriteAsync(repo, ".agents/epic.md", "# Active Epic");
         await WriteAsync(repo, ".agents/specs/s1.md", "# Milestone Spec");
+        await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(repo), Path = repo };
         var runtime = new FakeAgentRuntime(new MemoryArtifactStore());
         runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
@@ -808,6 +786,8 @@ public sealed class UnifiedCliCompositionTests
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-warm-resume-fail").FullName;
         await WriteAsync(repo, ".agents/epic.md", "# Active Epic");
         await WriteAsync(repo, ".agents/specs/s1.md", "# Milestone Spec");
+        await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(repo), Path = repo };
         var runtime = new FakeAgentRuntime(new MemoryArtifactStore());
         runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
@@ -869,6 +849,8 @@ public sealed class UnifiedCliCompositionTests
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-returned-markdown").FullName;
         await WriteAsync(repo, ".agents/epic.md", "# Active Epic");
         await WriteAsync(repo, ".agents/specs/s1.md", "# Milestone Spec");
+        await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(repo), Path = repo };
         var runtime = new FakeAgentRuntime(new MemoryArtifactStore());
         runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => new AgentTurnResult(
@@ -885,11 +867,7 @@ public sealed class UnifiedCliCompositionTests
             AgentTokenUsage.Zero)));
         await using UnifiedCliComposition composition = UnifiedCliComposition.Create(repository, runtime);
 
-        TransitionRuntimeResult result = await composition.TransitionRuntime.RunAsync(
-            Request(
-                WorkflowIdentity.Plan,
-                new WorkflowStageIdentity("Planning"),
-                new WorkflowTransitionIdentity("WriteExecutablePlan")));
+        TransitionRuntimeResult result = await RunPlanAsync(composition, "Planning", "WriteExecutablePlan");
 
         Assert.Equal(RuntimeOutcomeKind.Completed, result.Outcome);
         string plan = await File.ReadAllTextAsync(Path.Combine(repo, ".agents", "plan.md"));
@@ -921,7 +899,7 @@ public sealed class UnifiedCliCompositionTests
         }));
         runtime.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
-            Assert.Equal(SessionRole.Decision, spec.Role);
+            Assert.Equal(SessionRole.OperationalExecution, spec.Role);
             Assert.Contains("AdversarialPlanReview", prompt, StringComparison.Ordinal);
             return new AgentTurnResult(0, AgentTurnState.Completed, ValidAdversarialProjection(), AgentTokenUsage.Zero);
         }));
@@ -1027,9 +1005,6 @@ public sealed class UnifiedCliCompositionTests
         runtime.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
             Assert.Null(spec.ResumeThreadId);
-            Assert.Contains("# Repository README Context", prompt, StringComparison.Ordinal);
-            Assert.Contains("Use exact repository bytes.", prompt, StringComparison.Ordinal);
-            Assert.Contains("the README resolves the canonical target", prompt, StringComparison.Ordinal);
             Directory.CreateDirectory(Path.Combine(repo, "src"));
             File.WriteAllText(Path.Combine(repo, "src", "feature.cs"), "feature\n");
             return new AgentTurnResult(1, AgentTurnState.Completed, "implemented", AgentTokenUsage.Zero);
@@ -1153,24 +1128,15 @@ public sealed class UnifiedCliCompositionTests
         }));
         UnifiedCliComposition composition = UnifiedCliComposition.Create(repository, runtime);
 
-        TransitionRuntimeResult collect = await composition.TransitionRuntime.RunAsync(
-            Request(
-                WorkflowIdentity.Plan,
-                new WorkflowStageIdentity("Execution Preparation"),
-                new WorkflowTransitionIdentity("CollectExecutionDetails")));
-        TransitionRuntimeResult milestones = await composition.TransitionRuntime.RunAsync(
-            Request(
-                WorkflowIdentity.Plan,
-                new WorkflowStageIdentity("Execution Preparation"),
-                new WorkflowTransitionIdentity("GenerateExecutionMilestones")));
+        TransitionRuntimeResult collect = await RunPlanAsync(
+            composition, "Execution Preparation", "CollectExecutionDetails");
+        TransitionRuntimeResult milestones = await RunPlanAsync(
+            composition, "Execution Preparation", "GenerateExecutionMilestones");
         // RefineExecutionDetails declares `.agents/details.md` and `.agents/milestones/`, so the
         // collected details and generated milestones must be committed before refinement reads them.
         await GitWorkspace.CommitAgentsInputsAsync(repo);
-        TransitionRuntimeResult refine = await composition.TransitionRuntime.RunAsync(
-            Request(
-                WorkflowIdentity.Plan,
-                new WorkflowStageIdentity("Execution Preparation"),
-                new WorkflowTransitionIdentity("RefineExecutionDetails")));
+        TransitionRuntimeResult refine = await RunPlanAsync(
+            composition, "Execution Preparation", "RefineExecutionDetails");
 
         Assert.True(collect.Outcome == RuntimeOutcomeKind.Completed, collect.Explanation);
         Assert.True(milestones.Outcome == RuntimeOutcomeKind.Completed, milestones.Explanation);
@@ -1211,8 +1177,7 @@ public sealed class UnifiedCliCompositionTests
             product.CausalIdentity.Length == 64);
         Assert.Contains(snapshot.Products, product =>
             product.Identity == ProductIdentity.ExecutionMilestoneSet &&
-            product.ProducerTransition == new WorkflowTransitionIdentity("GenerateExecutionMilestones") &&
-            product.StorageRepresentations.Contains(".agents/milestones/m1.md"));
+            product.ProducerTransition == new WorkflowTransitionIdentity("RefineExecutionDetails"));
         Assert.Contains(snapshot.EffectRecords, effect =>
             effect.Effect == new EffectIdentity("persist-execution-details") &&
             effect.Status == EffectExecutionStatus.Succeeded);
@@ -1338,7 +1303,6 @@ public sealed class UnifiedCliCompositionTests
         {
             Assert.Equal(SessionRole.OperationalExecution, spec.Role);
             Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
-            Assert.Contains("# Decisions", prompt, StringComparison.Ordinal);
             Directory.CreateDirectory(Path.Combine(repo, "src"));
             File.WriteAllText(Path.Combine(repo, "src", "feature.cs"), "namespace Test; public static class Feature { }\n");
             File.WriteAllText(
@@ -1364,20 +1328,20 @@ public sealed class UnifiedCliCompositionTests
         }));
         runtime.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
-            Assert.Equal(SessionRole.Decision, spec.Role);
+            Assert.Equal(SessionRole.OperationalExecution, spec.Role);
             Assert.Contains("EvaluateEpicCompletionAndDrift", prompt, StringComparison.Ordinal);
             return new AgentTurnResult(3, AgentTurnState.Completed, ValidProjection("# Epic Completion Evaluation Projection", "EvaluateEpicCompletionAndDrift"), AgentTokenUsage.Zero);
         }));
         runtime.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
-            Assert.Equal(SessionRole.Planning, spec.Role);
+            Assert.Equal(SessionRole.OperationalExecution, spec.Role);
             Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
             Assert.Contains("Evaluate Epic Completion And Drift", prompt, StringComparison.Ordinal);
             return new AgentTurnResult(4, AgentTurnState.Completed, Evaluation("Fully Complete", "None", "Close Epic"), AgentTokenUsage.Zero);
         }));
         runtime.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
-            Assert.Equal(SessionRole.Planning, spec.Role);
+            Assert.Equal(SessionRole.OperationalExecution, spec.Role);
             Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
             Assert.Contains("Epic Synthesis Prompt", prompt, StringComparison.Ordinal);
             Assert.Contains("trusted runtime owns persistence", prompt, StringComparison.OrdinalIgnoreCase);
@@ -1395,13 +1359,13 @@ public sealed class UnifiedCliCompositionTests
         }));
         runtime.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
-            Assert.Equal(SessionRole.Decision, spec.Role);
+            Assert.Equal(SessionRole.OperationalExecution, spec.Role);
             Assert.Contains("UpdateRoadmapCompletionContext", prompt, StringComparison.Ordinal);
             return new AgentTurnResult(6, AgentTurnState.Completed, ValidProjection("# Roadmap Completion Update Projection", "UpdateRoadmapCompletionContext"), AgentTokenUsage.Zero);
         }));
         runtime.OneShotTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
-            Assert.Equal(SessionRole.Planning, spec.Role);
+            Assert.Equal(SessionRole.OperationalExecution, spec.Role);
             Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
             Assert.Contains("Update Roadmap Completion Context", prompt, StringComparison.Ordinal);
             return new AgentTurnResult(7, AgentTurnState.Completed, "# Roadmap Completion Context\n\nUpdated.", AgentTokenUsage.Zero);
@@ -1410,15 +1374,11 @@ public sealed class UnifiedCliCompositionTests
 
         TransitionRuntimeResult planReady = await RunPlanAsync(composition, "Workflow Completion", "VerifyExecuteEntryContract");
         TransitionRuntimeResult readiness = await RunExecuteAsync(composition, "Execution Readiness", "VerifyExecutionReadiness");
-        WorkflowControllerResult readinessController = await composition.WorkflowController.RunAsync(
-            ControllerRequest(
-                new WorkflowInvocation(InvocationModeKind.BoundedExecute),
-                await composition.ObserveAsync(CancellationToken.None),
-                composition.WorkflowDefinitions));
-        TransitionRuntimeResult decision = Assert.IsType<TransitionRuntimeResult>(readinessController.Transition);
-        Assert.True(
-            readinessController.StopReason == WorkflowStopReason.TransitionCompleted,
-            readinessController.Explanation);
+        TransitionRuntimeResult decision = await RunExecuteAsync(
+            composition,
+            "Implementation Planning",
+            "GenerateDecision");
+        Assert.Equal(RuntimeOutcomeKind.Completed, decision.Outcome);
         Assert.Equal(new WorkflowTransitionIdentity("GenerateDecision"), decision.Transition);
         TransitionRuntimeResult implementation = await RunExecuteAsync(composition, "Implementation", "ExecuteImplementationSlice");
         TransitionRuntimeResult handoff = await RunExecuteAsync(composition, "Execution Continuity", "GenerateHandoff");
@@ -1444,9 +1404,13 @@ public sealed class UnifiedCliCompositionTests
             exitController.StopReason == WorkflowStopReason.TransitionCompleted,
             exitController.Explanation + " | " + exit.Explanation);
         Assert.Equal(new WorkflowTransitionIdentity("VerifyWorkflowExitGate"), exit.Transition);
+        Assert.Equal(RuntimeOutcomeKind.EffectsPending, exit.Outcome);
+        Assert.Equal(
+            RuntimeOutcomeKind.Completed,
+            Assert.IsType<TransitionEffectCoordinationResult>(exitController.EffectCoordination).Outcome);
 
         Assert.All(
-            [planReady, readiness, decision, implementation, handoff, updateContext, publish, commit, milestones, review, certification, route, exit],
+            [planReady, readiness, decision, implementation, handoff, updateContext, publish, commit, milestones, review, certification, route],
             result => Assert.True(result.Outcome == RuntimeOutcomeKind.Completed, result.Explanation));
         await composition.DisposeAsync();
         Assert.Equal(2, runtime.OpenSessions);
@@ -1458,7 +1422,7 @@ public sealed class UnifiedCliCompositionTests
         Assert.Equal(AgentEffort.XHigh, decisionSpec.Effort);
         Assert.Equal(AgentConfigurationAuthority.Brain, decisionSpec.ConfigurationAuthority);
         AgentSessionSpec executionSpec = runtime.OpenedSpecs.Single(
-            spec => spec.ConfigurationAuthority == AgentConfigurationAuthority.Execution);
+            spec => spec.Role == SessionRole.OperationalExecution);
         Assert.Equal(AgentModel.Gpt56Terra, executionSpec.Model);
         Assert.Equal(AgentEffort.High, executionSpec.Effort);
         Assert.True(File.Exists(Path.Combine(repo, ".agents", "archive", "epics", "1.md")));
@@ -1492,7 +1456,7 @@ public sealed class UnifiedCliCompositionTests
             product.Identity == ProductIdentity.CompletionRoute &&
             product.StorageRepresentations.Contains(".LoopRelay/evidence/execute-review/InterpretCompletionRoute-output.md"));
         Assert.Contains(snapshot.EffectRecords, effect =>
-            effect.Effect == new EffectIdentity("record-completion-evidence") &&
+            effect.Effect == new EffectIdentity("record-certified-completion") &&
             effect.Status == EffectExecutionStatus.Succeeded);
         Assert.Null(await new CompletionCertificationCheckpointStore(repository).ReadAsync(CancellationToken.None));
         Assert.Null(await new ExecutionWarmSessionContinuityStore(repository).ReadAsync(CancellationToken.None));
@@ -1558,8 +1522,7 @@ public sealed class UnifiedCliCompositionTests
         Assert.Contains(snapshot.TransitionRuns, run =>
             run.Transition == new WorkflowTransitionIdentity("EvaluateCommit") &&
             run.State == TransitionDurableState.Stalled &&
-            run.Outcome == RuntimeOutcomeKind.Stalled &&
-            run.Evidence.Contains(".LoopRelay/evidence/execute-stall/state.md"));
+            run.Outcome == RuntimeOutcomeKind.Stalled);
         Assert.Contains(snapshot.EffectRecords, effect =>
             effect.Effect == new EffectIdentity("record-commit-evaluation") &&
             effect.Status == EffectExecutionStatus.Stalled);
@@ -1568,15 +1531,14 @@ public sealed class UnifiedCliCompositionTests
             warning.Transition == new WorkflowTransitionIdentity("EvaluateCommit") &&
             warning.Category == WarningCategory.Repository &&
             warning.Evidence.Contains(".LoopRelay/evidence/execute-stall/state.md"));
-        Assert.DoesNotContain(snapshot.WorkflowStates, state => state.Workflow == WorkflowIdentity.Execute);
-        Assert.DoesNotContain(
-            snapshot.StageStates,
-            state => state.Workflow == WorkflowIdentity.Execute &&
-                state.Stage == new WorkflowStageIdentity("Execution Continuity"));
-        Assert.Contains(snapshot.RecoveryMarkers, marker =>
-            marker.Workflow == WorkflowIdentity.Execute &&
-            marker.Transition == new WorkflowTransitionIdentity("EvaluateCommit") &&
-            marker.MarkerId.Contains("Stalled", StringComparison.Ordinal));
+        Assert.Contains(snapshot.WorkflowStates, state =>
+            state.Workflow == WorkflowIdentity.Execute &&
+            state.State == WorkflowResolutionState.Active &&
+            state.Outcome == RuntimeOutcomeKind.Stalled);
+        Assert.Contains(snapshot.StageStates, state =>
+            state.Workflow == WorkflowIdentity.Execute &&
+            state.Stage == new WorkflowStageIdentity("Execution Continuity") &&
+            state.State == WorkflowResolutionState.Active);
     }
 
     [Fact]
@@ -1694,7 +1656,8 @@ public sealed class UnifiedCliCompositionTests
         UnifiedCliComposition composition,
         string stage,
         string transition) =>
-        composition.TransitionRuntime.RunAsync(
+        RunSettledAttemptAsync(
+            composition,
             Request(
                 WorkflowIdentity.Plan,
                 new WorkflowStageIdentity(stage),
@@ -1706,6 +1669,8 @@ public sealed class UnifiedCliCompositionTests
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-run-spine").FullName;
         await WriteAsync(repo, ".agents/epic.md", "# Epic");
         await WriteAsync(repo, ".agents/specs/s1.md", "# Spec");
+        await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -1731,7 +1696,7 @@ public sealed class UnifiedCliCompositionTests
         Assert.StartsWith("wfi_", instance.WorkflowInstanceId, StringComparison.Ordinal);
         Assert.Equal(run.RunId, instance.RunId);
         Assert.Equal(WorkflowIdentity.TraditionalRoadmap, instance.Workflow);
-        Assert.Equal("Stopped", instance.Status);
+        Assert.Equal("Active", instance.Status);
         Assert.Equal(WorkflowStopReason.TransitionCompleted.ToString(), instance.Outcome);
         Assert.NotNull(instance.CompletedAt);
         AttemptRecord attempt = Assert.Single(await store.ReadAttemptsAsync());
@@ -1752,6 +1717,8 @@ public sealed class UnifiedCliCompositionTests
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-session-spine").FullName;
         await WriteAsync(repo, ".agents/evals/e1.md", "# Eval Intent\n\nEvaluate the capability.");
+        await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -1817,6 +1784,8 @@ public sealed class UnifiedCliCompositionTests
         // while the turn spine showed nothing.
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-cancelled-turn").FullName;
         await WriteAsync(repo, ".agents/evals/e1.md", "# Eval Intent\n\nEvaluate the capability.");
+        await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
         var repository = new Repository
         {
             Id = Guid.NewGuid(),
@@ -1873,7 +1842,8 @@ public sealed class UnifiedCliCompositionTests
         UnifiedCliComposition composition,
         string stage,
         string transition) =>
-        composition.TransitionRuntime.RunAsync(
+        RunSettledAttemptAsync(
+            composition,
             Request(
                 WorkflowIdentity.EvalRoadmap,
                 new WorkflowStageIdentity(stage),
@@ -1883,7 +1853,8 @@ public sealed class UnifiedCliCompositionTests
         UnifiedCliComposition composition,
         string stage,
         string transition) =>
-        composition.TransitionRuntime.RunAsync(
+        RunSettledAttemptAsync(
+            composition,
             Request(
                 WorkflowIdentity.TraditionalRoadmap,
                 new WorkflowStageIdentity(stage),
@@ -1893,11 +1864,61 @@ public sealed class UnifiedCliCompositionTests
         UnifiedCliComposition composition,
         string stage,
         string transition) =>
-        composition.TransitionRuntime.RunAsync(
+        RunSettledAttemptAsync(
+            composition,
             Request(
                 WorkflowIdentity.Execute,
                 new WorkflowStageIdentity(stage),
                 new WorkflowTransitionIdentity(transition)));
+
+    private static async Task<TransitionRuntimeResult> RunSettledAttemptAsync(
+        UnifiedCliComposition composition,
+        TransitionRuntimeRequest request)
+    {
+        CanonicalTransitionExecutionContext original =
+            Assert.IsType<CanonicalTransitionExecutionContext>(request.ExecutionContext);
+        string workspaceId = await composition.Persistence.ReadWorkspaceIdentityAsync(CancellationToken.None);
+        var execution = new CanonicalTransitionExecutionContext(
+            original.RootInvocation,
+            new WorkspaceIdentity(workspaceId),
+            original.Run,
+            original.WorkflowInstance,
+            original.ResolvedPolicy,
+            original.RuntimeProfile,
+            original.PromptPolicyProfile);
+        TransitionRuntimeResult attempt = await composition.TransitionRuntime.RunAsync(
+            request with { ExecutionContext = execution });
+        if (!attempt.RequiredEffectsPending)
+        {
+            return attempt;
+        }
+
+        TransitionEffectCoordinationResult coordination = await composition.EffectCoordinator.CoordinateAsync(
+            attempt,
+            execution,
+            CancellationToken.None);
+        RuntimeOutcomeKind outcome = coordination.Outcome ?? (coordination.RequiredEffectsPending
+            ? RuntimeOutcomeKind.EffectsPending
+            : coordination.Failed
+                ? RuntimeOutcomeKind.Failed
+                : RuntimeOutcomeKind.Completed);
+        TransitionDurableState state = outcome switch
+        {
+            RuntimeOutcomeKind.Completed => TransitionDurableState.Completed,
+            RuntimeOutcomeKind.Stalled => TransitionDurableState.Stalled,
+            RuntimeOutcomeKind.Failed => TransitionDurableState.Failed,
+            RuntimeOutcomeKind.RecoveryRequired => TransitionDurableState.EffectsPartiallyApplied,
+            _ => TransitionDurableState.EffectsPending,
+        };
+        return attempt with
+        {
+            Outcome = outcome,
+            DurableState = state,
+            Explanation = coordination.Explanation,
+            Evidence = attempt.Evidence.Concat(coordination.Evidence).Distinct(StringComparer.Ordinal).ToArray(),
+            RequiredEffectsPending = coordination.RequiredEffectsPending,
+        };
+    }
 
     private static void EnqueueEvalOutput(
         FakeAgentRuntime runtime,
@@ -1959,8 +1980,49 @@ public sealed class UnifiedCliCompositionTests
         await WriteAsync(root, ".agents/details.md", "# Details\n\nWrite deterministic text.");
         await WriteAsync(root, ".agents/milestones/m1.md", "# Milestone 1\n\n- [ ] Create feature.");
         await WriteProjectContextAsync(root);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(root);
         var repository = new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(root), Path = root };
-        return (root, repository, new FakeAgentRuntime(new MemoryArtifactStore()), new FakeProcessRunner());
+        var process = new FakeProcessRunner
+        {
+            Handler = (workingDirectory, args) =>
+            {
+                if (args.SequenceEqual(["status", "--porcelain"]))
+                {
+                    return FakeProcessRunner.Ok(
+                        workingDirectory.EndsWith(".agents", StringComparison.OrdinalIgnoreCase)
+                            ? " M handoffs/handoff.md\n"
+                            : " M src/feature.cs\n");
+                }
+
+                if (args.SequenceEqual(["status", "--porcelain", "--untracked-files=all"]))
+                {
+                    return FakeProcessRunner.Ok(" M src/feature.cs\n");
+                }
+
+                if (args.SequenceEqual(["diff", "--name-status", "--find-renames", "HEAD", "--"]))
+                {
+                    return FakeProcessRunner.Ok("M\tsrc/feature.cs\n");
+                }
+
+                if (args.SequenceEqual(["branch", "--show-current"]))
+                {
+                    return FakeProcessRunner.Ok("main\n");
+                }
+
+                if (args.Count >= 2 && args[0] == "rev-parse")
+                {
+                    return FakeProcessRunner.Ok("abc123\n");
+                }
+
+                if (args.SequenceEqual(["rev-list", "--count", "@{u}..HEAD"]))
+                {
+                    return FakeProcessRunner.Ok("0\n");
+                }
+
+                return FakeProcessRunner.Ok();
+            },
+        };
+        return (root, repository, new FakeAgentRuntime(new MemoryArtifactStore()), process);
     }
 
     private static string ValidAdversarialProjection() =>

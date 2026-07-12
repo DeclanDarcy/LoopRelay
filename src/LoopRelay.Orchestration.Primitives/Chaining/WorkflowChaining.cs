@@ -79,7 +79,8 @@ public sealed record TransitionEffectCoordinationResult(
     bool RequiredEffectsPending,
     bool Failed,
     string Explanation,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    RuntimeOutcomeKind? Outcome = null);
 
 public interface ITransitionEffectCoordinator
 {
@@ -345,8 +346,10 @@ public sealed class WorkflowController(
         // Runtime results are evidence, not progression authority. Re-observe canonical state after
         // every attempt/effect cycle before selecting a stop or successor decision.
         RepositoryObservation observed = await _observations.ObserveAsync(cancellationToken);
-        WorkflowStopReason stop = coordination is { Failed: true }
-            ? WorkflowStopReason.Failed
+        WorkflowStopReason stop = coordination?.Outcome is { } coordinatedOutcome
+            ? StopReasonFor(coordinatedOutcome)
+            : coordination is { Failed: true }
+                ? WorkflowStopReason.Failed
             : coordination is { RequiredEffectsPending: true }
                 ? WorkflowStopReason.RequiredEffectsPending
                 : coordination is not null

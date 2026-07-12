@@ -58,7 +58,7 @@ public class ExecutionStepTests
             Assert.Contains("PLAN", prompt);                                   // ContinueExecution.Render(plan, decisions)
             Assert.Contains("DECISIONS-SYS-PROMPT", prompt);
             Assert.Contains("continue executing the current milestone", prompt);
-            Assert.Contains("Repository growth is implementation-first", prompt);
+            Assert.DoesNotContain("## Resolved Prompt Policy", prompt);
             return Turns.Completed("work done");
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
@@ -90,7 +90,7 @@ public class ExecutionStepTests
         {
             Assert.Contains("PLAN-CONTENT", prompt);                        // StartExecution.Render(plan)
             Assert.Contains("start executing the first milestone", prompt);
-            Assert.Contains("Repository growth is implementation-first", prompt);
+            Assert.DoesNotContain("## Resolved Prompt Policy", prompt);
             Assert.DoesNotContain("continue executing", prompt);           // not the ContinueExecution prompt
             return Turns.Completed("work done");
         }));

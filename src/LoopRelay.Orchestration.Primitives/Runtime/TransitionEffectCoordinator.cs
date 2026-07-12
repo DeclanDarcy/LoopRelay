@@ -65,11 +65,20 @@ public sealed class TransitionEffectCoordinator(
                 evidence.AddRange(result.Evidence);
                 if (result.Status != EffectExecutionStatus.Succeeded)
                 {
+                    RuntimeOutcomeKind outcome = result.Status switch
+                    {
+                        EffectExecutionStatus.Stalled => RuntimeOutcomeKind.Stalled,
+                        EffectExecutionStatus.Failed => RuntimeOutcomeKind.Failed,
+                        EffectExecutionStatus.PartiallyFailed or EffectExecutionStatus.Unknown =>
+                            RuntimeOutcomeKind.RecoveryRequired,
+                        _ => RuntimeOutcomeKind.EffectsPending,
+                    };
                     return new TransitionEffectCoordinationResult(
-                        RequiredEffectsPending: result.Status is EffectExecutionStatus.Planned or EffectExecutionStatus.Unknown,
-                        Failed: result.Status is EffectExecutionStatus.Failed or EffectExecutionStatus.PartiallyFailed,
+                        RequiredEffectsPending: result.Status is EffectExecutionStatus.Planned or EffectExecutionStatus.Started,
+                        Failed: result.Status == EffectExecutionStatus.Failed,
                         result.Explanation,
-                        evidence);
+                        evidence,
+                        outcome);
                 }
             }
             catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
@@ -84,7 +93,8 @@ public sealed class TransitionEffectCoordinator(
                     RequiredEffectsPending: true,
                     Failed: false,
                     "An effect call has an unknown outcome and must be reconciled before retry.",
-                    evidence.Append(exception.GetType().Name).ToArray());
+                    evidence.Append(exception.GetType().Name).ToArray(),
+                    RuntimeOutcomeKind.RecoveryRequired);
             }
         }
 
@@ -92,6 +102,7 @@ public sealed class TransitionEffectCoordinator(
             RequiredEffectsPending: false,
             Failed: false,
             "All required effect intents completed.",
-            evidence);
+            evidence,
+            RuntimeOutcomeKind.Completed);
     }
 }

@@ -21,14 +21,30 @@ internal static class GitWorkspace
 
     public static async Task CommitAgentsInputsAsync(string repositoryPath)
     {
-        await GitAsync(repositoryPath, "add", "--", ".agents");
-        await GitAsync(repositoryPath, "commit", "--allow-empty", "-m", "Commit collaboration inputs");
+        string agentsPath = Path.Combine(repositoryPath, ".agents");
+        await GitAsync(agentsPath, "add", "-A");
+        await GitAsync(agentsPath, "commit", "--allow-empty", "-m", "Commit collaboration inputs");
     }
 
     public static async Task InitializeWithAgentsInputsAsync(string repositoryPath)
     {
         await InitializeAsync(repositoryPath);
+        string agentsPath = Path.Combine(repositoryPath, ".agents");
+        Directory.CreateDirectory(agentsPath);
+        await InitializeAsync(agentsPath);
         await CommitAgentsInputsAsync(repositoryPath);
+
+        string agentsRemote = Directory.CreateTempSubdirectory("looprelay-agents-remote").FullName;
+        await GitAsync(agentsRemote, "init", "--bare");
+        await GitAsync(agentsPath, "remote", "add", "origin", agentsRemote);
+        await GitAsync(agentsPath, "push", "-u", "origin", "HEAD");
+
+        await GitAsync(repositoryPath, "add", "--", ".agents");
+        await GitAsync(repositoryPath, "commit", "--allow-empty", "-m", "Commit collaboration gitlink");
+        string parentRemote = Directory.CreateTempSubdirectory("looprelay-parent-remote").FullName;
+        await GitAsync(parentRemote, "init", "--bare");
+        await GitAsync(repositoryPath, "remote", "add", "origin", parentRemote);
+        await GitAsync(repositoryPath, "push", "-u", "origin", "HEAD");
     }
 
     private static async Task GitAsync(string repositoryPath, params string[] arguments)

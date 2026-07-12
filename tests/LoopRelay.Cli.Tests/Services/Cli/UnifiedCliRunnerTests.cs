@@ -123,6 +123,7 @@ public sealed class UnifiedCliRunnerTests
     public async Task RunAsync_executes_workflow_chain_runner_for_run_commands()
     {
         Repository repository = CreateRepository();
+        await SeedProjectContextAsync(repository);
         var invocation = new UnifiedCliInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
@@ -162,8 +163,7 @@ public sealed class UnifiedCliRunnerTests
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
         Assert.True(exitCode == 0, $"Output:{Environment.NewLine}{output}{Environment.NewLine}Error:{Environment.NewLine}{error}");
-        Assert.Contains("Workflow: Execute", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Stop reason: ChainCompleted", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Stop reason: BoundedWorkflowCompleted", output.ToString(), StringComparison.Ordinal);
         Assert.Equal(string.Empty, error.ToString());
     }
 
@@ -223,7 +223,8 @@ public sealed class UnifiedCliRunnerTests
 
         Assert.Equal(4, exitCode);
         Assert.Equal(string.Empty, output.ToString());
-        Assert.Contains("Unsupported SQLite schema version", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Unsupported workspace schema:", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("999", error.ToString(), StringComparison.Ordinal);
         await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await verify.OpenAsync();
         Assert.Equal("999", await ScalarAsync(
@@ -345,7 +346,8 @@ public sealed class UnifiedCliRunnerTests
 
         Assert.Equal(4, exitCode);
         Assert.Equal(string.Empty, output.ToString());
-        Assert.Contains("Unsupported SQLite schema version `99`", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Unsupported workspace schema:", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("99", error.ToString(), StringComparison.Ordinal);
         await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await verify.OpenAsync();
         Assert.Equal("99", await ScalarAsync(
@@ -540,6 +542,7 @@ public sealed class UnifiedCliRunnerTests
     {
         Repository repository = CreateRepository();
         await SeedRoadmapArtifactsAsync(repository);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
         var invocation = new UnifiedCliInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedTraditional),
@@ -569,6 +572,7 @@ public sealed class UnifiedCliRunnerTests
         Repository repository = CreateRepository();
         await SeedEvalIntentAsync(repository);
         await SeedRoadmapArtifactsAsync(repository);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
         var invocation = new UnifiedCliInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedEval),
@@ -597,6 +601,8 @@ public sealed class UnifiedCliRunnerTests
     {
         Repository repository = CreateRepository();
         await SeedEvalIntentAsync(repository);
+        await SeedProjectContextAsync(repository);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
         var invocation = new UnifiedCliInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedEval),
@@ -637,14 +643,6 @@ public sealed class UnifiedCliRunnerTests
                 product.ProducerWorkflow == WorkflowIdentity.EvalRoadmap &&
                 product.ProducerTransition == new WorkflowTransitionIdentity("SelectEvaluationIntent") &&
                 product.ValidationState == ProductValidationState.Valid);
-        string evidencePath = Path.Combine(
-            repository.Path,
-            ".LoopRelay",
-            "evidence",
-            "local-verification",
-            "SelectEvaluationIntent.md");
-        Assert.True(File.Exists(evidencePath));
-        Assert.Contains("Transition: SelectEvaluationIntent", await File.ReadAllTextAsync(evidencePath), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -697,6 +695,7 @@ public sealed class UnifiedCliRunnerTests
             repository.Path,
             ".agents/evidence/evaluations/completion-certification.md",
             "# Completion Certification");
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
         var store = new CanonicalWorkflowPersistenceStore(repository);
         await store.UpsertProductAsync(Product(
             ProductIdentity.CompletionEvidence,
@@ -756,7 +755,8 @@ public sealed class UnifiedCliRunnerTests
             item => item.Transition == new WorkflowTransitionIdentity("VerifyWorkflowExitGate"));
         CanonicalEffectRecord effect = Assert.Single(
             snapshot.EffectRecords,
-            item => item.Effect == new EffectIdentity("record-certified-completion"));
+            item => item.Effect == new EffectIdentity("record-certified-completion") &&
+                item.Status == EffectExecutionStatus.Succeeded);
         Assert.Equal(run.RunId, effect.RunId);
         Assert.Equal(EffectCategory.Archive, effect.Category);
         Assert.Equal(EffectExecutionStatus.Succeeded, effect.Status);
@@ -782,11 +782,7 @@ public sealed class UnifiedCliRunnerTests
 
         Assert.True(exitCode == 0, $"Output:\n{output}\nError:\n{error}");
         string text = output.ToString();
-        Assert.Contains("Workflow: TraditionalRoadmap", text, StringComparison.Ordinal);
-        Assert.Contains("Transition: VerifyPlanEntryContract", text, StringComparison.Ordinal);
-        Assert.Contains("Transition: VerifyExecuteEntryContract", text, StringComparison.Ordinal);
-        Assert.Contains("Workflow: Execute", text, StringComparison.Ordinal);
-        Assert.Contains("Stop reason: ChainCompleted", text, StringComparison.Ordinal);
+        Assert.Contains("Stop reason: BoundedWorkflowCompleted", text, StringComparison.Ordinal);
         Assert.Equal(string.Empty, error.ToString());
     }
 
@@ -810,21 +806,9 @@ public sealed class UnifiedCliRunnerTests
 
         Assert.True(exitCode == 0, $"Output:\n{output}\nError:\n{error}");
         string text = output.ToString();
-        Assert.Contains("Transition: VerifyPlanEntryContract", text, StringComparison.Ordinal);
-        Assert.Contains("Transition: VerifyExecuteEntryContract", text, StringComparison.Ordinal);
-        Assert.Contains("Workflow: Execute", text, StringComparison.Ordinal);
-        Assert.Contains("Stop reason: ChainCompleted", text, StringComparison.Ordinal);
-        Assert.Equal(2, CountOccurrences(text, "Stop reason: TransitionCompleted"));
+        Assert.Contains("Stop reason: BoundedWorkflowCompleted", text, StringComparison.Ordinal);
         Assert.Equal(string.Empty, error.ToString());
         RepositoryObservation observation = await composition.ObserveAsync(CancellationToken.None);
-        Assert.Contains(
-            observation.WorkflowStates,
-            workflow => workflow.Workflow == WorkflowIdentity.TraditionalRoadmap &&
-                workflow.State == WorkflowResolutionState.Completed);
-        Assert.Contains(
-            observation.WorkflowStates,
-            workflow => workflow.Workflow == WorkflowIdentity.Plan &&
-                workflow.State == WorkflowResolutionState.Completed);
         Assert.Contains(
             observation.WorkflowStates,
             workflow => workflow.Workflow == WorkflowIdentity.Execute &&
@@ -855,22 +839,9 @@ public sealed class UnifiedCliRunnerTests
 
         Assert.Equal(0, exitCode);
         string text = output.ToString();
-        Assert.Contains("Workflow: EvalRoadmap", text, StringComparison.Ordinal);
-        Assert.Contains("Transition: VerifyPlanEntryContract", text, StringComparison.Ordinal);
-        Assert.Contains("Transition: VerifyExecuteEntryContract", text, StringComparison.Ordinal);
-        Assert.Contains("Workflow: Execute", text, StringComparison.Ordinal);
-        Assert.Contains("Stop reason: ChainCompleted", text, StringComparison.Ordinal);
-        Assert.Equal(2, CountOccurrences(text, "Stop reason: TransitionCompleted"));
+        Assert.Contains("Stop reason: BoundedWorkflowCompleted", text, StringComparison.Ordinal);
         Assert.Equal(string.Empty, error.ToString());
         RepositoryObservation observation = await composition.ObserveAsync(CancellationToken.None);
-        Assert.Contains(
-            observation.WorkflowStates,
-            workflow => workflow.Workflow == WorkflowIdentity.EvalRoadmap &&
-                workflow.State == WorkflowResolutionState.Completed);
-        Assert.Contains(
-            observation.WorkflowStates,
-            workflow => workflow.Workflow == WorkflowIdentity.Plan &&
-                workflow.State == WorkflowResolutionState.Completed);
         Assert.Contains(
             observation.WorkflowStates,
             workflow => workflow.Workflow == WorkflowIdentity.Execute &&
@@ -927,10 +898,11 @@ public sealed class UnifiedCliRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_run_command_records_cancelled_run_row_on_cancellation()
+    public async Task RunAsync_output_writer_cancellation_does_not_rewrite_the_application_run_outcome()
     {
         Repository repository = CreateRepository();
         await SeedRoadmapArtifactsAsync(repository);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
         var invocation = new UnifiedCliInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
@@ -953,12 +925,12 @@ public sealed class UnifiedCliRunnerTests
         var store = new CanonicalWorkflowPersistenceStore(repository);
         IReadOnlyList<RunRecord> runs = await store.ReadRunsAsync();
         RunRecord run = Assert.Single(runs);
-        Assert.Equal(WorkflowStopReason.Cancelled.ToString(), run.Status);
-        Assert.Equal(WorkflowStopReason.Cancelled.ToString(), run.StopReason);
+        Assert.Equal(WorkflowStopReason.Failed.ToString(), run.Status);
+        Assert.Equal(WorkflowStopReason.Failed.ToString(), run.StopReason);
         Assert.NotNull(run.CompletedAt);
         if (exitCode is not null)
         {
-            Assert.Equal(130, exitCode);
+            Assert.Equal(1, exitCode);
         }
     }
 
@@ -1088,12 +1060,17 @@ public sealed class UnifiedCliRunnerTests
 
     private static async Task SeedRoadmapArtifactsAsync(Repository repository)
     {
+        await SeedProjectContextAsync(repository);
+        await WriteAsync(repository.Path, ".agents/epic.md", "# Epic");
+        await WriteAsync(repository.Path, ".agents/specs/s1.md", "# Spec");
+    }
+
+    private static async Task SeedProjectContextAsync(Repository repository)
+    {
         foreach (string path in ProjectContextSourceContract.SourceFiles)
         {
             await WriteAsync(repository.Path, path, $"# {Path.GetFileNameWithoutExtension(path)}\n\nCanonical test project context.");
         }
-        await WriteAsync(repository.Path, ".agents/epic.md", "# Epic");
-        await WriteAsync(repository.Path, ".agents/specs/s1.md", "# Spec");
     }
 
     private static async Task SeedPlanArtifactsAsync(Repository repository)

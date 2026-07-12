@@ -327,7 +327,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             UPDATE canonical_effect_intents
             SET status = $status,
                 started_at = CASE WHEN $status = 'Started' THEN $now ELSE started_at END,
-                completed_at = CASE WHEN $status IN ('Succeeded', 'Failed', 'PartiallyFailed') THEN $now ELSE completed_at END,
+                completed_at = CASE WHEN $status IN ('Succeeded', 'Stalled', 'Failed', 'PartiallyFailed') THEN $now ELSE completed_at END,
                 failure = $failure
             WHERE transition_run_id = $run AND effect_identity = $effect;
             INSERT INTO canonical_effect_records (
@@ -340,26 +340,51 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             UPDATE canonical_transition_runs
             SET state = CASE
                     WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'EffectsPartiallyApplied'
+                    WHEN $status = 'Stalled' THEN 'Stalled'
                     WHEN $status = 'Failed' THEN 'Failed'
                     ELSE state
                 END,
                 outcome = CASE
                     WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'RecoveryRequired'
+                    WHEN $status = 'Stalled' THEN 'Stalled'
                     WHEN $status = 'Failed' THEN 'Failed'
                     ELSE outcome
                 END,
                 completed_at = CASE
-                    WHEN $status IN ('PartiallyFailed', 'Failed') THEN $now
+                    WHEN $status IN ('Stalled', 'PartiallyFailed', 'Failed') THEN $now
                     ELSE completed_at
                 END,
                 explanation = CASE
                     WHEN $status IN ('Unknown', 'PartiallyFailed')
                         THEN 'An effect outcome is uncertain and requires reconciliation.'
+                    WHEN $status = 'Stalled' THEN COALESCE($failure, 'A required effect stalled.')
                     WHEN $status = 'Failed' THEN COALESCE($failure, 'A required effect failed.')
                     ELSE explanation
                 END
             WHERE run_id = $run
-              AND $status IN ('Unknown', 'PartiallyFailed', 'Failed');
+              AND $status IN ('Unknown', 'Stalled', 'PartiallyFailed', 'Failed');
+            UPDATE attempts
+            SET outcome = CASE
+                    WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'RecoveryRequired'
+                    WHEN $status = 'Stalled' THEN 'Stalled'
+                    WHEN $status = 'Failed' THEN 'Failed'
+                    ELSE outcome
+                END,
+                completed_at = COALESCE(completed_at, $now)
+            WHERE transition_run_id = $run
+              AND $status IN ('Unknown', 'Stalled', 'PartiallyFailed', 'Failed');
+            UPDATE canonical_workflow_states
+            SET outcome = CASE
+                    WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'RecoveryRequired'
+                    WHEN $status = 'Stalled' THEN 'Stalled'
+                    WHEN $status = 'Failed' THEN 'Failed'
+                    ELSE outcome
+                END,
+                updated_at = $now
+            WHERE workflow_identity = (
+                SELECT workflow_identity FROM canonical_transition_runs WHERE run_id = $run
+            )
+              AND $status IN ('Unknown', 'Stalled', 'PartiallyFailed', 'Failed');
             UPDATE canonical_transition_runs
             SET state = 'Completed',
                 outcome = 'Completed',
