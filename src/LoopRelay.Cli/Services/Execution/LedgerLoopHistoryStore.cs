@@ -1,9 +1,12 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Services;
 using Microsoft.Data.Sqlite;
 
@@ -65,6 +68,7 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
             connection,
             transaction,
             historyIdentity,
+            request,
             relativePath,
             contentHash,
             recordedAt,
@@ -98,7 +102,8 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
         WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection, cancellationToken);
-        if (inspection.Family != WorkspaceSchemaFamily.CanonicalWorkspace || inspection.Version != 9)
+        if (inspection.Family != WorkspaceSchemaFamily.CanonicalWorkspace ||
+            inspection.Version != LoopRelayWorkspaceDatabase.CurrentSchemaVersion)
         {
             throw new WorkspaceCompatibilityImportRequiredException(inspection);
         }
@@ -299,31 +304,114 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
             ("$payload", JsonSerializer.Serialize(payload, payload.GetType(), Json)),
             ("$at", recordedAt.ToString("O", CultureInfo.InvariantCulture)));
 
-    private static Task InsertProjectionEffectAsync(
+    private static async Task InsertProjectionEffectAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         HistoryFactIdentity historyIdentity,
+        LoopHistoryAppendRequest request,
         string relativePath,
         string contentHash,
         DateTimeOffset plannedAt,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        (EffectIntentIdentity Identity, int Order)? parent = await FindStartedParentAsync(
+            connection, transaction, request.Causality, cancellationToken);
+        var payload = new FilesystemWriteEffectPayload(relativePath, request.Content);
+        string payloadJson = JsonSerializer.Serialize(payload, Json);
+        var intent = new EffectIntent(
+            EffectIntentIdentity.New(),
+            request.Causality,
+            $"history:materialize:{request.Kind}",
+            WorkspaceEffectExecutorKeys.FilesystemWrite,
+            "1",
+            new EffectTargetDescriptor(
+                "HistoryProjection",
+                relativePath,
+                JsonSerializer.Serialize(new { historyId = historyIdentity.Value, contentHash }, Json)),
+            payloadJson,
+            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson))),
+            parent?.Order + 1 ?? 0,
+            parent is null ? [] : [parent.Value.Identity],
+            EffectRequiredness.BlockingLocal,
+            new EffectCondition("history-fact-durable", JsonSerializer.Serialize(new { historyId = historyIdentity.Value }, Json)),
+            new EffectCondition("content-hash", JsonSerializer.Serialize(new { relativePath, contentHash }, Json)),
+            "independent-content-hash",
+            $"history-projection:{historyIdentity.Value}:{relativePath}:{contentHash}",
+            plannedAt);
+        await ExecuteAsync(
             connection,
             transaction,
             """
-            INSERT INTO canonical_projection_effects (
-                effect_id, history_id, target_path, content_hash, status,
-                idempotency_key, planned_at
-            )
-            VALUES ($effect, $history, $path, $hash, 'Planned', $key, $at);
+            INSERT INTO canonical_effect_intents (
+                effect_intent_id, transition_run_id, attempt_id, effect_identity, category,
+                effect_order, idempotency_key, status, definition_json, planned_at,
+                workspace_id, run_id, workflow_instance_id, semantic_operation_key,
+                executor_key, executor_version, target_json, payload_json, payload_hash,
+                requiredness, dependencies_json, precondition_json, postcondition_json,
+                reconciliation_policy, row_version, attempt_count
+            ) VALUES (
+                $intent, $transition, $attempt, $effect_identity, 'Archive',
+                $order, $key, 'Planned', $definition, $at,
+                $workspace, $run, $workflow_instance, $semantic,
+                $executor, $executor_version, $target, $payload, $payload_hash,
+                $requiredness, $dependencies, $precondition, $postcondition,
+                $reconciliation, 0, 0
+            );
+            INSERT INTO canonical_effect_lifecycle_events (
+                effect_intent_id, lifecycle, worker_id, explanation, evidence_json, recorded_at
+            ) VALUES (
+                $intent, 'Planned', 'history-authority',
+                'History projection enqueued atomically with its canonical history fact.',
+                $evidence, $at
+            );
             """,
             cancellationToken,
-            ("$effect", CausalUlid.NewId("effect")),
-            ("$history", historyIdentity.Value),
-            ("$path", relativePath),
-            ("$hash", contentHash),
-            ("$key", $"history-projection:{historyIdentity.Value}:{relativePath}:{contentHash}"),
-            ("$at", plannedAt.ToString("O", CultureInfo.InvariantCulture)));
+            ("$intent", intent.Identity.Value),
+            ("$transition", intent.Causality.TransitionRun.Value),
+            ("$attempt", intent.Causality.Attempt.Value),
+            ("$effect_identity", $"history-projection:{historyIdentity.Value}"),
+            ("$order", intent.Order),
+            ("$key", intent.IdempotencyKey),
+            ("$definition", JsonSerializer.Serialize(intent, Json)),
+            ("$at", plannedAt.ToString("O", CultureInfo.InvariantCulture)),
+            ("$workspace", intent.Causality.Workspace.Value),
+            ("$run", intent.Causality.Run.Value),
+            ("$workflow_instance", intent.Causality.WorkflowInstance.Value),
+            ("$semantic", intent.SemanticOperationKey),
+            ("$executor", intent.Executor.Value),
+            ("$executor_version", intent.ExecutorVersion),
+            ("$target", JsonSerializer.Serialize(intent.Target, Json)),
+            ("$payload", intent.TypedPayload),
+            ("$payload_hash", intent.TypedPayloadHash),
+            ("$requiredness", intent.Requiredness.ToString()),
+            ("$dependencies", JsonSerializer.Serialize(intent.Dependencies, Json)),
+            ("$precondition", JsonSerializer.Serialize(intent.Precondition, Json)),
+            ("$postcondition", JsonSerializer.Serialize(intent.Postcondition, Json)),
+            ("$reconciliation", intent.ReconciliationPolicy),
+            ("$evidence", JsonSerializer.Serialize(new[] { historyIdentity.Value, relativePath }, Json)));
+    }
+
+    private static async Task<(EffectIntentIdentity Identity, int Order)?> FindStartedParentAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CanonicalCausalContext causality,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT effect_intent_id, effect_order
+            FROM canonical_effect_intents
+            WHERE transition_run_id = $transition AND attempt_id = $attempt AND status = 'Started'
+            ORDER BY effect_order DESC LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$transition", causality.TransitionRun.Value);
+        command.Parameters.AddWithValue("$attempt", causality.Attempt.Value);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? (new EffectIntentIdentity(reader.GetString(0)), reader.GetInt32(1))
+            : null;
+    }
 
     private static async Task<HistoryEvidenceAttachments> ReadEvidenceAsync(
         SqliteConnection connection,

@@ -1,5 +1,6 @@
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Orchestration.Runtime;
@@ -25,7 +26,8 @@ public sealed class TransitionRuntime(
     ITransitionEvidenceStore _evidenceStore,
     ITransitionGateEvaluationStore _gateEvaluationStore,
     ITransitionCommitStore _commitStore,
-    ITransitionBoundaryJournal? _boundaryJournal = null) : ITransitionRuntime
+    ITransitionBoundaryJournal? _boundaryJournal = null,
+    ICanonicalRecoveryCaseRecorder? _recoveryCases = null) : ITransitionRuntime
 {
     private int boundarySequence;
 
@@ -45,10 +47,22 @@ public sealed class TransitionRuntime(
 
         WorkflowTransitionDefinition definition =
             await _definitionResolver.ResolveAsync(request, cancellationToken);
+        (TransitionRunIdentity transitionRun, AttemptIdentity attempt, int attemptIndex) =
+            AuthorizeAttempt(request.Authorization, execution);
+        CanonicalCausalContext causality = new(
+            execution.Workspace,
+            execution.Run,
+            execution.WorkflowInstance,
+            transitionRun,
+            attempt);
         ProductResolutionResult inputs =
             await _productResolver.ResolveAsync(definition.RequiredInputProducts, cancellationToken);
         GateResult inputGate =
-            await _gateEvaluator.EvaluateInputGateAsync(definition.InputGate, inputs, cancellationToken);
+            await _gateEvaluator.EvaluateInputGateAsync(
+                definition.InputGate,
+                inputs,
+                new InputGateEvaluationContext(request, causality, request.Interactive),
+                cancellationToken);
         if (!inputGate.IsSatisfied)
         {
             RuntimeOutcomeKind outcome = MapInputGate(inputGate);
@@ -70,14 +84,6 @@ public sealed class TransitionRuntime(
                 inputGate);
         }
 
-        (TransitionRunIdentity transitionRun, AttemptIdentity attempt, int attemptIndex) =
-            AuthorizeAttempt(request.Authorization, execution);
-        CanonicalCausalContext causality = new(
-            execution.Workspace,
-            execution.Run,
-            execution.WorkflowInstance,
-            transitionRun,
-            attempt);
         DateTimeOffset startedAt = DateTimeOffset.UtcNow;
 
         // Attempt intent is durable before any prompt rendering or provider-visible work.
@@ -91,7 +97,8 @@ public sealed class TransitionRuntime(
                 startedAt,
                 null,
                 null,
-                execution.ResolvedPolicy.Value),
+                execution.ResolvedPolicy.Value,
+                execution.AgentRolePolicyIdentity),
             cancellationToken);
 
         ConsumedInputManifestIdentity manifestIdentity = ConsumedInputManifestIdentity.New();
@@ -203,6 +210,23 @@ public sealed class TransitionRuntime(
                 DateTimeOffset.UtcNow,
                 outcome.ToString(),
                 CancellationToken.None);
+            bool cancelled = state == TransitionDurableState.Cancelled;
+            bool rawOutput = fault.Observation.Boundary is TransitionBoundaryKind.ProviderCompleted
+                or TransitionBoundaryKind.RawOutputPersisted or TransitionBoundaryKind.OutputInterpreted
+                or TransitionBoundaryKind.OutputValidated;
+            bool outward = fault.Observation.Boundary >= TransitionBoundaryKind.RequestWriteStarted;
+            await RecordRecoveryCaseAsync(
+                causality,
+                cancelled,
+                cancelled ? RecoveryCancellationBoundary.BeforeDispatch : RecoveryCancellationBoundary.None,
+                explicitFailure: false,
+                providerUnknown: !cancelled && !rawOutput,
+                outwardStarted: outward,
+                outwardAccepted: fault.Observation.Boundary >= TransitionBoundaryKind.RequestAccepted,
+                terminalProviderResult: rawOutput,
+                rawOutputDurable: rawOutput,
+                faultEvidence,
+                CancellationToken.None);
             return Result(
                 outcome,
                 state,
@@ -247,6 +271,18 @@ public sealed class TransitionRuntime(
                 DateTimeOffset.UtcNow,
                 RuntimeOutcomeKind.RecoveryRequired.ToString(),
                 CancellationToken.None);
+            await RecordRecoveryCaseAsync(
+                causality,
+                explicitCancellation: false,
+                RecoveryCancellationBoundary.None,
+                explicitFailure: false,
+                providerUnknown: true,
+                outwardStarted: true,
+                outwardAccepted: true,
+                terminalProviderResult: false,
+                rawOutputDurable: false,
+                [exception.GetType().Name, prepared.Dispatch.Dispatch.Value],
+                CancellationToken.None);
             return Result(
                 RuntimeOutcomeKind.RecoveryRequired,
                 TransitionDurableState.ProviderOutcomeUnknown,
@@ -289,6 +325,20 @@ public sealed class TransitionRuntime(
                 ? TransitionDurableState.Cancelled
                 : TransitionDurableState.Failed;
             string explanation = executionResult.FailureMessage ?? $"Provider execution {executionResult.Status}.";
+            await RecordRecoveryCaseAsync(
+                causality,
+                explicitCancellation: executionResult.Status == PromptExecutionStatus.Cancelled,
+                executionResult.Status == PromptExecutionStatus.Cancelled
+                    ? RecoveryCancellationBoundary.AfterOutwardAcceptance
+                    : RecoveryCancellationBoundary.None,
+                explicitFailure: executionResult.Status != PromptExecutionStatus.Cancelled,
+                providerUnknown: false,
+                outwardStarted: true,
+                outwardAccepted: true,
+                terminalProviderResult: true,
+                rawOutputDurable: false,
+                [prepared.Dispatch.Dispatch.Value, executionResult.Status.ToString()],
+                CancellationToken.None);
             return await CompleteNonSuccessAsync(
                 causality,
                 definition.Identity,
@@ -301,7 +351,7 @@ public sealed class TransitionRuntime(
         }
 
         InterpretedTransitionOutput interpreted =
-            await _outputInterpreter.InterpretAsync(definition, executionResult, cancellationToken);
+            await _outputInterpreter.InterpretAsync(causality, definition, executionResult, cancellationToken);
         await _evidenceStore.RecordEventAsync(
             Event(causality, definition.Identity, TransitionDurableState.OutputInterpreted,
                 "TransitionOutputInterpreted", interpreted.Explanation, interpreted.Evidence),
@@ -458,13 +508,55 @@ public sealed class TransitionRuntime(
             effectsPending: effectsPending);
     }
 
+    private async Task RecordRecoveryCaseAsync(
+        CanonicalCausalContext causality,
+        bool explicitCancellation,
+        RecoveryCancellationBoundary cancellationBoundary,
+        bool explicitFailure,
+        bool providerUnknown,
+        bool outwardStarted,
+        bool outwardAccepted,
+        bool terminalProviderResult,
+        bool rawOutputDurable,
+        IReadOnlyList<string> evidence,
+        CancellationToken cancellationToken)
+    {
+        if (_recoveryCases is null) return;
+        var subject = new RecoveryCausalSubject(causality);
+        await _recoveryCases.RecordAsync(
+            RecoveryScopeKind.ProviderDispatch,
+            subject,
+            new RecoveryDurableFacts(
+                RecoveryScopeKind.ProviderDispatch,
+                subject,
+                EvidenceComplete: true,
+                Corrupt: false,
+                Authorized: true,
+                ValidInFlightCorrelation: false,
+                OutwardStarted: outwardStarted,
+                OutwardAccepted: outwardAccepted,
+                ProviderOutcomeUnknown: providerUnknown,
+                TerminalProviderResult: terminalProviderResult,
+                RawOutputDurable: rawOutputDurable,
+                OutputPromoted: false,
+                ExplicitFailure: explicitFailure,
+                ExplicitCancellation: explicitCancellation,
+                CancellationBoundary: cancellationBoundary,
+                RequiredEffects: 0,
+                SucceededEffects: 0,
+                CompletionClosureStarted: false,
+                CompletionClosureSettled: false,
+                Evidence: evidence),
+            cancellationToken);
+    }
+
     private static (TransitionRunIdentity TransitionRun, AttemptIdentity Attempt, int AttemptIndex) AuthorizeAttempt(
         AttemptAuthorization authorization,
         CanonicalTransitionExecutionContext execution) => authorization switch
     {
         FreshAttemptAuthorization => (TransitionRunIdentity.New(), AttemptIdentity.New(), 1),
         RecoveryAttemptAuthorization recovery
-            when recovery.Plan.Action == TransitionRecoveryAction.RetryAsNewAttempt &&
+            when recovery.Plan.Action == CanonicalRecoveryAction.RetryNewAttempt &&
                  recovery.Plan.ResultingAttemptMode == RecoveryAttemptMode.RetryExistingTransitionRun &&
                  recovery.Plan.SourceCausality.Workspace == execution.Workspace &&
                  recovery.Plan.SourceCausality.Run == execution.Run &&

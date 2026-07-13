@@ -1,8 +1,10 @@
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
@@ -142,7 +144,10 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
         Assert.Equal(product.Identity, Assert.Single(snapshot.Products).Identity);
         Assert.Equal(TransitionDurableState.EffectsPending, Assert.Single(snapshot.TransitionRuns).State);
-        Assert.Equal(EffectExecutionStatus.Planned, Assert.Single(snapshot.EffectRecords).Status);
+        Assert.Empty(snapshot.EffectRecords);
+        EffectWorkItem work = Assert.Single(await new CanonicalEffectWorkStore(repository)
+            .ScanUnsettledAsync(10, DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(EffectLifecycle.Planned, work.State);
         Assert.Equal("EffectsPending", Assert.Single(await persistence.ReadAttemptsAsync()).Outcome);
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(
             LoopRelayWorkspaceDatabase.Resolve(repository));
@@ -151,20 +156,41 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         command.CommandText = "SELECT status FROM canonical_effect_intents;";
         Assert.Equal("Planned", Convert.ToString(await command.ExecuteScalarAsync()));
 
-        await new CanonicalTransitionEffectIntentStateStore(persistence).RecordStateAsync(
-            causality.TransitionRun,
-            definition.Effects.Single().Identity,
-            EffectExecutionStatus.Succeeded,
-            null,
+        var settlement = new CanonicalEffectPlanSettlementStore(repository);
+        Assert.False(await settlement.TrySettleAsync(causality.TransitionRun, CancellationToken.None));
+        var effectStore = new CanonicalEffectWorkStore(repository);
+        EffectLease lease = (await effectStore.TryLeaseAsync(
+            work.Intent.Identity, work.RowVersion, "test-worker", DateTimeOffset.UtcNow,
+            TimeSpan.FromMinutes(1), CancellationToken.None))!;
+        EffectWorkItem started = await effectStore.AppendLifecycleAsync(
+            work.Intent.Identity, lease.RowVersion, EffectLifecycle.Started, "test-worker",
+            "started", [], DateTimeOffset.UtcNow, CancellationToken.None);
+        await effectStore.RecordReceiptAsync(
+            work.Intent.Identity,
+            started.RowVersion,
+            new EffectReceipt(
+                EffectReceiptIdentity.New(), work.Intent.Identity, work.Intent.Executor,
+                work.Intent.ExecutorVersion, work.Intent.Target.Identity, "before", "after",
+                true, "test:effect", ["independent-observation"], DateTimeOffset.UtcNow),
+            "test-worker",
             CancellationToken.None);
+
+        snapshot = await persistence.LoadSnapshotAsync();
+        CanonicalWorkflowStateRecord pendingWorkflow = Assert.Single(snapshot.WorkflowStates);
+        Assert.Equal(WorkflowResolutionState.Active, pendingWorkflow.State);
+        Assert.Equal(RuntimeOutcomeKind.EffectsPending, pendingWorkflow.Outcome);
+        Assert.True(await settlement.TrySettleAsync(causality.TransitionRun, CancellationToken.None));
 
         snapshot = await persistence.LoadSnapshotAsync();
         Assert.Equal(TransitionDurableState.Completed, Assert.Single(snapshot.TransitionRuns).State);
         Assert.Equal("Completed", Assert.Single(await persistence.ReadAttemptsAsync()).Outcome);
+        CanonicalWorkflowStateRecord settledWorkflow = Assert.Single(snapshot.WorkflowStates);
+        Assert.Equal(WorkflowResolutionState.Resumable, settledWorkflow.State);
+        Assert.Equal(RuntimeOutcomeKind.Waiting, settledWorkflow.Outcome);
     }
 
     [Fact]
-    public async Task Recovery_coordinator_persists_typed_retry_plan_without_executing_work()
+    public async Task Recovery_coordinator_persists_canonical_cancelled_retry_plan_without_executing_work()
     {
         Repository repository = CreateRepository();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
@@ -192,22 +218,27 @@ public sealed class CanonicalTransitionPersistenceStoresTests
                 null,
                 []),
             CancellationToken.None);
+        await runs.PersistStateAsync(
+            new TransitionRunStateUpdate(
+                causality, DateTimeOffset.UtcNow, definition.Identity,
+                TransitionDurableState.Cancelled, "cancelled before submission", ["pre-submission"]),
+            CancellationToken.None);
         var coordinator = new TransitionRecoveryCoordinator(
             runs,
             new CanonicalTransitionRecoveryPlanStore(persistence));
 
         TransitionRecoveryPlan plan = await coordinator.PlanAsync(causality.TransitionRun);
 
-        Assert.Equal(TransitionRecoveryAction.RetryAsNewAttempt, plan.Action);
+        Assert.Equal(CanonicalRecoveryAction.RetryNewAttempt, plan.Action);
         Assert.Equal(RecoveryAttemptMode.RetryExistingTransitionRun, plan.ResultingAttemptMode);
         Assert.Equal(causality.Attempt, plan.SourceCausality.Attempt);
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(
             LoopRelayWorkspaceDatabase.Resolve(repository));
         await connection.OpenAsync();
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT action FROM transition_recovery_plans WHERE recovery_id = $id;";
+        command.CommandText = "SELECT action FROM canonical_recovery_plans WHERE plan_id = $id;";
         command.Parameters.AddWithValue("$id", plan.RecoveryIdentity.Value);
-        Assert.Equal("RetryAsNewAttempt", Convert.ToString(await command.ExecuteScalarAsync()));
+        Assert.Equal("RetryNewAttempt", Convert.ToString(await command.ExecuteScalarAsync()));
     }
 
     private static async Task<CanonicalCausalContext> SeedCausalityAsync(
@@ -296,7 +327,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         new GateDefinition(new GateIdentity("output"), "output", [], "test", "fail"),
         [],
         withEffect
-            ? [new EffectDefinition(new EffectIdentity("publish"), EffectCategory.Publication,
+            ? [new EffectDefinition(new EffectIdentity("persist"), EffectCategory.ProductPersistence,
                 "validated", [], [], 1, "retry")]
             : [],
         [], [],

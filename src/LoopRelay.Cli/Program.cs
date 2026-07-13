@@ -1,5 +1,8 @@
 using System.Text;
 using LoopRelay.Cli.Services.Cli;
+using LoopRelay.Cli.Surface;
+using LoopRelay.Application.Contracts;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Policy;
 using LoopRelay.Permissions.Models.Configuration;
 
@@ -17,18 +20,28 @@ catch (IOException)
     // Output is redirected and has no console to reconfigure — safe to ignore.
 }
 
-if (!CliArguments.TryParse(args, out UnifiedCliInvocation invocation, out string error))
+if (!CliRequestParser.TryParse(args, out ParsedCliRequest parsed, out string error))
 {
     Console.Error.WriteLine(error);
     return 2;
 }
 
-UnifiedCliComposition composition;
+LoopRelayCompositionRoot composition;
 try
 {
-    composition = UnifiedCliComposition.CreateProduction(
-        invocation.Repository,
-        invocation.PolicyOverrides,
+    var repository = new Repository
+    {
+        Id = Guid.NewGuid(),
+        Name = Path.GetFileName(parsed.RepositoryPath.TrimEnd(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+        Path = parsed.RepositoryPath,
+    };
+    PolicyOverride[] overrides = parsed.Request.Context.PolicyOverrides
+        .Select(item => new PolicyOverride(item.Key, item.Value, "cli-surface", IsExplicit: true))
+        .ToArray();
+    composition = LoopRelayCompositionRoot.CreateProduction(
+        repository,
+        overrides,
         Console.Out,
         Console.Error);
 }
@@ -40,8 +53,8 @@ catch (Exception exception) when (exception is CliSettingsException or PolicyRes
     return 2;
 }
 
-await using UnifiedCliComposition unifiedComposition = composition;
-var application = new CanonicalCliApplicationService(unifiedComposition);
+await using LoopRelayCompositionRoot unifiedComposition = composition;
+var application = new LoopRelayApplication(new CanonicalCliApplicationService(unifiedComposition));
 var runner = new UnifiedCliRunner(application, Console.Out, Console.Error);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---
@@ -53,4 +66,4 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
-return await runner.RunAsync(invocation, cts.Token);
+return await runner.RunAsync(parsed.Request, cts.Token);

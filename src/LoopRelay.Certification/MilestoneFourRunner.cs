@@ -12,6 +12,7 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
@@ -56,10 +57,10 @@ public sealed class MilestoneFourRunner
             }
 
             cases.Add(await RunCase(
-                "pre-submission-safe-retry",
+                "pre-submission-cancelled-salvage",
                 TransitionBoundaryKind.PreSubmission,
                 TransitionDurableState.Cancelled,
-                TransitionRecoveryDisposition.SafeRetry,
+                TransitionRecoveryDisposition.Cancelled,
                 TransitionDurableState.Completed,
                 expectedProviderCalls: 1,
                 expectedEffectCalls: 1,
@@ -167,6 +168,7 @@ public sealed class MilestoneFourRunner
                 await CoordinateEffectsAsync(
                     initial,
                     execution,
+                    repository,
                     persistence,
                     effects,
                     journal,
@@ -182,7 +184,7 @@ public sealed class MilestoneFourRunner
                     new CanonicalTransitionRecoveryPlanStore(persistence))
                 .PlanAsync(transitionRun, cancellationToken);
             var restartJournal = new CanonicalTransitionBoundaryJournal(persistence);
-            if (decision.Disposition == TransitionRecoveryDisposition.SafeRetry)
+            if (recoveryPlan.Action == CanonicalRecoveryAction.RetryNewAttempt)
             {
                 TransitionRuntime restartedRuntime = CreateRuntime(repository, live, restartJournal);
                 TransitionRuntimeResult restarted = await restartedRuntime.RunAsync(
@@ -193,6 +195,7 @@ public sealed class MilestoneFourRunner
                     await CoordinateEffectsAsync(
                         restarted,
                         execution,
+                        repository,
                         persistence,
                         effects,
                         restartJournal,
@@ -207,7 +210,7 @@ public sealed class MilestoneFourRunner
                 TransitionRuntime restartedRuntime = CreateRuntime(repository, deterministicTransport, restartJournal);
                 TransitionRecoveryPlan deterministicContinuation = recoveryPlan with
                 {
-                    Action = TransitionRecoveryAction.RetryAsNewAttempt,
+                    Action = CanonicalRecoveryAction.RetryNewAttempt,
                     ResultingAttemptMode = RecoveryAttemptMode.RetryExistingTransitionRun,
                     NextAttemptIndex = 2,
                 };
@@ -219,6 +222,7 @@ public sealed class MilestoneFourRunner
                     await CoordinateEffectsAsync(
                         restarted,
                         execution,
+                        repository,
                         persistence,
                         effects,
                         restartJournal,
@@ -436,7 +440,7 @@ public sealed class MilestoneFourRunner
 
     private sealed class SatisfiedGateEvaluator : IGateEvaluator
     {
-        public Task<GateResult> EvaluateInputGateAsync(GateDefinition gate, ProductResolutionResult inputs, CancellationToken token) =>
+        public Task<GateResult> EvaluateInputGateAsync(GateDefinition gate, ProductResolutionResult inputs, InputGateEvaluationContext context, CancellationToken token) =>
             Task.FromResult(Satisfied(gate));
         public Task<GateResult> EvaluateOutputGateAsync(GateDefinition gate, ProductValidationResult validation, CancellationToken token) =>
             Task.FromResult(Satisfied(gate));
@@ -505,6 +509,7 @@ public sealed class MilestoneFourRunner
     private sealed class OutputInterpreter : IOutputInterpreter
     {
         public Task<InterpretedTransitionOutput> InterpretAsync(
+            CanonicalCausalContext causality,
             WorkflowTransitionDefinition definition, PromptExecutionResult result, CancellationToken token)
         {
             bool valid = result.Status == PromptExecutionStatus.Completed && result.RawOutput.Contains("RECOVERY_OK", StringComparison.Ordinal);
@@ -574,6 +579,7 @@ public sealed class MilestoneFourRunner
     private static async Task CoordinateEffectsAsync(
         TransitionRuntimeResult attempt,
         CanonicalTransitionExecutionContext execution,
+        Repository repository,
         CanonicalWorkflowPersistenceStore persistence,
         MarkerEffectExecutor effects,
         ITransitionBoundaryJournal journal,
@@ -591,10 +597,27 @@ public sealed class MilestoneFourRunner
             transitionRun,
             attemptIdentity);
         await ObserveAsync(TransitionBoundaryKind.BeforeEffects, 90);
-        TransitionEffectCoordinationResult result = await new TransitionEffectCoordinator(
+        var workStore = new CanonicalEffectWorkStore(repository);
+        TransitionEffectExecutorAdapter[] typedExecutors = (await workStore.ReadPlanAsync(
+                transitionRun, cancellationToken))
+            .Where(item => item.Intent.Executor.Value.StartsWith(
+                "canonical-transition-effect:", StringComparison.Ordinal))
+            .Select(item => new TransitionEffectExecutorAdapter(
                 effects,
-                new CanonicalTransitionEffectIntentStateStore(persistence))
-            .CoordinateAsync(attempt, execution, cancellationToken);
+                item.Intent.Executor,
+                new EffectIdentity(item.Intent.Target.Identity)))
+            .ToArray();
+        var worker = new LoopRelay.Orchestration.Effects.EffectWorker(
+            "certification-m4",
+            workStore,
+            new LoopRelay.Orchestration.Effects.EffectExecutorRegistry(typedExecutors),
+            new TransitionalFeatureEffectReconciler(workStore),
+            TimeSpan.FromMinutes(1));
+        TransitionEffectCoordinationResult result = await new TransitionEffectCoordinator(
+                workStore,
+                worker,
+                new CanonicalEffectPlanSettlementStore(repository))
+            .CoordinateAsync(transitionRun, cancellationToken);
         if (result.RequiredEffectsPending || result.Failed)
         {
             return;

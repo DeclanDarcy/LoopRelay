@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Certification;
 
@@ -27,8 +29,6 @@ public sealed class ContinuousCertificationRunner
         new("failure-oracle-matrix", EvidenceLevel.DeterministicComponent, "milestone-12.latest.json"),
         new("traditional-full-chain", EvidenceLevel.LiveChainRecovery, "milestone-13.latest.json"),
         new("eval-full-chain", EvidenceLevel.LiveChainRecovery, "milestone-14.latest.json"),
-        new("windows-platform", EvidenceLevel.Replay, "platform-windows.latest.json"),
-        new("linux-platform", EvidenceLevel.Replay, "platform-linux.latest.json"),
     ];
 
     public async Task<ContinuousCertificationResult> RunAsync(
@@ -48,12 +48,31 @@ public sealed class ContinuousCertificationRunner
             string path = Path.Combine(evidenceRoot, spec.File);
             (bool evidencePassed, string evidenceClassification) = await EvidencePassedAsync(path, cancellationToken);
             bool ageCurrent = File.Exists(path) && DateTimeOffset.UtcNow - File.GetLastWriteTimeUtc(path) <= TimeSpan.FromDays(7);
-            // Roadmap certification treats supported model/effort profiles as interchangeable.
-            // Evidence may retain profile markers for diagnostics, but profile identity or marker
-            // absence does not invalidate otherwise current coverage.
-            bool profileCurrent = true;
-            bool current = surfaceCurrent && ageCurrent && profileCurrent;
+            bool profileCurrent = !RequiresFixtureProfile(spec.Identity) ||
+                await EvidenceUsesFixtureProfileAsync(path, cancellationToken);
+            EvidenceDurability durability = ReleaseEvidenceProjection.ClassifyDurability(path);
+            bool exactScopeCurrent = surfaceCurrent && ageCurrent && profileCurrent;
+            EvidenceCreditStatus credit = ReleaseEvidenceProjection.Credit(
+                exactScopeCurrent, evidencePassed, durability, crossMachineRequired: true);
+            bool current = credit == EvidenceCreditStatus.Credited;
             EvidenceLevel actual = evidencePassed && current ? spec.Required : EvidenceLevel.Uncovered;
+            string providerProfile = RequiresFixtureProfile(spec.Identity)
+                ? $"{CertificationFixtureSettings.BrainModel}/{CertificationFixtureSettings.BrainEffort}"
+                : "not-applicable";
+            var link = new ObligationEvidenceLink(
+                $"release:{spec.Identity}",
+                File.Exists(path) ? FileDigest(path) : "missing",
+                CanonicalWorkflowCatalog.Current.Identity,
+                $"{LoopRelayWorkspaceDatabase.SchemaIdentity}:v{LoopRelayWorkspaceDatabase.CurrentSchemaVersion}",
+                surfaceDigest,
+                providerProfile,
+                actual,
+                spec.File,
+                durability,
+                credit,
+                credit == EvidenceCreditStatus.Credited
+                    ? "Exact obligation scope and evidence tier are credited."
+                    : $"Evidence is not credited: {credit}.");
             dimensions.Add(new ReleaseDimensionResult(
                 spec.Identity,
                 spec.Required,
@@ -66,7 +85,10 @@ public sealed class ContinuousCertificationRunner
                     $"age-current:{ageCurrent}",
                     $"surface-current:{surfaceCurrent}",
                     $"fixture-profile-current:{profileCurrent}",
-                ]));
+                    $"credit-status:{credit}",
+                    $"durability:{durability}",
+                ],
+                link));
         }
 
         bool compatibility = CompatibilityFixturesCurrent(workspaceRoot);
@@ -97,13 +119,18 @@ public sealed class ContinuousCertificationRunner
         bool budgets = await BudgetsPassedAsync(evidenceRoot, cancellationToken);
         FailureCoverageCaseResult[] future = FutureTopologyObligations();
         CertificationTierResult[] tiers = Tiers();
-        bool passed = surfaceCurrent && noCriticalZero && crossPlatform && routesDistinct && budgets;
+        // This release contract is explicitly local-Windows-only. Platform probes remain visible
+        // diagnostics, but no Windows/Linux agreement is claimed or release-blocking until genuine
+        // durable Linux evidence is owned by the release authority.
+        const string platformClaim = "LocalWindowsOnly";
+        bool passed = surfaceCurrent && noCriticalZero && routesDistinct && budgets;
         var evidence = new List<string>
         {
             $"production-surface:{surfaceDigest}",
             $"baseline-state:{(baseline is null ? "establish-on-pass" : surfaceCurrent ? "current" : "invalidated")}",
             $"dimensions:{dimensions.Count(item => item.Passed)}/{dimensions.Count}",
-            $"platform-contract-agreement:{crossPlatform}",
+            $"platform-claim:{platformClaim}",
+            "platform-contract-agreement:not-claimed",
             $"classification-routes-distinct:{routesDistinct}",
             $"budgets:{budgets}",
             $"future-topology-uncovered:{future.Length}",
@@ -119,6 +146,7 @@ public sealed class ContinuousCertificationRunner
             tiers,
             dimensions,
             platforms,
+            platformClaim,
             crossPlatform,
             routesDistinct,
             true,
@@ -160,8 +188,8 @@ public sealed class ContinuousCertificationRunner
             ["traditional-full-chain", "eval-full-chain", "completion-closure"], true),
         new("scheduled-recovery", "weekly", EvidenceLevel.LiveChainRecovery,
             ["transition-recovery", "failure-oracle-matrix"], true),
-        new("cross-platform", "release", EvidenceLevel.Replay,
-            ["windows-platform", "linux-platform"], true),
+        new("cross-platform-diagnostic", "when-cross-platform-is-claimed", EvidenceLevel.Replay,
+            ["windows-platform", "linux-platform"], false),
         new("compatibility", "binary-schema-model-effort-change", EvidenceLevel.Replay,
             ["codex-compatibility"], true),
     ];
@@ -334,8 +362,10 @@ public sealed class ContinuousCertificationRunner
             {
                 case JsonValueKind.String:
                     string value = element.GetString() ?? string.Empty;
-                    model |= value.StartsWith("model:", StringComparison.Ordinal) && value.Length > "model:".Length;
-                    effort |= value.StartsWith("effort:", StringComparison.Ordinal) && value.Length > "effort:".Length;
+                    model |= string.Equals(value,
+                        $"model:{CertificationFixtureSettings.BrainModel}", StringComparison.Ordinal);
+                    effort |= string.Equals(value,
+                        $"effort:{CertificationFixtureSettings.BrainEffort}", StringComparison.Ordinal);
                     break;
                 case JsonValueKind.Array:
                     foreach (JsonElement item in element.EnumerateArray()) Visit(item);

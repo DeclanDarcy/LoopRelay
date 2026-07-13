@@ -15,11 +15,11 @@ public sealed class MilestoneTwelveRunner
     private static readonly FailureSpec[] MaintainedFailures =
     [
         Recover("repaired-context", "authority", "safe-retry", "tests/LoopRelay.Projections.Tests/Services/ProjectContextLoaderTests.cs"),
-        Recover("corrected-malformed-output", "prompt-output", "safe-retry", "tests/LoopRelay.Roadmap.Cli.Tests/Services/ArtifactManagement/EpicArtifactPromotionTests.cs"),
-        Recover("canonical-artifact-restoration", "artifact", "operator-unblock", "tests/LoopRelay.Roadmap.Cli.Tests/Services/ArtifactManagement/ArtifactLifecycleTests.cs"),
+        Recover("corrected-malformed-output", "prompt-output", "safe-retry", "tests/LoopRelay.Cli.Tests/Services/Cli/LoopRelayCompositionRootTests.cs"),
+        Recover("canonical-artifact-restoration", "artifact", "operator-unblock", "tests/LoopRelay.Orchestration.Primitives.Tests/Runtime/TransitionRuntimeTests.cs"),
         Recover("projection-regeneration", "projection", "deterministic-regeneration", "tests/LoopRelay.Projections.Tests/Services/ProjectionServiceTests.cs"),
         Recover("scoped-rollback", "artifact", "scoped-rollback", "src/LoopRelay.Certification/MilestoneFiveRunner.cs"),
-        Recover("incomplete-split-or-promotion", "artifact", "resume-or-fail-closed", "tests/LoopRelay.Roadmap.Cli.Tests/Services/TransitionCoordination/ActiveEpicPromotionCoordinatorTests.cs"),
+        Recover("incomplete-split-or-promotion", "artifact", "resume-or-fail-closed", "tests/LoopRelay.Orchestration.Primitives.Tests/Resolution/WorkflowResolverTests.cs"),
         Recover("stranded-publication", "git", "operator-unblock", "src/LoopRelay.Certification/MilestoneSevenRunner.cs", EvidenceLevel.LiveTransition),
         Recover("missing-parent-pointer", "recovery", "operator-unblock", "tests/LoopRelay.Orchestration.Primitives.Tests/Recovery/NativeForkRecoveryMechanismTests.cs"),
         Recover("changed-implementation-without-handoff", "completion", "continue-execution", "tests/LoopRelay.Completion.Tests/Services/CompletionCertificationServiceTests.cs"),
@@ -28,7 +28,7 @@ public sealed class MilestoneTwelveRunner
         Recover("pointer-conflict", "persistence", "compare-and-swap-fail-closed", "tests/LoopRelay.Orchestration.Primitives.Tests/Recovery/SqliteRecoveryStoreTests.cs"),
         Recover("partial-archive-or-context-update", "archive", "resume-singular-closure", "tests/LoopRelay.Completion.Tests/Services/CompletionCertificationServiceTests.cs"),
         Recover("cancelled-output", "provider", "boundary-classification", "tests/LoopRelay.Orchestration.Primitives.Tests/Runtime/TransitionRecoveryClassifierTests.cs"),
-        Recover("corrected-stall", "workflow", "explicit-rerun", "tests/LoopRelay.Roadmap.Cli.Tests/Services/Execution/RoadmapFailurePersistenceTests.cs"),
+        Recover("corrected-stall", "workflow", "explicit-rerun", "tests/LoopRelay.Orchestration.Primitives.Tests/Chaining/WorkflowChainRunnerTests.cs"),
         Recover("usage-limit-after-failure", "provider", "bounded-wait-retry", "tests/LoopRelay.Cli.Tests/Services/Agents/GatedAgentRuntimeTests.cs"),
         FailClosed("unsupported-schema-or-profile", "configuration", "src/LoopRelay.Certification/MilestoneThreeRunner.cs"),
         FailClosed("untrusted-corrupt-authority", "persistence", "src/LoopRelay.Certification/MilestoneEightRunner.cs", EvidenceLevel.LiveTransition),
@@ -38,7 +38,7 @@ public sealed class MilestoneTwelveRunner
         FailClosed("recovery-marker-mismatch", "persistence", "tests/LoopRelay.Orchestration.Primitives.Tests/Persistence/CanonicalTransitionPersistenceStoresTests.cs"),
         FailClosed("hard-deny-violation", "permission", "src/LoopRelay.Certification/MilestoneThreeRunner.cs", EvidenceLevel.LiveTransition),
         FailClosed("unresolved-dual-authority", "authority", "tests/LoopRelay.Orchestration.Primitives.Tests/Resolution/WorkflowResolverTests.cs"),
-        FailClosed("closed-evidence-contradicted-by-repository", "completion", "tests/LoopRelay.Roadmap.Cli.Tests/Services/Execution/CompletionCertificationPolicyTests.cs"),
+        FailClosed("closed-evidence-contradicted-by-repository", "completion", "tests/LoopRelay.Completion.Tests/Services/CompletionCertificationServiceTests.cs"),
         Recover("process-death-before-request", "interruption", "safe-retry", "src/LoopRelay.Certification/MilestoneFourRunner.cs", EvidenceLevel.LiveChainRecovery),
         Recover("process-death-after-write", "interruption", "safe-retry-before-submission", "src/LoopRelay.Certification/MilestoneFourRunner.cs", EvidenceLevel.LiveChainRecovery),
         Recover("process-death-after-acceptance", "interruption", "reconcile-provider", "src/LoopRelay.Certification/MilestoneFourRunner.cs", EvidenceLevel.LiveChainRecovery),
@@ -48,7 +48,7 @@ public sealed class MilestoneTwelveRunner
         Recover("provider-outage", "provider", "no-blind-retry", "tests/LoopRelay.Cli.Tests/Services/Agents/GatedAgentRuntimeTests.cs"),
         Recover("retry-exhaustion", "provider", "bounded-terminal-failure", "tests/LoopRelay.Cli.Tests/Services/Agents/GatedAgentRuntimeTests.cs"),
         FailClosed("git-publication-failure", "git", "src/LoopRelay.Certification/MilestoneSevenRunner.cs", EvidenceLevel.LiveTransition),
-        FailClosed("evaluator-failure", "oracle", "tests/LoopRelay.Roadmap.Cli.Tests/Services/Execution/CompletionCertificationPolicyTests.cs"),
+        FailClosed("evaluator-failure", "oracle", "tests/LoopRelay.Completion.Tests/Services/CompletionCertificationServiceTests.cs"),
         Recover("archive-recovery", "archive", "resume-singular-closure", "src/LoopRelay.Certification/MilestoneElevenRunner.cs", EvidenceLevel.LiveChainRecovery),
         Unsupported("provider-session-reconstruction-live", "provider", "profile-gated", "provider-compatibility", "Recertify when an exact profile exposes a reconstructable provider history contract."),
         Unsupported("native-fork-reconciliation-live", "provider", "profile-gated", "provider-compatibility", "Recertify when exact parent-child enumeration is live-certified."),
@@ -62,7 +62,7 @@ public sealed class MilestoneTwelveRunner
         CancellationToken cancellationToken = default)
     {
         var failures = MaintainedFailures.Select(spec => EvaluateFailure(workspaceRoot, spec)).ToArray();
-        TransitionRecoveryCoverageResult[] transitions = CanonicalWorkflowDefinitionSketches.CreateAll()
+        TransitionRecoveryCoverageResult[] transitions = CanonicalWorkflowCatalog.Current.Workflows
             .SelectMany(workflow => workflow.Transitions.Select(transition => EvaluateTransition(workflow, transition)))
             .OrderBy(item => item.Workflow, StringComparer.Ordinal)
             .ThenBy(item => item.Transition, StringComparer.Ordinal)
@@ -159,7 +159,8 @@ public sealed class MilestoneTwelveRunner
                 transition.Identity, TransitionDurableState.EffectsApplied, TransitionBoundaryKind.EffectsApplied))
             : null;
 
-        bool safeCovered = safe.Disposition == TransitionRecoveryDisposition.SafeRetry && safe.MaySubmitProviderTurn;
+        bool safeCovered = safe.Disposition == TransitionRecoveryDisposition.Cancelled &&
+            !safe.MaySubmitProviderTurn && !safe.MayApplyEffects;
         bool uncertainCovered = uncertainProvider.Disposition == TransitionRecoveryDisposition.ReconcileProvider &&
             !uncertainProvider.MaySubmitProviderTurn && !uncertainProvider.MayApplyEffects;
         bool postCovered = postValidation.Disposition == TransitionRecoveryDisposition.MaterializeCommittedOutput &&

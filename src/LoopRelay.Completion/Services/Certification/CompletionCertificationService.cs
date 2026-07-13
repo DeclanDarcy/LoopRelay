@@ -22,7 +22,9 @@ public sealed class CompletionCertificationService(
     CompletionCertificationPolicy? _policy = null,
     CompletionCertificationRouter? _router = null,
     ICompletionObserver? _observer = null,
-    IExecutionEvidenceStore? _executionEvidenceStore = null) : ICompletionCertificationService
+    IExecutionEvidenceStore? _executionEvidenceStore = null,
+    ICertifiedCompletionCandidateSink? _candidateSink = null,
+    ICompletionContextMaterializer? _contextMaterializer = null) : ICompletionCertificationService
 {
 
     public async Task<CompletionCertificationResult> CertifyPlanCompletionAsync(
@@ -130,6 +132,16 @@ public sealed class CompletionCertificationService(
                     [claimPath, evaluationPath]);
             }
 
+            if (_candidateSink is not null)
+            {
+                await _candidateSink.PersistAsync(
+                    new CertifiedCompletionCandidate(
+                        decision,
+                        route,
+                        [claimPath, evaluationPath]),
+                    cancellationToken);
+            }
+
             CompletedEpicArchiveResult archive = await _archiveService.ArchiveAndSynthesizeAsync(
                 new CompletedEpicArchiveRequest(
                     request.Repository,
@@ -156,11 +168,14 @@ public sealed class CompletionCertificationService(
                     ProjectContext: updateContext,
                     SecondaryInput: archive.SynthesisContent),
                 cancellationToken);
-            await artifacts.WriteAsync(request.RoadmapCompletionContextPath, updatedRoadmapCompletionContext);
-            string updateEvidencePath = await artifacts.WriteNumberedEvidenceAsync(
+            ICompletionContextMaterializer contextMaterializer = _contextMaterializer ??
+                new ArtifactStoreCompletionContextMaterializer(artifacts);
+            string updateEvidencePath = await contextMaterializer.MaterializeAsync(
+                request.RoadmapCompletionContextPath,
                 CompletionArtifactPaths.EvaluationEvidenceDirectory,
                 "roadmap-completion-update",
-                updatedRoadmapCompletionContext);
+                updatedRoadmapCompletionContext,
+                cancellationToken);
 
             return CompletionCertificationResult.Completed(
                 decision,
@@ -211,11 +226,14 @@ public sealed class CompletionCertificationService(
                 ProjectContext: context,
                 SecondaryInput: completedEpicEvidence),
             cancellationToken);
-        await artifacts.WriteAsync(request.RoadmapCompletionContextPath, output);
-        await artifacts.WriteNumberedEvidenceAsync(
+        ICompletionContextMaterializer contextMaterializer = _contextMaterializer ??
+            new ArtifactStoreCompletionContextMaterializer(artifacts);
+        await contextMaterializer.MaterializeAsync(
+            request.RoadmapCompletionContextPath,
             CompletionArtifactPaths.EvaluationEvidenceDirectory,
             "roadmap-completion-bootstrap",
-            output);
+            output,
+            cancellationToken);
     }
 
     private static async Task<string> WriteExecutionCompletionClaimAsync(
@@ -294,7 +312,7 @@ public sealed class CompletionCertificationService(
         IReadOnlyList<string> evidence = priorEvidence is null
             ? [blockedEvidence]
             : [..priorEvidence, blockedEvidence];
-        return CompletionCertificationResult.Blocked(
+        return CompletionCertificationResult.CannotProceed(
             decision,
             route,
             evaluationPath,

@@ -24,6 +24,7 @@ internal sealed class DecisionSessionRecoveryCoordinator(
         SessionContinuityProfile profile,
         IReadOnlyDictionary<string, string> policy,
         int contextBudget,
+        LoopRelay.Core.Models.Identity.CanonicalCausalContext? causality,
         CancellationToken cancellationToken)
     {
         RecoveryRuntimeResult result = await _runtime.RunAsync(
@@ -35,7 +36,8 @@ internal sealed class DecisionSessionRecoveryCoordinator(
                 profile,
                 policy,
                 contextBudget,
-                "ExecuteRestart"),
+                "ExecuteRestart",
+                causality),
             cancellationToken);
         if (result.Session is null)
         {

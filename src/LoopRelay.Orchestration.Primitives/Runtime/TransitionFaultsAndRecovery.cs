@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Orchestration.Runtime;
@@ -37,7 +38,6 @@ public enum TransitionRecoveryDisposition
     MaterializeCommittedOutput,
     ApplyVerifiedEffects,
     CompleteWithoutWork,
-    OperatorUnblock,
     Cancelled,
     FailClosedUnknownSideEffect,
     NonRecoverableCorruption,
@@ -61,20 +61,6 @@ public sealed record TransitionRecoveryDecision(
     string Explanation,
     IReadOnlyList<string> Evidence);
 
-public enum TransitionRecoveryAction
-{
-    StartFresh,
-    ResumeSession,
-    ForkSession,
-    ReusePersistedRawResult,
-    ReconcileProviderOutcome,
-    ReconcileEffects,
-    RetryAsNewAttempt,
-    Wait,
-    CannotProceed,
-    RequestHumanDecision,
-}
-
 public enum RecoveryAttemptMode
 {
     NoAttempt,
@@ -88,7 +74,7 @@ public sealed record TransitionRecoveryPlan(
     RecoveryAttemptIdentity RecoveryIdentity,
     CanonicalCausalContext SourceCausality,
     string Classification,
-    TransitionRecoveryAction Action,
+    CanonicalRecoveryAction Action,
     IReadOnlyList<string> Evidence,
     IReadOnlyList<string> Preconditions,
     RecoveryAttemptMode ResultingAttemptMode,
@@ -126,8 +112,18 @@ public sealed class TransitionRecoveryCoordinator(
         TransitionRunRecoverySnapshot snapshot = await _runs.LoadRecoveryAsync(transitionRun, cancellationToken)
             ?? throw new InvalidOperationException($"No durable recovery evidence exists for '{transitionRun}'.");
         TransitionRecoveryDecision decision = TransitionRecoveryClassifier.Classify(snapshot);
-        (TransitionRecoveryAction action, RecoveryAttemptMode mode, string[] preconditions) =
+        (CanonicalRecoveryAction action, RecoveryAttemptMode mode, string[] preconditions) =
             Map(decision.Disposition);
+        bool cancelledBeforeDispatch = decision.Disposition == TransitionRecoveryDisposition.Cancelled &&
+            !snapshot.Boundaries.Any(item => item.Boundary is TransitionBoundaryKind.RequestWriteStarted or
+                TransitionBoundaryKind.RequestSubmitted or TransitionBoundaryKind.RequestAccepted or
+                TransitionBoundaryKind.ProviderTurnIdentified);
+        if (cancelledBeforeDispatch)
+        {
+            action = CanonicalRecoveryAction.RetryNewAttempt;
+            mode = RecoveryAttemptMode.RetryExistingTransitionRun;
+            preconditions = ["cancellation is durable", "outward submission is proven absent"];
+        }
         var plan = new TransitionRecoveryPlan(
             RecoveryAttemptIdentity.New(),
             snapshot.Causality,
@@ -141,25 +137,25 @@ public sealed class TransitionRecoveryCoordinator(
         return plan;
     }
 
-    private static (TransitionRecoveryAction Action, RecoveryAttemptMode Mode, string[] Preconditions) Map(
+    private static (CanonicalRecoveryAction Action, RecoveryAttemptMode Mode, string[] Preconditions) Map(
         TransitionRecoveryDisposition disposition) => disposition switch
     {
         TransitionRecoveryDisposition.ReuseCompleted =>
-            (TransitionRecoveryAction.Wait, RecoveryAttemptMode.NoAttempt, ["canonical completion remains authoritative"]),
+            (CanonicalRecoveryAction.Wait, RecoveryAttemptMode.NoAttempt, ["canonical completion remains authoritative"]),
         TransitionRecoveryDisposition.CompleteWithoutWork or TransitionRecoveryDisposition.ApplyVerifiedEffects =>
-            (TransitionRecoveryAction.ReconcileEffects, RecoveryAttemptMode.NoAttempt, ["effect receipts verify postconditions"]),
+            (CanonicalRecoveryAction.ReconcileEffects, RecoveryAttemptMode.NoAttempt, ["effect receipts verify postconditions"]),
         TransitionRecoveryDisposition.MaterializeCommittedOutput =>
-            (TransitionRecoveryAction.ReusePersistedRawResult, RecoveryAttemptMode.DeterministicContinuation, ["raw outcome hash is verified"]),
+            (CanonicalRecoveryAction.ReuseRawOutput, RecoveryAttemptMode.DeterministicContinuation, ["raw outcome hash is verified"]),
         TransitionRecoveryDisposition.ReconcileProvider =>
-            (TransitionRecoveryAction.ReconcileProviderOutcome, RecoveryAttemptMode.NoAttempt, ["provider correlation is available"]),
+            (CanonicalRecoveryAction.ReconcileProvider, RecoveryAttemptMode.NoAttempt, ["provider correlation is available"]),
         TransitionRecoveryDisposition.SafeRetry =>
-            (TransitionRecoveryAction.RetryAsNewAttempt, RecoveryAttemptMode.RetryExistingTransitionRun, ["submission is proven not accepted"]),
+            (CanonicalRecoveryAction.RetryNewAttempt, RecoveryAttemptMode.RetryExistingTransitionRun, ["submission is proven not accepted"]),
         TransitionRecoveryDisposition.FailClosedUnknownSideEffect =>
-            (TransitionRecoveryAction.ReconcileEffects, RecoveryAttemptMode.NoAttempt, ["effect outcome must be reconciled"]),
+            (CanonicalRecoveryAction.ReconcileEffects, RecoveryAttemptMode.NoAttempt, ["effect outcome must be reconciled"]),
         TransitionRecoveryDisposition.Cancelled =>
-            (TransitionRecoveryAction.Wait, RecoveryAttemptMode.NoAttempt, ["cancellation evidence is durable"]),
+            (CanonicalRecoveryAction.Wait, RecoveryAttemptMode.NoAttempt, ["cancellation evidence is durable"]),
         _ =>
-            (TransitionRecoveryAction.RequestHumanDecision, RecoveryAttemptMode.NoAttempt, ["recovery evidence is insufficient"]),
+            (CanonicalRecoveryAction.RequestHumanDecision, RecoveryAttemptMode.NoAttempt, ["recovery evidence is insufficient"]),
     };
 }
 
@@ -196,40 +192,34 @@ public static class TransitionRecoveryClassifier
                 "All ordered effects are durable; persist completion without repeating them.");
         }
 
-        if (snapshot.State == TransitionDurableState.EffectsPartiallyApplied ||
-            snapshot.Boundaries.Any(item => item.Boundary == TransitionBoundaryKind.DuringEffects))
+        RecoveryDurableFacts facts = TransitionRecoveryFactProjector.Project(snapshot);
+        var recoveryCase = new CanonicalRecoveryCase(
+            new RecoveryCaseIdentity($"recoverycase:ProviderDispatch:{snapshot.Causality.Attempt.Value}"),
+            facts.Scope,
+            facts.Subject,
+            snapshot.Boundaries.FirstOrDefault()?.ObservedAt ?? DateTimeOffset.UtcNow);
+        CanonicalRecoveryClassification classification = CanonicalRecoveryClassifier.Classify(recoveryCase, facts);
+        return classification.Classification switch
         {
-            return Decision(TransitionRecoveryDisposition.FailClosedUnknownSideEffect, false, false,
-                "An effect may have occurred without complete durable verification; operator reconciliation is required.");
-        }
-
-        if (snapshot.RawOutput is not null || snapshot.State is TransitionDurableState.PromptCompleted
-            or TransitionDurableState.OutputInterpreted or TransitionDurableState.OutputValidated)
-        {
-            return Decision(TransitionRecoveryDisposition.MaterializeCommittedOutput, false, true,
-                "Committed raw provider output is available; continue deterministic interpretation, validation, and effects.");
-        }
-
-        bool submitted = snapshot.Boundaries.Any(item => item.Boundary is TransitionBoundaryKind.RequestWriteStarted
-            or TransitionBoundaryKind.RequestSubmitted
-            or TransitionBoundaryKind.RequestAccepted or TransitionBoundaryKind.ProviderTurnIdentified
-            or TransitionBoundaryKind.ProviderTerminal or TransitionBoundaryKind.ProviderCompleted);
-        if (submitted)
-        {
-            return Decision(TransitionRecoveryDisposition.ReconcileProvider, false, false,
-                "The provider request may have been accepted; reconcile the provider turn before any resubmission.");
-        }
-
-        bool preSubmission = snapshot.Boundaries.Any(item => item.Boundary is TransitionBoundaryKind.DispatchIntended
-            or TransitionBoundaryKind.PreSubmission);
-        if (preSubmission && snapshot.State is TransitionDurableState.Started or TransitionDurableState.Cancelled)
-        {
-            return Decision(TransitionRecoveryDisposition.SafeRetry, true, true,
-                "Durable evidence proves submission did not occur; retrying the same run is safe.");
-        }
-
-        return Decision(TransitionRecoveryDisposition.OperatorUnblock, false, false,
-            "Recovery evidence is insufficient to authorize provider or effect work.");
+            RecoveryBoundaryClassification.PartiallyEffected =>
+                Decision(TransitionRecoveryDisposition.FailClosedUnknownSideEffect, false, false,
+                    "Required effects are partially settled and must be reconciled before progress."),
+            RecoveryBoundaryClassification.SucceededUncommitted =>
+                Decision(TransitionRecoveryDisposition.MaterializeCommittedOutput, false, true,
+                    "Durable raw output may continue through deterministic validation without another dispatch."),
+            RecoveryBoundaryClassification.AcceptedUnknown or RecoveryBoundaryClassification.ProviderUnknown or
+                RecoveryBoundaryClassification.InFlight =>
+                    Decision(TransitionRecoveryDisposition.ReconcileProvider, false, false,
+                        "Provider work must be reconciled before any resubmission."),
+            RecoveryBoundaryClassification.NotStarted =>
+                Decision(TransitionRecoveryDisposition.SafeRetry, true, true,
+                    "Durable evidence proves outward submission did not occur."),
+            RecoveryBoundaryClassification.Cancelled =>
+                Decision(TransitionRecoveryDisposition.Cancelled, false, false,
+                    "Cancellation evidence and its salvage boundary are durable."),
+            _ => Decision(TransitionRecoveryDisposition.NonRecoverableCorruption, false, false,
+                "Recovery evidence is incomplete, corrupt, or explicitly failed; fail closed."),
+        };
 
         TransitionRecoveryDecision Decision(
             TransitionRecoveryDisposition disposition,

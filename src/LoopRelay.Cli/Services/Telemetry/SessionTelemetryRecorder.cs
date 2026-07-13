@@ -4,6 +4,7 @@ using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Agents.Services.Codex;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Infrastructure.Models.Diagnostics;
 using LoopRelay.Orchestration.Abstractions;
 
@@ -21,7 +22,8 @@ internal sealed class SessionTelemetryRecorder(
     ISessionTelemetrySink _sink,
     IDecisionCostModel _costModel,
     IClock _clock,
-    ILoopConsole _console) : ISessionTelemetryRecorder
+    ILoopConsole _console,
+    ProviderEnvironmentConfiguration? _providerEnvironment = null) : ISessionTelemetryRecorder
 {
     public async Task<string?> RecordTurnAsync(
         string repoName,
@@ -41,8 +43,7 @@ internal sealed class SessionTelemetryRecorder(
             CodexUsageStatus? post = await ProbePostAsync(cancellationToken);
             if (path is null && providerThreadId is { Length: > 0 })
             {
-                string codexHome = Environment.GetEnvironmentVariable("CODEX_HOME")
-                    ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
+                string codexHome = (_providerEnvironment ?? ProviderEnvironmentConfiguration.Resolve()).CodexHome;
                 CodexRolloutReadResult exact = await new CodexRolloutRepository().ReadExactAsync(
                     codexHome, providerThreadId, cancellationToken);
                 path = exact.Location;

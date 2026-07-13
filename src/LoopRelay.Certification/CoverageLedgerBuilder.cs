@@ -6,13 +6,17 @@ namespace LoopRelay.Certification;
 
 public static class CoverageLedgerBuilder
 {
-    public const string Version = "1";
+    public const string Version = "2";
 
     public static CoverageLedger Build(string workspaceRoot, bool creditCanary = false)
     {
-        IReadOnlyList<WorkflowDefinition> workflows = CanonicalWorkflowDefinitionSketches.CreateAll();
-        IReadOnlyList<WorkflowChainDefinition> chains = CanonicalWorkflowDefinitionSketches.CreateChains();
+        CanonicalWorkflowCatalogSnapshot catalog = CanonicalWorkflowCatalog.Current;
+        IReadOnlyList<WorkflowDefinition> workflows = catalog.Workflows;
+        IReadOnlyList<WorkflowChainDefinition> chains = catalog.Chains;
         var obligations = new List<CoverageObligation>();
+
+        foreach (CatalogObligation obligation in catalog.Obligations)
+            Add("catalog-obligation", obligation.Key, contentHash: obligation.ContentHash);
 
         foreach (WorkflowDefinition workflow in workflows.OrderBy(item => item.Identity.Value, StringComparer.Ordinal))
         {
@@ -87,14 +91,16 @@ public static class CoverageLedgerBuilder
             .OrderBy(item => item.Dimension, StringComparer.Ordinal)
             .ThenBy(item => item.Identity, StringComparer.Ordinal)
             .ToArray();
-        string digest = Hash(string.Join("\n", distinct.Select(item => $"{item.Dimension}\0{item.Identity}")));
+        string digest = Hash(string.Join("\n", distinct.Select(item =>
+            $"{item.Dimension}\0{item.Identity}\0{item.ContentHash}")));
         return new CoverageLedger(Version, digest, distinct);
 
-        void Add(string dimension, string identity, EvidenceLevel level = EvidenceLevel.Uncovered, IReadOnlyList<string>? evidence = null)
+        void Add(string dimension, string identity, EvidenceLevel level = EvidenceLevel.Uncovered,
+            IReadOnlyList<string>? evidence = null, string contentHash = "")
         {
             if (!string.IsNullOrWhiteSpace(identity))
             {
-                obligations.Add(new CoverageObligation(dimension, identity, level, evidence ?? []));
+                obligations.Add(new CoverageObligation(dimension, identity, level, evidence ?? [], contentHash));
             }
         }
     }

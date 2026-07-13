@@ -39,6 +39,31 @@ namespace LoopRelay.Completion.Tests.Services;
 public sealed class CompletionCertificationServiceTests
 {
     [Fact]
+    public async Task Certified_candidate_is_persisted_before_any_archive_closure_effect()
+    {
+        var sink = new RecordingCandidateSink();
+        Harness h = Harness.Create(
+            candidateSink: sink,
+            decorateArchive: inner => new CandidateOrderedArchiveService(inner, sink));
+        await h.SeedExecutionWorkspaceAsync();
+        h.Prompts.Handler = invocation => Task.FromResult(invocation.RuntimePromptName switch
+        {
+            CompletionRuntimePromptNames.EvaluateEpicCompletionAndDrift =>
+                Evaluation("Fully Complete", "None", "Close Epic"),
+            CompletionRuntimePromptNames.SynthesizeCompletedEpic => "# Completed Epic\n\nSynthesized.",
+            CompletionRuntimePromptNames.UpdateRoadmapCompletionContext =>
+                "# Roadmap Completion Context\n\nUpdated.",
+            _ => throw new InvalidOperationException(invocation.RuntimePromptName),
+        });
+
+        CompletionCertificationResult result = await h.Service.CertifyPlanCompletionAsync(
+            new CompletionCertificationRequest(h.Repository));
+
+        Assert.Equal(CompletionCertificationServiceOutcome.Completed, result.Outcome);
+        Assert.True(sink.Persisted);
+    }
+
+    [Fact]
     public async Task CloseWorthyCertification_ArchivesSynthesizesAndPassesCompletedEpicToUpdate()
     {
         Harness h = Harness.Create();
@@ -326,7 +351,7 @@ public sealed class CompletionCertificationServiceTests
         CompletionCertificationResult result = await service.CertifyPlanCompletionAsync(
             new CompletionCertificationRequest(repo.Repository));
 
-        Assert.Equal(CompletionCertificationServiceOutcome.Blocked, result.Outcome);
+        Assert.Equal(CompletionCertificationServiceOutcome.SpecificCannotProceed, result.Outcome);
     }
 
     [Fact]
@@ -421,7 +446,7 @@ public sealed class CompletionCertificationServiceTests
 
         CompletionCertificationResult result = await h.Service.CertifyPlanCompletionAsync(new CompletionCertificationRequest(h.Repository));
 
-        Assert.Equal(CompletionCertificationServiceOutcome.Blocked, result.Outcome);
+        Assert.Equal(CompletionCertificationServiceOutcome.SpecificCannotProceed, result.Outcome);
         Assert.Equal("Continue Epic", result.Decision?.ClosureRecommendation);
         Assert.NotNull(result.BlockedEvidencePath);
         Assert.Null(await h.ReadAsync(".agents/archive/epics/1/plan.md"));
@@ -543,7 +568,7 @@ public sealed class CompletionCertificationServiceTests
 
         CompletionCertificationResult result = await h.Service.CertifyPlanCompletionAsync(new CompletionCertificationRequest(h.Repository));
 
-        Assert.Equal(CompletionCertificationServiceOutcome.Blocked, result.Outcome);
+        Assert.Equal(CompletionCertificationServiceOutcome.SpecificCannotProceed, result.Outcome);
         Assert.Equal(".agents/evidence/execution/main-cli-completion-claim.0001.md", Assert.Single(executionEvidence.Records).RelativePath);
     }
 
@@ -578,7 +603,7 @@ public sealed class CompletionCertificationServiceTests
 
         CompletionCertificationResult result = await service.CertifyPlanCompletionAsync(new CompletionCertificationRequest(repo.Repository));
 
-        Assert.Equal(CompletionCertificationServiceOutcome.Blocked, result.Outcome);
+        Assert.Equal(CompletionCertificationServiceOutcome.SpecificCannotProceed, result.Outcome);
         ExecutionEvidenceRecord? record = await executionEvidence.ReadAsync(".agents/evidence/execution/main-cli-completion-claim.0001.md");
         Assert.NotNull(record);
     }
@@ -816,18 +841,22 @@ public sealed class CompletionCertificationServiceTests
 
         public static Harness Create(
             IExecutionEvidenceStore? executionEvidenceStore = null,
-            IProjectContextProjectionService? projectionService = null)
+            IProjectContextProjectionService? projectionService = null,
+            ICertifiedCompletionCandidateSink? candidateSink = null,
+            Func<ICompletedEpicArchiveService, ICompletedEpicArchiveService>? decorateArchive = null)
         {
             var store = new MemoryArtifactStore();
             var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = "/repo" };
             var prompts = new FakePromptRunner();
-            var archive = new CompletedEpicArchiveService(store, prompts);
+            ICompletedEpicArchiveService archive = new CompletedEpicArchiveService(store, prompts);
+            archive = decorateArchive?.Invoke(archive) ?? archive;
             var service = new CompletionCertificationService(
                 store,
                 projectionService ?? new FakeProjectionService(),
                 prompts,
                 archive,
-                _executionEvidenceStore: executionEvidenceStore);
+                _executionEvidenceStore: executionEvidenceStore,
+                _candidateSink: candidateSink);
             return new Harness(store, repository, prompts, service);
         }
 
@@ -867,6 +896,32 @@ public sealed class CompletionCertificationServiceTests
         {
             Invocations.Add(invocation);
             return await Handler(invocation);
+        }
+    }
+
+    private sealed class RecordingCandidateSink : ICertifiedCompletionCandidateSink
+    {
+        public bool Persisted { get; private set; }
+
+        public Task PersistAsync(CertifiedCompletionCandidate candidate, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Assert.True(candidate.Route.ShouldCloseEpic);
+            Persisted = true;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class CandidateOrderedArchiveService(
+        ICompletedEpicArchiveService inner,
+        RecordingCandidateSink sink) : ICompletedEpicArchiveService
+    {
+        public Task<CompletedEpicArchiveResult> ArchiveAndSynthesizeAsync(
+            CompletedEpicArchiveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Assert.True(sink.Persisted);
+            return inner.ArchiveAndSynthesizeAsync(request, cancellationToken);
         }
     }
 

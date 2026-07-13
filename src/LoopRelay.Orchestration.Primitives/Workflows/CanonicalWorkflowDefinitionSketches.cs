@@ -2,7 +2,7 @@ using LoopRelay.Orchestration.Services;
 
 namespace LoopRelay.Orchestration.Workflows;
 
-public static class CanonicalWorkflowDefinitionSketches
+internal static class CanonicalWorkflowDeclarations
 {
     public static IReadOnlyList<WorkflowDefinition> CreateAll() =>
     [
@@ -215,7 +215,12 @@ public static class CanonicalWorkflowDefinitionSketches
                     ExecutionPosture.OneShotAgentPrompt,
                     [preparedEpic],
                     [preparedEpic.Identity],
-                    [Effect("persist-prepared-epic", EffectCategory.ProductPersistence, [selection.Identity], [preparedEpic.Identity])],
+                    [
+                        Effect("persist-prepared-epic", EffectCategory.ProductPersistence,
+                            [selection.Identity], [preparedEpic.Identity]),
+                        Effect("publish-traditional-prepared-epic", EffectCategory.Publication,
+                            [preparedEpic.Identity], [preparedEpic.Identity], order: 1),
+                    ],
                     [ProductDependency(ProductIdentity.StrategicInitiativeSelection, selectStrategicInitiative, createEpic)]),
                 Transition(
                     workflow,
@@ -639,7 +644,7 @@ public static class CanonicalWorkflowDefinitionSketches
                 Transition(workflow, generateHandoff, "Generate execution handoff from the completed implementation slice.", [Requirement(ProductIdentity.ImplementationSlice)], "GenerateHandoff", ExecutionPosture.OneShotAgentPrompt, [handoff], [ProductIdentity.ExecutionHandoff], [Effect("persist-execution-handoff", EffectCategory.ProductPersistence, [ProductIdentity.ImplementationSlice], [ProductIdentity.ExecutionHandoff])], [ProductDependency(ProductIdentity.ImplementationSlice, executeSlice, generateHandoff)]),
                 Transition(workflow, updateContext, "Update operational context from implementation evidence and handoff.", [Requirement(ProductIdentity.ImplementationSlice), Requirement(ProductIdentity.ExecutionHandoff)], "UpdateOperationalContext", ExecutionPosture.OneShotAgentPrompt, [operationalDelta], [ProductIdentity.OperationalDelta], [Effect("persist-operational-delta", EffectCategory.ProductPersistence, [ProductIdentity.ImplementationSlice, ProductIdentity.ExecutionHandoff], [ProductIdentity.OperationalDelta])], [ProductDependency(ProductIdentity.ExecutionHandoff, generateHandoff, updateContext)]),
                 Transition(workflow, publishRepository, "Publish repository state evidence after implementation and handoff generation.", [Requirement(ProductIdentity.RepositoryChanges), Requirement(ProductIdentity.ExecutionHandoff)], "PublishRepositoryState", ExecutionPosture.ScopedArtifactOperation, [publishedRepositoryChanges], [ProductIdentity.RepositoryChanges], [Effect("publish-repository-state", EffectCategory.Publication, [ProductIdentity.RepositoryChanges, ProductIdentity.ExecutionHandoff], [ProductIdentity.RepositoryChanges])], [ProductDependency(ProductIdentity.ExecutionHandoff, generateHandoff, publishRepository)]),
-                Transition(workflow, evaluateCommit, "Evaluate whether the repository delta represents substantive progress.", [Requirement(ProductIdentity.RepositoryChanges)], "EvaluateCommit", ExecutionPosture.ReadOnlyPrompt, [commitEvaluation], [ProductIdentity.CompletionEvidence], [Effect("record-commit-evaluation", EffectCategory.Git, [ProductIdentity.RepositoryChanges], [ProductIdentity.CompletionEvidence])], [ProductDependency(ProductIdentity.RepositoryChanges, publishRepository, evaluateCommit)]),
+                Transition(workflow, evaluateCommit, "Evaluate whether the repository delta represents substantive progress.", [Requirement(ProductIdentity.RepositoryChanges)], "EvaluateCommit", ExecutionPosture.ReadOnlyPrompt, [commitEvaluation], [ProductIdentity.CompletionEvidence], [Effect("record-commit-evaluation", EffectCategory.Evidence, [ProductIdentity.RepositoryChanges], [ProductIdentity.CompletionEvidence])], [ProductDependency(ProductIdentity.RepositoryChanges, publishRepository, evaluateCommit)]),
                 Transition(workflow, evaluateMilestoneCompletion, "Evaluate milestone completion evidence after repository publication.", [Requirement(ProductIdentity.RepositoryChanges), Requirement(ProductIdentity.ExecutionHandoff), Requirement(ProductIdentity.ExecutionMilestoneSet)], "EvaluateMilestoneCompletion", ExecutionPosture.ReadOnlyPrompt, [milestoneCompletion], [ProductIdentity.CompletionEvidence], [Effect("record-milestone-completion", EffectCategory.Evidence, [ProductIdentity.RepositoryChanges, ProductIdentity.ExecutionHandoff, ProductIdentity.ExecutionMilestoneSet], [ProductIdentity.CompletionEvidence])], [ProductDependency(ProductIdentity.RepositoryChanges, publishRepository, evaluateMilestoneCompletion), ProductDependency(ProductIdentity.ExecutionMilestoneSet, verifyReadiness, evaluateMilestoneCompletion)]),
                 Transition(workflow, runNonImplementationReview, "Run non-implementation review before completion certification.", [Requirement(ProductIdentity.RepositoryChanges), Requirement(ProductIdentity.ExecutionHandoff)], "RunNonImplementationReview", ExecutionPosture.ReadOnlyPrompt, [nonImplementationReview], [ProductIdentity.CompletionEvidence], [Effect("record-non-implementation-review", EffectCategory.Evidence, [ProductIdentity.RepositoryChanges, ProductIdentity.ExecutionHandoff], [ProductIdentity.CompletionEvidence])], [ProductDependency(ProductIdentity.RepositoryChanges, publishRepository, runNonImplementationReview)]),
                 Transition(workflow, runCompletionCertification, "Run completion evaluation, archive the completed execution workspace, and record certification evidence.", [Requirement(ProductIdentity.RepositoryChanges), Requirement(ProductIdentity.ExecutionHandoff)], "RunCompletionCertification", ExecutionPosture.OneShotAgentPrompt, [completionEvidence], [ProductIdentity.CompletionEvidence], [Effect("archive-completed-execution-and-record-evidence", EffectCategory.Archive, [ProductIdentity.RepositoryChanges, ProductIdentity.ExecutionHandoff], [ProductIdentity.CompletionEvidence])], [ProductDependency(ProductIdentity.RepositoryChanges, publishRepository, runCompletionCertification)]),

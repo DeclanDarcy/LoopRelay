@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Persistence;
@@ -23,7 +24,8 @@ internal sealed record DecisionSessionScope(
 
 internal sealed record DecisionExecutionContext(
     DecisionSessionScope Scope,
-    PromptExecutionRequest PromptExecution);
+    PromptExecutionRequest PromptExecution,
+    CanonicalCausalContext? Causality = null);
 
 internal sealed record PromptExecutionRequest(
     string RunId,

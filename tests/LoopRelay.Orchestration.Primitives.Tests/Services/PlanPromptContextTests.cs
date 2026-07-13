@@ -190,7 +190,7 @@ public sealed class PlanPromptContextTests
     }
 
     private static WorkflowTransitionDefinition PlanTransition(string identity) =>
-        CanonicalWorkflowDefinitionSketches
+        CanonicalWorkflowCatalog
             .CreatePlan()
             .Transitions
             .Single(transition => transition.Identity == new WorkflowTransitionIdentity(identity));

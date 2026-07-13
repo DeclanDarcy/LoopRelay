@@ -2,8 +2,10 @@ using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Infrastructure.Services.Effects;
+using LoopRelay.Orchestration.Effects;
+using LoopRelay.Orchestration.Persistence;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -12,7 +14,7 @@ namespace LoopRelay.Cli.Tests.Services.Execution;
 public sealed class LedgerLoopHistoryStoreTests
 {
     [Fact]
-    public async Task Append_commits_fact_evidence_and_projection_effect_before_filesystem_projection()
+    public async Task Append_commits_fact_evidence_and_canonical_effect_before_filesystem_projection()
     {
         Harness harness = await NewAsync();
         var evidence = new HistoryEvidenceAttachments(
@@ -33,11 +35,15 @@ public sealed class LedgerLoopHistoryStoreTests
         Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM history_evidence_items;"));
         Assert.Equal(evidence.Identity.Value, await ScalarStringAsync(connection, "SELECT evidence_set_id FROM history_evidence_sets;"));
         Assert.Equal(evidence.Provider!.Identity.Value, await ScalarStringAsync(connection, "SELECT evidence_item_id FROM history_evidence_items;"));
-        Assert.Equal("Planned", await ScalarStringAsync(connection, "SELECT status FROM canonical_projection_effects;"));
+        Assert.Equal("Planned", await ScalarStringAsync(connection,
+            "SELECT status FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Decisions';"));
+        Assert.Equal(WorkspaceEffectExecutorKeys.FilesystemWrite.Value, await ScalarStringAsync(connection,
+            "SELECT executor_key FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Decisions';"));
+        Assert.Equal(0L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM canonical_projection_effects;"));
     }
 
     [Fact]
-    public async Task Projection_effect_runner_materializes_only_after_the_fact_is_durable()
+    public async Task Canonical_effect_worker_materializes_history_only_after_the_fact_is_durable()
     {
         Harness harness = await NewAsync();
         await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
@@ -45,10 +51,21 @@ public sealed class LedgerLoopHistoryStoreTests
             "handoff",
             harness.Causality));
 
-        var runner = new HistoryProjectionEffectRunner(new FileSystemArtifactStore(), harness.Repository);
-        IReadOnlyList<HistoryProjectionEffectResult> results = await runner.RunPendingAsync();
+        var workStore = new CanonicalEffectWorkStore(harness.Repository);
+        var executor = new FilesystemWriteEffectExecutor(harness.Repository);
+        var worker = new EffectWorker(
+            "history-projection-test",
+            workStore,
+            new EffectExecutorRegistry([executor]),
+            new FilesystemWriteEffectReconciler(harness.Repository),
+            TimeSpan.FromMinutes(1));
+        EffectWorkerResult result = await worker.RunOnceAsync();
 
-        Assert.Equal("Completed", Assert.Single(results).Status);
+        Assert.Equal(1, result.Succeeded);
+        EffectWorkItem item = Assert.Single(await workStore.ReadPlanAsync(
+            harness.Causality.TransitionRun, CancellationToken.None));
+        Assert.Equal(EffectLifecycle.Succeeded, item.State);
+        Assert.True(item.Receipt?.PostconditionSatisfied);
         Assert.Equal(
             "handoff",
             await File.ReadAllTextAsync(Path.Combine(harness.Root, ".agents", "handoffs", "handoff.0001.md")));

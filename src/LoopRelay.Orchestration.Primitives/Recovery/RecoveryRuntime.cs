@@ -13,7 +13,8 @@ public sealed class RecoveryRuntime(
     IRecoveryPlanner _planner,
     IRecoveryMechanismCatalog _mechanisms,
     IRecoveryEnvelopeFactory _envelopes,
-    TimeProvider? _timeProvider = null) : IRecoveryRuntime
+    TimeProvider? _timeProvider = null,
+    ICanonicalRecoveryStore? _canonicalStore = null) : IRecoveryRuntime
 {
     private readonly RecoveryJournal _journal = new();
     private readonly TimeProvider _clock = _timeProvider ?? TimeProvider.System;
@@ -36,6 +37,11 @@ public sealed class RecoveryRuntime(
         DecisionSessionActiveState active = activeRead.Active;
         DecisionSessionLineageNode originalLineage = activeRead.Lineage;
         var original = new ProviderSessionReference(originalLineage.Provider, originalLineage.ProviderSessionId);
+        await EnsureCanonicalPlanAsync(
+            request,
+            CanonicalRecoveryAction.ResumeSession,
+            ["decision-session-active-state", $"lineage:{originalLineage.LineageId}", "resume-original"],
+            cancellationToken);
         RecoveryAttempt? attempt = await _store.ReadNonterminalAttemptAsync(request.ScopeId, cancellationToken);
         if (attempt is null)
         {
@@ -251,6 +257,13 @@ public sealed class RecoveryRuntime(
                         envelope?.Digest,
                         envelope?.Descriptor),
                     _mechanisms.All);
+                await EnsureCanonicalPlanAsync(
+                    request,
+                    CanonicalActionFor(plan.Mechanism),
+                    observations.Select(item => $"source:{item.Descriptor.Kind}:{item.Descriptor.Digest}")
+                        .Append($"mechanism:{plan.Mechanism.Identity}@{plan.Mechanism.Version}")
+                        .ToArray(),
+                    cancellationToken);
             }
             catch (RecoveryPlanningException exception)
             {
@@ -591,6 +604,78 @@ public sealed class RecoveryRuntime(
             RecoveryCompleteness.Unknown, false, diagnostic);
 
     private DateTimeOffset Now() => _clock.GetUtcNow();
+
+    private async Task<CanonicalRecoveryPlan?> EnsureCanonicalPlanAsync(
+        RecoveryRuntimeRequest request,
+        CanonicalRecoveryAction action,
+        IReadOnlyList<string> evidence,
+        CancellationToken cancellationToken)
+    {
+        if (_canonicalStore is null || request.Causality is null) return null;
+        var subject = new RecoveryCausalSubject(
+            request.Causality,
+            SessionIdentity: request.ScopeId);
+        var facts = new RecoveryDurableFacts(
+            RecoveryScopeKind.WarmSession,
+            subject,
+            EvidenceComplete: true,
+            Corrupt: false,
+            Authorized: true,
+            ValidInFlightCorrelation: false,
+            OutwardStarted: false,
+            OutwardAccepted: false,
+            ProviderOutcomeUnknown: false,
+            TerminalProviderResult: false,
+            RawOutputDurable: false,
+            OutputPromoted: false,
+            ExplicitFailure: true,
+            ExplicitCancellation: false,
+            RecoveryCancellationBoundary.None,
+            RequiredEffects: 0,
+            SucceededEffects: 0,
+            CompletionClosureStarted: false,
+            CompletionClosureSettled: false,
+            Evidence: evidence);
+        var recorder = new CanonicalRecoveryCaseRecorder(_canonicalStore);
+        CanonicalRecoveryClassification classification = await recorder.RecordAsync(
+            RecoveryScopeKind.WarmSession,
+            subject,
+            facts,
+            cancellationToken);
+        var allowed = new HashSet<CanonicalRecoveryAction>
+        {
+            action,
+            CanonicalRecoveryAction.RequestHumanDecision,
+        };
+        bool exactSupported = action switch
+        {
+            CanonicalRecoveryAction.ResumeSession =>
+                request.Profile.Operation(SessionContinuityOperation.Resume).Status == SessionOperationSupport.Supported,
+            CanonicalRecoveryAction.NativeFork =>
+                request.Profile.Operation(SessionContinuityOperation.Fork).Status == SessionOperationSupport.Supported,
+            _ => true,
+        };
+        var authority = new RecoveryPlanningAuthority(
+            request.Policy.TryGetValue("policy-version", out string? policy) ? policy : "recovery-policy",
+            request.Profile.Digest,
+            exactSupported,
+            action == CanonicalRecoveryAction.ReconstructContext,
+            RetryAllowed: false,
+            allowed,
+            [request.Profile.EvidenceSource, $"profile:{request.Profile.Digest}"]);
+        var coordinator = new CanonicalRecoveryCoordinator(_canonicalStore);
+        return await coordinator.PlanAsync(
+            new RecoveryPlanRequest(classification.Case, authority),
+            cancellationToken);
+    }
+
+    private static CanonicalRecoveryAction CanonicalActionFor(RecoveryMechanismKey mechanism) =>
+        mechanism.Identity switch
+        {
+            "NativeFork" or "native-fork" => CanonicalRecoveryAction.NativeFork,
+            "NativeResume" or "native-resume" => CanonicalRecoveryAction.ResumeSession,
+            _ => CanonicalRecoveryAction.ReconstructContext,
+        };
 
     private static string Hash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();

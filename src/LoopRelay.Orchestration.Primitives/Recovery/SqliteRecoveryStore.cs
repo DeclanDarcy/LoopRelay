@@ -402,6 +402,70 @@ public sealed class SqliteRecoveryStore(Repository _repository) : IRecoveryStore
         return await UpdateAttemptInTransactionAsync(expected, updated, replacement, null, cancellationToken);
     }
 
+    public async Task<RecoveryStoreWriteResult> InsertInactiveRecoveryLineageAsync(
+        DecisionSessionLineageNode replacement,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        try
+        {
+            await InsertLineageAsync(connection, transaction, replacement, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return Success(0);
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode == 19)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            return Conflict("The inactive recovery lineage already exists or violates its scope contract.");
+        }
+    }
+
+    public async Task<RecoveryStoreWriteResult> ActivateRecoveryLineageAsync(
+        DecisionSessionActiveState expectedActive,
+        DecisionSessionLineageNode replacement,
+        DateTimeOffset activatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        try
+        {
+            int activeChanged = await ExecuteAsync(connection, transaction,
+                """
+                UPDATE decision_session_active
+                SET lineage_id = $replacement, row_version = row_version + 1, activated_at = $activated
+                WHERE scope_id = $scope AND lineage_id = $original AND row_version = $version;
+                """, cancellationToken,
+                ("$replacement", replacement.LineageId), ("$activated", Format(activatedAt)),
+                ("$scope", expectedActive.ScopeId), ("$original", expectedActive.LineageId),
+                ("$version", expectedActive.RowVersion));
+            if (activeChanged != 1)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return Conflict("The active pointer changed before canonical recovery activation.");
+            }
+            await ExecuteAsync(connection, transaction,
+                """
+                UPDATE decision_session_lineage
+                SET authority_state = 'Superseded', retired_at = $at
+                WHERE lineage_id = $original AND authority_state = 'Authoritative';
+                UPDATE decision_session_lineage
+                SET authority_state = 'Authoritative', activated_at = $at
+                WHERE lineage_id = $replacement AND authority_state = 'Inactive';
+                """, cancellationToken,
+                ("$at", Format(activatedAt)), ("$original", expectedActive.LineageId),
+                ("$replacement", replacement.LineageId));
+            await transaction.CommitAsync(cancellationToken);
+            return Success(expectedActive.RowVersion + 1);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+    }
+
     public async Task<RecoveryStoreWriteResult> CompleteRecoveryAndActivateAsync(
         RecoveryAttempt expected,
         RecoveryAttempt completed,

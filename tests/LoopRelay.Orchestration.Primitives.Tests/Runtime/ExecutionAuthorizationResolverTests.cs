@@ -1,6 +1,7 @@
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Workflows;
 using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Orchestration.Tests.Runtime;
@@ -19,6 +20,9 @@ public sealed class ExecutionAuthorizationResolverTests
         var store = new Store(evaluation, profile);
         var authorization = new ExecutionAuthorization(
             ExecutionAuthorizationIdentity.New(), decision, profile.Identity, evaluation.Identity,
+            null, evaluation.Policy, evaluation.ProviderCapabilities.Identity,
+            new PromptPolicyProfileIdentity("prompt-policy"), "catalog", WorkflowIdentity.Execute,
+            new WorkflowTransitionIdentity("ExecuteImplementationSlice"), "resolved-ceilings",
             RenderedPromptFactIdentity.New(), ConsumedInputManifestIdentity.New(), Causality());
 
         ResolvedRuntimeProfile resolved = await new ExecutionAuthorizationResolver(store, store)
@@ -38,7 +42,10 @@ public sealed class ExecutionAuthorizationResolverTests
         var store = new Store(evaluation, profile);
         var authorization = new ExecutionAuthorization(
             ExecutionAuthorizationIdentity.New(), DecisionProductVersionIdentity.New(), profile.Identity,
-            evaluation.Identity, RenderedPromptFactIdentity.New(), ConsumedInputManifestIdentity.New(), Causality());
+            evaluation.Identity, null, evaluation.Policy, evaluation.ProviderCapabilities.Identity,
+            new PromptPolicyProfileIdentity("prompt-policy"), "catalog", WorkflowIdentity.Execute,
+            new WorkflowTransitionIdentity("ExecuteImplementationSlice"), "resolved-ceilings",
+            RenderedPromptFactIdentity.New(), ConsumedInputManifestIdentity.New(), Causality());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new ExecutionAuthorizationResolver(store, store).ResolveAsync(authorization));

@@ -1,5 +1,6 @@
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Sessions;
+using LoopRelay.Core.Models.Identity;
 
 namespace LoopRelay.Orchestration.Recovery;
 
@@ -424,7 +425,8 @@ public sealed record RecoveryRuntimeRequest(
     SessionContinuityProfile Profile,
     IReadOnlyDictionary<string, string> Policy,
     int ContextBudget,
-    string Trigger);
+    string Trigger,
+    CanonicalCausalContext? Causality = null);
 
 public sealed record RecoveryRuntimeResult(
     RecoveryRuntimeOutcome Outcome,

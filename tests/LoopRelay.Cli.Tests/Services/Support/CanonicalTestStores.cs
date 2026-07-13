@@ -11,6 +11,7 @@ using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
+using LoopRelay.Orchestration.Workflows;
 using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Cli.Tests.Services.Support;
@@ -52,6 +53,14 @@ internal static class CanonicalTestStores
             new DecisionProductVersionIdentity("decision_test"),
             profile.Identity,
             RuntimeProfileEvaluationIdentity.New(),
+            null,
+            new PolicyIdentity("policy_test"),
+            ProviderCapabilityEvidenceIdentity.New(),
+            new PromptPolicyProfileIdentity("prompt_policy_test"),
+            "catalog_test",
+            WorkflowIdentity.Execute,
+            new WorkflowTransitionIdentity("ExecuteImplementationSlice"),
+            "resolved-ceilings",
             RenderedPromptFactIdentity.New(),
             ConsumedInputManifestIdentity.New(),
             causality);

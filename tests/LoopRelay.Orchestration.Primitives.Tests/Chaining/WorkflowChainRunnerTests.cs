@@ -9,10 +9,10 @@ namespace LoopRelay.Orchestration.Tests.Chaining;
 public sealed class WorkflowChainRunnerTests
 {
     private static readonly IReadOnlyList<WorkflowDefinition> Definitions =
-        CanonicalWorkflowDefinitionSketches.CreateAll();
+        CanonicalWorkflowCatalog.CreateAll();
 
     private static WorkflowChainDefinition TraditionalRoadmapChain =>
-        CanonicalWorkflowDefinitionSketches.CreateChains()
+        CanonicalWorkflowCatalog.CreateChains()
             .Single(chain => chain.InitialWorkflow == WorkflowIdentity.TraditionalRoadmap);
 
     [Fact]
@@ -40,7 +40,8 @@ public sealed class WorkflowChainRunnerTests
             observation,
             TraditionalRoadmapChain,
             Definitions,
-            context));
+            context,
+            FreshAttemptAuthorization.Instance));
 
         WorkflowBoundaryEvaluation boundary = Assert.Single(result.Boundaries);
         Assert.True(boundary.CanAdvance);
@@ -66,7 +67,8 @@ public sealed class WorkflowChainRunnerTests
             observation,
             TraditionalRoadmapChain,
             Definitions,
-            NewContext()));
+            NewContext(),
+            FreshAttemptAuthorization.Instance));
 
         Assert.Equal(WorkflowStopReason.MissingRequiredInput, result.StopReason);
         Assert.False(Assert.Single(result.Boundaries).CanAdvance);
@@ -94,7 +96,8 @@ public sealed class WorkflowChainRunnerTests
             observation,
             TraditionalRoadmapChain,
             Definitions,
-            NewContext()));
+            NewContext(),
+            FreshAttemptAuthorization.Instance));
 
         Assert.Equal(WorkflowStopReason.RequiredEffectsPending, result.StopReason);
         Assert.True(result.Decision.RequiredEffectsPending);
@@ -120,7 +123,33 @@ public sealed class WorkflowChainRunnerTests
                 observation,
                 TraditionalRoadmapChain,
                 Definitions,
-                NewContext())));
+                NewContext(),
+                FreshAttemptAuthorization.Instance)));
+    }
+
+    [Fact]
+    public async Task Kernel_owns_authorization_reobservation_decision_facts_and_passive_budget_exhaustion()
+    {
+        RepositoryObservation observation = Observation();
+        Harness harness = new(observation);
+        var decisions = new RecordingKernelDecisionStore();
+        var kernel = new OrchestrationKernel(harness.Runner, harness.Observations,
+            new DurableKernelAttemptAuthorizationSelector(), decisions);
+        WorkflowRunContext context = NewContext();
+
+        KernelResult result = await kernel.RunAsync(new KernelCommand(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain), observation,
+            TraditionalRoadmapChain, CanonicalWorkflowCatalog.Current, context, 1));
+
+        Assert.Equal(WorkflowStopReason.Waiting, result.StopReason);
+        Assert.Equal(RuntimeOutcomeKind.Waiting, result.Outcome);
+        Assert.Equal(context.Run, result.RootRun);
+        Assert.Equal(64, result.SnapshotIdentity.Length);
+        Assert.IsType<FreshAttemptAuthorization>(Assert.Single(harness.Runtime.Requests).Authorization);
+        KernelDecisionFact decision = Assert.Single(decisions.Decisions);
+        Assert.Equal(context.Run, decision.RootRun);
+        Assert.Equal(CanonicalWorkflowCatalog.Current.Identity, decision.CatalogIdentity);
+        Assert.True(harness.Observations.CallCount >= 2);
     }
 
     private sealed class Harness
@@ -194,8 +223,7 @@ public sealed class WorkflowChainRunnerTests
             new(false, false, "effects complete", []);
 
         public Task<TransitionEffectCoordinationResult> CoordinateAsync(
-            TransitionRuntimeResult attempt,
-            CanonicalTransitionExecutionContext executionContext,
+            TransitionRunIdentity transitionRun,
             CancellationToken cancellationToken)
         {
             CallCount++;
@@ -249,6 +277,16 @@ public sealed class WorkflowChainRunnerTests
             }
 
             Captures.Add(capture);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingKernelDecisionStore : IKernelDecisionStore
+    {
+        public List<KernelDecisionFact> Decisions { get; } = [];
+        public Task AppendAsync(KernelDecisionFact decision, CancellationToken cancellationToken)
+        {
+            Decisions.Add(decision);
             return Task.CompletedTask;
         }
     }

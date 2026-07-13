@@ -81,7 +81,8 @@ public sealed record CanonicalTransitionExecutionContext : TransitionExecutionCo
         WorkflowInstanceIdentity workflowInstance,
         PolicyIdentity resolvedPolicy,
         RuntimeProfileIdentity runtimeProfile,
-        PromptPolicyProfileIdentity promptPolicyProfile)
+        PromptPolicyProfileIdentity promptPolicyProfile,
+        string agentRolePolicyIdentity = "agent_role_policy_unspecified")
         : base(rootInvocation)
     {
         ArgumentNullException.ThrowIfNull(rootInvocation);
@@ -97,6 +98,9 @@ public sealed record CanonicalTransitionExecutionContext : TransitionExecutionCo
         ResolvedPolicy = resolvedPolicy;
         RuntimeProfile = runtimeProfile;
         PromptPolicyProfile = promptPolicyProfile;
+        AgentRolePolicyIdentity = string.IsNullOrWhiteSpace(agentRolePolicyIdentity)
+            ? throw new ArgumentException("Agent role policy identity must not be empty.", nameof(agentRolePolicyIdentity))
+            : agentRolePolicyIdentity;
     }
 
     public WorkspaceIdentity Workspace { get; }
@@ -110,6 +114,8 @@ public sealed record CanonicalTransitionExecutionContext : TransitionExecutionCo
     public RuntimeProfileIdentity RuntimeProfile { get; }
 
     public PromptPolicyProfileIdentity PromptPolicyProfile { get; }
+
+    public string AgentRolePolicyIdentity { get; }
 
     public CanonicalCausalContext BeginAttempt(
         TransitionRunIdentity transitionRun,
@@ -146,7 +152,13 @@ public sealed record TransitionRuntimeRequest(
     WorkflowTransitionIdentity Transition,
     TransitionExecutionContext ExecutionContext,
     AttemptAuthorization Authorization,
-    IReadOnlyDictionary<string, string>? Metadata = null);
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    bool Interactive = false);
+
+public sealed record InputGateEvaluationContext(
+    TransitionRuntimeRequest Request,
+    CanonicalCausalContext Causality,
+    bool Interactive);
 
 /// <summary>
 /// Typed authorization for exactly one attempt. It replaces caller-supplied nullable run ids.
@@ -520,6 +532,7 @@ public interface IGateEvaluator
     Task<GateResult> EvaluateInputGateAsync(
         GateDefinition gate,
         ProductResolutionResult inputs,
+        InputGateEvaluationContext context,
         CancellationToken cancellationToken);
 
     Task<GateResult> EvaluateOutputGateAsync(
@@ -557,6 +570,7 @@ public interface IPromptExecutor : IPromptRuntimeDispatcher;
 public interface IOutputInterpreter
 {
     Task<InterpretedTransitionOutput> InterpretAsync(
+        CanonicalCausalContext causality,
         WorkflowTransitionDefinition definition,
         PromptExecutionResult executionResult,
         CancellationToken cancellationToken);
@@ -643,13 +657,6 @@ public interface ITransitionGateEvaluationStore
 {
     Task RecordGateEvaluationAsync(
         TransitionGateEvaluationCapture evaluation,
-        CancellationToken cancellationToken);
-}
-
-public interface ITransitionEffectStore
-{
-    Task RecordEffectAsync(
-        TransitionEffectRecordCapture effect,
         CancellationToken cancellationToken);
 }
 

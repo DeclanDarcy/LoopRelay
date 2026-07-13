@@ -1,5 +1,6 @@
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Permissions.Models.Configuration;
+using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Orchestration.Models;
 
@@ -106,13 +107,24 @@ public sealed record ExecutionAuthorization
         DecisionProductVersionIdentity decisionProduct,
         RuntimeProfileIdentity runtimeProfile,
         RuntimeProfileEvaluationIdentity policyEvaluation,
+        ExecutionRecommendationIdentity? recommendation,
+        PolicyIdentity policy,
+        ProviderCapabilityEvidenceIdentity providerCapabilities,
+        PromptPolicyProfileIdentity promptPolicyProfile,
+        string catalogIdentity,
+        WorkflowIdentity catalogWorkflow,
+        WorkflowTransitionIdentity catalogTransition,
+        string permissionCeilings,
         RenderedPromptFactIdentity executionPrompt,
         ConsumedInputManifestIdentity causalInputManifest,
         CanonicalCausalContext causality)
     {
         ArgumentNullException.ThrowIfNull(causality);
         if (identity.IsEmpty || decisionProduct.IsEmpty || runtimeProfile.IsEmpty ||
-            policyEvaluation.IsEmpty || executionPrompt.IsEmpty || causalInputManifest.IsEmpty)
+            policyEvaluation.IsEmpty || policy.IsEmpty || providerCapabilities.IsEmpty ||
+            promptPolicyProfile.IsEmpty || string.IsNullOrWhiteSpace(catalogIdentity) ||
+            catalogWorkflow.IsEmpty || catalogTransition.IsEmpty || string.IsNullOrWhiteSpace(permissionCeilings) ||
+            executionPrompt.IsEmpty || causalInputManifest.IsEmpty)
         {
             throw new ArgumentException("Execution authorization must be causally complete.");
         }
@@ -121,6 +133,14 @@ public sealed record ExecutionAuthorization
         DecisionProduct = decisionProduct;
         RuntimeProfile = runtimeProfile;
         PolicyEvaluation = policyEvaluation;
+        Recommendation = recommendation;
+        Policy = policy;
+        ProviderCapabilities = providerCapabilities;
+        PromptPolicyProfile = promptPolicyProfile;
+        CatalogIdentity = catalogIdentity;
+        CatalogWorkflow = catalogWorkflow;
+        CatalogTransition = catalogTransition;
+        PermissionCeilings = permissionCeilings;
         ExecutionPrompt = executionPrompt;
         CausalInputManifest = causalInputManifest;
         Causality = causality;
@@ -130,6 +150,14 @@ public sealed record ExecutionAuthorization
     public DecisionProductVersionIdentity DecisionProduct { get; }
     public RuntimeProfileIdentity RuntimeProfile { get; }
     public RuntimeProfileEvaluationIdentity PolicyEvaluation { get; }
+    public ExecutionRecommendationIdentity? Recommendation { get; }
+    public PolicyIdentity Policy { get; }
+    public ProviderCapabilityEvidenceIdentity ProviderCapabilities { get; }
+    public PromptPolicyProfileIdentity PromptPolicyProfile { get; }
+    public string CatalogIdentity { get; }
+    public WorkflowIdentity CatalogWorkflow { get; }
+    public WorkflowTransitionIdentity CatalogTransition { get; }
+    public string PermissionCeilings { get; }
     public RenderedPromptFactIdentity ExecutionPrompt { get; }
     public ConsumedInputManifestIdentity CausalInputManifest { get; }
     public CanonicalCausalContext Causality { get; }

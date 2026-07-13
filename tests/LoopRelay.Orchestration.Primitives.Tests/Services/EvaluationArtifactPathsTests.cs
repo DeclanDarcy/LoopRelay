@@ -83,7 +83,7 @@ public sealed class EvaluationArtifactPathsTests
     [Fact]
     public void EvalRoadmap_definition_uses_registered_eval_prompt_assets()
     {
-        WorkflowDefinition workflow = CanonicalWorkflowDefinitionSketches.CreateEvalRoadmap();
+        WorkflowDefinition workflow = CanonicalWorkflowCatalog.CreateEvalRoadmap();
 
         foreach (EvalPromptAsset asset in EvalPromptAssetCatalog.Assets)
         {

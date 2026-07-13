@@ -37,7 +37,7 @@ public sealed record CompletionCertificationResult(
             RoadmapCompletionContextChanged: true,
             message);
 
-    public static CompletionCertificationResult Blocked(
+    public static CompletionCertificationResult CannotProceed(
         CompletionEvaluationDecision? decision,
         CompletionCertificationRoute? route,
         string? evaluationEvidencePath,
@@ -45,7 +45,7 @@ public sealed record CompletionCertificationResult(
         IReadOnlyList<string> evidencePaths,
         string message) =>
         new(
-            CompletionCertificationServiceOutcome.Blocked,
+            CompletionCertificationServiceOutcome.SpecificCannotProceed,
             decision,
             route,
             evaluationEvidencePath,

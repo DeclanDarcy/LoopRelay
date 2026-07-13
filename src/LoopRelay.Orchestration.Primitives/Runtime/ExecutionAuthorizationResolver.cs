@@ -24,7 +24,10 @@ public sealed class ExecutionAuthorizationResolver(
             cancellationToken)
             ?? throw new InvalidOperationException("Execution policy evaluation was not found.");
         if (evaluation.DecisionProduct != authorization.DecisionProduct ||
-            evaluation.EffectiveProfile.Identity != authorization.RuntimeProfile)
+            evaluation.EffectiveProfile.Identity != authorization.RuntimeProfile ||
+            evaluation.Policy != authorization.Policy ||
+            evaluation.ProviderCapabilities.Identity != authorization.ProviderCapabilities ||
+            evaluation.Recommendation != authorization.Recommendation)
         {
             throw new InvalidOperationException("Execution authorization does not match its policy evaluation.");
         }

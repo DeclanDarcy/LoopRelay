@@ -4,13 +4,12 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Abstractions;
 using LoopRelay.Orchestration.Models;
-using LoopRelay.Orchestration.Services;
 using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Cli.Services.Decisions;
 
 /// <summary>
-/// SQLite-canonical decision-session resume store with one-time legacy JSON import.
+/// SQLite-canonical decision-session resume store. Legacy file import is exhausted and absent.
 /// </summary>
 internal sealed class SqliteDecisionSessionResumeStore(
     Repository repository,
@@ -22,25 +21,13 @@ internal sealed class SqliteDecisionSessionResumeStore(
         PropertyNameCaseInsensitive = true,
     };
 
-    private string RuntimeDirectoryPath =>
-        Path.Combine(repository.Path, FileDecisionSessionResumeStore.DirectoryName);
-
-    private string LegacyFilePath =>
-        Path.Combine(RuntimeDirectoryPath, FileDecisionSessionResumeStore.FileName);
-
     private string DatabasePath => LoopRelayWorkspaceDatabase.Resolve(repository);
 
     public async Task<DecisionSessionResumeState?> ReadAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            DecisionSessionResumeState? state = await ReadSqliteAsync(cancellationToken);
-            if (state is not null)
-            {
-                return state;
-            }
-
-            return await TryImportLegacyAsync(cancellationToken);
+            return await ReadSqliteAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -79,16 +66,12 @@ internal sealed class SqliteDecisionSessionResumeStore(
         {
             onWarning?.Invoke($"Could not delete decision-session resume state in {DatabasePath}: {ex.Message}");
         }
-
-        TryDeleteLegacy();
     }
 
     public void EnsureDirectoryProtection()
     {
         try
         {
-            Directory.CreateDirectory(RuntimeDirectoryPath);
-            EnsureSelfIgnore();
             Directory.CreateDirectory(Path.GetDirectoryName(DatabasePath)!);
             using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(DatabasePath);
             connection.Open();
@@ -132,53 +115,10 @@ internal sealed class SqliteDecisionSessionResumeStore(
         return null;
     }
 
-    private async Task<DecisionSessionResumeState?> TryImportLegacyAsync(CancellationToken cancellationToken)
-    {
-        if (!File.Exists(LegacyFilePath))
-        {
-            return null;
-        }
-
-        DecisionSessionResumeState? state;
-        try
-        {
-            string json = await File.ReadAllTextAsync(LegacyFilePath, cancellationToken);
-            state = JsonSerializer.Deserialize<DecisionSessionResumeState>(json, Json);
-            if (!IsUsable(state))
-            {
-                onWarning?.Invoke(
-                    $"Ignoring unusable decision-session resume state at {LegacyFilePath} (schema/content mismatch) - deleting it.");
-                TryDeleteLegacy();
-                return null;
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            onWarning?.Invoke($"Could not read decision-session resume state at {LegacyFilePath}: {ex.Message} - deleting it.");
-            TryDeleteLegacy();
-            return null;
-        }
-
-        try
-        {
-            await WriteSqliteAsync(state!, cancellationToken);
-            TryDeleteLegacy();
-            return state;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            onWarning?.Invoke(
-                $"Could not import legacy decision-session resume state from {LegacyFilePath} into {DatabasePath}: {ex.Message}");
-            return null;
-        }
-    }
-
     private async Task WriteSqliteAsync(
         DecisionSessionResumeState state,
         CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(RuntimeDirectoryPath);
-        EnsureSelfIgnore();
         Directory.CreateDirectory(Path.GetDirectoryName(DatabasePath)!);
 
         DecisionSessionResumeState stamped = state with { SavedAtUtc = DateTimeOffset.UtcNow };
@@ -215,27 +155,4 @@ internal sealed class SqliteDecisionSessionResumeStore(
         state.SchemaVersion == DecisionSessionResumeState.CurrentSchemaVersion &&
         !string.IsNullOrWhiteSpace(state.ThreadId);
 
-    private void TryDeleteLegacy()
-    {
-        try
-        {
-            if (File.Exists(LegacyFilePath))
-            {
-                File.Delete(LegacyFilePath);
-            }
-        }
-        catch (Exception ex)
-        {
-            onWarning?.Invoke($"Could not delete decision-session resume state at {LegacyFilePath}: {ex.Message}");
-        }
-    }
-
-    private void EnsureSelfIgnore()
-    {
-        string gitignore = Path.Combine(RuntimeDirectoryPath, ".gitignore");
-        if (!File.Exists(gitignore))
-        {
-            File.WriteAllText(gitignore, "*\n");
-        }
-    }
 }

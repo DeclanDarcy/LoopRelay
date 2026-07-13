@@ -1,4 +1,4 @@
-<!-- BEGIN GENERATED: source=.agents/epic.md version=3.0 milestone=M14 -->
+<!-- BEGIN GENERATED: source=.agents/specs/epic.md version=3.0 milestone=M14 -->
 # M14 — Orchestration Kernel Deep Dive
 
 Status: Open
@@ -16,7 +16,7 @@ Status: Open
 
 | Authority class | Sources | Use |
 |---|---|---|
-| Roadmap authority | [`.agents/epic.md`](../epic.md) §§0, 2.1, 3, 5, 6, 7, 8, 9 (M14), 10–12, Appendix A | Status, ownership, dependency order, permanent property, convergence and acceptance |
+| Roadmap authority | [`.agents/specs/epic.md`](epic.md) §§0, 2.1, 3, 5, 6, 7, 8, 9 (M14), 10–12, Appendix A | Status, ownership, dependency order, permanent property, convergence and acceptance |
 | Architectural authority | [0008-single-attempt-runtime-and-recovery-coordinator](../../docs/architecture/decisions/0008-single-attempt-runtime-and-recovery-coordinator.md), [0009-canonical-prompt-dispatch-gateway](../../docs/architecture/decisions/0009-canonical-prompt-dispatch-gateway.md) | Accepted cross-authority contracts; an ADR is target authority where the roadmap says it supersedes older implementation |
 | Implementation authority | Current production code and active composition in the repository; paths in §10 | Concrete seams and executable contracts |
 | Supporting context | current tests and certification baseline in roadmap §6 | Evidence and historical intent only; never a competing authority |

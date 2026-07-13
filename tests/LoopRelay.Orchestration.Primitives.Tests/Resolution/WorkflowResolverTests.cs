@@ -608,7 +608,7 @@ public sealed class WorkflowResolverTests
     }
 
     [Fact]
-    public async Task Completion_archive_record_infers_certified_execute_closure()
+    public async Task Completion_archive_record_is_evidence_but_never_infers_certified_execute_closure()
     {
         string repo = CreateRepo();
         Write(repo, ".agents/archive/epics/1.md", "# Completed Epic\n\nSynthesized closure.");
@@ -619,31 +619,19 @@ public sealed class WorkflowResolverTests
 
         RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
 
-        ObservedWorkflowState state = Assert.Single(
-            observation.WorkflowStates,
-            item => item.Workflow == WorkflowIdentity.Execute);
-        Assert.Equal(WorkflowResolutionState.Completed, state.State);
-        Assert.Null(state.CurrentStage);
-        Assert.Contains(".agents/archive/epics/1.md", state.Evidence);
-        Assert.Contains(".agents/archive/epics/1", state.Evidence);
-
-        ObservedProduct certifiedCompletion = Assert.Single(
-            observation.Products,
+        Assert.DoesNotContain(observation.WorkflowStates,
+            item => item.Workflow == WorkflowIdentity.Execute &&
+                item.State == WorkflowResolutionState.Completed);
+        Assert.DoesNotContain(observation.Products,
             product => product.Product.Identity == ProductIdentity.CertifiedCompletion);
-        Assert.Equal(WorkflowIdentity.Execute, certifiedCompletion.Product.ProducerWorkflow);
-        Assert.Equal(ProductLifecycle.Archived, certifiedCompletion.Product.Lifecycle);
-        Assert.Equal(ProductValidationState.Valid, certifiedCompletion.Product.ValidationState);
-        Assert.Contains(".agents/archive/epics/1/plan.md", certifiedCompletion.Product.StorageRepresentations);
-        Assert.Contains(".agents/archive/epics/1/milestones/m1.md", certifiedCompletion.Product.StorageRepresentations);
         Assert.Contains(
             observation.Products,
             product => product.Product.Identity == ProductIdentity.CompletionEvidence);
 
         WorkflowResolutionResult result = Resolve(new WorkflowInvocation(InvocationModeKind.BoundedExecute), observation);
 
-        Assert.Equal(RepositoryClassification.Completed, result.Classification);
-        Assert.Equal(WorkflowResolutionState.Completed, result.WorkflowState);
-        Assert.Null(result.SelectedStage);
+        Assert.Equal(RepositoryClassification.InProgress, result.Classification);
+        Assert.NotEqual(WorkflowResolutionState.Completed, result.WorkflowState);
 
         RepositoryObservation secondObservation = await new RepositoryObserver().ObserveAsync(repo);
         WorkflowResolutionResult secondResult = Resolve(new WorkflowInvocation(InvocationModeKind.BoundedExecute), secondObservation);
@@ -861,8 +849,8 @@ public sealed class WorkflowResolverTests
         ObservedProduct completionEvidence = Assert.Single(observation.Products, product => product.Product.Identity == ProductIdentity.CompletionEvidence);
         Assert.Equal(ProductLifecycle.Active, completionEvidence.Product.Lifecycle);
         Assert.Equal("repository observation", completionEvidence.Product.Authority);
-        ObservedProduct certifiedCompletion = Assert.Single(observation.Products, product => product.Product.Identity == ProductIdentity.CertifiedCompletion);
-        Assert.Equal(ProductLifecycle.Archived, certifiedCompletion.Product.Lifecycle);
+        Assert.DoesNotContain(observation.Products,
+            product => product.Product.Identity == ProductIdentity.CertifiedCompletion);
     }
 
     [Fact]
@@ -925,7 +913,7 @@ public sealed class WorkflowResolverTests
     }
 
     [Fact]
-    public async Task Repository_observation_reads_legacy_decision_session_resume_state_without_importing_or_deleting()
+    public async Task Repository_observation_ignores_legacy_decision_session_resume_state_without_mutating_it()
     {
         string repo = CreateRepo();
         Write(
@@ -937,20 +925,15 @@ public sealed class WorkflowResolverTests
         RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
         IReadOnlyDictionary<string, string> after = Snapshot(repo);
 
-        ObservedLifecycleRow row = Assert.Single(
-            observation.LifecycleRows,
+        Assert.DoesNotContain(observation.LifecycleRows,
             item => item.Identity == "DecisionSessionResume:LegacyFile");
-        Assert.Equal("Present", row.State);
-        Assert.Contains(".LoopRelay/decision-session.json", row.Evidence);
-        Assert.Contains(
-            observation.Evidence,
-            item => item.Identity == "DecisionSessionResume:LegacyFile" &&
-                item.Location == ".LoopRelay/decision-session.json");
+        Assert.DoesNotContain(observation.Evidence,
+            item => item.Identity == "DecisionSessionResume:LegacyFile");
         Assert.Equal(before, after);
     }
 
     [Fact]
-    public async Task Repository_observation_reads_sqlite_decision_session_resume_state_without_mutating_it()
+    public async Task Repository_observation_ignores_sqlite_compatibility_resume_state_without_mutating_it()
     {
         string repo = CreateRepo();
         await CreateSqliteDatabaseAsync(repo);
@@ -965,20 +948,15 @@ public sealed class WorkflowResolverTests
         RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
         IReadOnlyDictionary<string, string> after = Snapshot(repo);
 
-        ObservedLifecycleRow row = Assert.Single(
-            observation.LifecycleRows,
+        Assert.DoesNotContain(observation.LifecycleRows,
             item => item.Identity == "DecisionSessionResume:Sqlite");
-        Assert.Equal("Present", row.State);
-        Assert.Contains(".LoopRelay/persistence/looprelay.sqlite3:decision_session_resume", row.Evidence);
-        Assert.Contains(
-            observation.Evidence,
-            item => item.Identity == "DecisionSessionResume:Sqlite" &&
-                item.Location == ".LoopRelay/persistence/looprelay.sqlite3:decision_session_resume");
+        Assert.DoesNotContain(observation.Evidence,
+            item => item.Identity == "DecisionSessionResume:Sqlite");
         Assert.Equal(before, after);
     }
 
     [Fact]
-    public async Task Repository_observation_reads_pre_unification_roadmap_filesystem_evidence_without_mutating()
+    public async Task Repository_observation_ignores_pre_unification_filesystem_authority_without_mutating()
     {
         string repo = CreateRepo();
         Write(repo, ".agents/state.json", """{"SchemaVersion":"roadmap-state.v1"}""");
@@ -1005,7 +983,7 @@ public sealed class WorkflowResolverTests
     }
 
     [Fact]
-    public async Task Repository_observation_reports_legacy_execution_handoff_filesystem_state_as_migration_only()
+    public async Task Repository_observation_does_not_project_legacy_filesystem_handoff_state()
     {
         string repo = CreateRepo();
         Write(repo, ".agents/state.json", """{"schemaVersion":"roadmap-state.v1","currentState":"ExecutionLoop"}""");
@@ -1028,7 +1006,7 @@ public sealed class WorkflowResolverTests
     }
 
     [Fact]
-    public async Task Repository_observation_reads_pre_unification_roadmap_sqlite_evidence_without_mutating()
+    public async Task Repository_observation_ignores_pre_unification_sqlite_authority_without_mutating()
     {
         string repo = CreateRepo();
         await CreateSqliteDatabaseAsync(repo);
@@ -1072,7 +1050,7 @@ public sealed class WorkflowResolverTests
     }
 
     [Fact]
-    public async Task Repository_observation_reports_legacy_execution_handoff_sqlite_state_as_migration_only()
+    public async Task Repository_observation_does_not_project_legacy_sqlite_handoff_state()
     {
         string repo = CreateRepo();
         await CreateSqliteDatabaseAsync(repo);
@@ -1193,7 +1171,7 @@ public sealed class WorkflowResolverTests
         new WorkflowResolver().Resolve(
             invocation,
             observation,
-            CanonicalWorkflowDefinitionSketches.CreateAll());
+            CanonicalWorkflowCatalog.CreateAll());
 
     private static RepositoryObservation Observation(
         IReadOnlyList<ObservedWorkflowState>? workflowStates = null,
@@ -1274,13 +1252,8 @@ public sealed class WorkflowResolverTests
         string identity,
         string evidence)
     {
-        ObservedLifecycleRow row = Assert.Single(
-            observation.LifecycleRows,
-            item => item.Identity == identity);
-        Assert.Equal("Present", row.State);
-        Assert.Contains(evidence, row.Evidence);
-        Assert.Contains(
-            observation.Evidence,
+        Assert.DoesNotContain(observation.LifecycleRows, item => item.Identity == identity);
+        Assert.DoesNotContain(observation.Evidence,
             item => item.Identity == identity && item.Location == evidence);
     }
 
@@ -1290,13 +1263,9 @@ public sealed class WorkflowResolverTests
         string state,
         string evidence)
     {
-        ObservedLifecycleRow row = Assert.Single(
-            observation.LifecycleRows,
-            item => item.Identity == identity);
-        Assert.Equal(state, row.State);
-        Assert.Contains(evidence, row.Evidence);
-        Assert.Contains(
-            observation.Evidence,
+        Assert.DoesNotContain(observation.LifecycleRows,
+            item => item.Identity == identity || item.State == state);
+        Assert.DoesNotContain(observation.Evidence,
             item => item.Identity == identity && item.Location == evidence);
     }
 

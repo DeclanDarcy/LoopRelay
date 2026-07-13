@@ -15,6 +15,14 @@ Accepted decisions:
 9. [ADR-0009: Canonical Prompt Dispatch Gateway](0009-canonical-prompt-dispatch-gateway.md)
 10. [ADR-0010: Bind Execution Recommendations to Decision Products and Policy Evaluations](0010-execution-recommendations-as-causal-evidence.md)
 11. [ADR-0011: Establish a Thin Application Boundary](0011-thin-application-boundary.md)
+12. [ADR-0012: Use Specific Reason-Bearing Outcomes](0012-specific-reason-bearing-outcomes.md)
+13. [ADR-0013: Recovery, Cancellation, and Profile Authority](0013-recovery-cancellation-and-profile-authority.md)
+14. [ADR-0014: Durable Interaction Policy](0014-durable-interaction-policy.md)
+15. [ADR-0015: Strict Storage Operation Boundaries](0015-strict-storage-operation-boundaries.md)
+16. [ADR-0016: Use a One-Way, Verified Import Gateway](0016-one-way-import-gateway.md)
+17. [ADR-0017: Use One Versioned Workflow Catalog Snapshot](0017-single-versioned-workflow-catalog.md)
+18. [ADR-0018: Use One Durable Orchestration Kernel](0018-one-durable-orchestration-kernel.md)
+19. [ADR-0019: Separate Completion Decision from Terminal Settlement](0019-completion-decision-and-settlement.md)
 
 ## Governance
 

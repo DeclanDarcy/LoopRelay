@@ -169,6 +169,10 @@ public static class WorkflowDefinitionValidator
         {
             errors.Add($"Product '{product.Identity}' must declare at least one storage representation.");
         }
+        if (string.IsNullOrWhiteSpace(product.SchemaVersion))
+        {
+            errors.Add($"Product '{product.Identity}' must declare a schema version.");
+        }
     }
 
     private static void ValidateGate(GateDefinition gate, string label, List<string> errors)

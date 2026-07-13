@@ -224,3 +224,59 @@ public readonly record struct RecoveryAttemptIdentity(string Value)
 
     public override string ToString() => Value;
 }
+
+public readonly record struct RecoveryCaseIdentity(string Value)
+{
+    public static RecoveryCaseIdentity New() => new(CausalUlid.NewId("recoverycase"));
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}
+
+public readonly record struct RecoveryClassificationIdentity(string Value)
+{
+    public static RecoveryClassificationIdentity New() => new(CausalUlid.NewId("recoveryclass"));
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}
+
+public readonly record struct RecoveryPlanIdentity(string Value)
+{
+    public static RecoveryPlanIdentity New() => new(CausalUlid.NewId("recoveryplan"));
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}
+
+public readonly record struct RecoveryActionIdentity(string Value)
+{
+    public static RecoveryActionIdentity New() => new(CausalUlid.NewId("recoveryaction"));
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}
+
+public readonly record struct InteractionRequestIdentity(string Value)
+{
+    public static InteractionRequestIdentity New() => new(CausalUlid.NewId("interaction"));
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}
+
+public readonly record struct InteractionResponseIdentity(string Value)
+{
+    public static InteractionResponseIdentity New() => new(CausalUlid.NewId("interactionresponse"));
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}
+
+public readonly record struct InteractionEventIdentity(string Value)
+{
+    public static InteractionEventIdentity New() => new(CausalUlid.NewId("interactionevent"));
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}
+
+public readonly record struct InteractionPolicyEvaluationIdentity(string Value)
+{
+    public static InteractionPolicyEvaluationIdentity New() => new(CausalUlid.NewId("interactionpolicy"));
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}

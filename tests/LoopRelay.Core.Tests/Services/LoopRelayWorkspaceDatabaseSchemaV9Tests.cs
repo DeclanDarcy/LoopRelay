@@ -17,7 +17,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
     ];
 
     [Fact]
-    public async Task EnsureSchemaAsync_FreshDatabase_StampsVersionNineAndCreatesSpineTables()
+    public async Task EnsureSchemaAsync_FreshDatabase_StampsVersionFifteenAndCreatesSpineTables()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -26,17 +26,17 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal(9, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
-        Assert.Equal("9", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal(15, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
+        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.Equal(LoopRelayWorkspaceDatabase.SchemaIdentity, await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_identity';"));
         Assert.Equal(LoopRelayWorkspaceDatabase.SchemaFamily, await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_family';"));
         Assert.Equal(
-            LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint,
+            LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint,
             await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_shape';"));
         WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
         Assert.Equal(WorkspaceSchemaFamily.CanonicalWorkspace, inspection.Family);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV9Complete, inspection.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint, inspection.ShapeFingerprint);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, inspection.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, inspection.ShapeFingerprint);
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist.");
@@ -137,7 +137,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             await LegacyContinuityWorkspaceImporter.ImportToShadowAsync(sourcePath, targetPath);
 
         Assert.Equal(WorkspaceSchemaFamily.LegacyContinuity, result.SourceSchema.Family);
-        Assert.Equal(9, result.TargetSchemaVersion);
+        Assert.Equal(15, result.TargetSchemaVersion);
         await using (SqliteConnection source = LoopRelayWorkspaceDatabase.OpenReadOnly(sourcePath))
         {
             await source.OpenAsync();
@@ -150,7 +150,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         WorkspaceSchemaInspection targetInspection =
             await LoopRelayWorkspaceDatabase.InspectSchemaAsync(shadow);
         Assert.Equal(WorkspaceSchemaFamily.CanonicalWorkspace, targetInspection.Family);
-        Assert.Equal(9, targetInspection.Version);
+        Assert.Equal(15, targetInspection.Version);
         Assert.Equal(4L, await ScalarLongAsync(
             shadow,
             $"SELECT COUNT(*) FROM compatibility_import_events WHERE import_id = '{result.ImportId}';"));
@@ -351,6 +351,113 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
     }
 
     [Fact]
+    public async Task EnsureSchemaAsync_MigratesCanonicalV11ToV12InteractionLedger()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        await ExecuteAsync(connection, """
+            DROP TABLE canonical_interaction_lifecycle_events;
+            DROP TABLE canonical_interaction_responses;
+            DROP TABLE canonical_interaction_requests;
+            DROP TABLE canonical_interaction_policy_evaluations;
+            UPDATE schema_metadata SET value = '11' WHERE key = 'schema_version';
+            """);
+        await ExecuteAsync(connection,
+            $"UPDATE schema_metadata SET value = '{LoopRelayWorkspaceDatabase.CanonicalV11ShapeFingerprint}' WHERE key = 'schema_shape';");
+
+        WorkspaceSchemaInspection before = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV11Complete, before.Shape);
+
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        WorkspaceSchemaInspection after = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, after.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, after.ShapeFingerprint);
+        Assert.True(await TableExistsAsync(connection, "canonical_interaction_requests"));
+        Assert.True(await TableExistsAsync(connection, "canonical_interaction_responses"));
+        Assert.True(await TableExistsAsync(connection, "canonical_interaction_lifecycle_events"));
+        Assert.True(await TableExistsAsync(connection, "canonical_interaction_policy_evaluations"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_FreshDatabase_CreatesV10EffectWorkContract()
+    {
+        Repository repository = CreateRepository();
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(CreateDatabasePath(repository));
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        foreach (string table in new[]
+        {
+            "canonical_effect_intents",
+            "canonical_effect_lifecycle_events",
+            "canonical_effect_receipts",
+            "canonical_effect_reconciliation_attempts",
+        })
+        {
+            Assert.True(await TableExistsAsync(connection, table), $"Expected v10 table `{table}`.");
+        }
+
+        IReadOnlyList<string> columns = await TableColumnsAsync(connection, "canonical_effect_intents");
+        foreach (string column in new[]
+        {
+            "workspace_id", "run_id", "workflow_instance_id", "semantic_operation_key",
+            "executor_key", "executor_version", "target_json", "payload_json", "payload_hash",
+            "requiredness", "dependencies_json", "precondition_json", "postcondition_json",
+            "reconciliation_policy", "row_version", "lease_owner", "lease_expires_at",
+            "attempt_count", "terminal_receipt_id",
+        })
+        {
+            Assert.Contains(column, columns);
+        }
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_V9EffectRowsBecomeAppendOnlyHumanReviewFactsWithoutInventedReceipt()
+    {
+        Repository repository = CreateRepository();
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(CreateDatabasePath(repository));
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        await ExecuteAsync(connection,
+            """
+            UPDATE schema_metadata SET value = '9' WHERE key = 'schema_version';
+            DELETE FROM schema_metadata WHERE key = 'schema_shape';
+            DROP TABLE canonical_effect_lifecycle_events;
+            DROP TABLE canonical_effect_receipts;
+            DROP TABLE canonical_effect_reconciliation_attempts;
+            INSERT INTO canonical_effect_intents (
+                effect_intent_id, transition_run_id, attempt_id, effect_identity, category,
+                effect_order, idempotency_key, status, definition_json, planned_at
+            ) VALUES (
+                'legacy-effect-1', 'legacy-transition-1', 'legacy-attempt-1', 'publish', 'Publication',
+                0, 'legacy-key-1', 'Unknown', '{"legacy":true}', '2026-07-12T00:00:00Z'
+            );
+            INSERT INTO canonical_effect_records (
+                run_id, effect_identity, category, status, recorded_at, explanation, evidence_json
+            ) VALUES (
+                'legacy-transition-1', 'publish', 'Publication', 'Unknown',
+                '2026-07-12T00:00:01Z', 'Legacy call outcome unknown.', '["legacy"]'
+            );
+            """);
+
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        Assert.Equal("HumanActionRequired", await ScalarStringAsync(connection,
+            "SELECT status FROM canonical_effect_intents WHERE effect_intent_id = 'legacy-effect-1';"));
+        Assert.Equal(2L, await ScalarLongAsync(connection,
+            "SELECT COUNT(*) FROM canonical_effect_lifecycle_events WHERE effect_intent_id = 'legacy-effect-1';"));
+        Assert.Equal(1L, await ScalarLongAsync(connection,
+            "SELECT COUNT(*) FROM canonical_effect_lifecycle_events WHERE effect_intent_id = 'legacy-effect-1' AND lifecycle = 'Unknown';"));
+        Assert.Equal(1L, await ScalarLongAsync(connection,
+            "SELECT COUNT(*) FROM canonical_effect_lifecycle_events WHERE effect_intent_id = 'legacy-effect-1' AND lifecycle = 'HumanActionRequired';"));
+        Assert.Equal(0L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM canonical_effect_receipts;"));
+    }
+
+    [Fact]
     public async Task EnsureSchemaAsync_ConvergesMerge4PartialV9WithoutRecordingFakeNineToNineMigration()
     {
         Repository repository = CreateRepository();
@@ -363,7 +470,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await RemoveIncomingV9FeaturesAsync(connection);
         await ExecuteAsync(
             connection,
-            "DELETE FROM schema_metadata WHERE key = 'schema_shape'; DROP TABLE workspace_schema_convergences;");
+            "UPDATE schema_metadata SET value = '9' WHERE key = 'schema_version'; DELETE FROM schema_metadata WHERE key = 'schema_shape'; DROP TABLE workspace_schema_convergences;");
 
         WorkspaceSchemaInspection provisional = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
         Assert.Equal(WorkspaceSchemaShape.Merge4V9Partial, provisional.Shape);
@@ -371,12 +478,15 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
         WorkspaceSchemaInspection complete = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV9Complete, complete.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint, complete.ShapeFingerprint);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, complete.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, complete.ShapeFingerprint);
         Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
         Assert.Equal(0L, await ScalarLongAsync(
             connection,
             "SELECT COUNT(*) FROM workspace_schema_migrations WHERE from_version = 9 AND to_version = 9;"));
+        Assert.Equal(1L, await ScalarLongAsync(
+            connection,
+            "SELECT COUNT(*) FROM workspace_schema_migrations WHERE from_version = 9 AND to_version = 15;"));
         Assert.Equal("Merge4V9Partial", await ScalarStringAsync(
             connection,
             "SELECT source_shape FROM workspace_schema_convergences;"));
@@ -395,7 +505,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await RemoveMerge4V9FeaturesAsync(connection);
         await ExecuteAsync(
             connection,
-            "DELETE FROM schema_metadata WHERE key IN ('schema_identity', 'schema_family', 'schema_shape');");
+            "UPDATE schema_metadata SET value = '9' WHERE key = 'schema_version'; DELETE FROM schema_metadata WHERE key IN ('schema_identity', 'schema_family', 'schema_shape');");
 
         WorkspaceSchemaInspection provisional = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
         Assert.False(provisional.HasExplicitLineage);
@@ -404,8 +514,8 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
         WorkspaceSchemaInspection complete = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV9Complete, complete.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint, complete.ShapeFingerprint);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, complete.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, complete.ShapeFingerprint);
         Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
         Assert.Equal("ArchitectureConvergenceV9Partial", await ScalarStringAsync(
             connection,
@@ -424,6 +534,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await ExecuteAsync(
             connection,
             """
+            UPDATE schema_metadata SET value = '9' WHERE key = 'schema_version';
             DELETE FROM schema_metadata WHERE key IN ('schema_identity', 'schema_family', 'schema_shape');
             DROP TABLE workspace_schema_convergences;
             """);
@@ -434,8 +545,8 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
         WorkspaceSchemaInspection complete = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV9Complete, complete.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV9ShapeFingerprint, complete.ShapeFingerprint);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, complete.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, complete.ShapeFingerprint);
         Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
     }
 
@@ -465,7 +576,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
     }
 
     [Fact]
-    public async Task EnsureSchemaAsync_RejectsStampedCanonicalV9WhenItsPhysicalShapeIsCorrupt()
+    public async Task EnsureSchemaAsync_RejectsStampedCanonicalV15WhenItsPhysicalShapeIsCorrupt()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -475,7 +586,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await ExecuteAsync(connection, "DROP TABLE canonical_runtime_prerequisites;");
 
         WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
-        Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV9, inspection.Shape);
+        Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV15, inspection.Shape);
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));
     }
@@ -748,7 +859,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
     }
 
     [Fact]
-    public async Task EnsureSchemaAsync_UpgradesVersionFourDatabaseToVersionNineIdempotently()
+    public async Task EnsureSchemaAsync_UpgradesVersionFourDatabaseToVersionFifteenIdempotently()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -769,12 +880,12 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("9", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.True(await TableExistsAsync(connection, "read_receipts"), "Expected table `read_receipts` to exist after upgrade.");
 
         // The migration is idempotent: a second schema pass succeeds and keeps the same shape.
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
-        Assert.Equal("9", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.True(await TableExistsAsync(connection, "read_receipts"), "Expected table `read_receipts` to survive a second schema pass.");
     }
 
@@ -859,7 +970,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
     }
 
     [Fact]
-    public async Task EnsureSchemaAsync_UpgradesVersionTwoShapedDatabaseToVersionNine()
+    public async Task EnsureSchemaAsync_UpgradesVersionTwoShapedDatabaseToVersionFifteen()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -876,7 +987,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("9", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist after upgrade.");
@@ -971,7 +1082,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("9", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.Equal("Resumable", await ScalarStringAsync(connection, "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
         Assert.Equal("MissingRequiredInput", await ScalarStringAsync(connection, "SELECT outcome FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
         Assert.Equal("Resumable", await ScalarStringAsync(connection, "SELECT state FROM canonical_stage_states WHERE workflow_identity = 'Plan';"));
@@ -994,7 +1105,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
-        await ExecuteAsync(connection, "UPDATE schema_metadata SET value = '10' WHERE key = 'schema_version';");
+        await ExecuteAsync(connection, "UPDATE schema_metadata SET value = '16' WHERE key = 'schema_version';");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));

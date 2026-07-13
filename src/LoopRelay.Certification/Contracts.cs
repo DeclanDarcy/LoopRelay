@@ -111,7 +111,8 @@ public sealed record CoverageObligation(
     string Dimension,
     string Identity,
     EvidenceLevel Level,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    string ContentHash = "");
 
 public sealed record CoverageLedger(
     string Version,
@@ -465,7 +466,36 @@ public sealed record ReleaseDimensionResult(
     string EvidenceFile,
     bool Current,
     bool Passed,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    ObligationEvidenceLink? ObligationLink = null);
+
+public enum EvidenceCreditStatus
+{
+    Uncredited,
+    Credited,
+    Stale,
+    LocalOnly,
+}
+
+public enum EvidenceDurability
+{
+    LocalTemporary,
+    WorkspaceDurable,
+    CrossMachineDurable,
+}
+
+public sealed record ObligationEvidenceLink(
+    string ObligationKey,
+    string ContentVersion,
+    string CatalogIdentity,
+    string SchemaIdentity,
+    string AssetVersion,
+    string ProviderProfile,
+    EvidenceLevel EvidenceTier,
+    string EvidenceIdentity,
+    EvidenceDurability Durability,
+    EvidenceCreditStatus CreditStatus,
+    string Reason);
 
 public sealed record ContinuousCertificationResult(
     string SchemaVersion,
@@ -474,6 +504,7 @@ public sealed record ContinuousCertificationResult(
     IReadOnlyList<CertificationTierResult> Tiers,
     IReadOnlyList<ReleaseDimensionResult> Dimensions,
     IReadOnlyList<PlatformCertificationResult> Platforms,
+    string PlatformClaim,
     bool CrossPlatformContractAgreement,
     bool ClassificationRoutingDistinct,
     bool DriftInvalidationEnabled,

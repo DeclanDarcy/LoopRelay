@@ -144,6 +144,69 @@ public enum EffectCategory
     PreUnificationExport,
 }
 
+public enum RepositoryTarget
+{
+    Workspace,
+    NestedAgents,
+    ParentGitlink,
+}
+
+public enum SurfaceMutationKind
+{
+    CreateOrReplaceFile,
+    ReplaceDirectory,
+    RepositoryDelta,
+    AppendEvidence,
+}
+
+public enum CommitPolicy
+{
+    None,
+    BlockingLocal,
+}
+
+public enum PushPolicy
+{
+    None,
+    RequiredAsync,
+}
+
+public readonly record struct ValidatorIdentity(string Value)
+{
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}
+
+public readonly record struct RuntimeCapabilityIdentity(string Value)
+{
+    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
+    public override string ToString() => Value;
+}
+
+public sealed record ValidatorReference(ValidatorIdentity Identity, string Owner);
+
+public sealed record OutputSurfaceDefinition(
+    string Path,
+    RepositoryTarget RepositoryTarget,
+    SurfaceMutationKind MutationKind,
+    string Ownership,
+    ValidatorReference Validator,
+    CommitPolicy CommitPolicy,
+    PushPolicy PushPolicy);
+
+public sealed record InputSurfaceDefinition(
+    string Path,
+    RepositoryTarget RepositoryTarget,
+    string Ownership,
+    ValidatorReference Validator);
+
+public sealed record PromptContractDefinition(
+    string TemplateIdentity,
+    string TemplateVersion,
+    string RequiredPolicyProfile,
+    IReadOnlyList<string> ResolvedPolicyRequirements,
+    IReadOnlyList<RuntimeCapabilityIdentity> RuntimeCapabilities);
+
 public enum ProductLifecycle
 {
     Proposed,
@@ -237,7 +300,14 @@ public sealed record WorkflowTransitionDefinition(
     IReadOnlyList<EffectDefinition> Effects,
     IReadOnlyList<TransitionDependency> Dependencies,
     IReadOnlyList<WorkflowTransitionIdentity> EligibleSuccessors,
-    RecoveryDefinition Recovery);
+    RecoveryDefinition Recovery,
+    IReadOnlyList<OutputSurfaceDefinition>? OutputSurfaces = null,
+    IReadOnlyList<ValidatorReference>? ValidatorReferences = null,
+    PromptContractDefinition? PromptContract = null,
+    IReadOnlyList<string>? InteractionCategories = null,
+    IReadOnlyList<string>? RecoveryStrategies = null,
+    string CompletionBehavior = "AdvanceOnlyAfterRequiredEffectsSettle",
+    IReadOnlyList<InputSurfaceDefinition>? InputSurfaces = null);
 
 public sealed record TransitionDependency(
     string Identity,

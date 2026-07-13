@@ -64,7 +64,6 @@ public sealed class PromptAssetOwnershipTests
             ["Projections/ProjectionForUpdateRoadmapCompletionContext.prompt"] = "ProjectionPromptCatalog",
 
             // Direct generated-class consumers.
-            ["ContinueExecution.prompt"] = "UnifiedPromptExecutor implementation slice + legacy ExecutionStep",
             ["GenerateNoChangesHandoff.prompt"] = "UnifiedPromptExecutor handoff turn + legacy ExecutionStep",
             ["GenerateSystemPromptForFirstExecutionAgent.prompt"] = "DecisionSession proposal turn",
             ["GenerateSystemPromptForNextExecutionAgent.prompt"] = "DecisionSession proposal turn",
@@ -75,11 +74,7 @@ public sealed class PromptAssetOwnershipTests
             ["SynthesizeNonImplementationInsights.prompt"] = "NonImplementationInsightSynthesizer",
 
             // Legacy Execute loop seed (LoopRunner/ExecutionStep), converging M17-M19.
-            ["StartExecution.prompt"] = "legacy ExecutionStep (converging M17-M19)",
 
-            // Uncompiled (no .prompt extension, excluded from the generator glob); retained by
-            // owner ruling 2026-07-11 for near-future full-roadmap generation plans (M17).
-            ["Planning/CreateNewRoadmap"] = "owner-reserved (uncompiled; M17 full-roadmap generation intent)",
         };
 
     // Registered assets whose template content the owner has explicitly reserved as pending;

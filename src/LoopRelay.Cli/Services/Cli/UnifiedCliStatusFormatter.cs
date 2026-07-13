@@ -15,6 +15,7 @@ internal static class UnifiedCliStatusFormatter
         var lines = new List<string>
         {
             $"Repository: {snapshot.RepositoryPath}",
+            $"Snapshot: {snapshot.WorkspaceSnapshot?.SnapshotIdentity ?? "(legacy)"}",
             $"Invocation mode: {resolution.Selection.InvocationMode}",
             $"Selected chain: {resolution.Selection.SelectedChain}",
             $"Selected workflow: {resolution.Selection.SelectedWorkflow}",

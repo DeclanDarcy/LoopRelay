@@ -42,9 +42,9 @@ public sealed class CanonicalPromptAssetCatalogTests
     [Fact]
     public void Plan_traditional_and_execute_definitions_use_registered_prompt_assets_where_available()
     {
-        WorkflowDefinition traditional = CanonicalWorkflowDefinitionSketches.CreateTraditionalRoadmap();
-        WorkflowDefinition plan = CanonicalWorkflowDefinitionSketches.CreatePlan();
-        WorkflowDefinition execute = CanonicalWorkflowDefinitionSketches.CreateExecute();
+        WorkflowDefinition traditional = CanonicalWorkflowCatalog.CreateTraditionalRoadmap();
+        WorkflowDefinition plan = CanonicalWorkflowCatalog.CreatePlan();
+        WorkflowDefinition execute = CanonicalWorkflowCatalog.CreateExecute();
 
         AssertRegistered(traditional, "CreateEpic");
         AssertRegistered(traditional, "GenerateMilestoneDeepDivesForEpic");
@@ -66,8 +66,6 @@ public sealed class CanonicalPromptAssetCatalogTests
             global::LoopRelay.Core.Prompts.WritePlan.Text,
             global::LoopRelay.Core.Prompts.RevisePlan.Template,
             global::LoopRelay.Core.Prompts.ExtractMilestones.Text,
-            global::LoopRelay.Core.Prompts.ContinueExecution.Template,
-            global::LoopRelay.Core.Prompts.StartExecution.Template,
         ];
 
         Assert.All(prompts, prompt =>

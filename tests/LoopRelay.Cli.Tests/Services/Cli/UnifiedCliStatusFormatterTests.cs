@@ -94,7 +94,7 @@ public sealed class UnifiedCliStatusFormatterTests
         WorkflowResolutionResult resolution = new WorkflowResolver().Resolve(
             invocation,
             observation,
-            CanonicalWorkflowDefinitionSketches.CreateAll());
+            CanonicalWorkflowCatalog.CreateAll());
         return new CanonicalCliStatusSnapshot(
             "repo",
             observation,

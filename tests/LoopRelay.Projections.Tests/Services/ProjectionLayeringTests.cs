@@ -10,7 +10,6 @@ public sealed class ProjectionLayeringTests
         string root = FindRepositoryRoot();
         foreach (string project in new[]
         {
-            "src/LoopRelay.Plan.Cli/LoopRelay.Plan.Cli.csproj",
             "src/LoopRelay.Cli/LoopRelay.Cli.csproj",
             "src/LoopRelay.Projections/LoopRelay.Projections.csproj",
         })

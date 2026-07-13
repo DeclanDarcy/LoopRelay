@@ -1,15 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Diagnostics;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
-using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Services;
 using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Storage;
 using LoopRelay.Orchestration.Workflows;
-using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Orchestration.Resolution;
 
@@ -17,24 +15,6 @@ public sealed class RepositoryObserver(
     IStorageVerifier? _storageVerifier = null,
     ICanonicalPersistenceProjection? _persistenceProjection = null)
 {
-    private const string WorkspaceDatabaseRelativePath = ".LoopRelay/persistence/looprelay.sqlite3";
-
-    private static readonly JsonSerializerOptions DecisionResumeJson = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-    };
-
-    private static readonly HashSet<string> PreUnificationExecutionHandoffStates = new(StringComparer.Ordinal)
-    {
-        "GenerateOperationalContext",
-        "OperationalContextReady",
-        "GenerateExecutionPrompt",
-        "ExecutionPromptReady",
-        "ExecutionLoop",
-        "ExecutionBlocked",
-    };
-
     // The per-type authority split (M3): these products are hand-editable collaboration files
     // observed from the working tree; the filesystem decides their presence and content, and
     // ledger rows never substitute for or mask them. Every other product identity is a
@@ -89,6 +69,10 @@ public sealed class RepositoryObserver(
             ? await _persistenceProjection.ProjectAsync(repository, cancellationToken)
             : CanonicalPersistenceReadModel.Empty;
         CanonicalWorkflowPersistenceSnapshot canonicalSnapshot = persistenceReadModel.Workflow;
+        HashSet<string> attemptsWithUnsettledRequiredEffects = persistenceReadModel
+            .UnsettledRequiredEffectAttempts.ToHashSet(StringComparer.Ordinal);
+        HashSet<string> certifiedTerminalAttempts = persistenceReadModel.CertifiedTerminalAttempts
+            .ToHashSet(StringComparer.Ordinal);
         IReadOnlyList<string> evalIntentPaths = ListRelativeFiles(root, Path.Combine(agents, "evals"), "*.md");
         var products = new List<ObservedProduct>();
 
@@ -123,14 +107,15 @@ public sealed class RepositoryObserver(
             products.RemoveAll(observed => observed.Product.Identity == product.Identity);
             products.Add(new ObservedProduct(
                 product,
-                GateUsable: product.ValidationState is ProductValidationState.Valid or ProductValidationState.Unknown,
+                GateUsable: (product.ValidationState is ProductValidationState.Valid or ProductValidationState.Unknown) &&
+                    !attemptsWithUnsettledRequiredEffects.Contains(product.CausalIdentity) &&
+                    (product.Identity != ProductIdentity.CertifiedCompletion ||
+                        certifiedTerminalAttempts.Contains(product.CausalIdentity)),
                 product.EvidenceLocations));
         }
         EnforceLiveDecisionRecommendation(products, root);
 
-        IReadOnlyList<string> completionArchiveEvidence = AddCompletionArchiveProducts(products, root);
-        IReadOnlyList<ObservedLifecycleRow> decisionResumeRows = ObserveDecisionSessionResume(repository, verification);
-        IReadOnlyList<ObservedLifecycleRow> preUnificationRows = ObservePreUnificationRoadmapEvidence(repository, verification);
+        AddCompletionArchiveProducts(products, root);
 
         IReadOnlyList<ObservedEvidence> evidence = products
             .SelectMany(product => product.Evidence.Select(location => new ObservedEvidence(
@@ -163,16 +148,6 @@ public sealed class RepositoryObserver(
                 location,
                 "canonical transition recovery",
                 Ignored: false))))
-            .Concat(decisionResumeRows.SelectMany(row => row.Evidence.Select(location => new ObservedEvidence(
-                row.Identity,
-                location,
-                "decision session resume observation",
-                Ignored: false))))
-            .Concat(preUnificationRows.SelectMany(row => row.Evidence.Select(location => new ObservedEvidence(
-                row.Identity,
-                location,
-                "pre-unification roadmap observation",
-                Ignored: false))))
             .Concat(verification.Evidence.Select(location => new ObservedEvidence(
                 "storage",
                 location,
@@ -194,7 +169,6 @@ public sealed class RepositoryObserver(
         }
 
         workflowStates = AddInferredPlanWorkflowState(workflowStates, products);
-        workflowStates = AddInferredExecuteCompletionState(workflowStates, completionArchiveEvidence);
         workflowStates = AddInferredExecuteWorkflowState(workflowStates, products);
 
         return new RepositoryObservation(
@@ -211,7 +185,8 @@ public sealed class RepositoryObserver(
                 product.EvidenceLocations))).Concat(canonicalSnapshot.RecoveryMarkers.Select(marker => new ObservedLifecycleRow(
                     $"TransitionRecovery:{marker.MarkerId}",
                     string.Join(",", marker.Recovery.SupportedActions),
-                    marker.Evidence))).Concat(decisionResumeRows).Concat(preUnificationRows).ToArray(),
+                    marker.Evidence))).Concat(persistenceReadModel.UnsettledEffects.Select(effect => new ObservedLifecycleRow(
+                    $"Effect:{effect.Identity}", effect.State, effect.Evidence))).ToArray(),
             Evidence: evidence,
             TransitionRuns: canonicalSnapshot.TransitionRuns.Select(run => new ObservedTransitionRun(
                 run.Workflow,
@@ -228,307 +203,6 @@ public sealed class RepositoryObserver(
             HumanInteractionRequirements: [],
             EvaluationIntentPaths: evalIntentPaths,
             StorageVerification: verification);
-    }
-
-    private static IReadOnlyList<ObservedLifecycleRow> ObserveDecisionSessionResume(
-        Repository repository,
-        StorageVerificationResult verification)
-    {
-        var rows = new List<ObservedLifecycleRow>();
-        string legacyRelativePath = ".LoopRelay/decision-session.json";
-        string legacyPath = Path.Combine(repository.Path, Normalize(legacyRelativePath));
-        if (File.Exists(legacyPath))
-        {
-            rows.Add(new ObservedLifecycleRow(
-                "DecisionSessionResume:LegacyFile",
-                ReadDecisionResumeState(legacyPath) is null ? "Invalid" : "Present",
-                [legacyRelativePath]));
-        }
-
-        if (verification.UsableAuthority)
-        {
-            string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
-            if (File.Exists(databasePath))
-            {
-                ObservedLifecycleRow? sqliteRow = ObserveSqliteDecisionResume(databasePath);
-                if (sqliteRow is not null)
-                {
-                    rows.Add(sqliteRow);
-                }
-            }
-        }
-
-        return rows;
-    }
-
-    private static IReadOnlyList<ObservedLifecycleRow> ObservePreUnificationRoadmapEvidence(
-        Repository repository,
-        StorageVerificationResult verification)
-    {
-        var rows = new List<ObservedLifecycleRow>();
-        AddFilesystemEvidenceRow(
-            rows,
-            repository.Path,
-            "PreUnificationRoadmapState:Filesystem",
-            [".agents/state.json", ".agents/state.md"]);
-        AddFilesystemExecutionHandoffStateRow(rows, repository.Path);
-        AddFilesystemEvidenceRow(
-            rows,
-            repository.Path,
-            "PreUnificationTransitionJournal:Filesystem",
-            [".agents/journal/transitions.jsonl"]);
-        AddFilesystemEvidenceRow(
-            rows,
-            repository.Path,
-            "PreUnificationArtifactLifecycle:Filesystem",
-            [".agents/artifacts/lifecycle.json", ".agents/artifacts/lifecycle.md"]);
-
-        if (!verification.UsableAuthority)
-        {
-            return rows;
-        }
-
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
-        if (!File.Exists(databasePath))
-        {
-            return rows;
-        }
-
-        rows.AddRange(ObservePreUnificationSqliteRows(databasePath));
-        return rows;
-    }
-
-    private static void AddFilesystemEvidenceRow(
-        List<ObservedLifecycleRow> rows,
-        string root,
-        string identity,
-        IReadOnlyList<string> relativePaths)
-    {
-        IReadOnlyList<string> evidence = relativePaths
-            .Where(path => File.Exists(Path.Combine(root, Normalize(path))))
-            .ToArray();
-        if (evidence.Count == 0)
-        {
-            return;
-        }
-
-        rows.Add(new ObservedLifecycleRow(identity, "Present", evidence));
-    }
-
-    private static IReadOnlyList<ObservedLifecycleRow> ObservePreUnificationSqliteRows(string databasePath)
-    {
-        try
-        {
-            using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
-            connection.Open();
-            var rows = new List<ObservedLifecycleRow>();
-            AddSqliteTableEvidenceRow(
-                rows,
-                connection,
-                "roadmap_state",
-                "PreUnificationRoadmapState:Sqlite",
-                "SELECT COUNT(*) FROM roadmap_state WHERE id = 1;");
-            AddSqliteExecutionHandoffStateRow(rows, connection);
-            AddSqliteTableEvidenceRow(
-                rows,
-                connection,
-                "transition_journal",
-                "PreUnificationTransitionJournal:Sqlite",
-                "SELECT COUNT(*) FROM transition_journal;");
-            AddSqliteTableEvidenceRow(
-                rows,
-                connection,
-                "artifact_lifecycle",
-                "PreUnificationArtifactLifecycle:Sqlite",
-                "SELECT COUNT(*) FROM artifact_lifecycle;");
-            return rows;
-        }
-        catch (SqliteException)
-        {
-            return [];
-        }
-        catch (InvalidOperationException)
-        {
-            return [];
-        }
-    }
-
-    private static void AddSqliteTableEvidenceRow(
-        List<ObservedLifecycleRow> rows,
-        SqliteConnection connection,
-        string table,
-        string identity,
-        string countCommandText)
-    {
-        if (!ObservationTableExists(connection, table))
-        {
-            return;
-        }
-
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = countCommandText;
-        object? scalar = command.ExecuteScalar();
-        if (Convert.ToInt64(scalar) <= 0)
-        {
-            return;
-        }
-
-        rows.Add(new ObservedLifecycleRow(
-            identity,
-            "Present",
-            [$"{WorkspaceDatabaseRelativePath}:{table}"]));
-    }
-
-    private static void AddFilesystemExecutionHandoffStateRow(
-        List<ObservedLifecycleRow> rows,
-        string root)
-    {
-        string relativePath = ".agents/state.json";
-        string path = Path.Combine(root, Normalize(relativePath));
-        if (!File.Exists(path) ||
-            !TryReadLegacyRoadmapCurrentState(File.ReadAllText(path), out string state) ||
-            !PreUnificationExecutionHandoffStates.Contains(state))
-        {
-            return;
-        }
-
-        rows.Add(new ObservedLifecycleRow(
-            "PreUnificationExecutionHandoffState:Filesystem",
-            $"MigrationOnly:{state}",
-            [relativePath]));
-    }
-
-    private static void AddSqliteExecutionHandoffStateRow(
-        List<ObservedLifecycleRow> rows,
-        SqliteConnection connection)
-    {
-        if (!ObservationTableExists(connection, "roadmap_state"))
-        {
-            return;
-        }
-
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT document_json FROM roadmap_state WHERE id = 1;";
-        object? scalar = command.ExecuteScalar();
-        string json = scalar is null or DBNull ? string.Empty : Convert.ToString(scalar) ?? string.Empty;
-        if (!TryReadLegacyRoadmapCurrentState(json, out string state) ||
-            !PreUnificationExecutionHandoffStates.Contains(state))
-        {
-            return;
-        }
-
-        rows.Add(new ObservedLifecycleRow(
-            "PreUnificationExecutionHandoffState:Sqlite",
-            $"MigrationOnly:{state}",
-            [$"{WorkspaceDatabaseRelativePath}:roadmap_state"]));
-    }
-
-    private static bool TryReadLegacyRoadmapCurrentState(
-        string json,
-        out string state)
-    {
-        state = string.Empty;
-        try
-        {
-            using JsonDocument document = JsonDocument.Parse(json);
-            JsonElement root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object ||
-                !TryGetPropertyCaseInsensitive(root, "currentState", out JsonElement currentState) ||
-                currentState.ValueKind != JsonValueKind.String)
-            {
-                return false;
-            }
-
-            state = currentState.GetString() ?? string.Empty;
-            return !string.IsNullOrWhiteSpace(state);
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    private static bool TryGetPropertyCaseInsensitive(
-        JsonElement element,
-        string propertyName,
-        out JsonElement value)
-    {
-        foreach (JsonProperty property in element.EnumerateObject())
-        {
-            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
-            {
-                value = property.Value;
-                return true;
-            }
-        }
-
-        value = default;
-        return false;
-    }
-
-    private static ObservedLifecycleRow? ObserveSqliteDecisionResume(string databasePath)
-    {
-        try
-        {
-            using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
-            connection.Open();
-            if (!ObservationTableExists(connection, "decision_session_resume"))
-            {
-                return null;
-            }
-
-            using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = "SELECT document_json FROM decision_session_resume WHERE id = 1;";
-            object? scalar = command.ExecuteScalar();
-            if (scalar is null or DBNull)
-            {
-                return null;
-            }
-
-            string json = Convert.ToString(scalar) ?? string.Empty;
-            DecisionSessionResumeState? state = ReadDecisionResumeState(json);
-            return new ObservedLifecycleRow(
-                "DecisionSessionResume:Sqlite",
-                state is null ? "Invalid" : "Present",
-                [$"{WorkspaceDatabaseRelativePath}:decision_session_resume"]);
-        }
-        catch (SqliteException)
-        {
-            return null;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
-    private static DecisionSessionResumeState? ReadDecisionResumeState(string pathOrJson)
-    {
-        try
-        {
-            string json = File.Exists(pathOrJson)
-                ? File.ReadAllText(pathOrJson)
-                : pathOrJson;
-            DecisionSessionResumeState? state =
-                JsonSerializer.Deserialize<DecisionSessionResumeState>(json, DecisionResumeJson);
-            return state is not null &&
-                state.SchemaVersion == DecisionSessionResumeState.CurrentSchemaVersion &&
-                !string.IsNullOrWhiteSpace(state.ThreadId)
-                    ? state
-                    : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
     }
 
     private static IReadOnlyList<string> AddCompletionArchiveProducts(
@@ -551,12 +225,6 @@ public sealed class RepositoryObserver(
             products,
             ProductIdentity.CompletionEvidence,
             new WorkflowTransitionIdentity("RunCompletionCertification"),
-            archive.Evidence);
-        AddObservedArchiveProduct(
-            root,
-            products,
-            ProductIdentity.CertifiedCompletion,
-            new WorkflowTransitionIdentity("VerifyWorkflowExitGate"),
             archive.Evidence);
         return archive.Evidence;
     }
@@ -843,37 +511,6 @@ public sealed class RepositoryObserver(
                 .Concat(["repository-observation:Plan:artifact-inferred-state"])
                 .Distinct(StringComparer.Ordinal)
                 .ToArray());
-
-    private static IReadOnlyList<ObservedWorkflowState> AddInferredExecuteCompletionState(
-        IReadOnlyList<ObservedWorkflowState> workflowStates,
-        IReadOnlyList<string> completionArchiveEvidence)
-    {
-        if (completionArchiveEvidence.Count == 0 ||
-            workflowStates.Any(state => state.Workflow == WorkflowIdentity.Execute))
-        {
-            return workflowStates;
-        }
-
-        var state = new ObservedWorkflowState(
-            WorkflowIdentity.Execute,
-            WorkflowResolutionState.Completed,
-            CurrentStage: null,
-            CompletedStages:
-            [
-                new WorkflowStageIdentity("Execution Readiness"),
-                new WorkflowStageIdentity("Implementation Planning"),
-                new WorkflowStageIdentity("Implementation"),
-                new WorkflowStageIdentity("Execution Continuity"),
-                new WorkflowStageIdentity("Completion"),
-                new WorkflowStageIdentity("Workflow Completion"),
-            ],
-            Warnings: [],
-            Evidence: completionArchiveEvidence
-                .Concat(["repository-observation:Execute:completion-archive-closed-state"])
-                .Distinct(StringComparer.Ordinal)
-                .ToArray());
-        return workflowStates.Concat([state]).ToArray();
-    }
 
     private static IReadOnlyList<ObservedWorkflowState> AddInferredExecuteWorkflowState(
         IReadOnlyList<ObservedWorkflowState> workflowStates,
@@ -1187,15 +824,6 @@ public sealed class RepositoryObserver(
         return new CompletionArchiveRecord(index, evidence);
     }
 
-    private static bool ObservationTableExists(SqliteConnection connection, string table)
-    {
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $table;";
-        command.Parameters.AddWithValue("$table", table);
-        object? scalar = command.ExecuteScalar();
-        return Convert.ToInt64(scalar) == 1;
-    }
-
     private static ObservedGitFacts ObserveGit(string root)
     {
         string git = Path.Combine(root, ".git");
@@ -1311,213 +939,25 @@ public sealed class RepositoryObserver(
 
 public sealed class FileSystemStorageVerifier : IStorageVerifier
 {
-    private const string DatabaseRelativePath = ".LoopRelay/persistence/looprelay.sqlite3";
+    private readonly WorkspaceStorageVerifierAdapter adapter = new();
 
-    public Task<StorageVerificationResult> VerifyAsync(
+    public async Task<StorageVerificationResult> VerifyAsync(
         string repositoryPath,
         CancellationToken cancellationToken)
     {
-        string root = Path.GetFullPath(repositoryPath);
-        string database = Path.Combine(root, DatabaseRelativePath.Replace('/', Path.DirectorySeparatorChar));
-        string agents = Path.Combine(root, OrchestrationArtifactPaths.AgentsDirectory);
-        bool hasDatabase = File.Exists(database);
-        bool hasAgents = Directory.Exists(agents);
-        var evidence = new List<string>();
-        if (hasDatabase)
+        string database = Path.Combine(Path.GetFullPath(repositoryPath),
+            LoopRelayWorkspaceDatabase.RelativeDatabasePath.Replace('/', Path.DirectorySeparatorChar));
+        bool agents = Directory.Exists(Path.Combine(repositoryPath, OrchestrationArtifactPaths.AgentsDirectory));
+        if (!File.Exists(database))
         {
-            evidence.Add(DatabaseRelativePath);
+            return new StorageVerificationResult(
+                agents ? StorageAuthorityKind.FilesystemExport : StorageAuthorityKind.Missing,
+                true, [], [], [], [], [], [], [],
+                agents ? [OrchestrationArtifactPaths.AgentsDirectory] : []);
         }
-
-        if (hasAgents)
-        {
-            evidence.Add(OrchestrationArtifactPaths.AgentsDirectory);
-        }
-
-        DatabaseInspection inspection = hasDatabase
-            ? InspectSqliteDatabase(database)
-            : DatabaseInspection.Empty;
-        if (hasDatabase && !inspection.CanOpen)
-        {
-            var warning = new ResolutionWarning(
-                WarningCategory.Storage,
-                "Workspace database is not a valid SQLite database.",
-                "storage verifier",
-                "Restore or explicitly repair workspace storage.",
-                [DatabaseRelativePath]);
-            return Task.FromResult(new StorageVerificationResult(
-                StorageAuthorityKind.Corrupt,
-                UsableAuthority: false,
-                StaleExports: [],
-                Conflicts: [],
-                Corruption: [DatabaseRelativePath],
-                UnsupportedSchema: [],
-                UnresolvedReferences: [],
-                PartialTransactions: [],
-                BlockingConditions: [warning],
-                Evidence: evidence));
-        }
-
-        StorageAuthorityKind authority = (hasDatabase, hasAgents) switch
-        {
-            (true, true) => StorageAuthorityKind.Mixed,
-            (true, false) => StorageAuthorityKind.CanonicalSqlite,
-            (false, true) => StorageAuthorityKind.FilesystemExport,
-            _ => StorageAuthorityKind.Missing,
-        };
-        if (hasDatabase && inspection.UnsupportedSchema.Count > 0)
-        {
-            var warning = new ResolutionWarning(
-                WarningCategory.Storage,
-                "Workspace database schema version is unsupported.",
-                "storage verifier",
-                "Use a compatible LoopRelay version or explicitly migrate workspace storage.",
-                [DatabaseRelativePath]);
-            return Task.FromResult(new StorageVerificationResult(
-                StorageAuthorityKind.Unsupported,
-                UsableAuthority: false,
-                StaleExports: [],
-                Conflicts: [],
-                Corruption: [],
-                UnsupportedSchema: inspection.UnsupportedSchema,
-                UnresolvedReferences: [],
-                PartialTransactions: [],
-                BlockingConditions: [warning],
-                Evidence: evidence));
-        }
-
-        if (hasDatabase && inspection.PartialTransactions.Count > 0)
-        {
-            var warning = new ResolutionWarning(
-                WarningCategory.Storage,
-                "Workspace database contains partial workflow transaction markers.",
-                "storage verifier",
-                "Resolve or recover partial workflow transactions before mutating orchestration.",
-                inspection.PartialTransactions);
-            return Task.FromResult(new StorageVerificationResult(
-                authority,
-                UsableAuthority: false,
-                StaleExports: [],
-                Conflicts: [],
-                Corruption: [],
-                UnsupportedSchema: [],
-                UnresolvedReferences: [],
-                PartialTransactions: inspection.PartialTransactions,
-                BlockingConditions: [warning],
-                Evidence: evidence.Concat(inspection.PartialTransactions).ToArray()));
-        }
-
-        return Task.FromResult(new StorageVerificationResult(
-            authority,
-            UsableAuthority: true,
-            StaleExports: [],
-            Conflicts: [],
-            Corruption: [],
-            UnsupportedSchema: [],
-            UnresolvedReferences: [],
-            PartialTransactions: [],
-            BlockingConditions: [],
-            Evidence: evidence));
-    }
-
-    private static DatabaseInspection InspectSqliteDatabase(string path)
-    {
-        try
-        {
-            using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
-            {
-                DataSource = path,
-                Mode = SqliteOpenMode.ReadOnly,
-                Pooling = false,
-            }.ToString());
-            connection.Open();
-            using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = "SELECT COUNT(*) FROM sqlite_master;";
-            _ = command.ExecuteScalar();
-            IReadOnlyList<string> unsupportedSchema = ReadUnsupportedSchema(connection);
-            IReadOnlyList<string> partialTransactions = ReadPartialTransactions(connection);
-            return new DatabaseInspection(
-                CanOpen: true,
-                unsupportedSchema,
-                partialTransactions);
-        }
-        catch (SqliteException)
-        {
-            return DatabaseInspection.Corrupt;
-        }
-        catch (InvalidOperationException)
-        {
-            return DatabaseInspection.Corrupt;
-        }
-    }
-
-    private static IReadOnlyList<string> ReadUnsupportedSchema(SqliteConnection connection)
-    {
-        if (!TableExists(connection, "schema_metadata"))
-        {
-            return [];
-        }
-
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT value FROM schema_metadata WHERE key = 'schema_version';";
-        object? scalar = command.ExecuteScalar();
-        string? value = scalar is null or DBNull ? null : Convert.ToString(scalar);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return [];
-        }
-
-        if (!int.TryParse(value, out int version) ||
-            version < 1 ||
-            version > LoopRelayWorkspaceDatabase.CurrentSchemaVersion)
-        {
-            return [$"schema_metadata:schema_version={value}"];
-        }
-
-        return [];
-    }
-
-    private static IReadOnlyList<string> ReadPartialTransactions(SqliteConnection connection)
-    {
-        if (!TableExists(connection, "workflow_transactions"))
-        {
-            return [];
-        }
-
-        var partial = new List<string>();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT transaction_id, status, completed_at
-            FROM workflow_transactions
-            WHERE status <> 'Completed' OR completed_at IS NULL
-            ORDER BY started_at, transaction_id;
-            """;
-        using SqliteDataReader reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            string transactionId = reader.GetString(0);
-            string status = reader.GetString(1);
-            partial.Add($"workflow_transactions:{transactionId}:{status}");
-        }
-
-        return partial;
-    }
-
-    private static bool TableExists(SqliteConnection connection, string table)
-    {
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $table;";
-        command.Parameters.AddWithValue("$table", table);
-        object? scalar = command.ExecuteScalar();
-        return Convert.ToInt64(scalar) == 1;
-    }
-
-    private sealed record DatabaseInspection(
-        bool CanOpen,
-        IReadOnlyList<string> UnsupportedSchema,
-        IReadOnlyList<string> PartialTransactions)
-    {
-        public static DatabaseInspection Empty { get; } = new(true, [], []);
-
-        public static DatabaseInspection Corrupt { get; } = new(false, [], []);
+        StorageVerificationResult result = await adapter.VerifyAsync(repositoryPath, cancellationToken);
+        return agents && result.Authority == StorageAuthorityKind.CanonicalSqlite
+            ? result with { Authority = StorageAuthorityKind.Mixed }
+            : result;
     }
 }

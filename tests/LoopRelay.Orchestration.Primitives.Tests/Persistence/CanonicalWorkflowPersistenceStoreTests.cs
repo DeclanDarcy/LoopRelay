@@ -148,15 +148,6 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
             [new GateRequirementResult("plan.exists", GateStatus.Satisfied, "plan exists", [".agents/plan.md"])],
             "gate satisfied",
             ["gate.md"]));
-        await store.AppendEffectRecordAsync(new CanonicalEffectRecord(
-            0,
-            runId,
-            new EffectIdentity("persist-plan"),
-            EffectCategory.ProductPersistence,
-            EffectExecutionStatus.Succeeded,
-            now.AddSeconds(30),
-            "effect applied",
-            ["effect.md"]));
         await store.AppendWarningAsync(new CanonicalWarningRecord(
             "warn_001",
             workflow,
@@ -188,7 +179,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Equal(ProductIdentity.ExecutablePlan, snapshot.Products[0].Identity);
         Assert.Equal("1", snapshot.Products[0].SchemaVersion);
         Assert.Single(snapshot.GateEvaluations);
-        Assert.Single(snapshot.EffectRecords);
+        Assert.Empty(snapshot.EffectRecords);
         Assert.Single(snapshot.Warnings);
         Assert.Single(snapshot.RecoveryMarkers);
 

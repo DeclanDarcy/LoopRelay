@@ -30,7 +30,7 @@ public sealed class ReadReceiptTests
         string expectedTree = (await GitReadAsync(repo, "rev-parse", "HEAD:.agents")).Trim();
         WorkflowTransitionDefinition definition = WriteExecutablePlanDefinition();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var store = new UnifiedCliComposition.CanonicalReadReceiptStore(persistence, new ProcessRunner(), repository);
+        var store = new LoopRelayCompositionRoot.CanonicalReadReceiptStore(persistence, new ProcessRunner(), repository);
         CanonicalCausalContext causality = Attempt();
         var request = new TransitionRuntimeRequest(
             WorkflowIdentity.Plan,
@@ -91,7 +91,7 @@ public sealed class ReadReceiptTests
         Repository repository = RepositoryFor(repo);
         WorkflowTransitionDefinition definition = WriteExecutablePlanDefinition();
         var persistence = new CanonicalWorkflowPersistenceStore(repository);
-        var store = new UnifiedCliComposition.CanonicalReadReceiptStore(persistence, new ProcessRunner(), repository);
+        var store = new LoopRelayCompositionRoot.CanonicalReadReceiptStore(persistence, new ProcessRunner(), repository);
         CanonicalCausalContext causality = Attempt();
         var request = new TransitionRuntimeRequest(
             WorkflowIdentity.Plan,
@@ -228,7 +228,7 @@ public sealed class ReadReceiptTests
 
     private static WorkflowTransitionDefinition WriteExecutablePlanDefinition()
     {
-        WorkflowDefinition plan = CanonicalWorkflowDefinitionSketches.CreateAll()
+        WorkflowDefinition plan = CanonicalWorkflowCatalog.CreateAll()
             .Single(workflow => workflow.Identity == WorkflowIdentity.Plan);
         return plan.Transitions.Single(transition => transition.Identity.Value == "WriteExecutablePlan");
     }

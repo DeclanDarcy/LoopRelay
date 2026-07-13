@@ -1,7 +1,7 @@
-<!-- BEGIN GENERATED: source=.agents/epic.md version=3.0 index -->
+<!-- BEGIN GENERATED: source=.agents/specs/epic.md version=3.0 index -->
 # Milestone Deep-Dive Index
 
-Source: [`.agents/epic.md`](../epic.md), version 3.0 (2026-07-12).
+Source: [`.agents/specs/epic.md`](epic.md), version 3.0 (2026-07-12).
 
 This index covers every architecture milestone named by the roadmap. M0–M7 are accepted historical boundaries, so their files specify preservation and post-merge reconciliation rather than reimplementation. M8–M21 are open implementation blueprints. The unnumbered post-merge baseline ratification gate is a hard prerequisite to M8, not an invented milestone.
 
@@ -9,14 +9,14 @@ The roadmap defines no separate capability IDs. The deep dives preserve capabili
 
 | Milestone | Name | Roadmap status | Hard prerequisite(s) | Deep dive |
 |---|---|---|---|---|
-| M0 | Architecture Constitution | Accepted | Roadmap authority | [m0-architecture-constitution-deep-dive.md](m0-architecture-constitution-deep-dive.md) |
-| M1 | Workspace State Authority | Accepted | M0 | [m1-workspace-state-authority-deep-dive.md](m1-workspace-state-authority-deep-dive.md) |
-| M2 | Evaluation Authority | Accepted | M1 | [m2-evaluation-authority-deep-dive.md](m2-evaluation-authority-deep-dive.md) |
-| M3 | Product Authority | Accepted | M2 | [m3-product-authority-deep-dive.md](m3-product-authority-deep-dive.md) |
-| M4 | History Authority | Accepted | M3 | [m4-history-authority-deep-dive.md](m4-history-authority-deep-dive.md) |
-| M5 | Policy Authority | Accepted | M4 | [m5-policy-authority-deep-dive.md](m5-policy-authority-deep-dive.md) |
-| M6 | Prompt Authority | Accepted; supersession ratification | M5 | [m6-prompt-authority-deep-dive.md](m6-prompt-authority-deep-dive.md) |
-| M7 | Runtime Authority | Accepted | M6 | [m7-runtime-authority-deep-dive.md](m7-runtime-authority-deep-dive.md) |
+| M0 | Architecture Constitution | Accepted | Roadmap authority | Preserved by accepted commit `9f6418f5`; `.agents/specs/epic.md` is the preservation specification |
+| M1 | Workspace State Authority | Accepted | M0 | Preserved by accepted commit `8c0b11a4`; `.agents/specs/epic.md` is the preservation specification |
+| M2 | Evaluation Authority | Accepted | M1 | Preserved by accepted commit `87c97444`; `.agents/specs/epic.md` is the preservation specification |
+| M3 | Product Authority | Accepted | M2 | Preserved by accepted commit `ab10e06b`; `.agents/specs/epic.md` is the preservation specification |
+| M4 | History Authority | Accepted | M3 | Preserved by accepted commit `b1b9aa8a`; `.agents/specs/epic.md` is the preservation specification |
+| M5 | Policy Authority | Accepted | M4 | Preserved by accepted commit `96d41f44`; `.agents/specs/epic.md` is the preservation specification |
+| M6 | Prompt Authority | Accepted; supersession ratification | M5 | Preserved by accepted commit `45053775`; `.agents/specs/epic.md` plus accepted superseding ADRs are the preservation specification |
+| M7 | Runtime Authority | Accepted | M6 | Preserved by accepted commit `10dd9494`; `.agents/specs/epic.md` is the preservation specification |
 | M8 | Effect Coordinator | Open | Post-merge baseline ratification | [m8-effect-coordinator-deep-dive.md](m8-effect-coordinator-deep-dive.md) |
 | M9 | Recovery Coordinator | Open | M8 | [m9-recovery-coordinator-deep-dive.md](m9-recovery-coordinator-deep-dive.md) |
 | M10 | Interaction Broker | Open | M9 | [m10-interaction-broker-deep-dive.md](m10-interaction-broker-deep-dive.md) |
@@ -76,4 +76,3 @@ Cross-edges preserved from roadmap §9: M8 and M10 both enable M11; M9 also enab
 - Human-facing documentation production is not an implementation activity. Section 29 is retained because the requested schema requires it, but normally limits work to tested machine-consumed manifests/contracts. M21 alone carries the roadmap’s explicit stale-claim deletion requirement.
 
 <!-- END GENERATED: index -->
-

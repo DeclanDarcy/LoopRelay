@@ -13,8 +13,6 @@ public sealed class PromptPolicyCompositionTests
         {
             ["GenerateSystemPromptForFirstExecutionAgent"] = GenerateSystemPromptForFirstExecutionAgent.Template,
             ["GenerateSystemPromptForNextExecutionAgent"] = GenerateSystemPromptForNextExecutionAgent.Template,
-            ["ContinueExecution"] = ContinueExecution.Template,
-            ["StartExecution"] = StartExecution.Template,
             ["WritePlan"] = WritePlan.Template,
             ["RevisePlan"] = RevisePlan.Template,
             ["SelectNextEpic"] = Core.Prompts.Planning.SelectNextEpic.Template,

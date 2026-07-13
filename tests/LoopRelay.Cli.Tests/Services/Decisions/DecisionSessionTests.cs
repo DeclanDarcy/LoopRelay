@@ -5,6 +5,7 @@ using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Decisions;
 using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Services.Effects;
 using LoopRelay.Cli.Tests.Models;
 using LoopRelay.Cli.Tests.Services.Agents;
 using LoopRelay.Cli.Tests.Services.Execution;
@@ -17,9 +18,11 @@ using LoopRelay.Core.Prompts;
 using LoopRelay.Core.Services.Artifacts;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Abstractions;
+using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
 using LoopRelay.Orchestration.Primitives.NonImplementationReview;
+using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
@@ -638,7 +641,8 @@ public class DecisionSessionTests
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo.Repository, TestAgentConfiguration.Brain, _costModel: null,
-            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcherFor(workspace));
+            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcherFor(workspace),
+            _artifactEffects: new DurableLoopArtifactEffectCoordinator(repo.Repository, art));
 
         await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await repo.Store.WriteAsync(repo.Resolve(OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -660,11 +664,16 @@ public class DecisionSessionTests
         LoopHistoryRecord latestDelta = (await history.ReadLatestAsync(LoopHistoryKind.OperationalDelta))!;
         Assert.Equal(OrchestrationArtifactPaths.HistoricalDelta(1), latestDelta.MaterializedRelativePath);
         Assert.Equal("DELTA-TEXT", latestDelta.Content);
-        // The ledger append plans the numbered projection; projection materialization belongs to
-        // the effect coordinator and is intentionally absent from this history-authority test.
-        Assert.Null(await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
+        Assert.Equal("DELTA-TEXT",
+            await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.False(await repo.Store.ExistsAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalDelta)));
         Assert.Equal("OPCTX-1", await repo.Store.ReadAsync(repo.Resolve(OrchestrationArtifactPaths.OperationalContext)));
+        IReadOnlyList<EffectWorkItem> effects = await new CanonicalEffectWorkStore(repo.Repository)
+            .ReadPlanAsync(latestDelta.Causality.TransitionRun, CancellationToken.None);
+        Assert.Contains(effects, item => item.Intent.Executor == WorkspaceEffectExecutorKeys.RotateOperationalDelta &&
+            item.State == EffectLifecycle.Succeeded && item.Receipt is { PostconditionSatisfied: true });
+        Assert.Contains(effects, item => item.Intent.Executor == WorkspaceEffectExecutorKeys.FilesystemWrite &&
+            item.State == EffectLifecycle.Succeeded && item.Receipt is { PostconditionSatisfied: true });
     }
 
     [Fact]
@@ -1101,7 +1110,7 @@ public class DecisionSessionTests
             terminal, active, active.Accounting, "# Decisions\n\nRecovered output.", "policy");
         Assert.Equal(DecisionTurnState.Committed, committed.Turn!.State);
 
-        WorkflowTransitionDefinition definition = CanonicalWorkflowDefinitionSketches.CreateAll()
+        WorkflowTransitionDefinition definition = CanonicalWorkflowCatalog.CreateAll()
             .Single(workflow => workflow.Identity == WorkflowIdentity.Execute)
             .Transitions.Single(transition => transition.Identity == new WorkflowTransitionIdentity("GenerateDecision"));
         var promptRequest = new PromptExecutionRequest(

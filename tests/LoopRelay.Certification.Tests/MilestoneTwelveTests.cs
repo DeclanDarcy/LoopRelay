@@ -15,7 +15,7 @@ public sealed class MilestoneTwelveTests
             MilestoneTwelveCertificationResult result = await new MilestoneTwelveRunner().RunAsync(
                 workspace, authority);
 
-            int expectedTransitions = CanonicalWorkflowDefinitionSketches.CreateAll()
+            int expectedTransitions = CanonicalWorkflowCatalog.CreateAll()
                 .Sum(workflow => workflow.Transitions.Count);
             Assert.Equal(CertificationClassification.Passed, result.Classification);
             Assert.Equal(expectedTransitions, result.TransitionClasses.Count);
@@ -70,6 +70,9 @@ public sealed class MilestoneTwelveTests
             Assert.False(result.NoCriticalDimensionAtZero);
             Assert.Contains(result.Dimensions, item =>
                 item.ActualLevel == EvidenceLevel.Uncovered && !item.Passed);
+            Assert.Equal("LocalWindowsOnly", result.PlatformClaim);
+            Assert.DoesNotContain(result.Dimensions, item => item.Dimension is "windows-platform" or "linux-platform");
+            Assert.Contains(result.Tiers, item => item.Identity == "cross-platform-diagnostic" && !item.ReleaseBlocking);
             Assert.False(File.Exists(Path.Combine(authority, "evidence", "production-baseline.v1.json")));
         }
         finally

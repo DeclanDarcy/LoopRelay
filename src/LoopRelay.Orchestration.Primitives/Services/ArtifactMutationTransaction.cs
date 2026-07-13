@@ -1,6 +1,10 @@
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Models.Policy;
+using LoopRelay.Orchestration.Effects;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace LoopRelay.Orchestration.Services;
 
@@ -85,6 +89,26 @@ public sealed class ArtifactMutationTransaction
                 }
             }
         }
+    }
+
+    public async Task<SurfaceRestoreEffectPayload> CreateRestorePayloadAsync()
+    {
+        var deletes = new HashSet<string>(_absentExactWrites, StringComparer.OrdinalIgnoreCase);
+        foreach (OperationPathGlob glob in _profile.AllowedWriteGlobs)
+        {
+            IReadOnlyList<string> matches = await _store.ListAsync(glob.Directory, glob.Pattern);
+            foreach (string match in matches)
+                if (!_snapshots.ContainsKey(match)) deletes.Add(match);
+        }
+        SurfaceRestoreFile[] files = _snapshots.OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => new SurfaceRestoreFile(item.Key, item.Value,
+                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(item.Value)))))
+            .ToArray();
+        string[] deletePaths = deletes.Except(_snapshots.Keys, StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.Ordinal).ToArray();
+        string canonical = JsonSerializer.Serialize(new { files, deletePaths });
+        string hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+        return new(files, deletePaths, hash);
     }
 
     public async Task<IReadOnlyList<string>> DeletedSnapshotFilesAsync()

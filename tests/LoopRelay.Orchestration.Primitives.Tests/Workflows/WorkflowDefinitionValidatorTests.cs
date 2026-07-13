@@ -6,9 +6,9 @@ namespace LoopRelay.Orchestration.Tests.Workflows;
 public sealed class WorkflowDefinitionValidatorTests
 {
     [Fact]
-    public void Canonical_sketches_are_valid_and_cover_the_four_workflow_identities()
+    public void Canonical_catalog_is_valid_and_covers_the_four_workflow_identities()
     {
-        IReadOnlyList<WorkflowDefinition> definitions = CanonicalWorkflowDefinitionSketches.CreateAll();
+        IReadOnlyList<WorkflowDefinition> definitions = CanonicalWorkflowCatalog.CreateAll();
 
         Assert.Equal(
             [
@@ -29,7 +29,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Disk_reading_transitions_declare_exactly_their_clean_input_surfaces()
     {
-        IReadOnlyList<WorkflowDefinition> definitions = CanonicalWorkflowDefinitionSketches.CreateAll();
+        IReadOnlyList<WorkflowDefinition> definitions = CanonicalWorkflowCatalog.CreateAll();
         IReadOnlyDictionary<(string Workflow, string Transition), string[]> expected =
             new Dictionary<(string Workflow, string Transition), string[]>
             {
@@ -78,7 +78,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Validate_rejects_a_gate_requirement_declaring_both_product_and_input_surface()
     {
-        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowDefinition definition = CanonicalWorkflowCatalog.CreatePlan();
         WorkflowTransitionDefinition transition = Assert.Single(
             definition.Transitions,
             item => item.Identity == new WorkflowTransitionIdentity("WriteExecutablePlan"));
@@ -133,7 +133,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Validate_accepts_the_canonical_relative_forward_slash_surfaces()
     {
-        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowDefinition definition = CanonicalWorkflowCatalog.CreatePlan();
 
         WorkflowDefinitionValidationResult result = WorkflowDefinitionValidator.Validate(definition);
 
@@ -142,7 +142,7 @@ public sealed class WorkflowDefinitionValidatorTests
 
     private static WorkflowDefinition WithWriteExecutablePlanSurface(string surface)
     {
-        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowDefinition definition = CanonicalWorkflowCatalog.CreatePlan();
         WorkflowTransitionDefinition transition = Assert.Single(
             definition.Transitions,
             item => item.Identity == new WorkflowTransitionIdentity("WriteExecutablePlan"));
@@ -168,7 +168,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Canonical_chains_express_traditional_and_eval_routes_into_the_same_plan_and_execute_workflows()
     {
-        IReadOnlyList<WorkflowChainDefinition> chains = CanonicalWorkflowDefinitionSketches.CreateChains();
+        IReadOnlyList<WorkflowChainDefinition> chains = CanonicalWorkflowCatalog.CreateChains();
 
         WorkflowChainDefinition traditional = Assert.Single(chains, chain => chain.InitialWorkflow == WorkflowIdentity.TraditionalRoadmap);
         WorkflowChainDefinition eval = Assert.Single(chains, chain => chain.InitialWorkflow == WorkflowIdentity.EvalRoadmap);
@@ -184,7 +184,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Canonical_completion_closure_products_are_owned_only_by_execute()
     {
-        IReadOnlyList<WorkflowDefinition> definitions = CanonicalWorkflowDefinitionSketches.CreateAll();
+        IReadOnlyList<WorkflowDefinition> definitions = CanonicalWorkflowCatalog.CreateAll();
         ProductIdentity[] completionProducts =
         [
             ProductIdentity.CompletionEvidence,
@@ -207,7 +207,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void TraditionalRoadmap_sketch_declares_migration_stages_and_transitions()
     {
-        WorkflowDefinition workflow = CanonicalWorkflowDefinitionSketches.CreateTraditionalRoadmap();
+        WorkflowDefinition workflow = CanonicalWorkflowCatalog.CreateTraditionalRoadmap();
 
         Assert.Equal(
             [
@@ -238,7 +238,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void TraditionalRoadmap_transitions_declare_prompt_identities_and_product_requirements()
     {
-        WorkflowDefinition workflow = CanonicalWorkflowDefinitionSketches.CreateTraditionalRoadmap();
+        WorkflowDefinition workflow = CanonicalWorkflowCatalog.CreateTraditionalRoadmap();
 
         AssertTransition(workflow, "BootstrapRoadmapCompletionContext", "BootstrapRoadmapCompletionContext");
         AssertTransition(
@@ -281,7 +281,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Plan_sketch_declares_plan_validation_and_execution_preparation_transitions()
     {
-        WorkflowDefinition workflow = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowDefinition workflow = CanonicalWorkflowCatalog.CreatePlan();
 
         Assert.Equal(
             ["Planning", "Plan Validation", "Execution Preparation", "Workflow Completion"],
@@ -319,20 +319,18 @@ public sealed class WorkflowDefinitionValidatorTests
     }
 
     [Fact]
-    public void Plan_transitions_declare_ordered_publication_and_parent_gitlink_effects()
+    public void Plan_transitions_declare_ordered_domain_effects_and_catalog_derives_git_publication()
     {
-        WorkflowDefinition workflow = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowDefinition workflow = CanonicalWorkflowCatalog.CreatePlan();
 
         AssertOrderedEffects(
             workflow,
             "WriteExecutablePlan",
-            ("persist-draft-plan", EffectCategory.ProductPersistence, 0),
-            ("publish-agents-write-plan", EffectCategory.Publication, 1));
+            ("persist-draft-plan", EffectCategory.ProductPersistence, 0));
         AssertOrderedEffects(
             workflow,
             "GenerateAdversarialProjection",
-            ("persist-adversarial-projection", EffectCategory.ProductPersistence, 0),
-            ("publish-agents-adversarial-projection", EffectCategory.Publication, 1));
+            ("persist-adversarial-projection", EffectCategory.ProductPersistence, 0));
         AssertOrderedEffects(
             workflow,
             "RunAdversarialReview",
@@ -340,34 +338,38 @@ public sealed class WorkflowDefinitionValidatorTests
         AssertOrderedEffects(
             workflow,
             "GenerateOperationalContext",
-            ("persist-operational-context", EffectCategory.ProductPersistence, 0),
-            ("publish-agents-operational-context", EffectCategory.Publication, 1));
+            ("persist-operational-context", EffectCategory.ProductPersistence, 0));
         AssertOrderedEffects(
             workflow,
             "CollectExecutionDetails",
-            ("persist-execution-details", EffectCategory.ProductPersistence, 0),
-            ("publish-agents-execution-details", EffectCategory.Publication, 1));
+            ("persist-execution-details", EffectCategory.ProductPersistence, 0));
         AssertOrderedEffects(
             workflow,
             "GenerateExecutionMilestones",
-            ("persist-execution-milestones", EffectCategory.ProductPersistence, 0),
-            ("publish-agents-execution-milestones", EffectCategory.Publication, 1));
+            ("persist-execution-milestones", EffectCategory.ProductPersistence, 0));
         AssertOrderedEffects(
             workflow,
             "RefineExecutionDetails",
-            ("persist-refined-execution-details", EffectCategory.ProductPersistence, 0),
-            ("publish-agents-refined-details", EffectCategory.Publication, 1));
+            ("persist-refined-execution-details", EffectCategory.ProductPersistence, 0));
         AssertOrderedEffects(
             workflow,
             "VerifyExecuteEntryContract",
-            ("record-execute-entry-evidence", EffectCategory.Evidence, 0),
-            ("record-plan-parent-gitlink", EffectCategory.Git, 1));
+            ("record-execute-entry-evidence", EffectCategory.Evidence, 0));
+
+        WorkflowDefinition derived = CanonicalWorkflowCatalog.Current.Workflows
+            .Single(item => item.Identity == WorkflowIdentity.Plan);
+        Assert.All(
+            derived.Transitions.Where(item => item.OutputSurfaces?.Any(surface =>
+                surface.CommitPolicy == CommitPolicy.BlockingLocal ||
+                surface.PushPolicy == PushPolicy.RequiredAsync) == true),
+            transition => Assert.Contains(transition.Effects,
+                effect => effect.Identity.Value.StartsWith("derived-git-", StringComparison.Ordinal)));
     }
 
     [Fact]
     public void Plan_permissioned_artifact_operations_are_scoped_operation_postures()
     {
-        WorkflowDefinition workflow = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowDefinition workflow = CanonicalWorkflowCatalog.CreatePlan();
 
         foreach (PlanScopedArtifactOperationSpec operation in PlanScopedArtifactOperationCatalog.All)
         {
@@ -382,7 +384,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Execute_sketch_declares_iterative_execution_and_completion_transitions()
     {
-        WorkflowDefinition workflow = CanonicalWorkflowDefinitionSketches.CreateExecute();
+        WorkflowDefinition workflow = CanonicalWorkflowCatalog.CreateExecute();
 
         Assert.Equal(
             [
@@ -423,7 +425,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void EvalRoadmap_sketch_references_all_eval_prompt_assets_and_refresh_transitions()
     {
-        WorkflowDefinition workflow = CanonicalWorkflowDefinitionSketches.CreateEvalRoadmap();
+        WorkflowDefinition workflow = CanonicalWorkflowCatalog.CreateEvalRoadmap();
 
         string[] promptIdentities = workflow.Transitions
             .Select(transition => transition.PromptIdentity)
@@ -521,7 +523,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Validation_rejects_missing_workflow_identity()
     {
-        WorkflowDefinition definition = CanonicalWorkflowDefinitionSketches.CreatePlan() with
+        WorkflowDefinition definition = CanonicalWorkflowCatalog.CreatePlan() with
         {
             Identity = default,
         };
@@ -534,7 +536,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Validation_rejects_stage_transition_references_that_do_not_exist()
     {
-        WorkflowDefinition source = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowDefinition source = CanonicalWorkflowCatalog.CreatePlan();
         WorkflowStageDefinition brokenStage = source.Stages[0] with
         {
             Transitions = [new WorkflowTransitionIdentity("MissingTransition")],
@@ -552,7 +554,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Validation_rejects_dependencies_that_reference_unknown_products()
     {
-        WorkflowDefinition source = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowDefinition source = CanonicalWorkflowCatalog.CreatePlan();
         WorkflowTransitionDefinition brokenTransition = source.Transitions[0] with
         {
             Dependencies =
@@ -583,7 +585,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Validation_rejects_products_without_intended_consumers()
     {
-        WorkflowDefinition source = CanonicalWorkflowDefinitionSketches.CreateExecute();
+        WorkflowDefinition source = CanonicalWorkflowCatalog.CreateExecute();
         WorkflowTransitionDefinition transition = source.Transitions[^1];
         ProductDefinition product = transition.ProducedProducts[0] with
         {
@@ -607,7 +609,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Validation_rejects_gates_without_explainable_requirements()
     {
-        WorkflowDefinition source = CanonicalWorkflowDefinitionSketches.CreateExecute();
+        WorkflowDefinition source = CanonicalWorkflowCatalog.CreateExecute();
         WorkflowDefinition definition = source with
         {
             EntryGate = source.EntryGate with
@@ -624,7 +626,7 @@ public sealed class WorkflowDefinitionValidatorTests
     [Fact]
     public void Validation_rejects_workflow_definitions_that_embed_cli_or_persistence_details()
     {
-        WorkflowDefinition source = CanonicalWorkflowDefinitionSketches.CreatePlan();
+        WorkflowDefinition source = CanonicalWorkflowCatalog.CreatePlan();
         WorkflowDefinition definition = source with
         {
             Purpose = "Run LoopRelay.Cli and write SQLite rows directly.",
@@ -662,15 +664,18 @@ public sealed class WorkflowDefinitionValidatorTests
     {
         WorkflowTransitionDefinition transition = workflow.Transitions
             .Single(item => item.Identity == new WorkflowTransitionIdentity(transitionIdentity));
+        EffectDefinition[] declared = transition.Effects
+            .Where(effect => !effect.Identity.Value.StartsWith("derived-git-", StringComparison.Ordinal))
+            .ToArray();
 
         Assert.Equal(
             expected.Select(item => item.Identity),
-            transition.Effects.Select(effect => effect.Identity.Value));
+            declared.Select(effect => effect.Identity.Value));
         Assert.Equal(
             expected.Select(item => item.Category),
-            transition.Effects.Select(effect => effect.Category));
+            declared.Select(effect => effect.Category));
         Assert.Equal(
             expected.Select(item => item.Order),
-            transition.Effects.Select(effect => effect.Order));
+            declared.Select(effect => effect.Order));
     }
 }

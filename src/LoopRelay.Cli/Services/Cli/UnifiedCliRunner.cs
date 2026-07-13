@@ -1,39 +1,328 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Cli.Services.Application;
+using LoopRelay.Cli.Surface;
+using LoopRelay.Application.Contracts;
+using LoopRelay.Application.ReadModel;
+using LoopRelay.Cli.Services.Effects;
+using LoopRelay.Completion.Models.Authority;
+using LoopRelay.Completion.Services.Authority;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Infrastructure.Models.Diagnostics;
 using LoopRelay.Infrastructure.Primitives.Diagnostics;
 using LoopRelay.Orchestration.Chaining;
+using LoopRelay.Orchestration.Effects;
+using LoopRelay.Orchestration.Interactions;
+using LoopRelay.Orchestration.Import;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Storage;
 using LoopRelay.Orchestration.Workflows;
-using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Cli.Services.Cli;
 
-internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _composition)
-    : ILoopRelayApplication
+internal sealed class CanonicalCliApplicationService(LoopRelayCompositionRoot _composition)
+    : IApplicationUseCaseDispatcher
 {
     private readonly StringWriter _output = new();
     private readonly StringWriter _error = new();
     private CanonicalCliStatusSnapshot? lastStatus;
+    private WorkflowStopReason? lastStopReason;
     private static readonly JsonSerializerOptions ProvenanceJsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() },
     };
 
-    public async Task<ApplicationCommandResult> ExecuteAsync(
-        ApplicationRequest request,
+    public async Task<LoopRelayResult> DispatchAsync(
+        LoopRelayRequest request,
         CancellationToken cancellationToken = default)
     {
-        lastStatus = null;
-        _output.GetStringBuilder().Clear();
-        _error.GetStringBuilder().Clear();
-        int exitCode = await RunCoreAsync(request.Invocation, cancellationToken);
+        try
+        {
+            return await DispatchCoreAsync(request, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new LoopRelayResult(request.Context.Correlation, ApplicationOutcomeKind.Cancelled,
+                "Application request was cancelled.", 130, [], [], new Dictionary<string, string>(),
+                [], [], [], [], [], []);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return CannotProceed(request, exception.Message);
+        }
+    }
+
+    private async Task<LoopRelayResult> DispatchCoreAsync(
+        LoopRelayRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request is CompletionOperationRequest completion)
+            return await DispatchCompletionAsync(completion, cancellationToken);
+        if (request is RecoveryOperationRequest recovery)
+            return await DispatchRecoveryAsync(recovery, cancellationToken);
+        if (request is ImportOperationRequest import)
+            return await DispatchImportAsync(import, cancellationToken);
+        if (request is InteractionOperationRequest interaction)
+            return interaction.Operation == InteractionOperationKind.Cancel
+                ? await DispatchInteractionCancellationAsync(interaction, cancellationToken)
+                : ToPublicResult(request, await ExecuteInteractionAsync(interaction, cancellationToken));
+        if (request is CapabilityDiagnosticsRequest diagnostics)
+            return await DispatchCapabilityDiagnosticsAsync(diagnostics, cancellationToken);
+        ApplicationCommandResult result = request switch
+        {
+            RunWorkflowRequest run => await ExecuteInternalAsync(run, cancellationToken),
+            CanonicalStatusRequest status => await ExecuteStatusAsync(status, cancellationToken),
+            StorageOperationRequest storage => await ExecuteStorageAsync(storage, cancellationToken),
+            _ => throw new NotSupportedException(
+                $"Application request {request.GetType().Name} has no registered use-case owner."),
+        };
+        return ToPublicResult(request, result);
+    }
+
+    private static LoopRelayResult ToPublicResult(LoopRelayRequest request, ApplicationCommandResult result)
+    {
+        IReadOnlyList<string> messages = result.Status is null
+            ? result.Messages
+            : result.Messages.Concat([UnifiedCliStatusFormatter.Format(result.Status)]).ToArray();
+        return new LoopRelayResult(request.Context.Correlation, result.Outcome,
+            result.Errors.FirstOrDefault() ?? messages.LastOrDefault() ?? result.Outcome.ToString(),
+            result.SuggestedExitCode, messages, result.Errors, CausalIdentities(result.Status),
+            result.Evidence, result.Warnings, result.PendingEffects, [], [], result.RequiredActions,
+            result.Status?.WorkspaceSnapshot?.SnapshotIdentity,
+            (object?)result.Status?.WorkspaceSnapshot ?? result.Status);
+    }
+
+    private async Task<LoopRelayResult> DispatchRecoveryAsync(
+        RecoveryOperationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.RecoveryIdentity))
+            return CannotProceed(request, "Recovery operations require a recovery identity.");
+        object payload;
+        string identity;
+        switch (request.Operation)
+        {
+            case RecoveryOperationKind.Inspect:
+                var inspected = await _composition.RecoveryInspect.InspectAsync(
+                    new RecoveryInspectRequest(new RecoveryCaseIdentity(request.RecoveryIdentity)), cancellationToken);
+                payload = inspected;
+                identity = inspected.Case.Identity.Value;
+                break;
+            case RecoveryOperationKind.Plan:
+                CanonicalRecoveryPlan plan = await _composition.RecoveryPlan.PlanAsync(
+                    new RecoveryPlanRequest(
+                        new RecoveryCaseIdentity(request.RecoveryIdentity),
+                        new RecoveryPlanningAuthority(
+                            _composition.Policy.PolicyId,
+                            _composition.RuntimeProfile.Value,
+                            ExactProfileSupported: true,
+                            CertifiedReconstructionAvailable: false,
+                            RetryAllowed: true,
+                            Enum.GetValues<CanonicalRecoveryAction>().ToHashSet(),
+                            [_composition.AgentRolePolicy.Identity])),
+                    cancellationToken);
+                payload = plan;
+                identity = plan.Identity.Value;
+                break;
+            case RecoveryOperationKind.Execute:
+                CanonicalRecoveryActionEvent action = await _composition.RecoveryExecute.ExecuteAsync(
+                    new RecoveryExecuteRequest(new RecoveryPlanIdentity(request.RecoveryIdentity)), cancellationToken);
+                payload = action;
+                identity = action.Identity.Value;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(request));
+        }
+        return new LoopRelayResult(request.Context.Correlation, ApplicationOutcomeKind.Completed,
+            $"Recovery {request.Operation} completed.", 0, [$"Recovery {request.Operation}: {identity}"], [],
+            new Dictionary<string, string> { ["recovery"] = identity }, [identity], [], [], [identity], [], [],
+            Payload: payload);
+    }
+
+    private async Task<LoopRelayResult> DispatchInteractionCancellationAsync(
+        InteractionOperationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.RequestIdentity))
+            return CannotProceed(request, "Interaction cancellation requires a request identity.");
+        var identity = new InteractionRequestIdentity(request.RequestIdentity);
+        InteractionAggregate aggregate = await _composition.InteractionBroker.ShowAsync(
+            new ShowInteractionQuery(identity), cancellationToken);
+        aggregate = await _composition.InteractionBroker.CancelAsync(
+            new CancelInteractionCommand(identity, request.ResponseDocument ?? "Cancelled by application request.",
+                aggregate.RowVersion), cancellationToken);
+        return new LoopRelayResult(request.Context.Correlation, ApplicationOutcomeKind.Cancelled,
+            "Interaction request was cancelled.", 0, [$"Interaction cancelled: {identity.Value}"], [],
+            new Dictionary<string, string> { ["interaction"] = identity.Value }, [identity.Value], [], [], [],
+            [identity.Value], [], Payload: aggregate);
+    }
+
+    private async Task<LoopRelayResult> DispatchCapabilityDiagnosticsAsync(
+        CapabilityDiagnosticsRequest request,
+        CancellationToken cancellationToken)
+    {
+        RuntimePrerequisiteApplicationResult result = request.IncludePrerequisites
+            ? await _composition.InspectRuntimePrerequisitesAsync(cancellationToken)
+            : RuntimePrerequisiteApplicationResult.NotRequired;
+        ApplicationOutcomeKind outcome = result.StopReason is null
+            ? ApplicationOutcomeKind.Completed : ApplicationOutcomeKind.UnsupportedProviderCapability;
+        return new LoopRelayResult(request.Context.Correlation, outcome,
+            result.StopReason?.ToString() ?? "Capability prerequisites are satisfied or not required.",
+            result.StopReason is null ? 0 : 4,
+            [result.StopReason?.ToString() ?? "Capabilities available."], [],
+            new Dictionary<string, string>
+            {
+                ["runtimeProfile"] = _composition.RuntimeProfile.Value,
+                ["rolePolicy"] = _composition.AgentRolePolicy.Identity,
+            },
+            result.Evidence?.Findings.Select(item => $"{item.Id}:{item.Code}").ToArray() ?? [],
+            [], [], [], [], result.StopReason is null ? [] : ["Satisfy the reported runtime prerequisite."],
+            Payload: result);
+    }
+
+    private async Task<LoopRelayResult> DispatchImportAsync(
+        ImportOperationRequest request,
+        CancellationToken cancellationToken)
+    {
+        ImportResult imported = request.Operation switch
+        {
+            ImportOperationKind.Detect => await _composition.ImportGateway.DetectAsync(
+                _composition.Repository.Path, cancellationToken),
+            ImportOperationKind.Preview when !string.IsNullOrWhiteSpace(request.ImportIdentity) =>
+                await _composition.ImportGateway.PreviewAsync(
+                    new ImportDetectionIdentity(request.ImportIdentity), cancellationToken),
+            ImportOperationKind.Execute when !string.IsNullOrWhiteSpace(request.ImportIdentity) =>
+                await _composition.ImportGateway.ExecuteAsync(
+                    new ImportPreviewIdentity(request.ImportIdentity), cancellationToken),
+            ImportOperationKind.Verify when !string.IsNullOrWhiteSpace(request.ImportIdentity) =>
+                await _composition.ImportGateway.VerifyAsync(request.ImportIdentity, cancellationToken),
+            _ => new ImportResult(ImportLifecycle.Refused, null, null, null, null,
+                $"Import {request.Operation} requires an import identity.", []),
+        };
+        (ApplicationOutcomeKind outcome, int exitCode) = imported.Lifecycle switch
+        {
+            ImportLifecycle.EffectsPending => (ApplicationOutcomeKind.EffectsPending, 3),
+            ImportLifecycle.RecoveryRequired => (ApplicationOutcomeKind.RecoveryRequired, 4),
+            ImportLifecycle.ApprovalRequired => (ApplicationOutcomeKind.HumanDecisionRequired, 4),
+            ImportLifecycle.Refused => (ApplicationOutcomeKind.SpecificCannotProceed, 4),
+            _ => (ApplicationOutcomeKind.Completed, 0),
+        };
+        var causal = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (imported.Detection is { } detection) causal["importDetection"] = detection.Identity.Value;
+        if (imported.Preview is { } preview) causal["importPreview"] = preview.Identity.Value;
+        if (imported.Operation is { } operation) causal["importOperation"] = operation.Value;
+        if (imported.Receipt is { } receipt) causal["importReceipt"] = receipt.Identity.Value;
+        string[] actions = imported.Lifecycle switch
+        {
+            ImportLifecycle.ApprovalRequired => ["Resolve the import approval interaction before execution."],
+            ImportLifecycle.RecoveryRequired => ["Reconcile the persisted import promotion effect through Recovery Authority."],
+            ImportLifecycle.Refused => [imported.Explanation],
+            _ => [],
+        };
+        return new LoopRelayResult(request.Context.Correlation, outcome, imported.Explanation, exitCode,
+            [imported.Explanation], [], causal, imported.Evidence, [], [],
+            outcome == ApplicationOutcomeKind.RecoveryRequired && imported.Operation is { } recovery
+                ? [recovery.Value] : [], [], actions, Payload: imported);
+    }
+
+    private static LoopRelayResult CannotProceed(LoopRelayRequest request, string reason) =>
+        new(request.Context.Correlation, ApplicationOutcomeKind.SpecificCannotProceed, reason, 4, [], [reason],
+            new Dictionary<string, string>(), [], [], [], [], [], [reason]);
+
+    private async Task<LoopRelayResult> DispatchCompletionAsync(
+        CompletionOperationRequest request,
+        CancellationToken cancellationToken)
+    {
+        CompletionAuthorityProjectionSnapshot projection = await new CompletionApplicationProjection(
+            _composition.Repository).ProjectAsync(cancellationToken);
+        (ApplicationOutcomeKind outcome, int exitCode, string reason) = CompletionOutcome(projection);
+        var causal = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (projection.LatestDecision is { } decision) causal["completionDecision"] = decision.Identity.Value;
+        if (projection.Certificate is { } certificate) causal["completionCertificate"] = certificate.Identity.Value;
+        if (projection.ClosurePlan is { } plan) causal["completionClosurePlan"] = plan.Identity.Value;
+        if (projection.LatestSettlement is { } settlement) causal["completionSettlement"] = settlement.Identity.Value;
+        if (projection.TerminalFact is { } terminal) causal["certifiedTerminal"] = terminal.Identity.Value;
+        string[] evidence = projection.LatestDecision?.EvidenceIdentities
+            .Concat(projection.LatestSettlement?.EvidenceIdentities ?? [])
+            .Distinct(StringComparer.Ordinal).ToArray() ?? [];
+        string[] actions = outcome switch
+        {
+            ApplicationOutcomeKind.EffectsPending => ["Resume the persisted completion closure plan."],
+            ApplicationOutcomeKind.RecoveryRequired => ["Reconcile the unknown completion effect through Recovery Authority."],
+            ApplicationOutcomeKind.SpecificCannotProceed => ["Resolve the typed completion cannot-proceed reason and start a new attempt."],
+            _ => [],
+        };
+        return new LoopRelayResult(
+            request.Context.Correlation,
+            outcome,
+            reason,
+            exitCode,
+            [reason],
+            outcome == ApplicationOutcomeKind.Failed ? [reason] : [],
+            causal,
+            evidence,
+            [],
+            projection.PendingOperations,
+            outcome == ApplicationOutcomeKind.RecoveryRequired && projection.LatestSettlement is { } recovery
+                ? [recovery.Identity.Value] : [],
+            [],
+            actions,
+            projection.Watermark,
+            projection);
+    }
+
+    private static (ApplicationOutcomeKind Outcome, int ExitCode, string Reason) CompletionOutcome(
+        CompletionAuthorityProjectionSnapshot projection)
+    {
+        if (projection.TerminalFact is not null)
+            return (ApplicationOutcomeKind.Completed, 0, "Completion closure is certified terminal.");
+        if (projection.LatestSettlement is { } settlement)
+            return settlement.Kind switch
+            {
+                CompletionSettlementKind.EffectsPending =>
+                    (ApplicationOutcomeKind.EffectsPending, 3, "Completion closure effects remain pending."),
+                CompletionSettlementKind.RecoveryRequired =>
+                    (ApplicationOutcomeKind.RecoveryRequired, 4, "Completion closure requires recovery reconciliation."),
+                CompletionSettlementKind.Cancelled =>
+                    (ApplicationOutcomeKind.Cancelled, 130, "Completion closure was cancelled."),
+                CompletionSettlementKind.SpecificCannotProceed =>
+                    (ApplicationOutcomeKind.SpecificCannotProceed, 4, "Completion closure cannot proceed for a typed reason."),
+                _ => (ApplicationOutcomeKind.Failed, 4, "Completion closure failed."),
+            };
+        return projection.LatestDecision?.Kind switch
+        {
+            CompletionDecisionKind.CertifiedCandidate =>
+                (ApplicationOutcomeKind.EffectsPending, 3, "Completion candidate awaits closure effects."),
+            CompletionDecisionKind.Continue =>
+                (ApplicationOutcomeKind.Waiting, 3, "Completion decision requires another execution slice."),
+            CompletionDecisionKind.Waiting =>
+                (ApplicationOutcomeKind.Waiting, 3, "Completion decision is waiting for current evidence."),
+            CompletionDecisionKind.Failed =>
+                (ApplicationOutcomeKind.Failed, 4, "Completion decision failed."),
+            CompletionDecisionKind.Cancelled =>
+                (ApplicationOutcomeKind.Cancelled, 130, "Completion decision was cancelled."),
+            CompletionDecisionKind.SpecificCannotProceed =>
+                (ApplicationOutcomeKind.SpecificCannotProceed, 4,
+                    $"Completion cannot proceed: {projection.LatestDecision.CannotProceedReason}."),
+            _ => (ApplicationOutcomeKind.Waiting, 3, "No completion decision has been recorded."),
+        };
+    }
+
+    private async Task<ApplicationCommandResult> ExecuteInternalAsync(
+        RunWorkflowRequest request,
+        CancellationToken cancellationToken)
+    {
+        ResetOutput();
+        int exitCode = await RunCoreAsync(request, cancellationToken);
+        return FinishInternal(exitCode);
+    }
+
+    private ApplicationCommandResult FinishInternal(int exitCode)
+    {
         IReadOnlyList<string> evidence = lastStatus?.Observation.Evidence
             .Select(item => $"{item.Authority}:{item.Location}")
             .ToArray() ?? [];
@@ -43,7 +332,7 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
         IReadOnlyList<string> pendingEffects = lastStatus?.PendingEffects ?? [];
         IReadOnlyList<string> requiredActions = lastStatus?.RequiredActions ?? [];
         return new ApplicationCommandResult(
-            OutcomeFor(exitCode),
+            OutcomeFor(exitCode, lastStopReason, lastStatus),
             exitCode,
             Lines(_output.ToString()),
             Lines(_error.ToString()),
@@ -54,51 +343,35 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
             lastStatus);
     }
 
+    private void ResetOutput()
+    {
+        lastStatus = null;
+        lastStopReason = null;
+        _output.GetStringBuilder().Clear();
+        _error.GetStringBuilder().Clear();
+    }
+
+    private static IReadOnlyDictionary<string, string> CausalIdentities(CanonicalCliStatusSnapshot? status) =>
+        status is null ? new Dictionary<string, string>() : status.Observation.TransitionRuns
+            .SelectMany(run => new[]
+            {
+                new KeyValuePair<string, string>($"transition:{run.Transition.Value}", run.State.ToString()),
+            }).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+
     private async Task<int> RunCoreAsync(
-        UnifiedCliInvocation invocation,
+        RunWorkflowRequest request,
         CancellationToken cancellationToken)
     {
-        int? migrationExitCode = await MigrateExistingWorkspaceDatabaseAsync(cancellationToken);
-        if (migrationExitCode is not null)
-        {
-            return migrationExitCode.Value;
-        }
-
-        if (invocation.Command.Kind == UnifiedCliCommandKind.Status)
-        {
-            return await RunStatusAsync(invocation, cancellationToken);
-        }
-
-        if (invocation.Command.Kind == UnifiedCliCommandKind.StorageVerify)
-        {
-            return await RunStorageVerifyAsync(cancellationToken);
-        }
-
         RepositoryObservation observation = await _composition.ObserveAsync(cancellationToken);
-        if (invocation.Command.RequiresStorageVerification &&
-            observation.StorageVerification.IsUnusable)
+        if (observation.StorageVerification.IsUnusable)
         {
             PrintStorageVerification(observation);
+            lastStopReason = WorkflowStopReason.StorageUnusable;
             return 4;
         }
 
-        if (invocation.Command.Kind != UnifiedCliCommandKind.Run)
-        {
-            if (invocation.Command.Kind == UnifiedCliCommandKind.StorageInit)
-            {
-                return await RunStorageInitAsync(cancellationToken);
-            }
-
-            if (invocation.Command.Kind is UnifiedCliCommandKind.StorageImport
-                or UnifiedCliCommandKind.StorageExport
-                or UnifiedCliCommandKind.StorageSync)
-            {
-                return await RunStorageSyncAsync(invocation, cancellationToken);
-            }
-
-            _error.WriteLine($"{invocation.Command.Kind} is parsed by the unified CLI but is not wired to an implementation yet.");
-            return 2;
-        }
+        await _composition.EffectWorker.RunOnceAsync(cancellationToken);
+        observation = await _composition.ObserveAsync(cancellationToken);
 
         // M7: runtime prerequisites are inspected before any agent launches — an Error aborts
         // with the typed MissingRuntimePrerequisite outcome instead of the raw resolver
@@ -114,53 +387,13 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
 
         if (runtimePrerequisites.StopReason is { } prerequisiteStopReason)
         {
+            lastStopReason = prerequisiteStopReason;
             _output.WriteLine($"Stop reason: {prerequisiteStopReason}");
             return ExitCodeFor(prerequisiteStopReason);
         }
 
-        return await RunWorkflowAsync(invocation, observation, cancellationToken);
-    }
-
-    // Every command migrates an existing workspace database in place before the first observation so
-    // legacy durable labels (for example 'Blocked') are rewritten before any read-only snapshot parse
-    // can observe them. A missing database file is left absent; fresh workspaces keep current behavior.
-    private async Task<int?> MigrateExistingWorkspaceDatabaseAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            string databasePath = LoopRelayWorkspaceDatabase.Resolve(_composition.Repository);
-            if (!File.Exists(databasePath))
-            {
-                return null;
-            }
-
-            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
-            await connection.OpenAsync(cancellationToken);
-            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
-            return null;
-        }
-        catch (SqliteException exception)
-        {
-            // A corrupt/non-SQLite authority is an expected fail-closed product outcome, not an
-            // unhandled process crash. Keep diagnostics bounded and path-free for retained
-            // certification evidence.
-            _output.WriteLine("Storage authority: Corrupt");
-            _output.WriteLine("Usable authority: False");
-            _output.WriteLine("Evidence: (none)");
-            _output.WriteLine("Stale exports: (none)");
-            _output.WriteLine("Conflicts: (none)");
-            _output.WriteLine($"Corruption: SQLite authority is unreadable (error {exception.SqliteErrorCode}).");
-            _output.WriteLine("Unsupported schema: (none)");
-            _output.WriteLine("Unresolved references: (none)");
-            _output.WriteLine("Partial transactions: (none)");
-            _output.WriteLine("Warnings: Repair or replace the corrupt workspace database before continuing.");
-            return 4;
-        }
-        catch (InvalidOperationException exception)
-        {
-            _error.WriteLine(exception.Message);
-            return 4;
-        }
+        return await RunWorkflowAsync(ToWorkflowInvocation(request.Mode, request.Workflow),
+            request.Context.Interactive, observation, cancellationToken);
     }
 
     public static int ExitCodeFor(WorkflowStopReason stopReason) =>
@@ -179,154 +412,186 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
             WorkflowStopReason.MissingRuntimePrerequisite => 4,
             WorkflowStopReason.Ambiguous => 4,
             WorkflowStopReason.NoEligibleTransition => 4,
+            WorkflowStopReason.RecoveryRequired => 4,
+            WorkflowStopReason.RequiredEffectsPending => 4,
+            WorkflowStopReason.WaitingForInteraction => 4,
+            WorkflowStopReason.CompatibilityImportRequired => 4,
+            WorkflowStopReason.UnsupportedProviderCapability => 4,
+            WorkflowStopReason.ConcurrentStateConflict => 4,
+            WorkflowStopReason.InputInvalidated => 4,
             WorkflowStopReason.Cancelled => 130,
             _ => 1,
         };
 
-    private async Task<int> RunStatusAsync(
-        UnifiedCliInvocation invocation,
+    private static WorkflowInvocation ToWorkflowInvocation(RunInvocationMode mode, string? workflow) =>
+        new(mode switch
+        {
+            RunInvocationMode.ForcedTraditional => InvocationModeKind.ForcedTraditionalChain,
+            RunInvocationMode.ForcedEval => InvocationModeKind.ForcedEvalChain,
+            RunInvocationMode.BoundedWorkflow when workflow == "Execute" => InvocationModeKind.BoundedExecute,
+            RunInvocationMode.BoundedWorkflow when workflow == "EvalRoadmap" => InvocationModeKind.BoundedEval,
+            RunInvocationMode.BoundedWorkflow when workflow == "TraditionalRoadmap" => InvocationModeKind.BoundedTraditional,
+            RunInvocationMode.BoundedWorkflow => InvocationModeKind.BoundedPlan,
+            _ => InvocationModeKind.DefaultChained,
+        });
+
+    private async Task<ApplicationCommandResult> ExecuteStatusAsync(
+        CanonicalStatusRequest request,
         CancellationToken cancellationToken)
     {
+        ResetOutput();
         RepositoryObservation observation = await _composition.ObserveAsync(cancellationToken);
-        WorkflowResolutionResult resolution = _composition.Resolve(invocation.WorkflowInvocation, observation);
-        DecisionContinuityStatusSnapshot? continuity = null;
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_composition.Repository);
-        if (File.Exists(databasePath))
-        {
-            continuity = await new SqliteRecoveryStore(_composition.Repository).ReadStatusAsync(cancellationToken);
-        }
-        IReadOnlyList<ConsumedInputDrift> inputDrift = observation.StorageAuthority.UsableAuthority
-            ? await ReadReceiptStaleness.ProjectAsync(invocation.Repository, cancellationToken)
-            : [];
-        CanonicalWorkflowPersistenceSnapshot persisted = await _composition.Persistence.LoadSnapshotAsync(cancellationToken);
-        IReadOnlyList<string> pendingEffects = persisted.EffectRecords
-            .GroupBy(effect => (effect.RunId, effect.Effect))
-            .Select(group => group.OrderByDescending(effect => effect.RecordId).First())
-            .Where(effect => effect.Status is not EffectExecutionStatus.Succeeded)
-            .Select(effect => $"{effect.Effect}:{effect.Status}")
-            .ToArray();
-        IReadOnlyList<string> pendingDispatches = (await _composition.Persistence
-                .ReadPromptDispatchEventsAsync(cancellationToken))
-            .GroupBy(item => item.DispatchId, StringComparer.Ordinal)
-            .Select(group => group.Last())
-            .Where(item => item.State is PromptDispatchState.Planned or PromptDispatchState.Authorized
-                or PromptDispatchState.Started or PromptDispatchState.Unknown)
-            .Select(item => $"{item.DispatchId}:{item.State}")
-            .ToArray();
-        IReadOnlyList<string> requiredActions = resolution.Explanation.Warnings
-            .Select(warning => warning.Remediation)
-            .Concat(continuity?.Diagnostic is null ? [] : [continuity.Diagnostic])
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        lastStatus = new CanonicalCliStatusSnapshot(
-            invocation.Repository.Path,
-            observation,
-            resolution,
-            continuity,
-            inputDrift,
-            pendingEffects,
-            pendingDispatches,
-            [],
-            observation.StorageVerification.UnsupportedSchema
-                .Concat(observation.StorageVerification.Conflicts)
-                .ToArray(),
-            requiredActions);
-        return 0;
+        WorkflowInvocation invocation = ToWorkflowInvocation(request.Mode, request.Workflow);
+        WorkflowResolutionResult resolution = _composition.Resolve(invocation, observation);
+        lastStatus = await CanonicalStatusSnapshotComposer.ProjectStatusAsync(
+            _composition, observation, resolution, cancellationToken);
+        return FinishInternal(observation.StorageVerification.IsUnusable ? 4 : 0);
     }
 
-    private async Task<int> RunStorageVerifyAsync(CancellationToken cancellationToken)
-    {
-        RepositoryObservation observation = await _composition.ObserveAsync(cancellationToken);
-        PrintStorageVerification(observation);
-        return observation.StorageVerification.IsUnusable ? 4 : 0;
-    }
-
-    private async Task<int> RunStorageInitAsync(CancellationToken cancellationToken)
-    {
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_composition.Repository);
-        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
-        await connection.OpenAsync(cancellationToken);
-        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
-        _output.WriteLine("Storage initialized.");
-        _output.WriteLine($"Database: {databasePath}");
-        return 0;
-    }
-
-    private async Task<int> RunStorageSyncAsync(
-        UnifiedCliInvocation invocation,
+    private async Task<ApplicationCommandResult> ExecuteStorageAsync(
+        StorageOperationRequest request,
         CancellationToken cancellationToken)
     {
-        if (invocation.Command.Arguments.Count > 0)
+        ResetOutput();
+        if (request.Operation == LoopRelay.Application.Contracts.StorageOperationKind.Verify)
         {
-            _error.WriteLine($"Unexpected argument: {invocation.Command.Arguments[0]}");
-            return 2;
+            StorageInspection verified = await _composition.StorageAuthority.VerifyAsync(cancellationToken);
+            PrintStorageInspection(verified);
+            return FinishInternal(verified.Health == StorageHealth.Healthy ? 0 : 4);
         }
-
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_composition.Repository);
-        switch (invocation.Command.Kind)
+        StorageOperationResult result = request.Operation switch
         {
-            case UnifiedCliCommandKind.StorageImport:
-                await EnsureWorkspaceDatabaseAsync(databasePath, "imported", cancellationToken);
-                _output.WriteLine("Storage import completed.");
-                _output.WriteLine("Filesystem exports remain repository-owned observation inputs.");
-                _output.WriteLine($"Database: {databasePath}");
-                return 0;
-            case UnifiedCliCommandKind.StorageExport:
-                if (!File.Exists(databasePath))
-                {
-                    _output.WriteLine("Storage export stopped because the workspace database is missing.");
-                    _output.WriteLine($"Database: {databasePath}");
-                    return 4;
-                }
-
-                await EnsureWorkspaceDatabaseAsync(databasePath, null, cancellationToken);
-                _output.WriteLine("Storage export completed with no filesystem mutations.");
-                _output.WriteLine("Repository observation already reads filesystem exports directly.");
-                _output.WriteLine($"Database: {databasePath}");
-                return 0;
-            case UnifiedCliCommandKind.StorageSync:
-                await EnsureWorkspaceDatabaseAsync(
-                    databasePath,
-                    File.Exists(databasePath) ? null : "imported",
-                    cancellationToken);
-                _output.WriteLine("Storage sync completed.");
-                _output.WriteLine("Shared workspace schema is usable for canonical orchestration.");
-                _output.WriteLine($"Database: {databasePath}");
-                return 0;
-            default:
-                throw new InvalidOperationException("Unsupported storage sync command.");
-        }
+            LoopRelay.Application.Contracts.StorageOperationKind.Initialize => await _composition.StorageAuthority.InitializeAsync(cancellationToken),
+            LoopRelay.Application.Contracts.StorageOperationKind.Migrate => await _composition.StorageAuthority.MigrateAsync(cancellationToken),
+            LoopRelay.Application.Contracts.StorageOperationKind.Export => await _composition.StorageAuthority.ExportAsync(
+                request.Target ?? ".LoopRelay/exports/workspace.canonical.json", cancellationToken),
+            LoopRelay.Application.Contracts.StorageOperationKind.Sync => await _composition.StorageAuthority.SyncAsync(cancellationToken),
+            _ => throw new ArgumentOutOfRangeException(nameof(request)),
+        };
+        _output.WriteLine($"Storage operation: {request.Operation}");
+        _output.WriteLine($"Operation identity: {result.Operation?.Value ?? "(none)"}");
+        _output.WriteLine($"Lifecycle: {result.Lifecycle}");
+        _output.WriteLine($"Explanation: {result.Explanation}");
+        PrintStorageInspection(result.Inspection);
+        return FinishInternal(result.Lifecycle == StorageOperationLifecycle.Completed ? 0 : 4);
     }
 
-    private static async Task EnsureWorkspaceDatabaseAsync(
-        string databasePath,
-        string? persistenceState,
+    private async Task<ApplicationCommandResult> ExecuteInteractionAsync(
+        InteractionOperationRequest request,
         CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
-        await connection.OpenAsync(cancellationToken);
-        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(persistenceState))
+        ResetOutput();
+        if (request.Operation == InteractionOperationKind.List)
         {
-            await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = """
-                INSERT INTO workspace_metadata (key, value)
-                VALUES ('persistence_state', $persistence_state)
-                ON CONFLICT(key) DO UPDATE SET value = excluded.value;
-                """;
-            command.Parameters.AddWithValue("$persistence_state", persistenceState);
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            IReadOnlyList<InteractionAggregate> outstanding = await _composition.InteractionBroker.ListAsync(
+                new ListInteractionsQuery(), cancellationToken);
+            if (outstanding.Count == 0)
+            {
+                _output.WriteLine("Outstanding interactions: (none)");
+                return FinishInternal(0);
+            }
+            foreach (InteractionAggregate interaction in outstanding)
+            {
+                _output.WriteLine($"{interaction.Request.Identity.Value} {interaction.Request.Category} {interaction.State} v{interaction.RowVersion}");
+                _output.WriteLine($"Question: {interaction.Request.Question}");
+            }
+            return FinishInternal(0);
         }
+
+        if (string.IsNullOrWhiteSpace(request.RequestIdentity))
+        {
+            _error.WriteLine($"Interaction {request.Operation} requires a request identity.");
+            return FinishInternal(4);
+        }
+        var identity = new InteractionRequestIdentity(request.RequestIdentity);
+        InteractionAggregate aggregate;
+        try
+        {
+            aggregate = await _composition.InteractionBroker.ShowAsync(
+                new ShowInteractionQuery(identity), cancellationToken);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            _error.WriteLine(exception.Message);
+            return FinishInternal(4);
+        }
+
+        if (request.Operation == InteractionOperationKind.Show)
+        {
+            PrintInteraction(aggregate);
+            return FinishInternal(0);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ResponseDocument))
+        {
+            _error.WriteLine("Interaction response requires a response document.");
+            return FinishInternal(4);
+        }
+        string responseJson = request.ResponseDocument;
+        InteractionResponseResult response = await _composition.InteractionBroker.RespondAsync(
+            new RespondInteractionCommand(
+                identity,
+                responseJson,
+                $"local-cli:{identity.Value}:{Convert.ToHexStringLower(
+                    System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(responseJson)))}",
+                $"local-cli-process:{Environment.ProcessId}",
+                ["responder-authentication", "mutation-authorization", "decision-authorization"],
+                aggregate.RowVersion),
+            cancellationToken);
+        if (!response.Accepted || response.Aggregate is null)
+        {
+            _error.WriteLine(response.Explanation);
+            return FinishInternal(4);
+        }
+
+        InteractionAggregate updated = response.Aggregate;
+        string? effectIdentity = null;
+        if (!updated.ResumeAuthorized)
+        {
+            using JsonDocument document = JsonDocument.Parse(response.Response!.ResponseJson);
+            bool accepted = document.RootElement.TryGetProperty("accept", out JsonElement accept) && accept.GetBoolean();
+            if (accepted)
+            {
+                EffectIntent effect = await new DirtyInputCommitEffectPlanner(_composition.Repository)
+                    .ScheduleAsync(updated, cancellationToken);
+                effectIdentity = effect.Identity.Value;
+            }
+            updated = await _composition.InteractionBroker.ResolveAsync(
+                new ResolveInteractionCommand(identity, updated.RowVersion,
+                    effectIdentity is null ? ["dirty-input-offer-declined"] : [$"effect:{effectIdentity}"]),
+                cancellationToken);
+        }
+
+        _output.WriteLine($"Interaction resolved: {identity.Value}");
+        _output.WriteLine($"State: {updated.State}");
+        if (effectIdentity is not null) _output.WriteLine($"Commit effect planned: {effectIdentity}");
+        return FinishInternal(0);
+    }
+
+    private void PrintInteraction(InteractionAggregate interaction)
+    {
+        _output.WriteLine($"Request: {interaction.Request.Identity.Value}");
+        _output.WriteLine($"Category: {interaction.Request.Category}");
+        _output.WriteLine($"State: {interaction.State}");
+        _output.WriteLine($"Row version: {interaction.RowVersion}");
+        _output.WriteLine($"Question: {interaction.Request.Question}");
+        _output.WriteLine($"Presentation: {interaction.Request.PresentationJson}");
+        _output.WriteLine($"Response schema: {interaction.Request.Policy.ResponseJsonSchema}");
+        _output.WriteLine($"Schema hash: {interaction.Request.Policy.ResponseSchemaHash}");
+        _output.WriteLine($"Deadline behavior: {interaction.Request.Policy.DeadlineBehavior}");
+        _output.WriteLine($"Default response: {interaction.Request.Policy.DefaultResponseJson ?? "(none)"}");
+        _output.WriteLine($"Required trust evidence: {string.Join(", ", interaction.Request.Policy.RequiredTrustEvidence)}");
+        _output.WriteLine($"Resolver owner: {interaction.Request.Policy.ResolverOwner}");
+        _output.WriteLine($"Creation evidence: {string.Join(", ", interaction.Request.CreationEvidence)}");
     }
 
     private async Task<int> RunWorkflowAsync(
-        UnifiedCliInvocation invocation,
+        WorkflowInvocation invocation,
+        bool interactive,
         RepositoryObservation observation,
         CancellationToken cancellationToken)
     {
-        WorkflowStopReason? lastStopReason = null;
+        lastStopReason = null;
         bool certifiedTerminalState = observation.Products.Any(product =>
                 product.Product.Identity == ProductIdentity.CertifiedCompletion && product.GateUsable) &&
             observation.WorkflowStates.Any(state =>
@@ -342,48 +607,29 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
             return 0;
         }
 
-        int guard = invocation.WorkflowInvocation.IsBounded
+        int budget = invocation.IsBounded
             ? 1
             : _composition.Policy.MaxUnboundedContinuationSteps;
-
-        RunIdentity run = RunIdentity.New();
-        DateTimeOffset runStartedAt = DateTimeOffset.UtcNow;
-        string chainIdentity = _composition.SelectChain(invocation.WorkflowInvocation, observation).Identity;
-        string invocationMode = invocation.WorkflowInvocation.Mode.ToString();
+        string chainIdentity = _composition.SelectChain(invocation, observation).Identity;
+        string invocationMode = invocation.Mode.ToString();
         string workspaceId = await _composition.Persistence.ReadWorkspaceIdentityAsync(cancellationToken);
-
-        try
+        WorkflowChainDefinition chain = _composition.SelectChain(invocation, observation);
+        KernelRootEntry entry = await new CanonicalKernelRootRunCoordinator(_composition.Persistence).EnterAsync(
+            workspaceId, chainIdentity, invocationMode, _composition.WorkflowCatalog, cancellationToken);
+        if (entry.Kind is KernelRootEntryKind.Ambiguous or KernelRootEntryKind.RecoveryRequired)
         {
-            await _composition.Persistence.InterruptLingeringActiveRunsAsync(run.Value, cancellationToken);
+            WorkflowStopReason reason = entry.Kind == KernelRootEntryKind.Ambiguous
+                ? WorkflowStopReason.Ambiguous : WorkflowStopReason.RecoveryRequired;
+            lastStopReason = reason;
+            _output.WriteLine($"Stop reason: {reason}");
+            _output.WriteLine($"Explanation: {entry.Explanation}");
+            foreach (string evidence in entry.Evidence) _output.WriteLine($"Evidence: {evidence}");
+            return 4;
         }
-        catch
+        RunIdentity run = entry.Run ?? throw new InvalidOperationException("Kernel root entry has no run identity.");
+        DateTimeOffset runStartedAt = entry.StartedAt;
+        if (entry.Kind == KernelRootEntryKind.Created)
         {
-        }
-
-        try
-        {
-            await _composition.Persistence.UpsertRunAsync(
-                new RunRecord(
-                    run.Value,
-                    workspaceId,
-                    chainIdentity,
-                    invocationMode,
-                    "Active",
-                    runStartedAt,
-                    null,
-                    null,
-                    string.Empty),
-                cancellationToken);
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            // The policy-resolution fact backs every attempt's policy_id for this run: the full
-            // resolved values (the canonical JSON the identity hash covers) plus per-field
-            // provenance. Same best-effort posture as the run record it accompanies.
             await _composition.Persistence.AppendPolicyResolutionAsync(
                 new CanonicalPolicyResolutionRecord(
                     CausalUlid.NewId("res"),
@@ -395,133 +641,42 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
                     runStartedAt),
                 cancellationToken);
         }
-        catch
-        {
-        }
-
+        await _composition.Persistence.AppendAgentRolePolicyAsync(
+            _composition.AgentRolePolicy, cancellationToken);
+        var context = new WorkflowRunContext(new WorkspaceIdentity(workspaceId), run,
+            new PolicyIdentity(_composition.Policy.PolicyId), _composition.RuntimeProfile,
+            _composition.PromptPolicyProfile, _composition.AgentRolePolicy.Identity);
         try
         {
-            for (int step = 0; step < guard; step++)
+            KernelResult result = await _composition.OrchestrationKernel.RunAsync(new KernelCommand(
+                invocation, observation, chain, _composition.WorkflowCatalog, context,
+                budget, interactive), cancellationToken);
+            lastStopReason = result.StopReason;
+            if (result.ChainResult is not null) PrintRunResult(result.ChainResult);
+            else
             {
-                WorkflowChainDefinition chain = _composition.SelectChain(invocation.WorkflowInvocation, observation);
-                var context = new WorkflowRunContext(
-                    new WorkspaceIdentity(workspaceId),
-                    run,
-                    new PolicyIdentity(_composition.Policy.PolicyId),
-                    new RuntimeProfileIdentity("runtime_cli_application"),
-                    new PromptPolicyProfileIdentity("prompt_policy_cli_application"));
-                WorkflowChainRunResult result = await _composition.WorkflowChainRunner.RunAsync(
-                    new WorkflowChainRunRequest(
-                        invocation.WorkflowInvocation,
-                        observation,
-                        chain,
-                        _composition.WorkflowDefinitions,
-                        context),
-                    cancellationToken);
-                lastStopReason = result.StopReason;
-                PrintRunResult(result);
-                cancellationToken.ThrowIfCancellationRequested();
-
-                RepositoryObservation? postTransitionObservation = null;
-                if (result.ControllerResult?.Transition is not null)
-                {
-                    postTransitionObservation = await _composition.ObserveAsync(cancellationToken);
-                    if (!await RetireCertifiedDecisionScopeAsync(postTransitionObservation, cancellationToken))
-                    {
-                        lastStopReason = WorkflowStopReason.StorageUnusable;
-                        return 4;
-                    }
-                }
-
-                if (invocation.WorkflowInvocation.IsBounded ||
-                    result.StopReason != WorkflowStopReason.TransitionCompleted)
-                {
-                    return ExitCodeFor(result.StopReason);
-                }
-
-                observation = postTransitionObservation ?? await _composition.ObserveAsync(cancellationToken);
-                if (invocation.Command.RequiresStorageVerification &&
-                    observation.StorageVerification.IsUnusable)
-                {
-                    lastStopReason = WorkflowStopReason.StorageUnusable;
-                    PrintStorageVerification(observation);
-                    return 4;
-                }
+                _output.WriteLine($"Stop reason: {result.StopReason}");
+                _output.WriteLine($"Explanation: {result.Explanation}");
             }
-
-            lastStopReason = WorkflowStopReason.Stalled;
-            _output.WriteLine($"Stop reason: {WorkflowStopReason.Stalled}");
-            _output.WriteLine($"Explanation: Unbounded workflow continuation guard exhausted after {guard} completed transitions.");
-            return ExitCodeFor(WorkflowStopReason.Stalled);
+            if (result.StopReason is WorkflowStopReason.ChainCompleted or WorkflowStopReason.BoundedWorkflowCompleted or
+                WorkflowStopReason.Cancelled or WorkflowStopReason.Failed)
+            {
+                await _composition.Persistence.UpsertRunAsync(new RunRecord(run.Value, workspaceId, chainIdentity,
+                    invocationMode, result.StopReason.ToString(), runStartedAt, DateTimeOffset.UtcNow,
+                    result.StopReason.ToString(), result.Explanation, _composition.WorkflowCatalog.Identity,
+                    _composition.WorkflowCatalog.SemanticVersion), CancellationToken.None);
+            }
+            return ExitCodeFor(result.StopReason);
         }
         catch (OperationCanceledException)
         {
             lastStopReason = WorkflowStopReason.Cancelled;
+            await _composition.Persistence.UpsertRunAsync(new RunRecord(run.Value, workspaceId, chainIdentity,
+                invocationMode, "Cancelled", runStartedAt, DateTimeOffset.UtcNow, "Cancelled",
+                "Invocation cancellation is durable.", _composition.WorkflowCatalog.Identity,
+                _composition.WorkflowCatalog.SemanticVersion), CancellationToken.None);
             throw;
         }
-        catch
-        {
-            lastStopReason = WorkflowStopReason.Failed;
-            throw;
-        }
-        finally
-        {
-            WorkflowStopReason terminal = lastStopReason ?? WorkflowStopReason.Failed;
-            try
-            {
-                await _composition.Persistence.UpsertRunAsync(
-                    new RunRecord(
-                        run.Value,
-                        workspaceId,
-                        chainIdentity,
-                        invocationMode,
-                        terminal.ToString(),
-                        runStartedAt,
-                        DateTimeOffset.UtcNow,
-                        terminal.ToString(),
-                        string.Empty),
-                    CancellationToken.None);
-            }
-            catch
-            {
-                // Run finalization is best-effort: a failed spine write must not mask the run outcome.
-            }
-        }
-    }
-
-    private async Task<bool> RetireCertifiedDecisionScopeAsync(
-        RepositoryObservation observation,
-        CancellationToken cancellationToken)
-    {
-        if (!observation.Products.Any(product =>
-                product.Product.Identity == ProductIdentity.CertifiedCompletion && product.GateUsable))
-        {
-            return true;
-        }
-
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_composition.Repository);
-        if (!File.Exists(databasePath))
-        {
-            return true;
-        }
-
-        var store = new SqliteRecoveryStore(_composition.Repository);
-        DecisionContinuityStatusSnapshot status = await store.ReadStatusAsync(cancellationToken);
-        if (status.Active is null)
-        {
-            return true;
-        }
-
-        RecoveryStoreWriteResult retired = await store.RetireScopeAsync(
-            status.Active.ScopeId, status.Active.RowVersion, cancellationToken);
-        if (!retired.Succeeded)
-        {
-            _error.WriteLine($"CertifiedCompletion was recorded, but decision continuity scope retirement failed: {retired.Diagnostic}");
-            return false;
-        }
-
-        _output.WriteLine($"Decision continuity scope retired after CertifiedCompletion: {status.Active.ScopeId}");
-        return true;
     }
 
     private void PrintRunResult(WorkflowChainRunResult result)
@@ -577,32 +732,76 @@ internal sealed class CanonicalCliApplicationService(UnifiedCliComposition _comp
         _output.WriteLine($"Warnings: {FormatList(verification.BlockingConditions.Select(warning => warning.Concern).ToArray())}");
     }
 
+    private void PrintStorageInspection(StorageInspection inspection)
+    {
+        _output.WriteLine($"Storage health: {inspection.Health}");
+        _output.WriteLine($"Authority exists: {inspection.Exists}");
+        _output.WriteLine($"Byte length: {inspection.ByteLength?.ToString() ?? "(none)"}");
+        _output.WriteLine($"Byte SHA-256: {inspection.ByteSha256 ?? "(none)"}");
+        _output.WriteLine($"Schema identity: {inspection.Schema?.SchemaIdentity ?? "(none)"}");
+        _output.WriteLine($"Schema family: {inspection.Schema?.Family.ToString() ?? "(none)"}");
+        _output.WriteLine($"Schema version: {inspection.Schema?.Version?.ToString() ?? "(none)"}");
+        _output.WriteLine($"Physical shape: {inspection.Schema?.Shape.ToString() ?? "(none)"}");
+        _output.WriteLine($"Shape fingerprint: {inspection.Schema?.ShapeFingerprint ?? "(none)"}");
+        _output.WriteLine($"Unresolved references: {FormatList(inspection.UnresolvedReferences)}");
+        _output.WriteLine($"Interrupted operations: {FormatList(inspection.InterruptedOperations)}");
+        _output.WriteLine($"Required actions: {FormatList(inspection.RequiredActions)}");
+    }
+
     private static string FormatList(IReadOnlyList<string> values) =>
         values.Count == 0 ? "(none)" : string.Join(", ", values);
 
     private static IReadOnlyList<string> Lines(string text) =>
         text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).ToArray();
 
-    private static ApplicationOutcome OutcomeFor(int exitCode) => exitCode switch
+    private static ApplicationOutcomeKind OutcomeFor(
+        int exitCode,
+        WorkflowStopReason? stopReason,
+        CanonicalCliStatusSnapshot? status) => stopReason switch
     {
-        0 => ApplicationOutcome.Completed,
-        3 => ApplicationOutcome.Stalled,
-        4 => ApplicationOutcome.CannotProceed,
-        130 => ApplicationOutcome.Cancelled,
-        _ => ApplicationOutcome.Failed,
+        WorkflowStopReason.ChainCompleted or WorkflowStopReason.BoundedWorkflowCompleted or
+            WorkflowStopReason.TransitionCompleted => ApplicationOutcomeKind.Completed,
+        WorkflowStopReason.Waiting => ApplicationOutcomeKind.Waiting,
+        WorkflowStopReason.RequiredEffectsPending => ApplicationOutcomeKind.EffectsPending,
+        WorkflowStopReason.RecoveryRequired => ApplicationOutcomeKind.RecoveryRequired,
+        WorkflowStopReason.WaitingForInteraction => ApplicationOutcomeKind.HumanDecisionRequired,
+        WorkflowStopReason.MissingRequiredInput => ApplicationOutcomeKind.MissingRequiredInput,
+        WorkflowStopReason.DirtyInputSurface => ApplicationOutcomeKind.DirtyInputSurface,
+        WorkflowStopReason.UnversionedInputSurface => ApplicationOutcomeKind.UnversionedInputSurface,
+        WorkflowStopReason.StorageUnusable => ApplicationOutcomeKind.StorageUnusable,
+        WorkflowStopReason.MissingRuntimePrerequisite => ApplicationOutcomeKind.MissingRuntimePrerequisite,
+        WorkflowStopReason.UnsupportedProviderCapability => ApplicationOutcomeKind.UnsupportedProviderCapability,
+        WorkflowStopReason.CompatibilityImportRequired => ApplicationOutcomeKind.CompatibilityImportRequired,
+        WorkflowStopReason.ConcurrentStateConflict => ApplicationOutcomeKind.ConcurrentStateConflict,
+        WorkflowStopReason.InputInvalidated => ApplicationOutcomeKind.InputInvalidated,
+        WorkflowStopReason.NoEligibleTransition => ApplicationOutcomeKind.NoEligibleTransition,
+        WorkflowStopReason.Ambiguous => ApplicationOutcomeKind.Ambiguous,
+        WorkflowStopReason.Stalled => ApplicationOutcomeKind.Stalled,
+        WorkflowStopReason.Cancelled => ApplicationOutcomeKind.Cancelled,
+        WorkflowStopReason.Failed => ApplicationOutcomeKind.Failed,
+        _ when status?.Observation.StorageVerification.IsUnusable == true =>
+            ApplicationOutcomeKind.StorageUnusable,
+        _ => exitCode switch
+        {
+            0 => ApplicationOutcomeKind.Completed,
+            3 => ApplicationOutcomeKind.Stalled,
+            4 => ApplicationOutcomeKind.SpecificCannotProceed,
+            130 => ApplicationOutcomeKind.Cancelled,
+            _ => ApplicationOutcomeKind.Failed,
+        },
     };
 }
 
 internal sealed class UnifiedCliRunner(
-    ILoopRelayApplication _application,
+    LoopRelay.Application.Contracts.ILoopRelayApplication _application,
     TextWriter _output,
     TextWriter _error)
 {
     internal UnifiedCliRunner(
-        UnifiedCliComposition composition,
+        LoopRelayCompositionRoot composition,
         TextWriter output,
         TextWriter error)
-        : this(new CanonicalCliApplicationService(composition), output, error)
+        : this(new LoopRelayApplication(new CanonicalCliApplicationService(composition)), output, error)
     {
     }
 
@@ -610,18 +809,15 @@ internal sealed class UnifiedCliRunner(
         CanonicalCliApplicationService.ExitCodeFor(stopReason);
 
     public async Task<int> RunAsync(
-        UnifiedCliInvocation invocation,
+        LoopRelayRequest request,
         CancellationToken cancellationToken)
     {
-        ApplicationCommandResult result = await _application.ExecuteAsync(
-            ApplicationRequestFactory.Create(invocation),
+        LoopRelayResult result = await _application.ExecuteAsync(
+            request,
             cancellationToken);
-        foreach (string message in result.Messages) _output.WriteLine(message);
-        foreach (string error in result.Errors) _error.WriteLine(error);
-        if (result.Status is not null)
-        {
-            _output.WriteLine(UnifiedCliStatusFormatter.Format(result.Status));
-        }
+        RenderedCliResult rendered = CliResultRenderer.Render(result);
+        foreach (string line in rendered.Output) _output.WriteLine(line);
+        foreach (string line in rendered.Errors) _error.WriteLine(line);
 
         return result.SuggestedExitCode;
     }

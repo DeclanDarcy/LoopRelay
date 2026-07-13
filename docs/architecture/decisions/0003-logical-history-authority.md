@@ -22,5 +22,5 @@ Storage implementations must satisfy the logical ledger contract. Replacing SQLi
 
 - `LedgerLoopHistoryStore` behavior moves behind the logical ledger abstraction.
 - Useful provider and recovery correlation from `SqliteLoopHistoryStore` must be ported before that feature-specific authority is retired.
-- `FileBackedLoopHistoryStore` remains only as a projection or bounded compatibility adapter.
+- The exhausted numbered-file history adapter is deleted; supported legacy portfolios enter only through the explicit canonical import gateway.
 - Runtime fallback from canonical history to legacy files is prohibited after successful migration.

@@ -1,121 +1,178 @@
 using LoopRelay.Core.Models.Identity;
+using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Chaining;
-using LoopRelay.Orchestration.Resolution;
+using LoopRelay.Orchestration.Effects;
+using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
+using DurableEffectExecutor = LoopRelay.Orchestration.Effects.IEffectExecutor;
 
 namespace LoopRelay.Orchestration.Tests.Runtime;
 
 public sealed class TransitionEffectCoordinatorTests
 {
     [Fact]
-    public async Task Executes_durable_intents_in_order_and_records_completion()
+    public async Task CoordinatesDurablePlanAndSettlesOnlyAfterVerifiedReceipts()
     {
+        Repository repository = Repository();
+        EffectIntent first = Intent(order: 0);
+        EffectIntent second = Intent(order: 1, causality: first.Causality, dependencies: [first.Identity]);
+        var store = new CanonicalEffectWorkStore(repository);
+        await store.AppendPlanAsync([first, second], CancellationToken.None);
+        var settlement = new RecordingSettlement { Result = true };
         var executor = new RecordingExecutor();
-        var states = new RecordingStates();
-        var coordinator = new TransitionEffectCoordinator(executor, states);
+        var coordinator = Coordinator(store, executor, new RecordingReconciler(), settlement);
 
         TransitionEffectCoordinationResult result = await coordinator.CoordinateAsync(
-            Attempt("first", "second"), Context(), CancellationToken.None);
+            first.Causality.TransitionRun, CancellationToken.None);
 
+        Assert.Equal(RuntimeOutcomeKind.Completed, result.Outcome);
         Assert.False(result.RequiredEffectsPending);
-        Assert.False(result.Failed);
-        Assert.Equal(["first", "second"], executor.Effects);
-        Assert.Equal(
-            [EffectExecutionStatus.Started, EffectExecutionStatus.Succeeded,
-             EffectExecutionStatus.Started, EffectExecutionStatus.Succeeded],
-            states.Statuses);
+        Assert.Equal([first.Identity, second.Identity], executor.Executed);
+        Assert.Equal(1, settlement.Calls);
+        Assert.All(await store.ReadPlanAsync(first.Causality.TransitionRun, CancellationToken.None),
+            item => Assert.NotNull(item.Receipt));
     }
 
     [Fact]
-    public async Task Thrown_external_call_is_unknown_and_requires_reconciliation()
+    public async Task UnknownWorkReconcilesBeforeAnyRepeatDispatch()
     {
-        var executor = new RecordingExecutor { Exception = new IOException("lost response") };
-        var states = new RecordingStates();
-        var coordinator = new TransitionEffectCoordinator(executor, states);
+        Repository repository = Repository();
+        EffectIntent intent = Intent(order: 0);
+        var store = new CanonicalEffectWorkStore(repository);
+        await store.AppendPlanAsync([intent], CancellationToken.None);
+        var executor = new RecordingExecutor { Failure = new IOException("lost response") };
+        var reconciler = new RecordingReconciler { Verdict = EffectReconciliationVerdict.Succeeded };
+        var coordinator = Coordinator(store, executor, reconciler, new RecordingSettlement { Result = true });
 
-        TransitionEffectCoordinationResult result = await coordinator.CoordinateAsync(
-            Attempt("publish"), Context(), CancellationToken.None);
+        TransitionEffectCoordinationResult first = await coordinator.CoordinateAsync(intent.Causality.TransitionRun, CancellationToken.None);
+        executor.Failure = null;
+        TransitionEffectCoordinationResult restarted = await coordinator.CoordinateAsync(intent.Causality.TransitionRun, CancellationToken.None);
 
-        Assert.True(result.RequiredEffectsPending);
-        Assert.False(result.Failed);
-        Assert.Equal(EffectExecutionStatus.Unknown, states.Statuses[^1]);
+        Assert.Equal(RuntimeOutcomeKind.RecoveryRequired, first.Outcome);
+        Assert.Equal(RuntimeOutcomeKind.Completed, restarted.Outcome);
+        Assert.Equal(1, executor.Calls);
+        Assert.Equal(1, reconciler.Calls);
     }
 
     [Fact]
-    public async Task Normalized_effect_failure_stops_later_effects()
+    public async Task FailedEffectDoesNotExecuteItsDependent()
     {
-        var executor = new RecordingExecutor { ResultStatus = EffectExecutionStatus.Failed };
-        var coordinator = new TransitionEffectCoordinator(executor, new RecordingStates());
+        Repository repository = Repository();
+        EffectIntent first = Intent(order: 0);
+        EffectIntent second = Intent(order: 1, causality: first.Causality, dependencies: [first.Identity]);
+        var store = new CanonicalEffectWorkStore(repository);
+        await store.AppendPlanAsync([first, second], CancellationToken.None);
+        var executor = new RecordingExecutor { State = EffectLifecycle.Failed };
 
-        TransitionEffectCoordinationResult result = await coordinator.CoordinateAsync(
-            Attempt("first", "second"), Context(), CancellationToken.None);
+        TransitionEffectCoordinationResult result = await Coordinator(
+            store, executor, new RecordingReconciler(), new RecordingSettlement())
+            .CoordinateAsync(first.Causality.TransitionRun, CancellationToken.None);
 
+        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
         Assert.True(result.Failed);
-        Assert.Equal(["first"], executor.Effects);
+        Assert.Single(executor.Executed);
     }
 
-    private static CanonicalTransitionExecutionContext Context() => new(
-        new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-        WorkspaceIdentity.New(),
-        RunIdentity.New(),
-        WorkflowInstanceIdentity.New(),
-        new PolicyIdentity("policy"),
-        new RuntimeProfileIdentity("runtime"),
-        new PromptPolicyProfileIdentity("prompt-policy"));
-
-    private static TransitionRuntimeResult Attempt(params string[] effects) => new(
-        RuntimeOutcomeKind.EffectsPending,
-        TransitionDurableState.EffectsPending,
-        new WorkflowTransitionIdentity("transition"),
-        null, null, null,
-        new EffectExecutionResult(
-            EffectExecutionStatus.Planned,
-            effects.Select(effect => new EffectExecutionRecord(
-                new EffectIdentity(effect), EffectExecutionStatus.Planned, "planned", [])).ToArray(),
-            "planned",
-            []),
-        [],
-        "effects pending",
-        [],
-        TransitionRunIdentity.New(),
-        AttemptIdentity.New(),
-        AttemptCompleted: true,
-        RequiredEffectsPending: true);
-
-    private sealed class RecordingExecutor : ITransitionEffectIntentExecutor
+    [Fact]
+    public async Task RestartAfterReceiptBeforeSettlementDoesNotRepeatOutwardWork()
     {
-        public List<string> Effects { get; } = [];
-        public Exception? Exception { get; set; }
-        public EffectExecutionStatus ResultStatus { get; set; } = EffectExecutionStatus.Succeeded;
+        Repository repository = Repository();
+        EffectIntent intent = Intent(order: 0);
+        var store = new CanonicalEffectWorkStore(repository);
+        await store.AppendPlanAsync([intent], CancellationToken.None);
+        var executor = new RecordingExecutor();
+        var settlement = new RecordingSettlement { Result = false };
+        var coordinator = Coordinator(store, executor, new RecordingReconciler(), settlement);
 
-        public Task<EffectExecutionRecord> ExecuteAsync(
-            CanonicalCausalContext causality,
-            EffectIdentity effect,
-            CancellationToken cancellationToken)
+        TransitionEffectCoordinationResult first = await coordinator.CoordinateAsync(
+            intent.Causality.TransitionRun, CancellationToken.None);
+        settlement.Result = true;
+        TransitionEffectCoordinationResult restarted = await coordinator.CoordinateAsync(
+            intent.Causality.TransitionRun, CancellationToken.None);
+
+        Assert.Equal(RuntimeOutcomeKind.EffectsPending, first.Outcome);
+        Assert.Equal(RuntimeOutcomeKind.Completed, restarted.Outcome);
+        Assert.Equal(1, executor.Calls);
+        Assert.Equal(2, settlement.Calls);
+    }
+
+    private static TransitionEffectCoordinator Coordinator(
+        IEffectWorkStore store,
+        DurableEffectExecutor executor,
+        IEffectReconciler reconciler,
+        IEffectPlanSettlementStore settlement) =>
+        new(store, new EffectWorker("coordinator-test", store, new EffectExecutorRegistry([executor]),
+            reconciler, TimeSpan.FromMinutes(1)), settlement);
+
+    private static EffectIntent Intent(
+        int order,
+        CanonicalCausalContext? causality = null,
+        IReadOnlyList<EffectIntentIdentity>? dependencies = null) => new(
+        EffectIntentIdentity.New(),
+        causality ?? new CanonicalCausalContext(
+            WorkspaceIdentity.New(), RunIdentity.New(), WorkflowInstanceIdentity.New(),
+            TransitionRunIdentity.New(), AttemptIdentity.New()),
+        $"operation-{order}", new EffectExecutorKey("test"), "1",
+        new EffectTargetDescriptor("test", $"effect-{order}", "{}"), "{}", new string('a', 64),
+        order, dependencies ?? [], EffectRequiredness.BlockingLocal,
+        new EffectCondition("always", "{}"), new EffectCondition("observed", "{}"),
+        "reconcile", $"key-{order}-{Guid.NewGuid():N}", DateTimeOffset.UtcNow);
+
+    private static Repository Repository()
+    {
+        string path = Directory.CreateTempSubdirectory("looprelay-effect-coordinator-").FullName;
+        return new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(path), Path = path };
+    }
+
+    private sealed class RecordingExecutor : DurableEffectExecutor
+    {
+        public EffectExecutorKey Key => new("test");
+        public string Version => "1";
+        public int Calls { get; private set; }
+        public List<EffectIntentIdentity> Executed { get; } = [];
+        public EffectLifecycle State { get; set; } = EffectLifecycle.Succeeded;
+        public Exception? Failure { get; set; }
+        public Task<EffectExecutionObservation> ExecuteAsync(EffectIntent intent, CancellationToken cancellationToken)
         {
-            Effects.Add(effect.Value);
-            if (Exception is not null)
-            {
-                throw Exception;
-            }
-
-            return Task.FromResult(new EffectExecutionRecord(effect, ResultStatus, ResultStatus.ToString(), []));
+            Calls++;
+            Executed.Add(intent.Identity);
+            if (Failure is not null) throw Failure;
+            return Task.FromResult(new EffectExecutionObservation(
+                State, State.ToString(), [intent.Identity.Value], "before", "after", State == EffectLifecycle.Succeeded));
         }
     }
 
-    private sealed class RecordingStates : ITransitionEffectIntentStateStore
+    private sealed class RecordingReconciler : IEffectReconciler
     {
-        public List<EffectExecutionStatus> Statuses { get; } = [];
+        public int Calls { get; private set; }
+        public EffectReconciliationVerdict Verdict { get; set; } = EffectReconciliationVerdict.StillUnknown;
+        public Task<EffectReconciliationObservation> ReconcileAsync(EffectIntent intent, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(new EffectReconciliationObservation(
+                Verdict, Verdict.ToString(), ["independent"], "before", "after"));
+        }
+    }
 
-        public Task RecordStateAsync(
+    private sealed class RecordingSettlement : IEffectPlanSettlementStore
+    {
+        public int Calls { get; private set; }
+        public bool Result { get; set; }
+        public List<RuntimeOutcomeKind> Outcomes { get; } = [];
+        public Task<bool> TrySettleAsync(TransitionRunIdentity transitionRun, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(Result);
+        }
+
+        public Task RecordOutcomeAsync(
             TransitionRunIdentity transitionRun,
-            EffectIdentity effect,
-            EffectExecutionStatus status,
-            string? failure,
+            RuntimeOutcomeKind outcome,
+            string explanation,
             CancellationToken cancellationToken)
         {
-            Statuses.Add(status);
+            Outcomes.Add(outcome);
             return Task.CompletedTask;
         }
     }

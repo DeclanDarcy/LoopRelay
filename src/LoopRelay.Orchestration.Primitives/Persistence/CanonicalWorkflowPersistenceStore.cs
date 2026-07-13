@@ -1,10 +1,15 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Resolution;
+using LoopRelay.Orchestration.Recovery;
+using LoopRelay.Orchestration.Effects;
+using LoopRelay.Orchestration.Policy;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
 using Microsoft.Data.Sqlite;
@@ -245,35 +250,63 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 ("$workflow", capture.Request.Workflow.Value),
                 ("$stage", capture.Request.Stage.Value));
 
+            var priorIntents = new List<EffectIntentIdentity>();
             foreach (EffectDefinition effect in capture.Definition.Effects.OrderBy(effect => effect.Order))
             {
-                string intentId = CausalUlid.NewId("effectintent");
-                string idempotencyKey =
-                    $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}";
+                foreach (EffectIntent intent in CreateEffectIntents(capture, effect, priorIntents))
+                {
+                EffectIntentIdentity intentId = intent.Identity;
+                string idempotencyKey = intent.IdempotencyKey;
                 await ExecuteAsync(connection, transaction,
                     """
                     INSERT INTO canonical_effect_intents (
                         effect_intent_id, transition_run_id, attempt_id, effect_identity, category,
-                        effect_order, idempotency_key, status, definition_json, planned_at
+                        effect_order, idempotency_key, status, definition_json, planned_at,
+                        workspace_id, run_id, workflow_instance_id, semantic_operation_key,
+                        executor_key, executor_version, target_json, payload_json, payload_hash,
+                        requiredness, dependencies_json, precondition_json, postcondition_json,
+                        reconciliation_policy, row_version, attempt_count
                     ) VALUES ($intent, $run, $attempt, $effect, $category, $order, $key,
-                              'Planned', $definition, $at)
+                              'Planned', $definition, $at, $workspace, $root_run, $workflow_instance,
+                              $semantic, $executor, $executor_version, $target, $payload, $payload_hash,
+                              $requiredness, $dependencies, $precondition, $postcondition,
+                              $reconciliation, 0, 0)
                     ON CONFLICT(idempotency_key) DO NOTHING;
-                    INSERT INTO canonical_effect_records (
-                        run_id, effect_identity, category, status, recorded_at, explanation, evidence_json
-                    ) VALUES ($run, $effect, $category, 'Planned', $at,
-                              'Required effect intent enqueued.', $effect_evidence);
+                    INSERT INTO canonical_effect_lifecycle_events (
+                        effect_intent_id, lifecycle, worker_id, explanation, evidence_json, recorded_at
+                    )
+                    SELECT $intent, 'Planned', 'transition-commit',
+                           'Required effect intent enqueued atomically with authoritative state.',
+                           $effect_evidence, $at
+                    WHERE changes() = 1;
                     """,
                     cancellationToken,
-                    ("$intent", intentId),
+                    ("$intent", intentId.Value),
                     ("$run", capture.Causality.TransitionRun.Value),
                     ("$attempt", capture.Causality.Attempt.Value),
                     ("$effect", effect.Identity.Value),
                     ("$category", effect.Category.ToString()),
-                    ("$order", effect.Order),
+                    ("$order", intent.Order),
                     ("$key", idempotencyKey),
-                    ("$definition", Json(effect)),
+                    ("$definition", Json(intent)),
                     ("$at", Format(capture.CommittedAt)),
+                    ("$workspace", capture.Causality.Workspace.Value),
+                    ("$root_run", capture.Causality.Run.Value),
+                    ("$workflow_instance", capture.Causality.WorkflowInstance.Value),
+                    ("$semantic", intent.SemanticOperationKey),
+                    ("$executor", intent.Executor.Value),
+                    ("$executor_version", intent.ExecutorVersion),
+                    ("$target", Json(intent.Target)),
+                    ("$payload", intent.TypedPayload),
+                    ("$payload_hash", intent.TypedPayloadHash),
+                    ("$requiredness", intent.Requiredness.ToString()),
+                    ("$dependencies", Json(intent.Dependencies)),
+                    ("$precondition", Json(intent.Precondition)),
+                    ("$postcondition", Json(intent.Postcondition)),
+                    ("$reconciliation", intent.ReconciliationPolicy),
                     ("$effect_evidence", Json(new[] { effect.Trigger })));
+                priorIntents.Add(intentId);
+                }
             }
 
             await transaction.CommitAsync(cancellationToken);
@@ -289,129 +322,64 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         TransitionRecoveryPlan plan,
         CancellationToken cancellationToken = default)
     {
-        await using SqliteConnection connection = await OpenAsync(cancellationToken);
-        await ExecuteAsync(
-            connection,
-            """
-            INSERT INTO transition_recovery_plans (
-                recovery_id, transition_run_id, source_attempt_id, classification, action,
-                resulting_attempt_mode, next_attempt_index, evidence_json, preconditions_json, planned_at
-            ) VALUES ($recovery, $run, $attempt, $classification, $action, $mode, $index,
-                      $evidence, $preconditions, $at);
-            """,
-            cancellationToken,
-            ("$recovery", plan.RecoveryIdentity.Value),
-            ("$run", plan.SourceCausality.TransitionRun.Value),
-            ("$attempt", plan.SourceCausality.Attempt.Value),
-            ("$classification", plan.Classification),
-            ("$action", plan.Action.ToString()),
-            ("$mode", plan.ResultingAttemptMode.ToString()),
-            ("$index", plan.NextAttemptIndex),
-            ("$evidence", Json(plan.Evidence)),
-            ("$preconditions", Json(plan.Preconditions)),
-            ("$at", Format(DateTimeOffset.UtcNow)));
+        var store = new CanonicalRecoveryStore(_repository);
+        var caseIdentity = new RecoveryCaseIdentity(
+            $"recoverycase:ProviderDispatch:{plan.SourceCausality.Attempt.Value}");
+        CanonicalRecoveryCase? recoveryCase = await store.ReadCaseAsync(caseIdentity, cancellationToken);
+        CanonicalRecoveryClassification classification;
+        if (recoveryCase is null)
+        {
+            recoveryCase = new CanonicalRecoveryCase(
+                caseIdentity,
+                RecoveryScopeKind.ProviderDispatch,
+                new RecoveryCausalSubject(plan.SourceCausality),
+                DateTimeOffset.UtcNow);
+            classification = new CanonicalRecoveryClassification(
+                RecoveryClassificationIdentity.New(),
+                caseIdentity,
+                LegacyClassification(plan.Classification),
+                string.Equals(plan.Classification, TransitionRecoveryDisposition.Cancelled.ToString(), StringComparison.Ordinal)
+                    ? RecoveryCancellationBoundary.BeforeDispatch
+                    : RecoveryCancellationBoundary.None,
+                plan.Evidence,
+                null,
+                DateTimeOffset.UtcNow);
+            await store.AppendCaseAndClassificationAsync(recoveryCase, classification, cancellationToken);
+        }
+        else
+        {
+            classification = await store.ReadLatestClassificationAsync(caseIdentity, cancellationToken)
+                ?? throw new InvalidOperationException("Canonical recovery case has no classification.");
+        }
+        await store.AppendPlanAsync(
+            new CanonicalRecoveryPlan(
+                new RecoveryPlanIdentity(plan.RecoveryIdentity.Value),
+                caseIdentity,
+                classification.Identity,
+                plan.Action,
+                "transition-recovery-policy",
+                "transition-profile-not-required",
+                plan.Evidence,
+                plan.Preconditions,
+                ["selected recovery action reaches a durable terminal observation"],
+                $"transition-recovery-plan:{plan.RecoveryIdentity.Value}",
+                plan.Action == CanonicalRecoveryAction.RetryNewAttempt ? AttemptIdentity.New() : null,
+                DateTimeOffset.UtcNow),
+            cancellationToken);
     }
 
-    public async Task RecordEffectIntentStateAsync(
-        TransitionRunIdentity transitionRun,
-        EffectIdentity effect,
-        EffectExecutionStatus status,
-        string? failure,
-        CancellationToken cancellationToken = default)
-    {
-        await using SqliteConnection connection = await OpenAsync(cancellationToken);
-        string now = Format(DateTimeOffset.UtcNow);
-        await ExecuteAsync(
-            connection,
-            """
-            UPDATE canonical_effect_intents
-            SET status = $status,
-                started_at = CASE WHEN $status = 'Started' THEN $now ELSE started_at END,
-                completed_at = CASE WHEN $status IN ('Succeeded', 'Stalled', 'Failed', 'PartiallyFailed') THEN $now ELSE completed_at END,
-                failure = $failure
-            WHERE transition_run_id = $run AND effect_identity = $effect;
-            INSERT INTO canonical_effect_records (
-                run_id, effect_identity, category, status, recorded_at, explanation, evidence_json
-            )
-            SELECT transition_run_id, effect_identity, category, $status, $now,
-                   COALESCE($failure, 'Effect state updated.'), '[]'
-            FROM canonical_effect_intents
-            WHERE transition_run_id = $run AND effect_identity = $effect;
-            UPDATE canonical_transition_runs
-            SET state = CASE
-                    WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'EffectsPartiallyApplied'
-                    WHEN $status = 'Stalled' THEN 'Stalled'
-                    WHEN $status = 'Failed' THEN 'Failed'
-                    ELSE state
-                END,
-                outcome = CASE
-                    WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'RecoveryRequired'
-                    WHEN $status = 'Stalled' THEN 'Stalled'
-                    WHEN $status = 'Failed' THEN 'Failed'
-                    ELSE outcome
-                END,
-                completed_at = CASE
-                    WHEN $status IN ('Stalled', 'PartiallyFailed', 'Failed') THEN $now
-                    ELSE completed_at
-                END,
-                explanation = CASE
-                    WHEN $status IN ('Unknown', 'PartiallyFailed')
-                        THEN 'An effect outcome is uncertain and requires reconciliation.'
-                    WHEN $status = 'Stalled' THEN COALESCE($failure, 'A required effect stalled.')
-                    WHEN $status = 'Failed' THEN COALESCE($failure, 'A required effect failed.')
-                    ELSE explanation
-                END
-            WHERE run_id = $run
-              AND $status IN ('Unknown', 'Stalled', 'PartiallyFailed', 'Failed');
-            UPDATE attempts
-            SET outcome = CASE
-                    WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'RecoveryRequired'
-                    WHEN $status = 'Stalled' THEN 'Stalled'
-                    WHEN $status = 'Failed' THEN 'Failed'
-                    ELSE outcome
-                END,
-                completed_at = COALESCE(completed_at, $now)
-            WHERE transition_run_id = $run
-              AND $status IN ('Unknown', 'Stalled', 'PartiallyFailed', 'Failed');
-            UPDATE canonical_workflow_states
-            SET outcome = CASE
-                    WHEN $status IN ('Unknown', 'PartiallyFailed') THEN 'RecoveryRequired'
-                    WHEN $status = 'Stalled' THEN 'Stalled'
-                    WHEN $status = 'Failed' THEN 'Failed'
-                    ELSE outcome
-                END,
-                updated_at = $now
-            WHERE workflow_identity = (
-                SELECT workflow_identity FROM canonical_transition_runs WHERE run_id = $run
-            )
-              AND $status IN ('Unknown', 'Stalled', 'PartiallyFailed', 'Failed');
-            UPDATE canonical_transition_runs
-            SET state = 'Completed',
-                outcome = 'Completed',
-                completed_at = $now,
-                explanation = 'All required effect intents completed.'
-            WHERE run_id = $run
-              AND $status = 'Succeeded'
-              AND NOT EXISTS (
-                  SELECT 1 FROM canonical_effect_intents
-                  WHERE transition_run_id = $run AND status <> 'Succeeded'
-              );
-            UPDATE attempts
-            SET outcome = 'Completed', completed_at = COALESCE(completed_at, $now)
-            WHERE transition_run_id = $run
-              AND $status = 'Succeeded'
-              AND NOT EXISTS (
-                  SELECT 1 FROM canonical_effect_intents
-                  WHERE transition_run_id = $run AND status <> 'Succeeded'
-              );
-            """,
-            cancellationToken,
-            ("$status", status.ToString()),
-            ("$now", now),
-            ("$failure", failure),
-            ("$run", transitionRun.Value),
-            ("$effect", effect.Value));
-    }
+    private static RecoveryBoundaryClassification LegacyClassification(string classification) =>
+        classification switch
+        {
+            nameof(TransitionRecoveryDisposition.SafeRetry) => RecoveryBoundaryClassification.NotStarted,
+            nameof(TransitionRecoveryDisposition.ReconcileProvider) => RecoveryBoundaryClassification.AcceptedUnknown,
+            nameof(TransitionRecoveryDisposition.MaterializeCommittedOutput) => RecoveryBoundaryClassification.SucceededUncommitted,
+            nameof(TransitionRecoveryDisposition.ApplyVerifiedEffects) or
+                nameof(TransitionRecoveryDisposition.FailClosedUnknownSideEffect) => RecoveryBoundaryClassification.PartiallyEffected,
+            nameof(TransitionRecoveryDisposition.Cancelled) => RecoveryBoundaryClassification.Cancelled,
+            nameof(TransitionRecoveryDisposition.NonRecoverableCorruption) => RecoveryBoundaryClassification.Corrupt,
+            _ => RecoveryBoundaryClassification.EvidenceIncomplete,
+        };
 
     public async Task AppendTransitionEvidenceAsync(
         CanonicalTransitionEvidenceRecord evidence,
@@ -521,31 +489,6 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$explanation", evaluation.Explanation),
             ("$evidence_json", Json(evaluation.Evidence)),
             ("$transition_run_id", evaluation.TransitionRunId));
-    }
-
-    public async Task AppendEffectRecordAsync(
-        CanonicalEffectRecord effect,
-        CancellationToken cancellationToken = default)
-    {
-        await using SqliteConnection connection = await OpenAsync(cancellationToken);
-        await ExecuteAsync(
-            connection,
-            """
-            INSERT INTO canonical_effect_records (
-                run_id, effect_identity, category, status, recorded_at, explanation, evidence_json
-            )
-            VALUES (
-                $run_id, $effect_identity, $category, $status, $recorded_at, $explanation, $evidence_json
-            );
-            """,
-            cancellationToken,
-            ("$run_id", effect.RunId),
-            ("$effect_identity", effect.Effect.Value),
-            ("$category", effect.Category.ToString()),
-            ("$status", effect.Status.ToString()),
-            ("$recorded_at", Format(effect.RecordedAt)),
-            ("$explanation", effect.Explanation),
-            ("$evidence_json", Json(effect.Evidence)));
     }
 
     public async Task AppendWarningAsync(
@@ -863,11 +806,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             """
             INSERT INTO runs (
                 run_id, workspace_id, chain_identity, invocation_mode, status,
-                started_at, completed_at, stop_reason, explanation
+                started_at, completed_at, stop_reason, explanation, catalog_identity, catalog_version
             )
             VALUES (
                 $run_id, $workspace_id, $chain_identity, $invocation_mode, $status,
-                $started_at, $completed_at, $stop_reason, $explanation
+                $started_at, $completed_at, $stop_reason, $explanation, $catalog_identity, $catalog_version
             )
             ON CONFLICT(run_id) DO UPDATE SET
                 workspace_id = excluded.workspace_id,
@@ -877,7 +820,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 started_at = excluded.started_at,
                 completed_at = excluded.completed_at,
                 stop_reason = excluded.stop_reason,
-                explanation = excluded.explanation;
+                explanation = excluded.explanation,
+                catalog_identity = excluded.catalog_identity,
+                catalog_version = excluded.catalog_version;
             """,
             cancellationToken,
             ("$run_id", run.RunId),
@@ -888,7 +833,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$started_at", Format(run.StartedAt)),
             ("$completed_at", run.CompletedAt is null ? null : Format(run.CompletedAt.Value)),
             ("$stop_reason", run.StopReason),
-            ("$explanation", run.Explanation));
+            ("$explanation", run.Explanation),
+            ("$catalog_identity", run.CatalogIdentity),
+            ("$catalog_version", run.CatalogVersion));
     }
 
     public async Task InterruptLingeringActiveRunsAsync(
@@ -943,11 +890,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             """
             INSERT INTO workflow_instances (
                 workflow_instance_id, run_id, workflow_identity, catalog_version, status,
-                started_at, completed_at, outcome
+                started_at, completed_at, outcome, catalog_identity
             )
             VALUES (
                 $workflow_instance_id, $run_id, $workflow_identity, $catalog_version, $status,
-                $started_at, $completed_at, $outcome
+                $started_at, $completed_at, $outcome, $catalog_identity
             )
             ON CONFLICT(workflow_instance_id) DO UPDATE SET
                 run_id = excluded.run_id,
@@ -956,7 +903,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 status = excluded.status,
                 started_at = excluded.started_at,
                 completed_at = excluded.completed_at,
-                outcome = excluded.outcome;
+                outcome = excluded.outcome,
+                catalog_identity = excluded.catalog_identity;
             """,
             cancellationToken,
             ("$workflow_instance_id", instance.WorkflowInstanceId),
@@ -966,7 +914,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$status", instance.Status),
             ("$started_at", Format(instance.StartedAt)),
             ("$completed_at", instance.CompletedAt is null ? null : Format(instance.CompletedAt.Value)),
-            ("$outcome", instance.Outcome));
+            ("$outcome", instance.Outcome),
+            ("$catalog_identity", instance.CatalogIdentity));
     }
 
     public async Task CompleteWorkflowInstanceAsync(
@@ -1003,11 +952,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             """
             INSERT INTO attempts (
                 attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
-                started_at, completed_at, outcome, policy_id
+                started_at, completed_at, outcome, policy_id, agent_role_policy_id
             )
             VALUES (
                 $attempt_id, $transition_run_id, $workflow_instance_id, $run_id, $attempt_index,
-                $started_at, $completed_at, $outcome, $policy_id
+                $started_at, $completed_at, $outcome, $policy_id, $agent_role_policy_id
             )
             ON CONFLICT(attempt_id) DO UPDATE SET
                 transition_run_id = excluded.transition_run_id,
@@ -1017,7 +966,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 started_at = excluded.started_at,
                 completed_at = excluded.completed_at,
                 outcome = excluded.outcome,
-                policy_id = excluded.policy_id;
+                policy_id = excluded.policy_id,
+                agent_role_policy_id = excluded.agent_role_policy_id;
             """,
             cancellationToken,
             ("$attempt_id", attempt.AttemptId),
@@ -1028,7 +978,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$started_at", Format(attempt.StartedAt)),
             ("$completed_at", attempt.CompletedAt is null ? null : Format(attempt.CompletedAt.Value)),
             ("$outcome", attempt.Outcome),
-            ("$policy_id", attempt.PolicyId));
+            ("$policy_id", attempt.PolicyId),
+            ("$agent_role_policy_id", attempt.AgentRolePolicyId));
     }
 
     public async Task CompleteAttemptAsync(
@@ -1224,7 +1175,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText = """
                 SELECT run_id, workspace_id, chain_identity, invocation_mode, status,
-                       started_at, completed_at, stop_reason, explanation
+                       started_at, completed_at, stop_reason, explanation, catalog_identity, catalog_version
                 FROM runs ORDER BY started_at, run_id;
                 """;
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -1239,7 +1190,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                     ParseDate(reader.GetString(5)),
                     reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
                     reader.IsDBNull(7) ? null : reader.GetString(7),
-                    reader.GetString(8)));
+                    reader.GetString(8),
+                    reader.GetString(9),
+                    reader.GetString(10)));
             }
 
             return rows;
@@ -1264,7 +1217,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText = """
                 SELECT workflow_instance_id, run_id, workflow_identity, catalog_version, status,
-                       started_at, completed_at, outcome
+                       started_at, completed_at, outcome, catalog_identity
                 FROM workflow_instances ORDER BY started_at, workflow_instance_id;
                 """;
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -1278,7 +1231,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                     reader.GetString(4),
                     ParseDate(reader.GetString(5)),
                     reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
-                    reader.IsDBNull(7) ? null : reader.GetString(7)));
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.GetString(8)));
             }
 
             return rows;
@@ -1303,20 +1257,18 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             // back with a null policy identity without migrating the database.
             bool hasPolicyId = await ColumnExistsAsync(
                 connection, "attempts", "policy_id", cancellationToken);
+            bool hasRolePolicyId = await ColumnExistsAsync(
+                connection, "attempts", "agent_role_policy_id", cancellationToken);
 
             var rows = new List<AttemptRecord>();
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = hasPolicyId
-                ? """
-                  SELECT attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
-                         started_at, completed_at, outcome, policy_id
-                  FROM attempts ORDER BY started_at, attempt_id;
-                  """
-                : """
-                  SELECT attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
-                         started_at, completed_at, outcome, NULL AS policy_id
-                  FROM attempts ORDER BY started_at, attempt_id;
-                  """;
+            command.CommandText = $"""
+                SELECT attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
+                       started_at, completed_at, outcome,
+                       {(hasPolicyId ? "policy_id" : "NULL AS policy_id")},
+                       {(hasRolePolicyId ? "agent_role_policy_id" : "NULL AS agent_role_policy_id")}
+                FROM attempts ORDER BY started_at, attempt_id;
+                """;
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -1329,7 +1281,8 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                     ParseDate(reader.GetString(5)),
                     reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
                     reader.IsDBNull(7) ? null : reader.GetString(7),
-                    reader.IsDBNull(8) ? null : reader.GetString(8)));
+                    reader.IsDBNull(8) ? null : reader.GetString(8),
+                    reader.IsDBNull(9) ? null : reader.GetString(9)));
             }
 
             return rows;
@@ -2002,6 +1955,361 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 reader.GetString(12), ParseDate(reader.GetString(13)))
             : null;
     }
+
+    public async Task<IReadOnlyList<string>> ReadCertifiedTerminalAttemptIdentitiesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath)) return [];
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+        await using (SqliteCommand exists = connection.CreateCommand())
+        {
+            exists.CommandText = """
+                SELECT COUNT(*) FROM sqlite_master
+                WHERE type='table' AND name IN ('attempts','canonical_certified_terminal_facts');
+                """;
+            if (Convert.ToInt64(await exists.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) != 2)
+                return [];
+        }
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT DISTINCT attempt.attempt_id
+            FROM attempts AS attempt
+            INNER JOIN canonical_certified_terminal_facts AS terminal
+                ON terminal.root_run_id = attempt.run_id
+            ORDER BY attempt.attempt_id;
+            """;
+        var result = new List<string>();
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken)) result.Add(reader.GetString(0));
+        return result;
+    }
+
+    public async Task AppendAgentRolePolicyAsync(
+        ResolvedAgentRolePolicy policy,
+        CancellationToken cancellationToken = default)
+    {
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await ExecuteAsync(connection, """
+            INSERT INTO canonical_agent_role_policies(
+                role_policy_id,operational_policy_id,runtime_profile_id,document_json,provenance,recorded_at
+            ) VALUES($id,$policy,$runtime,$document,$provenance,$at)
+            ON CONFLICT(role_policy_id) DO NOTHING;
+            """, cancellationToken, ("$id", policy.Identity), ("$policy", policy.OperationalPolicy.Value),
+            ("$runtime", policy.RuntimeProfile.Value), ("$document", JsonSerializer.Serialize(policy)),
+            ("$provenance", policy.Provenance), ("$at", Format(DateTimeOffset.UtcNow)));
+    }
+
+    private static IReadOnlyList<EffectIntent> CreateEffectIntents(
+        TransitionCommitCapture capture,
+        EffectDefinition effect,
+        IReadOnlyList<EffectIntentIdentity> priorIntents)
+    {
+        if (effect.Category == EffectCategory.Git &&
+            effect.Identity.Value.StartsWith("derived-git-", StringComparison.Ordinal))
+            return CreateDerivedGitIntents(capture, effect, priorIntents);
+        if (effect.Category is not (EffectCategory.Publication or EffectCategory.Git))
+        {
+            string payload = Json(effect);
+            var localDependencies = priorIntents.ToArray();
+            var prefix = new List<EffectIntent>();
+            int primaryOrder = effect.Order * 10;
+            if (string.Equals(effect.Identity.Value, "record-certified-completion", StringComparison.Ordinal))
+            {
+                const string markerPath = ".LoopRelay/evidence/execute-completion-recovery/final-closed-state-persistence.md";
+                var markerPayload = new FilesystemWriteEffectPayload(
+                    markerPath,
+                    $"""
+                    # Execute Completion Recovery Phase
+
+                    | Field | Value |
+                    |---|---|
+                    | Phase | Final closed-state persistence |
+                    | Transition | {capture.Definition.Identity} |
+                    | Created At | {capture.CommittedAt:O} |
+
+                    Canonical completion settlement is pending verified effect receipts.
+                    """);
+                EffectIntent marker = CreateIntent(
+                    capture,
+                    effect,
+                    WorkspaceEffectExecutorKeys.FilesystemWrite,
+                    "filesystem:write-final-closed-state-marker",
+                    markerPath,
+                    Json(markerPayload),
+                    primaryOrder,
+                    localDependencies,
+                    EffectRequiredness.BlockingLocal,
+                    $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:closed-state-marker");
+                prefix.Add(marker);
+                localDependencies = [marker.Identity];
+                primaryOrder++;
+            }
+            EffectIntent primary = CreateIntent(
+                capture, effect, TransitionalFeatureEffectExecutorKeys.For(effect.Identity.Value),
+                $"transition-effect:{effect.Identity.Value}", effect.Identity.Value, payload,
+                primaryOrder, localDependencies, EffectRequiredness.BlockingLocal,
+                $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}");
+            prefix.Add(primary);
+            if (string.Equals(effect.Identity.Value, "archive-completed-execution-and-record-evidence", StringComparison.Ordinal))
+            {
+                const string closureMessage = "LoopRelay: close completed execution";
+                EffectIntent nestedCommit = CreateIntent(
+                    capture,
+                    effect,
+                    GitEffectExecutorKeys.NestedRepositoryCommit,
+                    "completion:nested-agents-commit",
+                    ".agents",
+                    Json(new GitEffectPayload(".agents", closureMessage)),
+                    effect.Order * 10 + 1,
+                    [primary.Identity],
+                    EffectRequiredness.BlockingLocal,
+                    $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:nested-agents-commit");
+                EffectIntent nestedPush = CreateIntent(
+                    capture,
+                    effect,
+                    GitEffectExecutorKeys.NestedRepositoryPush,
+                    "completion:nested-agents-push",
+                    ".agents",
+                    Json(new GitEffectPayload(".agents", closureMessage)),
+                    effect.Order * 10 + 2,
+                    [nestedCommit.Identity],
+                    EffectRequiredness.RequiredAsync,
+                    $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:nested-agents-push");
+                EffectIntent gitlinkCommit = CreateIntent(
+                    capture,
+                    effect,
+                    GitEffectExecutorKeys.ParentGitlinkCommit,
+                    "completion:parent-gitlink-commit",
+                    ".agents",
+                    Json(new GitEffectPayload(".", closureMessage, ".agents")),
+                    effect.Order * 10 + 3,
+                    [nestedPush.Identity],
+                    EffectRequiredness.BlockingLocal,
+                    $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:parent-gitlink-commit");
+                EffectIntent workingTreeCommit = CreateIntent(
+                    capture,
+                    effect,
+                    GitEffectExecutorKeys.ParentWorkingTreeCommit,
+                    "completion:parent-working-tree-commit",
+                    ".",
+                    Json(new GitEffectPayload(".", closureMessage)),
+                    effect.Order * 10 + 4,
+                    [gitlinkCommit.Identity],
+                    EffectRequiredness.BlockingLocal,
+                    $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:parent-working-tree-commit");
+                return
+                [
+                    .. prefix,
+                    nestedCommit,
+                    nestedPush,
+                    gitlinkCommit,
+                    workingTreeCommit,
+                    CreateIntent(
+                        capture,
+                        effect,
+                        GitEffectExecutorKeys.ParentRepositoryPush,
+                        "completion:parent-repository-push",
+                        ".",
+                        Json(new GitEffectPayload(".", closureMessage)),
+                        effect.Order * 10 + 5,
+                        [workingTreeCommit.Identity],
+                        EffectRequiredness.RequiredAsync,
+                        $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:parent-push"),
+                ];
+            }
+            if (!string.Equals(effect.Identity.Value, "record-certified-completion", StringComparison.Ordinal))
+            {
+                return prefix;
+            }
+
+            EffectIntent decisionCleanup = CreateIntent(
+                capture,
+                effect,
+                WorkspaceEffectExecutorKeys.DecisionContinuityCleanup,
+                "completion:retire-decision-continuity",
+                "decision_session_scopes",
+                Json(new DecisionContinuityCleanupPayload(capture.Causality.Run.Value)),
+                primaryOrder + 1,
+                [primary.Identity],
+                EffectRequiredness.BlockingLocal,
+                $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:decision-continuity-cleanup");
+            EffectIntent warmSessionCleanup = CreateIntent(
+                capture,
+                effect,
+                WorkspaceEffectExecutorKeys.CheckpointCleanup,
+                "completion:retire-execution-warm-session",
+                "workspace_metadata:execution_warm_session.v1",
+                Json(new WorkspaceCheckpointCleanupPayload([CanonicalCheckpointKeys.ExecutionWarmSession])),
+                primaryOrder + 2,
+                [decisionCleanup.Identity],
+                EffectRequiredness.BlockingLocal,
+                $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:warm-session-cleanup");
+            return
+            [
+                .. prefix,
+                decisionCleanup,
+                warmSessionCleanup,
+                CreateIntent(
+                    capture,
+                    effect,
+                    WorkspaceEffectExecutorKeys.CheckpointCleanup,
+                    "completion:retire-certification-checkpoint",
+                    "workspace_metadata:completion_certification.v1",
+                    Json(new WorkspaceCheckpointCleanupPayload([CanonicalCheckpointKeys.CompletionCertification])),
+                    primaryOrder + 3,
+                    [warmSessionCleanup.Identity],
+                    EffectRequiredness.BlockingLocal,
+                    $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:certification-checkpoint-cleanup"),
+            ];
+        }
+
+        string message = $"LoopRelay: publish {capture.Definition.Identity.Value}";
+        var result = new List<EffectIntent>();
+        var dependencies = priorIntents.ToList();
+        bool hasPriorFeatureEffect = capture.Definition.Effects.Any(candidate =>
+            candidate != effect && candidate.Order < effect.Order &&
+            candidate.Category is not (EffectCategory.Publication or EffectCategory.Git));
+        if (!hasPriorFeatureEffect)
+        {
+            string featurePayload = Json(effect);
+            EffectIntent feature = CreateIntent(
+                capture, effect, TransitionalFeatureEffectExecutorKeys.For(effect.Identity.Value),
+                $"transition-effect:{effect.Identity.Value}", effect.Identity.Value, featurePayload,
+                effect.Order * 10, dependencies, EffectRequiredness.BlockingLocal,
+                $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:feature");
+            result.Add(feature);
+            dependencies = [feature.Identity];
+        }
+
+        var definitions = effect.Category == EffectCategory.Publication
+            ? new (EffectExecutorKey Executor, string Operation, GitEffectPayload Payload, EffectRequiredness Requiredness)[]
+        {
+            (GitEffectExecutorKeys.NestedRepositoryCommit, "nested-commit", new(".agents", message), EffectRequiredness.BlockingLocal),
+            (GitEffectExecutorKeys.NestedRepositoryPush, "nested-push", new(".agents", message), EffectRequiredness.RequiredAsync),
+            (GitEffectExecutorKeys.ParentGitlinkCommit, "parent-gitlink-commit", new(".", "LoopRelay: record .agents gitlink", ".agents"), EffectRequiredness.BlockingLocal),
+            (GitEffectExecutorKeys.ParentRepositoryPush, "parent-push", new(".", message), EffectRequiredness.RequiredAsync),
+        }
+            : string.Equals(effect.Identity.Value, "record-plan-parent-gitlink", StringComparison.Ordinal)
+                ?
+                [
+                    (GitEffectExecutorKeys.ParentGitlinkCommit, "parent-gitlink-commit", new GitEffectPayload(".", "LoopRelay: record .agents gitlink", ".agents"), EffectRequiredness.BlockingLocal),
+                    (GitEffectExecutorKeys.ParentRepositoryPush, "parent-push", new GitEffectPayload(".", message), EffectRequiredness.RequiredAsync),
+                ]
+                :
+                [
+                    (GitEffectExecutorKeys.ParentWorkingTreeCommit, "parent-worktree-commit", new GitEffectPayload(".", "LoopRelay: implementation iteration"), EffectRequiredness.BlockingLocal),
+                    (GitEffectExecutorKeys.ParentRepositoryPush, "parent-push", new GitEffectPayload(".", message), EffectRequiredness.RequiredAsync),
+                ];
+        for (int index = 0; index < definitions.Length; index++)
+        {
+            var definition = definitions[index];
+            string payload = Json(definition.Payload);
+            EffectIntent intent = CreateIntent(
+                capture,
+                effect,
+                definition.Executor,
+                $"publication:{effect.Identity.Value}:{definition.Operation}",
+                definition.Payload.RepositoryRelativeWorkingDirectory,
+                payload,
+                effect.Order * 10 + result.Count,
+                dependencies,
+                definition.Requiredness,
+                $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:{definition.Operation}");
+            result.Add(intent);
+            dependencies = [intent.Identity];
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<EffectIntent> CreateDerivedGitIntents(
+        TransitionCommitCapture capture,
+        EffectDefinition effect,
+        IReadOnlyList<EffectIntentIdentity> priorIntents)
+    {
+        bool commit = effect.Identity.Value.StartsWith("derived-git-commit:", StringComparison.Ordinal);
+        OutputSurfaceDefinition surface = (capture.Definition.OutputSurfaces ?? [])
+            .Single(item => effect.Identity.Value.EndsWith(":" + item.Path, StringComparison.Ordinal));
+        string message = $"LoopRelay: publish {capture.Definition.Identity.Value} ({surface.Path})";
+        int order = effect.Order * 10;
+        var intents = new List<EffectIntent>();
+        IReadOnlyList<EffectIntentIdentity> dependencies = priorIntents.ToArray();
+
+        void Add(EffectExecutorKey executor, string operation, GitEffectPayload payload,
+            EffectRequiredness requiredness)
+        {
+            EffectIntent intent = CreateIntent(capture, effect, executor,
+                $"publication:{effect.Identity.Value}:{operation}", surface.Path, Json(payload), order++,
+                dependencies, requiredness,
+                $"transition-effect:{capture.Causality.TransitionRun.Value}:{effect.Identity.Value}:{operation}");
+            intents.Add(intent);
+            dependencies = [intent.Identity];
+        }
+
+        if (commit)
+        {
+            if (surface.RepositoryTarget == RepositoryTarget.NestedAgents)
+            {
+                string nestedPath = surface.Path.StartsWith(".agents/", StringComparison.Ordinal)
+                    ? surface.Path[8..] : null!;
+                Add(GitEffectExecutorKeys.NestedRepositoryCommit, "nested-commit",
+                    new GitEffectPayload(".agents", message, nestedPath), EffectRequiredness.BlockingLocal);
+            }
+            else if (surface.RepositoryTarget == RepositoryTarget.ParentGitlink)
+                Add(GitEffectExecutorKeys.ParentGitlinkCommit, "parent-gitlink-commit",
+                    new GitEffectPayload(".", message, ".agents"), EffectRequiredness.BlockingLocal);
+            else
+                Add(GitEffectExecutorKeys.ParentWorkingTreeCommit, "parent-worktree-commit",
+                    new GitEffectPayload(".", message, surface.Path == "." ? null : surface.Path),
+                    EffectRequiredness.BlockingLocal);
+        }
+        else
+        {
+            if (surface.RepositoryTarget == RepositoryTarget.NestedAgents)
+            {
+                Add(GitEffectExecutorKeys.NestedRepositoryPush, "nested-push",
+                    new GitEffectPayload(".agents", message), EffectRequiredness.RequiredAsync);
+                Add(GitEffectExecutorKeys.ParentGitlinkCommit, "parent-gitlink-commit",
+                    new GitEffectPayload(".", "LoopRelay: record .agents gitlink", ".agents"),
+                    EffectRequiredness.BlockingLocal);
+                Add(GitEffectExecutorKeys.ParentRepositoryPush, "parent-push",
+                    new GitEffectPayload(".", message), EffectRequiredness.RequiredAsync);
+            }
+            else
+                Add(GitEffectExecutorKeys.ParentRepositoryPush, "parent-push",
+                    new GitEffectPayload(".", message), EffectRequiredness.RequiredAsync);
+        }
+        return intents;
+    }
+
+    private static EffectIntent CreateIntent(
+        TransitionCommitCapture capture,
+        EffectDefinition effect,
+        EffectExecutorKey executor,
+        string semanticOperation,
+        string targetIdentity,
+        string payload,
+        int order,
+        IReadOnlyList<EffectIntentIdentity> dependencies,
+        EffectRequiredness requiredness,
+        string idempotencyKey) => new(
+            EffectIntentIdentity.New(),
+            capture.Causality,
+            semanticOperation,
+            executor,
+            "1",
+            new EffectTargetDescriptor(effect.Category.ToString(), targetIdentity, Json(effect)),
+            payload,
+            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload))),
+            order,
+            dependencies.ToArray(),
+            requiredness,
+            new EffectCondition("declared-trigger", Json(effect.Trigger)),
+            new EffectCondition("declared-outputs", Json(effect.Outputs)),
+            effect.FailureSemantics,
+            idempotencyKey,
+            capture.CommittedAt);
 
     public async Task<CanonicalExecutionRecommendationEvidenceRecord?> ReadLatestExecutionRecommendationAsync(
         CancellationToken cancellationToken = default)

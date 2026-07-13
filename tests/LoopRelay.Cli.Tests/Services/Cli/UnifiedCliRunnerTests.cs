@@ -9,9 +9,12 @@ using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Infrastructure.Models.Diagnostics;
 using LoopRelay.Infrastructure.Services.Diagnostics;
 using LoopRelay.Orchestration.Chaining;
+using LoopRelay.Orchestration.Effects;
+using LoopRelay.Orchestration.Interactions;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
+using LoopRelay.Orchestration.Storage;
 using LoopRelay.Orchestration.Workflows;
 using Microsoft.Data.Sqlite;
 using Xunit;
@@ -20,6 +23,58 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 
 public sealed class UnifiedCliRunnerTests
 {
+    [Fact]
+    public async Task Interaction_respond_acceptance_resolves_request_and_plans_scoped_commit_effect()
+    {
+        Repository repository = CreateRepository();
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
+        var causality = new CanonicalCausalContext(
+            WorkspaceIdentity.New(), RunIdentity.New(), WorkflowInstanceIdentity.New(),
+            TransitionRunIdentity.New(), AttemptIdentity.New());
+        InteractionCategoryPolicy policy = InteractionCategoryPolicyRegistry.Resolve(
+            InteractionCategory.DirtyInputCommitOffer, composition.Policy.PolicyId);
+        var request = new InteractionRequest(
+            InteractionRequestIdentity.New(), InteractionCategory.DirtyInputCommitOffer,
+            new InteractionCausalSubject(causality, "declared-input-surface", ".agents/specs"),
+            "Commit the declared surface?",
+            """{"surface":".agents/specs","changedPaths":[".agents/specs/epic.md"]}""",
+            policy, [".agents/specs/epic.md"], "dirty-cli-test", DateTimeOffset.UtcNow);
+        InteractionAggregate aggregate = await composition.InteractionBroker.CreateAsync(new(request));
+        aggregate = await composition.InteractionBroker.PresentAsync(request.Identity, aggregate.RowVersion);
+        using var statusOutput = new StringWriter();
+        using var statusError = new StringWriter();
+        int statusExit = await new UnifiedCliRunner(composition, statusOutput, statusError).RunAsync(
+            new TestApplicationInvocation(repository, new WorkflowInvocation(InvocationModeKind.DefaultChained),
+                new TestApplicationCommand(TestApplicationCommandKind.Status, [])),
+            CancellationToken.None);
+        Assert.Equal(0, statusExit);
+        Assert.Contains(request.Identity.Value, statusOutput.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Commit the declared surface?", statusOutput.ToString(), StringComparison.Ordinal);
+        var invocation = new TestApplicationInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.DefaultChained),
+            new TestApplicationCommand(TestApplicationCommandKind.InteractionRespond,
+                [request.Identity.Value, """{"accept":true}"""]));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        int exitCode = await new UnifiedCliRunner(composition, output, error)
+            .RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(error.ToString());
+        InteractionAggregate resolved = await composition.InteractionBroker.ShowAsync(new(request.Identity));
+        Assert.True(resolved.ResumeAuthorized);
+        EffectWorkItem effect = Assert.Single(await new CanonicalEffectWorkStore(repository)
+            .ReadPlanAsync(causality.TransitionRun, CancellationToken.None));
+        GitEffectPayload payload = System.Text.Json.JsonSerializer.Deserialize<GitEffectPayload>(
+            effect.Intent.TypedPayload,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        Assert.Equal(".agents/specs", payload.Pathspec);
+        Assert.Contains($"effect:{effect.Intent.Identity.Value}",
+            resolved.Events.Single(item => item.Lifecycle == InteractionLifecycle.Resolved).Evidence);
+    }
+
     [Theory]
     [InlineData(WorkflowStopReason.ChainCompleted, 0)]
     [InlineData(WorkflowStopReason.BoundedWorkflowCompleted, 0)]
@@ -50,13 +105,13 @@ public sealed class UnifiedCliRunnerTests
         // outcome (exit 4) instead of the raw resolver exception at the first send, and the
         // inspection is appended as an append-only fact.
         Repository repository = CreateRepository();
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
         composition.ProductionRuntime = true;
         composition.RuntimePrerequisiteProfile = HostProfile();
         composition.RuntimePrerequisiteDoctor = new RuntimePrerequisiteDoctor(_ => null, _ => false);
@@ -84,7 +139,7 @@ public sealed class UnifiedCliRunnerTests
         // Injected runtimes have no provider prerequisites: the inspection returns nothing and
         // appends no fact, so unit-test compositions never gate on the machine's environment.
         Repository repository = CreateRepository();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
         composition.RuntimePrerequisiteDoctor = new RuntimePrerequisiteDoctor(_ => null, _ => false);
 
         RuntimePrerequisiteApplicationResult result =
@@ -99,11 +154,11 @@ public sealed class UnifiedCliRunnerTests
     public async Task Non_runtime_commands_bypass_production_runtime_inspection()
     {
         Repository repository = CreateRepository();
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            new UnifiedCliCommand(UnifiedCliCommandKind.StorageInit, []));
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+            new TestApplicationCommand(TestApplicationCommandKind.StorageInit, []));
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
         composition.ProductionRuntime = true;
         composition.RuntimePrerequisiteProfile = HostProfile();
         composition.RuntimePrerequisiteDoctor = new RuntimePrerequisiteDoctor(_ => null, _ => false);
@@ -124,13 +179,13 @@ public sealed class UnifiedCliRunnerTests
     {
         Repository repository = CreateRepository();
         await SeedProjectContextAsync(repository);
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
@@ -152,18 +207,18 @@ public sealed class UnifiedCliRunnerTests
         await SeedPlanArtifactsAsync(repository);
         var store = new CanonicalWorkflowPersistenceStore(repository);
         await PersistCompletedChainAsync(store);
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
         Assert.True(exitCode == 0, $"Output:{Environment.NewLine}{output}{Environment.NewLine}Error:{Environment.NewLine}{error}");
-        Assert.Contains("Stop reason: BoundedWorkflowCompleted", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Stop reason: ChainCompleted", output.ToString(), StringComparison.Ordinal);
         Assert.Equal(string.Empty, error.ToString());
     }
 
@@ -171,21 +226,22 @@ public sealed class UnifiedCliRunnerTests
     public async Task RunAsync_storage_init_creates_canonical_workspace_schema()
     {
         Repository repository = CreateRepository();
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            new UnifiedCliCommand(UnifiedCliCommandKind.StorageInit, []));
+            new TestApplicationCommand(TestApplicationCommandKind.StorageInit, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
         Assert.True(File.Exists(databasePath));
-        Assert.Contains("Storage initialized.", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains(databasePath, output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Storage operation: Initialize", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Lifecycle: Completed", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Storage health: Healthy", output.ToString(), StringComparison.Ordinal);
         Assert.Equal(string.Empty, error.ToString());
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync();
@@ -211,25 +267,53 @@ public sealed class UnifiedCliRunnerTests
                 "INSERT INTO schema_metadata(key, value) VALUES ('schema_version', '999');");
         }
 
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            new UnifiedCliCommand(UnifiedCliCommandKind.StorageInit, []));
+            new TestApplicationCommand(TestApplicationCommandKind.StorageInit, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
         Assert.Equal(4, exitCode);
-        Assert.Equal(string.Empty, output.ToString());
-        Assert.Contains("Unsupported workspace schema:", error.ToString(), StringComparison.Ordinal);
-        Assert.Contains("999", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Lifecycle: Refused", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Storage health: Unsupported", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("999", output.ToString(), StringComparison.Ordinal);
+        Assert.Equal(string.Empty, error.ToString());
         await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await verify.OpenAsync();
         Assert.Equal("999", await ScalarAsync(
             verify,
             "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+    }
+
+    [Fact]
+    public async Task RunAsync_storage_export_emits_verified_semantic_package_and_repeated_init_refuses()
+    {
+        Repository repository = CreateRepository();
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
+        var runner = new UnifiedCliRunner(composition, new StringWriter(), new StringWriter());
+        var mode = new WorkflowInvocation(InvocationModeKind.DefaultChained);
+        Assert.Equal(0, await runner.RunAsync(new TestApplicationInvocation(repository, mode,
+            new TestApplicationCommand(TestApplicationCommandKind.StorageInit, [])), CancellationToken.None));
+        byte[] initialized = await File.ReadAllBytesAsync(LoopRelayWorkspaceDatabase.Resolve(repository));
+        Assert.Equal(4, await runner.RunAsync(new TestApplicationInvocation(repository, mode,
+            new TestApplicationCommand(TestApplicationCommandKind.StorageInit, [])), CancellationToken.None));
+        Assert.Equal(initialized, await File.ReadAllBytesAsync(LoopRelayWorkspaceDatabase.Resolve(repository)));
+        const string exportPath = ".LoopRelay/exports/test.canonical.json";
+
+        int exportExit = await runner.RunAsync(new TestApplicationInvocation(repository, mode,
+            new TestApplicationCommand(TestApplicationCommandKind.StorageExport, [exportPath])), CancellationToken.None);
+
+        Assert.Equal(0, exportExit);
+        string json = await File.ReadAllTextAsync(Path.Combine(repository.Path,
+            exportPath.Replace('/', Path.DirectorySeparatorChar)));
+        CanonicalStorageExportPackage package = new CanonicalStorageExportCodec().Decode(json);
+        Assert.Equal("looprelay-canonical-storage", package.Manifest.Codec);
+        Assert.NotEmpty(package.Manifest.LogicalFingerprint);
+        Assert.NotEmpty(package.Domains);
     }
 
     [Fact]
@@ -239,26 +323,26 @@ public sealed class UnifiedCliRunnerTests
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
         await File.WriteAllTextAsync(databasePath, "not-a-sqlite-database");
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
         Assert.Equal(4, exitCode);
         Assert.Contains("Storage authority: Corrupt", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Corruption: SQLite authority is unreadable", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("SQLite authority is unreadable", output.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(repository.Path, output.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal(string.Empty, error.ToString());
         Assert.Equal("not-a-sqlite-database", await File.ReadAllTextAsync(databasePath));
     }
 
     [Fact]
-    public async Task RunAsync_status_migrates_pre_m2_database_with_latched_blocked_row_before_any_read()
+    public async Task RunAsync_status_reports_migration_required_without_mutating_pre_m2_database()
     {
         Repository repository = CreateRepository();
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
@@ -294,25 +378,25 @@ public sealed class UnifiedCliRunnerTests
                 """);
         }
 
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Status, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Status, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
-        Assert.Equal(0, exitCode);
+        Assert.Equal(4, exitCode);
         Assert.Equal(string.Empty, error.ToString());
         Assert.Contains("Selected workflow: Plan", output.ToString(), StringComparison.Ordinal);
         await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await verify.OpenAsync();
-        Assert.Equal("Resumable", await ScalarAsync(
+        Assert.Equal("Blocked", await ScalarAsync(
             verify,
             "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
-        Assert.Equal(LoopRelayWorkspaceDatabase.CurrentSchemaVersion.ToString(), await ScalarAsync(
+        Assert.Equal("3", await ScalarAsync(
             verify,
             "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
     }
@@ -334,20 +418,20 @@ public sealed class UnifiedCliRunnerTests
                 "INSERT INTO schema_metadata(key, value) VALUES ('schema_version', '99');");
         }
 
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Status, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Status, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
         Assert.Equal(4, exitCode);
-        Assert.Equal(string.Empty, output.ToString());
-        Assert.Contains("Unsupported workspace schema:", error.ToString(), StringComparison.Ordinal);
-        Assert.Contains("99", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Storage authority: Unsupported", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("99", output.ToString(), StringComparison.Ordinal);
+        Assert.Equal(string.Empty, error.ToString());
         await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await verify.OpenAsync();
         Assert.Equal("99", await ScalarAsync(
@@ -356,53 +440,25 @@ public sealed class UnifiedCliRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_storage_import_initializes_shared_workspace_schema()
+    public async Task RunAsync_storage_import_fails_closed_for_unregistered_workspace_portfolio()
     {
         Repository repository = CreateRepository();
         await SeedRoadmapArtifactsAsync(repository);
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            new UnifiedCliCommand(UnifiedCliCommandKind.StorageImport, []));
+            new TestApplicationCommand(TestApplicationCommandKind.StorageImport, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
-        Assert.Equal(0, exitCode);
+        Assert.Equal(4, exitCode);
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
-        Assert.True(File.Exists(databasePath));
-        Assert.Contains("Storage import completed.", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains($"Database: {databasePath}", output.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(databasePath));
+        Assert.Contains("Import detection failed closed", output.ToString(), StringComparison.Ordinal);
         Assert.Equal(string.Empty, error.ToString());
-        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
-        await connection.OpenAsync();
-        Assert.Equal(LoopRelayWorkspaceDatabase.CurrentSchemaVersion.ToString(), await ScalarAsync(
-            connection,
-            "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
-        Assert.Equal("imported", await ScalarAsync(
-            connection,
-            "SELECT value FROM workspace_metadata WHERE key = 'persistence_state';"));
-    }
-
-    [Fact]
-    public async Task RunAsync_storage_sync_rejects_extra_arguments()
-    {
-        Repository repository = CreateRepository();
-        var invocation = new UnifiedCliInvocation(
-            repository,
-            new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            new UnifiedCliCommand(UnifiedCliCommandKind.StorageSync, ["extra"]));
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
-
-        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
-
-        Assert.Equal(2, exitCode);
-        Assert.Equal(string.Empty, output.ToString());
-        Assert.Contains("Unexpected argument: extra", error.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -439,13 +495,13 @@ public sealed class UnifiedCliRunnerTests
         Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, workflow.Outcome);
         Assert.Equal(stage, workflow.CurrentStage);
 
-        var runInvocation = new UnifiedCliInvocation(
+        var runInvocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var runOutput = new StringWriter();
         using var runError = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), runOutput, runError);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), runOutput, runError);
 
         int runExitCode = await runner.RunAsync(runInvocation, CancellationToken.None);
 
@@ -460,13 +516,13 @@ public sealed class UnifiedCliRunnerTests
         Repository repository = CreateRepository();
         await SeedRoadmapArtifactsAsync(repository);
         await GitAsync(repository.Path, "init");
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
@@ -493,13 +549,13 @@ public sealed class UnifiedCliRunnerTests
             DateTimeOffset.UtcNow,
             ["plan-complete.md"]));
         await PersistPlanProductsAsync(store);
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
@@ -514,13 +570,14 @@ public sealed class UnifiedCliRunnerTests
     {
         Repository repository = CreateRepository();
         await SeedPlanArtifactsAsync(repository);
-        var invocation = new UnifiedCliInvocation(
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
         var runner = new UnifiedCliRunner(composition, output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
@@ -543,13 +600,13 @@ public sealed class UnifiedCliRunnerTests
         Repository repository = CreateRepository();
         await SeedRoadmapArtifactsAsync(repository);
         await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedTraditional),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
         var runner = new UnifiedCliRunner(composition, output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
@@ -573,13 +630,13 @@ public sealed class UnifiedCliRunnerTests
         await SeedEvalIntentAsync(repository);
         await SeedRoadmapArtifactsAsync(repository);
         await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedEval),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
         var runner = new UnifiedCliRunner(composition, output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
@@ -603,13 +660,13 @@ public sealed class UnifiedCliRunnerTests
         await SeedEvalIntentAsync(repository);
         await SeedProjectContextAsync(repository);
         await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedEval),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
         var runner = new UnifiedCliRunner(composition, output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
@@ -661,13 +718,13 @@ public sealed class UnifiedCliRunnerTests
             RuntimeOutcomeKind.Waiting,
             DateTimeOffset.UtcNow,
             ["execute-readiness-test"]));
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedExecute),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
         var runner = new UnifiedCliRunner(composition, output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
@@ -686,7 +743,7 @@ public sealed class UnifiedCliRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_bounded_execute_verifies_workflow_exit_through_canonical_runtime()
+    public async Task RunAsync_bounded_execute_rejects_workflow_exit_without_completion_authority_candidate()
     {
         Repository repository = CreateRepository();
         // CompletionEvidence is a collaboration file (M3): the persisted row below only
@@ -712,157 +769,58 @@ public sealed class UnifiedCliRunnerTests
             RuntimeOutcomeKind.Waiting,
             DateTimeOffset.UtcNow,
             ["execute-workflow-completion-test"]));
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedExecute),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
         var runner = new UnifiedCliRunner(composition, output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
-        Assert.Equal(0, exitCode);
+        Assert.Equal(4, exitCode);
         string text = output.ToString();
         Assert.Contains("Workflow: Execute", text, StringComparison.Ordinal);
-        Assert.Contains("Stop reason: TransitionCompleted", text, StringComparison.Ordinal);
+        Assert.Contains("Stop reason: MissingRequiredInput", text, StringComparison.Ordinal);
         Assert.Contains("Transition: VerifyWorkflowExitGate", text, StringComparison.Ordinal);
+        Assert.Contains("Completion Authority has no certified candidate", text, StringComparison.Ordinal);
         Assert.Equal(string.Empty, error.ToString());
         RepositoryObservation observation = await composition.ObserveAsync(CancellationToken.None);
         ObservedWorkflowState state = Assert.Single(
             observation.WorkflowStates,
             workflow => workflow.Workflow == WorkflowIdentity.Execute);
-        Assert.Equal(WorkflowResolutionState.Completed, state.State);
-        Assert.Null(state.CurrentStage);
-        Assert.Contains(
-            observation.Products,
-            product => product.Product.Identity == ProductIdentity.CertifiedCompletion &&
-                product.Product.ProducerTransition == new WorkflowTransitionIdentity("VerifyWorkflowExitGate") &&
-                product.Product.ValidationState == ProductValidationState.Valid &&
-                product.GateUsable);
-        string evidencePath = Path.Combine(
-            repository.Path,
-            ".LoopRelay",
-            "evidence",
-            "local-verification",
-            "VerifyWorkflowExitGate.md");
-        Assert.True(File.Exists(evidencePath));
-        Assert.Contains("Transition: VerifyWorkflowExitGate", await File.ReadAllTextAsync(evidencePath), StringComparison.Ordinal);
+        Assert.Equal(WorkflowResolutionState.Resumable, state.State);
+        Assert.Equal(new WorkflowStageIdentity("Workflow Completion"), state.CurrentStage);
+        Assert.DoesNotContain(observation.Products,
+            product => product.Product.Identity == ProductIdentity.CertifiedCompletion);
         CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync();
-        CanonicalTransitionRunRecord run = Assert.Single(
-            snapshot.TransitionRuns,
-            item => item.Transition == new WorkflowTransitionIdentity("VerifyWorkflowExitGate"));
-        CanonicalEffectRecord effect = Assert.Single(
-            snapshot.EffectRecords,
-            item => item.Effect == new EffectIdentity("record-certified-completion") &&
-                item.Status == EffectExecutionStatus.Succeeded);
-        Assert.Equal(run.RunId, effect.RunId);
-        Assert.Equal(EffectCategory.Archive, effect.Category);
-        Assert.Equal(EffectExecutionStatus.Succeeded, effect.Status);
+        Assert.DoesNotContain(snapshot.TransitionRuns,
+            item => item.Transition == new WorkflowTransitionIdentity("VerifyWorkflowExitGate") &&
+                item.State == TransitionDurableState.Completed);
+        Assert.DoesNotContain(snapshot.EffectRecords,
+            item => item.Effect == new EffectIdentity("record-certified-completion"));
     }
 
     [Fact]
-    public async Task RunAsync_default_chained_without_eval_intent_continues_through_plan_and_execute()
-    {
-        Repository repository = CreateRepository();
-        await SeedRoadmapArtifactsAsync(repository);
-        await SeedPlanArtifactsAsync(repository);
-        await SeedCompletionArchiveAsync(repository);
-        var invocation = new UnifiedCliInvocation(
-            repository,
-            new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
-        var runner = new UnifiedCliRunner(composition, output, error);
-
-        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
-
-        Assert.True(exitCode == 0, $"Output:\n{output}\nError:\n{error}");
-        string text = output.ToString();
-        Assert.Contains("Stop reason: BoundedWorkflowCompleted", text, StringComparison.Ordinal);
-        Assert.Equal(string.Empty, error.ToString());
-    }
-
-    [Fact]
-    public async Task RunAsync_unbounded_traditional_reobserves_completed_transitions_and_continues_through_execute()
-    {
-        Repository repository = CreateRepository();
-        await SeedRoadmapArtifactsAsync(repository);
-        await SeedPlanArtifactsAsync(repository);
-        await SeedCompletionArchiveAsync(repository);
-        var invocation = new UnifiedCliInvocation(
-            repository,
-            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
-        var runner = new UnifiedCliRunner(composition, output, error);
-
-        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
-
-        Assert.True(exitCode == 0, $"Output:\n{output}\nError:\n{error}");
-        string text = output.ToString();
-        Assert.Contains("Stop reason: BoundedWorkflowCompleted", text, StringComparison.Ordinal);
-        Assert.Equal(string.Empty, error.ToString());
-        RepositoryObservation observation = await composition.ObserveAsync(CancellationToken.None);
-        Assert.Contains(
-            observation.WorkflowStates,
-            workflow => workflow.Workflow == WorkflowIdentity.Execute &&
-                workflow.State == WorkflowResolutionState.Completed);
-    }
-
-    [Theory]
-    [InlineData(InvocationModeKind.DefaultChained)]
-    [InlineData(InvocationModeKind.ForcedEvalChain)]
-    public async Task RunAsync_eval_chained_invocations_continue_through_plan_and_execute(
-        InvocationModeKind mode)
-    {
-        Repository repository = CreateRepository();
-        await SeedEvalIntentAsync(repository);
-        await SeedRoadmapArtifactsAsync(repository);
-        await SeedPlanArtifactsAsync(repository);
-        await SeedCompletionArchiveAsync(repository);
-        var invocation = new UnifiedCliInvocation(
-            repository,
-            new WorkflowInvocation(mode),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-        UnifiedCliComposition composition = UnifiedCliComposition.Create(repository);
-        var runner = new UnifiedCliRunner(composition, output, error);
-
-        int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
-
-        Assert.Equal(0, exitCode);
-        string text = output.ToString();
-        Assert.Contains("Stop reason: BoundedWorkflowCompleted", text, StringComparison.Ordinal);
-        Assert.Equal(string.Empty, error.ToString());
-        RepositoryObservation observation = await composition.ObserveAsync(CancellationToken.None);
-        Assert.Contains(
-            observation.WorkflowStates,
-            workflow => workflow.Workflow == WorkflowIdentity.Execute &&
-                workflow.State == WorkflowResolutionState.Completed);
-    }
-
-    [Fact]
-    public async Task RunAsync_run_command_writes_terminal_run_row_and_interrupts_lingering_active_runs()
+    public async Task RunAsync_run_command_reenters_and_terminally_completes_matching_active_root()
     {
         Repository repository = CreateRepository();
         var store = new CanonicalWorkflowPersistenceStore(repository);
+        string workspace = await store.ReadWorkspaceIdentityAsync();
         await store.UpsertRunAsync(new RunRecord(
             "run_lingering",
-            "ws_lingering",
+            workspace,
             "BoundedPlan",
             "BoundedPlan",
             "Active",
             DateTimeOffset.UtcNow.AddMinutes(-5),
             null,
             null,
-            string.Empty));
+            string.Empty,
+            CanonicalWorkflowCatalog.Current.Identity,
+            CanonicalWorkflowCatalog.Current.SemanticVersion));
         await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
             WorkflowIdentity.Plan,
             WorkflowResolutionState.Completed,
@@ -871,24 +829,20 @@ public sealed class UnifiedCliRunnerTests
             DateTimeOffset.UtcNow,
             ["plan-complete.md"]));
         await PersistPlanProductsAsync(store);
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.BoundedPlan),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var output = new StringWriter();
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int exitCode = await runner.RunAsync(invocation, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         IReadOnlyList<RunRecord> runs = await store.ReadRunsAsync();
-        Assert.Equal(2, runs.Count);
-        RunRecord lingering = Assert.Single(runs, run => run.RunId == "run_lingering");
-        Assert.Equal("Interrupted", lingering.Status);
-        Assert.NotNull(lingering.CompletedAt);
-        RunRecord current = Assert.Single(runs, run => run.RunId != "run_lingering");
-        Assert.StartsWith("run_", current.RunId, StringComparison.Ordinal);
+        RunRecord current = Assert.Single(runs);
+        Assert.Equal("run_lingering", current.RunId);
         Assert.StartsWith("ws_", current.WorkspaceId, StringComparison.Ordinal);
         Assert.Equal("BoundedPlan", current.ChainIdentity);
         Assert.Equal(InvocationModeKind.BoundedPlan.ToString(), current.InvocationMode);
@@ -903,14 +857,14 @@ public sealed class UnifiedCliRunnerTests
         Repository repository = CreateRepository();
         await SeedRoadmapArtifactsAsync(repository);
         await GitWorkspace.InitializeWithAgentsInputsAsync(repository.Path);
-        var invocation = new UnifiedCliInvocation(
+        var invocation = new TestApplicationInvocation(
             repository,
             new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
-            new UnifiedCliCommand(UnifiedCliCommandKind.Run, []));
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
         using var source = new CancellationTokenSource();
         using var output = new CancelOnStopReasonWriter(source);
         using var error = new StringWriter();
-        var runner = new UnifiedCliRunner(UnifiedCliComposition.Create(repository), output, error);
+        var runner = new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error);
 
         int? exitCode = null;
         try
@@ -1063,6 +1017,65 @@ public sealed class UnifiedCliRunnerTests
         await SeedProjectContextAsync(repository);
         await WriteAsync(repository.Path, ".agents/epic.md", "# Epic");
         await WriteAsync(repository.Path, ".agents/specs/s1.md", "# Spec");
+    }
+
+    [Fact]
+    public async Task RunAsync_requires_recovery_when_active_run_catalog_is_unavailable()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        string workspace = await store.ReadWorkspaceIdentityAsync();
+        await store.UpsertRunAsync(new RunRecord(
+            "run_old_catalog", workspace, "BoundedPlan", "BoundedPlan", "Active",
+            DateTimeOffset.UtcNow.AddMinutes(-5), null, null, "", "catalog_missing", "12.0.0"));
+        var invocation = new TestApplicationInvocation(repository,
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        int exitCode = await new UnifiedCliRunner(LoopRelayCompositionRoot.CreateForTests(repository), output, error)
+            .RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(4, exitCode);
+        Assert.Contains("Stop reason: RecoveryRequired", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Exact catalog 'catalog_missing'", output.ToString(), StringComparison.Ordinal);
+        Assert.Equal("Active", Assert.Single(await store.ReadRunsAsync()).Status);
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
+    public async Task RunAsync_storage_migrate_is_the_only_command_that_upgrades_a_recognized_schema()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await connection.OpenAsync();
+            await ExecuteAsync(connection,
+                "CREATE TABLE schema_metadata(key text primary key, value text not null); INSERT INTO schema_metadata VALUES ('schema_version','8');");
+        }
+        byte[] beforeStatus = await File.ReadAllBytesAsync(databasePath);
+        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository);
+        using var statusOutput = new StringWriter();
+        int statusExit = await new UnifiedCliRunner(composition, statusOutput, new StringWriter()).RunAsync(
+            new TestApplicationInvocation(repository, new WorkflowInvocation(InvocationModeKind.DefaultChained),
+                new TestApplicationCommand(TestApplicationCommandKind.Status, [])), CancellationToken.None);
+        Assert.Equal(4, statusExit);
+        Assert.Equal(beforeStatus, await File.ReadAllBytesAsync(databasePath));
+
+        using var migrateOutput = new StringWriter();
+        int migrateExit = await new UnifiedCliRunner(composition, migrateOutput, new StringWriter()).RunAsync(
+            new TestApplicationInvocation(repository, new WorkflowInvocation(InvocationModeKind.DefaultChained),
+                new TestApplicationCommand(TestApplicationCommandKind.StorageMigrate, [])), CancellationToken.None);
+
+        Assert.Equal(0, migrateExit);
+        Assert.Contains("Lifecycle: Completed", migrateOutput.ToString(), StringComparison.Ordinal);
+        await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await verify.OpenAsync();
+        Assert.Equal(LoopRelayWorkspaceDatabase.CurrentSchemaVersion.ToString(), await ScalarAsync(
+            verify, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
     }
 
     private static async Task SeedProjectContextAsync(Repository repository)

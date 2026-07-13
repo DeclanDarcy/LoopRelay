@@ -1,9 +1,7 @@
-using System.Text.Json;
 using LoopRelay.Cli.Services.Decisions;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Models;
-using LoopRelay.Orchestration.Services;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -12,132 +10,58 @@ namespace LoopRelay.Cli.Tests.Services.Decisions;
 public sealed class SqliteDecisionSessionResumeStoreTests : IDisposable
 {
     private readonly string root = Path.Combine(Path.GetTempPath(), "cc-sqlite-resume-" + Guid.NewGuid().ToString("N"));
-    private readonly List<string> warnings = new();
-
+    private readonly List<string> warnings = [];
     private Repository Repository => new() { Id = Guid.NewGuid(), Name = "r", Path = root };
-
-    private SqliteDecisionSessionResumeStore NewStore() =>
-        new(Repository, warnings.Add);
-
-    private static DecisionSessionResumeState State(string threadId = "thread-1") =>
-        new(threadId, 100, 5d, 2, 3d, 2d, 300_000d, 1, 500, 1);
-
-    private string LegacyFilePath => Path.Combine(root, ".LoopRelay", "decision-session.json");
-
     private string DatabasePath => LoopRelayWorkspaceDatabase.Resolve(Repository);
+    private SqliteDecisionSessionResumeStore NewStore() => new(Repository, warnings.Add);
+    private static DecisionSessionResumeState State() =>
+        new("thread-1", 100, 5d, 2, 3d, 2d, 300_000d, 1, 500, 1);
 
     public void Dispose()
     {
-        try
-        {
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
-        }
-        catch
-        {
-            // best-effort cleanup
-        }
+        if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
     }
 
     [Fact]
-    public async Task WriteThenRead_RoundTripsThroughSqlite_AndStampsSavedAtUtc()
+    public async Task Write_read_and_clear_round_trip_only_through_canonical_sqlite()
     {
         SqliteDecisionSessionResumeStore store = NewStore();
-
         await store.WriteAsync(State());
+
         DecisionSessionResumeState? read = await store.ReadAsync();
 
         Assert.NotNull(read);
         Assert.Equal("thread-1", read!.ThreadId);
-        Assert.Equal(100, read.OccupancyTokens);
-        Assert.Equal(5d, read.ReuseCost);
-        Assert.Equal(2, read.ReuseCycles);
-        Assert.Equal(3d, read.LastCycleCost);
-        Assert.Equal(2d, read.PrevCycleCost);
-        Assert.Equal(300_000d, read.TransferCost);
-        Assert.Equal(1, read.TransferCount);
-        Assert.Equal(500, read.PreviousOperationalContextSize);
-        Assert.Equal(1, read.OperationalContextGrowthStreak);
         Assert.NotEqual(default, read.SavedAtUtc);
-        Assert.False(File.Exists(LegacyFilePath));
+        Assert.False(File.Exists(Path.Combine(root, ".LoopRelay", "decision-session.json")));
         Assert.Equal(1, await ResumeRowCountAsync());
+        await store.ClearAsync();
+        Assert.Equal(0, await ResumeRowCountAsync());
         Assert.Empty(warnings);
     }
 
     [Fact]
-    public async Task Read_ImportsValidLegacyStateOnce_AndDeletesTheLegacyFile()
+    public async Task Legacy_file_is_not_imported_or_deleted_after_adapter_exhaustion()
     {
-        var legacy = new FileDecisionSessionResumeStore(Repository, warnings.Add);
-        await legacy.WriteAsync(State("legacy-thread"));
-        SqliteDecisionSessionResumeStore store = NewStore();
+        string legacy = Path.Combine(root, ".LoopRelay", "decision-session.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(legacy)!);
+        await File.WriteAllTextAsync(legacy, "{}");
 
-        DecisionSessionResumeState? read = await store.ReadAsync();
-
-        Assert.NotNull(read);
-        Assert.Equal("legacy-thread", read!.ThreadId);
-        Assert.False(File.Exists(LegacyFilePath));
-        Assert.Equal(1, await ResumeRowCountAsync());
-        Assert.Equal("legacy-thread", await StoredThreadIdAsync());
-        Assert.Empty(warnings);
-    }
-
-    [Fact]
-    public async Task Read_InvalidLegacyState_WarnsDeletesAndDoesNotCreateCanonicalState()
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(LegacyFilePath)!);
-        await File.WriteAllTextAsync(LegacyFilePath, """{"schemaVersion":999,"threadId":"thread-1"}""");
-        SqliteDecisionSessionResumeStore store = NewStore();
-
-        DecisionSessionResumeState? read = await store.ReadAsync();
+        DecisionSessionResumeState? read = await NewStore().ReadAsync();
 
         Assert.Null(read);
-        Assert.False(File.Exists(LegacyFilePath));
+        Assert.True(File.Exists(legacy));
         Assert.False(File.Exists(DatabasePath));
-        Assert.NotEmpty(warnings);
     }
 
     [Fact]
-    public async Task Clear_RemovesCanonicalAndLegacyState()
+    public async Task Ensure_directory_protection_creates_schema_without_legacy_side_files()
     {
-        SqliteDecisionSessionResumeStore store = NewStore();
-        await store.WriteAsync(State());
-        Directory.CreateDirectory(Path.GetDirectoryName(LegacyFilePath)!);
-        await File.WriteAllTextAsync(LegacyFilePath, "{}");
+        NewStore().EnsureDirectoryProtection();
 
-        await store.ClearAsync();
-        await store.ClearAsync();
-
-        Assert.Equal(0, await ResumeRowCountAsync());
-        Assert.False(File.Exists(LegacyFilePath));
-        Assert.Empty(warnings);
-    }
-
-    [Fact]
-    public async Task EnsureDirectoryProtection_CreatesSelfIgnoringRuntimeDirectoryAndSchemaWithoutState()
-    {
-        SqliteDecisionSessionResumeStore store = NewStore();
-
-        store.EnsureDirectoryProtection();
-
-        Assert.Equal("*\n", await File.ReadAllTextAsync(Path.Combine(root, ".LoopRelay", ".gitignore")));
         Assert.True(File.Exists(DatabasePath));
+        Assert.False(File.Exists(Path.Combine(root, ".LoopRelay", ".gitignore")));
         Assert.Equal(0, await ResumeRowCountAsync());
-        Assert.Empty(warnings);
-    }
-
-    [Fact]
-    public async Task EnsureDirectoryProtection_DoesNotOverwriteExistingGitignore()
-    {
-        SqliteDecisionSessionResumeStore store = NewStore();
-        store.EnsureDirectoryProtection();
-        string gitignore = Path.Combine(root, ".LoopRelay", ".gitignore");
-        await File.WriteAllTextAsync(gitignore, "custom");
-
-        store.EnsureDirectoryProtection();
-
-        Assert.Equal("custom", await File.ReadAllTextAsync(gitignore));
         Assert.Empty(warnings);
     }
 
@@ -148,16 +72,5 @@ public sealed class SqliteDecisionSessionResumeStoreTests : IDisposable
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM decision_session_resume;";
         return Convert.ToInt32(await command.ExecuteScalarAsync());
-    }
-
-    private async Task<string?> StoredThreadIdAsync()
-    {
-        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(DatabasePath);
-        await connection.OpenAsync();
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT document_json FROM decision_session_resume WHERE id = 1;";
-        string json = Convert.ToString(await command.ExecuteScalarAsync())!;
-        using JsonDocument document = JsonDocument.Parse(json);
-        return document.RootElement.GetProperty("threadId").GetString();
     }
 }

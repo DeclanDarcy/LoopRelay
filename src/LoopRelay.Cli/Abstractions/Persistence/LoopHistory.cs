@@ -225,30 +225,3 @@ internal interface ILoopHistoryStore
         LoopHistoryKind kind,
         CancellationToken cancellationToken = default);
 }
-
-/// <summary>
-/// Explicit compatibility boundary for numbered history files that do not possess canonical
-/// causal identities. Compatibility Authority imports these records into ILoopHistoryStore;
-/// canonical runtime code never appends through this contract.
-/// </summary>
-internal interface ILegacyLoopHistoryStore
-{
-    Task<LegacyLoopHistoryRecord> AppendLegacyAsync(
-        LoopHistoryKind kind,
-        string content,
-        CancellationToken cancellationToken = default);
-
-    Task<LegacyLoopHistoryRecord?> ReadLatestLegacyAsync(
-        LoopHistoryKind kind,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<LegacyLoopHistoryRecord>> ReadAllLegacyAsync(
-        LoopHistoryKind kind,
-        CancellationToken cancellationToken = default);
-}
-
-internal sealed record LegacyLoopHistoryRecord(
-    LoopHistoryKind Kind,
-    int Sequence,
-    string RelativePath,
-    string? Content);

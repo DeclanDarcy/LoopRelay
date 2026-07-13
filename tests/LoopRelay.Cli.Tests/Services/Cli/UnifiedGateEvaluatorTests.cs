@@ -1,7 +1,10 @@
 using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Services.Process;
 using LoopRelay.Cli.Services.Cli;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Orchestration.Interactions;
+using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
 using Xunit;
@@ -77,8 +80,8 @@ public sealed class UnifiedGateEvaluatorTests
         GateStatus right,
         GateStatus expected)
     {
-        Assert.Equal(expected, UnifiedCliComposition.UnifiedGateEvaluator.WorstOf([left, right]));
-        Assert.Equal(expected, UnifiedCliComposition.UnifiedGateEvaluator.WorstOf([right, left]));
+        Assert.Equal(expected, LoopRelayCompositionRoot.UnifiedGateEvaluator.WorstOf([left, right]));
+        Assert.Equal(expected, LoopRelayCompositionRoot.UnifiedGateEvaluator.WorstOf([right, left]));
     }
 
     [Fact]
@@ -140,6 +143,47 @@ public sealed class UnifiedGateEvaluatorTests
         Assert.Equal(GateStatus.Unsatisfied, requirement.Status);
         Assert.Contains(".agents/epic.md", requirement.Evidence);
         Assert.Contains("commit the listed files under '.agents/'", requirement.Explanation, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(repo, ".agents", "looprelay.db")),
+            "Headless dirty-input evaluation must not create an interaction or canonical database.");
+    }
+
+    [Fact]
+    public async Task Interactive_dirty_surface_persists_and_presents_a_restart_safe_request()
+    {
+        string repo = TempRepo();
+        await GitAsync(repo, "init");
+        Directory.CreateDirectory(Path.Combine(repo, ".agents"));
+        await File.WriteAllTextAsync(Path.Combine(repo, ".agents", "epic.md"), "# Epic");
+        await GitAsync(repo, "add", ".agents/epic.md");
+        Repository repository = RepositoryFor(repo);
+        var broker = new InteractionBroker(new CanonicalInteractionStore(repository));
+        var evaluator = new LoopRelayCompositionRoot.UnifiedGateEvaluator(
+            new ProcessRunner(), repository, broker, "policy-test");
+        GateDefinition gate = Gate(CleanInputRequirement(".agents/"));
+        var execution = new CanonicalTransitionExecutionContext(
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            WorkspaceIdentity.New(), RunIdentity.New(), WorkflowInstanceIdentity.New(),
+            new PolicyIdentity("policy-test"), new RuntimeProfileIdentity("runtime-test"),
+            new PromptPolicyProfileIdentity("prompt-policy-test"));
+        var request = new TransitionRuntimeRequest(
+            WorkflowIdentity.Plan, new WorkflowStageIdentity("Planning"),
+            new WorkflowTransitionIdentity("WriteExecutablePlan"), execution,
+            FreshAttemptAuthorization.Instance, Interactive: true);
+        var context = new InputGateEvaluationContext(
+            request,
+            execution.BeginAttempt(TransitionRunIdentity.New(), AttemptIdentity.New()),
+            Interactive: true);
+
+        GateResult result = await evaluator.EvaluateInputGateAsync(
+            gate, new ProductResolutionResult([], [], [], [], []), context, CancellationToken.None);
+
+        GateRequirementResult requirement = Assert.Single(result.Requirements);
+        Assert.Equal(RuntimeOutcomeKind.HumanDecisionRequired, requirement.UnsatisfiedOutcome);
+        InteractionAggregate outstanding = Assert.Single(await new InteractionBroker(
+            new CanonicalInteractionStore(repository)).ListAsync(new ListInteractionsQuery()));
+        Assert.Equal(InteractionLifecycle.Presented, outstanding.State);
+        Assert.Equal(".agents", outstanding.Request.Subject.SubjectIdentity);
+        Assert.Contains($"interaction:{outstanding.Request.Identity.Value}", requirement.Evidence);
     }
 
     [Fact]
@@ -237,15 +281,17 @@ public sealed class UnifiedGateEvaluatorTests
         Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, requirement.UnsatisfiedOutcome);
     }
 
-    private static UnifiedCliComposition.UnifiedGateEvaluator Evaluator(string repositoryPath) =>
+    private static LoopRelayCompositionRoot.UnifiedGateEvaluator Evaluator(string repositoryPath) =>
         new(
             new ProcessRunner(),
-            new Repository
-            {
-                Id = Guid.NewGuid(),
-                Name = Path.GetFileName(repositoryPath),
-                Path = repositoryPath,
-            });
+            RepositoryFor(repositoryPath));
+
+    private static Repository RepositoryFor(string repositoryPath) => new()
+    {
+        Id = Guid.NewGuid(),
+        Name = Path.GetFileName(repositoryPath),
+        Path = repositoryPath,
+    };
 
     private static GateDefinition Gate(params GateRequirementDefinition[] requirements) =>
         new(

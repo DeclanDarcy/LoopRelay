@@ -102,7 +102,8 @@ public sealed class CanonicalAttemptStoreTests
         Assert.Equal(workflowInstance.Value, begun.WorkflowInstanceId);
         Assert.Equal("run_001", begun.RunId);
         Assert.Equal(WorkflowIdentity.Plan, begun.Workflow);
-        Assert.Equal(string.Empty, begun.CatalogVersion);
+        Assert.Equal(CanonicalWorkflowCatalog.Current.SemanticVersion, begun.CatalogVersion);
+        Assert.Equal(CanonicalWorkflowCatalog.Current.Identity, begun.CatalogIdentity);
         Assert.Equal("Active", begun.Status);
         Assert.Null(begun.CompletedAt);
         Assert.Null(begun.Outcome);

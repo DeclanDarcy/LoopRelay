@@ -11,6 +11,7 @@ using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Console;
 using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Cli.Services.Effects;
 using LoopRelay.Cli.Services.Decisions.Recovery;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
@@ -68,7 +69,8 @@ internal sealed class DecisionSession(
     string _recoveryPolicyVersion = "decision-recovery-resume-only.v1",
     int _operationalContextGrowthStreakWarningThreshold =
         OperationalPolicyResolver.DefaultOperationalContextGrowthWarningStreak,
-    IDecisionPromptTurnDispatcher? _promptDispatcher = null) : IAsyncDisposable
+    IDecisionPromptTurnDispatcher? _promptDispatcher = null,
+    ILoopArtifactEffectCoordinator? _artifactEffects = null) : IAsyncDisposable
 {
     private const string TemplateOwnedPromptPolicy = "template-owned-implementation-first.v1";
     private IAgentSession? session;
@@ -478,6 +480,7 @@ internal sealed class DecisionSession(
                         ["rank:RepositoryReconstruction@1"] = "300",
                     },
                     contextBudget,
+                    decisionExecutionContext.Causality,
                     cancellationToken);
             }
             catch (InvalidOperationException exception)
@@ -921,8 +924,8 @@ internal sealed class DecisionSession(
         string? archived;
         try
         {
-            archived = await _artifacts.RotateOperationalDeltaAsync(
-                deltaTurn.Causality);
+            archived = await (_artifactEffects ?? new DirectLoopArtifactEffectCoordinator(_artifacts))
+                .RotateOperationalDeltaAsync(deltaTurn.Causality, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

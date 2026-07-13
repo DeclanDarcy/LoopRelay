@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LoopRelay.Agents\LoopRelay.Agents.csproj" />
+    <ProjectReference Include="..\LoopRelay.Application\LoopRelay.Application.csproj" />
+    <ProjectReference Include="..\LoopRelay.Cli.Surface\LoopRelay.Cli.Surface.csproj" />
     <ProjectReference Include="..\LoopRelay.Completion\LoopRelay.Completion.csproj" />
     <ProjectReference Include="..\LoopRelay.Core\LoopRelay.Core.csproj" />
     <ProjectReference Include="..\LoopRelay.Infrastructure\LoopRelay.Infrastructure.csproj" />

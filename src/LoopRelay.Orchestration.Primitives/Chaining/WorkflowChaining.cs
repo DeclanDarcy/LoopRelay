@@ -35,7 +35,8 @@ public sealed record WorkflowRunContext(
     RunIdentity Run,
     PolicyIdentity Policy,
     RuntimeProfileIdentity RuntimeProfile,
-    PromptPolicyProfileIdentity PromptPolicyProfile);
+    PromptPolicyProfileIdentity PromptPolicyProfile,
+    string AgentRolePolicyIdentity = "agent_role_policy_unspecified");
 
 public sealed record ProductTransferResult(
     WorkflowIdentity SourceWorkflow,
@@ -85,8 +86,7 @@ public sealed record TransitionEffectCoordinationResult(
 public interface ITransitionEffectCoordinator
 {
     Task<TransitionEffectCoordinationResult> CoordinateAsync(
-        TransitionRuntimeResult attempt,
-        CanonicalTransitionExecutionContext executionContext,
+        TransitionRunIdentity transitionRun,
         CancellationToken cancellationToken);
 }
 
@@ -95,7 +95,8 @@ public sealed record WorkflowControllerRequest(
     RepositoryObservation Observation,
     IReadOnlyList<WorkflowDefinition> Definitions,
     CanonicalTransitionExecutionContext ExecutionContext,
-    AttemptAuthorization Authorization);
+    AttemptAuthorization Authorization,
+    bool Interactive = false);
 
 public sealed record WorkflowControllerResult(
     WorkflowResolutionResult Resolution,
@@ -110,7 +111,9 @@ public sealed record WorkflowChainRunRequest(
     RepositoryObservation Observation,
     WorkflowChainDefinition Chain,
     IReadOnlyList<WorkflowDefinition> Definitions,
-    WorkflowRunContext Context);
+    WorkflowRunContext Context,
+    AttemptAuthorization Authorization,
+    bool Interactive = false);
 
 public interface IWorkflowInstanceRecorder
 {
@@ -335,12 +338,15 @@ public sealed class WorkflowController(
                 resolution.SelectedStage ?? new WorkflowStageIdentity("Unknown"),
                 selectedTransition.Transition,
                 request.ExecutionContext,
-                request.Authorization),
+                request.Authorization,
+                Interactive: request.Interactive),
             cancellationToken);
         TransitionEffectCoordinationResult? coordination = null;
         if (attempt.RequiredEffectsPending)
         {
-            coordination = await _effects.CoordinateAsync(attempt, request.ExecutionContext, cancellationToken);
+            TransitionRunIdentity transitionRun = attempt.TransitionRun
+                ?? throw new InvalidOperationException("Effect-pending runtime result has no transition identity.");
+            coordination = await _effects.CoordinateAsync(transitionRun, cancellationToken);
         }
 
         // Runtime results are evidence, not progression authority. Re-observe canonical state after
@@ -433,14 +439,16 @@ public sealed class WorkflowChainRunner(
                     instance,
                     request.Context.Policy,
                     request.Context.RuntimeProfile,
-                    request.Context.PromptPolicyProfile);
+                    request.Context.PromptPolicyProfile,
+                    request.Context.AgentRolePolicyIdentity);
                 WorkflowControllerResult controller = await _controller.RunAsync(
                     new WorkflowControllerRequest(
                         InvocationFor(current),
                         observation,
                         request.Definitions,
                         execution,
-                        FreshAttemptAuthorization.Instance),
+                        request.Authorization,
+                        request.Interactive),
                     cancellationToken);
                 await _instances.CompleteInstanceAsync(
                     instance,

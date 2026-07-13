@@ -4,9 +4,12 @@ using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Process;
 using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Permissions.Models.Configuration;
+using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Orchestration.Tests.Recovery;
 
@@ -17,16 +20,18 @@ public sealed class RecoveryRuntimeTests
     {
         Fixture fixture = await Fixture.CreateAsync();
         var continuity = new FakeContinuityRuntime(fixture.Profile);
+        var decisionStore = new CanonicalDecisionRecoveryStore(fixture.Repository, fixture.Store);
         var runtime = new RecoveryRuntime(
-            fixture.Store,
+            decisionStore,
             continuity,
             new RecoverySourceCatalog([new FixedSource()]),
             new RecoveryPlanner(),
             new RecoveryMechanismCatalog([new RepositoryReconstructionMechanism()]),
             new FixedEnvelopeFactory(),
-            new FrozenTimeProvider(Fixture.Now));
+            new FrozenTimeProvider(Fixture.Now),
+            new CanonicalRecoveryStore(fixture.Repository));
 
-        RecoveryRuntimeResult result = await runtime.RunAsync(fixture.Request());
+        RecoveryRuntimeResult result = await runtime.RunAsync(fixture.RequestWithCausality());
 
         Assert.Equal(RecoveryRuntimeOutcome.ReplacementRepositoryOnly, result.Outcome);
         Assert.True(result.Seeded);
@@ -39,7 +44,24 @@ public sealed class RecoveryRuntimeTests
         Assert.Equal("RepositoryOnly", active.Lineage.Mechanism);
         Assert.Equal("Authoritative", active.Lineage.AuthorityState);
         Assert.Equal(RecoveryAttemptStatus.RecoveryCompleted, result.Attempt!.Status);
-        Assert.NotNull(await fixture.Store.ReadPlanAsync(result.Plan!.Digest));
+        Assert.NotNull(await decisionStore.ReadPlanAsync(result.Plan!.Digest));
+        CanonicalRecoveryCase canonicalCase = Assert.IsType<CanonicalRecoveryCase>(
+            await new CanonicalRecoveryStore(fixture.Repository).ReadCaseAsync(
+                new RecoveryCaseIdentity("recoverycase:WarmSession:scope-runtime"),
+                CancellationToken.None));
+        Assert.Equal(RecoveryScopeKind.WarmSession, canonicalCase.Scope);
+        await using (SqliteConnection database = LoopRelayWorkspaceDatabase.OpenReadOnly(
+            LoopRelayWorkspaceDatabase.Resolve(fixture.Repository)))
+        {
+            await database.OpenAsync();
+            await using SqliteCommand legacy = database.CreateCommand();
+            legacy.CommandText = """
+                SELECT (SELECT count(*) FROM session_recovery_attempts) +
+                       (SELECT count(*) FROM session_recovery_plans) +
+                       (SELECT count(*) FROM session_recovery_sources);
+                """;
+            Assert.Equal(0L, Convert.ToInt64(await legacy.ExecuteScalarAsync()));
+        }
 
         await result.Session!.DisposeAsync();
     }
@@ -49,8 +71,9 @@ public sealed class RecoveryRuntimeTests
     {
         Fixture fixture = await Fixture.CreateAsync();
         var continuity = new FakeContinuityRuntime(fixture.Profile) { ForkEnabled = true };
+        var decisionStore = new CanonicalDecisionRecoveryStore(fixture.Repository, fixture.Store);
         var runtime = new RecoveryRuntime(
-            fixture.Store,
+            decisionStore,
             continuity,
             new RecoverySourceCatalog([new FixedSource()]),
             new RecoveryPlanner(),
@@ -60,8 +83,9 @@ public sealed class RecoveryRuntimeTests
                 new NativeForkRecoveryMechanism(),
             ]),
             new FixedEnvelopeFactory(),
-            new FrozenTimeProvider(Fixture.Now));
-        RecoveryRuntimeRequest request = fixture.Request() with
+            new FrozenTimeProvider(Fixture.Now),
+            new CanonicalRecoveryStore(fixture.Repository));
+        RecoveryRuntimeRequest request = fixture.RequestWithCausality() with
         {
             Policy = new Dictionary<string, string>
             {
@@ -93,16 +117,18 @@ public sealed class RecoveryRuntimeTests
     {
         Fixture fixture = await Fixture.CreateAsync();
         var continuity = new FakeContinuityRuntime(fixture.Profile) { OriginalResumeOutcome = resumeOutcome };
+        var decisionStore = new CanonicalDecisionRecoveryStore(fixture.Repository, fixture.Store);
         var runtime = new RecoveryRuntime(
-            fixture.Store,
+            decisionStore,
             continuity,
             new RecoverySourceCatalog([new FixedSource()]),
             new RecoveryPlanner(),
             new RecoveryMechanismCatalog([new RepositoryReconstructionMechanism()]),
             new FixedEnvelopeFactory(),
-            new FrozenTimeProvider(Fixture.Now));
+            new FrozenTimeProvider(Fixture.Now),
+            new CanonicalRecoveryStore(fixture.Repository));
 
-        RecoveryRuntimeResult result = await runtime.RunAsync(fixture.Request());
+        RecoveryRuntimeResult result = await runtime.RunAsync(fixture.RequestWithCausality());
 
         Assert.Equal(expected, result.Outcome);
         Assert.Equal(0, continuity.CreateCalls);
@@ -274,6 +300,13 @@ public sealed class RecoveryRuntimeTests
                 new Dictionary<string, string> { ["rank:RepositoryReconstruction@1"] = "1" },
                 100_000, "ExecuteRestart");
         }
+
+        public RecoveryRuntimeRequest RequestWithCausality() => Request() with
+        {
+            Causality = new CanonicalCausalContext(
+                WorkspaceIdentity.New(), RunIdentity.New(), WorkflowInstanceIdentity.New(),
+                TransitionRunIdentity.New(), AttemptIdentity.New()),
+        };
 
         private static SessionContinuityProfile CreateProfile()
         {

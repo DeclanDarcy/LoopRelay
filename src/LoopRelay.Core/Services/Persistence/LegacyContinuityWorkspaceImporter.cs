@@ -59,7 +59,9 @@ public static class LegacyContinuityWorkspaceImporter
         }
 
         string sourceDigest;
-        await using (FileStream stream = File.OpenRead(sourcePath))
+        await using (FileStream stream = new(sourcePath, FileMode.Open, FileAccess.Read,
+                         FileShare.ReadWrite | FileShare.Delete, 64 * 1024,
+                         FileOptions.Asynchronous | FileOptions.SequentialScan))
         {
             sourceDigest = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
         }

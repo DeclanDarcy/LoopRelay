@@ -1,5 +1,6 @@
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Services;
@@ -49,6 +50,9 @@ public sealed class TransitionRuntimeTests
         Assert.NotNull(result.TransitionRun);
         Assert.NotNull(result.Attempt);
         Assert.Equal("RecoveryRequired", Assert.Single(harness.Attempts.Completed).Outcome);
+        Assert.Equal(
+            RecoveryBoundaryClassification.ProviderUnknown,
+            Assert.Single(harness.RecoveryCases.Classifications).Classification);
     }
 
     [Fact]
@@ -112,7 +116,7 @@ public sealed class TransitionRuntimeTests
             RecoveryAttemptIdentity.New(),
             source,
             TransitionRecoveryDisposition.SafeRetry.ToString(),
-            TransitionRecoveryAction.RetryAsNewAttempt,
+            CanonicalRecoveryAction.RetryNewAttempt,
             ["submission not accepted"],
             ["durable pre-submission boundary"],
             RecoveryAttemptMode.RetryExistingTransitionRun,
@@ -153,6 +157,7 @@ public sealed class TransitionRuntimeTests
             Evidence = new RecordingEvidenceStore();
             GateEvaluations = new RecordingGateStore();
             Commit = new RecordingCommitStore();
+            RecoveryCases = new RecordingRecoveryCaseRecorder();
             Runtime = new TransitionRuntime(
                 Resolver,
                 Products,
@@ -169,7 +174,9 @@ public sealed class TransitionRuntimeTests
                 Receipts,
                 Evidence,
                 GateEvaluations,
-                Commit);
+                Commit,
+                null,
+                RecoveryCases);
             CanonicalTransitionExecutionContext context = execution ?? NewExecutionContext();
             Request = new TransitionRuntimeRequest(
                 WorkflowIdentity.Plan,
@@ -199,8 +206,28 @@ public sealed class TransitionRuntimeTests
         public RecordingEvidenceStore Evidence { get; }
         public RecordingGateStore GateEvaluations { get; }
         public RecordingCommitStore Commit { get; }
+        public RecordingRecoveryCaseRecorder RecoveryCases { get; }
         public TransitionRuntime Runtime { get; }
         public TransitionRuntimeRequest Request { get; }
+    }
+
+    private sealed class RecordingRecoveryCaseRecorder : ICanonicalRecoveryCaseRecorder
+    {
+        public List<CanonicalRecoveryClassification> Classifications { get; } = [];
+
+        public Task<CanonicalRecoveryClassification> RecordAsync(
+            RecoveryScopeKind scope,
+            RecoveryCausalSubject subject,
+            RecoveryDurableFacts facts,
+            CancellationToken cancellationToken = default)
+        {
+            var recoveryCase = new CanonicalRecoveryCase(
+                RecoveryCaseIdentity.New(), scope, subject, DateTimeOffset.UtcNow);
+            CanonicalRecoveryClassification classification =
+                CanonicalRecoveryClassifier.Classify(recoveryCase, facts);
+            Classifications.Add(classification);
+            return Task.FromResult(classification);
+        }
     }
 
     private static CanonicalTransitionExecutionContext NewExecutionContext() => new(
@@ -272,6 +299,7 @@ public sealed class TransitionRuntimeTests
         public Task<GateResult> EvaluateInputGateAsync(
             GateDefinition gate,
             ProductResolutionResult inputs,
+            InputGateEvaluationContext context,
             CancellationToken cancellationToken) => Task.FromResult(Satisfied());
 
         public Task<GateResult> EvaluateOutputGateAsync(
@@ -370,6 +398,7 @@ public sealed class TransitionRuntimeTests
         public int CallCount { get; private set; }
 
         public Task<InterpretedTransitionOutput> InterpretAsync(
+            CanonicalCausalContext causality,
             WorkflowTransitionDefinition definition,
             PromptExecutionResult executionResult,
             CancellationToken cancellationToken)

@@ -26,7 +26,8 @@ internal static class SessionTelemetryComposition
         ICodexUsageProbe probe,
         IDecisionCostModel costModel,
         IClock clock,
-        ILoopConsole console)
+        ILoopConsole console,
+        ProviderEnvironmentConfiguration? providerEnvironment = null)
     {
         if (!enabled)
         {
@@ -39,7 +40,9 @@ internal static class SessionTelemetryComposition
             new SqliteSessionTelemetrySink(repository),
             new RotatingJsonlTelemetrySink(directory, clock),
         ]);
-        var locator = new FileSystemCodexRolloutLocator(FileSystemCodexRolloutLocator.ResolveDefaultSessionsRoot());
-        return new SessionTelemetryRecorder(probe, locator, sink, costModel, clock, console);
+        providerEnvironment ??= ProviderEnvironmentConfiguration.Resolve();
+        var locator = new FileSystemCodexRolloutLocator(
+            FileSystemCodexRolloutLocator.ResolveDefaultSessionsRoot(providerEnvironment));
+        return new SessionTelemetryRecorder(probe, locator, sink, costModel, clock, console, providerEnvironment);
     }
 }

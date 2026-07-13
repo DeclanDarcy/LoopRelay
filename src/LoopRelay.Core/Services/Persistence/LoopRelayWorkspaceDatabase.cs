@@ -25,8 +25,20 @@ public enum WorkspaceSchemaShape
     ArchitectureConvergenceV9Partial,
     RecognizedMixedV9Partial,
     CanonicalV9Complete,
+    CanonicalV10Complete,
+    CanonicalV11Complete,
+    CanonicalV12Complete,
+    CanonicalV13Complete,
+    CanonicalV14Complete,
+    CanonicalV15Complete,
     UnknownV9Shape,
     CorruptCanonicalV9,
+    CorruptCanonicalV10,
+    CorruptCanonicalV11,
+    CorruptCanonicalV12,
+    CorruptCanonicalV13,
+    CorruptCanonicalV14,
+    CorruptCanonicalV15,
     Unknown,
 }
 
@@ -55,11 +67,29 @@ public static class LoopRelayWorkspaceDatabase
     public const string SchemaIdentity = "looprelay.workspace-state";
     public const string SchemaFamily = "CanonicalWorkspace";
     public const string SchemaShapeMetadataKey = "schema_shape";
-    public const int CurrentSchemaVersion = 9;
+    public const int CurrentSchemaVersion = 15;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     public static string CanonicalV9ShapeFingerprint =>
         ComputeShapeFingerprint(CanonicalV9Requirements.Select(requirement => requirement.Token));
+
+    public static string CanonicalV10ShapeFingerprint =>
+        ComputeShapeFingerprint(CanonicalV10Requirements.Select(requirement => requirement.Token));
+
+    public static string CanonicalV11ShapeFingerprint =>
+        ComputeShapeFingerprint(CanonicalV11Requirements.Select(requirement => requirement.Token));
+
+    public static string CanonicalV12ShapeFingerprint =>
+        ComputeShapeFingerprint(CanonicalV12Requirements.Select(requirement => requirement.Token));
+
+    public static string CanonicalV13ShapeFingerprint =>
+        ComputeShapeFingerprint(CanonicalV13Requirements.Select(requirement => requirement.Token));
+
+    public static string CanonicalV14ShapeFingerprint =>
+        ComputeShapeFingerprint(CanonicalV14Requirements.Select(requirement => requirement.Token));
+
+    public static string CanonicalV15ShapeFingerprint =>
+        ComputeShapeFingerprint(CanonicalV15Requirements.Select(requirement => requirement.Token));
 
     public static string Resolve(Repository repository)
     {
@@ -101,11 +131,11 @@ public static class LoopRelayWorkspaceDatabase
         string? preservedWorkspaceId = await ValidateExistingWorkspaceIdentityAsync(
             connection,
             cancellationToken);
-        bool structurallyComplete = inspection.Shape == WorkspaceSchemaShape.CanonicalV9Complete;
+        bool structurallyComplete = inspection.Shape == WorkspaceSchemaShape.CanonicalV15Complete;
         if (structurallyComplete && preservedWorkspaceId is null)
         {
             throw new InvalidOperationException(
-                "Canonical v9 is stamped complete but has no immutable workspace identity.");
+                "Canonical v15 is stamped complete but has no immutable workspace identity.");
         }
 
         LegacyResumeImport? legacyResume = await ReadLegacyResumeAsync(connection, cancellationToken);
@@ -127,6 +157,14 @@ public static class LoopRelayWorkspaceDatabase
             await EnsureCanonicalV8ShapeAsync(connection, transaction, cancellationToken);
             await ExecuteAsync(connection, transaction, SchemaV9Sql, cancellationToken);
             await EnsureV9ColumnsAsync(connection, transaction, cancellationToken);
+            await EnsureV10ColumnsAsync(connection, transaction, cancellationToken);
+            await ExecuteAsync(connection, transaction, SchemaV10Sql, cancellationToken);
+            await ExecuteAsync(connection, transaction, SchemaV11Sql, cancellationToken);
+            await ExecuteAsync(connection, transaction, SchemaV12Sql, cancellationToken);
+            await ExecuteAsync(connection, transaction, SchemaV13Sql, cancellationToken);
+            await ExecuteAsync(connection, transaction, SchemaV14Sql, cancellationToken);
+            await EnsureV14ColumnsAsync(connection, transaction, cancellationToken);
+            await ExecuteAsync(connection, transaction, SchemaV15Sql, cancellationToken);
             if (legacyResume is not null)
             {
                 await ImportLegacyResumeAsync(connection, transaction, legacyResume, cancellationToken);
@@ -138,7 +176,7 @@ public static class LoopRelayWorkspaceDatabase
                 inspection,
                 preservedWorkspaceId,
                 cancellationToken);
-            await VerifyCanonicalV9ShapeAsync(connection, transaction, cancellationToken);
+            await VerifyCanonicalV15ShapeAsync(connection, transaction, cancellationToken);
             await RecordSchemaConvergenceAsync(
                 connection,
                 transaction,
@@ -194,6 +232,58 @@ public static class LoopRelayWorkspaceDatabase
 
             if (version == CurrentSchemaVersion)
             {
+                return await ClassifyV15ShapeAsync(
+                    connection,
+                    identity,
+                    hasExplicitLineage: true,
+                    stampedShape,
+                    cancellationToken);
+            }
+
+            if (version == 14)
+            {
+                return await ClassifyV14ShapeAsync(
+                    connection, identity, hasExplicitLineage: true, stampedShape, cancellationToken);
+            }
+
+            if (version == 13)
+            {
+                return await ClassifyV13ShapeAsync(
+                    connection, identity, hasExplicitLineage: true, stampedShape, cancellationToken);
+            }
+
+            if (version == 12)
+            {
+                return await ClassifyV12ShapeAsync(
+                    connection,
+                    identity,
+                    hasExplicitLineage: true,
+                    stampedShape,
+                    cancellationToken);
+            }
+
+            if (version == 11)
+            {
+                return await ClassifyV11ShapeAsync(
+                    connection,
+                    identity,
+                    hasExplicitLineage: true,
+                    stampedShape,
+                    cancellationToken);
+            }
+
+            if (version == 10)
+            {
+                return await ClassifyV10ShapeAsync(
+                    connection,
+                    identity,
+                    hasExplicitLineage: true,
+                    stampedShape,
+                    cancellationToken);
+            }
+
+            if (version == 9)
+            {
                 return await ClassifyV9ShapeAsync(
                     connection,
                     identity,
@@ -209,7 +299,7 @@ public static class LoopRelayWorkspaceDatabase
                 true,
                 WorkspaceSchemaShape.PreLineageCanonical,
                 stampedShape,
-                $"Canonical workspace schema v{version} requires canonical-v9 migration.");
+                $"Canonical workspace schema v{version} requires migration to v{CurrentSchemaVersion}.");
         }
 
         bool legacyContinuity = version == 3 &&
@@ -228,9 +318,62 @@ public static class LoopRelayWorkspaceDatabase
                 "Detected branch-local LegacyContinuity v3 by structural fingerprint.");
         }
 
-        if (version == CurrentSchemaVersion)
+        if (version == 9)
         {
             return await ClassifyV9ShapeAsync(
+                connection,
+                schemaIdentity: null,
+                hasExplicitLineage: false,
+                stampedShape,
+                cancellationToken);
+        }
+
+
+        if (version == CurrentSchemaVersion)
+        {
+            return await ClassifyV15ShapeAsync(
+                connection,
+                schemaIdentity: null,
+                hasExplicitLineage: false,
+                stampedShape,
+                cancellationToken);
+        }
+
+        if (version == 14)
+        {
+            return await ClassifyV14ShapeAsync(
+                connection, schemaIdentity: null, hasExplicitLineage: false, stampedShape, cancellationToken);
+        }
+
+        if (version == 13)
+        {
+            return await ClassifyV13ShapeAsync(
+                connection, schemaIdentity: null, hasExplicitLineage: false, stampedShape, cancellationToken);
+        }
+
+        if (version == 12)
+        {
+            return await ClassifyV12ShapeAsync(
+                connection,
+                schemaIdentity: null,
+                hasExplicitLineage: false,
+                stampedShape,
+                cancellationToken);
+        }
+
+        if (version == 11)
+        {
+            return await ClassifyV11ShapeAsync(
+                connection,
+                schemaIdentity: null,
+                hasExplicitLineage: false,
+                stampedShape,
+                cancellationToken);
+        }
+
+        if (version == 10)
+        {
+            return await ClassifyV10ShapeAsync(
                 connection,
                 schemaIdentity: null,
                 hasExplicitLineage: false,
@@ -292,7 +435,7 @@ public static class LoopRelayWorkspaceDatabase
                 return new WorkspaceSchemaInspection(
                     schemaIdentity,
                     WorkspaceSchemaFamily.Unknown,
-                    CurrentSchemaVersion,
+                    9,
                     hasExplicitLineage,
                     WorkspaceSchemaShape.CorruptCanonicalV9,
                     observedFingerprint,
@@ -302,7 +445,7 @@ public static class LoopRelayWorkspaceDatabase
             return new WorkspaceSchemaInspection(
                 SchemaIdentity,
                 WorkspaceSchemaFamily.CanonicalWorkspace,
-                CurrentSchemaVersion,
+                9,
                 true,
                 WorkspaceSchemaShape.CanonicalV9Complete,
                 observedFingerprint,
@@ -314,7 +457,7 @@ public static class LoopRelayWorkspaceDatabase
             return new WorkspaceSchemaInspection(
                 schemaIdentity,
                 WorkspaceSchemaFamily.Unknown,
-                CurrentSchemaVersion,
+                9,
                 hasExplicitLineage,
                 hasExplicitLineage
                     ? WorkspaceSchemaShape.CorruptCanonicalV9
@@ -341,7 +484,7 @@ public static class LoopRelayWorkspaceDatabase
             return new WorkspaceSchemaInspection(
                 schemaIdentity,
                 WorkspaceSchemaFamily.Unknown,
-                CurrentSchemaVersion,
+                9,
                 hasExplicitLineage,
                 hasExplicitLineage
                     ? WorkspaceSchemaShape.CorruptCanonicalV9
@@ -353,11 +496,179 @@ public static class LoopRelayWorkspaceDatabase
         return new WorkspaceSchemaInspection(
             schemaIdentity ?? SchemaIdentity,
             WorkspaceSchemaFamily.CanonicalWorkspace,
-            CurrentSchemaVersion,
+            9,
             hasExplicitLineage,
             shape,
             observedFingerprint,
             $"Recognized {shape} by strict canonical-v9 structural fingerprint; convergence is required.");
+    }
+
+    private static async Task<WorkspaceSchemaInspection> ClassifyV10ShapeAsync(
+        SqliteConnection connection,
+        string? schemaIdentity,
+        bool hasExplicitLineage,
+        string? stampedShape,
+        CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection,
+            CanonicalV10Requirements,
+            transaction: null,
+            cancellationToken);
+        string observedFingerprint = ComputeShapeFingerprint(satisfied);
+        bool complete = HasAll(satisfied, CanonicalV10Requirements);
+        bool validStamp = hasExplicitLineage &&
+            string.Equals(stampedShape, CanonicalV10ShapeFingerprint, StringComparison.Ordinal) &&
+            complete;
+        if (!validStamp)
+        {
+            return new WorkspaceSchemaInspection(
+                schemaIdentity,
+                WorkspaceSchemaFamily.Unknown,
+                10,
+                hasExplicitLineage,
+                WorkspaceSchemaShape.CorruptCanonicalV10,
+                observedFingerprint,
+                "Canonical-v10 shape stamp is missing its declared effect-work contract or lineage; mutation is blocked.");
+        }
+
+        return new WorkspaceSchemaInspection(
+            SchemaIdentity,
+            WorkspaceSchemaFamily.CanonicalWorkspace,
+            10,
+            true,
+            WorkspaceSchemaShape.CanonicalV10Complete,
+            observedFingerprint,
+            "Canonical workspace v10 lineage and complete physical-shape fingerprint verified.");
+    }
+
+    private static async Task<WorkspaceSchemaInspection> ClassifyV11ShapeAsync(
+        SqliteConnection connection,
+        string? schemaIdentity,
+        bool hasExplicitLineage,
+        string? stampedShape,
+        CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection,
+            CanonicalV11Requirements,
+            transaction: null,
+            cancellationToken);
+        string observedFingerprint = ComputeShapeFingerprint(satisfied);
+        bool complete = HasAll(satisfied, CanonicalV11Requirements);
+        bool validStamp = hasExplicitLineage &&
+            string.Equals(stampedShape, CanonicalV11ShapeFingerprint, StringComparison.Ordinal) &&
+            complete;
+        if (!validStamp)
+        {
+            return new WorkspaceSchemaInspection(
+                schemaIdentity,
+                WorkspaceSchemaFamily.Unknown,
+                11,
+                hasExplicitLineage,
+                WorkspaceSchemaShape.CorruptCanonicalV11,
+                observedFingerprint,
+                "Canonical-v11 shape stamp is missing its declared recovery-authority contract or lineage; mutation is blocked.");
+        }
+
+        return new WorkspaceSchemaInspection(
+            SchemaIdentity,
+            WorkspaceSchemaFamily.CanonicalWorkspace,
+            11,
+            true,
+            WorkspaceSchemaShape.CanonicalV11Complete,
+            observedFingerprint,
+            "Canonical workspace v11 lineage and complete physical-shape fingerprint verified.");
+    }
+
+    private static async Task<WorkspaceSchemaInspection> ClassifyV12ShapeAsync(
+        SqliteConnection connection,
+        string? schemaIdentity,
+        bool hasExplicitLineage,
+        string? stampedShape,
+        CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection, CanonicalV12Requirements, transaction: null, cancellationToken);
+        string observedFingerprint = ComputeShapeFingerprint(satisfied);
+        bool validStamp = hasExplicitLineage &&
+            string.Equals(stampedShape, CanonicalV12ShapeFingerprint, StringComparison.Ordinal) &&
+            HasAll(satisfied, CanonicalV12Requirements);
+        if (!validStamp)
+        {
+            return new WorkspaceSchemaInspection(
+                schemaIdentity, WorkspaceSchemaFamily.Unknown, 12, hasExplicitLineage,
+                WorkspaceSchemaShape.CorruptCanonicalV12, observedFingerprint,
+                "Canonical-v12 shape stamp is missing its declared interaction-broker contract or lineage; mutation is blocked.");
+        }
+        return new WorkspaceSchemaInspection(
+            SchemaIdentity, WorkspaceSchemaFamily.CanonicalWorkspace, 12, true,
+            WorkspaceSchemaShape.CanonicalV12Complete, observedFingerprint,
+            "Canonical workspace v12 lineage and complete physical-shape fingerprint verified.");
+    }
+
+    private static async Task<WorkspaceSchemaInspection> ClassifyV13ShapeAsync(
+        SqliteConnection connection,
+        string? schemaIdentity,
+        bool hasExplicitLineage,
+        string? stampedShape,
+        CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection, CanonicalV13Requirements, transaction: null, cancellationToken);
+        string observedFingerprint = ComputeShapeFingerprint(satisfied);
+        bool validStamp = hasExplicitLineage &&
+            string.Equals(stampedShape, CanonicalV13ShapeFingerprint, StringComparison.Ordinal) &&
+            HasAll(satisfied, CanonicalV13Requirements);
+        if (!validStamp)
+        {
+            return new WorkspaceSchemaInspection(
+                schemaIdentity, WorkspaceSchemaFamily.Unknown, 13, hasExplicitLineage,
+                WorkspaceSchemaShape.CorruptCanonicalV13, observedFingerprint,
+                "Canonical-v13 shape stamp is missing its declared storage-authority contract or lineage; mutation is blocked.");
+        }
+        return new WorkspaceSchemaInspection(
+            SchemaIdentity, WorkspaceSchemaFamily.CanonicalWorkspace, 13, true,
+            WorkspaceSchemaShape.CanonicalV13Complete, observedFingerprint,
+            "Canonical workspace v13 lineage and complete physical-shape fingerprint verified.");
+    }
+
+    private static async Task<WorkspaceSchemaInspection> ClassifyV14ShapeAsync(
+        SqliteConnection connection, string? schemaIdentity, bool hasExplicitLineage,
+        string? stampedShape, CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection, CanonicalV14Requirements, transaction: null, cancellationToken);
+        string observedFingerprint = ComputeShapeFingerprint(satisfied);
+        bool validStamp = hasExplicitLineage &&
+            string.Equals(stampedShape, CanonicalV14ShapeFingerprint, StringComparison.Ordinal) &&
+            HasAll(satisfied, CanonicalV14Requirements);
+        if (!validStamp)
+            return new WorkspaceSchemaInspection(schemaIdentity, WorkspaceSchemaFamily.Unknown, 14,
+                hasExplicitLineage, WorkspaceSchemaShape.CorruptCanonicalV14, observedFingerprint,
+                "Canonical-v14 shape stamp is missing its declared import-gateway contract or lineage; mutation is blocked.");
+        return new WorkspaceSchemaInspection(SchemaIdentity, WorkspaceSchemaFamily.CanonicalWorkspace, 14, true,
+            WorkspaceSchemaShape.CanonicalV14Complete, observedFingerprint,
+            "Canonical workspace v14 lineage and complete physical-shape fingerprint verified.");
+    }
+
+    private static async Task<WorkspaceSchemaInspection> ClassifyV15ShapeAsync(
+        SqliteConnection connection, string? schemaIdentity, bool hasExplicitLineage,
+        string? stampedShape, CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection, CanonicalV15Requirements, transaction: null, cancellationToken);
+        string observedFingerprint = ComputeShapeFingerprint(satisfied);
+        bool validStamp = hasExplicitLineage &&
+            string.Equals(stampedShape, CanonicalV15ShapeFingerprint, StringComparison.Ordinal) &&
+            HasAll(satisfied, CanonicalV15Requirements);
+        if (!validStamp)
+            return new WorkspaceSchemaInspection(schemaIdentity, WorkspaceSchemaFamily.Unknown, 15,
+                hasExplicitLineage, WorkspaceSchemaShape.CorruptCanonicalV15, observedFingerprint,
+                "Canonical-v15 shape stamp is missing its declared completion-authority contract or lineage; mutation is blocked.");
+        return new WorkspaceSchemaInspection(SchemaIdentity, WorkspaceSchemaFamily.CanonicalWorkspace, 15, true,
+            WorkspaceSchemaShape.CanonicalV15Complete, observedFingerprint,
+            "Canonical workspace v15 lineage and complete physical-shape fingerprint verified.");
     }
 
     private static async Task<string?> ValidateExistingWorkspaceIdentityAsync(
@@ -407,17 +718,17 @@ public static class LoopRelayWorkspaceDatabase
         return scalar is null or DBNull ? null : Convert.ToString(scalar, CultureInfo.InvariantCulture);
     }
 
-    private static async Task VerifyCanonicalV9ShapeAsync(
+    private static async Task VerifyCanonicalV15ShapeAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         CancellationToken cancellationToken)
     {
         HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
             connection,
-            CanonicalV9Requirements,
+            CanonicalV15Requirements,
             transaction,
             cancellationToken);
-        string[] missing = CanonicalV9Requirements
+        string[] missing = CanonicalV15Requirements
             .Where(requirement => !satisfied.Contains(requirement.Token))
             .Select(requirement => requirement.Token)
             .Distinct(StringComparer.Ordinal)
@@ -426,16 +737,16 @@ public static class LoopRelayWorkspaceDatabase
         if (missing.Length > 0)
         {
             throw new InvalidOperationException(
-                "Canonical-v9 convergence verification failed. Missing contract requirements: " +
+                "Canonical-v15 migration verification failed. Missing contract requirements: " +
                 string.Join(", ", missing.Take(12)) +
                 (missing.Length > 12 ? $" (+{missing.Length - 12} more)." : "."));
         }
 
         string fingerprint = ComputeShapeFingerprint(satisfied);
-        if (!string.Equals(fingerprint, CanonicalV9ShapeFingerprint, StringComparison.Ordinal))
+        if (!string.Equals(fingerprint, CanonicalV15ShapeFingerprint, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Canonical-v9 convergence produced fingerprint '{fingerprint}', expected '{CanonicalV9ShapeFingerprint}'.");
+                $"Canonical-v15 migration produced fingerprint '{fingerprint}', expected '{CanonicalV15ShapeFingerprint}'.");
         }
     }
 
@@ -482,6 +793,23 @@ public static class LoopRelayWorkspaceDatabase
         {
             await AddColumnIfMissingAsync(
                 connection, transaction, "agent_turns", column, type, cancellationToken);
+        }
+    }
+
+    private static async Task EnsureV10ColumnsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        foreach ((string column, string declaration) in V10EffectIntentColumns)
+        {
+            await AddColumnIfMissingAsync(
+                connection,
+                transaction,
+                "canonical_effect_intents",
+                column,
+                declaration,
+                cancellationToken);
         }
     }
 
@@ -550,7 +878,7 @@ public static class LoopRelayWorkspaceDatabase
             cancellationToken,
             ("$identity_format", identityFormat),
             ("$migration_source", inspection.Family == WorkspaceSchemaFamily.Empty
-                ? "fresh-v9"
+                ? "fresh-v14"
                 : $"{inspection.Shape}:v{inspection.Version}"),
             ("$imported_at", inspection.Family == WorkspaceSchemaFamily.Empty
                 ? null
@@ -568,7 +896,7 @@ public static class LoopRelayWorkspaceDatabase
             new("schema_identity", SchemaIdentity),
             new("schema_family", SchemaFamily),
             new("schema_version", CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture)),
-            new(SchemaShapeMetadataKey, CanonicalV9ShapeFingerprint),
+            new(SchemaShapeMetadataKey, CanonicalV15ShapeFingerprint),
         ])
         {
             await ExecuteAsync(
@@ -645,11 +973,11 @@ public static class LoopRelayWorkspaceDatabase
             ON CONFLICT(convergence_id) DO NOTHING;
             """,
             cancellationToken,
-            ("$convergence_id", $"canonical-v9:{workspaceId}:{inspection.Shape}:{sourceFingerprint}"),
+            ("$convergence_id", $"canonical-v15:{workspaceId}:{inspection.Shape}:{sourceFingerprint}"),
             ("$source_shape", inspection.Shape.ToString()),
             ("$source_fingerprint", sourceFingerprint),
             ("$source_version", inspection.Version),
-            ("$target_fingerprint", CanonicalV9ShapeFingerprint),
+            ("$target_fingerprint", CanonicalV15ShapeFingerprint),
             ("$workspace_id", workspaceId),
             ("$completed_at", completedAt));
     }
@@ -670,6 +998,21 @@ public static class LoopRelayWorkspaceDatabase
                 $"ALTER TABLE {table} ADD COLUMN {column} {declaration};",
                 cancellationToken);
         }
+    }
+
+    private static async Task EnsureV14ColumnsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await AddColumnIfMissingAsync(connection, transaction, "runs", "catalog_identity",
+            "text not null default ''", cancellationToken);
+        await AddColumnIfMissingAsync(connection, transaction, "runs", "catalog_version",
+            "text not null default ''", cancellationToken);
+        await AddColumnIfMissingAsync(connection, transaction, "workflow_instances", "catalog_identity",
+            "text not null default ''", cancellationToken);
+        await AddColumnIfMissingAsync(connection, transaction, "attempts", "agent_role_policy_id",
+            "text", cancellationToken);
     }
 
     public static async Task<string> ReadWorkspaceIdentityAsync(
@@ -807,6 +1150,29 @@ public static class LoopRelayWorkspaceDatabase
         ("diagnostics", "text"),
     ];
 
+    private static readonly (string Column, string Declaration)[] V10EffectIntentColumns =
+    [
+        ("workspace_id", "text"),
+        ("run_id", "text"),
+        ("workflow_instance_id", "text"),
+        ("semantic_operation_key", "text"),
+        ("executor_key", "text"),
+        ("executor_version", "text"),
+        ("target_json", "text"),
+        ("payload_json", "text"),
+        ("payload_hash", "text"),
+        ("requiredness", "text"),
+        ("dependencies_json", "text"),
+        ("precondition_json", "text"),
+        ("postcondition_json", "text"),
+        ("reconciliation_policy", "text"),
+        ("row_version", "integer not null default 0"),
+        ("lease_owner", "text"),
+        ("lease_expires_at", "text"),
+        ("attempt_count", "integer not null default 0"),
+        ("terminal_receipt_id", "text"),
+    ];
+
     private static readonly string[] CanonicalCoreTableNames =
     [
         "schema_metadata",
@@ -937,6 +1303,114 @@ public static class LoopRelayWorkspaceDatabase
             .Concat(Merge4V9Requirements)
             .Concat(ArchitectureConvergenceV9Requirements)
             .Concat(ConvergenceReceiptRequirements)
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<ShapeRequirement> CanonicalV10Requirements =>
+        CanonicalV9Requirements
+            .Concat(V10EffectIntentColumns.Select(item => ShapeRequirement.Column(
+                "canonical_effect_intents",
+                item.Column,
+                item.Declaration.StartsWith("integer", StringComparison.Ordinal) ? "integer" : "text")))
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_effect_lifecycle_events"),
+                ShapeRequirement.Table("canonical_effect_receipts"),
+                ShapeRequirement.Table("canonical_effect_reconciliation_attempts"),
+                ShapeRequirement.Index("idx_effect_intents_unsettled"),
+                ShapeRequirement.Index("idx_effect_intents_lease"),
+                ShapeRequirement.Index("idx_effect_intents_transition_attempt"),
+                ShapeRequirement.Index("idx_effect_intents_semantic_operation"),
+                ShapeRequirement.Index("idx_effect_receipts_intent"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<ShapeRequirement> CanonicalV11Requirements =>
+        CanonicalV10Requirements
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_recovery_cases"),
+                ShapeRequirement.Table("canonical_recovery_classifications"),
+                ShapeRequirement.Table("canonical_recovery_source_links"),
+                ShapeRequirement.Table("canonical_recovery_plans"),
+                ShapeRequirement.Table("canonical_recovery_action_events"),
+                ShapeRequirement.Column("canonical_recovery_cases", "scope_identity", "text"),
+                ShapeRequirement.Column("canonical_recovery_plans", "compatibility_document_json", "text"),
+                ShapeRequirement.Column("canonical_recovery_action_events", "document_json", "text"),
+                ShapeRequirement.Index("idx_recovery_cases_subject"),
+                ShapeRequirement.Index("idx_recovery_classifications_case"),
+                ShapeRequirement.Index("idx_recovery_source_links_classification"),
+                ShapeRequirement.Index("idx_recovery_plans_case"),
+                ShapeRequirement.Index("idx_recovery_action_events_plan"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<ShapeRequirement> CanonicalV12Requirements =>
+        CanonicalV11Requirements
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_interaction_requests"),
+                ShapeRequirement.Table("canonical_interaction_policy_evaluations"),
+                ShapeRequirement.Table("canonical_interaction_responses"),
+                ShapeRequirement.Table("canonical_interaction_lifecycle_events"),
+                ShapeRequirement.Index("idx_interaction_requests_state"),
+                ShapeRequirement.Index("idx_interaction_requests_causality"),
+                ShapeRequirement.Index("idx_interaction_events_request"),
+                ShapeRequirement.Index("idx_interaction_responses_semantic"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<ShapeRequirement> CanonicalV13Requirements =>
+        CanonicalV12Requirements
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_storage_operation_plans"),
+                ShapeRequirement.Table("canonical_storage_operation_events"),
+                ShapeRequirement.Table("canonical_storage_operation_receipts"),
+                ShapeRequirement.Index("idx_storage_operation_events_operation"),
+                ShapeRequirement.Index("idx_storage_operation_plans_lifecycle"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<ShapeRequirement> CanonicalV14Requirements =>
+        CanonicalV13Requirements.Concat(
+            [
+                ShapeRequirement.Table("canonical_import_detections"),
+                ShapeRequirement.Table("canonical_import_previews"),
+                ShapeRequirement.Table("canonical_import_mappings"),
+                ShapeRequirement.Table("canonical_import_verifications"),
+                ShapeRequirement.Table("canonical_import_receipts"),
+                ShapeRequirement.Table("canonical_source_authority"),
+                ShapeRequirement.Table("canonical_import_adapter_exhaustion"),
+                ShapeRequirement.Table("canonical_kernel_decisions"),
+                ShapeRequirement.Column("canonical_import_previews", "import_id", "text"),
+                ShapeRequirement.Column("runs", "catalog_identity", "text"),
+                ShapeRequirement.Column("runs", "catalog_version", "text"),
+                ShapeRequirement.Column("workflow_instances", "catalog_identity", "text"),
+                ShapeRequirement.Column("attempts", "agent_role_policy_id", "text"),
+                ShapeRequirement.Table("canonical_agent_role_policies"),
+                ShapeRequirement.Index("idx_import_previews_fingerprint"),
+                ShapeRequirement.Index("idx_import_mappings_preview"),
+                ShapeRequirement.Index("idx_import_receipts_fingerprint"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<ShapeRequirement> CanonicalV15Requirements =>
+        CanonicalV14Requirements.Concat(
+            [
+                ShapeRequirement.Table("canonical_completion_decisions"),
+                ShapeRequirement.Table("canonical_completion_certificates"),
+                ShapeRequirement.Table("canonical_completion_closure_plans"),
+                ShapeRequirement.Table("canonical_completion_settlements"),
+                ShapeRequirement.Table("canonical_certified_terminal_facts"),
+                ShapeRequirement.Index("idx_completion_decisions_root"),
+                ShapeRequirement.Index("idx_completion_settlements_plan"),
+            ])
             .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
             .ToArray();
 
@@ -1693,6 +2167,467 @@ public static class LoopRelayWorkspaceDatabase
             ON canonical_runtime_prerequisites(run_id);
         """;
 
+    private const string SchemaV10Sql = """
+        CREATE TABLE IF NOT EXISTS canonical_effect_lifecycle_events(
+            event_id integer primary key autoincrement,
+            effect_intent_id text not null,
+            lifecycle text not null,
+            worker_id text not null,
+            explanation text not null,
+            evidence_json text not null,
+            recorded_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_effect_receipts(
+            receipt_id text primary key,
+            effect_intent_id text not null unique,
+            executor_key text not null,
+            executor_version text not null,
+            observed_target_identity text not null,
+            before_facts_json text not null,
+            after_facts_json text not null,
+            postcondition_satisfied integer not null,
+            external_correlation text,
+            evidence_json text not null,
+            recorded_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_effect_reconciliation_attempts(
+            reconciliation_id text primary key,
+            effect_intent_id text not null,
+            worker_id text not null,
+            verdict text not null,
+            before_facts_json text not null,
+            after_facts_json text not null,
+            external_correlation text,
+            evidence_json text not null,
+            recorded_at text not null
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_effect_intents_unsettled
+            ON canonical_effect_intents(status, requiredness, effect_order, planned_at);
+        CREATE INDEX IF NOT EXISTS idx_effect_intents_lease
+            ON canonical_effect_intents(lease_expires_at, row_version);
+        CREATE INDEX IF NOT EXISTS idx_effect_intents_transition_attempt
+            ON canonical_effect_intents(transition_run_id, attempt_id, effect_order);
+        CREATE INDEX IF NOT EXISTS idx_effect_intents_semantic_operation
+            ON canonical_effect_intents(semantic_operation_key, idempotency_key);
+        CREATE INDEX IF NOT EXISTS idx_effect_receipts_intent
+            ON canonical_effect_receipts(effect_intent_id, recorded_at);
+        CREATE INDEX IF NOT EXISTS idx_effect_lifecycle_intent
+            ON canonical_effect_lifecycle_events(effect_intent_id, event_id);
+        CREATE INDEX IF NOT EXISTS idx_effect_reconciliation_intent
+            ON canonical_effect_reconciliation_attempts(effect_intent_id, recorded_at);
+
+        INSERT INTO canonical_effect_lifecycle_events (
+            effect_intent_id, lifecycle, worker_id, explanation, evidence_json, recorded_at
+        )
+        SELECT intent.effect_intent_id,
+               CASE record.status WHEN 'PartiallyFailed' THEN 'Unknown' ELSE record.status END,
+               'v9-migration', record.explanation, record.evidence_json, record.recorded_at
+        FROM canonical_effect_records AS record
+        JOIN canonical_effect_intents AS intent
+          ON intent.transition_run_id = record.run_id
+         AND intent.effect_identity = record.effect_identity
+        WHERE NOT EXISTS (
+            SELECT 1 FROM canonical_effect_lifecycle_events AS existing
+            WHERE existing.effect_intent_id = intent.effect_intent_id
+        )
+        ORDER BY record.record_id;
+
+        INSERT INTO canonical_effect_lifecycle_events (
+            effect_intent_id, lifecycle, worker_id, explanation, evidence_json, recorded_at
+        )
+        SELECT effect_intent_id, 'HumanActionRequired', 'v9-migration',
+               'Legacy effect intent has no exact executor/target contract and cannot be replayed automatically.',
+               '["legacy-v9-effect-intent","no-receipt-invented"]', planned_at
+        FROM canonical_effect_intents
+        WHERE executor_key IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM canonical_effect_lifecycle_events AS existing
+              WHERE existing.effect_intent_id = canonical_effect_intents.effect_intent_id
+                AND existing.lifecycle = 'HumanActionRequired'
+          );
+
+        UPDATE canonical_effect_intents
+        SET workspace_id = COALESCE(workspace_id, (SELECT workspace_id FROM workspace_identity WHERE id = 1)),
+            run_id = COALESCE(run_id, (SELECT run_id FROM attempts WHERE attempts.attempt_id = canonical_effect_intents.attempt_id)),
+            workflow_instance_id = COALESCE(workflow_instance_id, (SELECT workflow_instance_id FROM attempts WHERE attempts.attempt_id = canonical_effect_intents.attempt_id)),
+            semantic_operation_key = COALESCE(semantic_operation_key, 'legacy:' || effect_identity),
+            executor_key = COALESCE(executor_key, 'legacy-unresolved'),
+            executor_version = COALESCE(executor_version, '0'),
+            target_json = COALESCE(target_json, '{"kind":"legacy-unresolved"}'),
+            payload_json = COALESCE(payload_json, definition_json),
+            payload_hash = COALESCE(payload_hash, 'legacy-unverified'),
+            requiredness = COALESCE(requiredness, 'BlockingLocal'),
+            dependencies_json = COALESCE(dependencies_json, '[]'),
+            precondition_json = COALESCE(precondition_json, '{"kind":"legacy-unknown"}'),
+            postcondition_json = COALESCE(postcondition_json, '{"kind":"legacy-unknown"}'),
+            reconciliation_policy = COALESCE(reconciliation_policy, 'human-decision-required'),
+            status = CASE WHEN executor_key IS NULL THEN 'HumanActionRequired' ELSE status END,
+            row_version = CASE WHEN executor_key IS NULL THEN row_version + 1 ELSE row_version END,
+            lease_owner = NULL,
+            lease_expires_at = NULL;
+        """;
+
+    private const string SchemaV11Sql = """
+        CREATE TABLE IF NOT EXISTS canonical_recovery_cases(
+            case_id text primary key,
+            scope_kind text not null,
+            scope_identity text,
+            subject_json text not null,
+            transition_run_id text,
+            attempt_id text,
+            created_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_recovery_classifications(
+            classification_id text primary key,
+            case_id text not null,
+            classification text not null,
+            cancellation_boundary text not null,
+            source_evidence_json text not null,
+            supersedes_classification_id text,
+            observed_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_recovery_source_links(
+            classification_id text not null,
+            source_kind text not null,
+            source_identity text not null,
+            source_digest text,
+            primary key(classification_id, source_kind, source_identity)
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_recovery_plans(
+            plan_id text primary key,
+            case_id text not null,
+            classification_id text not null,
+            action text not null,
+            resolved_policy_identity text not null,
+            exact_profile_identity text not null,
+            source_evidence_json text not null,
+            preconditions_json text not null,
+            postconditions_json text not null,
+            idempotency_key text not null unique,
+            new_attempt_id text,
+            compatibility_document_json text,
+            planned_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_recovery_action_events(
+            event_id integer primary key autoincrement,
+            action_id text not null,
+            plan_id text not null,
+            lifecycle text not null,
+            explanation text not null,
+            evidence_json text not null,
+            document_json text,
+            recorded_at text not null
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_recovery_cases_subject
+            ON canonical_recovery_cases(scope_kind, transition_run_id, attempt_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_recovery_classifications_case
+            ON canonical_recovery_classifications(case_id, observed_at, classification_id);
+        CREATE INDEX IF NOT EXISTS idx_recovery_source_links_classification
+            ON canonical_recovery_source_links(classification_id, source_kind);
+        CREATE INDEX IF NOT EXISTS idx_recovery_plans_case
+            ON canonical_recovery_plans(case_id, planned_at);
+        CREATE INDEX IF NOT EXISTS idx_recovery_action_events_plan
+            ON canonical_recovery_action_events(plan_id, event_id);
+
+        INSERT OR IGNORE INTO canonical_recovery_cases (
+            case_id, scope_kind, scope_identity, subject_json, transition_run_id, attempt_id, created_at
+        )
+        SELECT recovery_id, 'Transition', NULL,
+               json_object('transitionRunId', transition_run_id, 'attemptId', source_attempt_id),
+               transition_run_id, source_attempt_id, planned_at
+        FROM transition_recovery_plans;
+
+        INSERT OR IGNORE INTO canonical_recovery_classifications (
+            classification_id, case_id, classification, cancellation_boundary,
+            source_evidence_json, supersedes_classification_id, observed_at
+        )
+        SELECT 'legacy-transition-classification:' || recovery_id,
+               recovery_id,
+               CASE classification
+                   WHEN 'SafeRetry' THEN 'NotStarted'
+                   WHEN 'ReconcileProvider' THEN 'AcceptedUnknown'
+                   WHEN 'MaterializeCommittedOutput' THEN 'SucceededUncommitted'
+                   WHEN 'ApplyVerifiedEffects' THEN 'PartiallyEffected'
+                   WHEN 'Cancelled' THEN 'Cancelled'
+                   WHEN 'FailClosedUnknownSideEffect' THEN 'PartiallyEffected'
+                   WHEN 'NonRecoverableCorruption' THEN 'Corrupt'
+                   ELSE 'EvidenceIncomplete'
+               END,
+               CASE classification WHEN 'Cancelled' THEN 'BeforeDispatch' ELSE 'None' END,
+               evidence_json, NULL, planned_at
+        FROM transition_recovery_plans;
+
+        INSERT OR IGNORE INTO canonical_recovery_plans (
+            plan_id, case_id, classification_id, action, resolved_policy_identity,
+            exact_profile_identity, source_evidence_json, preconditions_json,
+            postconditions_json, idempotency_key, new_attempt_id, planned_at
+        )
+        SELECT recovery_id, recovery_id, 'legacy-transition-classification:' || recovery_id,
+               CASE action
+                   WHEN 'ReconcileProviderOutcome' THEN 'ReconcileProvider'
+                   WHEN 'RetryAsNewAttempt' THEN 'RetryNewAttempt'
+                   WHEN 'ReusePersistedRawResult' THEN 'ReuseRawOutput'
+                   WHEN 'CannotProceed' THEN 'RequestHumanDecision'
+                   ELSE action
+               END,
+               'legacy-policy-unresolved', 'legacy-profile-unresolved', evidence_json,
+               preconditions_json, '[]', 'legacy-transition-recovery-plan:' || recovery_id,
+               NULL, planned_at
+        FROM transition_recovery_plans;
+
+        INSERT OR IGNORE INTO canonical_recovery_cases (
+            case_id, scope_kind, scope_identity, subject_json, transition_run_id, attempt_id, created_at
+        )
+        SELECT attempt_id, 'WarmSession', scope_id,
+               json_object('scopeId', scope_id, 'lineageId', original_lineage_id),
+               transition_run_id, NULL, created_at
+        FROM session_recovery_attempts;
+
+        INSERT OR IGNORE INTO canonical_recovery_classifications (
+            classification_id, case_id, classification, cancellation_boundary,
+            source_evidence_json, supersedes_classification_id, observed_at
+        )
+        SELECT 'legacy-session-classification:' || attempt_id, attempt_id,
+               CASE
+                   WHEN status = 'UnknownOutcome' THEN 'ProviderUnknown'
+                   WHEN failure_classification IS NOT NULL THEN 'Failed'
+                   WHEN status IN ('RecoveryCompleted','ResumeSucceeded') THEN 'SucceededUncommitted'
+                   ELSE 'EvidenceIncomplete'
+               END,
+               'None', COALESCE(diagnostic_json, '[]'), NULL, updated_at
+        FROM session_recovery_attempts;
+
+        INSERT OR IGNORE INTO canonical_recovery_source_links (
+            classification_id, source_kind, source_identity, source_digest
+        )
+        SELECT 'legacy-session-classification:' || attempt_id,
+               source_kind, source_location, source_digest
+        FROM session_recovery_sources;
+
+        INSERT OR IGNORE INTO canonical_recovery_plans (
+            plan_id, case_id, classification_id, action, resolved_policy_identity,
+            exact_profile_identity, source_evidence_json, preconditions_json,
+            postconditions_json, idempotency_key, new_attempt_id, planned_at
+        )
+        SELECT plan.plan_id, attempt.attempt_id,
+               'legacy-session-classification:' || attempt.attempt_id,
+               CASE plan.mechanism_identity
+                   WHEN 'native-resume' THEN 'ResumeSession'
+                   WHEN 'native-fork' THEN 'NativeFork'
+                   ELSE 'ReconstructContext'
+               END,
+               plan.policy_version, plan.profile_digest, '[]', '[]', '[]',
+               'legacy-session-recovery-plan:' || plan.plan_id, NULL, plan.created_at
+        FROM session_recovery_plans AS plan
+        JOIN session_recovery_attempts AS attempt ON attempt.plan_digest = plan.plan_digest
+        ORDER BY attempt.created_at;
+        """;
+
+    private const string SchemaV12Sql = """
+        CREATE TABLE IF NOT EXISTS canonical_interaction_policy_evaluations(
+            policy_evaluation_id text primary key,
+            category text not null,
+            question_version text not null,
+            response_schema_version text not null,
+            response_json_schema text not null,
+            response_schema_hash text not null,
+            deadline_behavior text not null,
+            deadline text,
+            default_response_json text,
+            headless_outcome text not null,
+            required_trust_evidence_json text not null,
+            resolver_owner text not null,
+            resolved_policy_identity text not null,
+            evaluated_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_interaction_requests(
+            request_id text primary key,
+            category text not null,
+            workspace_id text not null,
+            run_id text not null,
+            workflow_instance_id text not null,
+            transition_run_id text not null,
+            attempt_id text not null,
+            subject_json text not null,
+            question text not null,
+            presentation_json text not null,
+            policy_evaluation_id text not null,
+            creation_evidence_json text not null,
+            semantic_idempotency_key text not null unique,
+            current_state text not null,
+            row_version integer not null,
+            created_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_interaction_responses(
+            response_id text primary key,
+            request_id text not null unique,
+            response_json text not null,
+            semantic_response_hash text not null,
+            semantic_idempotency_key text not null,
+            trust_evidence_json text not null,
+            responder_identity text not null,
+            responded_at text not null,
+            unique(request_id, semantic_idempotency_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_interaction_lifecycle_events(
+            event_id integer primary key autoincrement,
+            event_identity text not null unique,
+            request_id text not null,
+            lifecycle text not null,
+            explanation text not null,
+            evidence_json text not null,
+            recorded_at text not null
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_interaction_requests_state
+            ON canonical_interaction_requests(current_state, category, created_at);
+        CREATE INDEX IF NOT EXISTS idx_interaction_requests_causality
+            ON canonical_interaction_requests(transition_run_id, attempt_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_interaction_events_request
+            ON canonical_interaction_lifecycle_events(request_id, event_id);
+        CREATE INDEX IF NOT EXISTS idx_interaction_responses_semantic
+            ON canonical_interaction_responses(request_id, semantic_response_hash, semantic_idempotency_key);
+        """;
+
+    private const string SchemaV13Sql = """
+        CREATE TABLE IF NOT EXISTS canonical_storage_operation_plans(
+            operation_id text primary key,
+            operation_kind text not null,
+            workspace_id text not null,
+            run_id text not null,
+            workflow_instance_id text not null,
+            transition_run_id text not null,
+            attempt_id text not null,
+            source_fingerprint text not null,
+            target_manifest text not null,
+            preconditions_json text not null,
+            postconditions_json text not null,
+            semantic_idempotency_key text not null unique,
+            current_lifecycle text not null,
+            planned_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_storage_operation_events(
+            event_id integer primary key autoincrement,
+            operation_id text not null,
+            lifecycle text not null,
+            explanation text not null,
+            evidence_json text not null,
+            recorded_at text not null
+        );
+
+        CREATE TABLE IF NOT EXISTS canonical_storage_operation_receipts(
+            operation_id text primary key,
+            observed_fingerprint text not null,
+            effect_receipts_json text not null,
+            evidence_json text not null,
+            recorded_at text not null
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_storage_operation_events_operation
+            ON canonical_storage_operation_events(operation_id, event_id);
+        CREATE INDEX IF NOT EXISTS idx_storage_operation_plans_lifecycle
+            ON canonical_storage_operation_plans(current_lifecycle, operation_kind, planned_at);
+        """;
+
+    private const string SchemaV14Sql = """
+        CREATE TABLE IF NOT EXISTS canonical_import_detections(
+            detection_id text primary key, source_kind text not null, source_family text not null,
+            source_version text, source_fingerprint text not null, document_json text not null,
+            detected_at text not null
+        );
+        CREATE TABLE IF NOT EXISTS canonical_import_previews(
+            preview_id text primary key, detection_id text not null, source_fingerprint text not null,
+            lifecycle text not null, import_id text, approval_json text, document_json text not null, previewed_at text not null
+        );
+        CREATE TABLE IF NOT EXISTS canonical_import_mappings(
+            mapping_id integer primary key autoincrement, preview_id text not null, domain text not null,
+            source_identity text not null, target_identity text, preserved integer not null,
+            rule text not null, conflict text
+        );
+        CREATE TABLE IF NOT EXISTS canonical_import_verifications(
+            verification_id text primary key, import_id text not null, equivalent integer not null,
+            target_logical_fingerprint text not null, domain_diffs_json text not null, verified_at text not null
+        );
+        CREATE TABLE IF NOT EXISTS canonical_import_receipts(
+            receipt_id text primary key, import_id text not null unique, preview_id text not null,
+            source_fingerprint text not null, target_logical_fingerprint text not null,
+            evidence_json text not null, recorded_at text not null,
+            unique(source_fingerprint, target_logical_fingerprint)
+        );
+        CREATE TABLE IF NOT EXISTS canonical_source_authority(
+            id integer primary key check(id=1), canonical_only integer not null,
+            import_receipt_id text, source_non_authoritative_at text, marker_sequence integer not null
+        );
+        CREATE TABLE IF NOT EXISTS canonical_import_adapter_exhaustion(
+            adapter_identity text not null, adapter_version text not null,
+            portfolio_fingerprint text not null, fixture_receipts_json text not null,
+            canonical_only_runs_json text not null, disabled_results_json text not null,
+            exhausted_at text not null, superseded_at text,
+            primary key(adapter_identity, adapter_version, portfolio_fingerprint)
+        );
+        CREATE TABLE IF NOT EXISTS canonical_kernel_decisions(
+            decision_id text primary key, catalog_identity text not null, snapshot_identity text not null,
+            root_run_id text not null, workflow_instance_id text, transition_run_id text, attempt_id text,
+            eligible_json text not null, rejected_json text not null, selected_action text not null,
+            outcome text not null, evidence_json text not null, recorded_at text not null
+        );
+        CREATE TABLE IF NOT EXISTS canonical_agent_role_policies(
+            role_policy_id text primary key, operational_policy_id text not null,
+            runtime_profile_id text not null, document_json text not null,
+            provenance text not null, recorded_at text not null
+        );
+        CREATE INDEX IF NOT EXISTS idx_import_previews_fingerprint
+            ON canonical_import_previews(source_fingerprint, lifecycle);
+        CREATE INDEX IF NOT EXISTS idx_import_mappings_preview
+            ON canonical_import_mappings(preview_id, domain, source_identity);
+        CREATE INDEX IF NOT EXISTS idx_import_receipts_fingerprint
+            ON canonical_import_receipts(source_fingerprint, target_logical_fingerprint);
+        INSERT INTO canonical_source_authority(id, canonical_only, import_receipt_id, source_non_authoritative_at, marker_sequence)
+            VALUES(1,0,NULL,NULL,0) ON CONFLICT(id) DO NOTHING;
+        """;
+
+    private const string SchemaV15Sql = """
+        CREATE TABLE IF NOT EXISTS canonical_completion_decisions(
+            decision_id text primary key, root_run_id text not null, attempt_id text not null,
+            kind text not null, reason text, evidence_json text not null, gate_identities_json text not null,
+            review_identities_json text not null, decided_at text not null
+        );
+        CREATE TABLE IF NOT EXISTS canonical_completion_certificates(
+            certificate_id text primary key, decision_id text not null unique,
+            evidence_json text not null, certified_at text not null
+        );
+        CREATE TABLE IF NOT EXISTS canonical_completion_closure_plans(
+            plan_id text primary key, decision_id text not null unique, certificate_id text not null unique,
+            operations_json text not null, content_hash text not null, planned_at text not null
+        );
+        CREATE TABLE IF NOT EXISTS canonical_completion_settlements(
+            settlement_id text primary key, plan_id text not null, kind text not null,
+            pending_operations_json text not null, evidence_json text not null, reason text,
+            settled_at text not null
+        );
+        CREATE TABLE IF NOT EXISTS canonical_certified_terminal_facts(
+            terminal_id text primary key, root_run_id text not null unique, decision_id text not null,
+            certificate_id text not null, plan_id text not null, settlement_id text not null,
+            effect_receipts_json text not null, recorded_at text not null
+        );
+        CREATE INDEX IF NOT EXISTS idx_completion_decisions_root
+            ON canonical_completion_decisions(root_run_id, decided_at);
+        CREATE INDEX IF NOT EXISTS idx_completion_settlements_plan
+            ON canonical_completion_settlements(plan_id, settled_at);
+        """;
+
     private const string SchemaSql = """
         CREATE TABLE IF NOT EXISTS schema_metadata(
             key text primary key,
@@ -2031,7 +2966,9 @@ public static class LoopRelayWorkspaceDatabase
             started_at text not null,
             completed_at text,
             stop_reason text,
-            explanation text not null
+            explanation text not null,
+            catalog_identity text not null default '',
+            catalog_version text not null default ''
         );
 
         CREATE TABLE IF NOT EXISTS workflow_instances(
@@ -2042,7 +2979,8 @@ public static class LoopRelayWorkspaceDatabase
             status text not null,
             started_at text not null,
             completed_at text,
-            outcome text
+            outcome text,
+            catalog_identity text not null default ''
         );
 
         CREATE TABLE IF NOT EXISTS attempts(
@@ -2055,6 +2993,7 @@ public static class LoopRelayWorkspaceDatabase
             completed_at text,
             outcome text,
             policy_id text,
+            agent_role_policy_id text,
             unique(transition_run_id, attempt_index)
         );
 

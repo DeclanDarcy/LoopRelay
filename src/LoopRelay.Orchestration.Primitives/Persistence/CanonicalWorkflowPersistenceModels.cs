@@ -113,7 +113,9 @@ public sealed record RunRecord(
     DateTimeOffset StartedAt,
     DateTimeOffset? CompletedAt,
     string? StopReason,
-    string Explanation);
+    string Explanation,
+    string CatalogIdentity = "",
+    string CatalogVersion = "");
 
 public sealed record WorkflowInstanceRecord(
     string WorkflowInstanceId,
@@ -123,7 +125,8 @@ public sealed record WorkflowInstanceRecord(
     string Status,
     DateTimeOffset StartedAt,
     DateTimeOffset? CompletedAt,
-    string? Outcome);
+    string? Outcome,
+    string CatalogIdentity = "");
 
 public sealed record AttemptRecord(
     string AttemptId,
@@ -134,7 +137,8 @@ public sealed record AttemptRecord(
     DateTimeOffset StartedAt,
     DateTimeOffset? CompletedAt,
     string? Outcome,
-    string? PolicyId = null);
+    string? PolicyId = null,
+    string? AgentRolePolicyId = null);
 
 // The append-only fact behind an attempt's policy_id: the full resolved policy (the canonical
 // JSON the identity hash covers) plus per-field provenance. One row per invocation that starts

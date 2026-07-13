@@ -17,17 +17,8 @@ internal sealed class FileSystemCodexRolloutLocator : ICodexRolloutLocator
 
     public FileSystemCodexRolloutLocator(string sessionsRoot) => _sessionsRoot = sessionsRoot;
 
-    /// <summary><c>%CODEX_HOME%/sessions</c>, else <c>%USERPROFILE%/.codex/sessions</c>.</summary>
-    public static string ResolveDefaultSessionsRoot()
-    {
-        string? home = Environment.GetEnvironmentVariable("CODEX_HOME");
-        if (string.IsNullOrWhiteSpace(home))
-        {
-            home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
-        }
-
-        return Path.Combine(home, "sessions");
-    }
+    public static string ResolveDefaultSessionsRoot(ProviderEnvironmentConfiguration configuration) =>
+        Path.Combine(configuration.CodexHome, "sessions");
 
     public string? Resolve(string workingDirectory, DateTimeOffset openedAtUtc)
     {

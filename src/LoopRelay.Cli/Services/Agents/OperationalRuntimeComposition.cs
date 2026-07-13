@@ -26,7 +26,8 @@ internal static class OperationalRuntimeComposition
         ResolvedOperationalPolicy policy,
         Repository repository,
         IProcessRunner processRunner,
-        ILoopConsole console)
+        ILoopConsole console,
+        ProviderEnvironmentConfiguration? providerEnvironment = null)
     {
         IAgentRuntime composed = runtime;
         InputWaitObservationStore? inputWaitObservations = null;
@@ -52,7 +53,8 @@ internal static class OperationalRuntimeComposition
                     new CodexUsageProbe(processRunner, new EnvironmentAgentExecutableResolver(), repository),
                     new EffectiveTokenCostModel(),
                     clock,
-                    console),
+                    console,
+                    providerEnvironment),
                 clock,
                 SessionTelemetryComposition.RepoName(repository),
                 inputWaitObservations,

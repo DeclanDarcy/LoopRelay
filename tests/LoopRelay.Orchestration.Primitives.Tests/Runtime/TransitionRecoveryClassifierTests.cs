@@ -1,4 +1,5 @@
 using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Runtime;
 using LoopRelay.Orchestration.Workflows;
 
@@ -6,14 +7,54 @@ namespace LoopRelay.Orchestration.Tests.Runtime;
 
 public sealed class TransitionRecoveryClassifierTests
 {
+    public static TheoryData<TransitionBoundaryKind> EveryBoundary => new(
+        Enum.GetValues<TransitionBoundaryKind>());
+
+    [Theory]
+    [MemberData(nameof(EveryBoundary))]
+    public void Every_transition_and_prompt_boundary_projects_to_the_canonical_taxonomy(
+        TransitionBoundaryKind boundary)
+    {
+        bool raw = boundary is TransitionBoundaryKind.ProviderCompleted or
+            TransitionBoundaryKind.RawOutputPersisted or TransitionBoundaryKind.OutputInterpreted or
+            TransitionBoundaryKind.OutputValidated or TransitionBoundaryKind.BeforeEffects;
+        bool partialEffect = boundary == TransitionBoundaryKind.DuringEffects;
+        TransitionDurableState state = partialEffect
+            ? TransitionDurableState.EffectsPartiallyApplied
+            : raw
+                ? TransitionDurableState.PromptCompleted
+                : boundary is >= TransitionBoundaryKind.RequestWriteStarted and <= TransitionBoundaryKind.ProviderTerminal
+                    ? TransitionDurableState.ProviderOutcomeUnknown
+                    : TransitionDurableState.Started;
+        TransitionRunRecoverySnapshot snapshot = Snapshot(
+            state,
+            raw ? new PromptExecutionResult(PromptExecutionStatus.Completed, "output", TimeSpan.Zero, new Dictionary<string, string>()) : null,
+            [Boundary(boundary)]);
+        RecoveryDurableFacts facts = TransitionRecoveryFactProjector.Project(snapshot);
+        CanonicalRecoveryClassification classification = CanonicalRecoveryClassifier.Classify(
+            new CanonicalRecoveryCase(RecoveryCaseIdentity.New(), facts.Scope, facts.Subject, DateTimeOffset.UtcNow),
+            facts);
+
+        Assert.Contains($"boundary:{boundary}", classification.SourceEvidence);
+        Assert.Equal(
+            partialEffect
+                ? RecoveryBoundaryClassification.PartiallyEffected
+                : raw
+                    ? RecoveryBoundaryClassification.SucceededUncommitted
+                    : state == TransitionDurableState.ProviderOutcomeUnknown
+                        ? RecoveryBoundaryClassification.ProviderUnknown
+                        : RecoveryBoundaryClassification.InFlight,
+            classification.Classification);
+    }
+
     [Fact]
-    public void PreSubmissionCancellationIsSafeToRetry()
+    public void PreSubmissionCancellationRemainsDistinctAndThePlannerOwnsAnyLaterRetry()
     {
         TransitionRecoveryDecision decision = TransitionRecoveryClassifier.Classify(
             Snapshot(TransitionDurableState.Cancelled, boundaries: [Boundary(TransitionBoundaryKind.PreSubmission)]));
 
-        Assert.Equal(TransitionRecoveryDisposition.SafeRetry, decision.Disposition);
-        Assert.True(decision.MaySubmitProviderTurn);
+        Assert.Equal(TransitionRecoveryDisposition.Cancelled, decision.Disposition);
+        Assert.False(decision.MaySubmitProviderTurn);
     }
 
     [Fact]

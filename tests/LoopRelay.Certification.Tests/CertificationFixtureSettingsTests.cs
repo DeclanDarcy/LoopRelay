@@ -41,12 +41,12 @@ public sealed class CertificationFixtureSettingsTests
     }
 
     [Theory]
-    [InlineData("gpt-5.4-mini", "medium", true)]
+    [InlineData("gpt-5.4-mini", "medium", false)]
     [InlineData("gpt-5.3-codex-spark", "medium", true)]
-    [InlineData("gpt-5.6-sol", "high", true)]
+    [InlineData("gpt-5.6-sol", "high", false)]
     [InlineData("", "medium", false)]
     [InlineData("gpt-5.4-mini", "", false)]
-    public void Continuous_evidence_accepts_any_declared_fixture_profile(
+    public void Continuous_evidence_credits_only_the_exact_certified_fixture_profile(
         string model,
         string effort,
         bool expected)

@@ -1,3 +1,5 @@
+using LoopRelay.Core.Services.Persistence;
+using LoopRelay.Orchestration.Storage;
 using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Orchestration.Resolution;
@@ -114,9 +116,13 @@ public sealed record StorageVerificationResult(
     IReadOnlyList<string> UnresolvedReferences,
     IReadOnlyList<string> PartialTransactions,
     IReadOnlyList<ResolutionWarning> BlockingConditions,
-    IReadOnlyList<string> Evidence)
+    IReadOnlyList<string> Evidence,
+    StorageHealth Health = StorageHealth.Healthy,
+    WorkspaceSchemaInspection? Schema = null,
+    IReadOnlyList<string>? RequiredActions = null)
 {
     public bool IsUnusable =>
+        Health != StorageHealth.Healthy ||
         !UsableAuthority ||
         BlockingConditions.Count > 0 ||
         Conflicts.Count > 0 ||

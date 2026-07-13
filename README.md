@@ -10,7 +10,7 @@ The project intends to eventually incorporate richer interactive features direct
 
 LoopRelay stores local runtime state under `.LoopRelay/`. The directory is local-only runtime state and is protected by a create-only `.LoopRelay/.gitignore` containing `*`.
 
-Structured runtime state is canonical in `.LoopRelay/persistence/looprelay.sqlite3`. Decision-session resume state is stored in SQLite, with one-time import of an existing `.LoopRelay/decision-session.json` followed by deletion of that legacy file. Session telemetry events are also stored canonically in SQLite.
+Structured runtime state is canonical in `.LoopRelay/persistence/looprelay.sqlite3`. Decision-session resume state and session telemetry events are stored canonically in SQLite. A legacy `.LoopRelay/decision-session.json` is diagnostic input only and is never read as runtime authority.
 
 Telemetry JSONL files under `.LoopRelay/telemetry/sessions.YYYY-MM-DD.NNNN.jsonl` remain as a compatibility export for existing diagnostics tooling; they are not the canonical telemetry store.
 
@@ -30,12 +30,13 @@ The supported public executable is `LoopRelay.Cli`. It accepts `--repo <path>`, 
 
 - no command runs the selected chain; `eval`, `traditional`, `plan`, and `execute` run one bounded workflow;
 - `status` observes selection, gates, blockers, storage authority, and continuity without mutation;
-- `unblock` resolves only recoverable canonical blockers and returns exit code `4` while non-recoverable or stage-less blockers remain;
 - `storage init` creates the canonical SQLite schema;
-- `storage import` creates canonical storage and records imported authority, but does not claim a full retained-service migration;
-- `storage export` verifies an existing canonical database and intentionally performs no filesystem export mutation;
-- `storage sync` ensures the shared canonical schema is usable; it does not claim bidirectional reconciliation with every retained representation;
+- `storage migrate` applies supported canonical schema migrations;
+- `storage export [path]` exports through the storage authority and reports the resulting evidence;
+- `storage sync` reconciles rebuildable projections and effect work with canonical facts; it is not a bidirectional legacy import;
 - `storage verify` is byte-for-byte non-mutating and reports missing, stale, conflicting, corrupt, unsupported, unresolved, and partial-transaction conditions.
+- `import detect|preview|execute|verify [identity]` runs the explicit compatibility-import portfolio; no legacy adapter participates in ordinary runs.
+- `recovery inspect|plan|execute <identity>`, `interactions list|show|respond|cancel`, `completion status|reconcile`, and `capabilities` expose their canonical owners through the same application boundary.
 
 Exit codes are `0` for successful/completed/waiting observations, `1` for failure, `2` for command-line errors, `3` for a stall, `4` for blocked/ambiguous/no-eligible work, and `130` for cancellation.
 
