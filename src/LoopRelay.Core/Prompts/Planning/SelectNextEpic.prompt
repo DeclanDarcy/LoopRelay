@@ -28,6 +28,8 @@ The runtime context provides roadmap source references, not embedded roadmap epi
 
 Before evaluating existing roadmap epics, inspect `.agents/roadmap/*.md` directly from the repository.
 
+If `.agents/roadmap` is absent or contains no epic files, record that there are no existing roadmap candidates and continue evaluating newly identified initiatives. Absence of advisory roadmap files alone is NOT evidence that roadmap revision must precede selection, and recreating the roadmap directory is not itself a strategic epic. When the projection, roadmap completion context, or project context defines a safe bounded new initiative, select that initiative directly. Use `Roadmap Revision Required` only when neither an existing epic nor a narrowly defined new intermediary/split/investigation initiative can be selected safely.
+
 ---
 
 ## Core Objective

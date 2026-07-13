@@ -1025,6 +1025,17 @@ Choose one:
 - Reopen Epic
 - Gather More Evidence
 
+The recommendation MUST be compatible with the evaluation summary:
+
+- Close Epic: Fully Complete or Functionally Complete, with None or Positive drift.
+- Close With Follow-Up: Fully Complete or Functionally Complete, with None, Positive, or Mixed drift.
+- Continue Epic: Partially Complete or Not Complete, with None, Positive, Negative, or Mixed drift.
+- Reopen Epic: any completion status, with Negative, Mixed, or Unknown drift.
+- Gather More Evidence: Inconclusive, with Negative, Mixed, or Unknown drift.
+
+Never pair Functionally Complete or Fully Complete with Continue Epic. Never pair Negative drift with Close Epic or
+Close With Follow-Up. Check this compatibility matrix before returning the final report.
+
 ### Recommendation Rationale
 
 Explain why this recommendation follows from the evidence.

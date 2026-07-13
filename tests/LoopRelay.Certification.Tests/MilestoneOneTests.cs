@@ -91,6 +91,18 @@ public sealed class MilestoneOneTests
         Assert.Equal("Repository: <CASE>\nRun: <GUID> at <TIMESTAMP>", normalized);
     }
 
+    [Fact]
+    public void Normalizer_replaces_status_snapshot_identity_but_preserves_other_hashes()
+    {
+        string root = Path.GetTempPath();
+        string hash = new('a', 64);
+
+        string normalized = EvidenceNormalizer.Normalize(
+            $"Snapshot: {hash}\nContent: {hash}", root);
+
+        Assert.Equal($"Snapshot: <SNAPSHOT>\nContent: {hash}", normalized);
+    }
+
     [Theory]
     [InlineData("api_key=super-secret-value", "credential-or-secret-pattern")]
     [InlineData("PATH=/unsafe/bin", "environment-dump-pattern")]

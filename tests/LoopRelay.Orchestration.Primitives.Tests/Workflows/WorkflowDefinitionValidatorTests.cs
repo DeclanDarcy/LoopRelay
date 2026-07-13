@@ -420,6 +420,14 @@ public sealed class WorkflowDefinitionValidatorTests
             workflow.Transitions.Single(transition => transition.Identity.Value == "EvaluateMilestoneCompletion")
                 .RequiredInputProducts
                 .Select(requirement => requirement.Product));
+        WorkflowTransitionDefinition executeSlice = workflow.Transitions.Single(
+            transition => transition.Identity.Value == "ExecuteImplementationSlice");
+        Assert.Contains(
+            ProductIdentity.ExecutionMilestoneSet,
+            executeSlice.RequiredInputProducts.Select(requirement => requirement.Product));
+        Assert.Contains(
+            ProductIdentity.ExecutionMilestoneSet,
+            executeSlice.ProducedProducts.Select(product => product.Identity));
     }
 
     [Fact]

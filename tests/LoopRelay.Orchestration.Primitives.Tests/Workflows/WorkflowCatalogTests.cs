@@ -1,6 +1,7 @@
 using LoopRelay.Orchestration.Workflows;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Services;
 
 namespace LoopRelay.Orchestration.Tests.Workflows;
 
@@ -77,6 +78,37 @@ public sealed class WorkflowCatalogTests
                 effect.Category == EffectCategory.Git &&
                 !effect.Identity.Value.StartsWith("derived-git-", StringComparison.Ordinal));
         });
+        WorkflowTransitionDefinition repositoryPublication = catalog.GetWorkflow(WorkflowIdentity.Execute)
+            .Transitions.Single(item => item.Identity.Value == "PublishRepositoryState");
+        Assert.Contains(repositoryPublication.OutputSurfaces!, surface =>
+            surface.Path == OrchestrationArtifactPaths.LiveHandoff &&
+            surface.RepositoryTarget == RepositoryTarget.NestedAgents &&
+            surface.CommitPolicy == CommitPolicy.BlockingLocal &&
+            surface.PushPolicy == PushPolicy.RequiredAsync);
+        Assert.All(
+            new[] { WorkflowIdentity.TraditionalRoadmap, WorkflowIdentity.EvalRoadmap },
+            workflow =>
+            {
+                WorkflowTransitionDefinition planEntryPublication = catalog.GetWorkflow(workflow)
+                    .Transitions.Single(item => item.Identity.Value == "VerifyPlanEntryContract");
+                Assert.Contains(planEntryPublication.OutputSurfaces!, surface =>
+                    surface.Path == EvaluationArtifactPaths.MilestoneSpecificationDirectory &&
+                    surface.RepositoryTarget == RepositoryTarget.NestedAgents &&
+                    surface.CommitPolicy == CommitPolicy.BlockingLocal &&
+                    surface.PushPolicy == PushPolicy.RequiredAsync);
+            });
+        WorkflowTransitionDefinition traditionalPlanEntry = catalog.GetWorkflow(WorkflowIdentity.TraditionalRoadmap)
+            .Transitions.Single(item => item.Identity.Value == "VerifyPlanEntryContract");
+        Assert.Contains(traditionalPlanEntry.OutputSurfaces!, surface =>
+            surface.Path == ".agents/core/roadmap-completion-context.md");
+        Assert.Contains(traditionalPlanEntry.OutputSurfaces!, surface =>
+            surface.Path == ".agents/selection.md");
+        WorkflowTransitionDefinition evalPlanEntry = catalog.GetWorkflow(WorkflowIdentity.EvalRoadmap)
+            .Transitions.Single(item => item.Identity.Value == "VerifyPlanEntryContract");
+        Assert.Contains(evalPlanEntry.OutputSurfaces!, surface =>
+            surface.Path == EvaluationArtifactPaths.DependencyInventory);
+        Assert.Contains(evalPlanEntry.OutputSurfaces!, surface =>
+            surface.Path == EvaluationArtifactPaths.EvalDag);
     }
 
     [Fact]

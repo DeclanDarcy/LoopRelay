@@ -56,7 +56,12 @@ public sealed class MilestoneThreeRunner
                 "exact-profile-gate",
                 compatible,
                 compatible ? manifestMatch ? "pass" : "candidate-profile" : "provider-incompatible",
-                [$"version:{version}", $"schema:{schemaDigest}", $"manifest-match:{manifestMatch}"]));
+                [
+                    $"version:{version}",
+                    $"schema:{schemaDigest}",
+                    $"manifest-match:{manifestMatch}",
+                    $"model:{CertificationFixtureSettings.BrainModel}",
+                ]));
             if (!compatible)
             {
                 return await Finish(CertificationClassification.UnsupportedCapability);
@@ -223,12 +228,12 @@ public sealed class MilestoneThreeRunner
     private static AgentSessionSpec ReadOnlySpec(string repository, AgentEffort effort) => new(
         SessionIdentity.New(), "live-provider-certification", SessionRole.Decision,
         new SandboxProfile("read-only", false, false, false),
-        AgentModel.Gpt56Luna, effort, AgentConfigurationAuthority.Brain, repository);
+        CertificationFixtureSettings.BrainAgentModel, effort, AgentConfigurationAuthority.Brain, repository);
 
     private static AgentSessionSpec ScopedSpec(string repository, OperationPermissionProfile profile) => new(
         SessionIdentity.New(), "live-provider-certification", SessionRole.OperationalExecution,
         new SandboxProfile("read-only", false, false, true),
-        AgentModel.Gpt56Luna, AgentEffort.Low, AgentConfigurationAuthority.Brain, repository,
+        CertificationFixtureSettings.BrainAgentModel, AgentEffort.Low, AgentConfigurationAuthority.Brain, repository,
         operationPermissionProfile: profile);
 
     private static PermissionGateway CreateGateway() => new(

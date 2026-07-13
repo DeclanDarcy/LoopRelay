@@ -723,6 +723,79 @@ internal sealed partial class LoopRelayCompositionRoot
                 sections.AddRange(result.Sections);
                 consumedFiles.AddRange(result.ConsumedFiles);
             }
+            else if (request.Workflow == WorkflowIdentity.Execute &&
+                request.Transition == new WorkflowTransitionIdentity("ExecuteImplementationSlice"))
+            {
+                (string Title, string Path, bool Required)[] executionInputs =
+                [
+                    ("Executable Plan", OrchestrationArtifactPaths.Plan, true),
+                    ("Execution Details", OrchestrationArtifactPaths.Details, false),
+                    ("Decision Set", OrchestrationArtifactPaths.Decisions, true),
+                    ("Repository README", "README.md", false),
+                ];
+                foreach ((string title, string relativePath, bool required) in executionInputs)
+                {
+                    string fullPath = ResolveRepositoryPath(_repository, relativePath);
+                    if (!File.Exists(fullPath))
+                    {
+                        if (required)
+                        {
+                            throw new PromptContextUnavailableException(
+                                $"ExecuteImplementationSlice requires `{relativePath}`.",
+                                [$"execution-input:missing:{relativePath}"],
+                                consumedFiles);
+                        }
+
+                        continue;
+                    }
+
+                    string content = await File.ReadAllTextAsync(fullPath, cancellationToken);
+                    ConsumedInputFile consumed = ConsumedInputFile.FromContent(relativePath, content);
+                    consumedFiles.Add(consumed);
+                    sections.Add(new PromptContextSection(
+                        title,
+                        content,
+                        relativePath,
+                        [$"consumed-input-sha256:{consumed.Sha256}"]));
+                }
+
+                string milestoneDirectory = ResolveRepositoryPath(
+                    _repository,
+                    OrchestrationArtifactPaths.MilestonesDirectory);
+                string[] milestoneFiles = Directory.Exists(milestoneDirectory)
+                    ? Directory.GetFiles(milestoneDirectory, "m*.md", SearchOption.TopDirectoryOnly)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray()
+                    : [];
+                if (milestoneFiles.Length == 0)
+                {
+                    throw new PromptContextUnavailableException(
+                        $"ExecuteImplementationSlice requires milestone files under `{OrchestrationArtifactPaths.MilestonesDirectory}/`.",
+                        [$"execution-input:missing:{OrchestrationArtifactPaths.MilestonesDirectory}/m*.md"],
+                        consumedFiles);
+                }
+
+                var milestoneContents = new List<string>(milestoneFiles.Length);
+                foreach (string milestoneFile in milestoneFiles)
+                {
+                    string relativePath = ArtifactPath.ToRepositoryRelativePath(_repository, milestoneFile);
+                    string content = await File.ReadAllTextAsync(milestoneFile, cancellationToken);
+                    ConsumedInputFile consumed = ConsumedInputFile.FromContent(relativePath, content);
+                    consumedFiles.Add(consumed);
+                    milestoneContents.Add($"# FILE: {relativePath}{Environment.NewLine}{Environment.NewLine}{content}");
+                }
+
+                sections.Add(new PromptContextSection(
+                    "Execution Milestones",
+                    string.Join(Environment.NewLine + Environment.NewLine, milestoneContents),
+                    OrchestrationArtifactPaths.MilestonesDirectory + "/",
+                    consumedFiles
+                        .Where(file => file.Path.StartsWith(
+                            OrchestrationArtifactPaths.MilestonesDirectory + "/",
+                            StringComparison.Ordinal))
+                        .Select(file => $"consumed-input-sha256:{file.Sha256}")
+                        .ToArray()));
+            }
             else if (request.Workflow == WorkflowIdentity.TraditionalRoadmap)
             {
                 var artifacts = new ProjectionArtifacts(

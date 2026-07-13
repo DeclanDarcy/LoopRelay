@@ -56,6 +56,30 @@ public sealed class TransitionEffectCoordinatorTests
     }
 
     [Fact]
+    public async Task Independently_verified_not_applied_work_retries_in_same_coordination()
+    {
+        Repository repository = Repository();
+        EffectIntent intent = Intent(order: 0);
+        var store = new CanonicalEffectWorkStore(repository);
+        await store.AppendPlanAsync([intent], CancellationToken.None);
+        var executor = new RecordingExecutor { Failure = new IOException("lost response") };
+        var reconciler = new RecordingReconciler { Verdict = EffectReconciliationVerdict.NotApplied };
+        var settlement = new RecordingSettlement { Result = true };
+        var coordinator = Coordinator(store, executor, reconciler, settlement);
+
+        TransitionEffectCoordinationResult first = await coordinator.CoordinateAsync(
+            intent.Causality.TransitionRun, CancellationToken.None);
+        executor.Failure = null;
+        TransitionEffectCoordinationResult restarted = await coordinator.CoordinateAsync(
+            intent.Causality.TransitionRun, CancellationToken.None);
+
+        Assert.Equal(RuntimeOutcomeKind.RecoveryRequired, first.Outcome);
+        Assert.Equal(RuntimeOutcomeKind.Completed, restarted.Outcome);
+        Assert.Equal(2, executor.Calls);
+        Assert.Equal(1, reconciler.Calls);
+    }
+
+    [Fact]
     public async Task FailedEffectDoesNotExecuteItsDependent()
     {
         Repository repository = Repository();

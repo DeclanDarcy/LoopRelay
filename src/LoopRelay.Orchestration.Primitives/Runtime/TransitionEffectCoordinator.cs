@@ -193,7 +193,7 @@ public sealed class TransitionEffectCoordinator(
                 item.Receipt is { PostconditionSatisfied: true })
             .Select(item => item.Intent.Identity)
             .ToHashSet();
-        return plan.Any(item => item.State == EffectLifecycle.Planned &&
+        return plan.Any(item => item.State is EffectLifecycle.Planned or EffectLifecycle.RetryAuthorized &&
             item.Intent.Dependencies.All(succeeded.Contains));
     }
 

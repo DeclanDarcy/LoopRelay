@@ -124,4 +124,18 @@ public sealed class ArtifactMutationTransaction
 
         return deleted;
     }
+
+    public async Task<IReadOnlyList<string>> CreatedGlobFilesAsync()
+    {
+        var created = new List<string>();
+        foreach (OperationPathGlob glob in _profile.AllowedWriteGlobs)
+        {
+            IReadOnlyList<string> matches = await _store.ListAsync(glob.Directory, glob.Pattern);
+            created.AddRange(matches.Where(match => !_snapshots.ContainsKey(match)));
+        }
+
+        return created.Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
 }

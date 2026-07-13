@@ -126,6 +126,71 @@ public sealed class GitEffectExecutorsTests
         Assert.Equal(EffectLifecycle.Pending, remote.State);
     }
 
+    [Fact]
+    public async Task Parent_gitlink_commit_records_new_nested_head_when_an_unrelated_nested_file_remains_dirty()
+    {
+        (Repository repository, ProcessRunner process) = await CreateRepositoryAsync();
+        string agents = Path.Combine(repository.Path, ".agents");
+        await File.WriteAllTextAsync(Path.Combine(agents, "plan.md"), "initial plan");
+        await GitAsync(process, agents, "add", ".");
+        await GitAsync(process, agents, "commit", "-m", "seed agents");
+        await GitAsync(process, repository.Path, "add", ".agents");
+        await GitAsync(process, repository.Path, "commit", "-m", "seed parent gitlink");
+        await File.WriteAllTextAsync(Path.Combine(agents, "plan.md"), "revised but unpublished plan");
+        await File.WriteAllTextAsync(Path.Combine(agents, "operational_context.md"), "context");
+
+        CanonicalCausalContext causality = Causality();
+        string nestedPayload = JsonSerializer.Serialize(
+            new GitEffectPayload(".agents", "publish context", "operational_context.md"),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        EffectIntent nested = GitIntent(
+            GitEffectExecutorKeys.NestedRepositoryCommit, "nested-context", causality, nestedPayload);
+        EffectExecutionObservation nestedResult = await new NestedRepositoryCommitEffectExecutor(repository, process)
+            .ExecuteAsync(nested, CancellationToken.None);
+        string parentPayload = JsonSerializer.Serialize(
+            new GitEffectPayload(".", "record gitlink", ".agents"),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        EffectIntent parent = GitIntent(
+            GitEffectExecutorKeys.ParentGitlinkCommit, "parent-gitlink", causality, parentPayload);
+        EffectExecutionObservation parentResult = await new ParentGitlinkCommitEffectExecutor(repository, process)
+            .ExecuteAsync(parent, CancellationToken.None);
+
+        Assert.Equal(EffectLifecycle.Succeeded, nestedResult.State);
+        Assert.Equal(EffectLifecycle.Succeeded, parentResult.State);
+        Assert.Equal(2, await CommitCountAsync(process, repository.Path));
+        ProcessRunResult nestedStatus = await process.RunAsync("git", ["status", "--porcelain"], agents);
+        Assert.Contains("plan.md", nestedStatus.StandardOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("operational_context.md", nestedStatus.StandardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Parent_gitlink_commit_is_idempotent_when_only_the_nested_worktree_is_dirty()
+    {
+        (Repository repository, ProcessRunner process) = await CreateRepositoryAsync();
+        string agents = Path.Combine(repository.Path, ".agents");
+        await File.WriteAllTextAsync(Path.Combine(agents, "plan.md"), "initial plan");
+        await GitAsync(process, agents, "add", ".");
+        await GitAsync(process, agents, "commit", "-m", "seed agents");
+        await GitAsync(process, repository.Path, "add", ".agents");
+        await GitAsync(process, repository.Path, "commit", "-m", "seed parent gitlink");
+        await File.WriteAllTextAsync(Path.Combine(agents, "unpublished.md"), "not part of this effect");
+        CanonicalCausalContext causality = Causality();
+        string payload = JsonSerializer.Serialize(
+            new GitEffectPayload(".", "record gitlink", ".agents"),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        EffectIntent parent = GitIntent(
+            GitEffectExecutorKeys.ParentGitlinkCommit, "parent-gitlink", causality, payload);
+
+        EffectExecutionObservation result = await new ParentGitlinkCommitEffectExecutor(repository, process)
+            .ExecuteAsync(parent, CancellationToken.None);
+
+        Assert.Equal(EffectLifecycle.Succeeded, result.State);
+        Assert.Equal("Parent gitlink already recorded.", result.Explanation);
+        Assert.Equal(1, await CommitCountAsync(process, repository.Path));
+        ProcessRunResult nestedStatus = await process.RunAsync("git", ["status", "--porcelain"], agents);
+        Assert.Contains("unpublished.md", nestedStatus.StandardOutput, StringComparison.Ordinal);
+    }
+
     private static EffectIntent Intent(
         Repository repository,
         EffectExecutorKey executor,

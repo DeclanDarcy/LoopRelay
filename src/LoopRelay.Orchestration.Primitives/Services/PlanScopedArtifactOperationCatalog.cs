@@ -14,7 +14,8 @@ public sealed record PlanScopedArtifactOperationSpec(
     IReadOnlyList<string> RequiredOutputs,
     OperationPathGlob? RequiredOutputGlob,
     string? ChangedGuard,
-    bool RequireChecklistInGlob);
+    bool RequireChecklistInGlob,
+    bool PreserveWriteGlobFileSet);
 
 public static class PlanScopedArtifactOperationCatalog
 {
@@ -31,6 +32,7 @@ public static class PlanScopedArtifactOperationCatalog
             [OrchestrationArtifactPaths.Details],
             null,
             null,
+            false,
             false),
         new(
             new WorkflowTransitionIdentity("GenerateExecutionMilestones"),
@@ -43,7 +45,8 @@ public static class PlanScopedArtifactOperationCatalog
             [],
             new OperationPathGlob(OrchestrationArtifactPaths.MilestonesDirectory, OrchestrationArtifactPaths.MilestoneSearchPattern),
             OrchestrationArtifactPaths.Plan,
-            true),
+            true,
+            false),
         new(
             new WorkflowTransitionIdentity("RefineExecutionDetails"),
             "ExtractDetails",
@@ -55,7 +58,8 @@ public static class PlanScopedArtifactOperationCatalog
             [OrchestrationArtifactPaths.Details],
             null,
             null,
-            false),
+            false,
+            true),
     ];
 
     private static readonly IReadOnlyDictionary<WorkflowTransitionIdentity, PlanScopedArtifactOperationSpec> ByTransition =

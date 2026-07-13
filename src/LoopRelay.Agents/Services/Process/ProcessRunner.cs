@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Process;
 
@@ -17,6 +18,8 @@ public sealed class ProcessRunner : IProcessRunner
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             UseShellExecute = false,
             CreateNoWindow = true
         };
@@ -59,6 +62,9 @@ public sealed class ProcessRunner : IProcessRunner
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             UseShellExecute = false,
             CreateNoWindow = true
         };

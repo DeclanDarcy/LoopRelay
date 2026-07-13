@@ -252,12 +252,27 @@ public sealed class EffectWorker(
     {
         foreach (EffectIntentIdentity dependency in intent.Dependencies)
         {
-            if (settledThisRun.Contains(dependency)) continue;
             EffectWorkItem? item = await _store.ReadAsync(dependency, cancellationToken);
             if (item?.State != EffectLifecycle.Succeeded || item.Receipt is null || !item.Receipt.PostconditionSatisfied)
             {
                 return false;
             }
+
+            // A feature executor may append ordered child effects while this worker is processing
+            // an earlier scan snapshot. Those children are a durable barrier even though the
+            // feature's own receipt is already present; otherwise a pre-planned publication effect
+            // can run before the newly planned filesystem mutation it is meant to publish.
+            IReadOnlyList<EffectWorkItem> plan = await _store.ReadPlanAsync(
+                item.Intent.Causality.TransitionRun, cancellationToken);
+            bool childPending = plan.Any(candidate =>
+                candidate.Intent.Identity != intent.Identity &&
+                candidate.Intent.Order <= intent.Order &&
+                candidate.Intent.PlannedAt > intent.PlannedAt &&
+                candidate.Intent.Dependencies.Contains(dependency) &&
+                (candidate.State != EffectLifecycle.Succeeded ||
+                 candidate.Receipt is null ||
+                 !candidate.Receipt.PostconditionSatisfied));
+            if (childPending) return false;
         }
         return true;
     }

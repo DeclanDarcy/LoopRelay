@@ -6,8 +6,11 @@ namespace LoopRelay.Certification.Tests;
 
 public sealed class CertificationFixtureSettingsTests
 {
-    [Fact]
-    public async Task Materialized_settings_use_the_certification_brain_profile()
+    [Theory]
+    [InlineData("gpt-5.3-codex-spark")]
+    [InlineData("gpt-5.4-mini")]
+    public async Task Materialized_settings_use_the_manually_selected_certification_brain_profile(
+        string model)
     {
         string root = Directory.CreateTempSubdirectory("looprelay-fixture-settings").FullName;
         try
@@ -22,11 +25,14 @@ public sealed class CertificationFixtureSettingsTests
                 Path.Combine(cliDirectory, "settings.default.json"),
                 """{"schemaVersion":"settings-v3","runtime":{"brain":{"model":"gpt-5.6-sol","effort":"xhigh"}},"permissions":{}}""");
 
-            string path = await CertificationFixtureSettings.WriteAsync(caseDirectory, cliPath);
+            string path = await CertificationFixtureSettings.WriteAsync(
+                caseDirectory,
+                cliPath,
+                model);
             JsonNode settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
 
             Assert.Equal(
-                CertificationFixtureSettings.BrainModel,
+                model,
                 settings["runtime"]?["brain"]?["model"]?.GetValue<string>());
             Assert.Equal(
                 CertificationFixtureSettings.BrainEffort,
@@ -41,7 +47,7 @@ public sealed class CertificationFixtureSettingsTests
     }
 
     [Theory]
-    [InlineData("gpt-5.4-mini", "medium", false)]
+    [InlineData("gpt-5.4-mini", "medium", true)]
     [InlineData("gpt-5.3-codex-spark", "medium", true)]
     [InlineData("gpt-5.6-sol", "high", false)]
     [InlineData("", "medium", false)]
@@ -55,6 +61,28 @@ public sealed class CertificationFixtureSettingsTests
             $$"""{"evidence":["model:{{model}}",{"nested":["effort:{{effort}}"]}]}""");
 
         Assert.Equal(expected, ContinuousCertificationRunner.EvidenceUsesFixtureProfile(document.RootElement));
+    }
+
+    [Theory]
+    [InlineData(null, "gpt-5.3-codex-spark")]
+    [InlineData("", "gpt-5.3-codex-spark")]
+    [InlineData("gpt-5.3-codex-spark", "gpt-5.3-codex-spark")]
+    [InlineData("gpt-5.4-mini", "gpt-5.4-mini")]
+    public void Manual_model_selection_accepts_the_certification_equivalence_set(
+        string? configured,
+        string expected)
+    {
+        Assert.Equal(expected, CertificationFixtureSettings.ResolveBrainModel(configured));
+    }
+
+    [Fact]
+    public void Manual_model_selection_rejects_models_outside_the_certification_equivalence_set()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(() =>
+            CertificationFixtureSettings.ResolveBrainModel("gpt-5.6-sol"));
+
+        Assert.Contains("gpt-5.3-codex-spark", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("gpt-5.4-mini", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

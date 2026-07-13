@@ -97,8 +97,24 @@ public static class CanonicalWorkflowCatalog
             .Select(identity => new ValidatorReference(new ValidatorIdentity(identity), WorkflowCatalogOwnerRegistry.ValidatorOwner))
             .DistinctBy(item => item.Identity).ToArray();
         bool publish = transition.Effects.Any(effect => effect.Category is EffectCategory.Publication or EffectCategory.Git);
+        ProductIdentity[] publishedEffectOutputs = transition.Effects
+            .Where(effect => effect.Category is EffectCategory.Publication or EffectCategory.Git)
+            .SelectMany(effect => effect.Outputs)
+            .Distinct()
+            .ToArray();
         OutputSurfaceDefinition[] surfaces = transition.ProducedProducts
-            .Select(product => SurfaceFor(product, validators, publish)).DistinctBy(item => item.Path, StringComparer.Ordinal).ToArray();
+            .Select(product => SurfaceFor(product, validators, publish))
+            .Concat(publishedEffectOutputs
+                .Where(identity => transition.ProducedProducts.All(product => product.Identity != identity))
+                .Select(identity => SurfaceFor(
+                    identity,
+                    "repository-owned publication input",
+                    validators,
+                    publish)))
+            .OrderBy(surface => surface.RepositoryTarget == RepositoryTarget.NestedAgents ? 0 : 1)
+            .ThenBy(surface => surface.Path, StringComparer.Ordinal)
+            .DistinctBy(item => item.Path, StringComparer.Ordinal)
+            .ToArray();
         InputSurfaceDefinition[] inputs = transition.RequiredInputProducts
             .Select(requirement => InputFor(requirement.Product, validators))
             .Concat(transition.InputGate.Requirements.Where(item => item.InputSurface is not null)
@@ -159,19 +175,26 @@ public static class CanonicalWorkflowCatalog
 
     private static OutputSurfaceDefinition SurfaceFor(
         ProductDefinition product, IReadOnlyList<ValidatorReference> validators, bool publish)
+        => SurfaceFor(product.Identity, product.RepositoryOwnership, validators, publish);
+
+    private static OutputSurfaceDefinition SurfaceFor(
+        ProductIdentity identity,
+        string ownership,
+        IReadOnlyList<ValidatorReference> validators,
+        bool publish)
     {
-        string path = ProductSurfacePath(product.Identity);
+        string path = ProductSurfacePath(identity);
         RepositoryTarget target = TargetFor(path);
         ValidatorReference validator = validators.FirstOrDefault(item =>
-            item.Identity.Value.StartsWith(product.Identity.Value, StringComparison.Ordinal))
-            ?? new ValidatorReference(new ValidatorIdentity($"{product.Identity}Validator"),
+            item.Identity.Value.StartsWith(identity.Value, StringComparison.Ordinal))
+            ?? new ValidatorReference(new ValidatorIdentity($"{identity}Validator"),
                 WorkflowCatalogOwnerRegistry.ValidatorOwner);
         bool directory = path.EndsWith("/", StringComparison.Ordinal) ||
             path is ".agents/specs" or ".agents/milestones" or ".agents/evidence" or ".agents/archive/epics";
         return new OutputSurfaceDefinition(path.TrimEnd('/'), target,
-            product.Identity == ProductIdentity.RepositoryChanges ? SurfaceMutationKind.RepositoryDelta :
+            identity == ProductIdentity.RepositoryChanges ? SurfaceMutationKind.RepositoryDelta :
             directory ? SurfaceMutationKind.ReplaceDirectory : SurfaceMutationKind.CreateOrReplaceFile,
-            product.RepositoryOwnership, validator,
+            ownership, validator,
             publish ? CommitPolicy.BlockingLocal : CommitPolicy.None,
             publish ? PushPolicy.RequiredAsync : PushPolicy.None);
     }
@@ -183,8 +206,8 @@ public static class CanonicalWorkflowCatalog
     private static string ProductSurfacePath(ProductIdentity identity) => identity.Value switch
     {
         "EvaluationIntent" => EvaluationArtifactPaths.SelectedEvaluation,
-        "RoadmapCompletionContext" => ".agents/roadmap-completion-context.md",
-        "StrategicInitiativeSelection" => ".agents/selected-initiative.md",
+        "RoadmapCompletionContext" => ".agents/core/roadmap-completion-context.md",
+        "StrategicInitiativeSelection" => ".agents/selection.md",
         "EpicPreparationAudit" => ".agents/epic-preparation-audit.md",
         "DependencyInventory" => EvaluationArtifactPaths.DependencyInventory,
         "HypothesisInventory" => EvaluationArtifactPaths.HypothesisInventory,

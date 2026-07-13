@@ -167,6 +167,31 @@ internal sealed partial class LoopRelayCompositionRoot
             }
 
             if (definition.Identity.Value == "VerifyExecuteEntryContract" &&
+                !ExecutionMilestoneFileSet.Evaluate(
+                    Directory.Exists(ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.MilestonesDirectory))
+                        ? Directory.GetFiles(
+                            ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.MilestonesDirectory),
+                            OrchestrationArtifactPaths.MilestoneSearchPattern,
+                            SearchOption.TopDirectoryOnly)
+                        : []).IsValid)
+            {
+                ExecutionMilestoneFileSetResult fileSet = ExecutionMilestoneFileSet.Evaluate(
+                    Directory.GetFiles(
+                        ResolveRepositoryPath(_repository, OrchestrationArtifactPaths.MilestonesDirectory),
+                        OrchestrationArtifactPaths.MilestoneSearchPattern,
+                        SearchOption.TopDirectoryOnly));
+                return new ProductValidationResult(
+                    ProductValidationStatus.Invalid,
+                    output.CandidateProducts,
+                    [],
+                    [ProductIdentity.ExecutionMilestoneSet],
+                    [],
+                    [],
+                    fileSet.Explanation,
+                    output.Evidence);
+            }
+
+            if (definition.Identity.Value == "VerifyExecuteEntryContract" &&
                 ExplicitSingleMilestoneInvariantViolated(_repository.Path, out int milestoneCount))
             {
                 return new ProductValidationResult(
@@ -474,6 +499,21 @@ internal sealed partial class LoopRelayCompositionRoot
                 string[] relativeMatches = matches
                     .Select(path => ArtifactPath.ToRepositoryRelativePath(_repository, path))
                     .ToArray();
+                ExecutionMilestoneFileSetResult fileSet =
+                    ExecutionMilestoneFileSet.Evaluate(relativeMatches);
+                if (!fileSet.IsValid)
+                {
+                    invalid.AddRange(definition.ProducedProducts.Select(product => product.Identity));
+                    return new ProductValidationResult(
+                        ProductValidationStatus.Invalid,
+                        [],
+                        [],
+                        invalid.Distinct().ToArray(),
+                        [],
+                        [],
+                        fileSet.Explanation,
+                        evidence.Concat(relativeMatches).Distinct(StringComparer.Ordinal).ToArray());
+                }
                 foreach (string relativeMatch in relativeMatches)
                 {
                     artifactPaths.Add(relativeMatch);

@@ -253,7 +253,7 @@ public sealed class MilestoneFourRunner
                 };
                 string unblockOutput = unblock.StandardOutput + "\n" + unblock.StandardError;
                 unblockFailedClosed = unblock.ExitCode != 0 &&
-                    unblockOutput.Contains("Unknown command: unblock", StringComparison.Ordinal);
+                    unblockOutput.Contains("Unknown or invalid command: unblock", StringComparison.Ordinal);
             }
 
             bool duplicateProvider = live.Calls > expectedProviderCalls;
@@ -283,6 +283,7 @@ public sealed class MilestoneFourRunner
                 passed,
                 [
                     $"run:{runId}",
+                    $"model:{CertificationFixtureSettings.BrainModel}",
                     $"durable-boundaries:{snapshot.Boundaries.Count}",
                     $"terminal-row:{afterRestart.State}",
                     $"provider:{live.Calls}",
@@ -486,7 +487,7 @@ public sealed class MilestoneFourRunner
             var spec = new AgentSessionSpec(
                 SessionIdentity.New(), "m4-live-recovery", SessionRole.OperationalExecution,
                 new SandboxProfile("read-only", false, false, false),
-                AgentModel.Gpt56Luna, AgentEffort.Low, AgentConfigurationAuthority.Brain, repository);
+                CertificationFixtureSettings.BrainAgentModel, AgentEffort.Low, AgentConfigurationAuthority.Brain, repository);
             await using var session = new CodexAppServerSession(spec, process, new DeterministicAgentTokenEstimator());
             AgentTurnResult result = await session.RunTurnAsync(prompt.Fact.RenderedContent, cancellationToken: token);
             return new PromptExecutionResult(

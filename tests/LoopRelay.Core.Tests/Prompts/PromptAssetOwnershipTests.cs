@@ -11,6 +11,15 @@ namespace LoopRelay.Core.Tests.Prompts;
 /// </summary>
 public sealed class PromptAssetOwnershipTests
 {
+    [Fact]
+    public void Select_next_epic_does_not_treat_an_empty_advisory_roadmap_as_a_selection_blocker()
+    {
+        string prompt = LoopRelay.Core.Prompts.Planning.SelectNextEpic.Template;
+
+        Assert.Contains("Absence of advisory roadmap files alone is NOT evidence", prompt, StringComparison.Ordinal);
+        Assert.Contains("select that initiative directly", prompt, StringComparison.Ordinal);
+    }
+
     // Relative path (forward slashes) -> registered owner.
     private static readonly IReadOnlyDictionary<string, string> Registry =
         new Dictionary<string, string>(StringComparer.Ordinal)
@@ -18,6 +27,7 @@ public sealed class PromptAssetOwnershipTests
             // Canonical prompt asset catalog (rendered at the TransitionRuntime seam).
             ["AdversarialPlanReview.prompt"] = "CanonicalPromptAssetCatalog:RunAdversarialReview",
             ["CollectDetails.prompt"] = "CanonicalPromptAssetCatalog:CollectDetails",
+            ["ContinueExecution.prompt"] = "CanonicalPromptAssetCatalog:ExecuteImplementationSlice",
             ["ExtractDetails.prompt"] = "CanonicalPromptAssetCatalog:ExtractDetails",
             ["ExtractMilestones.prompt"] = "CanonicalPromptAssetCatalog:ExtractMilestones",
             ["GenerateHandoff.prompt"] = "CanonicalPromptAssetCatalog:GenerateHandoff + UnifiedPromptExecutor handoff turn",

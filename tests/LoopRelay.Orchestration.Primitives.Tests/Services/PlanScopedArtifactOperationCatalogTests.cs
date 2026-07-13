@@ -64,6 +64,7 @@ public sealed class PlanScopedArtifactOperationCatalogTests
         Assert.Null(refine.RequiredOutputGlob);
         Assert.Null(refine.ChangedGuard);
         Assert.False(refine.RequireChecklistInGlob);
+        Assert.True(refine.PreserveWriteGlobFileSet);
     }
 
     [Fact]

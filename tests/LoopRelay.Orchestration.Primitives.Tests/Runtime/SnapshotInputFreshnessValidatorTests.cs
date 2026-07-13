@@ -96,6 +96,49 @@ public sealed class SnapshotInputFreshnessValidatorTests
     }
 
     [Fact]
+    public async Task Own_in_place_file_change_matches_its_directory_backed_prompt_section()
+    {
+        CanonicalCausalContext causality = NewCausality();
+        ProductRecord frozen = Record(
+            "input-version",
+            ProductLifecycle.Active,
+            ".agents/milestones/m1.md");
+        ProductRecord candidate = Record(
+            "new-file-content",
+            ProductLifecycle.Active,
+            ".agents/milestones/m1.md",
+            "repository observation");
+        WorkflowTransitionDefinition definition = Definition();
+        PromptContextSection[] frozenSections =
+        [
+            new("Execution Milestones", "- [ ] Implement", ".agents/milestones/", ["old"]),
+            new("Decision Set", "stable", ".agents/decisions/decisions.md", ["stable"]),
+        ];
+        PromptContext frozenContext = Context(
+            definition,
+            frozen,
+            new Dictionary<string, string>(),
+            frozenSections);
+        PromptContextSection[] currentSections =
+        [
+            new("Execution Milestones", "- [x] Implement", ".agents/milestones/", ["new"]),
+            new("Decision Set", "stable", ".agents/decisions/decisions.md", ["stable"]),
+        ];
+        var validator = new SnapshotInputFreshnessValidator(
+            new FixedProductResolver(new ProductResolutionResult([candidate], [], [candidate], [], [])),
+            new FixedContextBuilder(definition, new Dictionary<string, string>(), currentSections));
+
+        InputFreshnessResult result = await validator.ValidateAsync(
+            causality,
+            Request(definition),
+            definition,
+            frozenContext,
+            CancellationToken.None);
+
+        Assert.Equal(InputFreshnessStatus.Fresh, result.Status);
+    }
+
+    [Fact]
     public async Task Archive_transition_preserves_frozen_identity_for_an_input_it_relocated()
     {
         CanonicalCausalContext causality = NewCausality();

@@ -233,6 +233,9 @@ public static class PlanPromptContext
         metadata["plan.scoped_operation.require_checklist_in_glob"] = operation.RequireChecklistInGlob
             ? "true"
             : "false";
+        metadata["plan.scoped_operation.preserve_write_glob_file_set"] = operation.PreserveWriteGlobFileSet
+            ? "true"
+            : "false";
 
         sections.Add(new PromptContextSection(
             "Scoped Operation Contract",
@@ -254,6 +257,7 @@ public static class PlanPromptContext
             Required output glob: {(operation.RequiredOutputGlob is null ? "(none)" : FormatGlob(operation.RequiredOutputGlob))}
             Changed guard: {operation.ChangedGuard ?? "(none)"}
             Requires checklist in required output glob: {operation.RequireChecklistInGlob.ToString().ToLowerInvariant()}
+            Preserve write-glob file set: {operation.PreserveWriteGlobFileSet.ToString().ToLowerInvariant()}
             """,
             evidence,
             [evidence]));

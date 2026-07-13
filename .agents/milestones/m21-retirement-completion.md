@@ -66,6 +66,27 @@ Both roadmap full chains, former-route absence checks, adapter-disabled imports,
 duplicate-owner sentinels, reduced-solution build/tests, and the privacy scan are required on the
 final deletion candidate.
 
+### Post-acceptance certification-profile hardening
+
+- [x] Allow an operator to select GPT-5.3 Codex Spark or GPT-5.4 Mini for any live generated campaign.
+- [x] Credit Spark/medium and Mini/medium evidence as one certification-equivalent fixture profile.
+- [x] Exercise both selection paths and reject models outside the accepted equivalence set.
+- [x] Record the operational swap rule: start with Spark, treat only an explicit capacity-limit response as exhaustion, preserve that attempt, and manually start a fresh campaign or governed identical rerun on Mini. Slow runs and ordinary failures do not trigger a swap, and no automatic production fallback is implied.
+
+### Future full-suite hardening operations
+
+- [x] Distinguish the full solution test suite from the full runtime-generated certification suite; the former may intentionally skip live-only tests and cannot certify the latter by itself.
+- [x] Record the complete fresh-campaign order: build the exact candidate; run deterministic canary/M2/M7/M8/M12; live M3/M4/M5/M6/M9/M10/M11; retained M13/M14; then M15 last.
+- [x] Require actual campaign execution into a new `.tmp/certification/milestone-N/<case-guid>/`; retained cases and `*.latest.json` summaries are audit inputs, never execution substitutes.
+- [x] Invalidate and rerun affected evidence after any production or provider-facing input change; after the final hardening change, rerun the complete exact-candidate sequence before M15.
+
+### Generated-fixture recertification
+
+- [x] Build the exact candidate and run deterministic canary, M2, M7, M8, and M12 campaigns.
+- [x] Run live Spark-or-Mini M3, M4, M5, M6, M9, M10, and M11 campaigns.
+- [x] Run live Traditional M13 and Eval M14 full-chain campaigns with retained cases.
+- [x] Run M15 last. Result: `Blocked` (classification `6`); all generated campaign summaries were current and successful but remained `LocalOnly` / `LocalTemporary`, so M15 credited only the static Codex compatibility manifest (`1/15` dimensions). The Windows platform probes passed; cross-platform agreement was not claimed.
+
 The acceptance candidate may accept cross-machine claims only from the D9-selected durable,
 scrubbed evidence owner. Ignored `.tmp` files remain diagnostic evidence, not durable release
 provenance.

@@ -81,7 +81,9 @@ public sealed class CertificationRunner
         string stderr = EvidenceNormalizer.Normalize(process.StandardError, repositoryPath);
         var oracles = new List<OracleResult>
         {
-            new("exit-code", process.ExitCode == 0, $"Expected status exit code 0; observed {process.ExitCode}.", [$"exit:{process.ExitCode}"]),
+            new("exit-code", process.ExitCode == 4,
+                $"Expected typed action-required status exit code 4 for missing storage; observed {process.ExitCode}.",
+                [$"exit:{process.ExitCode}"]),
             RequiredLinesOracle(stdout),
             new("no-repository-mutation", mutations.Count == 0 && baseHash == postRunHash,
                 mutations.Count == 0 ? "Repository snapshot is unchanged." : "Status mutated repository authority.",

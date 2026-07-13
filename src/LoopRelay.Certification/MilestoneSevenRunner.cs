@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
@@ -103,15 +104,15 @@ public sealed class MilestoneSevenRunner
             string agentsBefore = await GitValueAsync(agents, "rev-parse", "HEAD");
             int parentCountBefore = int.Parse(await GitValueAsync(repositoryPath, "rev-list", "--count", "HEAD"));
             int agentsCountBefore = int.Parse(await GitValueAsync(agents, "rev-list", "--count", "HEAD"));
-            await File.WriteAllTextAsync(
-                Path.Combine(agents, "handoffs", "handoff.md"),
-                "# Handoff\n\nChanged for publication.\n",
-                cancellationToken);
-
             ProcessResult init = await RunCliAsync(cliPath, repositoryPath, ["storage", "init"], cancellationToken);
             if (init.ExitCode != 0) throw new InvalidOperationException("Nested storage init failed.");
             var repository = new Repository { Id = Guid.NewGuid(), Name = "nested", Path = repositoryPath };
             await SeedPublicationStateAsync(repository, cancellationToken);
+            await File.WriteAllTextAsync(
+                Path.Combine(agents, "handoffs", "handoff.md"),
+                "# Handoff\n\nChanged for publication.\n",
+                cancellationToken);
+            string agentsStatusBefore = await GitValueAsync(agents, "status", "--porcelain");
             ProcessResult run = await RunCliAsync(cliPath, repositoryPath, ["execute"], cancellationToken);
 
             string parentAfter = await GitValueAsync(repositoryPath, "rev-parse", "HEAD");
@@ -121,7 +122,15 @@ public sealed class MilestoneSevenRunner
             int parentCountAfter = int.Parse(await GitValueAsync(repositoryPath, "rev-list", "--count", "HEAD"));
             int agentsCountAfter = int.Parse(await GitValueAsync(agents, "rev-list", "--count", "HEAD"));
             string tree = await GitValueAsync(repositoryPath, "ls-tree", "HEAD", ".agents");
-            bool parentExpected = parentAfter != parentBefore && parentCountAfter == parentCountBefore + 1;
+            string agentsStatusAfter = await GitValueAsync(agents, "status", "--porcelain");
+            CanonicalWorkflowPersistenceSnapshot publicationSnapshot =
+                await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync(cancellationToken);
+            CanonicalTransitionRunRecord publicationRun = publicationSnapshot.TransitionRuns
+                .Last(item => item.Transition == new WorkflowTransitionIdentity("PublishRepositoryState"));
+            IReadOnlyList<LoopRelay.Orchestration.Effects.EffectWorkItem> publicationPlan =
+                await new CanonicalEffectWorkStore(repository).ReadPlanAsync(
+                    new TransitionRunIdentity(publicationRun.RunId), cancellationToken);
+            bool parentExpected = parentAfter != parentBefore && parentCountAfter == parentCountBefore + 2;
             bool agentsExpected = agentsAfter != agentsBefore && agentsCountAfter == agentsCountBefore + 1;
             bool parentRemoteExpected = parentRemoteHead == parentAfter;
             bool agentsRemoteExpected = agentsRemoteHead == agentsAfter;
@@ -148,6 +157,9 @@ public sealed class MilestoneSevenRunner
                     $"agents-after:{Short(agentsAfter)}",
                     $"parent-commits:{parentCountBefore}->{parentCountAfter}",
                     $"agents-commits:{agentsCountBefore}->{agentsCountAfter}",
+                    $"agents-status-before:{agentsStatusBefore.Replace('\n', '|')}",
+                    $"agents-status-after:{agentsStatusAfter.Replace('\n', '|')}",
+                    $"effect-plan:{string.Join(';', publicationPlan.Select(item => $"{item.Intent.Executor.Value}:{item.State}:{item.Receipt?.PostconditionSatisfied}"))}",
                     $"gitlink-mode:{(gitlinkExpected ? "160000" : "unexpected")}",
                     $"cli-stdout:{EvidenceNormalizer.Normalize(run.StandardOutput, repositoryPath)}",
                     $"cli-stderr:{EvidenceNormalizer.Normalize(run.StandardError, repositoryPath)}",

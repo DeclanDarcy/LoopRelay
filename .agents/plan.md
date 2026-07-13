@@ -27,7 +27,7 @@ Completion means both roadmap producers feed the same Plan contract, Plan feeds 
 
 ### 2.2 Out of scope
 
-- Parallel workflow scheduling, concurrent active runs in one workspace, provider fallback, additional production providers, distributed workers, and cross-workspace scaling.
+- Parallel workflow scheduling, concurrent active runs in one workspace, automatic production provider failover, additional production providers, distributed workers, and cross-workspace scaling. Operator-selected certification campaigns may use either accepted model in the certification equivalence set; that is evidence policy, not a production fallback restriction.
 - Making SQLite, console rendering, or filesystem projections architectural authorities.
 - Permanent compatibility fallbacks, dual writes, or runtime reads from imported legacy sources.
 - New human-facing documentation except deletion or correction of claims that become false.
@@ -73,7 +73,7 @@ Before the first implementation commit, capture a clean baseline with `dotnet bu
 - Prompt fact plus `Planned` and `Authorized` dispatch lifecycle facts must be durable before `Started` or any provider write.
 - A thrown or missing normalized result after dispatch start is unknown provider work and enters recovery; it never authorizes a blind resend.
 - Execution recommendations are immutable causal evidence. Only a durable policy evaluation may produce an effective runtime profile, and recommendations can never raise permission, approval, sandbox, provider, or network ceilings.
-- Exact Codex version plus app-server schema determines supported resume/read/fork behavior. Unsupported exact capability fails closed; there is no provider fallback.
+- Exact Codex version plus app-server schema determines supported resume/read/fork behavior. Model identity remains recorded, while GPT-5.3 Codex Spark and GPT-5.4 Mini are certification-equivalent at the fixture effort. Unsupported protocol capability still fails closed; this does not prevent an operator from rerunning a generated certification campaign with either accepted model.
 
 ### 4.3 Outcomes
 
@@ -333,7 +333,13 @@ dotnet build LoopRelay.slnx --no-restore
 dotnet test LoopRelay.slnx --no-restore
 ```
 
-Run focused changed-project tests during development, then the whole solution at the gate. Build before certification. Use the certification executable's deterministic `canary`, `milestone12`, and `milestone15` campaigns where applicable; run individual live milestones needed by the changed behavior, including Traditional and Eval full chains, rather than assuming an aggregate command runs them. Run the release aggregate only after its underlying evidence exists.
+Run focused changed-project tests during development, then the whole solution at the gate. Build before certification. The phrase **full solution test suite** means `dotnet test LoopRelay.slnx`; it includes component and architecture tests but is not the full generated-fixture certification suite. Live-only tests may be intentionally skipped there because their behavior is exercised by the separate live campaigns.
+
+The phrase **full generated-fixture certification suite** means a build of the exact candidate followed by fresh runtime-generated `canary`, M2, M7, M8, and M12 campaigns; live M3, M4, M5, M6, M9, M10, and M11 campaigns; retained Traditional M13 and Eval M14 full chains; and M15 last. There is no single run-all command. Each campaign must actually execute and create a new `.tmp/certification/milestone-N/<case-guid>/` case; a checked-in fixture, retained case, or `*.latest.json` summary is evidence to inspect, not a substitute for executing the campaign. Any production or provider-facing input change invalidates affected evidence. After the final production change, rebuild and rerun the affected campaigns; for a final hardening candidate, rerun the complete sequence before M15.
+
+Start live hardening campaigns explicitly with `gpt-5.3-codex-spark` at medium effort. Elapsed time, a slow response, or an ordinary provider/fixture failure is not a capacity event. Only an explicit provider capacity-limit response authorizes the operator to retain the attempt and manually select `gpt-5.4-mini` for a fresh campaign or identical governed rerun. Do not automatically fail over or relabel an in-flight attempt. Record the exact model on every run and preserve the first failure. Spark/medium and Mini/medium receive equal certification credit; this operator procedure does not create a production provider-fallback restriction.
+
+Run the release aggregate only after all underlying evidence exists.
 
 Machine evidence records commit, catalog/schema/profile identities, command, environment/platform, case IDs, test/campaign results, obligation links, independent observations, privacy scan, and skipped/unsupported reasons. Scrub secrets and provider payloads. A missing platform or capability remains missing; it is never averaged into a pass.
 

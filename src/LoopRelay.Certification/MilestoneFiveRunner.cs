@@ -81,14 +81,11 @@ public sealed class MilestoneFiveRunner
                 return await Finish(CertificationClassification.UnsupportedCapability);
             }
 
-            IReadOnlyDictionary<string, PlanProducerCaseResult> reusable =
-                await LoadReusablePassedCasesAsync(authorityRoot, version, schema, cancellationToken);
-            cases.Add(reusable.TryGetValue(WorkflowIdentity.TraditionalRoadmap.Value, out PlanProducerCaseResult? traditional)
-                ? Reused(traditional)
-                : await RunProducerCaseAsync(WorkflowIdentity.TraditionalRoadmap));
-            cases.Add(reusable.TryGetValue(WorkflowIdentity.EvalRoadmap.Value, out PlanProducerCaseResult? eval)
-                ? Reused(eval)
-                : await RunProducerCaseAsync(WorkflowIdentity.EvalRoadmap));
+            // Certification campaigns are candidate-bound runtime evidence. Never reuse a prior
+            // live summary here: provider/schema compatibility does not identify the CLI binary,
+            // its referenced assemblies, prompt assets, workflow catalog, or fixture oracle.
+            cases.Add(await RunProducerCaseAsync(WorkflowIdentity.TraditionalRoadmap));
+            cases.Add(await RunProducerCaseAsync(WorkflowIdentity.EvalRoadmap));
             return await Finish(LiveProviderFailureClassifier.Classify(
                 cases.All(item => item.Passed), codexHome));
         }
@@ -107,7 +104,7 @@ public sealed class MilestoneFiveRunner
             Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", priorSettings);
             string authCopy = Path.Combine(codexHome, "auth.json");
             if (File.Exists(authCopy)) File.Delete(authCopy);
-            if (Directory.Exists(root))
+            if (Directory.Exists(root) && cases.All(item => item.Passed))
             {
                 foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
@@ -153,13 +150,19 @@ public sealed class MilestoneFiveRunner
                 string? actualTransition = ParseTransition(run.StandardOutput);
                 bool completed = run.ExitCode == 0 && string.Equals(actualTransition, expectedTransition, StringComparison.Ordinal);
                 bool mutationValid = AllowedMutations(expectedTransition, changed);
+                var diagnostics = CompactDiagnostics(actualTransition, run).ToList();
+                if (!completed && actualTransition is not null)
+                {
+                    diagnostics.AddRange(await EffectDiagnosticsAsync(
+                        repository, actualTransition, cancellationToken));
+                }
                 transitionResults.Add(new PlanTransitionCaseResult(
                     expectedTransition,
                     run.ExitCode,
                     changed,
                     mutationValid,
                     completed,
-                    CompactDiagnostics(actualTransition, run)));
+                    diagnostics));
                 if (!completed) break;
             }
 
@@ -216,14 +219,6 @@ public sealed class MilestoneFiveRunner
         PlanProducerCaseResult FailedCase(WorkflowIdentity producer, string diagnostic) => new(
             producer.Value, [], false, false, false, false, false, false, false, [diagnostic]);
 
-        static PlanProducerCaseResult Reused(PlanProducerCaseResult result) => result with
-        {
-            Evidence = result.Evidence
-                .Concat(["reused-current-live-summary:milestone-5.latest.json"])
-                .Distinct(StringComparer.Ordinal)
-                .ToArray(),
-        };
-
         async Task<MilestoneFiveCertificationResult> Finish(CertificationClassification classification)
         {
             string scrubbed = string.Join("\n", cases.SelectMany(item => item.Evidence)
@@ -237,40 +232,6 @@ public sealed class MilestoneFiveRunner
             await using FileStream stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
             return result;
-        }
-    }
-
-    private static async Task<IReadOnlyDictionary<string, PlanProducerCaseResult>> LoadReusablePassedCasesAsync(
-        string authorityRoot,
-        string version,
-        string schema,
-        CancellationToken cancellationToken)
-    {
-        string path = Path.Combine(authorityRoot, "evidence", "milestone-5.latest.json");
-        if (!File.Exists(path) || DateTimeOffset.UtcNow - File.GetLastWriteTimeUtc(path) > TimeSpan.FromHours(2))
-        {
-            return new Dictionary<string, PlanProducerCaseResult>(StringComparer.Ordinal);
-        }
-
-        try
-        {
-            await using FileStream stream = File.OpenRead(path);
-            MilestoneFiveCertificationResult? prior = await JsonSerializer.DeserializeAsync<MilestoneFiveCertificationResult>(
-                stream, JsonOptions, cancellationToken);
-            if (prior is null || prior.SchemaVersion != CertificationRunner.ResultSchemaVersion ||
-                prior.CodexVersion != version || prior.SchemaDigest != schema || prior.PrivacyFindings.Count > 0)
-            {
-                return new Dictionary<string, PlanProducerCaseResult>(StringComparer.Ordinal);
-            }
-
-            return prior.ProducerCases
-                .Where(item => item.Passed)
-                .GroupBy(item => item.ProducerWorkflow, StringComparer.Ordinal)
-                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
-        }
-        catch (JsonException)
-        {
-            return new Dictionary<string, PlanProducerCaseResult>(StringComparer.Ordinal);
         }
     }
 
@@ -369,6 +330,25 @@ public sealed class MilestoneFiveRunner
         await transaction.RestoreAsync();
         return await File.ReadAllTextAsync(Path.Combine(root, ".agents", "plan.md")) == "# Original plan\n" &&
             !File.Exists(Path.Combine(root, ".agents", "milestones", "m1.md"));
+    }
+
+    private static async Task<IReadOnlyList<string>> EffectDiagnosticsAsync(
+        Repository repository,
+        string transition,
+        CancellationToken cancellationToken)
+    {
+        CanonicalWorkflowPersistenceSnapshot snapshot =
+            await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync(cancellationToken);
+        CanonicalTransitionRunRecord? run = snapshot.TransitionRuns.LastOrDefault(item =>
+            string.Equals(item.Transition.Value, transition, StringComparison.Ordinal));
+        if (run is null) return ["effect-plan:missing-transition-run"];
+        IReadOnlyList<LoopRelay.Orchestration.Effects.EffectWorkItem> plan =
+            await new CanonicalEffectWorkStore(repository).ReadPlanAsync(
+                new LoopRelay.Core.Models.Identity.TransitionRunIdentity(run.RunId), cancellationToken);
+        return plan.Select(item =>
+            $"effect:{item.Intent.Executor.Value}:{item.State}:{item.Receipt?.PostconditionSatisfied}:" +
+            string.Join('>', item.Events.Select(value => $"{value.State}:{OneLine(value.Explanation)}")))
+            .ToArray();
     }
 
     private static async Task InitializeGitAsync(

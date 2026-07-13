@@ -416,6 +416,7 @@ public sealed class WorkflowResolverTests
     {
         string repo = CreateRepo();
         Write(repo, ".agents/decisions/decisions.md", "# Decisions");
+        Write(repo, ".agents/milestones/m1.md", "# M1\n\n- [ ] Implement the decision.");
         Write(
             repo,
             ".agents/decisions/decisions.recommendation.json",

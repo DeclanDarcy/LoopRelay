@@ -49,7 +49,7 @@ accepted milestone.
 
 For each milestone, produce one machine-readable, immutable acceptance candidate keyed by commit,
 architecture milestone, catalog identity, schema identity/version/fingerprint, prompt-policy and
-exact-provider profile identities, and platform. It must contain:
+exact-provider protocol identities, the accepted certification-model equivalence set, and platform. It must contain:
 
 - owner decision/ADR identities and unresolved-decision count;
 - obligations added, changed, invalidated, credited, and explicitly uncredited;
@@ -101,6 +101,18 @@ record why higher tiers are required or not applicable.
 - Run every full chain affected by shared chain behavior.
 - Run a release aggregate only after its referenced evidence exists. A missing platform or
   capability stays missing and cannot be credited by an aggregate result.
+- Do not use **full suite** ambiguously. The full solution test suite is the whole `dotnet test`
+  invocation and may intentionally skip live-only tests. The full certification suite is the
+  separately executed runtime-generated campaign sequence in `plan.md` §25.3, with M15 last.
+- Generate fresh cases for certification. A retained case or `*.latest.json` file supports audit
+  and flake analysis but cannot stand in for campaign execution. Rebuild and recertify after the
+  last production or provider-facing input change so all credited evidence describes one exact
+  candidate.
+- Begin live hardening on `gpt-5.3-codex-spark`/medium. Switch manually to
+  `gpt-5.4-mini`/medium only after an explicit capacity-limit response, retain the original
+  attempt, and start a fresh campaign or governed identical rerun. Latency and ordinary failures
+  are not capacity exhaustion. Both models are certification-equivalent, but their exact identity
+  remains part of each evidence record; no automatic production fallback is implied.
 
 The acceptance manifest from G3 stores this mapping and the actual evidence IDs.
 

@@ -19,38 +19,38 @@ public sealed class MilestoneTwoRunner
         var results = new List<PublicCliCaseResult>();
         try
         {
-            results.Add(await RunCase("status-default", ["status"], 0, false, Seed.Empty,
+            results.Add(await RunCase("status-default", ["status"], 4, false, Seed.Empty,
                 ["Invocation mode: DefaultChained", "Selected workflow: TraditionalRoadmap"]));
-            results.Add(await RunCase("status-forced-eval", ["--eval", "status"], 0, false, Seed.Empty,
+            results.Add(await RunCase("status-forced-eval", ["--eval", "status"], 4, false, Seed.Empty,
                 ["Invocation mode: ForcedEvalChain", "Selected workflow: EvalRoadmap"]));
-            results.Add(await RunCase("status-forced-traditional", ["--traditional", "status"], 0, false, Seed.Empty,
+            results.Add(await RunCase("status-forced-traditional", ["--traditional", "status"], 4, false, Seed.Empty,
                 ["Invocation mode: ForcedTraditionalChain", "Selected workflow: TraditionalRoadmap"]));
             results.Add(await RunCase("run-default-storage-block", [], 4, false, Seed.CorruptStorage,
                 ["Storage authority:", "Corruption:"]));
             results.Add(await RunCase("bounded-traditional-storage-block", ["traditional"], 4, false, Seed.CorruptStorage,
                 ["Storage authority:", "Corruption:"]));
-            results.Add(await RunCase("bounded-eval", ["eval"], 4, true, Seed.Empty,
+            results.Add(await RunCase("bounded-eval", ["eval"], 4, true, Seed.InitializedStorage,
                 ["Workflow: EvalRoadmap", "Stop reason: MissingRequiredInput"]));
-            results.Add(await RunCase("bounded-plan", ["plan"], 4, true, Seed.Empty,
+            results.Add(await RunCase("bounded-plan", ["plan"], 4, true, Seed.InitializedStorage,
                 ["Workflow: Plan", "Stop reason: MissingRequiredInput"]));
-            results.Add(await RunCase("bounded-execute", ["execute"], 4, true, Seed.Empty,
+            results.Add(await RunCase("bounded-execute", ["execute"], 4, true, Seed.InitializedStorage,
                 ["Workflow: Execute", "Stop reason: MissingRequiredInput"]));
-            results.Add(await RunCase("storage-verify-missing", ["storage", "verify"], 0, false, Seed.Empty,
-                ["Storage authority: Missing"]));
+            results.Add(await RunCase("storage-verify-missing", ["storage", "verify"], 4, false, Seed.Empty,
+                ["Storage health: ActionRequired", "Authority exists: False"]));
             results.Add(await RunCase("storage-export-missing", ["storage", "export"], 4, false, Seed.Empty,
-                ["Storage export stopped because the workspace database is missing."]));
+                ["Storage operation: Export", "Lifecycle: Refused", "Storage health: ActionRequired"]));
             results.Add(await RunCase("storage-init", ["storage", "init"], 0, true, Seed.Empty,
-                ["Storage initialized."]));
-            results.Add(await RunCase("storage-import", ["storage", "import"], 0, true, Seed.Empty,
-                ["Storage import completed."]));
-            results.Add(await RunCase("storage-sync", ["storage", "sync"], 0, true, Seed.Empty,
-                ["Storage sync completed."]));
-            results.Add(await RunCase("storage-export-initialized", ["storage", "export"], 0, false, Seed.InitializedStorage,
-                ["Storage export completed with no filesystem mutations."]));
+                ["Storage operation: Initialize", "Lifecycle: Completed", "Storage health: Healthy"]));
+            results.Add(await RunCase("import-detect-empty", ["import", "detect"], 4, true, Seed.Empty,
+                ["Import detection failed closed; resolve the reported source problem."]));
+            results.Add(await RunCase("storage-sync", ["storage", "sync"], 0, true, Seed.InitializedStorage,
+                ["Storage operation: Sync", "Lifecycle: Completed", "Storage health: Healthy"]));
+            results.Add(await RunCase("storage-export-initialized", ["storage", "export"], 0, true, Seed.InitializedStorage,
+                ["Storage operation: Export", "Lifecycle: Completed", "Storage health: Healthy"]));
             results.Add(await RunCase("storage-verify-initialized", ["storage", "verify"], 0, false, Seed.InitializedStorage,
-                ["Storage authority: CanonicalSqlite"]));
+                ["Storage health: Healthy", "Authority exists: True", "Schema version: 15"]));
             results.Add(await RunCase("unblock-retired", ["unblock"], 2, false, Seed.Empty,
-                [], expectedError: "Unknown command: unblock"));
+                [], expectedError: "Unknown or invalid command: unblock"));
             results.Add(await RunCase("invalid-option", ["--invalid-certification-option"], 2, false, Seed.Empty,
                 [], expectedError: "Unknown option:"));
         }

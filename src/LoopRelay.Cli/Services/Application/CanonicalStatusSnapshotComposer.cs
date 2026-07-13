@@ -35,12 +35,14 @@ internal static class CanonicalStatusSnapshotComposer
         CanonicalWorkflowPersistenceSnapshot workflow = healthyStorage
             ? await composition.Persistence.LoadSnapshotAsync(cancellationToken)
             : new CanonicalWorkflowPersistenceSnapshot([], [], [], [], [], [], [], [], []);
-        IReadOnlyList<string> pendingEffects = workflow.EffectRecords
-            .GroupBy(effect => (effect.RunId, effect.Effect))
-            .Select(group => group.OrderByDescending(effect => effect.RecordId).First())
-            .Where(effect => effect.Status is not EffectExecutionStatus.Succeeded)
-            .Select(effect => $"{effect.Effect}:{effect.Status}")
-            .ToArray();
+        IReadOnlyList<string> pendingEffects = healthyStorage
+            ? (await new CanonicalEffectWorkStore(composition.Repository).ScanUnsettledAsync(
+                    256, DateTimeOffset.UtcNow, cancellationToken))
+                .Select(effect => $"{effect.Intent.Target.Identity}:{effect.State}")
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray()
+            : [];
         IReadOnlyList<string> pendingDispatches = healthyStorage
             ? (await composition.Persistence.ReadPromptDispatchEventsAsync(cancellationToken))
                 .GroupBy(item => item.DispatchId, StringComparer.Ordinal)

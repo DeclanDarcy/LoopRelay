@@ -390,9 +390,15 @@ public sealed class FullChainLiveRunner
         return epic?.ProducerWorkflow == roadmapWorkflow && specs?.ProducerWorkflow == roadmapWorkflow &&
             epic.ValidationState == ProductValidationState.Valid && specs.ValidationState == ProductValidationState.Valid &&
             executeEntry.All(identity => snapshot.Products.Any(product =>
-                product.Identity == identity && product.ProducerWorkflow == WorkflowIdentity.Plan &&
-                product.ValidationState == ProductValidationState.Valid));
+                product.Identity == identity && ConvergedExecuteEntryProducer(product)));
     }
+
+    internal static bool ConvergedExecuteEntryProducer(ProductRecord product) =>
+        product.ValidationState == ProductValidationState.Valid &&
+        (product.ProducerWorkflow == WorkflowIdentity.Plan ||
+         (product.Identity == ProductIdentity.ExecutionMilestoneSet &&
+          product.ProducerWorkflow == WorkflowIdentity.Execute &&
+          product.ProducerTransition == new WorkflowTransitionIdentity("ExecuteImplementationSlice")));
 
     private static bool EvalTraceability(string root)
     {

@@ -4,7 +4,7 @@ namespace LoopRelay.Certification;
 
 public static partial class EvidenceNormalizer
 {
-    public const string Version = "1";
+    public const string Version = "2";
 
     public static string Normalize(string value, string casePath)
     {
@@ -16,6 +16,7 @@ public static partial class EvidenceNormalizer
         normalized = GuidPattern().Replace(normalized, "<GUID>");
         normalized = TimestampPattern().Replace(normalized, "<TIMESTAMP>");
         normalized = DurationPattern().Replace(normalized, "<DURATION>");
+        normalized = SnapshotLinePattern().Replace(normalized, "Snapshot: <SNAPSHOT>");
         return normalized.TrimEnd();
     }
 
@@ -27,6 +28,9 @@ public static partial class EvidenceNormalizer
 
     [GeneratedRegex(@"\b\d+(?:\.\d+)?\s?(?:ms|milliseconds?|s|seconds?)\b", RegexOptions.IgnoreCase)]
     private static partial Regex DurationPattern();
+
+    [GeneratedRegex(@"(?m)^Snapshot: [0-9a-fA-F]{64}$")]
+    private static partial Regex SnapshotLinePattern();
 }
 
 public static partial class PrivacyScanner

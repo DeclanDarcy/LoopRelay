@@ -73,6 +73,8 @@ public sealed class RepositoryObserver(
             .UnsettledRequiredEffectAttempts.ToHashSet(StringComparer.Ordinal);
         HashSet<string> certifiedTerminalAttempts = persistenceReadModel.CertifiedTerminalAttempts
             .ToHashSet(StringComparer.Ordinal);
+        bool requiredEffectsSettled = attemptsWithUnsettledRequiredEffects.Count == 0;
+        bool certifiedTerminalRecorded = certifiedTerminalAttempts.Count > 0;
         IReadOnlyList<string> evalIntentPaths = ListRelativeFiles(root, Path.Combine(agents, "evals"), "*.md");
         var products = new List<ObservedProduct>();
 
@@ -108,9 +110,9 @@ public sealed class RepositoryObserver(
             products.Add(new ObservedProduct(
                 product,
                 GateUsable: (product.ValidationState is ProductValidationState.Valid or ProductValidationState.Unknown) &&
-                    !attemptsWithUnsettledRequiredEffects.Contains(product.CausalIdentity) &&
+                    requiredEffectsSettled &&
                     (product.Identity != ProductIdentity.CertifiedCompletion ||
-                        certifiedTerminalAttempts.Contains(product.CausalIdentity)),
+                        certifiedTerminalRecorded),
                 product.EvidenceLocations));
         }
         EnforceLiveDecisionRecommendation(products, root);

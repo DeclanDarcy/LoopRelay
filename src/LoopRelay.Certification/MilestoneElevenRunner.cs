@@ -55,6 +55,7 @@ public sealed class MilestoneElevenRunner
         var evidence = new List<string>();
         string version = "unknown";
         string schema = "unknown";
+        bool retainCase = false;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -199,6 +200,8 @@ public sealed class MilestoneElevenRunner
             bool passed = transitions.Count == Transitions.Length && transitions.All(item => item.Completed) &&
                 restartRoute && archiveComplete && roadmapUpdated && canonicalClosure && continuityRetired &&
                 idempotent && independentAcceptance && processesClean;
+            retainCase = !passed;
+            if (retainCase) evidence.Add($"retained-case:milestone-11/{Path.GetFileName(root)}");
             return await Finish(
                 LiveProviderFailureClassifier.Classify(passed, codexHome),
                 restartRoute,
@@ -212,7 +215,9 @@ public sealed class MilestoneElevenRunner
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            retainCase = true;
             evidence.AddRange([exception.GetType().Name, exception.Message]);
+            evidence.Add($"retained-case:milestone-11/{Path.GetFileName(root)}");
             return await Finish(CertificationClassification.EnvironmentFailure);
         }
         finally
@@ -223,7 +228,7 @@ public sealed class MilestoneElevenRunner
             Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", priorSettings);
             string authCopy = Path.Combine(codexHome, "auth.json");
             if (File.Exists(authCopy)) File.Delete(authCopy);
-            if (Directory.Exists(root))
+            if (!retainCase && Directory.Exists(root))
             {
                 foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
@@ -494,6 +499,27 @@ public sealed class MilestoneElevenRunner
 
     private static async Task InitializeGitAsync(string root, CancellationToken token)
     {
+        string caseRoot = Path.GetDirectoryName(root)!;
+        string remote = Path.Combine(caseRoot, "repository-remote.git");
+        string agentsRemote = Path.Combine(caseRoot, "agents-remote.git");
+        Directory.CreateDirectory(remote);
+        Directory.CreateDirectory(agentsRemote);
+        await RequireGitAsync(caseRoot, ["init", "--bare", "--initial-branch=main", remote], token);
+        await RequireGitAsync(caseRoot, ["init", "--bare", "--initial-branch=main", agentsRemote], token);
+        string agents = Path.Combine(root, ".agents");
+        foreach (string[] arguments in new[]
+        {
+            new[] { "init", "-b", "main" },
+            new[] { "config", "user.email", "certification@looprelay.invalid" },
+            new[] { "config", "user.name", "LoopRelay Certification" },
+            new[] { "add", "." },
+            new[] { "commit", "-m", "seed completion agent artifacts" },
+            new[] { "remote", "add", "origin", agentsRemote },
+            new[] { "push", "-u", "origin", "main" },
+        })
+        {
+            await RequireGitAsync(agents, arguments, token);
+        }
         foreach (string[] arguments in new[]
         {
             new[] { "init", "-b", "main" },
@@ -501,23 +527,48 @@ public sealed class MilestoneElevenRunner
             new[] { "config", "user.name", "LoopRelay Certification" },
             new[] { "add", "." },
             new[] { "commit", "-m", "seed completion certification" },
+            new[] { "remote", "add", "origin", remote },
+            new[] { "push", "-u", "origin", "main" },
         })
         {
-            ProcessResult result = await RunProcessAsync("git", arguments, root, TimeSpan.FromMinutes(2), token);
-            if (result.ExitCode != 0) throw new InvalidOperationException($"git {arguments[0]} failed.");
+            await RequireGitAsync(root, arguments, token);
         }
     }
 
     private static async Task CommitHarnessEvidenceAsync(string root, CancellationToken token)
     {
+        string agents = Path.Combine(root, ".agents");
         foreach (string[] arguments in new[]
         {
-            new[] { "add", ".agents/evidence/execution/harness-verifier-result.md" },
+            new[] { "add", "evidence/execution/harness-verifier-result.md" },
             new[] { "commit", "-m", "record independent verifier evidence" },
+            new[] { "push", "origin", "main" },
         })
         {
-            ProcessResult result = await RunProcessAsync("git", arguments, root, TimeSpan.FromMinutes(2), token);
-            if (result.ExitCode != 0) throw new InvalidOperationException($"git {arguments[0]} harness evidence failed.");
+            await RequireGitAsync(agents, arguments, token);
+        }
+        foreach (string[] arguments in new[]
+        {
+            new[] { "add", ".agents" },
+            new[] { "commit", "-m", "record independent verifier evidence gitlink" },
+            new[] { "push", "origin", "main" },
+        })
+        {
+            await RequireGitAsync(root, arguments, token);
+        }
+    }
+
+    private static async Task RequireGitAsync(
+        string root,
+        IReadOnlyList<string> arguments,
+        CancellationToken token)
+    {
+        ProcessResult result = await RunProcessAsync(
+            "git", arguments, root, TimeSpan.FromMinutes(2), token);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"git {arguments[0]} failed: {result.StandardError}{result.StandardOutput}");
         }
     }
 

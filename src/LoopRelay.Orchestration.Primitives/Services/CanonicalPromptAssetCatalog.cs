@@ -98,6 +98,11 @@ public static class CanonicalPromptAssetCatalog
             global::LoopRelay.Core.Prompts.GenerateHandoff.Template,
             global::LoopRelay.Core.Prompts.GenerateHandoff.SourceHash),
         Asset(
+            "ExecuteImplementationSlice",
+            "ContinueExecution.prompt",
+            global::LoopRelay.Core.Prompts.ContinueExecution.Template,
+            global::LoopRelay.Core.Prompts.ContinueExecution.SourceHash),
+        Asset(
             "UpdateOperationalContext",
             "UpdateOperationalContext.prompt",
             global::LoopRelay.Core.Prompts.UpdateOperationalContext.Template,

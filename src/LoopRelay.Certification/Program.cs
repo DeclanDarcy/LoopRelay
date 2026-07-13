@@ -3,12 +3,25 @@ using LoopRelay.Certification;
 
 if (args.Length == 0 || args[0] is "-h" or "--help")
 {
-    Console.WriteLine("Usage: looprelay-certification <canary|ledger> --workspace <path> [--cli <path>] [--case-root <path>] [--retain-case]");
+    Console.WriteLine("Usage: looprelay-certification <command> --workspace <path> [--cli <path>] [--codex <path>] [--auth <path>] [--case-root <path>] [--model <gpt-5.3-codex-spark|gpt-5.4-mini>] [--retain-case]");
+    Console.WriteLine("Live certification defaults to gpt-5.3-codex-spark. Select gpt-5.4-mini manually with --model; both profiles receive equal certification credit.");
     return 0;
 }
 
 string command = args[0];
 Dictionary<string, string?> options = ParseOptions(args.Skip(1).ToArray());
+if (options.TryGetValue("--model", out string? selectedModel))
+{
+    try
+    {
+        CertificationFixtureSettings.SelectBrainModel(selectedModel ?? string.Empty);
+    }
+    catch (ArgumentException exception)
+    {
+        Console.Error.WriteLine(exception.Message);
+        return 2;
+    }
+}
 if (!options.TryGetValue("--workspace", out string? workspace) || string.IsNullOrWhiteSpace(workspace))
 {
     Console.Error.WriteLine("--workspace <path> is required.");

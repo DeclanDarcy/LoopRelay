@@ -86,7 +86,8 @@ public sealed class SnapshotInputFreshnessValidator(
         }
 
         PromptContextSection[] stableSections = context.Sections
-            .Where(section => !mutablePaths.Contains(NormalizePath(section.SourcePath), StringComparer.Ordinal))
+            .Where(section => !mutablePaths.Any(path =>
+                RepresentsSameSurface(path, NormalizePath(section.SourcePath))))
             .ToArray();
         string[] mutableMetadataTokens = mutablePaths.Select(MetadataToken).ToArray();
         Dictionary<string, string> stableMetadata = context.Metadata
@@ -101,7 +102,12 @@ public sealed class SnapshotInputFreshnessValidator(
     }
 
     private static string NormalizePath(string path) =>
-        path.Replace('\\', '/').TrimStart('.', '/');
+        path.Replace('\\', '/').TrimStart('.', '/').TrimEnd('/');
+
+    private static bool RepresentsSameSurface(string left, string right) =>
+        string.Equals(left, right, StringComparison.Ordinal) ||
+        left.StartsWith(right + "/", StringComparison.Ordinal) ||
+        right.StartsWith(left + "/", StringComparison.Ordinal);
 
     private static string MetadataToken(string path) => string.Concat(
         NormalizePath(path).Select(character => char.IsLetterOrDigit(character)

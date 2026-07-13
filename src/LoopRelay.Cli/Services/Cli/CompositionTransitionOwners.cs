@@ -391,9 +391,12 @@ internal sealed partial class LoopRelayCompositionRoot
             }
             else if (CanonicalPromptAssetCatalog.TryGetByPromptIdentity(definition.PromptIdentity, out CanonicalPromptAsset canonicalAsset))
             {
-                text = definition.Identity.Value == "RunAdversarialReview"
-                    ? RenderAdversarialPlanReviewPrompt(context)
-                    : RenderCanonicalPromptAsset(canonicalAsset, context);
+                text = definition.Identity.Value switch
+                {
+                    "RunAdversarialReview" => RenderAdversarialPlanReviewPrompt(context),
+                    "ExecuteImplementationSlice" => RenderExecuteImplementationPrompt(context),
+                    _ => RenderCanonicalPromptAsset(canonicalAsset, context),
+                };
                 evidence = $"unified-cli/prompts/core/{canonicalAsset.PromptAssetName}@{canonicalAsset.SourceHash}";
                 templateSourceHash = canonicalAsset.SourceHash;
             }
@@ -567,6 +570,58 @@ internal sealed partial class LoopRelayCompositionRoot
         private static string RequiredSection(PromptContext context, string title) =>
             context.Sections.FirstOrDefault(section => string.Equals(section.Title, title, StringComparison.Ordinal))?.Content
             ?? throw new InvalidOperationException($"Plan prompt context did not include `{title}`.");
+
+        private static string RenderExecuteImplementationPrompt(PromptContext context)
+        {
+            string plan = RequiredSection(context, "Executable Plan");
+            string? details = Section(context, "Execution Details");
+            string decisions = RequiredSection(context, "Decision Set");
+            string? readme = Section(context, "Repository README");
+            string milestones = RequiredSection(context, "Execution Milestones");
+            return ContinueExecution.Render(
+                plan,
+                AppendExecutionContext(details, readme, milestones),
+                decisions);
+        }
+
+        private static string AppendExecutionContext(
+            string? details,
+            string? repositoryReadme,
+            string executionMilestones)
+        {
+            return $"""
+                {details}
+
+                # Execution Milestone Context
+
+                The following milestone documents are authoritative execution state. Work only on the current applicable unchecked item(s), and change each checkbox to `[x]` when its item is completed and locally verified during this slice.
+
+                <EXECUTION_MILESTONES>
+                {executionMilestones.Trim()}
+                </EXECUTION_MILESTONES>
+
+                {RenderRepositoryReadmeContext(repositoryReadme)}
+                """;
+        }
+
+        private static string RenderRepositoryReadmeContext(string? repositoryReadme)
+        {
+            if (string.IsNullOrWhiteSpace(repositoryReadme))
+            {
+                return string.Empty;
+            }
+
+            return $"""
+                # Repository README Context
+
+                The following repository-owned README content is authoritative execution context. Use it directly when the plan or verifier refers to README-defined values; do not attempt to infer those values from hashes.
+                When the README specifies exact required content and the verifier accepts multiple values, the README resolves the canonical target. A broader verifier allowlist is not ambiguity and must not block implementation solely because it contains multiple accepted values.
+
+                <REPOSITORY_README>
+                {repositoryReadme.Trim()}
+                </REPOSITORY_README>
+                """;
+        }
     }
 
 }

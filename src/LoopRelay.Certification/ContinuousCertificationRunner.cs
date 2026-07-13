@@ -57,7 +57,7 @@ public sealed class ContinuousCertificationRunner
             bool current = credit == EvidenceCreditStatus.Credited;
             EvidenceLevel actual = evidencePassed && current ? spec.Required : EvidenceLevel.Uncovered;
             string providerProfile = RequiresFixtureProfile(spec.Identity)
-                ? $"{CertificationFixtureSettings.BrainModel}/{CertificationFixtureSettings.BrainEffort}"
+                ? CertificationFixtureSettings.CertifiedProfileIdentity
                 : "not-applicable";
             var link = new ObligationEvidenceLink(
                 $"release:{spec.Identity}",
@@ -362,8 +362,8 @@ public sealed class ContinuousCertificationRunner
             {
                 case JsonValueKind.String:
                     string value = element.GetString() ?? string.Empty;
-                    model |= string.Equals(value,
-                        $"model:{CertificationFixtureSettings.BrainModel}", StringComparison.Ordinal);
+                    model |= value.StartsWith("model:", StringComparison.Ordinal) &&
+                        CertificationFixtureSettings.IsCertifiedBrainModel(value["model:".Length..]);
                     effort |= string.Equals(value,
                         $"effort:{CertificationFixtureSettings.BrainEffort}", StringComparison.Ordinal);
                     break;

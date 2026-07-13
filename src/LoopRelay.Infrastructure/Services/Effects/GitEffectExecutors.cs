@@ -48,7 +48,10 @@ public abstract class GitEffectExecutorBase : IEffectExecutor
 
     protected static EffectExecutionObservation Failure(ProcessRunResult result, string operation) => new(
         EffectLifecycle.Failed,
-        $"{operation} failed with exit code {result.ExitCode}: {result.StandardError}",
+        $"{operation} failed with exit code {result.ExitCode}: " +
+            string.Join(' ', new[] { result.StandardError, result.StandardOutput }
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value.Trim())),
         [$"exit:{result.ExitCode}"], "unknown", "unknown", false);
 }
 
@@ -128,12 +131,12 @@ public sealed class ParentGitlinkCommitEffectExecutor(Repository repository, IPr
         string directory = WorkingDirectory(payload);
         string pathspec = payload.Pathspec ?? ".agents";
         string before = await HeadAsync(directory);
-        ProcessRunResult status = await GitAsync(directory, ["status", "--porcelain", "--", pathspec]);
-        if (status.ExitCode != 0) return Failure(status, "git status -- pathspec");
-        if (string.IsNullOrWhiteSpace(status.StandardOutput))
-            return new(EffectLifecycle.Succeeded, "Parent gitlink already recorded.", [before], before, before, true, before);
         ProcessRunResult add = await GitAsync(directory, ["add", "--", pathspec]);
         if (add.ExitCode != 0) return Failure(add, "git add -- pathspec");
+        ProcessRunResult staged = await GitAsync(directory, ["diff", "--cached", "--quiet", "--", pathspec]);
+        if (staged.ExitCode == 0)
+            return new(EffectLifecycle.Succeeded, "Parent gitlink already recorded.", [before], before, before, true, before);
+        if (staged.ExitCode != 1) return Failure(staged, "git diff --cached --quiet -- pathspec");
         ProcessRunResult commit = await GitAsync(directory, ["commit", "-m", payload.CommitMessage]);
         if (commit.ExitCode != 0) return Failure(commit, "git commit");
         string after = await HeadAsync(directory);

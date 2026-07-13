@@ -6,6 +6,24 @@ namespace LoopRelay.Orchestration.Tests.Prompts;
 
 public sealed class PromptPolicyCompositionTests
 {
+    [Fact]
+    public void Completion_evaluation_prompt_embeds_the_certification_policy_matrix()
+    {
+        string template = global::LoopRelay.Core.Prompts.Planning.EvaluateEpicCompletionAndDrift.Template;
+
+        Assert.Contains("Never pair Functionally Complete or Fully Complete with Continue Epic", template, StringComparison.Ordinal);
+        Assert.Contains("Never pair Negative drift with Close Epic or", template, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Detail_refinement_preserves_the_existing_milestone_identity_set()
+    {
+        string template = global::LoopRelay.Core.Prompts.ExtractDetails.Template;
+
+        Assert.Contains("Preserve the exact existing milestone file set", template, StringComparison.Ordinal);
+        Assert.Contains("Do not create, rename, copy, split, merge, or delete milestone files", template, StringComparison.Ordinal);
+    }
+
     private const string PolicyHeading = "## Implementation-First Prompt Policy";
 
     private static readonly IReadOnlyDictionary<string, string> PolicyConsumers =

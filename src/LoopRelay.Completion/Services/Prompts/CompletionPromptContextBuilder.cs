@@ -68,7 +68,12 @@ internal sealed class CompletionPromptContextBuilder(
             "Inspect repository reality and run non-mutating verifier/hash commands as needed before certifying completion. " +
             "Do not modify repository files. Treat checked milestone boxes as a completion claim, not as proof of closure. " +
             "Execution Completion Claim and Independent Execution Evidence sections are authoritative logical artifacts loaded from canonical SQLite persistence; " +
-            "their content is supplied above and their logical paths are not required to exist as filesystem files. " +
+            "their complete content is supplied above and their logical paths are intentionally not required to exist as filesystem files. " +
+            "Do not search for a physical copy of a supplied logical artifact, and do not downgrade completion, evidence strength, drift, or closure because that physical copy is absent. " +
+            "The `.agents` directory may intentionally be an independent nested Git repository represented by a parent gitlink; a parent status marker for `.agents`, or in-flight uncommitted evaluation/projection/review outputs inside it, is expected before the downstream publication transition and is not provenance drift, residual work, or a closure gap. " +
+            "A Git HEAD recorded in independent verifier evidence identifies the pre-evidence verifier baseline; a later HEAD caused by committing that evidence or its gitlink is expected and is not snapshot drift when the verifier blob identity still matches. " +
+            "Implementation and handoff publication is an orchestrator-owned transition completed before this certification; publication of this evaluation, the completed archive, and final closure evidence is orchestrator-owned closure work that can occur only after a close recommendation. " +
+            "Do not classify either publication boundary as missing implementation evidence, residual epic work, or a reason to choose Continue Epic. " +
             "The roadmap completion context is intentionally updated only after this certification succeeds, and the active epic/selection remain historical planning inputs; " +
             "their pre-certification wording is expected workflow ordering, not strategic drift or residual work."));
 

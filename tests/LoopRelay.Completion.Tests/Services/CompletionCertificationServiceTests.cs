@@ -558,6 +558,12 @@ public sealed class CompletionCertificationServiceTests
                 Assert.Contains("# Main CLI Completion Claim", invocation.ProjectContext, StringComparison.Ordinal);
                 Assert.Contains("authoritative logical artifacts", invocation.ProjectContext, StringComparison.Ordinal);
                 Assert.Contains("not required to exist as filesystem files", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("Do not search for a physical copy", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("independent nested Git repository", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("is not provenance drift", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("pre-evidence verifier baseline", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("orchestrator-owned closure work", invocation.ProjectContext, StringComparison.Ordinal);
+                Assert.Contains("reason to choose Continue Epic", invocation.ProjectContext, StringComparison.Ordinal);
                 Assert.Contains("expected workflow ordering, not strategic drift", invocation.ProjectContext, StringComparison.Ordinal);
                 Assert.Null(await h.ReadAsync(".agents/evidence/execution/main-cli-completion-claim.0001.md"));
                 return Evaluation("Partially Complete", "None", "Continue Epic");

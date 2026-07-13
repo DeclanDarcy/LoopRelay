@@ -1026,6 +1026,11 @@ public sealed class LoopRelayCompositionRootTests
         runtime.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
         {
             Assert.Null(spec.ResumeThreadId);
+            Assert.Contains("# Execution Milestone Context", prompt, StringComparison.Ordinal);
+            Assert.Contains("- [ ] Create feature.", prompt, StringComparison.Ordinal);
+            Assert.Contains("# Repository README Context", prompt, StringComparison.Ordinal);
+            Assert.Contains("# Canonical Capability", prompt, StringComparison.Ordinal);
+            Assert.DoesNotContain("integration is not wired", prompt, StringComparison.OrdinalIgnoreCase);
             Directory.CreateDirectory(Path.Combine(repo, "src"));
             File.WriteAllText(Path.Combine(repo, "src", "feature.cs"), "feature\n");
             return new AgentTurnResult(1, AgentTurnState.Completed, "implemented", AgentTokenUsage.Zero);
@@ -1060,6 +1065,94 @@ public sealed class LoopRelayCompositionRootTests
         Assert.Equal(checkpoint.SliceBaseline.ExecutionSliceId, after.SliceBaseline.ExecutionSliceId);
         await AssertCanonicalRecoveryPlanAsync(
             repository, $"execute:{checkpoint.ProviderThreadId}", CanonicalRecoveryAction.ResumeSession);
+    }
+
+    [Fact]
+    public async Task Execute_implementation_rejects_and_rolls_back_milestone_file_set_changes()
+    {
+        (string repo, Repository repository, FakeAgentRuntime runtime, FakeProcessRunner process) =
+            await PrepareExecuteContinuityCaseAsync("cc-cli-unified-execute-milestone-file-set");
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "# Decisions\n\nImplement the feature.", AgentTokenUsage.Zero)));
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+        {
+            File.WriteAllText(
+                Path.Combine(repo, ".agents", "milestones", "m1.md"),
+                "# Milestone 1\n\n- [x] Create feature.");
+            File.WriteAllText(
+                Path.Combine(repo, ".agents", "milestones", "m1-completion-evidence.md"),
+                "# Duplicate M1\n\n- [x] Evidence.");
+            return new AgentTurnResult(1, AgentTurnState.Completed, "implemented", AgentTokenUsage.Zero);
+        }));
+
+        await using LoopRelayCompositionRoot composition =
+            LoopRelayCompositionRoot.CreateForTests(repository, runtime, process);
+        await RunPlanAsync(composition, "Workflow Completion", "VerifyExecuteEntryContract");
+        await RunExecuteAsync(composition, "Execution Readiness", "VerifyExecutionReadiness");
+        await RunExecuteAsync(composition, "Implementation Planning", "GenerateDecision");
+        TransitionRuntimeResult result = await RunExecuteAsync(
+            composition,
+            "Implementation",
+            "ExecuteImplementationSlice");
+
+        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
+        Assert.Contains("milestone file identity set", result.Explanation, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(repo, ".agents", "milestones", "m1-completion-evidence.md")));
+        Assert.Contains(
+            "- [ ] Create feature.",
+            await File.ReadAllTextAsync(Path.Combine(repo, ".agents", "milestones", "m1.md")),
+            StringComparison.Ordinal);
+        Assert.Null(await new CanonicalCheckpointStore(repository).ReadAsync<ExecutionWarmSessionContinuity>(
+            CanonicalCheckpointKeys.ExecutionWarmSession,
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Execute_implementation_rejects_provider_completion_without_implementation_progress()
+    {
+        (string repo, Repository repository, FakeAgentRuntime runtime, FakeProcessRunner process) =
+            await PrepareExecuteContinuityCaseAsync("cc-cli-unified-execute-no-progress");
+        process.Handler = (workingDirectory, args) =>
+        {
+            if (args.SequenceEqual(["status", "--porcelain"]) ||
+                args.SequenceEqual(["status", "--porcelain", "--untracked-files=all"]) ||
+                args.SequenceEqual(["diff", "--name-status", "--find-renames", "HEAD", "--"]))
+            {
+                return FakeProcessRunner.Ok();
+            }
+
+            if (args.SequenceEqual(["branch", "--show-current"]))
+            {
+                return FakeProcessRunner.Ok("main\n");
+            }
+
+            if (args.Count >= 2 && args[0] == "rev-parse")
+            {
+                return FakeProcessRunner.Ok("abc123\n");
+            }
+
+            return FakeProcessRunner.Ok();
+        };
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "# Decisions\n\nImplement the feature.", AgentTokenUsage.Zero)));
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(1, AgentTurnState.Completed, "No changes were necessary.", AgentTokenUsage.Zero)));
+
+        await using LoopRelayCompositionRoot composition =
+            LoopRelayCompositionRoot.CreateForTests(repository, runtime, process);
+        await RunPlanAsync(composition, "Workflow Completion", "VerifyExecuteEntryContract");
+        await RunExecuteAsync(composition, "Execution Readiness", "VerifyExecutionReadiness");
+        await RunExecuteAsync(composition, "Implementation Planning", "GenerateDecision");
+        TransitionRuntimeResult result = await RunExecuteAsync(
+            composition,
+            "Implementation",
+            "ExecuteImplementationSlice");
+
+        Assert.Equal(RuntimeOutcomeKind.Failed, result.Outcome);
+        Assert.Contains("no repository implementation delta", result.Explanation, StringComparison.Ordinal);
+        Assert.Null(await new CanonicalCheckpointStore(repository).ReadAsync<ExecutionWarmSessionContinuity>(
+            CanonicalCheckpointKeys.ExecutionWarmSession,
+            CancellationToken.None));
     }
 
     [Fact]
@@ -1150,6 +1243,7 @@ public sealed class LoopRelayCompositionRootTests
         {
             Assert.Equal("extract-details", spec.OperationPermissionProfile?.Label);
             Assert.Contains(".agents/milestones/m*.md", prompt, StringComparison.Ordinal);
+            Assert.Contains("Preserve write-glob file set: true", prompt, StringComparison.Ordinal);
             File.WriteAllText(Path.Combine(repo, ".agents", "details.md"), "# Details\n\nRefined shared implementation detail.");
             return new AgentTurnResult(2, AgentTurnState.Completed, "refined", AgentTokenUsage.Zero);
         }));
@@ -1326,6 +1420,11 @@ public sealed class LoopRelayCompositionRootTests
         {
             Assert.Equal(SessionRole.OperationalExecution, spec.Role);
             Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
+            Assert.Contains("# Plan", prompt, StringComparison.Ordinal);
+            Assert.Contains("# Details", prompt, StringComparison.Ordinal);
+            Assert.Contains("# Decisions", prompt, StringComparison.Ordinal);
+            Assert.Contains("continue executing the current milestone", prompt, StringComparison.Ordinal);
+            Assert.DoesNotContain("integration is not wired", prompt, StringComparison.OrdinalIgnoreCase);
             Directory.CreateDirectory(Path.Combine(repo, "src"));
             File.WriteAllText(Path.Combine(repo, "src", "feature.cs"), "namespace Test; public static class Feature { }\n");
             File.WriteAllText(
@@ -1548,6 +1647,10 @@ public sealed class LoopRelayCompositionRootTests
         }
         Assert.Null(await new CanonicalCheckpointStore(repository).ReadAsync<CompletionCertificationCheckpoint>(CanonicalCheckpointKeys.CompletionCertification, CancellationToken.None));
         Assert.Null(await new CanonicalCheckpointStore(repository).ReadAsync<ExecutionWarmSessionContinuity>(CanonicalCheckpointKeys.ExecutionWarmSession, CancellationToken.None));
+        RepositoryObservation terminalObservation = await new RepositoryObserver().ObserveAsync(repo);
+        Assert.True(Assert.Single(
+            terminalObservation.Products,
+            product => product.Product.Identity == ProductIdentity.CertifiedCompletion).GateUsable);
 
         int sessionCallsBeforeRerun = runtime.SessionCalls.Count;
         int oneShotCallsBeforeRerun = runtime.OneShotCalls.Count;

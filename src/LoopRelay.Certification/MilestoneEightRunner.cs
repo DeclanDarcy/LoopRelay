@@ -30,10 +30,10 @@ public sealed class MilestoneEightRunner
             (tables, columns) = await InspectSchemaAsync(database, cancellationToken);
             WorkspaceSchemaInspection schemaInspection = await InspectCanonicalSchemaAsync(database, cancellationToken);
             bool canonicalInventory = schemaInspection.Version == LoopRelayWorkspaceDatabase.CurrentSchemaVersion &&
-                schemaInspection.Shape == WorkspaceSchemaShape.CanonicalV10Complete &&
+                schemaInspection.Shape == WorkspaceSchemaShape.CanonicalV15Complete &&
                 string.Equals(
                     schemaInspection.ShapeFingerprint,
-                    LoopRelayWorkspaceDatabase.CanonicalV10ShapeFingerprint,
+                    LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint,
                     StringComparison.Ordinal) &&
                 columns.Count == tables.Count && columns.All(pair => pair.Value.Count > 0);
             string workspaceIdBefore = await WorkspaceIdAsync(database, cancellationToken);
@@ -50,7 +50,7 @@ public sealed class MilestoneEightRunner
                 $"columns:{columns.Sum(pair => pair.Value.Count)}",
                 $"schema-version:{await SchemaVersionAsync(database, cancellationToken)}",
                 $"schema-shape:{schemaInspection.Shape}",
-                $"shape-fingerprint-match:{string.Equals(schemaInspection.ShapeFingerprint, LoopRelayWorkspaceDatabase.CanonicalV10ShapeFingerprint, StringComparison.Ordinal)}",
+                $"shape-fingerprint-match:{string.Equals(schemaInspection.ShapeFingerprint, LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, StringComparison.Ordinal)}",
                 $"workspace-id-digest:{Hash(workspaceIdBefore)}"));
 
             Dictionary<string, string> verifyBefore = SnapshotFiles(healthy);
@@ -68,27 +68,29 @@ public sealed class MilestoneEightRunner
             Dictionary<string, string> exportBefore = SnapshotFiles(healthy);
             ProcessResult export = await RunCliAsync(cliPath, healthy, ["storage", "export"], cancellationToken);
             bool exportStable = SameSnapshot(exportBefore, SnapshotFiles(healthy));
+            bool exportCreated = File.Exists(Path.Combine(
+                healthy, ".LoopRelay", "exports", "workspace.canonical.json"));
             cases.Add(Case(
-                "declared-narrow-export-is-explicit-no-op",
-                true,
-                exportStable,
-                export.ExitCode == 0 && exportStable &&
-                    export.StandardOutput.Contains("no filesystem mutations", StringComparison.Ordinal),
-                $"exit:{export.ExitCode}",
-                $"stable:{exportStable}"));
-
-            string imported = NewCase(root, "missing-import");
-            ProcessResult import = await RunCliAsync(cliPath, imported, ["storage", "import"], cancellationToken);
-            bool importCreated = File.Exists(Database(imported)) &&
-                await SchemaVersionAsync(Database(imported), cancellationToken) ==
-                    LoopRelayWorkspaceDatabase.CurrentSchemaVersion;
-            cases.Add(Case(
-                "public-import-creates-current-canonical-authority",
+                "declared-export-creates-versioned-semantic-package",
                 true,
                 nonMutating: false,
-                import.ExitCode == 0 && importCreated,
+                export.ExitCode == 0 && !exportStable && exportCreated &&
+                    export.StandardOutput.Contains("Lifecycle: Completed", StringComparison.Ordinal),
+                $"exit:{export.ExitCode}",
+                $"stable:{exportStable}",
+                $"package-created:{exportCreated}"));
+
+            string imported = NewCase(root, "missing-import");
+            ProcessResult import = await RunCliAsync(cliPath, imported, ["import", "detect"], cancellationToken);
+            bool importCreated = File.Exists(Database(imported));
+            cases.Add(Case(
+                "public-import-detection-does-not-create-main-authority",
+                true,
+                nonMutating: false,
+                import.ExitCode == 4 && !importCreated &&
+                    CombinedOutput(import).Contains("Import detection failed closed", StringComparison.Ordinal),
                 $"exit:{import.ExitCode}",
-                $"created:{importCreated}"));
+                $"main-authority-created:{importCreated}"));
 
             string unsupported = await InitializedCaseAsync(root, cliPath, "unsupported-schema", cancellationToken);
             await ExecuteAsync(Database(unsupported),
@@ -117,7 +119,7 @@ public sealed class MilestoneEightRunner
                 true,
                 corruptStable,
                 corruptVerify.ExitCode == 4 && corruptStable &&
-                    corruptVerify.StandardOutput.Contains("Corruption:", StringComparison.Ordinal),
+                    corruptVerify.StandardOutput.Contains("Storage health: Corrupt", StringComparison.Ordinal),
                 $"exit:{corruptVerify.ExitCode}",
                 $"stable:{corruptStable}"));
 

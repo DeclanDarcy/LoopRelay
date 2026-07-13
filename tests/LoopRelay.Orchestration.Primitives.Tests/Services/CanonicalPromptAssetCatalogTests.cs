@@ -28,6 +28,7 @@ public sealed class CanonicalPromptAssetCatalogTests
     [InlineData("CollectDetails", "CollectDetails.prompt")]
     [InlineData("ExtractDetails", "ExtractDetails.prompt")]
     [InlineData("ExtractMilestones", "ExtractMilestones.prompt")]
+    [InlineData("ExecuteImplementationSlice", "ContinueExecution.prompt")]
     [InlineData("GenerateHandoff", "GenerateHandoff.prompt")]
     [InlineData("UpdateOperationalContext", "UpdateOperationalContext.prompt")]
     public void Catalog_maps_canonical_prompt_identities_to_generated_assets(
@@ -54,6 +55,7 @@ public sealed class CanonicalPromptAssetCatalogTests
         AssertRegistered(plan, "RevisePlan");
         AssertRegistered(plan, "GenerateExecutionMilestones");
         AssertRegistered(plan, "RefineExecutionDetails");
+        AssertRegistered(execute, "ExecuteImplementationSlice");
         AssertRegistered(execute, "GenerateHandoff");
         AssertRegistered(execute, "UpdateOperationalContext");
     }

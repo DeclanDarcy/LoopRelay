@@ -7,6 +7,40 @@ namespace LoopRelay.Agents.Tests.Services.Process;
 public sealed class ProcessRunnerStderrDrainTests
 {
     [Fact]
+    public async Task StartInteractiveAsync_WritesPromptAsBomlessUtf8()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        string scriptPath = Path.Combine(Path.GetTempPath(), $"stdin-bytes-{Guid.NewGuid():N}.ps1");
+        const string prompt = "ASCII—漢字🙂\n";
+        await File.WriteAllTextAsync(scriptPath, """
+            $inputStream = [Console]::OpenStandardInput()
+            $memory = [System.IO.MemoryStream]::new()
+            $inputStream.CopyTo($memory)
+            [Convert]::ToHexString($memory.ToArray()).ToLowerInvariant()
+            """);
+        IAgentProcess? process = null;
+        try
+        {
+            var runner = new ProcessRunner();
+            process = await runner.StartInteractiveAsync(
+                "pwsh", ["-NoProfile", "-File", scriptPath], Path.GetTempPath());
+            await process.WriteStandardInputAsync(prompt);
+            var lines = new List<string>();
+            await foreach (string line in process.ReadOutputLinesAsync()) lines.Add(line);
+
+            Assert.Equal(Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(prompt)).ToLowerInvariant(),
+                Assert.Single(lines));
+            Assert.Equal(0, process.ExitCode);
+        }
+        finally
+        {
+            if (process is not null) await process.DisposeAsync();
+            File.Delete(scriptPath);
+        }
+    }
+
+    [Fact]
     public async Task StartInteractiveAsync_DoesNotDeadlock_WhenChildFloodsStderr()
     {
         // Regression for the codex-exec hang: StartInteractiveAsync redirects standard error, and if

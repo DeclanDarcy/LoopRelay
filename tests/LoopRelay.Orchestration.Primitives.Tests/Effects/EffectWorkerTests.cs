@@ -47,6 +47,46 @@ public sealed class EffectWorkerTests
         Assert.All(store.Items, item => Assert.NotNull(item.Receipt));
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(10)]
+    public async Task Dynamically_appended_ordered_child_blocks_preplanned_downstream_effect_until_subsequent_scan(
+        int downstreamOrder)
+    {
+        CanonicalCausalContext causality = new(
+            WorkspaceIdentity.New(), RunIdentity.New(), WorkflowInstanceIdentity.New(),
+            TransitionRunIdentity.New(), AttemptIdentity.New());
+        EffectIntent parent = Intent(order: 0, causality: causality);
+        EffectIntent downstream = Intent(order: downstreamOrder, dependencies: [parent.Identity], causality: causality);
+        var store = new MemoryEffectWorkStore(parent, downstream);
+        EffectIntent? child = null;
+        var executor = new ScriptedExecutor
+        {
+            OnExecute = intent =>
+            {
+                if (intent.Identity == parent.Identity)
+                {
+                    child = Intent(order: 1, dependencies: [parent.Identity], causality: causality);
+                    store.Append(child);
+                }
+            },
+        };
+        var worker = Worker(store, executor, new ScriptedReconciler(EffectReconciliationVerdict.StillUnknown));
+
+        await worker.RunOnceAsync();
+
+        Assert.Equal([parent.Identity], executor.Executed);
+        Assert.Equal(EffectLifecycle.Planned,
+            (await store.ReadAsync(downstream.Identity, CancellationToken.None))!.State);
+        Assert.Equal(EffectLifecycle.Planned,
+            (await store.ReadAsync(child!.Identity, CancellationToken.None))!.State);
+
+        await worker.RunOnceAsync();
+        await worker.RunOnceAsync();
+
+        Assert.Equal([parent.Identity, child.Identity, downstream.Identity], executor.Executed);
+    }
+
     [Fact]
     public async Task PendingRequiredAsyncEffectRemainsDiscoverableAcrossRuns()
     {
@@ -172,10 +212,11 @@ public sealed class EffectWorkerTests
     private static EffectIntent Intent(
         int order,
         IReadOnlyList<EffectIntentIdentity>? dependencies = null,
-        EffectRequiredness requiredness = EffectRequiredness.BlockingLocal) =>
+        EffectRequiredness requiredness = EffectRequiredness.BlockingLocal,
+        CanonicalCausalContext? causality = null) =>
         new(
             EffectIntentIdentity.New(),
-            new CanonicalCausalContext(
+            causality ?? new CanonicalCausalContext(
                 WorkspaceIdentity.New(), RunIdentity.New(), WorkflowInstanceIdentity.New(),
                 TransitionRunIdentity.New(), AttemptIdentity.New()),
             $"operation-{order}-{Guid.NewGuid():N}",
@@ -200,6 +241,7 @@ public sealed class EffectWorkerTests
         public int Calls { get; private set; }
         public List<EffectIntentIdentity> Executed { get; } = [];
         public Exception? Failure { get; set; }
+        public Action<EffectIntent>? OnExecute { get; set; }
         public EffectExecutionObservation Observation { get; set; } = new(
             EffectLifecycle.Succeeded, "Applied.", ["observed"], "before", "after", true);
 
@@ -207,6 +249,7 @@ public sealed class EffectWorkerTests
         {
             Calls++;
             Executed.Add(intent.Identity);
+            OnExecute?.Invoke(intent);
             if (Failure is not null) throw Failure;
             return Task.FromResult(Observation);
         }
@@ -235,6 +278,11 @@ public sealed class EffectWorkerTests
 
         public EffectIntentIdentity OnlyIdentity => _items.Keys.Single();
         public IReadOnlyList<EffectWorkItem> Items { get { lock (_gate) return _items.Values.Select(value => value.Snapshot()).ToArray(); } }
+
+        public void Append(EffectIntent intent)
+        {
+            lock (_gate) _items.Add(intent.Identity, new MutableItem(intent));
+        }
 
         public Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(
             int limit, DateTimeOffset now, CancellationToken cancellationToken)

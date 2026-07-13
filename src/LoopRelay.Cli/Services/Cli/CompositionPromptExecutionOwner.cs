@@ -684,6 +684,15 @@ internal sealed partial class LoopRelayCompositionRoot
                 return $"{operation.Label} deleted declared artifact(s): {string.Join(", ", deleted)}.";
             }
 
+            if (operation.PreserveWriteGlobFileSet)
+            {
+                IReadOnlyList<string> created = await transaction.CreatedGlobFilesAsync();
+                if (created.Count > 0)
+                {
+                    return $"{operation.Label} created artifact(s) even though it must preserve the existing file set: {string.Join(", ", created)}.";
+                }
+            }
+
             foreach (string requiredOutput in operation.RequiredOutputs)
             {
                 if (!await artifactStore.ExistsAsync(requiredOutput))
@@ -1196,16 +1205,11 @@ internal sealed partial class LoopRelayCompositionRoot
                     await CloseExecutionSessionAsync();
                 }
 
-                LoopArtifacts artifacts = CreateLoopArtifacts();
-                string? plan = await artifacts.ReadPlanAsync();
-                string? details = await artifacts.ReadDetailsAsync();
-                (string? decisions, string? decisionsPath) = await artifacts.ReadLatestDecisionsAsync();
-                if (string.IsNullOrWhiteSpace(decisions))
-                {
-                    return Failed($"{OrchestrationArtifactPaths.Decisions} was not available for execution.");
-                }
-
                 MilestoneGate milestones = CreateMilestoneGate();
+                ArtifactMutationTransaction milestoneFileSetTransaction =
+                    await ArtifactMutationTransaction.CaptureAsync(
+                        artifactStore,
+                        ExecuteMilestoneFileSetProfile());
                 uncheckedMilestonesBeforeExecution = (await milestones.GetUntickedItemsAsync()).Count;
                 executionSliceBaseline = await CreateBaselineStore().CapturePreSliceAsync();
 
@@ -1231,8 +1235,30 @@ internal sealed partial class LoopRelayCompositionRoot
                         WithDiagnostics($"Execution turn ended in state {work.State}.", work.Diagnostics));
                 }
 
+                IReadOnlyList<string> milestoneFileSetChanges =
+                    await RollBackChangedExecutionMilestoneFileSetAsync(
+                        milestoneFileSetTransaction,
+                        cancellationToken);
+                if (milestoneFileSetChanges.Count > 0)
+                {
+                    await CloseExecutionSessionAsync();
+                    return Failed(
+                        "ExecuteImplementationSlice changed the milestone file identity set; " +
+                        $"the milestone scope was rolled back: {string.Join(", ", milestoneFileSetChanges)}");
+                }
+
                 changedPathsAfterExecution = await CreateChangeDetector().GetRealChangedPathsAsync();
                 uncheckedMilestonesAfterExecution = (await milestones.GetUntickedItemsAsync()).Count;
+                bool implementationProgress =
+                    uncheckedMilestonesAfterExecution < uncheckedMilestonesBeforeExecution ||
+                    changedPathsAfterExecution.Any(IsImplementationRepositoryPath);
+                if (!implementationProgress)
+                {
+                    await CloseExecutionSessionAsync();
+                    return Failed(
+                        "ExecuteImplementationSlice produced no repository implementation delta and completed no milestone checkbox; candidate promotion is denied.");
+                }
+
                 string? threadId = executionSession.ThreadId;
                 if (threadId is { Length: > 0 } && executionSliceBaseline is not null)
                 {
@@ -1274,25 +1300,41 @@ internal sealed partial class LoopRelayCompositionRoot
             }
         }
 
-        private static string? AppendRepositoryReadmeContext(string? details, string? repositoryReadme)
+        private async Task<IReadOnlyList<string>> RollBackChangedExecutionMilestoneFileSetAsync(
+            ArtifactMutationTransaction transaction,
+            CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(repositoryReadme))
+            string[] added = (await transaction.CreatedGlobFilesAsync()).ToArray();
+            string[] removed = (await transaction.DeletedSnapshotFilesAsync()).ToArray();
+            if (added.Length == 0 && removed.Length == 0)
             {
-                return details;
+                return [];
             }
 
-            return $"""
-                {details}
+            await new DurableSurfaceRestoreEffectPlanner(_repository).RestoreAsync(
+                await ResolveCausalityAsync(cancellationToken),
+                transaction,
+                "ExecuteImplementationSlice-milestone-file-set",
+                cancellationToken);
 
-                # Repository README Context
+            return added.Select(path => $"added:{path}")
+                .Concat(removed.Select(path => $"removed:{path}"))
+                .ToArray();
+        }
 
-                The following repository-owned README content is authoritative execution context. Use it directly when the plan or verifier refers to README-defined values; do not attempt to infer those values from hashes.
-                When the README specifies exact required content and the verifier accepts multiple values, the README resolves the canonical target. A broader verifier allowlist is not ambiguity and must not block implementation solely because it contains multiple accepted values.
+        private OperationPermissionProfile ExecuteMilestoneFileSetProfile() => new(
+            "execute-milestone-file-set",
+            _repository.Path,
+            [],
+            [],
+            [],
+            [new OperationPathGlob(OrchestrationArtifactPaths.MilestonesDirectory, "*.md")]);
 
-                <REPOSITORY_README>
-                {repositoryReadme.Trim()}
-                </REPOSITORY_README>
-                """;
+        private static bool IsImplementationRepositoryPath(string path)
+        {
+            string normalized = path.Replace('\\', '/').TrimStart('.', '/');
+            return !normalized.StartsWith("agents/", StringComparison.OrdinalIgnoreCase) &&
+                !normalized.StartsWith("LoopRelay/", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<PromptExecutionResult> ExecuteHandoffAsync(
