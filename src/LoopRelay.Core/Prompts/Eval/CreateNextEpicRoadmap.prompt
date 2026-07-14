@@ -1,0 +1,733 @@
+# Create DAG-to-Next-Epic Roadmap Prompt
+
+This prompt reads an evaluation DAG and creates a bounded roadmap with milestones for the next epic.
+
+It traverses the DAG to select the earliest meaningful unresolved graph frontier, identifies the smallest coherent epic slice that advances evaluation readiness, and decomposes that slice into evidence-backed milestones.
+
+You are NOT creating or modifying evaluation specs.
+You are NOT creating or modifying the DAG.
+You are NOT creating or modifying the dependency inventory.
+You are NOT creating or modifying the hypothesis inventory.
+You are NOT creating or modifying the architectural catalog.
+You are NOT creating the full project roadmap unless explicitly requested.
+You are NOT creating implementation design.
+You are NOT creating architecture.
+You are NOT creating tasks.
+You are NOT writing tests.
+You are NOT executing tests.
+You are NOT reporting evaluation results.
+You are NOT deciding whether repository reality satisfies the DAG unless explicitly instructed to assess repository evidence.
+You are NOT prescribing semantic approval, authority, certification, readiness, support-label, manual-judgment, or planning records as milestone deliverables, milestone evidence, acceptance criteria, or exit evidence.
+You are NOT creating governance records, source-authority records, certification judgments, readiness-label rules, support-label controls, manual judgment records, or roadmap/planning tables as artifacts for future agents to produce.
+
+Your output must be only the final Markdown content for:
+
+```text
+.agents/next-epic-roadmap.md
+```
+
+If the caller provides a different output path, use that path instead.
+
+---
+
+## Core Objective
+
+Create a Next Epic Roadmap from the evaluation DAG.
+
+The file should answer:
+
+> What is the next coherent epic to pursue, and what evidence-backed milestones should it contain, given the current evaluation-readiness DAG?
+
+The roadmap must:
+
+* traverse the DAG from unresolved root or frontier nodes;
+* respect topological prerequisite order;
+* preserve horizontal architectural-plane meaning;
+* select one bounded next epic, not the whole roadmap;
+* prioritize foundational and enabling graph slices before semantic-depth or feature-surface work;
+* convert dependencies into prerequisite constraints;
+* convert hypotheses into falsifiable acceptance conditions;
+* include only source-required execution-tied machine artifacts as milestone evidence;
+* keep roadmap tables, baselines, open questions, explicit exclusions, governance/source-authority notes, certification rules, and manual judgment records out of milestone evidence and acceptance criteria;
+* preserve traceability from DAG nodes and edges down to milestone acceptance;
+* avoid implementation-specific design unless source artifacts require it.
+
+The result should be a planning artifact that is actionable for future roadmap, epic, milestone, audit, test-design, and remediation work without becoming an implementation plan.
+
+---
+
+## Project-Agnostic Rule
+
+This prompt must remain project-agnostic.
+
+Do not hardcode:
+
+* product names;
+* programming languages;
+* frameworks;
+* providers;
+* file extensions;
+* repository paths;
+* architecture names;
+* domain-specific constructs;
+* evaluation IDs;
+* report names;
+* fixture names;
+* dependency IDs;
+* hypothesis IDs;
+* capability names;
+* certification states;
+* public capability rows;
+* ontology categories.
+
+Use project-specific terms only when they appear in the source files.
+
+When the source DAG or supporting inventories contain project-specific details, preserve them as source-derived roadmap content.
+
+Do not generalize away concrete source meaning.
+
+Do not invent missing roadmap scope, epics, milestones, dependencies, hypotheses, statuses, fixtures, reports, or evidence requirements.
+
+Use `TBD` when source meaning is unclear.
+
+---
+
+## Generation Normal Form
+
+Optimize for semantic efficiency, not superficial brevity.
+
+Semantic efficiency means the roadmap preserves all source-required meaning while minimizing repeated structure, duplicated lists, and retrieval friction.
+
+Generate the roadmap in this normal form:
+
+* Define each concept once, then reference it by stable ID or short name.
+* Keep related facts local: milestone goal, evidence, acceptance, non-pass handling, and dependency/hypothesis coverage should appear together.
+* Use a canonical inventory only when many later sections need the same list.
+* Prefer bullets or compact labeled fields over tables when cells would contain long prose, repeated IDs, or sentence fragments.
+* Use tables only for dense comparison of short values.
+* Do not create row IDs solely to make a table look formal.
+* Use short local milestone IDs such as `M001`, `M002`, `M003`, unless a source-defined ID must be preserved.
+* Merge dependency and hypothesis coverage into the selected epic summary and each milestone's `Covers` block instead of emitting separate coverage matrices.
+* Preserve traceability inline through source IDs, dependency IDs, hypothesis IDs, evidence names, and gate references instead of duplicating a full traceability matrix.
+* Include candidate reasoning only to the degree needed to justify the selected epic. Do not emit a full candidate table when a short frontier comparison is enough.
+* State global rules once in `Purpose` or `Construction Rules`; do not restate them in every milestone.
+* Keep section order aligned with retrieval order: what this is, what inputs were used, rules, baseline, frontier, selection, milestones, evidence package, controls, non-pass rules, gate effects, open questions, exclusions, anti-patterns, checklist.
+
+Do not remove source-required meaning just to reduce tokens.
+
+Do not replace a required evidence item, non-pass state, dependency, hypothesis, open question, or exclusion with a vague summary.
+
+---
+
+## Execution-Tied Artifact Boundary
+
+This roadmap may identify source-required machine artifacts that are tied to execution.
+
+It must not put forth records that only assert readiness, authority, approval, or judgment for future agents to create or satisfy.
+
+A valid execution-tied machine artifact must be all of:
+
+* required by a source-defined executable eval, runtime behavior, deterministic comparison, machine-verifiable check, eval fixture, report generator, or validator;
+* produced, consumed, or validated by tooling, runtime code, evaluator logic, generated report logic, or fixture infrastructure;
+* inspectable as machine state, serialized output, persisted evidence, generated report data, schema validation, deterministic comparison, static scan output, or queryable runtime/public metadata;
+* directly tied to a dependency, hypothesis, negative control, fixture, evidence requirement, or gate condition;
+* backed by a concrete producer, consumer, validator, fixture, or check invocation.
+
+For every milestone evidence item, the roadmap must be able to name:
+
+* the source dependency or hypothesis requiring it;
+* the producer, consumer, validator, fixture, runtime path, runner, evaluator, generated report logic, or check invocation that ties it to execution;
+* the observable artifact shape, such as fixture file, serialized output, report field, status record, scan result, persisted record, runtime query result, schema validation result, or deterministic comparison.
+
+If any of those three cannot be named from source material, the item is not milestone evidence.
+
+Valid milestone evidence may include, when source-derived:
+
+* fixtures, fixture corpora, fixture manifests, fixture fingerprints, and fixture coverage mappings;
+* provider registry output, extractor output, routing output, extraction traces, validation results, canonical truth summaries, sidecars, evidence records, and persisted evidence stores;
+* static scan outputs, negative-control outputs, unsupported/no-provider records, replay records, fingerprints, and comparison artifacts;
+* capability metadata, projection mappings, public matrices, or support states only when they are implemented as runtime/queryable provider state or generated machine output;
+* generated eval reports, report schemas, report fields, evidence inventories, skipped-check indicators, remediation fields, and status records only when machine-produced from executable check outcomes or validated by evaluator/report tooling;
+* machine-readable configuration, allowlists, capability flags, or suite metadata only when source-required and consumed by executable checks, runtime code, fixture infrastructure, or generated report validation.
+
+Invalid milestone evidence and invalid deliverables include:
+
+* roadmap tables, selected graph-slice tables, candidate-selection tables, explicit-exclusion tables, planning baselines, source-status notes, open-question lists, and planning rationale;
+* certification documents, certification judgments, certification-position statements, certification separation discipline, manual judgment records, readiness labels, gate-claim rules, support-label controls, or compatibility-only claim rules;
+* governance review artifacts, source-authority records, human justifications, accepted-evidence-format records, naming-authority records, and source cleanup records;
+* report discipline, non-pass handling plans, judgment rules, or skipped-check rules unless the source requires executable evaluator behavior, schema validation, generated status records, or generated report-validation outputs.
+
+If a source appears to require an invalid artifact:
+
+* do not convert it into milestone evidence by renaming it as machine, execution, implementation, readiness, status, metadata, or governance output;
+* record it as out of implementation scope, downstream certification/governance work, or an open planning question;
+* use an execution-tied counterpart only when the source supports a concrete producer, consumer, validator, fixture, or check invocation.
+
+Planning sections may mention invalid artifacts only as context, exclusions, risks, or open questions.
+
+They must not appear in required evidence, acceptance evidence, milestone exit evidence, or milestone completion criteria.
+
+---
+
+## Required Source Inputs
+
+Read the following source first:
+
+```text
+.agents/eval-dag.md
+```
+
+If available, also read:
+
+```text
+.agents/eval-architectural-catalog.md
+.agents/eval-dependency-inventory.md
+.agents/eval-hypothesis-inventory.md
+```
+
+If available, also read current-state or authority context such as:
+
+```text
+.agents/roadmap-completion-context.md
+.agents/north-star/projections/evaluation-projection.md
+.agents/north-star/core/
+```
+
+Use additional sources only to clarify current state, authority, capability meaning, or traceability.
+
+Do not use repository source code, runtime behavior, or test results unless the caller explicitly asks for repository assessment.
+
+If current completion status is unavailable, assume:
+
+```text
+No DAG nodes are certified complete unless the DAG itself marks them complete.
+```
+
+---
+
+## Source Authority
+
+`.agents/eval-dag.md` owns DAG nodes, edges, edge direction, topological layers, gate nodes, prerequisite relationships, validation relationships, falsification relationships, evidence relationships, certification relationships, architectural plane view, item-to-node mapping, source coverage, and open DAG questions.
+
+Use the DAG as the primary authority for traversal and sequencing.
+
+`.agents/eval-architectural-catalog.md`, when available, owns horizontal architectural planes, minimized groups, catalog item IDs, group membership, relationship constraints, plane validation, and group validation.
+
+Use the catalog to preserve horizontal-plane meaning and avoid grouping incompatible items.
+
+`.agents/eval-dependency-inventory.md`, when available, owns dependency meaning, classes, strictness, planning weights, evidence requirements, fixture dependencies, report dependencies, negative-control dependencies, stability dependencies, public-surface dependencies, governance/model-change dependencies, and run/pass/certify/safe-failure gate dependencies.
+
+Use dependency strictness and planning weight to shape epic boundaries and milestone order.
+
+Use governance/model-change, public-surface, certification, report, and gate-claim dependencies as milestone evidence only when the dependency requires execution-tied machine artifacts under the Execution-Tied Artifact Boundary. Otherwise, keep them as planning context, exclusions, downstream work, or open questions.
+
+`.agents/eval-hypothesis-inventory.md`, when available, owns hypothesis statements, verification modes, confirmation conditions, falsification conditions, blocked or inconclusive conditions, evidence requirements, negative-control hypotheses, stability hypotheses, public-surface hypotheses, governance hypotheses, certification hypotheses, and run/pass/certify/safe-failure hypothesis gates.
+
+Use hypotheses to create falsifiable milestone acceptance conditions.
+
+Use governance, certification, public-surface, and judgment hypotheses as acceptance conditions only when they can be confirmed or falsified by source-required execution-tied machine artifacts.
+
+If confirmation would require a human judgment record, governance note, source-authority decision, or certification document, do not make it milestone evidence.
+
+If a roadmap completion context or equivalent current-state artifact is supplied, use it to determine completed nodes, blocked nodes, active initiatives, known gaps, known drift, and known remediation needs.
+
+If no current-state artifact is supplied, do not infer completion from the repository or from source existence.
+
+If sources conflict:
+
+* preserve the conflict;
+* do not silently choose one;
+* record the issue in `Open Questions`;
+* mark affected status, scope, milestone, or selection fields `TBD`;
+* do not build a roadmap on an unresolved contradiction unless the contradiction is explicitly scoped as an investigation milestone.
+
+Open questions are roadmap context only.
+
+Do not cite an open-question list, conflict note, or source-authority note as milestone evidence.
+
+---
+
+## Roadmap Semantics
+
+This prompt creates a next-epic roadmap, not a full project roadmap.
+
+A next-epic roadmap includes:
+
+* DAG frontier analysis;
+* selected next epic;
+* rationale for selection;
+* milestone sequence for that epic;
+* evidence and hypothesis coverage;
+* negative controls;
+* non-pass handling;
+* traceability;
+* explicit exclusions.
+
+Generate candidate next epic options internally. Output only the alternatives or rejected frontiers needed to explain why the selected epic is next.
+
+Roadmap sections may record planning context, open questions, exclusions, and governance/source constraints.
+
+Those sections are not milestone evidence and must not be cited as acceptance or exit evidence.
+
+It does not include:
+
+* the entire future roadmap;
+* all downstream epics;
+* implementation tasks;
+* detailed test design;
+* architecture decisions;
+* repository modifications;
+* certification results;
+* semantic approval, authority, certification, readiness, support-label, manual-judgment, or planning records for agents to create.
+
+---
+
+## DAG Traversal Semantics
+
+A directed edge:
+
+```text
+A -> B
+```
+
+means:
+
+> A must be established, produced, evaluated, reviewed, or preserved before B can be meaningfully claimed, certified, trusted, or used as an evaluation prerequisite.
+
+DAG traversal must respect:
+
+* prerequisite depth;
+* gate dependencies;
+* validation edges;
+* falsification edges;
+* evidence edges;
+* negative-control edges;
+* conditional edges;
+* unresolved cycles or SCC condensation if present.
+
+Topological layer is vertical prerequisite depth.
+
+Architectural plane is horizontal concern.
+
+Do not confuse the two.
+
+---
+
+## Next Epic Selection Principle
+
+Select the next epic by applying this rule:
+
+> Choose the smallest coherent graph slice that clears the earliest high-weight unresolved blocker or enables the next meaningful evaluation gate, while preserving all required evidence, hypotheses, negative controls, and non-pass handling needed to avoid false success.
+
+The next epic should not be selected because it is:
+
+* the most visible feature area;
+* the easiest implementation area;
+* the most familiar architectural layer;
+* the largest collection of related terms;
+* the most recently discussed topic;
+* the most convenient repository area.
+
+If two candidates are close, prefer the one that clears the earliest certification-blocking or safe-failure-blocking dependency.
+
+---
+
+## Milestone Semantics
+
+Milestones must be evidence-backed stages of evaluation-readiness, not implementation task bundles.
+
+Milestone evidence must satisfy the Execution-Tied Artifact Boundary.
+
+Planning tables, baselines, open questions, explicit exclusions, governance notes, certification rules, support-label controls, and manual judgment records are not valid milestone evidence.
+
+Each milestone should state:
+
+* goal;
+* required evidence;
+* confirmation condition;
+* falsification condition;
+* non-pass handling;
+* dependencies and hypotheses covered.
+
+Do not write milestones like:
+
+```text
+Implement X.
+```
+
+Prefer milestone framing like:
+
+```text
+Establish falsifiable readiness for X by producing required evidence Y and negative-control behavior Z.
+```
+
+Do not write milestones that require hand-authored certification discipline, governance review, source-authority cleanup, explicit exclusion tables, planning baselines, or manual judgment records as deliverables.
+
+---
+
+## Acceptance Rules
+
+Every milestone must include acceptance conditions derived from hypotheses and dependencies.
+
+Acceptance evidence must be source-required, execution-tied, and machine-verifiable.
+
+An acceptance condition is invalid if its required evidence has `TBD` for the source dependency and the evidence is not otherwise directly traceable to a named source hypothesis, eval requirement, or fixture/report requirement.
+
+An acceptance condition is invalid if its required evidence is a roadmap section, selected slice, baseline, status taxonomy, claim rule, judgment rule, open question, exclusion, or table row.
+
+Each acceptance condition must include or clearly imply:
+
+* source dependency ID(s);
+* source hypothesis ID(s), where available;
+* confirmation condition;
+* falsification condition;
+* required evidence;
+* blocked or inconclusive handling;
+* gate or downstream impact.
+
+Do not include acceptance criteria that are merely:
+
+* implementation exists;
+* code compiles;
+* tests pass;
+* report generated;
+* task completed;
+* reviewed manually;
+* roadmap table exists;
+* baseline note exists;
+* selected graph slice is stated;
+* explicit exclusions are listed;
+* open questions are recorded;
+* governance review is documented;
+* source authority is noted;
+* certification judgment is stated;
+* readiness or support label is asserted;
+* manual judgment rules are described.
+
+An execution-tied counterpart is valid only when the source requires or directly implies a concrete producer, consumer, validator, fixture, or check invocation, such as:
+
+* evaluator status enums;
+* generated report fields;
+* report schema validation;
+* skipped-check detection output;
+* source-required machine-readable configuration consumed by a runner, evaluator, fixture, runtime path, or report validator;
+* static scan output;
+* queryable runtime/provider state;
+* deterministic comparison output.
+
+If no machine-checkable counterpart is source-supported, record the requirement outside milestone acceptance as planning context, an explicit exclusion, or an open question.
+
+Do not create a placeholder milestone to make such planning context look actionable.
+
+---
+
+## Negative-Control Rule
+
+A milestone may not claim success for a positive-path behavior if the DAG, dependency inventory, or hypothesis inventory identifies a negative control required to expose false success for that behavior.
+
+Required negative controls must be:
+
+* included in the milestone as executable behavior, machine-produced evidence, or machine-validated output;
+* explicitly deferred with justification; or
+* recorded as blocking success for that milestone.
+
+Do not silently defer negative controls past pass, certification, or readiness claims.
+
+---
+
+## Non-Pass State Rule
+
+The roadmap must preserve non-pass states, including:
+
+* blocked;
+* failed;
+* inconclusive;
+* partial;
+* unsupported;
+* not assessed;
+* TBD;
+* conditional;
+* conflicting.
+
+For each non-pass state inside the selected epic scope, classify it as:
+
+* prerequisite;
+* milestone acceptance blocker;
+* investigation milestone;
+* explicit exclusion;
+* downstream dependency;
+* open question;
+* remediation item.
+
+Do not delete or smooth over non-pass states to make the epic look cleaner.
+
+When non-pass handling is part of milestone acceptance, require machine-produced statuses, evaluator behavior, generated report validation, or persisted evidence.
+
+Do not require a hand-authored non-pass handling plan, judgment record, certification separation statement, or readiness-label rule as milestone evidence.
+
+---
+
+## Traceability Rule
+
+Every selected epic and milestone must preserve traceability:
+
+```text
+DAG node / edge
+-> catalog group / item
+-> dependency ID
+-> hypothesis ID
+-> eval requirement
+-> evidence requirement
+-> gate or readiness impact
+```
+
+If some links are unavailable, write `TBD`.
+
+Missing traceability is a planning defect and must be recorded.
+
+Preserve traceability inline where the relevant concept appears. Use a separate traceability matrix only when inline references would be ambiguous or materially harder to retrieve.
+
+Do not cite a traceability section itself as milestone evidence, required artifact, acceptance evidence, or exit evidence.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the final roadmap.
+
+1. Read the DAG and supporting inventories. Record source file, source type, inclusion status, source coverage, open questions, and status assumptions.
+2. Normalize DAG state: nodes, edges, topological layers, architectural planes, gate nodes, cycle analysis, SCC nodes if present, item-to-node mappings, traceability-only edges, and open DAG questions.
+3. Determine completion baseline from DAG status fields, current-state artifact status, explicit completion evaluation, or explicit human clarification. Do not infer completion from source existence or repository content.
+4. Identify the earliest unresolved DAG frontier and its planning weight, strictness, gate relevance, upstream prerequisites, downstream nodes, non-pass risks, negative-control obligations, evidence obligations, and open questions.
+5. Classify frontier nodes. Do not select blocked nodes unless the epic is explicitly an unblock or investigation epic.
+6. Generate candidate epic slices internally from the frontier. Include necessary upstream prerequisites when they are small and directly required.
+7. Score candidates qualitatively by topological priority, planning weight, gate impact, dependency leverage, evidence leverage, false-success reduction, scope coherence, milestoneability, open-question risk, and plane integrity.
+8. Select exactly one next epic unless the sources make selection impossible. If selection is impossible, create an investigation roadmap designed to resolve the selection blockers.
+9. Derive milestones in DAG prerequisite order. Use only milestones justified by the graph slice.
+10. Attach dependencies and hypotheses to the closest milestone that consumes or verifies them. Do not duplicate full coverage tables elsewhere.
+11. Attach evidence requirements. Include only execution-tied machine artifacts, where source-derived.
+12. Attach non-pass handling as evaluator behavior, generated status output, persisted evidence, generated report validation, or explicit milestone blocker.
+13. Define the out-of-scope boundary for downstream DAG nodes, planes, dependencies, hypotheses, negative controls, implementation design, certification claims, and governance/source-authority/support-label artifacts.
+14. Validate the roadmap for semantic completeness and token-efficient structure.
+
+---
+
+## Output Requirements
+
+Output only the final Markdown content for the requested roadmap file.
+
+Do not include commentary.
+Do not include a preface.
+Do not include hidden analysis.
+Do not include a separate explanation.
+Do not wrap the entire output in code fences.
+
+Use this section order unless the source context makes a section irrelevant. If a section is irrelevant, write a short explicit statement instead of creating an empty table.
+
+---
+
+# Next Epic Roadmap
+
+## Purpose
+
+State what the document selects and what it does not do.
+
+State the milestone evidence boundary once.
+
+Do not repeat this boundary in every later section.
+
+## Inputs Used
+
+List sources as compact bullets.
+
+For each source, include only the file path and the role it played.
+
+Do not emit a source table unless a conflict or inclusion/exclusion distinction requires one.
+
+## Construction Rules
+
+List the governing rules as compact bullets.
+
+Include DAG traversal semantics, frontier selection, bounded epic selection, hypothesis-to-acceptance conversion, evidence boundary, negative-control inclusion, non-pass preservation, and current-state handling.
+
+Do not describe the internal process step by step.
+
+## Baseline
+
+Summarize only the baseline facts needed to understand the selected epic:
+
+* DAG shape and gate/SCC constraints;
+* completion or assessment baseline;
+* current repository or current-state blockers, if explicitly assessed or supplied.
+
+Use bullets or short paragraphs.
+
+Do not emit separate DAG, repository, dependency-count, and hypothesis-count tables unless the source requires exact tabular comparison.
+
+## Frontier
+
+Identify the earliest useful unresolved frontier.
+
+Mention rejected frontier nodes only when needed to justify selection.
+
+Use source IDs, gate IDs, and edge IDs where available.
+
+## Selected Epic
+
+Define the selected epic with compact labeled fields:
+
+* `Epic ID`
+* `Name`
+* `Target gate` or readiness target
+* `Epic type`
+* short selection statement
+* primary planes
+* core dependencies grouped by semantic role
+* core hypotheses grouped by semantic role
+
+Do not emit a large field/value table with long prose cells.
+
+## Why This Epic Is Next
+
+Explain the selection in short bullets.
+
+Cover topological priority, gate impact, current blockers when available, evidence leverage, false-success reduction, and scope coherence.
+
+Do not emit a score table unless source-defined scoring values must be preserved.
+
+## Milestones
+
+Use short local IDs such as:
+
+```text
+### M001 - Milestone Name
+```
+
+For each milestone, include exactly these blocks unless a source requires another block:
+
+```text
+Goal: ...
+
+Required evidence:
+
+- ...
+
+Acceptance:
+
+- Confirmed when ...
+- Falsified when ...
+- Non-pass handling: ...
+
+Covers:
+
+- Dependencies: ...
+- Hypotheses: ...
+```
+
+Keep milestone details local. Do not split the same milestone into separate detail, acceptance, exit, dependency coverage, and hypothesis coverage sections.
+
+Do not include an evidence item unless it satisfies the Execution-Tied Artifact Boundary.
+
+## Evidence Package
+
+List the machine evidence required across the epic once.
+
+Use an ordered list when order matters or a bullet list when it does not.
+
+Group related evidence instead of repeating every dependency/hypothesis mapping.
+
+State what does not satisfy the package, such as missing, non-traceable, transient, or hand-authored substitutes.
+
+## Negative Controls
+
+List only false-success controls that are executable, observable in machine-produced evidence, or machine-validated.
+
+If no negative controls are required by the selected DAG slice, write:
+
+```text
+No negative controls are required by the selected DAG slice.
+```
+
+## Non-Pass Rules
+
+Define the non-pass states relevant to this epic and how they affect claims.
+
+Use bullets, not a plan table.
+
+Preserve missing, blocked, inconclusive, partial, unsupported, failed, not assessed, TBD, conditional, and conflicting states when source-relevant.
+
+## Gate Effects
+
+Summarize how the epic affects relevant gates.
+
+Separate direct target, partially supported gates, reusable downstream evidence, and claims not made.
+
+Do not imply pass, certification, public support, or full realization unless source-defined evidence supports it.
+
+## Open Questions
+
+List unresolved planning questions as numbered questions.
+
+Do not include affected-node columns unless they materially improve retrieval.
+
+Open questions are context, not milestone evidence.
+
+If no unresolved planning questions are known, write:
+
+```text
+No unresolved planning questions are currently known.
+```
+
+## Explicit Exclusions
+
+List what this epic intentionally does not cover.
+
+Use bullets.
+
+Do not include future-handling prose unless needed to avoid overclaiming.
+
+## Anti-Patterns To Avoid
+
+List only anti-patterns relevant to interpreting this roadmap.
+
+Use bullets.
+
+Include project-specific anti-patterns only if source artifacts contain them.
+
+## Completion Checklist
+
+Use a compact checklist that validates the roadmap's core obligations.
+
+Do not restate every source rule.
+
+The checklist must verify:
+
+* required sources were considered;
+* the DAG was the primary traversal authority;
+* current completion baseline is explicit;
+* exactly one next epic is selected, unless selection is blocked;
+* selected epic is sourced from the DAG frontier;
+* selected epic does not skip unresolved prerequisites;
+* selected epic advances a meaningful gate or readiness condition;
+* selected epic scope is coherent and bounded;
+* architectural planes are preserved and not confused with topological layers;
+* dependencies are represented as prerequisite constraints;
+* hypotheses are represented as falsifiable acceptance conditions;
+* milestones follow DAG prerequisite order;
+* milestones are evidence-backed;
+* milestone evidence is source-required, execution-tied, and machine-verifiable;
+* required fixtures, generated reports, runtime/queryable public surfaces, stability outputs, or negative controls are included where source-derived;
+* roadmap tables, baselines, open questions, exclusions, and planning rationale are not cited as acceptance or exit evidence;
+* governance, source-authority, certification, support-label, and manual judgment artifacts are not prescribed as milestone deliverables;
+* generated reports are treated as evidence only when machine-produced or machine-validated from executable check outcomes;
+* negative controls are not deferred past positive-path success claims;
+* non-pass states remain visible;
+* explicit exclusions are listed;
+* traceability reaches from DAG node or edge to evidence and milestone acceptance;
+* open questions are recorded rather than resolved by invention;
+* repository satisfaction status is not assessed unless explicitly requested;
+* no full roadmap appears;
+* no implementation tasks appear;
+* no architecture is invented;
+* no tests are written;
+* no evaluation result or certification result is claimed.

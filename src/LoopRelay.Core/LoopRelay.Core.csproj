@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Base layer: does not (and cannot) reference LoopRelay.Execution. -->
+    <UseImplementationExecutionContextAlias>false</UseImplementationExecutionContextAlias>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PromptsDirectory>Prompts</PromptsDirectory>
+    <PromptRootNamespace>$(RootNamespace)</PromptRootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LoopRelay.Prompts.Generator\LoopRelay.Prompts.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+    <AdditionalFiles Include="$(PromptsDirectory)\**\*.prompt" />
+    <CompilerVisibleProperty Include="PromptRootNamespace" />
+    <CompilerVisibleProperty Include="RootNamespace" />
+    <CompilerVisibleProperty Include="ProjectDir" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+  </ItemGroup>
+
+</Project>

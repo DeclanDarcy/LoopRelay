@@ -1,0 +1,948 @@
+<PROJECT_CONTEXT>
+{projectContext}
+</PROJECT_CONTEXT>
+
+# Create Project Context Projection For Split Epic
+
+## Role
+
+You are a projection compiler for a projection-based AI engineering loop.
+
+Your job is to create a projection to be consumed by a later prompt:
+
+SplitEpic
+
+That downstream prompt will receive:
+
+1. This projection.
+2. A split epic proposal produced by SelectNextEpic.
+3. The current codebase or codebase evidence.
+
+The downstream prompt will determine the optimal capability partition for one oversized or bundled strategic initiative and then produce a set of resulting epic specifications.
+
+Your job is NOT to split an epic.
+
+Your job is NOT to inspect a split proposal.
+
+Your job is NOT to inspect the codebase.
+
+Your job is NOT to author any resulting epic.
+
+Your job is to create the stable strategic decomposition frame that allows the downstream prompt to partition one strategic opportunity into multiple coherent initiatives.
+
+This is a projection, not a summary.
+
+---
+
+## Core Objective
+
+Create a deterministic, decomposition-oriented projection of the Project Context that answers:
+
+How should one strategic opportunity be partitioned into a complete set of strategically coherent initiatives?
+
+The projection must define:
+
+- how the original strategic opportunity must be conserved
+- how strategic capability boundaries should be discovered
+- how repository reality should inform split boundaries
+- how dependency relationships should be derived
+- what makes a split high quality
+- how coverage should be proven
+- how overlap should be prevented
+- when splitting should be blocked
+- how resulting initiatives should be handed off to the standard CreateNewEpic authoring model
+
+This projection exists to support:
+
+SplitEpic
+
+It must not include a split epic proposal.
+
+It must not include codebase state.
+
+It must not evaluate any specific split.
+
+It must not author resulting epics.
+
+It must not include milestone or acceptance-criteria authoring rules except as handoff expectations.
+
+It must not generate implementation tasks.
+
+It must not modify the roadmap.
+
+---
+
+## Consumer
+
+This projection will be consumed by:
+
+SplitEpic
+
+That downstream prompt will compute:
+
+Projection
++
+Split Epic Proposal
++
+Repository Reality
+=
+Capability Partition
++
+Dependency Graph
++
+Coverage / Overlap Proof
++
+Resulting Epic Set
+
+This projection defines how the partition should be discovered and validated.
+
+It is the strategic decomposition frame, not the split result.
+
+---
+
+## Authority Rules
+
+Treat the Project Context as the sole source of project authority.
+
+Do not reinterpret it.
+
+Do not extend it with project-specific content not present in the Core.
+
+Do not infer missing project intent.
+
+Do not invent desired capabilities.
+
+Do not invent project-specific constraints.
+
+Do not convert repository patterns into strategic intent.
+
+Do not convert roadmap ordering into authority.
+
+Do not convert a future split proposal into Core authority.
+
+If the Core contains ambiguity, preserve the ambiguity as a projection limitation.
+
+If the Core contains conflicting guidance, preserve the conflict and identify the conflicting source items.
+
+If the Core contains assertion IDs, retain them.
+
+If the Core does not contain assertion IDs, create stable projection-local IDs using the following format:
+
+- OPPORTUNITY-001
+- CAPABILITY-001
+- PARTITION-001
+- BOUNDARY-001
+- DEPENDENCY-001
+- QUALITY-001
+- COVERAGE-001
+- OVERLAP-001
+- BLOCK-001
+- HANDOFF-001
+- TRACE-001
+- TERM-001
+- LIMITATION-001
+
+Projection-local IDs must not pretend to be canonical Core IDs.
+
+You may include generic projection-local decomposition rules if they are necessary for SplitEpic to operate and do not alter Core intent. Mark them clearly as projection-local.
+
+---
+
+## Projection Principles
+
+### 1. Decomposition projection, not north-star summary
+
+Do not summarize the Project Context generally.
+
+Select only the Core semantics required to partition one strategic opportunity into multiple coherent initiatives.
+
+The projection should answer:
+
+- What must the split preserve?
+- Where should strategic capability boundaries be found?
+- What makes one partition better than another?
+- When is a proposed split artificial?
+- When should splitting be blocked?
+- How should resulting initiatives be handed off for epic authoring?
+
+---
+
+### 2. Opportunity conservation
+
+The original strategic opportunity must be conserved across the resulting initiative set.
+
+The split should satisfy:
+
+Resulting Initiative A
++
+Resulting Initiative B
++
+...
++
+Resulting Initiative N
+=
+Original Strategic Opportunity
+
+Nothing strategically material should disappear.
+
+Nothing unrelated should be added.
+
+The split redistributes strategic responsibility; it does not change the strategic objective.
+
+---
+
+### 3. Capability partitioning
+
+Split by strategic capability responsibility, not by implementation task.
+
+A valid resulting initiative should own one coherent capability or strategic responsibility.
+
+Do not split by:
+
+- file area
+- implementation layer
+- arbitrary phase
+- developer task
+- technology choice
+- chronological order alone
+
+unless that boundary also corresponds to a meaningful strategic capability boundary.
+
+---
+
+### 4. Repository-informed boundaries
+
+The downstream prompt will receive repository evidence.
+
+This projection should define how repository evidence may reveal natural split boundaries.
+
+Examples of natural boundaries:
+
+- bounded context
+- domain ownership boundary
+- platform boundary
+- runtime boundary
+- API boundary
+- compatibility boundary
+- migration seam
+- validation boundary
+- semantic ownership boundary
+- dependency seam
+- architectural responsibility
+
+Do not include actual repository facts.
+
+---
+
+### 5. High cohesion, low overlap
+
+Each resulting initiative should be internally coherent.
+
+The split should minimize shared ownership.
+
+A capability should belong to exactly one resulting initiative unless the split explicitly defines a dependency relationship.
+
+Avoid duplicate acceptance responsibility across resulting initiatives.
+
+---
+
+### 6. Explicit dependency graph
+
+Splitting creates dependency relationships.
+
+The projection must require downstream SplitEpic to make these relationships first-class.
+
+Each resulting initiative should state:
+
+- what it depends on
+- what depends on it
+- whether it should precede sibling initiatives
+- whether it can proceed independently
+- what future roadmap work it enables
+
+---
+
+### 7. Independent strategic value
+
+Each resulting initiative should be independently meaningful.
+
+If a partition creates a fragment that cannot stand as a strategic initiative, it should probably become a milestone inside another epic rather than a separate epic.
+
+A valid split produces epics, not task fragments.
+
+---
+
+### 8. Coverage and non-overlap proof
+
+The downstream prompt must prove that:
+
+- all material parts of the original strategic opportunity are covered
+- no material part is lost
+- no unrelated opportunity is added
+- no resulting initiatives duplicate ownership
+- ambiguous ownership is resolved
+- dependencies are explicit
+
+---
+
+### 9. Split blocking
+
+The projection must define when not to split.
+
+Splitting should be blocked when:
+
+- there is only one coherent capability
+- repository evidence does not support natural boundaries
+- the split would create task fragments
+- the split would create overlapping ownership
+- coverage cannot be proven
+- dependencies cannot be safely determined
+- evidence is insufficient
+- another prompt is more appropriate
+
+---
+
+### 10. Standard authoring handoff
+
+This projection should not duplicate full epic-authoring semantics.
+
+Resulting initiatives should be authored using the same quality standard as CreateNewEpic.
+
+SplitEpic owns:
+
+- partition discovery
+- resulting initiative set
+- dependency graph
+- coverage proof
+- overlap prevention
+
+CreateNewEpic-style authoring owns:
+
+- full epic specification quality
+- milestone roadmap quality
+- acceptance criteria quality
+- success condition quality
+- risk and follow-up structure
+
+For MVP, SplitEpic may output complete epic files, but those files should be treated as applications of the standard CreateNewEpic authoring model to each partition.
+
+---
+
+## Inclusion Criteria
+
+Retain Project Context content that belongs to one of these categories.
+
+### A. Opportunity Conservation
+
+Retain semantics that define what strategic value must be preserved when an initiative is split.
+
+Examples:
+
+- desired outcome
+- strategic opportunity
+- user or system capability
+- platform capability
+- architectural capability
+- semantic capability
+- future roadmap enablement
+- risk reduction objective
+
+### B. Capability Partitioning Semantics
+
+Retain rules that define valid capability boundaries.
+
+Examples:
+
+- one epic owns one coherent capability
+- capability ownership should be unambiguous
+- strategic responsibility should not be duplicated
+- resulting initiatives should be independently meaningful
+- implementation phases are not sufficient epic boundaries
+
+### C. Repository-Informed Boundary Discovery
+
+Retain rules for how repository evidence should inform split boundaries.
+
+Examples:
+
+- use existing domain boundaries where they reflect strategic capability
+- use existing API boundaries where they reflect durable ownership
+- use migration seams where they define separable capability stages
+- use platform boundaries where they unlock multiple downstream capabilities
+- use compatibility surfaces where they create distinct obligations
+- use missing foundations where they should become separate initiatives
+
+### D. Dependency Derivation Semantics
+
+Retain rules for deriving dependencies among resulting initiatives.
+
+Examples:
+
+- foundational capability precedes dependent capability
+- migration foundation precedes consuming feature
+- compatibility boundary precedes dependent integration
+- validation foundation precedes high-risk implementation
+- semantic foundation precedes downstream capability
+- sibling dependencies must be explicit
+
+### E. Split Quality Criteria
+
+Retain rules that define a high-quality split.
+
+Examples:
+
+- high cohesion
+- low coupling
+- explicit dependencies
+- complete coverage
+- no overlap
+- repository alignment
+- strategic clarity
+- independent value
+- minimal fragmentation
+- future roadmap clarity
+
+### F. Coverage Rules
+
+Retain rules for proving the resulting initiatives collectively preserve the original opportunity.
+
+Examples:
+
+- every proposal element assigned exactly once
+- every desired capability accounted for
+- every risk or gap represented or explicitly excluded
+- every dependency placed in the correct initiative
+- every excluded element justified
+
+### G. Overlap Prevention Rules
+
+Retain rules for preventing duplicate ownership.
+
+Examples:
+
+- no two resulting epics own the same capability
+- shared infrastructure should be isolated or assigned
+- acceptance responsibility should not be duplicated
+- sibling scopes should define clear non-goals
+- ambiguous ownership requires refinement or blocking
+
+### H. Split Blocking Rules
+
+Retain rules for when SplitEpic should refuse to split.
+
+Examples:
+
+- split produces tasks, not epics
+- no natural capability boundary exists
+- evidence is insufficient
+- proposal is actually a new epic
+- proposal is actually reimagination
+- proposal is actually investigation
+- proposal requires roadmap revision
+- split would violate constraints
+- split would require changing Core intent
+
+### I. Handoff Requirements
+
+Retain rules for what each resulting initiative must provide to the authoring path.
+
+Examples:
+
+- owned capability
+- strategic purpose
+- dependencies
+- non-overlap boundary
+- repository grounding summary
+- projection link
+- constraints
+- relation to siblings
+- relation to original opportunity
+
+### J. Traceability Requirements
+
+Retain rules requiring the split to prove source linkage.
+
+Examples:
+
+- original opportunity traces to proposal and projection
+- each resulting initiative traces to a distinct part of the opportunity
+- each dependency traces to repository evidence, proposal, or projection
+- every excluded element has rationale
+- coverage and non-overlap are explicit
+
+### K. Canonical Vocabulary
+
+Retain terms the downstream prompt must preserve when splitting initiatives.
+
+---
+
+## Exclusion Criteria
+
+Exclude Project Context content that belongs to these categories unless it directly affects strategic decomposition.
+
+Exclude:
+
+- full epic authoring semantics
+- milestone authoring rules
+- acceptance criteria authoring rules
+- success condition authoring rules
+- implementation instructions
+- execution guidance
+- developer commands
+- tool use instructions
+- operational workflow
+- prompt templates
+- current roadmap completion state
+- completed epic history
+- current roadmap progress
+- current codebase facts
+- selected initiative details
+- roadmap prioritization semantics
+- next-epic selection logic
+- epic validation / disposition logic
+- realignment patch rules
+- reimagination replacement rules
+- detailed ADR history
+- historical rationale essays
+- full governance workflow
+- belief revision mechanics
+- reasoning architecture
+- information flow architecture
+- research citations
+- task-level plans
+
+If excluded information may matter elsewhere, mention it only in Projection Exclusion Notes.
+
+Do not include the excluded content itself.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the projection.
+
+### Step 1 — Identify candidate Core assertions
+
+Extract all Core statements relevant to decomposing one strategic opportunity into multiple coherent initiatives.
+
+Classify each as:
+
+- Opportunity Conservation
+- Capability Partitioning Semantics
+- Repository-Informed Boundary Discovery
+- Dependency Derivation Semantics
+- Split Quality Criterion
+- Coverage Rule
+- Overlap Prevention Rule
+- Split Blocking Rule
+- Handoff Requirement
+- Traceability Requirement
+- Vocabulary
+- Exclude
+
+### Step 2 — Apply split-projection admission test
+
+For each candidate, ask:
+
+1. Would this help partition one strategic opportunity into coherent initiatives?
+2. Would this help identify natural capability boundaries?
+3. Would this help distinguish epics from milestones or tasks?
+4. Would this help derive dependency relationships among resulting initiatives?
+5. Would this help prove coverage and prevent overlap?
+6. Would this help decide when splitting should be blocked?
+7. Is this stable and non-regenerable from the split proposal or repository evidence?
+
+Retain only candidates that pass.
+
+### Step 3 — Convert retained items into decomposition semantics
+
+For each retained opportunity, capability, dependency, quality rule, or boundary, express how it should affect splitting.
+
+Do not apply it to any actual proposal.
+
+Do not inspect or infer repository facts.
+
+Define decomposition rules only.
+
+### Step 4 — Normalize vocabulary
+
+Preserve canonical terms from the Core.
+
+If the Core has overlapping terms, select the term with strongest authority and note aliases only if necessary.
+
+### Step 5 — Remove authoring and implementation noise
+
+Aggressively remove anything that would distract the downstream prompt from strategic decomposition.
+
+Do not include detailed CreateNewEpic authoring guidance.
+
+Reference the standard authoring model only as a handoff expectation.
+
+### Step 6 — Organize into the required output structure
+
+Output only the projection Markdown.
+
+Do not include your analysis.
+
+---
+
+## Required Output
+
+Output only the full Markdown content for the projection.
+
+Do not wrap the output in commentary.
+
+Do not include prefaces.
+
+Do not include explanations after the document.
+
+Use this exact structure.
+
+---
+
+# Split Epic Projection
+
+## Purpose
+
+This projection defines how one strategic opportunity should be decomposed into multiple strategically coherent initiatives.
+
+It exists to support:
+
+- capability partitioning
+- repository-informed boundary discovery
+- dependency graph derivation
+- split quality evaluation
+- coverage proof
+- overlap prevention
+- split blocking
+- handoff to standard CreateNewEpic authoring
+
+It is a projection of the Project Context, not a split proposal, roadmap, codebase audit, repository summary, or epic authoring guide.
+
+## Authority Boundary
+
+- The Project Context remains the source of authority.
+- This projection is a task-specific decomposition view of the Project Context.
+- This projection defines how SplitEpic should partition strategic opportunities.
+- This projection does not include the split proposal.
+- This projection does not include repository state.
+- This projection does not perform the split.
+- This projection does not author resulting epics.
+- This projection does not create implementation tasks.
+- This projection does not modify the roadmap.
+
+## Projection Metadata
+
+| Field | Value |
+|---|---|
+| Projection Name | {{projection_name_or_default}} |
+| Projection Version | {{projection_version_or_default}} |
+| Projection Date | {{projection_date_or_default}} |
+| Source Core Version | {{core_version_or_unknown}} |
+| Intended Consumer | SplitEpic |
+| Projection Family | Epic Splitting / Strategic Decomposition |
+
+## Source Coverage
+
+Briefly describe what parts of the Project Context were retained.
+
+Use bullets.
+
+Then briefly describe what parts were intentionally excluded.
+
+Use bullets.
+
+## Opportunity Conservation Rules
+
+Define how the original strategic opportunity must be preserved across the resulting initiative set.
+
+| ID | Conservation Rule | Meaning | Split Implication |
+|---|---|---|---|
+
+Examples:
+
+- full strategic opportunity must be covered
+- no unrelated opportunity may be added
+- desired capability must remain represented
+- risk-reduction purpose must remain represented
+- enabled future work must remain represented
+- excluded elements require explicit rationale
+
+## Capability Partitioning Rules
+
+Define valid strategic capability boundaries.
+
+| ID | Partitioning Rule | Meaning | Invalid Split Signal |
+|---|---|---|---|
+
+Examples:
+
+- each resulting epic owns one coherent capability
+- capability ownership must be unambiguous
+- implementation phases are not sufficient epic boundaries
+- task fragments are not epics
+- resulting initiatives must have independent strategic value
+- shared capability ownership requires refinement
+
+## Repository Boundary Discovery Rules
+
+Define how repository evidence should inform natural split boundaries.
+
+| ID | Repository Boundary Pattern | Strategic Interpretation | Split Implication |
+|---|---|---|---|
+
+Examples of Repository Boundary Pattern:
+
+- domain boundary
+- API boundary
+- compatibility surface
+- platform boundary
+- runtime boundary
+- data ownership boundary
+- workflow boundary
+- migration seam
+- missing foundation
+- validation boundary
+
+Do not include actual repository facts.
+
+## Dependency Derivation Rules
+
+Define how dependencies among resulting initiatives should be derived.
+
+| ID | Dependency Pattern | Derivation Rule | Split Implication |
+|---|---|---|---|
+
+Examples:
+
+- foundational capability precedes dependent capability
+- semantic model precedes feature use
+- compatibility boundary precedes integration
+- validation foundation precedes high-risk work
+- migration seam precedes dependent modernization
+- platform capability precedes downstream roadmap epics
+- dependency too unclear requires investigation or blocking
+
+## Split Quality Criteria
+
+Define what makes a split high quality.
+
+| ID | Criterion | High-Quality Split Means | Low-Quality Split Means |
+|---|---|---|---|
+
+Include criteria for:
+
+- strategic cohesion
+- low coupling
+- independent value
+- repository alignment
+- explicit dependencies
+- complete coverage
+- no overlap
+- future roadmap clarity
+- minimal fragmentation
+- constraint preservation
+
+## Coverage Rules
+
+Define how the downstream prompt should prove that the resulting initiatives collectively cover the original opportunity.
+
+| ID | Coverage Rule | Required Evidence | Failure Handling |
+|---|---|---|---|
+
+Examples:
+
+- every material proposal element assigned exactly once
+- every desired capability accounted for
+- every strategic risk represented or explicitly excluded
+- every dependency assigned or acknowledged
+- every non-goal stated when exclusion prevents ambiguity
+
+Failure Handling should explain whether to refine partition, add initiative, merge initiative, or block split.
+
+## Overlap Prevention Rules
+
+Define how to prevent duplicate or ambiguous ownership.
+
+| ID | Overlap Case | Prevention Rule | Required Handling |
+|---|---|---|---|
+
+Examples:
+
+- two epics own same capability
+- shared infrastructure is implicit
+- acceptance responsibility is duplicated
+- sibling scopes overlap
+- boundary between capabilities is unclear
+- one epic consumes another epic’s unfinished capability
+
+## Split Blocking Rules
+
+Define when SplitEpic should refuse to split.
+
+| ID | Blocking Case | Indicates | Required Handling |
+|---|---|---|---|
+
+Indicates must be one of:
+
+- CreateNewEpic Required
+- ReimagineEpic Required
+- Strategic Investigation Required
+- Roadmap Revision Required
+- Insufficient Evidence
+- Projection Conflict
+- Governance Escalation
+- Different Prompt Required
+
+Examples:
+
+- only one coherent capability exists
+- split would create task fragments
+- no repository-supported boundary exists
+- coverage cannot be proven
+- overlap cannot be resolved
+- dependency graph cannot be determined
+- split would violate projection constraints
+- split would require changing Core intent
+- proposal is not actually a split
+
+## Handoff Requirements For Resulting Initiatives
+
+Define what each resulting initiative must provide to the authoring path.
+
+| ID | Handoff Requirement | Required Content | Why It Matters |
+|---|---|---|---|
+
+Include requirements for:
+
+- owned capability
+- strategic purpose
+- source opportunity link
+- projection link
+- repository grounding summary
+- sibling dependency relationships
+- non-overlap boundary
+- constraints
+- major risks
+- suggested filename
+
+This section should define handoff requirements only.
+
+Do not include detailed epic authoring rules.
+
+## Traceability Requirements
+
+Define how the split must prove its sources and coverage.
+
+| ID | Traceability Requirement | Required Evidence | Failure Handling |
+|---|---|---|---|
+
+Examples:
+
+- original opportunity must trace to proposal and projection
+- each resulting initiative must trace to a distinct opportunity element
+- each dependency must trace to proposal, projection, or repository evidence
+- every excluded element must have rationale
+- coverage table must prove no material opportunity was lost
+- overlap check must prove no capability is duplicated
+
+## Canonical Vocabulary
+
+List load-bearing terms that downstream prompts must preserve.
+
+| Term | Definition | Notes / Banned Synonyms |
+|---|---|---|
+
+Rules:
+
+- Include only terms relevant to strategic decomposition.
+- Use Core definitions where available.
+- If a term is undefined in the Core but required for this projection, mark definition as “Projection-local; confirm against Core if promoted.”
+
+## Projection Exclusion Notes
+
+List important Core content intentionally excluded from this projection.
+
+| Excluded Content Type | Reason Excluded | Where It Should Be Used Instead |
+|---|---|---|
+
+Examples:
+
+- full epic authoring semantics
+- milestone authoring details
+- acceptance criteria authoring details
+- implementation guidance
+- execution workflow
+- roadmap prioritization semantics
+- epic validation logic
+- realignment rules
+- reimagination rules
+- repository facts
+- completed epic history
+
+## Known Projection Limitations
+
+List ambiguities or missing Core information that may limit SplitEpic.
+
+| Limitation | Why It Matters | Recommended Handling |
+|---|---|---|
+
+Examples:
+
+- capability boundaries are implicit
+- dependency semantics are underspecified
+- split quality criteria are unclear
+- coverage rules are incomplete
+- overlap prevention rules are ambiguous
+- repository boundary expectations are underspecified
+- canonical vocabulary is ambiguous
+
+Do not invent missing information to fix these limitations.
+
+## Downstream Use Instructions
+
+When this projection is used by SplitEpic:
+
+- Treat this projection as the strategic decomposition frame.
+- Treat the split epic proposal as the opportunity to partition.
+- Treat repository evidence as current implementation reality.
+- Preserve the full original strategic opportunity.
+- Partition by strategic capability responsibility.
+- Use repository evidence to discover natural boundaries.
+- Derive explicit dependency relationships.
+- Ensure each resulting initiative has independent strategic value.
+- Prove complete coverage.
+- Prevent overlap and duplicate ownership.
+- Block splitting if the partition would create task fragments.
+- Hand each resulting initiative to the standard CreateNewEpic authoring model.
+- Do not modify the roadmap.
+- Do not update roadmap completion context.
+- Do not generate implementation tasks.
+- Do not create file-level plans.
+- Do not generate code.
+- Do not create execution prompts.
+
+## Projection Integrity Checklist
+
+Before finalizing, verify:
+
+- The projection contains strategic decomposition semantics only.
+- No split epic proposal is included.
+- No repository state is included.
+- No roadmap completion state is included.
+- No completed epic history is included.
+- No resulting epic is authored.
+- Every retained statement helps partition one strategic opportunity into coherent initiatives.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
+- Opportunity conservation rules are explicit.
+- Capability partitioning rules are explicit.
+- Repository boundary discovery rules are explicit.
+- Dependency derivation rules are explicit.
+- Split quality criteria are explicit.
+- Coverage rules are explicit.
+- Overlap prevention rules are explicit.
+- Split blocking rules are explicit.
+- Handoff requirements are explicit but do not duplicate CreateNewEpic authoring semantics.
+- Canonical vocabulary is preserved.
+- Excluded operational, implementation, authoring, validation, realignment, reimagination, and prioritization details are not present.
+- The projection is compact enough to be passed into SplitEpic.

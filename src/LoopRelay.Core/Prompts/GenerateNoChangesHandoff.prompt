@@ -1,0 +1,7 @@
+Write .agents/handoffs/handoff.md.
+Assume the next decision agent already has the complete project plan.
+Explain why none of the following milestone checkbox items were attempted, able to be completed, or ticked despite being completed/retired.
+{milestoneCheckboxItems}
+If none were attempted due to a lack of explicit permission, identify the best item to tackle next, explain why it should be tackled next, and explicitly request permission to tackle it.
+If none were attempted due to no items being appropriate to complete given the current project state and trajectory, explain the situation and explicitly request permission to retire those items, i.e. permission to delete them from the milestone doc(s) in the next session.
+If none were able to be completed, explain why and explicitly request any guidance, resources, etc needed to enable completion in the next session.

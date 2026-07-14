@@ -1,0 +1,13 @@
+{plan}
+{details}
+{decisions}
+continue executing the current milestone in .agents/milestones/
+`PublishRepositoryState` is a downstream LoopRelay orchestration transition. Do not search for, invoke, preview, or
+preflight it (or a substitute publisher) inside this implementation slice. The absence of a callable publication command
+is not an implementation blocker. Implement and locally verify the current capability work now; leave publication-only
+conditions for the orchestrator after handoff.
+Before exiting, ensure that every completed checkbox item is ticked in the milestone doc(s) that you worked on.
+The existing milestone file set is immutable during Execute: do not create, rename, copy, split, merge, or delete any
+`.agents/milestones/*.md` file. If embedded plan/details/milestone prose names a different milestone filename for
+completion evidence, treat that filename as stale and record the evidence plus checkbox updates in the existing
+authoritative milestone file embedded in this prompt.

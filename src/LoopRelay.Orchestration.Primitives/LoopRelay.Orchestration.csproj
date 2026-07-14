@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <ProjectReference Include="..\LoopRelay.Agents\LoopRelay.Agents.csproj" />
+    <ProjectReference Include="..\LoopRelay.Core\LoopRelay.Core.csproj" />
+    <ProjectReference Include="..\LoopRelay.Permissions\LoopRelay.Permissions.csproj" />
+  </ItemGroup>
+
+</Project>

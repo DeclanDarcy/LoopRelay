@@ -1,0 +1,17 @@
+{
+  "executionSliceId": "slice-20260711221306-50487f2bcca04f6f999377d64fc82fc2",
+  "capturedAtUtc": "2026-07-11T22:13:06.3679888+00:00",
+  "files": [
+    {
+      "path": ".agents",
+      "previousPath": null,
+      "status": " M",
+      "exists": true,
+      "isDeleted": false,
+      "extension": ".agents",
+      "size": null,
+      "contentSha256": null,
+      "trackedDiffMetadata": []
+    }
+  ]
+}

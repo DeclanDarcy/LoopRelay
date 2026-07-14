@@ -1,0 +1,25 @@
+Write `.agents/plan.md` to implement the epic and specs in `.agents/specs/` against the current codebase.
+
+You MUST use the file-edit tool to create `.agents/plan.md` in the repository during this turn. Returning a plan
+only in your response is not completion. Before ending the turn, inspect `.agents/plan.md` and confirm that it
+exists, is non-empty, is self-contained, and contains the executable milestones. Your response after the tool
+write should be a concise status only; do not duplicate the plan in chat.
+Note: the epic and specs will be deleted after certifying the plan, the plan must be self-contained and shall not make statements about these source materials
+
+Apply the implementation-first prompt policy included below. The plan must avoid autonomous non-implementation deliverables and documentation-centric milestones.
+
+LoopRelay owns the downstream orchestration transitions after an implementation slice. Order capability implementation
+and its local verification before `GenerateHandoff` and `PublishRepositoryState`. Never require an execution agent to
+discover, invoke, preview, or preflight `PublishRepositoryState` (or any equivalent publisher) before making the bounded
+implementation change. Publication may be a downstream completion condition, but it is not an implementation entry gate,
+an execution-agent responsibility, or a prerequisite checklist item that can block implementation. The absence of a
+callable publisher is not an implementation blocker.
+
+If the policy permits an explicitly HITL-requested non-implementation deliverable and the source request is explicit, include this stable section in .agents/plan.md:
+
+## HITL-Requested Non-Implementation Deliverables
+
+| Path Or Pattern | Source | Source Hash | Rationale |
+| --- | --- | --- | --- |
+
+Omit that section when there are no explicitly grounded HITL-requested non-implementation deliverables.

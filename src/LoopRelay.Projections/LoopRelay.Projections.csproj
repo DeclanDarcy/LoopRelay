@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseImplementationExecutionContextAlias>false</UseImplementationExecutionContextAlias>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LoopRelay.Core\LoopRelay.Core.csproj" />
+    <ProjectReference Include="..\LoopRelay.Infrastructure\LoopRelay.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

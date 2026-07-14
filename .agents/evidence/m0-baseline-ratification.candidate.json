@@ -1,0 +1,122 @@
+{
+  "schema": "looprelay.architecture-acceptance-candidate/v1",
+  "milestone": "M0-baseline-ratification",
+  "capturedAtUtc": "2026-07-12T17:12:37.6031527Z",
+  "sourceRevision": {
+    "baseCommit": "35ef7feaa967e7abcae718dc53f4f7cfdeeda1e1",
+    "scope": "working-tree acceptance candidate",
+    "portable": true
+  },
+  "architecture": {
+    "schemaIdentity": "looprelay.workspace-state",
+    "schemaFamily": "CanonicalWorkspace",
+    "logicalVersion": 9,
+    "shape": "CanonicalV9Complete",
+    "catalogIdentity": "provisional-pre-M13",
+    "promptPolicyIdentity": "versioned profile selected per attempt",
+    "providerProfileIdentity": "exact profiles covered by LoopRelay.Agents.Compatibility.Tests"
+  },
+  "decisions": {
+    "accepted": [
+      "ADR-0001",
+      "ADR-0002",
+      "ADR-0004",
+      "ADR-0009",
+      "ADR-0012"
+    ],
+    "unresolvedCount": 0
+  },
+  "obligations": {
+    "added": [
+      "baseline.accepted-decisions-indexed",
+      "baseline.canonical-runtime-resolved-profile-only",
+      "baseline.canonical-outcomes-specific",
+      "baseline.specification-set-integrity"
+    ],
+    "changed": [
+      "generated-source:.agents/specs/epic.md",
+      "accepted-M0-M7-preservation-authority"
+    ],
+    "invalidated": [
+      "generated-source:.agents/epic.md",
+      "missing-M0-M7-deep-dive-links"
+    ],
+    "uncredited": [
+      "M8-and-later-authority"
+    ]
+  },
+  "commands": [
+    {
+      "command": "dotnet build LoopRelay.slnx --no-restore",
+      "result": "passed",
+      "warnings": 0,
+      "errors": 0
+    },
+    {
+      "command": "dotnet test LoopRelay.slnx --no-restore",
+      "result": "passed",
+      "passed": 1770,
+      "failed": 0,
+      "skipped": 5,
+      "skipReason": "Five explicitly live Codex app-server certification tests require an opted-in real provider environment."
+    },
+    {
+      "command": "dotnet test tests/LoopRelay.Orchestration.Primitives.Tests/LoopRelay.Orchestration.Tests.csproj --no-restore --filter BaselineArchitectureContractTests",
+      "result": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "componentCounts": {
+    "LoopRelay.Permissions.Tests": { "passed": 83, "skipped": 0 },
+    "LoopRelay.Agents.Compatibility.Tests": { "passed": 4, "skipped": 0 },
+    "LoopRelay.Agents.Tests": { "passed": 144, "skipped": 5 },
+    "LoopRelay.Infrastructure.Tests": { "passed": 21, "skipped": 0 },
+    "LoopRelay.Projections.Tests": { "passed": 9, "skipped": 0 },
+    "LoopRelay.Certification.Tests": { "passed": 21, "skipped": 0 },
+    "LoopRelay.Plan.Cli.Tests": { "passed": 109, "skipped": 0 },
+    "LoopRelay.Completion.Tests": { "passed": 15, "skipped": 0 },
+    "LoopRelay.Orchestration.Tests": { "passed": 404, "skipped": 0 },
+    "LoopRelay.Core.Tests": { "passed": 72, "skipped": 0 },
+    "LoopRelay.Roadmap.Cli.Tests": { "passed": 473, "skipped": 0 },
+    "LoopRelay.Cli.Tests": { "passed": 415, "skipped": 0 }
+  },
+  "productionOwner": "M0 ratifies existing Prompt, Policy, Runtime, Persistence, and Evaluation authority contracts",
+  "removedOrUnreachableRoute": "Post-render policy mutation and optional pre-dispatch evidence are rejected by executable contracts; broken generated specification routes were removed.",
+  "reachabilityVerifier": "BaselineArchitectureContractTests",
+  "restartAndFaultBoundaries": [
+    "prompt fact persistence failure before dispatch",
+    "dispatch lifecycle persistence failure before dispatch",
+    "provider exception after dispatch start becomes Unknown"
+  ],
+  "typedOutcomesObserved": [
+    "MissingRequiredInput",
+    "DirtyInputSurface",
+    "EffectsPending",
+    "RecoveryRequired",
+    "HumanDecisionRequired",
+    "UnsupportedProviderCapability",
+    "CompatibilityImportRequired"
+  ],
+  "privacyScan": "passed-no-secrets-or-provider-payloads-recorded",
+  "temporaryDuplication": [
+    {
+      "owner": "Recovery Coordinator",
+      "callers": "pre-canonical transition recovery",
+      "evidence": "ADR-0012",
+      "deletionMilestone": "M9"
+    },
+    {
+      "owner": "Completion Authority",
+      "callers": "pre-canonical completion and review results",
+      "evidence": "ADR-0012",
+      "deletionMilestone": "M15"
+    }
+  ],
+  "northStarMetricDelta": {
+    "blockingDecisionsExecutable": "0 -> 5 indexed accepted ADRs",
+    "brokenNormativeLinks": "8 -> 0",
+    "generatedRoadmapSources": "ambiguous -> 1"
+  }
+}

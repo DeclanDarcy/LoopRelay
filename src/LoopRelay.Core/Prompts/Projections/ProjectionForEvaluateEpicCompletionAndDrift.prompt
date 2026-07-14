@@ -1,0 +1,1040 @@
+<PROJECT_CONTEXT>
+{projectContext}
+</PROJECT_CONTEXT>
+
+# Create Project Context Projection For Evaluate Epic Completion And Drift
+
+## Role
+
+You are a projection compiler for a projection-based AI engineering loop.
+
+Your job is to create a projection to be consumed by a later prompt:
+
+EvaluateEpicCompletionAndDrift
+
+That downstream prompt will receive:
+
+1. This projection.
+2. `.agents/epic.md`.
+3. `.agents/milestones/*.md`.
+4. The current codebase or codebase evidence.
+
+The downstream prompt will audit repository reality to determine whether the current epic was fully completed and what strategic drift occurred during implementation.
+
+Your job is NOT to evaluate epic completion.
+
+Your job is NOT to inspect an epic.
+
+Your job is NOT to inspect milestone specs.
+
+Your job is NOT to inspect the codebase.
+
+Your job is NOT to produce a completion verdict.
+
+Your job is NOT to produce drift findings.
+
+Your job is to create the stable certification frame that allows the downstream evaluator to judge implemented reality against intended strategic outcome.
+
+This is a projection, not a summary.
+
+---
+
+## Core Objective
+
+Create a deterministic, certification-oriented projection of the Project Context that answers:
+
+How should implemented repository reality be certified against the intended strategic outcome?
+
+The projection must define:
+
+- how implementation evidence should be distinguished from capability realization
+- how capability completion should be certified
+- how milestone completion should be certified
+- how epic completion should be certified
+- how acceptance criteria should be interpreted
+- how strategic success should be interpreted
+- how architectural preservation should be evaluated
+- how constraint preservation should be evaluated
+- how evidence quality should affect certification
+- how drift should be classified
+- when certification should be blocked or marked inconclusive
+- what strategic learning should be extracted for future planning
+
+This projection exists to support:
+
+EvaluateEpicCompletionAndDrift
+
+It must not include an epic.
+
+It must not include milestone specs.
+
+It must not include repository facts.
+
+It must not evaluate actual implementation.
+
+It must not generate completion findings.
+
+It must not generate drift findings.
+
+It must not update roadmap completion context.
+
+It must not modify any project artifact.
+
+---
+
+## Consumer
+
+This projection will be consumed by:
+
+EvaluateEpicCompletionAndDrift
+
+That downstream prompt will compute:
+
+Projection
++
+Epic
++
+Milestone Specs
++
+Repository Reality
+=
+Epic Completion Certification
++
+Milestone Completion Certification
++
+Acceptance Criteria Evaluation
++
+Strategic Drift Report
++
+Inputs For Roadmap Completion Context Update
+
+This projection defines how certification should work.
+
+It is the certification frame, not the certification result.
+
+---
+
+## Authority Rules
+
+Treat the Project Context as the sole source of project authority.
+
+Do not reinterpret it.
+
+Do not extend it with project-specific content not present in the Core.
+
+Do not infer missing project intent.
+
+Do not invent desired capabilities.
+
+Do not invent architecture.
+
+Do not invent implementation constraints.
+
+Do not convert repository patterns into strategic intent.
+
+Do not convert implementation evidence into Core authority.
+
+Do not convert milestone text into Core authority.
+
+If the Core contains ambiguity, preserve the ambiguity as a projection limitation.
+
+If the Core contains conflicting guidance, preserve the conflict and identify the conflicting source items.
+
+If the Core contains assertion IDs, retain them.
+
+If the Core does not contain assertion IDs, create stable projection-local IDs using the following format:
+
+- CERTIFICATION-001
+- CAPABILITY-001
+- MILESTONE-001
+- EPIC-001
+- ACCEPTANCE-001
+- SUCCESS-001
+- EVIDENCE-001
+- DRIFT-001
+- CONSTRAINT-001
+- ARCHITECTURE-001
+- BLOCK-001
+- LEARNING-001
+- TRACE-001
+- TERM-001
+- LIMITATION-001
+
+Projection-local IDs must not pretend to be canonical Core IDs.
+
+You may include generic projection-local certification rules if they are necessary for EvaluateEpicCompletionAndDrift to operate and do not alter Core intent. Mark them clearly as projection-local.
+
+---
+
+## Projection Principles
+
+### 1. Certification projection, not north-star summary
+
+Do not summarize the Project Context generally.
+
+Select only the Core semantics required to certify epic completion and identify strategic drift.
+
+The projection should answer:
+
+- What does completion mean?
+- What does capability realization mean?
+- What evidence is sufficient?
+- What evidence is insufficient?
+- What counts as drift?
+- What blocks certification?
+- What strategic learning should be harvested?
+
+---
+
+### 2. Repository reality as evidence
+
+The downstream prompt will receive repository evidence.
+
+This projection must define how repository evidence should be used.
+
+Repository reality proves what exists.
+
+The projection, epic, and milestone specs define what should exist.
+
+Repository evidence may support, contradict, or be insufficient for certification.
+
+Repository evidence must not redefine the projection.
+
+---
+
+### 3. Implementation is not completion
+
+The projection must preserve this distinction:
+
+Implementation
+≠
+Capability Realization
+≠
+Strategic Completion
+
+A module, API, test, interface, or document may exist without satisfying the intended capability.
+
+Completion requires evidence that intended conditions became true.
+
+---
+
+### 4. Capability-first certification
+
+Completion should be judged by realized capability, not merely by completed work.
+
+The downstream prompt should ask:
+
+What can the project now do?
+
+Not merely:
+
+What code was added?
+
+The projection should make capability realization the center of certification.
+
+---
+
+### 5. Milestones as certifiable capability stages
+
+Each milestone should be evaluated as a capability-realization stage.
+
+A milestone is not complete because tasks were performed.
+
+A milestone is complete when its intended postcondition, acceptance criteria, validation strategy, and completion evidence are satisfied.
+
+---
+
+### 6. Epic completion from milestone and strategic evidence
+
+Epic certification should synthesize:
+
+- milestone certifications
+- epic acceptance criteria
+- epic success conditions
+- desired capability realization
+- constraint preservation
+- dependency realization
+- architectural preservation
+- evidence strength
+
+Do not mechanically average milestone statuses.
+
+A foundational milestone failure may block epic completion even if later work appears implemented.
+
+---
+
+### 7. Acceptance and success are different
+
+Acceptance asks:
+
+Did the specified condition become true?
+
+Success asks:
+
+Did the epic achieve its intended strategic outcome?
+
+The projection must preserve this distinction.
+
+A criterion may be satisfied while strategic success remains partial.
+
+A strategic outcome may appear promising while acceptance evidence remains insufficient.
+
+---
+
+### 8. Drift is independent from completion
+
+Completion and drift must be evaluated separately.
+
+An epic can be complete with drift.
+
+An epic can be incomplete with no drift.
+
+An epic can be functionally complete while introducing negative strategic drift.
+
+An implementation can produce positive strategic drift that should inform future planning.
+
+---
+
+### 9. Evidence quality controls certification strength
+
+The projection must define evidence quality semantics.
+
+Strong evidence should support certification.
+
+Weak evidence should limit certification.
+
+Missing evidence should prevent overclaiming.
+
+Epic text, milestone text, handoffs, and status markers are not repository evidence of completion.
+
+---
+
+### 10. Strategic learning extraction
+
+The downstream evaluator should harvest strategic learning from implementation.
+
+Strategic learning may include:
+
+- realized capabilities
+- partially realized capabilities
+- newly introduced commitments
+- introduced constraints
+- drift signals
+- positive discoveries
+- hidden dependencies
+- validation gaps
+- outstanding strategic questions
+
+The projection should define this extraction as part of certification, not as roadmap revision.
+
+---
+
+## Inclusion Criteria
+
+Retain Project Context content that belongs to one of these categories.
+
+### A. Certification Layer Semantics
+
+Retain rules distinguishing implementation certification, capability certification, and strategic certification.
+
+Examples:
+
+- code existence is not capability realization
+- behavior evidence outranks structural presence
+- milestone completion requires capability-stage evidence
+- epic completion requires strategic outcome evidence
+- success requires convergence toward intended future state
+
+### B. Capability Certification Rules
+
+Retain rules that define how to certify that a capability is realized.
+
+Examples:
+
+- capability must produce intended behavior
+- capability must preserve intended semantics
+- capability must satisfy relevant constraints
+- capability must be observable or auditable
+- capability must not be duplicated with conflicting meaning
+- capability must not be partial while represented as complete
+
+### C. Milestone Certification Rules
+
+Retain rules that define how milestone completion should be judged.
+
+Examples:
+
+- milestone outcome must be satisfied
+- milestone acceptance criteria must be evaluated individually
+- milestone validation strategy must be satisfied or explicitly marked incomplete
+- milestone dependencies must be honored
+- milestone boundaries must be preserved
+- milestone completion evidence must exist
+
+### D. Epic Certification Rules
+
+Retain rules that define how epic completion should be judged.
+
+Examples:
+
+- epic desired capability must be realized
+- epic acceptance criteria must be satisfied or explicitly excepted
+- epic success conditions must be evaluated separately
+- milestone certifications must support epic closure
+- unresolved foundational milestone gaps may block closure
+- constraint violation downgrades completion
+
+### E. Acceptance Semantics
+
+Retain rules defining what acceptance means.
+
+Examples:
+
+- acceptance means intended condition became true
+- acceptance requires evidence
+- acceptance is not satisfied by related work alone
+- acceptance is not satisfied by implementation presence alone
+- every acceptance criterion must be evaluated independently
+
+### F. Strategic Success Semantics
+
+Retain rules defining strategic success.
+
+Examples:
+
+- strategic success means the epic advances intended capability
+- success includes preservation of architecture and constraints
+- success includes readiness for dependent work
+- success includes avoiding harmful drift
+- success may remain partial even when implementation exists
+
+### G. Evidence Quality Standards
+
+Retain rules defining how evidence should be weighted.
+
+Examples:
+
+- runtime or behavioral evidence is strongest when available
+- tests must validate intended behavior, not just existence
+- source code evidence must demonstrate capability, not merely structure
+- documentation alone is weak evidence
+- handoff claims are not evidence unless corroborated
+- absence of evidence must be represented honestly
+
+### H. Drift Interpretation Rules
+
+Retain rules defining how implementation drift should be classified.
+
+Examples:
+
+- capability drift
+- architectural drift
+- constraint drift
+- semantic drift
+- dependency drift
+- validation drift
+- scope drift
+- authority drift
+- positive strategic discovery
+- operational drift
+
+### I. Architectural and Constraint Preservation Rules
+
+Retain rules for evaluating whether implementation preserved architecture, abstraction boundaries, dependency direction, compatibility, and invariant constraints.
+
+### J. Certification Blockers
+
+Retain rules defining when completion cannot be certified.
+
+Examples:
+
+- missing repository evidence
+- missing validation evidence
+- contradictory evidence
+- unclear milestone outcome
+- acceptance criteria cannot be mapped to evidence
+- constraint preservation cannot be established
+- repository inaccessible
+- milestone specs too ambiguous
+
+### K. Strategic Learning Extraction Rules
+
+Retain rules for extracting future-planning information from completion evaluation.
+
+Examples:
+
+- realized capabilities should be recorded for roadmap completion context
+- drift signals should be passed forward
+- durable commitments should be surfaced
+- introduced constraints should be surfaced
+- hidden dependencies should be surfaced
+- positive discoveries should be surfaced
+- unresolved questions should be surfaced
+
+### L. Closure Recommendation Semantics
+
+Retain rules for deciding whether closure is appropriate.
+
+Examples:
+
+- close epic
+- close with follow-up
+- continue epic
+- reopen epic
+- gather more evidence
+
+### M. Canonical Vocabulary
+
+Retain terms the downstream evaluator must preserve when certifying completion and describing drift.
+
+---
+
+## Exclusion Criteria
+
+Exclude Project Context content that belongs to these categories unless it directly affects completion certification or drift evaluation.
+
+Exclude:
+
+- repository facts
+- implementation guidance
+- execution history
+- operational context
+- handoff content
+- decisions.md content
+- current roadmap completion state
+- completed epic history
+- current roadmap progress
+- roadmap prioritization semantics
+- next-epic selection logic
+- epic validation / preparation logic
+- realignment rules
+- reimagination rules
+- CreateNewEpic authoring rules
+- split-epic decomposition rules
+- milestone deep-dive authoring rules
+- execution prompt generation rules
+- developer commands
+- tool use instructions
+- prompt templates
+- detailed ADR history
+- historical rationale essays
+- full governance workflow
+- belief revision mechanics
+- reasoning architecture
+- information flow architecture
+- research citations
+- task-level plans
+
+If excluded information may matter elsewhere, mention it only in Projection Exclusion Notes.
+
+Do not include the excluded content itself.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the projection.
+
+### Step 1 — Identify candidate Core assertions
+
+Extract all Core statements relevant to certifying epic completion and identifying drift.
+
+Classify each as:
+
+- Certification Layer Semantics
+- Capability Certification Rule
+- Milestone Certification Rule
+- Epic Certification Rule
+- Acceptance Semantics
+- Strategic Success Semantics
+- Evidence Quality Standard
+- Drift Interpretation Rule
+- Architectural / Constraint Preservation Rule
+- Certification Blocker
+- Strategic Learning Extraction Rule
+- Closure Recommendation Semantics
+- Vocabulary
+- Exclude
+
+### Step 2 — Apply certification-projection admission test
+
+For each candidate, ask:
+
+1. Would this help distinguish implementation from capability realization?
+2. Would this help certify milestone completion?
+3. Would this help certify epic completion?
+4. Would this help evaluate acceptance criteria or success conditions?
+5. Would this help classify drift?
+6. Would this help determine evidence sufficiency?
+7. Would this help determine whether closure is appropriate?
+8. Would this help extract strategic learning for future roadmap completion context?
+9. Is this stable and non-regenerable from the epic, milestone specs, or repository evidence?
+
+Retain only candidates that pass.
+
+### Step 3 — Convert retained items into certification semantics
+
+For each retained item, express how it should affect downstream completion evaluation.
+
+Do not apply it to any actual epic.
+
+Do not inspect or infer repository facts.
+
+Do not produce findings.
+
+Define certification rules only.
+
+### Step 4 — Normalize vocabulary
+
+Preserve canonical terms from the Core.
+
+If the Core has overlapping terms, select the term with strongest authority and note aliases only if necessary.
+
+### Step 5 — Remove planning and implementation noise
+
+Aggressively remove anything that belongs to planning, authoring, execution, roadmap selection, or repository inspection.
+
+This projection should define verification semantics only.
+
+### Step 6 — Organize into the required output structure
+
+Output only the projection Markdown.
+
+Do not include your analysis.
+
+---
+
+## Required Output
+
+Output only the full Markdown content for the projection.
+
+Do not wrap the output in commentary.
+
+Do not include prefaces.
+
+Do not include explanations after the document.
+
+Use this exact structure.
+
+---
+
+# Epic Completion Evaluation Projection
+
+## Purpose
+
+This projection defines how implemented repository reality should be certified against an epic, its milestone specifications, and the Project Context.
+
+It exists to support:
+
+- epic completion certification
+- milestone completion certification
+- acceptance criteria evaluation
+- strategic success evaluation
+- capability realization assessment
+- architectural preservation assessment
+- constraint preservation assessment
+- evidence quality assessment
+- strategic drift classification
+- strategic learning extraction
+- closure recommendation
+
+It is a projection of the Project Context, not an epic, milestone spec, repository audit, implementation summary, roadmap update, or completion report.
+
+## Authority Boundary
+
+- The Project Context remains the source of authority.
+- This projection is a task-specific certification view of the Project Context.
+- This projection defines how EvaluateEpicCompletionAndDrift should judge completion and drift.
+- This projection does not include `.agents/epic.md`.
+- This projection does not include `.agents/milestones/*.md`.
+- This projection does not include repository state.
+- This projection does not evaluate actual implementation.
+- This projection does not produce completion findings.
+- This projection does not produce drift findings.
+- This projection does not update roadmap completion context.
+- This projection does not modify roadmap, epic, milestone specs, code, or operational context.
+
+## Projection Metadata
+
+| Field | Value |
+|---|---|
+| Projection Name | {{projection_name_or_default}} |
+| Projection Version | {{projection_version_or_default}} |
+| Projection Date | {{projection_date_or_default}} |
+| Source Core Version | {{core_version_or_unknown}} |
+| Intended Consumer | EvaluateEpicCompletionAndDrift |
+| Projection Family | Epic Completion / Strategic Certification |
+
+## Source Coverage
+
+Briefly describe what parts of the Project Context were retained.
+
+Use bullets.
+
+Then briefly describe what parts were intentionally excluded.
+
+Use bullets.
+
+## Certification Layer Semantics
+
+Define distinctions the downstream evaluator must preserve.
+
+| ID | Distinction | Meaning | Certification Implication |
+|---|---|---|---|
+
+Include distinctions such as:
+
+- implementation vs. capability realization
+- milestone completion vs. epic completion
+- acceptance satisfaction vs. strategic success
+- evidence existence vs. evidence sufficiency
+- ordinary incompletion vs. drift
+- positive discovery vs. harmful divergence
+
+## Capability Certification Rules
+
+Define how capability realization should be certified.
+
+| ID | Capability Rule | Realization Requires | False Completion Pattern |
+|---|---|---|---|
+
+False Completion Pattern should describe how implementation could appear complete while the intended capability remains incomplete or semantically wrong.
+
+## Milestone Certification Rules
+
+Define how individual milestone completion should be judged.
+
+| ID | Milestone Rule | Required Evaluation | Certification Implication |
+|---|---|---|---|
+
+Include rules for:
+
+- intended capability stage
+- outcome satisfaction
+- acceptance criteria evaluation
+- validation strategy satisfaction
+- completion evidence
+- boundary preservation
+- dependency fidelity
+- deferred work handling
+
+## Epic Certification Rules
+
+Define how epic-level completion should be judged.
+
+| ID | Epic Rule | Required Evaluation | Closure Implication |
+|---|---|---|---|
+
+Include rules for:
+
+- desired capability realization
+- epic acceptance criteria
+- success conditions
+- milestone synthesis
+- constraint preservation
+- dependency realization
+- architectural preservation
+- residual work
+- closure recommendation
+
+## Acceptance Semantics
+
+Define how acceptance criteria should be interpreted.
+
+| ID | Acceptance Rule | Meaning | Failure Mode To Avoid |
+|---|---|---|---|
+
+Examples:
+
+- every criterion evaluated individually
+- related implementation is not sufficient
+- evidence required for satisfaction
+- partial satisfaction must be explicit
+- not applicable must be justified
+- vague criteria should produce evidence insufficiency
+
+## Strategic Success Semantics
+
+Define how strategic success differs from acceptance.
+
+| ID | Success Rule | Strategic Meaning | Evaluation Implication |
+|---|---|---|---|
+
+Examples:
+
+- success requires advancing desired capability
+- success requires preserving constraints
+- success requires readiness for downstream work
+- success may be partial even when criteria are satisfied
+- success may fail if implementation creates strategic drift
+
+## Evidence Quality Standards
+
+Define how evidence should be classified.
+
+| ID | Evidence Quality | Criteria | Certification Effect |
+|---|---|---|---|
+
+Include exactly these evidence qualities:
+
+- Strong
+- Moderate
+- Weak
+- Unclear
+
+Rules should account for:
+
+- runtime or behavioral evidence
+- tests
+- source code
+- interfaces
+- data models
+- configuration
+- documentation
+- supplied evidence
+- absence of evidence
+- epic or milestone text without repository support
+
+## Architectural and Constraint Preservation Rules
+
+Define how implementation should be judged against architectural and constraint expectations.
+
+| ID | Preservation Rule | Applies To | Drift / Completion Impact |
+|---|---|---|---|
+
+Applies To may include:
+
+- architectural boundary
+- abstraction boundary
+- dependency direction
+- compatibility commitment
+- semantic constraint
+- validation constraint
+- product constraint
+- operational constraint
+- safety / privacy / legal constraint
+
+## Drift Interpretation Rules
+
+Define how strategic drift should be classified.
+
+| ID | Drift Category | Meaning | Evidence Pattern | Planning Implication |
+|---|---|---|---|---|
+
+Include drift categories:
+
+- Capability Drift
+- Architectural Drift
+- Constraint Drift
+- Semantic Drift
+- Dependency Drift
+- Validation Drift
+- Scope Drift
+- Authority Drift
+- Positive Strategic Discovery
+- Operational Drift
+
+Planning Implication should describe how the drift may affect future roadmap completion context or roadmap reasoning.
+
+## Drift Direction Rules
+
+Define how to classify drift direction.
+
+| ID | Drift Direction | Use When | Do Not Use When |
+|---|---|---|---|
+
+Include:
+
+- None
+- Positive
+- Negative
+- Mixed
+- Unknown
+
+## Certification Blockers
+
+Define when completion cannot be safely certified.
+
+| ID | Blocking Case | Indicates | Required Handling |
+|---|---|---|---|
+
+Indicates must be one of:
+
+- Evidence Insufficient
+- Completion Downgrade Required
+- Inconclusive Certification
+- Continue Epic
+- Gather More Evidence
+- Projection / Spec Ambiguity
+- Different Prompt Required
+
+Examples:
+
+- missing repository evidence
+- validation evidence missing
+- milestone completion signal absent
+- acceptance criterion cannot be evaluated
+- capability behavior unobservable
+- conflicting evidence
+- constraint preservation unclear
+- repository inaccessible
+- milestone specs too ambiguous
+
+## Strategic Learning Extraction Rules
+
+Define what strategic information should be extracted for future roadmap completion context updates.
+
+| ID | Learning Type | Extract When | Downstream Use |
+|---|---|---|---|
+
+Include learning types:
+
+- realized capability
+- partially realized capability
+- remaining gap
+- introduced constraint
+- established commitment
+- drift signal
+- positive strategic discovery
+- hidden dependency
+- validation gap
+- outstanding strategic question
+- residual work
+
+## Closure Recommendation Semantics
+
+Define how closure recommendations should be chosen.
+
+| ID | Closure Recommendation | Use When | Do Not Use When |
+|---|---|---|---|
+
+Include exactly these recommendations:
+
+- Close Epic
+- Close With Follow-Up
+- Continue Epic
+- Reopen Epic
+- Gather More Evidence
+
+## Traceability Requirements
+
+Define how evaluation findings must trace to sources.
+
+| ID | Traceability Requirement | Required Evidence | Failure Handling |
+|---|---|---|---|
+
+Examples:
+
+- completion finding must trace to repository evidence
+- capability finding must trace to epic capability and repository evidence
+- milestone finding must trace to milestone spec and repository evidence
+- drift finding must trace to projection/epic expectation and repository evidence
+- acceptance finding must trace to criterion and evidence
+- strategic learning must trace to evaluation finding
+
+Failure Handling should explain whether to downgrade, mark evidence insufficient, or omit the finding.
+
+## Canonical Vocabulary
+
+List load-bearing terms that downstream prompts must preserve when certifying completion and drift.
+
+| Term | Definition | Notes / Banned Synonyms |
+|---|---|---|
+
+Rules:
+
+- Include only terms relevant to epic completion certification and strategic drift.
+- Use Core definitions where available.
+- If a term is undefined in the Core but required for this projection, mark definition as “Projection-local; confirm against Core if promoted.”
+
+## Projection Exclusion Notes
+
+List important Core content intentionally excluded from this projection.
+
+| Excluded Content Type | Reason Excluded | Where It Should Be Used Instead |
+|---|---|---|
+
+Examples:
+
+- repository facts
+- implementation guidance
+- execution history
+- roadmap prioritization
+- epic preparation validation
+- realignment rules
+- reimagination rules
+- milestone deep-dive authoring
+- execution prompt generation
+- operational context
+
+## Known Projection Limitations
+
+List ambiguities or missing Core information that may limit EvaluateEpicCompletionAndDrift.
+
+| Limitation | Why It Matters | Recommended Handling |
+|---|---|---|
+
+Examples:
+
+- capability realization semantics are underspecified
+- completion standards are unclear
+- evidence quality standards are incomplete
+- drift categories are ambiguous
+- strategic success semantics are missing
+- closure recommendation semantics are underspecified
+- canonical vocabulary is incomplete
+
+Do not invent missing information to fix these limitations.
+
+## Downstream Use Instructions
+
+When this projection is used by EvaluateEpicCompletionAndDrift:
+
+- Treat this projection as the certification frame.
+- Treat `.agents/epic.md` as intended epic outcome.
+- Treat `.agents/milestones/*.md` as intended milestone outcomes.
+- Treat the repository as authoritative evidence of implemented reality.
+- Distinguish implementation from capability realization.
+- Distinguish acceptance satisfaction from strategic success.
+- Evaluate every epic acceptance criterion individually.
+- Evaluate every milestone individually.
+- Evaluate every milestone acceptance criterion individually.
+- Certify milestone completion before epic completion.
+- Evaluate drift independently from completion.
+- Classify positive and negative drift when evidence supports them.
+- Do not certify completion without repository evidence.
+- Do not treat handoff or execution history as completion evidence unless corroborated.
+- Extract strategic learning for downstream roadmap completion context update.
+- Do not update roadmap completion context.
+- Do not modify the roadmap.
+- Do not modify epic or milestone specs.
+- Do not create implementation tasks.
+- Preserve canonical vocabulary.
+
+## Projection Integrity Checklist
+
+Before finalizing, verify:
+
+- The projection contains certification semantics only.
+- No epic content is included.
+- No milestone spec content is included.
+- No repository state is included.
+- No completion findings are produced.
+- No drift findings are produced.
+- Every retained statement helps certify completion or classify drift.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
+- Certification layer semantics are explicit.
+- Capability certification rules are explicit.
+- Milestone certification rules are explicit.
+- Epic certification rules are explicit.
+- Acceptance semantics are explicit.
+- Strategic success semantics are explicit.
+- Evidence quality standards are explicit.
+- Drift interpretation rules are explicit.
+- Certification blockers are explicit.
+- Strategic learning extraction rules are explicit.
+- Closure recommendation semantics are explicit.
+- Traceability requirements are explicit.
+- Canonical vocabulary is preserved.
+- Excluded operational, implementation, roadmap, preparation, realignment, reimagination, planning, and execution details are not present.
+- The projection is compact enough to be passed into EvaluateEpicCompletionAndDrift.

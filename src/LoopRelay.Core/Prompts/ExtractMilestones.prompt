@@ -1,0 +1,11 @@
+Read .agents/plan.md and .agents/details.md, then split the plan into one markdown file per milestone: .agents/milestones/m*.md where * is the number plus a succinct label.
+Preserve the plan's milestone identity set exactly. Create exactly one file for each distinct milestone number; consolidate all work for M1 into one `m1-*.md` file, all work for M2 into one `m2-*.md` file, and so on. Never split a single numbered milestone into multiple files with different labels, and never invent additional milestone numbers.
+Each milestone markdown must contain at least one strict Markdown progress checkbox such as `- [ ] item`.
+You must rewrite .agents/plan.md so each milestone entry contains only a `(See ./milestones/m*.md)` pointer using a path relative to .agents/plan.md. Leaving .agents/plan.md byte-for-byte unchanged fails the operation and rolls back every write.
+Copy milestone-specific information from .agents/details.md into the applicable milestone files. Do not modify .agents/details.md in this operation; a later scoped operation refines it.
+Keep implementation responsibility separate from downstream orchestration. Capability implementation and local verification
+must be actionable before `GenerateHandoff` and `PublishRepositoryState`; never make discovery, preview, or invocation of a
+publisher a prerequisite for an implementation checkbox. Publication-only conditions belong to the later orchestrator and
+must not block the execution agent from performing bounded capability work. The absence of a callable publisher is not an
+implementation blocker.
+Perform the repository writes now. A prose description without the required file mutations is a failure.

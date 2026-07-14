@@ -1,0 +1,1265 @@
+# Create Eval Dependency/Hypothesis Architectural Catalog Prompt
+
+This prompt reads:
+
+```text
+.agents/eval-dependency-inventory.md
+.agents/eval-hypothesis-inventory.md
+```
+
+and produces an organized hierarchical catalog of eligible implementation-first dependencies and hypotheses.
+
+The catalog must minimize the total number of groups while ensuring:
+
+1. no two items with a dependency relationship are placed in the same group;
+2. no two items with a falsifiability relationship are placed in the same group;
+3. every item within a group belongs to the same horizontal architectural plane.
+
+You are NOT creating or modifying evaluation specs.
+You are NOT creating or modifying the dependency inventory.
+You are NOT creating or modifying the hypothesis inventory.
+You are NOT creating a roadmap.
+You are NOT creating epics.
+You are NOT creating milestones.
+You are NOT implementing anything.
+You are NOT designing architecture.
+You are NOT writing tests.
+You are NOT executing tests.
+You are NOT reporting evaluation results.
+You are NOT deciding whether dependencies or hypotheses are satisfied unless explicitly instructed to assess repository evidence.
+
+Your output must be only the final Markdown content for:
+
+```text
+.agents/eval-architectural-catalog.md
+```
+
+If the caller provides a different output path, use that path instead.
+
+---
+
+## Core Objective
+
+Create an **Eval Dependency/Hypothesis Architectural Catalog**.
+
+The file should answer:
+
+> How can all individual eval dependencies and falsifiable hypotheses be organized into the fewest possible coherent groups, while preserving dependency separation, falsifiability separation, and horizontal architectural-plane integrity?
+
+The catalog must:
+
+* index every eligible implementation-first dependency;
+* index every eligible implementation-first hypothesis;
+* preserve source traceability;
+* identify dependency relationships;
+* identify falsifiability relationships;
+* assign every eligible item to a horizontal architectural plane;
+* group items only with same-plane peers;
+* prevent related items from sharing a group;
+* minimize the total number of groups subject to those constraints;
+* expose open implementation-first ambiguities instead of resolving them by convenience.
+
+The output should not restate the inventories.
+
+It should reorganize their eligible implementation-first items into a dependency-safe, falsifiability-safe, architecture-plane-aware catalog.
+
+---
+
+## Project-Agnostic Rule
+
+This prompt must remain project-agnostic.
+
+Do not hardcode:
+
+* product names;
+* programming languages;
+* frameworks;
+* providers;
+* repository paths;
+* architecture names;
+* domain-specific constructs;
+* evaluation IDs;
+* output artifact names;
+* fixture names;
+* hypothesis IDs;
+* dependency IDs;
+* capability names;
+* non-execution decision, judgment, or result-acceptance state names;
+* public capability rows;
+* ontology categories.
+
+Use project-specific terms only when they appear in the dependency or hypothesis inventory.
+
+When the source inventories contain project-specific details, preserve them as source-derived catalog content.
+
+Do not generalize away concrete source meaning.
+
+Project-specific terms that belong to forbidden non-implementation artifacts are internal derivation context only.
+Do not emit those names, labels, IDs, examples, or traces in the final catalog.
+
+Do not invent missing planes, groups, dependencies, hypotheses, or relationships.
+
+Use `TBD` when a plane, relationship, minimization decision, or source interpretation is unclear.
+
+---
+
+## Source Authority
+
+The dependency inventory owns:
+
+* dependency IDs;
+* dependency names;
+* dependency classes;
+* dependency strictness;
+* planning weights;
+* source eval mappings;
+* source requirement mappings;
+* dependency graph relationships;
+* functional dependencies;
+* technical dependencies;
+* operational dependencies;
+* cross-cutting dependencies;
+* evidence dependencies;
+* fixture/input dependencies;
+* execution-tied result-envelope, result-data, schema, validator, and evidence dependencies;
+* negative-control dependencies;
+* stability dependencies;
+* public/external dependencies;
+* schema/model-change validation dependencies;
+* conditional dependencies;
+* run/pass/result-aggregation/safe-failure execution prerequisites;
+* dependency coverage matrix;
+* open dependency questions.
+
+The hypothesis inventory owns:
+
+* hypothesis IDs;
+* hypothesis statements;
+* hypothesis classes;
+* source dependency mappings;
+* strictness;
+* planning weights;
+* verification modes;
+* confirmation conditions;
+* falsification conditions;
+* blocked or inconclusive conditions;
+* hypothesis graph relationships;
+* dependency-to-hypothesis coverage;
+* run/pass/result-aggregation/safe-failure hypothesis execution prerequisites;
+* conditional hypotheses;
+* open hypothesis questions.
+
+If source inventories conflict:
+
+* preserve both claims;
+* do not silently choose one;
+* record the conflict in `Open Catalog Questions`;
+* use `TBD` for affected plane, group, or relationship decisions.
+
+Repository evidence may be used only if the task explicitly requests current status assessment. Otherwise, status must remain inherited from source inventories or marked:
+
+```text
+Not Assessed
+```
+
+---
+
+## Implementation-First Boundary
+
+This catalog is implementation-first.
+
+Only source items that name or imply implementation-aligned, machine-verifiable prerequisites may become catalog items, planes, groups, relationship rows, coverage rows, execution-prerequisite rows, summary counts, or open-question resolutions.
+
+A valid catalog item may describe:
+
+* runtime behavior;
+* evaluator behavior;
+* executable fixture input;
+* fixture artifact, fixture corpus, fixture manifest, or machine-consumed scenario input;
+* provider output required to exercise an eval path;
+* schema-validated evaluator result envelope, validator output, or deterministic result data;
+* persisted evidence record, durable evidence store, sidecar, or diagnostic record;
+* validation contract, extraction boundary contract, executable schema contract, scanner, runner, comparator, or harness;
+* static scan output, replay record, comparison artifact, negative-control output, or machine-consumed false-success test result;
+* capability descriptor, capability fingerprint, capability metadata, public capability matrix, projection contract, or queryable runtime/public-surface metadata;
+* storage, identity, linkage, serialization, replay, compatibility, or schema/ontology validation mechanism.
+
+The following non-implementation artifacts and semantic artifacts acting as policy are forbidden as final catalog content under all circumstances:
+
+* reports whose primary role is human-readable certification, smoke-gate narration, suite overview, or aggregation narrative;
+* certification documents, certification judgments, readiness declarations, final realization declarations, or support labels;
+* report-format requirements whose primary deliverable is narrative structure rather than machine-validated result data;
+* evidence/finding/judgment separation rules whose primary deliverable is a certification narrative rather than a machine-validated evidence schema;
+* suite-level states, final support-label states, support-label discipline, or judgment-state discipline;
+* certification checklists, minimum-bar checklists, gate-ordering policies, or foundational gate-enforcement rules;
+* governance review artifacts, ontology change inventories, proof packages, admission proof packages, proof-authority packages, manual approval records, or release-governance controls;
+* public documentation review artifacts, public-claim review artifacts, or support-label review artifacts.
+
+A source-defined requirement does not override this prohibition.
+Do not preserve, summarize, reframe, rename, count, group, classify, index, or list forbidden artifacts anywhere in the generated catalog.
+Do not assign forbidden artifacts a plane, group, relationship edge, dependency class, hypothesis class, strictness, planning weight, execution prerequisite, status, coverage row, open question, or anti-pattern row.
+
+Machine-readable wording is not sufficient.
+An artifact is eligible only when the source row can pass every part of this execution-tied test:
+
+1. It has a deterministic producer, such as a runner, harness, extractor, validator, scanner, fixture generator, persistence path, query path, or aggregator.
+2. It has a deterministic consumer, such as a validator, comparator, aggregator, replay check, query surface, runtime path, or downstream executable check.
+3. It has a typed or schema-constrained payload, or a source-defined machine contract whose fields are consumed by execution.
+4. Invalid, missing, incomplete, or contradictory payload data changes machine behavior by producing a failed, blocked, inconclusive, unsupported, skipped, or non-pass machine state.
+5. Its catalog representation can be stated without preserving the forbidden artifact as the deliverable.
+
+If any part of this test fails, the row is not eligible.
+Do not keep it by replacing the noun with implementation, generated, machine-readable, evidence, result, schema, validation, or governance wording.
+
+Use source text about forbidden artifacts only as internal derivation context for implementation-first items.
+When source text names a forbidden artifact, derive only the underlying executable behavior, machine-verifiable evidence, deterministic result data, runtime/queryable metadata, validation mechanism, result aggregation, compatibility check, or durable record needed to make the source obligation machine-verifiable.
+Do not launder a forbidden artifact by adding words such as implementation, generated, machine-readable, evidence, result, support, schema, or validation unless the row actually names an execution-tied mechanism.
+
+Forbidden artifacts must not appear in any final-output exclusion ledger, coverage matrix, anti-pattern, example, open question, source trace, note, or summary.
+If aggregate accounting is needed, emit only a count and a neutral boundary reason, without source IDs, source labels, titles, filenames, or quotations for forbidden rows.
+
+If the implementation-first basis is unclear, create an open catalog question only about the missing executable behavior, machine-verifiable evidence, validation, metadata, result aggregation, compatibility check, or durable record.
+Do not ask for, propose, summarize, or name the forbidden artifact as the resolution.
+
+Do not reject a candidate merely because it is an artifact.
+Reject it only when it is non-implementation, a semantic artifact acting as policy, or primarily documentary/judgment-based.
+Machine-required artifacts are permitted when executable eval behavior consumes, produces, compares, validates, persists, or queries them.
+Semantic artifacts acting as policy are forbidden; deterministically execution-tied artifacts are eligible.
+
+---
+
+## Definitions
+
+### Item
+
+An item is any eligible implementation-first dependency or hypothesis extracted or derived from the source inventories.
+
+Every eligible item must be indexed exactly once in the final catalog.
+
+Forbidden non-implementation artifacts are not items and must not appear in the final catalog.
+
+### Dependency Item
+
+A dependency item is a dependency record from the dependency inventory.
+
+It may be functional, technical, operational, evidence-related, fixture-related, result-envelope/schema/validator-related, negative-control-related, stability-related, public-surface-related, schema/validation-related, model-change-mechanism-related, cross-cutting, conditional, or open-question-related.
+
+### Hypothesis Item
+
+A hypothesis item is a falsifiable hypothesis record from the hypothesis inventory.
+
+It may be functional, technical, operational, evidence-related, negative-control-related, stability-related, public/external-surface-related, schema/validation-related, model-change-mechanism-related, result-aggregation-related, cross-cutting, conditional, or open-question-related.
+
+### Relationship
+
+A relationship is a source-derived edge showing that two items are not independent.
+
+Relationships include dependency relationships and falsifiability relationships.
+
+If two items have a relationship, they must not be assigned to the same group.
+
+### Horizontal Architectural Plane
+
+A horizontal architectural plane is a same-level area of architectural concern.
+
+Items in the same group must dwell in the same horizontal plane.
+
+A plane is not a roadmap phase, implementation layer, team, file area, or sequence step unless the source inventories explicitly define it that way.
+
+A plane should describe a peer-level architectural concern such as:
+
+* input or fixture availability;
+* participant/provider/component participation;
+* artifact recognition or classification;
+* processing or evaluation boundary;
+* durable record or data model;
+* identity or reference stability;
+* relationship/linkage/dependency semantics;
+* evidence, diagnostics, or observability;
+* execution-tied evidence, result-envelope schema, validator output, aggregation record, or deterministic result data;
+* public/external surface honesty;
+* determinism, replay, reproducibility, or regression;
+* negative-control or safe-failure behavior;
+* operational run discipline;
+* schema, ontology, validation, compatibility, or durable model-change mechanisms.
+
+Use only planes supported by source inventories.
+
+Do not create overly narrow planes merely to reduce grouping conflicts.
+
+### Group
+
+A group is a set of catalog items that:
+
+* are all assigned to the same horizontal architectural plane;
+* have no dependency relationship between any pair of items in the group;
+* have no falsifiability relationship between any pair of items in the group;
+* can be reasoned about as peer-level items for planning, audit, or review.
+
+The total number of groups must be minimized subject to these constraints.
+
+---
+
+## Relationship Rules
+
+Create relationship edges from the source inventories.
+
+### Dependency Relationships
+
+A dependency relationship exists when one item:
+
+* depends on another item;
+* enables another item;
+* blocks another item if missing;
+* is required before another item can run, pass, produce result aggregation, or fail safely;
+* is an upstream prerequisite;
+* is a downstream consequence;
+* appears in a dependency graph as connected;
+* appears in an execution-prerequisite table as prerequisite to a later execution stage;
+* appears in a conditional dependency relationship;
+* is the source dependency for a hypothesis;
+* is required evidence for another dependency or hypothesis;
+* is required fixture/input/generated result data/public surface/schema/validation state for another item.
+
+### Falsifiability Relationships
+
+A falsifiability relationship exists when one item:
+
+* is a hypothesis that confirms or falsifies a dependency;
+* is a hypothesis prerequisite for another hypothesis;
+* is falsified together with another hypothesis;
+* provides a falsifier for another hypothesis or dependency;
+* exposes false success in another item;
+* is a negative control for another item;
+* provides required evidence for confirming or falsifying another hypothesis;
+* is necessary to determine whether another hypothesis is blocked, inconclusive, supported, or falsified;
+* is part of dependency-to-hypothesis coverage for another item.
+
+### Non-Relationships
+
+Do not create a relationship edge merely because two items:
+
+* come from the same eval;
+* come from the same file;
+* share a source heading;
+* share a planning weight;
+* share a dependency class;
+* share a hypothesis class;
+* share a verification mode;
+* share an architectural plane;
+* use similar words;
+* are both important;
+* both appear in the same summary.
+
+Similarity is not a relationship.
+
+Only source-derived or logically necessary dependency/falsifiability connections are relationship edges.
+
+When uncertain, record the possible edge in `Open Catalog Questions`.
+
+---
+
+## Grouping Constraints
+
+The final grouping must satisfy all constraints below.
+
+### Constraint 1 — Complete Eligible Assignment
+
+Every eligible dependency and hypothesis item must be assigned to exactly one group.
+
+Forbidden non-implementation artifacts are outside catalog scope and must not be assigned, listed, counted, or covered.
+
+### Constraint 2 — Same Plane
+
+Every item in a group must belong to the same horizontal architectural plane.
+
+### Constraint 3 — No Dependency Relationship Within Group
+
+No two items with a dependency relationship may be in the same group.
+
+### Constraint 4 — No Falsifiability Relationship Within Group
+
+No two items with a falsifiability relationship may be in the same group.
+
+### Constraint 5 — Minimized Group Count
+
+The total number of groups must be minimized subject to Constraints 1–4.
+
+### Constraint 6 — Honest Plane Assignment
+
+Plane assignment must reflect architectural meaning, not grouping convenience.
+
+Do not create artificial planes just to reduce conflicts or lower group count.
+
+### Constraint 7 — Stable IDs
+
+Every plane, group, item, and edge must receive a stable catalog ID.
+
+### Constraint 8 — Traceability
+
+Every catalog item must preserve traceability to its source dependency or hypothesis ID and source inventory file.
+
+### Constraint 9 — Implementation-First Output Boundary
+
+No final-output section may emit a forbidden non-implementation artifact as a catalog item, plane, group, dependency, hypothesis, edge, execution prerequisite, status, coverage row, open-question resolution, anti-pattern, source trace, example, or summary count.
+
+---
+
+## Group Minimization Method
+
+Use the following method.
+
+### Step A — Assign Primary Plane
+
+Assign every eligible item to one primary horizontal architectural plane.
+
+Use source-derived plane or family names when available.
+
+When source-derived planes are unavailable, infer the plane from:
+
+* dependency class;
+* hypothesis class;
+* planning weight;
+* verification mode;
+* required evidence;
+* source requirement area;
+* execution-prerequisite role;
+* dependency family;
+* hypothesis family;
+* item purpose;
+* architectural concern.
+
+If an item spans multiple planes, assign the plane corresponding to the item’s primary falsifiable or dependency-bearing concern, and record secondary planes as tags.
+
+If the primary plane is unclear, assign `TBD` and record an open catalog question.
+
+### Step B — Build Incompatibility Graph
+
+Create an incompatibility graph.
+
+Nodes are catalog items.
+
+Edges are dependency or falsifiability relationships.
+
+Only items in the same plane are candidates for the same group.
+
+Items in different planes are never grouped together.
+
+### Step C — Minimize Groups Per Plane
+
+For each architectural plane, partition that plane’s items into the minimum number of independent groups.
+
+Within a plane, this is equivalent to graph coloring the plane-specific incompatibility graph.
+
+Use an exact minimization approach when tractable.
+
+When exact minimization is not tractable, use a deterministic graph-coloring heuristic and record:
+
+* the heuristic used;
+* the lower bound if known;
+* the resulting group count;
+* why the result is accepted;
+* whether exact minimality is proven or best-effort.
+
+Do not hide uncertainty about minimality.
+
+### Step D — Minimize Total Groups
+
+The total group count is the sum of minimized group counts across all planes.
+
+Do not reduce total group count by merging planes.
+
+Do not reduce total group count by ignoring relationship edges.
+
+Do not reduce total group count by excluding difficult eligible items.
+
+### Step E — Validate Groups
+
+For each group, verify:
+
+* all items share the same primary plane;
+* no relationship edge exists between any two group items;
+* every item has source traceability;
+* the group has a clear architectural-plane rationale;
+* the group does not contain dependency/falsifiability pairs;
+* the group is not an artifact of implementation convenience;
+* the group is not centered on forbidden semantic-policy, certification, judgment, label, proof-package, overview, inventory, checklist, or manual-review artifacts.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the final file.
+
+### Step 1 — Read Source Inventories
+
+Read:
+
+```text
+.agents/eval-dependency-inventory.md
+.agents/eval-hypothesis-inventory.md
+```
+
+If `.agents/eval-dependency-inventory` is a file, read that file.
+
+If it is a directory, recursively read Markdown, MDX, YAML, JSON, TOML, or other obvious dependency-inventory files.
+
+For every source file, identify:
+
+* path;
+* source type;
+* title;
+* version if present;
+* included or excluded status;
+* exclusion reason if excluded.
+
+Do not silently ignore files.
+
+---
+
+### Step 2 — Extract Dependency Items
+
+Apply the implementation-first boundary before extraction.
+
+Extract every eligible implementation-first dependency item from the dependency inventory, including items from:
+
+* Foundational Dependency Map;
+* Functional Dependencies;
+* Technical Dependencies;
+* Operational Dependencies;
+* Cross-Cutting Dependencies;
+* Evidence Dependencies;
+* Fixture / Corpus / Input Dependencies;
+* Machine-Required Generated Result / Evidence Dependencies;
+* Negative-Control and Safe-Failure Dependencies;
+* Determinism / Replay / Reproducibility / Regression Dependencies;
+* Public / External Surface Dependencies;
+* Schema / Validation / Model-Change Mechanism Dependencies;
+* Dependency Graph;
+* Eval Coverage Matrix;
+* Run / Pass / Result-Aggregation / Safe-Failure Execution Prerequisites;
+* Conditional Dependencies;
+* Open Dependency Questions.
+
+When a source dependency row is forbidden by the implementation-first boundary, do not extract that row.
+Use it only to derive eligible implementation-first dependency items, or ignore it if no implementation-first basis is present.
+
+Preserve:
+
+* dependency ID;
+* dependency name;
+* dependency class;
+* strictness;
+* planning weight;
+* source eval or requirement trace;
+* status;
+* evidence required;
+* execution-prerequisite role;
+* graph relationships;
+* conditionality;
+* open questions.
+
+---
+
+### Step 3 — Extract Hypothesis Items
+
+Apply the implementation-first boundary before extraction.
+
+Extract every eligible implementation-first hypothesis item from the hypothesis inventory, including items from:
+
+* Foundational Hypotheses;
+* Functional Hypotheses;
+* Technical Hypotheses;
+* Operational Hypotheses;
+* Evidence Hypotheses;
+* Fixture / Corpus / Input Hypotheses;
+* Machine-Required Generated Result / Evidence Hypotheses;
+* Negative-Control and Safe-Failure Hypotheses;
+* Stability Hypotheses;
+* Public / External Surface Hypotheses;
+* Schema / Validation / Model-Change Mechanism Hypotheses;
+* Result-Aggregation Hypotheses;
+* Cross-Cutting Hypotheses;
+* Conditional Hypotheses;
+* Hypothesis Graph;
+* Run / Pass / Result-Aggregation / Safe-Failure Hypotheses;
+* Dependency-to-Hypothesis Coverage Matrix;
+* Open Hypothesis Questions.
+
+When a source hypothesis row is forbidden by the implementation-first boundary, do not extract that row.
+Use it only to derive eligible implementation-first hypotheses about executable behavior, evidence, metadata, validation, result aggregation, compatibility, durable records, or safe-failure behavior.
+
+Preserve:
+
+* hypothesis ID;
+* hypothesis statement;
+* hypothesis class;
+* source dependency;
+* strictness;
+* planning weight;
+* verification mode;
+* required evidence;
+* confirmation condition;
+* falsification condition;
+* blocked or inconclusive condition;
+* status;
+* graph relationships;
+* execution-prerequisite role;
+* conditionality;
+* open questions.
+
+---
+
+### Step 4 — Normalize Item Index
+
+Create a normalized item index.
+
+Every eligible item must have:
+
+* catalog item ID;
+* source item ID;
+* source type: `Dependency` or `Hypothesis`;
+* source file;
+* item name or statement;
+* item class;
+* strictness;
+* planning weight;
+* status;
+* source trace;
+* primary architectural plane;
+* secondary plane tags, if any;
+* relationship edge references;
+* assigned group ID.
+
+Do not create normalized item-index rows for forbidden non-implementation artifacts.
+
+Use stable ID patterns such as:
+
+```text
+EVAL-CAT-ITEM-001
+EVAL-CAT-DEP-001
+EVAL-CAT-HYP-001
+```
+
+Do not rewrite source IDs.
+
+Keep source IDs as traceability fields.
+
+---
+
+### Step 5 — Build Relationship Edge Index
+
+Build a relationship edge index.
+
+Only create relationship edges between eligible catalog items.
+Do not create edges where a forbidden non-implementation artifact is the source item or target item.
+
+For each edge, record:
+
+* edge ID;
+* source item;
+* target item;
+* edge type;
+* relationship class: `Dependency`, `Falsifiability`, or `Both`;
+* source evidence for the edge;
+* whether the edge prevents same-group placement;
+* notes or uncertainty.
+
+Use stable ID patterns such as:
+
+```text
+EVAL-CAT-EDGE-001
+```
+
+All dependency and falsifiability edges prevent same-group placement.
+
+---
+
+### Step 6 — Assign Horizontal Architectural Planes
+
+Assign every eligible item to one primary horizontal architectural plane.
+
+Use source-derived terminology first.
+
+If no source-derived plane exists, use project-agnostic architectural-plane language based on the item’s primary concern.
+
+Possible generic planes include:
+
+* Input / Fixture / Scenario Plane;
+* Participant / Provider / Component Participation Plane;
+* Artifact Recognition / Classification Plane;
+* Processing / Evaluation Boundary Plane;
+* Durable Record / Data Model Plane;
+* Identity / Identifier Plane;
+* Relationship / Linkage / Dependency Plane;
+* Evidence / Diagnostics / Observability Plane;
+* Execution-Tied Evidence / Result Data Plane;
+* Public / External Surface Plane;
+* Determinism / Replay / Reproducibility / Regression Plane;
+* Negative-Control / Safe-Failure Plane;
+* Operational Run / Maintenance Plane;
+* Governance / Schema / Ontology / Validation / Model-Change Mechanism Plane;
+* TBD Plane.
+
+Use only planes that fit source items.
+
+Do not force every generic plane to appear.
+
+Do not assign an item to a plane solely to reduce conflicts.
+
+Do not create a report/certification artifact plane, judgment plane, support-label plane, proof-package plane, checklist plane, overview plane, inventory plane, or other plane whose primary concern is a forbidden non-implementation artifact.
+
+---
+
+### Step 7 — Validate Plane Assignments
+
+For each plane, verify:
+
+* items share a horizontal architectural concern;
+* the plane is not a sequence step unless the source requires it;
+* the plane is not a repository folder, implementation module, team, or roadmap phase unless the source requires it;
+* the plane is not centered on forbidden semantic-policy, certification, judgment, label, proof-package, overview, inventory, checklist, or manual-review artifacts;
+* the plane is broad enough to avoid artificial fragmentation;
+* the plane is narrow enough that grouped items are true same-plane peers.
+
+Record ambiguous plane assignments in `Open Catalog Questions`.
+
+---
+
+### Step 8 — Group Items Within Each Plane
+
+For each plane:
+
+1. collect all eligible items assigned to that plane;
+2. build the plane-specific incompatibility graph;
+3. partition items into the minimum number of groups such that no group contains an edge-connected pair;
+4. assign stable group IDs;
+5. record minimization evidence or rationale.
+
+Use stable ID patterns such as:
+
+```text
+EVAL-CAT-GROUP-001
+```
+
+A group may contain both dependencies and hypotheses only when:
+
+* both items pass the implementation-first boundary;
+* they are in the same plane;
+* no dependency relationship connects them;
+* no falsifiability relationship connects them;
+* they are not source dependency/hypothesis pairs;
+* they do not require one another as evidence, prerequisite, confirmation, falsifier, or execution condition.
+
+---
+
+### Step 9 — Create Hierarchical Catalog
+
+Organize the final catalog as:
+
+```text
+Architectural Plane
+  → Minimized Group
+    → Individual Items
+```
+
+Each plane should include:
+
+* plane ID;
+* plane name;
+* plane definition;
+* included item count;
+* group count;
+* minimization notes;
+* open issues.
+
+Each group should include:
+
+* group ID;
+* group name;
+* architectural plane;
+* item count;
+* dependencies included;
+* hypotheses included;
+* why items can coexist horizontally;
+* relationship constraints checked;
+* source traceability coverage.
+
+Each item should include:
+
+* catalog item ID;
+* source item ID;
+* item type;
+* short label;
+* source trace;
+* relationship edges;
+* execution-prerequisite relevance;
+* status;
+* notes.
+
+---
+
+### Step 10 — Create Cross-Catalog Views
+
+After the hierarchical catalog, create supporting views:
+
+* item index;
+* dependency item index;
+* hypothesis item index;
+* edge index;
+* group validation matrix;
+* plane validation matrix;
+* source coverage matrix;
+* dependency-to-hypothesis mapping view;
+* execution prerequisite view;
+* open questions.
+
+These views must support auditing the grouping.
+
+These views must include only eligible implementation-first catalog items and relationships.
+Do not use supporting views to list, classify, explain, preserve, or individually count forbidden non-implementation artifacts.
+Only aggregate boundary-exclusion counts are permitted for forbidden rows, and those counts must not expose forbidden row IDs, labels, source names, traces, or examples.
+
+---
+
+### Step 11 — Verify Minimization
+
+Before final output, verify:
+
+* all eligible items are assigned;
+* no item is assigned to multiple groups;
+* no same-group pair has a dependency edge;
+* no same-group pair has a falsifiability edge;
+* all same-group items share a primary plane;
+* total group count is minimized within each plane or minimization uncertainty is disclosed;
+* no plane was split artificially to reduce group count;
+* no eligible dependency or hypothesis was dropped;
+* no forbidden non-implementation artifact appears in any final-output section;
+* every source inventory file was considered.
+
+---
+
+### Step 12 — Record Open Catalog Questions
+
+Record questions where:
+
+* item extraction is ambiguous;
+* source IDs conflict;
+* edge interpretation is unclear;
+* plane assignment is unclear;
+* group minimization is uncertain;
+* source inventories disagree;
+* an item appears to span multiple planes;
+* a relationship appears likely but is not source-supported;
+* source status is unclear;
+* group count minimality cannot be proven.
+
+Questions must be phrased only in terms of missing implementation-first behavior, evidence, metadata, validation, result aggregation, compatibility checks, durable records, or safe-failure outcomes.
+Do not request, propose, summarize, or name a forbidden non-implementation artifact as the answer.
+
+Do not invent answers.
+
+Use `TBD` where required.
+
+---
+
+## Output Requirements
+
+Output only the final Markdown content for:
+
+```text
+.agents/eval-architectural-catalog.md
+```
+
+Do not include commentary.
+Do not include a preface.
+Do not include hidden analysis.
+Do not include a separate explanation.
+Do not wrap the entire output in code fences.
+
+Use the structure below.
+
+---
+
+# Eval Dependency/Hypothesis Architectural Catalog
+
+## Purpose of This Document
+
+This document indexes eligible implementation-first dependencies and hypotheses from:
+
+```text
+.agents/eval-dependency-inventory.md
+.agents/eval-hypothesis-inventory.md
+```
+
+into an organized hierarchical catalog.
+
+It minimizes the total number of groups while ensuring that no two items with a dependency or falsifiability relationship are placed in the same group and that every item within a group belongs to the same horizontal architectural plane.
+
+It includes only implementation-first catalog items and omits source text outside that boundary.
+
+It does not define implementation design, architecture, roadmap, epics, milestones, repository structure, execution workflow, tests, evaluation results, result-acceptance decisions, certification decisions, or public-readiness decisions.
+
+---
+
+## Source Inventory
+
+List every source file read.
+
+| ID                  | Source File     | Source Type                                      | Included In Analysis | Notes     |
+| ------------------- | --------------- | ------------------------------------------------ | -------------------- | --------- |
+| EVAL-CAT-SOURCE-001 | {{source_file}} | {{dependency_inventory_or_hypothesis_inventory}} | {{yes_no}}           | {{notes}} |
+
+---
+
+## Catalog Method
+
+Describe how the catalog was created.
+
+| ID                  | Method Rule     | Meaning     | Applied To |
+| ------------------- | --------------- | ----------- | ---------- |
+| EVAL-CAT-METHOD-001 | {{method_rule}} | {{meaning}} | {{scope}}  |
+
+Include rules for:
+
+* implementation-first boundary enforcement;
+* item extraction;
+* item normalization;
+* plane assignment;
+* dependency edge extraction;
+* falsifiability edge extraction;
+* same-plane grouping;
+* group minimization;
+* validation.
+
+---
+
+## Item Taxonomy
+
+Define item types used in the catalog.
+
+| ID                    | Item Type       | Definition     | Source               |
+| --------------------- | --------------- | -------------- | -------------------- |
+| EVAL-CAT-TAXONOMY-001 | Dependency Item | {{definition}} | {{source_inventory}} |
+| EVAL-CAT-TAXONOMY-002 | Hypothesis Item | {{definition}} | {{source_inventory}} |
+
+---
+
+## Relationship Model
+
+Define relationship types that prevent same-group placement.
+
+| ID                        | Relationship Type           | Definition     | Same-Group Allowed? | Source Basis     |
+| ------------------------- | --------------------------- | -------------- | ------------------- | ---------------- |
+| EVAL-CAT-RELATIONSHIP-001 | Dependency Relationship     | {{definition}} | No                  | {{source_basis}} |
+| EVAL-CAT-RELATIONSHIP-002 | Falsifiability Relationship | {{definition}} | No                  | {{source_basis}} |
+
+---
+
+## Horizontal Architectural Plane Model
+
+Define the architectural planes used in this catalog.
+
+| ID                 | Plane          | Definition     | Inclusion Rule     | Exclusion Rule     |
+| ------------------ | -------------- | -------------- | ------------------ | ------------------ |
+| EVAL-CAT-PLANE-001 | {{plane_name}} | {{definition}} | {{inclusion_rule}} | {{exclusion_rule}} |
+
+Only include planes used by eligible implementation-first catalog items.
+
+---
+
+## Group Minimization Method
+
+Describe how groups were minimized.
+
+| ID                    | Minimization Rule | Meaning     | Result / Notes      |
+| --------------------- | ----------------- | ----------- | ------------------- |
+| EVAL-CAT-MINIMIZE-001 | {{rule}}          | {{meaning}} | {{result_or_notes}} |
+
+Include whether minimization was exact or best-effort for each plane.
+
+---
+
+## Catalog Counts
+
+Emit deterministic catalog counts only.
+
+| ID                  | Metric                                      | Value        |
+| ------------------- | ------------------------------------------- | ------------ |
+| EVAL-CAT-COUNT-001  | Source files analyzed                       | {{count}}    |
+| EVAL-CAT-COUNT-002  | Eligible dependency items                   | {{count}}    |
+| EVAL-CAT-COUNT-003  | Eligible hypothesis items                   | {{count}}    |
+| EVAL-CAT-COUNT-004  | Relationship edges                          | {{count}}    |
+| EVAL-CAT-COUNT-005  | Architectural planes with retained items    | {{count}}    |
+| EVAL-CAT-COUNT-006  | Minimized groups                            | {{count}}    |
+| EVAL-CAT-COUNT-007  | Execution-eligible graph gaps               | {{count}}    |
+| EVAL-CAT-COUNT-008  | Aggregate forbidden boundary drops          | {{count_or_zero}} |
+
+If repository status was not requested, state:
+
+```text
+Repository satisfaction status was not assessed.
+```
+
+Do not include forbidden source IDs, labels, titles, source traces, examples, or quotations in catalog counts.
+
+---
+
+## Hierarchical Catalog
+
+Catalog eligible implementation-first items by architectural plane and minimized group.
+
+### {{Plane ID}} — {{Plane Name}}
+
+| Plane Field         | Value                        |
+| ------------------- | ---------------------------- |
+| Definition          | {{definition}}               |
+| Item Count          | {{count}}                    |
+| Group Count         | {{count}}                    |
+| Minimization Status | {{exact_best_effort_or_TBD}} |
+| Plane Notes         | {{notes}}                    |
+
+#### {{Group ID}} — {{Group Name}}
+
+| Group Field                    | Value                                                    |
+| ------------------------------ | -------------------------------------------------------- |
+| Architectural Plane            | {{plane_name}}                                           |
+| Item Count                     | {{count}}                                                |
+| Dependency Items               | {{dependency_item_ids_or_none}}                          |
+| Hypothesis Items               | {{hypothesis_item_ids_or_none}}                          |
+| Same-Plane Rationale           | {{rationale}}                                            |
+| Relationship Constraint Result | {{no_internal_dependency_or_falsifiability_edges_found}} |
+| Minimization Notes             | {{notes}}                                                |
+
+| Catalog Item ID     | Source Item ID     | Item Type                    | Short Label     | Strictness            | Planning Weight            | Execution Prerequisite | Source Trace     | Relationship Edges   |
+| ------------------- | ------------------ | ---------------------------- | --------------- | --------------------- | -------------------------- | ---------------------- | ---------------- | -------------------- |
+| {{catalog_item_id}} | {{source_item_id}} | {{Dependency_or_Hypothesis}} | {{short_label}} | {{strictness_or_TBD}} | {{planning_weight_or_TBD}} | {{prerequisite_or_TBD}} | {{source_trace}} | {{edge_ids_or_none}} |
+
+Repeat for every plane and group.
+
+---
+
+## Item Index
+
+List every eligible normalized item.
+
+| Catalog Item ID   | Source Item ID | Item Type | Primary Plane | Assigned Group | Source File     | Source Trace     | Status     |
+| ----------------- | -------------- | --------- | ------------- | -------------- | --------------- | ---------------- | ---------- |
+| EVAL-CAT-ITEM-001 | {{source_id}}  | {{type}}  | {{plane}}     | {{group_id}}   | {{source_file}} | {{source_trace}} | {{status}} |
+
+---
+
+## Dependency Item Index
+
+List every eligible dependency item.
+
+| Catalog Dependency ID | Source Dependency ID     | Dependency Class | Primary Plane | Assigned Group | Strictness     | Planning Weight     | Source Trace     |
+| --------------------- | ------------------------ | ---------------- | ------------- | -------------- | -------------- | ------------------- | ---------------- |
+| EVAL-CAT-DEP-001      | {{source_dependency_id}} | {{class}}        | {{plane}}     | {{group_id}}   | {{strictness}} | {{planning_weight}} | {{source_trace}} |
+
+If no dependency items are found, write:
+
+```text
+No eligible dependency items were found in the source inventories.
+```
+
+---
+
+## Hypothesis Item Index
+
+List every eligible hypothesis item.
+
+| Catalog Hypothesis ID | Source Hypothesis ID     | Hypothesis Class | Primary Plane | Assigned Group | Verification Mode     | Strictness     | Planning Weight     | Source Trace     |
+| --------------------- | ------------------------ | ---------------- | ------------- | -------------- | --------------------- | -------------- | ------------------- | ---------------- |
+| EVAL-CAT-HYP-001      | {{source_hypothesis_id}} | {{class}}        | {{plane}}     | {{group_id}}   | {{verification_mode}} | {{strictness}} | {{planning_weight}} | {{source_trace}} |
+
+If no hypothesis items are found, write:
+
+```text
+No eligible hypothesis items were found in the source inventories.
+```
+
+---
+
+## Relationship Edge Index
+
+List every dependency or falsifiability relationship edge between eligible catalog items.
+
+| Edge ID           | Source Item        | Target Item        | Relationship Class                    | Relationship Type     | Prevents Same Group | Source Basis     | Notes     |
+| ----------------- | ------------------ | ------------------ | ------------------------------------- | --------------------- | ------------------- | ---------------- | --------- |
+| EVAL-CAT-EDGE-001 | {{source_item_id}} | {{target_item_id}} | {{Dependency_Falsifiability_or_Both}} | {{relationship_type}} | Yes                 | {{source_basis}} | {{notes}} |
+
+If no relationship edges are found, write:
+
+```text
+No dependency or falsifiability relationship edges were found in the source inventories.
+```
+
+---
+
+## Group Validation Matrix
+
+Verify group constraints.
+
+| Group ID     | Plane     | Item Count | Same Plane Confirmed | Dependency Edges Within Group | Falsifiability Edges Within Group | Constraint Status     | Notes     |
+| ------------ | --------- | ---------- | -------------------- | ----------------------------- | --------------------------------- | --------------------- | --------- |
+| {{group_id}} | {{plane}} | {{count}}  | {{yes_no}}           | {{none_or_edge_ids}}          | {{none_or_edge_ids}}              | {{valid_invalid_TBD}} | {{notes}} |
+
+No group may be marked valid if it contains a dependency or falsifiability edge.
+
+---
+
+## Plane Validation Matrix
+
+Verify plane integrity.
+
+| Plane ID     | Plane Name     | Item Count | Group Count | Plane Coherence Rationale | Artificial Split Risk | Status        |
+| ------------ | -------------- | ---------- | ----------- | ------------------------- | --------------------- | ------------- |
+| {{plane_id}} | {{plane_name}} | {{count}}  | {{count}}   | {{rationale}}             | {{risk_or_none}}      | {{valid_TBD}} |
+
+---
+
+## Source Coverage Matrix
+
+Show that every eligible source item was assigned.
+Forbidden source rows are not source coverage rows.
+
+| ID                    | Source File     | Source Item ID     | Source Item Type             | Catalog Item ID     | Assigned Plane | Assigned Group | Coverage Status         |
+| --------------------- | --------------- | ------------------ | ---------------------------- | ------------------- | -------------- | -------------- | ----------------------- |
+| EVAL-CAT-COVERAGE-001 | {{source_file}} | {{source_item_id}} | {{dependency_or_hypothesis}} | {{catalog_item_id}} | {{plane}}      | {{group}}      | {{covered_partial_TBD}} |
+
+Coverage status values:
+
+* Covered
+* Partially Covered
+* Excluded
+* TBD
+* Conflict
+
+Do not mark an item Covered unless it appears in exactly one group.
+Do not add per-row source coverage entries for forbidden non-implementation artifacts.
+Do not emit forbidden source IDs, source labels, source titles, source filenames, source traces, or examples in this matrix.
+
+If the generator needs boundary accounting, use a separate aggregate row with this shape:
+
+| ID                         | Boundary Area                      | Source Row Count | Retained Catalog Items | Status              | Notes                                      |
+| -------------------------- | ---------------------------------- | ---------------- | ---------------------- | ------------------- | ------------------------------------------ |
+| EVAL-CAT-BOUNDARY-COUNT-01 | Non-implementation boundary drops  | {{count}}        | 0                      | Excluded by boundary | Aggregate count only; no row identifiers. |
+
+Execution-eligible source rows omitted from the minimized graph are not boundary drops.
+List those rows as explicit coverage gaps only when they pass the execution-tied test.
+
+---
+
+## Dependency-to-Hypothesis Mapping View
+
+Show eligible source dependency-to-hypothesis relationships and their group separation.
+
+| ID                   | Dependency Item        | Hypothesis Item(s)      | Relationship Edge(s) | Dependency Group     | Hypothesis Group(s)   | Separation Confirmed |
+| -------------------- | ---------------------- | ----------------------- | -------------------- | -------------------- | --------------------- | -------------------- |
+| EVAL-CAT-DEP-HYP-001 | {{dependency_item_id}} | {{hypothesis_item_ids}} | {{edge_ids}}         | {{dependency_group}} | {{hypothesis_groups}} | {{yes_no_TBD}}       |
+
+---
+
+## Execution Prerequisite View
+
+Group eligible catalog items by run/pass/result-aggregation/safe-failure relevance.
+
+| ID                  | Execution Prerequisite              | Catalog Items | Groups Involved | Plane(s)   | Notes     |
+| ------------------- | ----------------------------------- | ------------- | --------------- | ---------- | --------- |
+| EVAL-CAT-PREREQ-001 | Required before run                 | {{item_ids}}  | {{group_ids}}   | {{planes}} | {{notes}} |
+| EVAL-CAT-PREREQ-002 | Required before pass                | {{item_ids}}  | {{group_ids}}   | {{planes}} | {{notes}} |
+| EVAL-CAT-PREREQ-003 | Required before result aggregation  | {{item_ids}}  | {{group_ids}}   | {{planes}} | {{notes}} |
+| EVAL-CAT-PREREQ-004 | Required for safe failure           | {{item_ids}}  | {{group_ids}}   | {{planes}} | {{notes}} |
+
+Add or remove execution prerequisites only if source inventories justify different execution semantics.
+
+---
+
+## Group Minimization Results
+
+Summarize minimization by plane.
+
+| ID                      | Plane     | Items          | Relationship Edges In Plane | Minimum / Produced Group Count | Exact Minimality Proven? | Method / Notes   |
+| ----------------------- | --------- | -------------- | --------------------------- | ------------------------------ | ------------------------ | ---------------- |
+| EVAL-CAT-MIN-RESULT-001 | {{plane}} | {{item_count}} | {{edge_count}}              | {{group_count}}                | {{yes_no_TBD}}           | {{method_notes}} |
+
+---
+
+## Open Catalog Questions
+
+List unresolved implementation-first catalog questions.
+
+| ID                    | Question     | Affected Items      | Affected Plane / Group    | Why It Matters     | Recommended Handling     |
+| --------------------- | ------------ | ------------------- | ------------------------- | ------------------ | ------------------------ |
+| EVAL-CAT-QUESTION-001 | {{question}} | {{item_ids_or_TBD}} | {{plane_or_group_or_TBD}} | {{why_it_matters}} | {{recommended_handling}} |
+
+If no unresolved catalog questions are known, write:
+
+```text
+No unresolved catalog questions are currently known.
+```
+
+Do not use open questions to request, propose, summarize, preserve, or name forbidden non-implementation artifacts.
+
+---
+
+## Boundary Validation Record
+
+Emit a validation record for the generated catalog.
+This section must contain deterministic check results only, not semantic-policy guidance, anti-pattern prose, forbidden artifact examples, or remediation advice.
+
+| ID                    | Check                                      | Result          | Evidence                  |
+| --------------------- | ------------------------------------------ | --------------- | ------------------------- |
+| EVAL-CAT-VALID-001    | Every retained item passed the execution-tied artifact test. | {{pass_fail_TBD}} | {{count_or_check_reference}} |
+| EVAL-CAT-VALID-002    | No forbidden source row is emitted by ID, label, title, trace, filename, example, or quotation. | {{pass_fail_TBD}} | {{count_or_check_reference}} |
+| EVAL-CAT-VALID-003    | No forbidden source row is assigned a plane, group, edge, execution prerequisite, coverage row, open question, or summary item. | {{pass_fail_TBD}} | {{count_or_check_reference}} |
+| EVAL-CAT-VALID-004    | Execution-eligible omitted rows are listed as explicit graph gaps or integrated into the minimized graph. | {{pass_fail_TBD}} | {{count_or_check_reference}} |
+| EVAL-CAT-VALID-005    | Every group contains only same-plane items and no internal dependency/falsifiability edge. | {{pass_fail_TBD}} | {{count_or_check_reference}} |
+
+---
+
+## Completeness Checklist
+
+Before finalizing this catalog, verify:
+
+* Every dependency-inventory source was considered.
+* Every hypothesis-inventory source was considered.
+* Every included source appears in the Source Inventory.
+* Every eligible dependency item is indexed.
+* Every eligible hypothesis item is indexed.
+* Every eligible item has a normalized catalog item ID.
+* Every eligible item has a primary horizontal architectural plane.
+* Every eligible item is assigned to exactly one group.
+* Every group contains only items from the same primary plane.
+* No group contains two items with a dependency relationship.
+* No group contains two items with a falsifiability relationship.
+* Every dependency-to-hypothesis relation is separated across groups.
+* Every relationship edge is indexed.
+* Every group is validated.
+* Every plane is validated.
+* Group count is minimized per plane or minimization uncertainty is disclosed.
+* Total group count is minimized subject to source-derived planes and relationship constraints.
+* No artificial planes were created to reduce group conflicts.
+* No eligible dependencies were dropped.
+* No eligible hypotheses were dropped.
+* No eligible source item appears in more than one group.
+* Open questions are recorded in implementation-first terms rather than resolved by invention.
+* Repository satisfaction status is not assessed unless explicitly requested.
+* No forbidden non-implementation artifact appears in any final-output section.
+* No forbidden source row is emitted by ID, label, title, trace, filename, example, or quotation.
+* Forbidden boundary drops appear only as aggregate counts when accounting is required.
+* No plane is centered on source text outside the implementation-first boundary.
+* No catalog item is created from source text outside the implementation-first boundary.
+* No implementation-aligned machine-required artifact is omitted merely because it is an artifact.
+* No artifact is admitted merely because it is called implementation-aligned, generated, machine-readable, evidence, result, schema, or validation.
+* Every admitted artifact has a deterministic producer and deterministic consumer.
+* Any execution-eligible source row omitted from the minimized graph is listed as an explicit coverage gap.
+* No anti-pattern, semantic-policy guidance, manual review, approval, or narrative-remediation section appears in the final catalog.
+* No roadmap appears.
+* No actual epics appear.
+* No actual milestones appear.
+* No implementation tasks appear.
+* No architecture is invented.
+* No evaluation result, result-acceptance decision, certification decision, or public-readiness decision is claimed.
+* The catalog is detailed enough to support downstream machine validation, audit, and implementation remediation without adding semantic-policy artifacts.

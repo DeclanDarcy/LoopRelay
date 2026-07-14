@@ -1,0 +1,979 @@
+This prompt is designed for eval directories containing specs like the provider-neutrality evaluation suite you supplied earlier. 
+
+# Create Eval Dependency Inventory Prompt
+
+This prompt reads evaluation specifications from:
+
+```text
+.agents/evals/
+```
+
+and produces an exhaustive dependency inventory describing the **implementation-first functional**, **technical**, and **operational** dependencies necessary for those evaluations to be run, satisfied, fail safely, generate machine-verifiable evidence, and enable deterministic governance evidence.
+
+You are NOT creating or modifying evaluation specs.
+You are NOT creating a roadmap.
+You are NOT creating epics.
+You are NOT creating milestones.
+You are NOT implementing anything.
+You are NOT designing architecture.
+You are NOT reporting evaluation results.
+You are NOT determining whether the repository currently satisfies the dependencies unless explicitly instructed to do so.
+
+Your output must be only the final Markdown content for:
+
+```text
+.agents/eval-dependency-inventory.md
+```
+
+If the caller provides a different output path, use that path instead.
+
+---
+
+## Core Objective
+
+Create a comprehensive **Eval Dependency Inventory**.
+
+The file should answer:
+
+> What implementation-first functional, technical, and operational dependencies must exist for every evaluation in `.agents/evals/` to run, pass, fail safely, produce machine-verifiable evidence, enable deterministic governance evidence, and avoid false success?
+
+The inventory must be:
+
+* exhaustive
+* source-traceable
+* evaluation-driven
+* project-agnostic
+* detailed enough to drive roadmap, epic, milestone, and remediation planning
+* explicit about blockers, hidden prerequisites, evidence needs, reporting needs, and operational requirements
+
+The output should not merely summarize evaluations.
+
+It should identify the dependencies necessary for satisfying them.
+
+It must model the executable, runtime, data, evidence, and machine-verifiable prerequisites of deterministic governance evidence.
+
+It must not model certification documents, readiness labels, governance review packages, public-claim reviews, or manual judgment discipline as implementation dependencies.
+This prohibition is mandatory: any dependency row that makes those artifacts first-class prerequisites is invalid.
+Non-implementation artifacts are mediated outside this agent artifact by policy.
+Do not emit, recommend, preserve, summarize, list, or create non-implementation artifacts or policy artifacts.
+Semantic artifacts acting as policy are forbidden. Renaming a policy artifact with implementation-flavored words such as `implementation`, `machine-verifiable`, `generated`, `metadata`, `governance evidence`, or `validation` does not make it valid.
+
+This prohibition does not apply to implementation-aligned, machine-required artifacts.
+Artifacts that are consumed, produced, compared, retained, or validated by an executable eval are permitted dependencies when they satisfy the implementation-first boundary.
+
+---
+
+## Project-Agnostic Rule
+
+This prompt must remain project-agnostic.
+
+Do not hardcode:
+
+* product names
+* programming languages
+* frameworks
+* providers
+* file extensions
+* repository paths
+* architecture patterns
+* report names
+* evaluation IDs
+* policy state names
+* fixture names
+* public capability rows
+* ontology categories
+* domain-specific constructs
+
+unless those details appear in the evaluation specs under `.agents/evals/`.
+
+When the evaluation specs contain project-specific details, preserve them as source-derived dependency content.
+
+Do not generalize away concrete requirements.
+
+Do not invent missing requirements.
+
+Use `TBD` when a dependency, owner, status, evidence requirement, or interpretation is unclear.
+
+---
+
+## Source Authority
+
+The evaluation specs under `.agents/evals/` are the primary authority for:
+
+* evaluation IDs
+* evaluation names
+* evaluation order
+* evaluation requirements
+* scope and non-scope
+* required checks
+* pass criteria
+* fail criteria
+* blocked conditions
+* inconclusive conditions
+* fixtures, corpora, inputs, and scenarios
+* report artifacts
+* required report fields
+* evidence requirements
+* negative controls
+* determinism, replay, reproducibility, or regression requirements
+* public or external runtime metadata requirements
+* policy-mediated state text, only as derivation context
+* explicit non-pass conditions
+* source-defined minimum bars
+* follow-on eval dependencies
+
+If project Core documents are available, they may be used only to interpret terminology and authority boundaries.
+
+Repository evidence may be used only if the task explicitly requests current dependency status. Otherwise, mark implementation status as:
+
+```text
+Not Assessed
+```
+
+---
+
+## Implementation-First Boundary
+
+This inventory is implementation-first.
+
+A dependency row must name an implementation-aligned prerequisite, such as:
+
+* runtime behavior
+* evaluator behavior
+* executable fixture input
+* fixture artifact, fixture corpus, fixture manifest, or machine-consumed scenario input
+* machine-consumed configuration or metadata
+* generated machine-verifiable eval report
+* persisted evidence record
+* deterministic comparison artifact
+* static scan output, replay record, negative-control output, or capability fingerprint
+* queryable capability or public-surface metadata
+* validation hook, scanner, runner, comparator, or harness
+* storage, identity, linkage, serialization, or replay mechanism
+
+## Deterministic Execution-Tie Rule
+
+An artifact is permitted only when it has a deterministic execution tie to the eval system.
+
+An artifact has a deterministic execution tie only if at least one executable eval, runner, scanner, comparator, replay process, validator, projection path, persistence path, or runtime query path consumes, produces, compares, validates, persists, or queries it.
+
+The dependency row must name that tie concretely in behavior, evidence, required-for, or notes. If the row cannot state the tie without relying on human review, release policy, support wording, readiness status, or a certification decision, omit the artifact and derive a lower-level executable dependency instead.
+
+These are valid when execution-tied:
+
+* fixtures, fixture manifests, corpora, and scenario inputs
+* generated evaluator reports and report schemas
+* evidence records, sidecars, diagnostics, candidate sets, and unsupported records
+* static scan outputs, negative-control outputs, replay records, comparison artifacts, and fingerprints
+* validation records, schema compatibility results, and deterministic impact checks
+* runtime/queryable capability metadata, limitation metadata, and public projection output
+
+These remain forbidden even if renamed:
+
+* semantic artifacts whose primary role is policy mediation
+* certification or readiness documents
+* support labels, derived labels, claim controls, and claim review records
+* governance packages, admission packages, proof-authority records, and manual approval records
+* checklists, minimum-bar summaries, and report narratives whose only role is to support human policy decisions
+
+Do not launder forbidden artifacts by attaching implementation terms to them.
+Do not write dependency rows whose primary deliverable is a policy-semantic artifact.
+Do not preserve a forbidden artifact in another section after omitting it from the catalog.
+
+The following violation patterns are forbidden as dependency rows under all circumstances:
+
+* certification documents
+* certification judgments
+* final realization declarations
+* gate-ordering policies
+* readiness-state labels
+* certification checklists or minimum-bar checklists
+* governance review artifacts
+* ontology admission packages
+* proof-authority packages
+* manual approval records
+* public documentation review artifacts
+* support-label review artifacts
+* release-governance controls
+* report overviews or aggregation narratives whose only role is human certification
+
+The forbidden list does not include machine-required eval artifacts such as fixtures, fixture manifests, generated evaluator reports, report schemas, persisted evidence records, static scan outputs, negative-control outputs, replay records, deterministic comparison artifacts, capability fingerprints, or queryable runtime metadata.
+Those are valid when required by executable eval behavior or machine-verifiable checks.
+
+A source-defined requirement does not override this prohibition.
+Do not place forbidden artifacts in the dependency catalog, specialized requirements, foundational/shared dependencies, executive-summary dependency counts, dependency evidence fields, or dependency status fields.
+Do not assign them dependency class, strictness, planning weight, or implementation status.
+
+These items are outside agent output scope.
+Use source text about them only as internal derivation context for implementation-first dependencies.
+Do not preserve, summarize, list, or reframe them as policy outputs.
+
+Do not collapse valid machine-required artifacts into the forbidden category merely because they are named artifacts.
+Classify them by their role in execution, validation, evidence production, comparison, replay, or runtime metadata.
+
+When a source-defined obligation is a certification document, readiness label, governance proof package, public-claim rule, or checklist, derive only the deterministic execution-tied dependency underneath it:
+
+* For a certification document or judgment, depend on executable checks, machine-verifiable suite results, generated evidence packages, and deterministic report data; do not emit or model the judgment itself.
+* For a gate-ordering or readiness-state rule, depend on executable gate checks and result aggregation; do not emit or model the state label itself.
+* For a certification checklist or minimum bar, break the source obligation into executable implementation capabilities, evaluator checks, evidence records, and machine-verifiable outputs.
+* For a governance proof or ontology admission package, depend on schema or ontology extension points, validation hooks, compatibility checks, and machine-checkable records; do not emit or model the package itself.
+* For public documentation or support-label review, depend on runtime/queryable capability metadata, public projection behavior, limitation visibility, and evidence links; do not emit or model the label or review itself.
+
+If the implementation-first replacement is unclear, create an open dependency question instead of turning the non-implementation artifact into a dependency.
+
+If a candidate can only be expressed as a forbidden artifact, omit it from all output sections.
+If the omission leaves an implementation-first gap, ask only what executable behavior, machine-verifiable evidence, validation, metadata, or result aggregation satisfies the source requirement.
+
+---
+
+## Dependency Definition
+
+A dependency is an implementation-aligned prerequisite that must exist, behave correctly, be available, be preserved, be observable, be repeatable, or be operationally maintained for an evaluation requirement to be satisfied.
+
+A dependency may be explicitly named by the evaluation or implicitly required by a check, pass criterion, report field, fixture, negative control, or governance evidence condition.
+
+Named source artifacts still must pass the implementation-first boundary before they become dependency rows.
+Machine-required eval artifacts pass that boundary when an executable eval consumes, produces, compares, validates, persists, or queries them.
+
+A valid dependency is:
+
+* necessary for running, passing, producing deterministic governance evidence, or safely failing an eval
+* traceable to one or more source evaluation requirements
+* specific enough to plan or remediate
+* separable from unrelated dependencies
+* classifiable as functional, technical, operational, or cross-cutting
+* accompanied by required evidence or verification method where possible
+* implementation-aligned rather than merely documentary, policy, review, or label-based
+
+A dependency is NOT merely:
+
+* a task
+* a roadmap item
+* an implementation guess
+* a preferred architecture
+* a technology choice
+* an ungrounded suggestion
+* a generic best practice
+* a restatement of an evaluation check without prerequisite analysis
+* a certification document, judgment, checklist, readiness label, public-claim review, or governance proof package
+* a semantic artifact acting as policy
+
+A dependency may be a fixture artifact, generated eval report, report schema, evidence record, scan output, replay record, comparison artifact, negative-control output, capability fingerprint, or queryable metadata when it is machine-required by an executable eval.
+
+---
+
+## Dependency Classes
+
+Classify every dependency into one primary class.
+
+### Functional Dependency
+
+A system behavior, capability, semantic condition, user-visible behavior, domain behavior, or failure behavior required by the eval.
+
+Typical form:
+
+```text
+The system must be able to...
+```
+
+Examples of generic functional dependency areas:
+
+* accepting a required input
+* routing or classifying an artifact
+* producing a required output
+* preserving a required semantic distinction
+* exposing a runtime-queryable or machine-verifiable public capability state
+* failing safely under a negative control
+* distinguishing unsupported, absent, partial, failed, ambiguous, blocked, or inconclusive states
+
+### Technical Dependency
+
+A technical condition, contract, infrastructure, data model, interface, tooling, storage behavior, identity scheme, validation mechanism, runner, comparator, machine-generated report generator, or internal capability required to produce or verify the functional behavior.
+
+Typical form:
+
+```text
+There must exist...
+```
+
+Examples of generic technical dependency areas:
+
+* registry or discovery mechanism
+* artifact matching mechanism
+* extraction or processing contract
+* persistence or evidence store
+* deterministic identity derivation
+* serialization and hash generation
+* comparison tooling
+* machine-verifiable report generation
+* static analysis or scan mechanism
+* fixture harness
+* public-surface metadata mechanism
+* version or fingerprint capture
+* validation contract
+
+### Operational Dependency
+
+An executable evaluation process, maintenance practice, run procedure, fixture maintenance expectation, report-generation discipline, evidence-retention practice, environment prerequisite, or automation-controlled gate required to run and rely on machine-verifiable eval evidence.
+
+Human certification review, release governance, public-claim review, manual approval, and readiness labeling are not operational dependencies and are outside agent output scope.
+
+Typical form:
+
+```text
+The evaluation process must...
+```
+
+Examples of generic operational dependency areas:
+
+* maintaining fixtures
+* preserving baselines
+* running repeated comparisons
+* collecting evidence
+* generating reports from machine-verifiable output
+* machine-classifying non-pass states
+* preserving traceability
+* maintaining compatibility baselines
+* escalating blocked or ambiguous conditions
+* preventing skipped checks from becoming successful output
+
+### Cross-Cutting Dependency
+
+A dependency that spans functional, technical, and operational concerns.
+
+Use this only when splitting the dependency would obscure its meaning and the combined item still satisfies the implementation-first boundary.
+
+If the dependency has separable functional, technical, and operational parts, split it instead.
+
+---
+
+## Dependency Atomicity Rule
+
+Dependencies should be atomic enough to plan, block, evidence, or remediate independently.
+
+Split a dependency when:
+
+* different evidence proves different parts
+* different evals depend on different parts
+* one part can exist while another is missing
+* one part is functional and another is technical or operational
+* one part is required to run while another is required to pass or produce governance evidence
+* one part is a positive-path dependency and another is a negative-control dependency
+
+Do not split a dependency when:
+
+* the parts are inseparable in the evaluation requirement
+* splitting would create artificial task fragments
+* splitting would obscure the source requirement
+* the resulting entries would have identical source, evidence, blocking effect, and planning consequence
+
+If in doubt, split and note the relationship in the affected dependency rows.
+
+---
+
+## Dependency Strictness
+
+Assign every dependency one strictness value.
+
+| Strictness                | Meaning                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Required                  | The eval cannot pass or produce required governance evidence without this dependency.                    |
+| Required to Run           | The eval cannot execute meaningfully without this dependency.                                           |
+| Required to Pass          | The eval can run but cannot pass without this dependency.                                               |
+| Required for Governance Evidence       | The eval may produce behavior but cannot produce governance-ready machine-verifiable evidence without this dependency. |
+| Required for Safe Failure | The dependency is necessary for negative controls, unsupported outcomes, or explicit non-pass behavior. |
+| Conditional               | Required only when a source-defined condition applies.                                                  |
+| Optional / Deferred       | Named by the eval as future, optional, or out of current scope.                                         |
+| TBD                       | The source implies a dependency, but strictness is unclear.                                             |
+
+Do not mark something optional unless the evaluation says it is optional or out of scope.
+
+Do not use `Required for Governance Evidence` for the certification judgment, certification document, readiness label, gate-ordering rule, or checklist itself.
+Use it only for implementation-first behavior, evidence, report data, result aggregation, validation, or replay dependencies needed to produce deterministic governance evidence.
+
+---
+
+## Dependency Planning Weight
+
+Assign every dependency one planning weight.
+
+| Planning Weight               | Meaning                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Foundational                  | Many later eval assertions are unsafe or meaningless without this dependency.                                  |
+| Enabling                      | Unlocks or stabilizes multiple later dependencies.                                                            |
+| Semantic / Functional Surface | Required domain behavior or construct coverage.                                                               |
+| Evidence / Reporting          | Required evidence, report, traceability, observability, or audit output.                                      |
+| Result Aggregation / Evidence Support | Deterministic checks, generated report data, evidence linkage, validation, replay output, or result aggregation required for machine-verifiable governance evidence. |
+| Negative Control              | Required to expose false success, unsafe fallback, silent omission, or unsupported behavior.                  |
+| Schema / Validation           | Required for machine-checkable model, schema, ontology, public contract, compatibility, validation hook, or deterministically validated change support. |
+| Operational                   | Required to run, maintain, generate evidence for, or institutionalize the executable evaluation process.       |
+| TBD                           | Planning weight is unclear from the source.                                                                   |
+
+Foundational and enabling dependencies should be highlighted prominently.
+
+Do not use planning weights to preserve manual certification artifacts, governance proof packages, review records, readiness labels, or public support-label controls.
+Use planning weights only for deterministic execution-tied prerequisites that make behavior, evidence, validation, metadata, or result aggregation machine-verifiable.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the final file.
+
+### Step 1 — Read Eval Specs
+
+Read all evaluation specification files under:
+
+```text
+.agents/evals/
+```
+
+Recursively include Markdown, MDX, YAML, JSON, TOML, or other obvious eval-spec files.
+
+For each file, identify:
+
+* file path
+* title
+* eval ID or suite ID
+* eval name
+* status if stated
+* stage or ordering if stated
+* source sections
+* whether the file appears active, draft, deprecated, archived, or ambiguous
+
+If a file appears unrelated to evals, list it in the source inventory with an exclusion reason.
+
+Do not silently ignore files.
+
+---
+
+### Step 2 — Extract Evaluation Requirement Units
+
+For each eval, extract requirement units from:
+
+* purpose
+* stated assertion
+* scope
+* non-scope
+* fixture requirements
+* required checks
+* pass criteria
+* fail criteria
+* blocked conditions
+* inconclusive conditions
+* negative controls
+* determinism or replay sections
+* reporting requirements
+* evidence requirements
+* public-surface requirements
+* capability or support matrix requirements
+* ontology, schema, model-change, or validation requirements
+* policy-mediated state text, only as derivation context
+* explicit non-pass conditions
+* source-defined minimum bar
+* follow-on evals
+
+Each requirement unit should retain source traceability.
+
+For each requirement unit, identify whether it is:
+
+* an implementation-first dependency candidate
+* derivation-only source text that names a forbidden non-implementation artifact
+* an output generated from machine-verifiable eval evidence and therefore implementation-aligned
+* ambiguous and therefore requiring an open dependency question
+
+Use source eval IDs and section names.
+
+Use file paths and line numbers if available.
+
+If line numbers are unavailable, use file path plus heading or section label.
+
+---
+
+### Step 3 — Derive Direct Dependencies
+
+For each requirement unit, identify dependencies explicitly required by the text.
+
+Examples of direct dependency extraction:
+
+* If the eval requires a machine-generated eval report, the report generator, schema, and generated evidence package are dependencies.
+* If the eval requires a certification document or certification judgment, derive only the executable checks, result aggregation, and machine-verifiable evidence dependencies that support it; do not emit the document or judgment.
+* If the eval requires a fixture, fixture corpus, fixture manifest, scenario input, or other machine-consumed eval input, that artifact is a dependency.
+* If the eval requires a capability matrix used as runtime/queryable provider state, the matrix or metadata surface is a dependency.
+* If the eval requires a public documentation or support-label review, derive only runtime capability metadata and public projection behavior dependencies; do not emit the review obligation.
+* If the eval requires a governance proof package or ontology admission package, derive only schema extension, validation, compatibility, and machine-checkable record dependencies; do not emit the package.
+* If the eval requires a deterministic comparison, the repeated-run comparison is a dependency.
+* If the eval requires evidence retention, the retained evidence and its linkage are dependencies.
+* If the eval requires a negative control, the ability to create and observe the negative condition is a dependency.
+* If the eval requires static scan output, replay records, capability fingerprints, comparison artifacts, or negative-control outputs, those machine-produced artifacts are dependencies.
+
+---
+
+### Step 4 — Derive Implicit Dependencies
+
+Derive dependencies implied by the ability to satisfy the requirement.
+
+Do not stop at direct nouns in the eval.
+
+For every required behavior, ask:
+
+* What input must exist?
+* What system behavior must exist?
+* What data or evidence must be produced?
+* What data or evidence must persist?
+* What identity or reference must link the data?
+* What validator, scanner, runner, comparator, or reporter is needed?
+* What output must be generated?
+* What non-pass or negative-control behavior must be observable?
+* What operational process must preserve this over time?
+* What runtime, public, external, or consumer-facing state must expose the result in a machine-verifiable way?
+* What machine-checkable schema, validation, compatibility, or extension mechanism is required if durable semantics change?
+* If the source names a document, judgment, checklist, review, readiness label, or public claim, what deterministic execution-tied behavior or artifact underlies that source text?
+
+Only include implicit dependencies that are logically necessary for the eval requirement.
+
+Do not invent preferred implementation designs.
+
+Do not turn a policy artifact into a dependency merely because the source requires it.
+
+---
+
+### Step 5 — Decompose Into Functional, Technical, and Operational Dependencies
+
+For each direct or implicit dependency, classify it.
+
+A single eval check may produce multiple dependency records.
+
+For example, a determinism check may imply:
+
+* functional dependency: repeated equivalent inputs produce equivalent outputs
+* technical dependency: deterministic serialization and hash comparison exist
+* technical dependency: stable identity derivation exists
+* operational dependency: repeated-run procedure is maintained
+* evidence dependency: comparison output is preserved in the report
+
+Use project-specific terms only when present in the eval specs.
+
+For source text that names policy-mediated artifacts, decompose the source text into deterministic execution-tied dependencies before classification.
+If only the forbidden artifact remains after decomposition, omit it from the output instead of classifying it as functional, technical, operational, cross-cutting, specialized, shared, or policy.
+
+---
+
+### Step 6 — Consolidate Shared and Specialized Dependencies
+
+Before consolidation, apply the implementation-first boundary.
+
+Reject or remap any dependency candidate whose primary deliverable is:
+
+* a certification document or judgment
+* a readiness label or suite state label
+* a gate-ordering rule
+* a certification checklist or minimum-bar checklist
+* a governance proof package, ontology admission package, or manual review artifact
+* a public documentation review, support-label review, release-governance control, or public-claim discipline
+
+Do not reject a candidate merely because it is an artifact.
+Reject it when it lacks a deterministic execution tie or is non-implementation and policy-mediated.
+Permit machine-required artifacts only when they are used as eval inputs, generated outputs, evidence, comparison targets, replay records, validation results, or runtime metadata.
+
+For each rejected candidate, either:
+
+* map it to one or more implementation-first dependency rows that produce the required behavior, evidence, metadata, validation, or machine-verifiable result; or
+* record an open dependency question about the missing implementation-first basis if that basis is unclear.
+
+Merge duplicate dependencies when they require the same condition, evidence, strictness, and planning consequence.
+
+Preserve eval-specific variants when source requirements differ.
+
+For each dependency, capture any important relationship directly in the row:
+
+* which evals or requirements depend on it
+* whether it is foundational or enabling
+* whether it is required before run, pass, deterministic governance evidence, or safe failure
+* what is blocked if it is missing
+* what upstream dependency or source-defined condition applies, if any
+
+Do not create separate crosswalks, coverage matrices, dependency graphs, or gate matrices.
+
+Use the `Foundational and Shared Dependencies` section only for dependencies that materially affect multiple evals or block meaningful eval execution.
+
+Use the `Specialized Requirements` section only for source-defined items that need dedicated handling beyond the main dependency row, such as:
+
+* fixtures, corpora, inputs, scenarios, or datasets
+* fixture manifests or other machine-consumed eval input artifacts
+* generated eval reports, report fields, machine-verifiable evidence packages, or machine-produced summary outputs
+* required evidence records
+* static scan outputs, replay records, comparison artifacts, capability fingerprints, or negative-control outputs
+* negative controls or safe-failure behavior
+* determinism, replay, reproducibility, regression, stability, or baseline requirements
+* runtime/queryable public, external, support, capability, compliance, or disclosure metadata requirements
+* machine-checkable schema, ontology, model-change, relationship validation, identity-domain, public-contract, compatibility, or validation mechanisms
+* conditional requirements
+
+Do not use the `Specialized Requirements` section as a workaround for listing non-implementation artifacts as dependencies.
+Certification documents, readiness labels, manual governance packages, public-claim reviews, and support-label controls are outside agent output scope.
+
+---
+
+### Step 7 — Identify Evidence and Status
+
+For every dependency, identify what evidence would prove it exists or behaves correctly.
+
+Evidence may include:
+
+* source artifact
+* fixture
+* run output
+* diagnostic
+* generated report
+* persisted evidence record
+* serialized output
+* hash comparison
+* static scan result
+* public metadata
+* capability descriptor
+* negative-control output
+* baseline comparison
+* machine-verifiable eval result or result aggregation
+
+Do not treat evidence as sufficient unless it directly supports the dependency.
+
+Do not use human certification judgments, manual approvals, readiness labels, public support labels, or governance proof packages as evidence that an implementation-first dependency exists or behaves correctly.
+Use their source text only as derivation context; dependency evidence must be the underlying executable behavior, generated report data, persisted record, validation result, comparison artifact, or queryable metadata.
+
+Default mode is **requirements-only**.
+
+Do not assess whether the repository currently satisfies the dependencies unless explicitly requested.
+
+Set status fields to:
+
+```text
+Not Assessed
+```
+
+If the caller explicitly requests repository status, classify each dependency as:
+
+* Present
+* Missing
+* Partial
+* Conflicting
+* Not Found
+* Not Assessed
+* TBD
+
+and cite repository evidence separately.
+
+---
+
+### Step 8 — Identify Conflicts and Ambiguities
+
+Record open questions where:
+
+* eval specs conflict
+* dependency strictness is unclear
+* dependency category is unclear
+* fixture ownership is unclear
+* evidence sufficiency is unclear
+* report format is ambiguous
+* policy-mediated state meaning is ambiguous as derivation context
+* it is unclear whether source text has an implementation-first dependency basis
+* technical prerequisite is implied but underspecified
+* operational owner or process is unclear
+* a dependency appears necessary but not explicitly supported by the eval source
+
+Do not silently resolve ambiguity.
+
+Do not omit ambiguous dependencies.
+
+Include them with `TBD`.
+
+---
+
+### Step 9 — Exhaustiveness Verification
+
+Before finalizing, verify:
+
+* every eval file under `.agents/evals/` was considered
+* every eval ID is represented
+* every required check is represented by at least one dependency
+* every pass criterion is represented by at least one dependency
+* every fail criterion is reflected as a failure, safe-failure, or false-success dependency
+* every blocked or inconclusive condition is reflected as a run, evidence, result aggregation, or governance evidence dependency
+* every fixture requirement is represented
+* every generated report or machine-verifiable report requirement is represented as an implementation-first dependency
+* every evidence requirement is represented
+* every negative control is represented
+* every determinism, replay, reproducibility, regression, or stability requirement is represented
+* every runtime/queryable public, external, support, capability, compliance, or disclosure metadata requirement is represented as an implementation-first dependency
+* every readiness label, support-label control, public documentation review, or public-claim discipline requirement is excluded from output unless reduced to implementation-first dependencies
+* every machine-checkable schema, model-change, ontology, validation, compatibility, or validation mechanism is represented as an implementation-first dependency
+* every governance review artifact, ontology admission package, proof-authority package, or manual approval record is excluded from output unless reduced to implementation-first dependencies
+* every minimum passing bar is decomposed into implementation-first dependencies or excluded from output
+* every explicit non-pass condition is represented
+* every certification document, judgment, readiness label, public-claim review, governance package, or checklist is either remapped to implementation-first dependencies or omitted from output
+* shared dependencies are consolidated without losing source traceability
+* no dependency is included without source or inference rationale
+* no non-implementation artifact is included as a dependency row or specialized dependency row
+* no implementation design is invented
+
+---
+
+## Output Requirements
+
+Output only the final Markdown content for:
+
+```text
+.agents/eval-dependency-inventory.md
+```
+
+Do not include commentary.
+Do not include a preface.
+Do not include hidden analysis.
+Do not include a separate explanation.
+Do not wrap the entire output in code fences.
+
+Use the structure below.
+
+---
+
+# Eval Dependency Inventory
+
+## Purpose of This Document
+
+This document identifies the implementation-first functional, technical, and operational dependencies necessary to satisfy the evaluation specifications under:
+
+```text
+.agents/evals/
+```
+
+It derives dependencies from evaluation requirements, checks, fixtures, generated reports, evidence obligations, negative controls, and non-pass conditions.
+
+It excludes all policy-mediated non-implementation artifacts from agent output.
+It includes implementation-aligned machine-required artifacts, such as executable fixtures, generated evaluator outputs, evidence records, scan outputs, replay records, comparison artifacts, capability fingerprints, and queryable runtime metadata.
+
+It does not define implementation design, architecture, roadmap, epics, milestones, repository structure, release governance, policy-mediated artifacts, or evaluation results.
+
+---
+
+## Source Inventory
+
+List every eval source file read.
+
+| ID                  | Source File     | Eval ID / Suite ID | Eval Name            | Source Status                    | Included In Analysis | Notes     |
+| ------------------- | --------------- | ------------------ | -------------------- | -------------------------------- | -------------------- | --------- |
+| EVAL-DEP-SOURCE-001 | {{source_file}} | {{eval_id_or_TBD}} | {{eval_name_or_TBD}} | {{active_draft_archived_or_TBD}} | {{yes_no}}           | {{notes}} |
+
+---
+
+## Dependency Extraction Method
+
+Describe how dependencies were derived.
+
+| ID                  | Extraction Rule | Meaning     | Applied To |
+| ------------------- | --------------- | ----------- | ---------- |
+| EVAL-DEP-METHOD-001 | {{rule}}        | {{meaning}} | {{scope}}  |
+
+Include rules for:
+
+* direct dependencies
+* implicit dependencies
+* functional dependencies
+* technical dependencies
+* operational dependencies
+* cross-eval dependencies
+* negative-control dependencies
+* evidence dependencies
+* governance evidence dependencies
+* machine-required eval artifacts
+* implementation-first boundary decisions
+* exclusion of forbidden non-implementation artifacts from agent output
+
+---
+
+## Dependency Taxonomy
+
+Define dependency categories used in this inventory.
+
+| ID                    | Dependency Class | Definition     | Typical Evidence     |
+| --------------------- | ---------------- | -------------- | -------------------- |
+| EVAL-DEP-TAXONOMY-001 | Functional       | {{definition}} | {{typical_evidence}} |
+| EVAL-DEP-TAXONOMY-002 | Technical        | {{definition}} | {{typical_evidence}} |
+| EVAL-DEP-TAXONOMY-003 | Operational      | {{definition}} | {{typical_evidence}} |
+| EVAL-DEP-TAXONOMY-004 | Cross-Cutting    | {{definition}} | {{typical_evidence}} |
+
+---
+
+## Executive Summary
+
+Summarize the dependency landscape.
+
+| ID                   | Summary Area                                     | Finding             |
+| -------------------- | ------------------------------------------------ | ------------------- |
+| EVAL-DEP-SUMMARY-001 | Total eval sources analyzed                      | {{count_and_notes}} |
+| EVAL-DEP-SUMMARY-002 | Total functional dependencies                    | {{count_and_notes}} |
+| EVAL-DEP-SUMMARY-003 | Total technical dependencies                     | {{count_and_notes}} |
+| EVAL-DEP-SUMMARY-004 | Total operational dependencies                   | {{count_and_notes}} |
+| EVAL-DEP-SUMMARY-005 | Foundational dependencies                        | {{summary}}         |
+| EVAL-DEP-SUMMARY-006 | Dependencies required before first eval run      | {{summary}}         |
+| EVAL-DEP-SUMMARY-007 | Dependencies required before machine-verifiable governance evidence | {{summary}}         |
+| EVAL-DEP-SUMMARY-008 | Highest-risk missing or unclear dependency areas | {{summary_or_TBD}}  |
+
+If repository status was not requested, state:
+
+```text
+Repository satisfaction status was not assessed.
+```
+
+---
+
+## Dependency Catalog
+
+List every dependency once.
+
+| ID               | Dependency | Class | Required Condition | Required For | Source Trace | Strictness | Planning Weight | Evidence Required | Status | Notes |
+| ---------------- | ---------- | ----- | ------------------ | ------------ | ------------ | ---------- | --------------- | ----------------- | ------ | ----- |
+| EVAL-DEP-001     | {{name}}   | {{Functional / Technical / Operational / Cross-Cutting}} | {{behavior_condition_or_process}} | {{run_pass_governance_evidence_safe_failure_or_condition}} | {{eval_id_section_or_line}} | {{strictness}} | {{weight}} | {{evidence}} | {{status_or_Not_Assessed}} | {{upstream_downstream_blocking_or_TBD}} |
+
+Rules:
+
+* Use one row per atomic dependency.
+* Do not create separate crosswalks, coverage matrices, dependency graphs, or gate matrices that restate the same relationships.
+* Put relationship details in `Required For`, `Source Trace`, and `Notes`.
+* Use `Class` to distinguish functional, technical, operational, and cross-cutting dependencies.
+* Split cross-cutting dependencies when the functional, technical, and operational parts can be evidenced or remediated separately.
+* Technical dependencies must describe necessary technical conditions, not preferred implementation designs.
+* Operational dependencies must describe executable run, maintenance, evidence-retention, reporting, or automated gate conditions without inventing owners.
+* Do not list forbidden non-implementation artifacts or policy-mediated artifacts as dependency rows.
+* Do list implementation-aligned machine-required artifacts when they are consumed, produced, compared, retained, validated, or queried by executable evals.
+* Remap non-implementation obligations to their executable checks, machine-verifiable evidence, runtime metadata, generated report data, validation hooks, or result aggregation dependencies.
+
+---
+
+## Foundational and Shared Dependencies
+
+Highlight only dependencies that materially affect multiple evals or must exist before a meaningful eval run.
+
+| Dependency ID | Why It Matters | Required By | Missing Effect |
+| ------------- | -------------- | ----------- | -------------- |
+| {{dep_id}}    | {{reason}}     | {{source_evals_or_requirements}} | {{blocked_run_pass_governance_evidence_or_safe_failure_effect}} |
+
+If no dependency is clearly foundational or shared, write:
+
+```text
+No foundational or shared dependencies are clearly defined by the eval specs.
+```
+
+---
+
+## Specialized Requirements
+
+List only source-defined items that need dedicated handling beyond the main dependency row.
+
+| ID                           | Type | Required Item | Requirement | Required By | Evidence / Verification | Failure Risk | Source Trace | Status |
+| ---------------------------- | ---- | ------------- | ----------- | ----------- | ---------------- | ------------ | ------------ | ------ |
+| EVAL-DEP-SPECIALIZED-001     | {{Evidence / Fixture / Input / Generated Report / Runtime Artifact / Negative Control / Stability / Public Metadata / Schema or Validation / Conditional}} | {{item}} | {{requirement}} | {{eval_or_requirement}} | {{evidence_or_TBD}} | {{risk_or_TBD}} | {{source_trace}} | {{status_or_Not_Assessed}} |
+
+Use this section for:
+
+* fixtures, corpora, inputs, scenarios, and datasets
+* fixture manifests and machine-consumed eval input artifacts
+* generated eval reports, report fields, machine-verifiable evidence packages, and machine-produced summary outputs
+* evidence that must be produced, retained, linked, reported, or machine-verified
+* static scan outputs, replay records, comparison artifacts, capability fingerprints, and negative-control outputs
+* negative controls and safe-failure behavior
+* determinism, replay, reproducibility, regression, stability, or baseline requirements
+* runtime/queryable public, external, support, capability, compliance, or disclosure metadata requirements
+* machine-checkable schema, ontology, model-change, relationship validation, identity-domain, public-contract, compatibility, or validation mechanisms
+* source-defined conditional requirements
+
+Do not list forbidden non-implementation artifacts or policy-mediated artifacts in this section.
+Do not list those source obligations anywhere else in the output.
+Do list implementation-aligned machine-required artifacts when they meet the specialized requirements criteria.
+
+If no specialized requirements are defined, write:
+
+```text
+No specialized dependency requirements are defined by the eval specs.
+```
+
+---
+
+## Open Dependency Questions
+
+List unresolved questions.
+
+Questions must be phrased only in terms of missing implementation-first behavior, evidence, metadata, validation, or result aggregation.
+Do not request, propose, summarize, or name policy-mediated artifacts as the resolution.
+
+| ID                    | Question     | Affected Eval(s)    | Affected Dependency Area | Why It Matters     | Recommended Handling     |
+| --------------------- | ------------ | ------------------- | ------------------------ | ------------------ | ------------------------ |
+| EVAL-DEP-QUESTION-001 | {{question}} | {{eval_ids_or_TBD}} | {{dependency_area}}      | {{why_it_matters}} | {{recommended_handling}} |
+
+If no unresolved dependency questions are known, write:
+
+```text
+No unresolved dependency questions are currently known.
+```
+
+---
+
+## Dependency Anti-Patterns To Avoid
+
+List anti-patterns relevant to dependency interpretation.
+
+| ID                       | Anti-Pattern                                                           | Why It Is Harmful                                                                                                    | Corrective Principle                                                                                                |
+| ------------------------ | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| EVAL-DEP-ANTIPATTERN-001 | Treating an eval check as a dependency without deriving prerequisites. | It produces a requirement restatement instead of an actionable dependency inventory.                                   | Derive the behavior, technical condition, evidence, and operation needed to satisfy the check.                      |
+| EVAL-DEP-ANTIPATTERN-002 | Treating implementation existence as dependency satisfaction.          | An artifact may exist while the eval requirement remains unmet.                                                      | Require source-traceable evidence and mark repository status Not Assessed unless explicitly evaluated.              |
+| EVAL-DEP-ANTIPATTERN-003 | Omitting operational dependencies.                                     | Evals may fail or become unreliable because fixtures, generated reports, baselines, run procedures, or evidence practices are missing. | Extract executable process and maintenance prerequisites as first-class dependencies.                               |
+| EVAL-DEP-ANTIPATTERN-004 | Hiding negative controls inside positive-path dependencies.            | False success can remain undetected.                                                                                 | Represent negative controls and safe-failure behavior separately.                                                   |
+| EVAL-DEP-ANTIPATTERN-005 | Recreating dependency relationships as separate crosswalks.             | The same source, gate, evidence, and blocking relationships get repeated and drift across sections.                  | Capture relationships once in the dependency catalog; use shared and specialized sections only when they add value. |
+| EVAL-DEP-ANTIPATTERN-006 | Inventing architecture from dependency analysis.                       | Dependency inventory becomes an implementation design rather than eval-derived requirement analysis.                 | Describe required technical conditions without prescribing implementation mechanisms unless the eval requires them. |
+| EVAL-DEP-ANTIPATTERN-007 | Treating policy-mediated artifacts as dependencies.                    | It allows non-implementation artifacts to replace executable checks, generated evidence, runtime metadata, validation, or result aggregation. | Model only the deterministic execution-tied basis as dependencies; otherwise omit the source item from agent output. |
+| EVAL-DEP-ANTIPATTERN-008 | Laundering semantic policy artifacts with implementation terms.         | Adding words such as implementation, metadata, generated, validation, or governance evidence can hide that the deliverable is still a policy artifact. | Require a concrete executable tie; if no eval path consumes, produces, compares, validates, persists, or queries the artifact, omit it. |
+
+Add project-specific anti-patterns only if present in the eval specs.
+
+---
+
+## Completeness Checklist
+
+Before finalizing this dependency inventory, verify:
+
+* Every file under `.agents/evals/` was considered.
+* Every included eval source appears in the Source Inventory.
+* Every eval ID or suite ID is represented or marked `TBD`.
+* Every required check is represented by dependencies.
+* Every pass criterion is represented by dependencies.
+* Every fail criterion is reflected in failure, negative-control, or false-success dependencies.
+* Every blocked or inconclusive condition is reflected in run, evidence, result aggregation, or governance evidence dependencies.
+* Every fixture, corpus, input, scenario, or dataset requirement is represented.
+* Every fixture artifact, fixture manifest, or other machine-consumed eval input artifact is represented when required.
+* Every generated report or machine-verifiable report artifact requirement is represented as an implementation-first dependency.
+* Every required report field is represented or summarized without loss.
+* Every evidence requirement is represented.
+* Every negative control is represented.
+* Every required scan output, replay record, comparison artifact, capability fingerprint, or negative-control output is represented.
+* Every deterministic, replay, reproducibility, regression, or stability requirement is represented.
+* Every runtime/queryable public, external, support, capability, compliance, or disclosure metadata requirement is represented as an implementation-first dependency.
+* Every machine-checkable schema, ontology, model-change, relationship validation, identity-domain, public-contract, compatibility, or validation mechanism is represented as an implementation-first dependency.
+* Every source-defined minimum bar is decomposed into implementation-first dependencies or omitted from output.
+* Every source requirement that names a policy-mediated non-implementation artifact is remapped to implementation-first dependencies or omitted from output.
+* Every explicit non-pass condition is represented.
+* Each catalog row has an explicit dependency class.
+* Technical dependencies do not prescribe implementation design unless the eval requires it.
+* Operational dependencies are not omitted.
+* No dependency catalog row or specialized requirement row has a forbidden non-implementation artifact as its primary deliverable.
+* No section, table, list, evidence field, status field, summary count, or open question emits policy-mediated artifacts.
+* No implementation-aligned machine-required artifact is omitted merely because it is an artifact.
+* Shared dependencies are consolidated without losing source traceability.
+* Conditional dependencies include their conditions.
+* Ambiguities are recorded in Open Dependency Questions.
+* Repository satisfaction status is `Not Assessed` unless explicitly requested.
+* No roadmap appears.
+* No actual epics appear.
+* No actual milestones appear.
+* No implementation tasks appear.
+* No architecture is invented.
+* No evaluation result or policy-mediated status is claimed.
+* The inventory is detailed enough to drive downstream roadmap, epic, milestone, and remediation planning.

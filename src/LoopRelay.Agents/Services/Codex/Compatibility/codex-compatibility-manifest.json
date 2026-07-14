@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "codex-0.144.0-app-server-v2-d3639dd0",
+      "serverVersion": "0.144.0",
+      "schemaDigest": "d3639dd0e04172c9dbb9ca7af048e32cfe197d482d9344a137d2bca95f946c6f",
+      "fixtureIdentity": "codex-0.144.0-certification.v1",
+      "resumeSupport": "Supported",
+      "excludeTurnsSupport": "Supported",
+      "forkSupport": "Unknown",
+      "readSupport": "Supported",
+      "writeSupport": "Unknown",
+      "maximumRecoverableContext": null,
+      "evidenceDigest": "e2cbb8b6928af5637b656174118ff1e812de4d4bfc8b1033aa1f1f55c7a54637"
+    },
+    {
+      "id": "codex-0.142.5-app-server-v2-f0ead6fd",
+      "serverVersion": "0.142.5",
+      "schemaDigest": "f0ead6fd0bb0f21a9a3194c65e068f5c8ba333d24464d2575933065066b76a5e",
+      "fixtureIdentity": "codex-0.142.5-certification.v1",
+      "resumeSupport": "Supported",
+      "excludeTurnsSupport": "Supported",
+      "forkSupport": "Unknown",
+      "readSupport": "Supported",
+      "writeSupport": "Unknown",
+      "maximumRecoverableContext": null,
+      "evidenceDigest": "d28f9111ac48038de0e7427de8a3363bc792541bf96644dd0913b815aa35bf8e"
+    },
+    {
+      "id": "codex-0.144.1-app-server-v2-d3639dd0",
+      "serverVersion": "0.144.1",
+      "schemaDigest": "d3639dd0e04172c9dbb9ca7af048e32cfe197d482d9344a137d2bca95f946c6f",
+      "fixtureIdentity": "codex-0.144.1-certification.v1",
+      "resumeSupport": "Supported",
+      "excludeTurnsSupport": "Supported",
+      "forkSupport": "Unknown",
+      "readSupport": "Supported",
+      "writeSupport": "Unknown",
+      "maximumRecoverableContext": null,
+      "evidenceDigest": "25b5ed3bdbb55dee15f88b287beee1297750a9d4d729c5e87031dd878b29e4b3"
+    }
+  ]
+}

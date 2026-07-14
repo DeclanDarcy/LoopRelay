@@ -1,0 +1,602 @@
+# Create Planning-Only Next-Epic Active Epic Prompt
+
+This prompt reads a completed next-epic roadmap and transforms it into a planning-only, implementation-focused active epic.
+
+Planning-only means:
+
+* repository source code is not inspected;
+* repository structure is not inferred;
+* implementation reality is not assessed;
+* concrete file paths, modules, APIs, functions, classes, schemas, commands, tools, storage choices, and test names are not invented;
+* repository-specific implementation details are marked `TBD` unless already present in the source planning artifacts.
+
+You are NOT creating or modifying evaluation specs, the DAG, dependency inventory, hypothesis inventory, architectural catalog, next-epic roadmap, repository implementation, code, tests, evaluation results, pass claims, or certification claims.
+
+Your output must be only the final Markdown content for:
+
+```text
+.agents/epic.md
+```
+
+When the caller provides a different output path, use that path instead.
+
+Do not write `.agents/specs/epic.md` by default. The universal EvalRoadmap writes the active epic at `.agents/epic.md`; `GenerateMilestoneDeepDivesForEpic` then consumes that active epic and writes `.agents/specs/*.md`.
+
+---
+
+## Core Objective
+
+Create a Planning-Only Next-Epic Active Epic that answers:
+
+> What implementation-bearing epic must exist so `GenerateMilestoneDeepDivesForEpic` can expand the selected next-eval roadmap slice into milestone deep dives, without inventing repository-specific design or losing evaluation traceability?
+
+The active epic must transform source planning artifacts into:
+
+```text
+selected epic scope
+-> active epic capability frame
+-> milestone roadmap
+-> implementation requirements
+-> verification targets
+-> evidence obligations
+-> negative controls and false-success guards
+-> non-pass rules
+-> open repository-grounding decisions
+-> milestone-deep-dive handoff
+```
+
+The output should be semantically complete, implementation-focused, and efficient to retrieve. Token efficiency means avoiding duplicate crosswalks and restated relationships, not dropping source meaning.
+
+---
+
+## Planning-Only Boundary
+
+The active epic may define:
+
+* required system behaviors;
+* implementation requirements;
+* implementation surface categories as planning lenses;
+* source-mandated technical conditions;
+* fixture and input obligations;
+* evidence production, retention, linkage, and report visibility;
+* verification targets, confirmation conditions, falsification conditions, and blocked or inconclusive conditions;
+* negative-control and safe-failure behavior;
+* non-pass behavior;
+* report, generated artifact, public-surface, governance, stability, and operational obligations when source-derived;
+* open repository-grounding questions and decisions;
+* milestone sequencing and handoff requirements.
+
+The active epic must not:
+
+* inspect repository code;
+* infer repository structure;
+* invent repository files, folders, modules, classes, functions, interfaces, APIs, commands, schemas, tools, frameworks, storage mechanisms, or test names;
+* claim implementation status;
+* claim tests pass;
+* claim evidence exists;
+* claim the selected epic is complete;
+* claim an eval passes;
+* claim certification;
+* prescribe exact implementation mechanics unless source artifacts require them.
+
+Unless source planning artifacts explicitly state otherwise, repository-specific fields must be `TBD`, and implementation status must be `Planned / Not Implemented / Not Verified`.
+
+The active epic is a planning artifact, but it is also an implementation-bearing roadmap input. It must be valid as the `RoadmapArtifactPaths.ActiveEpic` artifact consumed by `GenerateMilestoneDeepDivesForEpic`.
+
+### Required Active Epic Shape
+
+The output must use this active-epic structure:
+
+```markdown
+# Epic: {{selected_epic_name}}
+
+## Epic Metadata
+
+| Field | Value |
+| --- | --- |
+| Epic ID | {{stable_id_or_TBD}} |
+| Status | Planned / Not Implemented / Not Verified |
+
+## Strategic Purpose
+
+{{strategic_purpose}}
+
+## Desired Capability
+
+{{desired_capability}}
+
+## Acceptance Criteria
+
+{{criteria}}
+
+## Milestone Roadmap
+
+| Milestone ID | Milestone Name | Purpose | Outcome | Depends On | Completion Signal |
+| --- | --- | --- | --- | --- | --- |
+| {{id}} | {{name}} | {{purpose}} | {{outcome}} | {{dependencies_or_None}} | {{signal}} |
+```
+
+You may add additional `##` sections after these required sections when they preserve source-derived implementation meaning, such as evidence obligations, non-pass rules, negative controls, open decisions, or handoff requirements.
+
+Do not output a generic implementation-spec document whose top heading is not `# Epic:`. Do not omit `## Epic Metadata`, `## Strategic Purpose` or `## Strategic Continuity`, `## Desired Capability`, `## Acceptance Criteria`, or `## Milestone Roadmap`.
+
+---
+
+## Source Inputs
+
+Read the primary source:
+
+```text
+.agents/next-epic-roadmap.md
+```
+
+When available, also read:
+
+```text
+.agents/eval-dag.md
+.agents/eval-architectural-catalog.md
+.agents/eval-dependency-inventory.md
+.agents/eval-hypothesis-inventory.md
+.agents/evals/
+.agents/north-star/projections/evaluation-projection.md
+.agents/north-star/core/
+.agents/ctx/
+```
+
+Use supporting sources only to preserve scope, authority, constraints, dependencies, hypotheses, evidence obligations, false-success controls, non-pass behavior, vocabulary, and traceability.
+
+Do not inspect non-`.agents` implementation source unless the caller explicitly disables planning-only mode.
+
+Record unavailable or unreadable expected sources in the output. Do not silently ignore them.
+
+---
+
+## Source Authority
+
+Use this authority order:
+
+| Source | Authority |
+| --- | --- |
+| Next-epic roadmap | Selected epic, milestone sequence, scope, non-scope, dependency and hypothesis coverage, evidence plan, negative-control plan, non-pass plan, open questions, and traceability. |
+| Eval DAG | Prerequisite topology, DAG nodes and edges, gate meaning, SCC limitations, and readiness order. |
+| Architectural catalog | Horizontal architectural planes and catalog grouping as planning lenses, not code modules. |
+| Dependency inventory | Dependency meaning, strictness, prerequisite constraints, planning weight, and dependency evidence requirements. |
+| Hypothesis inventory | Verification modes, confirmation conditions, falsification conditions, blocked or inconclusive conditions, and required evidence. |
+| Eval suite source | Source-defined fixture behavior, checks, report fields, status behavior, skipped-check controls, and machine-output obligations. |
+| Evaluation projection and Core or ctx constraints | Authority, evaluation semantics, drift, false-success, vocabulary, and meaning boundaries. |
+
+When sources conflict:
+
+* preserve the conflict;
+* do not silently choose one;
+* mark affected concrete details `TBD`;
+* record the conflict in open decisions;
+* do not create a concrete implementation decision from unresolved authority conflict.
+
+---
+
+## Project-Agnostic Rule
+
+Keep the prompt and generated active epic project-agnostic.
+
+Do not hardcode product names, programming languages, frameworks, providers, repository paths, architecture names, domain-specific constructs, evaluation IDs, report names, fixture names, dependency IDs, hypothesis IDs, capability names, certification states, public capability rows, or ontology categories.
+
+Use project-specific terms only when they appear in the source files. Preserve source-derived concrete meaning. Do not generalize it away.
+
+Use `TBD` when source meaning is unclear.
+
+---
+
+## Canonical Vocabulary
+
+Use these concepts consistently. They are attributes of generated content, not mandatory top-level sections.
+
+| Concept | Meaning |
+| --- | --- |
+| Requirement | What must become true. |
+| Implementation surface category | A conceptual planning lens for where the work likely lives. It is not architecture. |
+| Source-mandated detail | Detail explicitly required by source artifacts. |
+| Repository-grounded detail | Detail requiring repository inspection; it is `TBD` in planning-only mode. |
+| Verification target | What future work must confirm or falsify. |
+| Evidence obligation | Artifact, record, report, output, or observation required to prove a requirement. |
+| Non-pass behavior | Required behavior for blocked, failed, inconclusive, partial, unsupported, absent, conflicting, conditional, skipped, not-assessed, or `TBD` states. |
+| Open decision | Design, repository-grounding, authority, or clarification question unresolved by source artifacts. |
+
+Requirement classes may include functional, technical, evidence, validation, negative-control, non-pass, operational, public/external surface, governance/model-change, stability/regression, fixture/input, and report/certification artifact. Assign classes where useful, but do not create one global section per class unless the source scope is so large that retrieval would suffer without it.
+
+Specificity levels may include source-mandated, source-implied, planning-inferred, repository-grounding required, open decision, and `TBD`. Do not mark concrete implementation detail as source-mandated unless a source artifact actually states it.
+
+---
+
+## Generation Principles
+
+### 1. Milestones Are The Primary Locality
+
+Make roadmap milestones the primary implementation structure.
+
+Each milestone should locally contain the information needed to act on it:
+
+* objective;
+* source tags;
+* required outputs;
+* requirements;
+* validation or verification targets;
+* exit criteria;
+* non-scope.
+
+Do not scatter the same milestone meaning across many distant global tables.
+
+### 2. Define Semantic Contracts Once
+
+Define each requirement, evidence obligation, verification target, negative control, non-pass rule, open decision, and source relationship in the smallest stable location that owns it.
+
+After a concept is defined, reference it by stable ID or short source tag. Do not restate the same full row in dependency, hypothesis, evidence, validation, milestone, traceability, and checklist sections.
+
+### 3. Use Source Tags Instead Of Repeated Crosswalks
+
+Preserve traceability with compact source tags:
+
+```text
+Dependencies: DEP-...
+Hypotheses: HYP-...
+DAG: NODE/EDGE/GATE...
+Catalog: GROUP/ITEM...
+Source: path or source excerpt reference when needed
+```
+
+Prefer one source-tag block per milestone and inline tags on requirements where they affect implementation planning.
+
+Add a separate traceability appendix only when source relationships cannot be recovered from milestone source tags and inline requirement references.
+
+### 4. Normalize Before Writing
+
+Before drafting, normalize source material into canonical inventories:
+
+* selected epic scope;
+* milestones;
+* requirements;
+* evidence obligations;
+* verification targets;
+* negative controls;
+* non-pass rules;
+* open decisions and repository-grounding `TBD`s;
+* handoff obligations.
+
+Merge duplicates with the same semantic role. Split composites only when different evidence, validation, ownership, or non-pass behavior applies.
+
+### 5. Preserve Dependency Meaning As Prerequisite Constraints
+
+Dependencies are not background context. Represent them as constraints on when implementation work, milestone completion, positive-path claims, safe failure, report generation, pass claims, or certification attempts can be meaningful.
+
+Keep dependency IDs close to the milestone or requirement they constrain.
+
+### 6. Preserve Hypotheses As Verification Targets
+
+Convert covered hypotheses into verification targets with:
+
+* verification mode;
+* confirmation condition;
+* falsification condition;
+* blocked or inconclusive condition;
+* required evidence;
+* milestone ownership.
+
+Do not write test code, commands, file names, framework names, or repository mechanisms unless source artifacts provide them.
+
+### 7. Make Evidence First-Class And Local
+
+For every requirement and verification target, identify the evidence that will prove it later.
+
+Evidence must be machine-produced or machine-validated when the source requires executable truth. Planning prose, governance notes, roadmap tables, skipped-check rules, and open questions are not milestone evidence unless future repository-aware work turns them into source-required machine output or validation input.
+
+Provide a consolidated evidence package after milestone sections so future implementers can retrieve all expected artifacts without reading every milestone.
+
+### 8. Keep Negative Controls Near The Claims They Protect
+
+Negative controls must identify:
+
+* the unsafe success they expose;
+* the positive claim they protect;
+* required safe-failure behavior;
+* required evidence;
+* non-pass effect if omitted.
+
+A positive-path milestone may not complete when a source-required negative control protecting that behavior is missing.
+
+### 9. Preserve Non-Pass States As Rules
+
+Define non-pass states once as rules. Reference them from milestones and requirements.
+
+Do not collapse missing, blocked, inconclusive, partial, unsupported, failed, skipped, conditional, conflicting, not-assessed, or `TBD` states into pass/fail language unless the source requires that exact behavior.
+
+### 10. Separate Run, Pass, Certification, And Public Support
+
+Generated reports, status records, readiness labels, and source-derived current-state observations do not prove pass, certification, full realization, public support, or implementation completion.
+
+Make the boundary explicit whenever the selected epic concerns run-readiness, evidence packaging, report generation, or status validation.
+
+### 11. Optimize Tables For Retrieval
+
+Use compact tables with only decision-relevant columns.
+
+Prefer this requirement table shape inside milestones:
+
+| Requirement | Must Become True | Evidence | Validate By | Blocks If |
+| --- | --- | --- | --- | --- |
+
+Use prose lists when a table would create wide, repetitive, or low-density rows.
+
+Avoid wide global tables that repeat requirement text, source IDs, evidence, validation, and non-pass behavior already defined inside milestones.
+
+### 12. Maintain Stable IDs
+
+Use stable, monotonic IDs for requirements, verification targets, decisions, and other reusable items when cross-reference is needed.
+
+IDs should be short enough to scan and stable enough for future handoff. Do not create IDs for one-off text that is never referenced.
+
+### 13. Prefer Semantic Efficiency Over Brevity
+
+Do not shorten by deleting required source meaning.
+
+Improve efficiency by:
+
+* grouping related semantics once;
+* replacing repeated matrices with source tags;
+* moving details to their owning milestone;
+* consolidating cross-cutting rules;
+* removing template sections that add no source-derived content;
+* avoiding empty boilerplate tables.
+
+### 14. Preserve Existing Strengths
+
+Keep all successful planning-only safeguards:
+
+* no repository inspection;
+* no invented implementation details;
+* source authority and conflict handling;
+* selected epic scope preservation;
+* milestone sequence preservation;
+* dependency and hypothesis traceability;
+* evidence-backed readiness;
+* negative-control discipline;
+* explicit non-pass behavior;
+* explicit exclusions;
+* handoff expectations.
+
+---
+
+## Required Internal Process
+
+Follow this process before writing the final file.
+
+### Step 1 - Read And Classify Sources
+
+For each required or available source, record:
+
+* path;
+* source type;
+* included, missing, unavailable, or excluded status;
+* authority role;
+* coverage limitations;
+* relevant open questions.
+
+### Step 2 - Extract Selected Epic
+
+From the roadmap, extract:
+
+* epic ID and name;
+* epic type;
+* selection rationale;
+* primary gate or readiness target;
+* DAG slice and SCC limitations;
+* milestone sequence;
+* dependencies and hypotheses covered;
+* evidence scope;
+* negative-control scope;
+* non-pass states;
+* downstream unlocks;
+* explicit exclusions;
+* open questions.
+
+Do not expand beyond selected scope.
+
+### Step 3 - Normalize Milestones
+
+For each roadmap milestone, normalize:
+
+* purpose and implementation objective;
+* source tags;
+* required outputs;
+* requirements;
+* verification targets;
+* evidence obligations;
+* negative controls;
+* non-pass states;
+* repository-grounding `TBD`s;
+* exit criteria;
+* non-scope.
+
+Preserve roadmap order unless DAG authority requires a different prerequisite order.
+
+### Step 4 - Derive Requirements
+
+Derive implementation requirements from source obligations.
+
+For each requirement, determine:
+
+* what must become true;
+* class and specificity when useful;
+* milestone owner;
+* source dependency and hypothesis tags;
+* implementation surface category as a planning lens;
+* required evidence;
+* verification target;
+* non-pass behavior;
+* default status.
+
+Split requirements only when evidence, validation, owner, success behavior, or non-pass behavior differs.
+
+### Step 5 - Derive Verification And Evidence
+
+For every covered hypothesis and evidence obligation:
+
+* map it to a milestone;
+* identify confirmation, falsification, and blocked or inconclusive conditions;
+* identify required evidence;
+* identify what missing evidence blocks or makes inconclusive.
+
+### Step 6 - Derive Negative Controls And Non-Pass Rules
+
+For every source-required negative control and non-success state:
+
+* identify the positive claim protected;
+* identify unsafe success;
+* identify safe-failure behavior;
+* identify evidence;
+* identify blocking or inconclusive effect.
+
+### Step 7 - Consolidate Cross-Cutting Inventories
+
+After milestone-local content is stable, build compact cross-cutting inventories only for information that benefits from a single retrieval point:
+
+* evidence package;
+* non-pass rules;
+* negative controls and false-success guards;
+* open decisions and repository-grounding `TBD`s;
+* handoff requirements;
+* anti-patterns;
+* execution readiness checklist.
+
+Do not generate separate global sections for every requirement class by default.
+
+### Step 8 - Validate The Active Epic
+
+Before finalizing, verify:
+
+* the selected epic scope is unchanged;
+* every roadmap milestone is represented;
+* every source-required dependency and hypothesis is represented through milestone source tags, requirement references, verification targets, or open decisions;
+* required evidence is represented;
+* negative controls are represented and block unsafe positive claims;
+* non-pass behavior is explicit;
+* repository-specific details remain `TBD`;
+* source conflicts remain open rather than resolved by invention;
+* repeated crosswalks have been collapsed;
+* no implementation status, pass result, eval result, or certification result is claimed.
+
+---
+
+## Output Architecture
+
+Use the active-epic architecture below. The headings named in this section are part of the contract because the existing active-epic validator and `GenerateMilestoneDeepDivesForEpic` prompt consume this shape.
+
+### `# Epic: {{Selected Epic Name}}`
+
+Use a concrete source-derived name. If the selected epic name is unclear, use `# Epic: TBD` and record the ambiguity in Open Decisions.
+
+### `## Epic Metadata`
+
+Include a compact field table with at least:
+
+| Field | Required Value |
+| --- | --- |
+| Epic ID | A stable source-derived ID, or `TBD` when unavailable. |
+| Status | `Planned / Not Implemented / Not Verified`. |
+| Output Path | `.agents/epic.md` unless the caller supplied a different path. |
+| Primary Source Basis | The next-epic roadmap and any supporting eval artifacts used. |
+| Downstream Consumer | `GenerateMilestoneDeepDivesForEpic`. |
+
+Additional metadata fields are allowed when source-derived and useful for later milestone generation.
+
+### `## Strategic Purpose`
+
+State why this epic exists and what evaluation-readiness frontier it advances. Preserve source-derived DAG, dependency, and hypothesis meaning without turning this section into a traceability dump.
+
+If the source uses continuity language instead of purpose language, use `## Strategic Continuity` instead. At least one of `## Strategic Purpose` or `## Strategic Continuity` must exist.
+
+### `## Desired Capability`
+
+Describe the software capability, correctness property, execution behavior, evidence behavior, or validation behavior that must become true. Keep repository-specific implementation details as `TBD` unless they are source-derived.
+
+### `## Scope`
+
+Define included scope, non-scope, selected DAG slice, explicit exclusions, run/pass/certification/public-support boundaries, and repository-grounding `TBD`s.
+
+### `## Acceptance Criteria`
+
+List source-derived acceptance criteria as auditable bullets. Include evidence, negative-control, false-success, non-pass, and validation criteria where they constrain epic completion.
+
+Do not claim any criterion is already satisfied.
+
+### `## Milestone Roadmap`
+
+Include a milestone table with exactly these required columns:
+
+| Milestone ID | Milestone Name | Purpose | Outcome | Depends On | Completion Signal |
+| --- | --- | --- | --- | --- | --- |
+| {{id}} | {{name}} | {{purpose}} | {{outcome}} | {{dependencies_or_None}} | {{signal}} |
+
+Every row must have non-empty `Milestone ID`, `Milestone Name`, `Purpose`, `Outcome`, and `Completion Signal` values. Use `None` in `Depends On` when there is no dependency.
+
+Each milestone should preserve the roadmap milestone sequence and carry enough source-derived meaning for `GenerateMilestoneDeepDivesForEpic` to expand it into `.agents/specs/*.md` without inventing the milestone structure.
+
+### `## Evidence And Verification Obligations`
+
+Group evidence by milestone or evidence class. State missing-evidence consequences and source tags where useful.
+
+### `## Negative Controls And Non-Pass Rules`
+
+Define applicable non-pass states and false-success guards once. Reference affected milestone IDs or requirement IDs where useful.
+
+### `## Open Decisions`
+
+Combine design decisions, authority conflicts, unavailable source inputs, and repository-grounding `TBD`s into one retrieval point.
+
+### `## Handoff Requirements`
+
+List what future repository-aware execution or milestone deep-dive generation must preserve:
+
+* requirement IDs attempted;
+* evidence produced, missing, retained, linked, or unauditable;
+* concrete repository files, modules, commands, APIs, schemas, storage, or mechanisms introduced by future work;
+* negative-control outcomes;
+* non-pass states;
+* unresolved `TBD`s and source conflicts;
+* whether the future work claims run-readiness only, and whether it does not claim pass, certification, full realization, or public support.
+
+### Optional Appendix - Traceability Matrix
+
+Add this appendix only when milestone source tags and inline requirement references are not enough for a future reader to recover traceability.
+
+If included, keep it compact and reference existing requirement IDs rather than restating requirement text, evidence, validation, and non-pass behavior.
+
+---
+
+## Output Quality Bar
+
+The final active epic succeeds when:
+
+* it can be written to `.agents/epic.md`;
+* it has the required active-epic heading, metadata, desired capability, acceptance criteria, and milestone roadmap shape;
+* `GenerateMilestoneDeepDivesForEpic` can use it as the selected active epic;
+* a future implementer can find each requirement inside the owning milestone;
+* a future reviewer can recover dependencies and hypotheses from source tags without reading repeated crosswalks;
+* evidence expectations are concrete enough for future repository-aware work;
+* non-pass and negative-control behavior prevents false success;
+* repository-grounded unknowns remain explicit;
+* source conflicts remain visible;
+* run-readiness, pass, certification, full realization, and public support remain separate;
+* the document is semantically dense rather than merely shorter.
+
+The final active epic fails when it:
+
+* outputs `.agents/next-epic-implementation-spec.md` or `.agents/specs/epic.md` by default instead of `.agents/epic.md`;
+* uses a top-level heading other than `# Epic:`;
+* omits active-epic validator-required sections or milestone roadmap columns;
+* copies source wording without deriving implementation requirements;
+* creates broad global tables that repeat the same relationships already present in milestones;
+* creates one section per requirement class when milestone-local representation is sufficient;
+* optimizes for brevity by dropping source obligations;
+* invents repository architecture, code, commands, schemas, test names, or storage mechanisms;
+* hides missing evidence, unsupported paths, skipped checks, blocked states, or source conflicts;
+* treats planning context as eval result, pass result, implementation completion, public support, or certification.

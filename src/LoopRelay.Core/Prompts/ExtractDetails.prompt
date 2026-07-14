@@ -1,0 +1,11 @@
+Extract milestone-specific information from `.agents/details.md` into the existing files under
+`.agents/milestones/`, then leave `.agents/details.md` containing only details that are universally relevant.
+
+This is an in-place refinement. Preserve the exact existing milestone file set, filenames, milestone identities,
+and checkbox identities. Do not create, rename, copy, split, merge, or delete milestone files. In particular, never
+create a second file for a milestone merely because its heading or ID suggests a different filename. Edit each
+existing milestone file directly. Repeating a detail across existing milestone files is preferable to leaving a
+milestone-specific detail in the universal details document.
+Within each existing milestone document, remove or rewrite any instruction that tells Execute to create, write, or
+update a different `.agents/milestones/*.md` file. Completion evidence and checkbox progress for a milestone must be
+recorded in that same existing milestone document, regardless of a stale filename mentioned by upstream prose.

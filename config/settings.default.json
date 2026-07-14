@@ -1,0 +1,224 @@
+{
+  "schemaVersion": "settings-v3",
+  "runtime": {
+    "brain": {
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh"
+    },
+    "providers": {
+      "supportedCodexProfiles": []
+    }
+  },
+  "policy": {
+    "schemaVersion": "policy-v4",
+    "execution": {
+      "maxUnboundedContinuationSteps": 32,
+      "maxNoChangesCommits": 2,
+      "operationalContextGrowthWarningStreak": 2
+    },
+    "decisions": {
+      "sessionResume": true
+    },
+    "recovery": {
+      "strategy": "resume-only"
+    },
+    "runtime": {
+      "sessionTelemetry": true,
+      "usageLimitWaitRetry": true,
+      "inputWaitReporting": true
+    }
+  },
+  "permissions": {
+    "fingerprintVersion": "v1",
+    "commandsWithSubcommands": [
+      "git",
+      "npm",
+      "pnpm",
+      "yarn",
+      "docker",
+      "kubectl",
+      "dotnet",
+      "cargo",
+      "go",
+      "pip",
+      "conda",
+      "apt-get",
+      "apt",
+      "brew",
+      "systemctl",
+      "terraform",
+      "az",
+      "gcloud",
+      "gh"
+    ],
+    "safeTools": [
+      "read",
+      "glob",
+      "grep",
+      "ls"
+    ],
+    "safeBashCommands": [
+      "echo",
+      "cat",
+      "head",
+      "tail",
+      "wc",
+      "sort",
+      "uniq",
+      "diff",
+      "less",
+      "more",
+      "file",
+      "stat",
+      "which",
+      "whoami",
+      "date",
+      "uname",
+      "hostname",
+      "basename",
+      "dirname",
+      "realpath",
+      "true",
+      "false",
+      "test",
+      "env",
+      "printenv",
+      "id",
+      "groups",
+      "tee",
+      "tr",
+      "cut",
+      "paste",
+      "fold",
+      "fmt",
+      "nl",
+      "seq",
+      "yes",
+      "printf",
+      "find",
+      "xargs",
+      "type",
+      "command",
+      "rg"
+    ],
+    "hardDeny": {
+      "privilegeEscalationCommands": [
+        "sudo",
+        "su",
+        "doas"
+      ],
+      "recursiveForceDelete": {
+        "command": "rm",
+        "flagSets": [
+          [
+            "-rf"
+          ],
+          [
+            "-fr"
+          ],
+          [
+            "-r",
+            "-f"
+          ],
+          [
+            "-r",
+            "--force"
+          ],
+          [
+            "--recursive",
+            "-f"
+          ],
+          [
+            "--recursive",
+            "--force"
+          ]
+        ]
+      },
+      "systemControlCommands": [
+        "shutdown",
+        "reboot",
+        "halt",
+        "poweroff"
+      ],
+      "networkFetchCommands": [
+        "curl",
+        "wget"
+      ],
+      "gitForcePushFlags": [
+        "--force",
+        "-f"
+      ],
+      "indirectShellExecution": {
+        "commands": [
+          "bash",
+          "sh",
+          "zsh"
+        ],
+        "flag": "-c"
+      }
+    },
+    "reviewRequired": {
+      "gitCommit": true,
+      "gitCommitAmendFlags": [
+        "--amend"
+      ],
+      "gitPush": true,
+      "installCommands": [
+        "npm",
+        "pnpm",
+        "yarn",
+        "pip",
+        "dotnet",
+        "cargo",
+        "apt-get",
+        "apt",
+        "brew",
+        "conda"
+      ],
+      "installSubcommand": "install",
+      "infrastructureCommands": [
+        "docker",
+        "kubectl",
+        "terraform"
+      ]
+    },
+    "allow": {
+      "alwaysAllowedCommands": [
+        "pwd"
+      ],
+      "gitReadOnlySubcommands": [
+        "status",
+        "diff"
+      ],
+      "gitLogAllowedUnlessFlags": [
+        "-p",
+        "--patch"
+      ],
+      "dotnetAllowedSubcommands": [
+        "build",
+        "test",
+        "restore"
+      ],
+      "packageManagerAllowedSubcommands": {
+        "npm": [
+          "test",
+          "run"
+        ],
+        "pnpm": [
+          "test",
+          "run"
+        ],
+        "yarn": [
+          "test",
+          "run"
+        ]
+      },
+      "testCommands": {
+        "pytest": [],
+        "go": [
+          "test"
+        ]
+      }
+    }
+  }
+}

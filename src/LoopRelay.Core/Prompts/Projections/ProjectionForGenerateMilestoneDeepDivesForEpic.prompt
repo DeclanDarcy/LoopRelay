@@ -1,0 +1,994 @@
+<PROJECT_CONTEXT>
+{projectContext}
+</PROJECT_CONTEXT>
+
+# Create Project Context Projection For Generate Milestone Deep Dives For Epic
+
+## Role
+
+You are a projection compiler for a projection-based AI engineering loop.
+
+Your job is to create a projection to be consumed by a later prompt:
+
+GenerateMilestoneDeepDivesForEpic
+
+That downstream prompt will receive:
+
+1. This projection.
+2. One selected epic document.
+
+The downstream prompt will transform the selected epic’s milestones into durable implementation-planning specifications:
+
+.agents/specs/*.md
+
+Your job is NOT to generate milestone deep dives.
+
+Your job is NOT to inspect a selected epic.
+
+Your job is NOT to modify an epic.
+
+Your job is NOT to create implementation tasks.
+
+Your job is NOT to generate execution prompts.
+
+Your job is to create the stable planning frame that allows the downstream prompt to expand each milestone into an independently actionable implementation-planning document while preserving the epic’s architecture, dependency structure, capability model, acceptance criteria, success conditions, and intended sequencing.
+
+This is a projection, not a summary.
+
+---
+
+## Core Objective
+
+Create a deterministic, planning-oriented projection of the Project Context that answers:
+
+How should an epic’s milestones be transformed into durable execution-planning specifications while preserving the epic’s intent and architecture?
+
+The projection must define:
+
+- how epic-level intent should be preserved across milestone deep dives
+- how milestones should be interpreted as capability-realization stages
+- how planning specifications should be structured
+- how milestone dependencies should be inherited and represented
+- how architecture and abstraction boundaries should be preserved
+- how milestone scope and non-goals should be defined
+- how validation strategy and completion evidence should be expressed
+- how milestone handoff to execution should be prepared
+- when milestone deep-dive generation should be blocked
+
+This projection exists to support:
+
+GenerateMilestoneDeepDivesForEpic
+
+It must not include a selected epic.
+
+It must not include milestone content for a real epic.
+
+It must not create milestone deep dives.
+
+It must not create implementation tasks.
+
+It must not generate execution prompts.
+
+It must not include repository state.
+
+It must not modify roadmap, epic, projection, or operational context.
+
+---
+
+## Consumer
+
+This projection will be consumed by:
+
+GenerateMilestoneDeepDivesForEpic
+
+That downstream prompt will compute:
+
+Projection
++
+Selected Epic
+=
+Milestone Planning Specifications
+=
+.agents/specs/*.md
+
+This projection defines how milestone planning specifications should be created.
+
+It is the execution-planning frame, not the planning output.
+
+---
+
+## Authority Rules
+
+Treat the Project Context as the sole source of project authority.
+
+Do not reinterpret it.
+
+Do not extend it with project-specific content not present in the Core.
+
+Do not infer missing project intent.
+
+Do not invent desired capabilities.
+
+Do not invent architecture.
+
+Do not invent project-specific dependencies.
+
+Do not convert milestone-planning conventions into Core authority.
+
+Do not convert implementation preferences into strategic intent.
+
+If the Core contains ambiguity, preserve the ambiguity as a projection limitation.
+
+If the Core contains conflicting guidance, preserve the conflict and identify the conflicting source items.
+
+If the Core contains assertion IDs, retain them.
+
+If the Core does not contain assertion IDs, create stable projection-local IDs using the following format:
+
+- CONTINUITY-001
+- CAPABILITY-STAGE-001
+- PLANNING-001
+- ARCHITECTURE-001
+- DEPENDENCY-001
+- BOUNDARY-001
+- VALIDATION-001
+- EVIDENCE-001
+- HANDOFF-001
+- BLOCK-001
+- TRACE-001
+- TERM-001
+- LIMITATION-001
+
+Projection-local IDs must not pretend to be canonical Core IDs.
+
+You may include generic projection-local planning rules if they are necessary for GenerateMilestoneDeepDivesForEpic to operate and do not alter Core intent. Mark them clearly as projection-local.
+
+---
+
+## Projection Principles
+
+### 1. Planning projection, not north-star summary
+
+Do not summarize the Project Context generally.
+
+Select only the Core semantics required to transform epic milestones into implementation-planning documents.
+
+The projection should answer:
+
+- What must be preserved from the epic?
+- How should a milestone be interpreted?
+- What should a milestone deep dive contain?
+- What must not be changed during milestone expansion?
+- How should validation and completion evidence be defined?
+- When should milestone deep-dive generation be blocked?
+
+---
+
+### 2. Epic preservation
+
+Milestone deep dives are subordinate to the selected epic.
+
+They must preserve the epic’s:
+
+- strategic purpose
+- desired capability
+- architecture
+- abstraction boundaries
+- dependency structure
+- milestone ordering
+- constraints
+- acceptance criteria
+- success conditions
+- risks and watchpoints
+- canonical vocabulary
+
+The downstream prompt must not use milestone expansion to redesign the epic.
+
+---
+
+### 3. Capability-stage refinement
+
+Every milestone should be interpreted as a stage of capability realization.
+
+A milestone deep dive should answer:
+
+What becomes true after this milestone is complete?
+
+It should not primarily answer:
+
+What files will be edited?
+What tasks will be performed?
+What code will be written?
+
+The capability stage should organize the planning document.
+
+---
+
+### 4. Planning, not execution
+
+The projection must preserve the boundary between implementation planning and implementation.
+
+A milestone deep dive may define:
+
+- purpose
+- capability stage
+- scope
+- boundaries
+- dependencies
+- assumptions
+- constraints
+- validation strategy
+- completion evidence
+- execution readiness
+
+It must not define:
+
+- exact code changes
+- exact files to edit
+- commands to run
+- step-by-step execution tasks
+- patches
+- execution-agent prompts
+
+---
+
+### 5. Architectural continuity
+
+The downstream prompt must preserve the architecture already defined by the selected epic.
+
+Milestone expansion must not:
+
+- invent new architecture
+- replace abstractions
+- change capability ownership
+- alter dependency direction
+- modify compatibility boundaries
+- revise the epic’s decomposition
+
+If architecture is underspecified, the downstream prompt should mark the planning assumption or required follow-up rather than invent architecture.
+
+---
+
+### 6. Dependency fidelity
+
+The downstream prompt must preserve milestone order and dependency relationships from the selected epic.
+
+Each milestone deep dive should explicitly represent:
+
+- upstream milestone dependencies
+- downstream milestones enabled
+- prerequisite assumptions
+- inherited constraints
+- completion evidence required before dependent milestones begin
+
+Milestone expansion must not reorder, merge, split, or delete milestones.
+
+---
+
+### 7. Boundary clarity
+
+Each milestone deep dive must define:
+
+- what this milestone owns
+- what this milestone does not own
+- what is deferred to later milestones
+- what was already handled by earlier milestones
+- what must not leak into this milestone
+
+Boundary clarity prevents milestone bleed.
+
+---
+
+### 8. Validation orientation
+
+Each milestone deep dive must define how completion will be proven.
+
+Validation should focus on:
+
+- capability evidence
+- behavior evidence
+- integration evidence
+- interface evidence
+- test evidence
+- constraint preservation evidence
+- readiness for downstream milestones
+- readiness for later execution prompt generation
+
+Completion should not be stated vaguely.
+
+---
+
+### 9. Execution readiness
+
+A milestone deep dive should be complete enough that a later execution-prompt generation agent can use it as a planning source.
+
+It should clarify:
+
+- intended outcome
+- implementation boundaries
+- validation expectations
+- completion signal
+- risks and follow-up
+
+It should not itself become the execution prompt.
+
+---
+
+### 10. Collective epic coverage
+
+The full set of milestone deep dives must collectively preserve the epic.
+
+The downstream prompt should ensure:
+
+- no epic capability is lost
+- no milestone duplicates another milestone’s responsibility
+- every epic acceptance criterion is represented somewhere
+- the final milestone supports the epic’s success conditions
+- the milestone sequence realizes the epic’s intended capability
+
+---
+
+## Inclusion Criteria
+
+Retain Project Context content that belongs to one of these categories.
+
+### A. Epic Continuity Rules
+
+Retain semantics that define what must be preserved when expanding an epic into milestone specs.
+
+Examples:
+
+- strategic purpose preservation
+- desired capability preservation
+- architecture preservation
+- constraint preservation
+- acceptance semantics preservation
+- success condition preservation
+- canonical vocabulary preservation
+
+### B. Capability-Stage Semantics
+
+Retain rules that define milestones as stages of capability realization.
+
+Examples:
+
+- milestone outcome should state what becomes true
+- milestone should represent a coherent capability stage
+- milestone should not be a task bucket
+- milestone should enable later capability stages
+- final milestone should prove epic success
+
+### C. Planning Specification Rules
+
+Retain rules that define what an implementation-planning document should contain.
+
+Examples:
+
+- purpose
+- capability stage
+- scope
+- non-goals
+- inputs and preconditions
+- outputs and postconditions
+- dependency relationship
+- architectural context
+- constraints
+- assumptions
+- acceptance criteria
+- validation strategy
+- completion evidence
+- risks and watchpoints
+- deferred work
+- required follow-up
+- traceability
+
+### D. Architectural Preservation Rules
+
+Retain rules that prevent milestone expansion from redesigning the epic.
+
+Examples:
+
+- preserve epic architecture
+- preserve abstraction boundaries
+- preserve dependency direction
+- preserve compatibility commitments
+- preserve domain ownership
+- mark underspecified architecture as follow-up
+- do not invent new architecture during planning
+
+### E. Dependency Inheritance Rules
+
+Retain rules for representing dependencies in milestone deep dives.
+
+Examples:
+
+- upstream dependencies must be explicit
+- downstream milestones enabled must be explicit
+- prerequisite completion evidence must be explicit
+- dependent milestone must not start before prerequisite completion
+- inherited assumptions must be preserved
+- dependency uncertainty must be marked as follow-up
+
+### F. Boundary Definition Rules
+
+Retain rules that prevent milestone bleed.
+
+Examples:
+
+- each milestone owns only its capability stage
+- future milestone work must be deferred
+- prior milestone work must not be repeated
+- non-goals must be explicit
+- shared responsibilities require ownership clarification
+- ambiguous milestone boundaries require blocking or follow-up
+
+### G. Validation Semantics
+
+Retain rules for defining validation strategy.
+
+Examples:
+
+- validation must be capability-oriented
+- validation must be auditable
+- validation must preserve constraints
+- validation must prove readiness for downstream milestones
+- validation should distinguish behavior, integration, interface, and regression evidence where relevant
+- validation must not rely on vague completion claims
+
+### H. Completion Evidence Rules
+
+Retain rules for defining what evidence should exist when a milestone is complete.
+
+Examples:
+
+- implemented capability evidence
+- passing test evidence
+- interface evidence
+- integration evidence
+- documented behavior
+- updated spec evidence
+- migration readiness evidence
+- downstream dependency unlocked
+
+### I. Execution-Readiness Rules
+
+Retain rules that define when a milestone deep dive is ready for execution-prompt generation.
+
+Examples:
+
+- scope is clear
+- dependencies are explicit
+- constraints are explicit
+- acceptance criteria are auditable
+- validation strategy is clear
+- follow-up items are resolved or marked
+- deferred work is explicit
+
+### J. Blocking Rules
+
+Retain rules for when GenerateMilestoneDeepDivesForEpic should refuse to generate milestone specs.
+
+Examples:
+
+- epic has no milestone roadmap
+- milestone ordering is contradictory
+- milestone dependencies are unclear
+- milestone completion signals are missing
+- milestone expansion would require redesigning the epic
+- architecture is too underspecified to plan safely
+- acceptance criteria cannot be mapped to milestones
+- projection conflict prevents safe expansion
+
+### K. Traceability Requirements
+
+Retain rules requiring milestone specs to prove upward linkage to the selected epic and projection.
+
+Examples:
+
+- milestone purpose must trace to epic milestone
+- milestone capability stage must trace to epic desired capability
+- milestone constraints must trace to epic or projection
+- validation strategy must trace to acceptance criteria
+- completion evidence must trace to milestone outcome
+- deferred work must trace to later milestone or non-goal
+
+### L. Canonical Vocabulary
+
+Retain terms the downstream prompt must preserve when generating milestone deep dives.
+
+---
+
+## Exclusion Criteria
+
+Exclude Project Context content that belongs to these categories unless it directly affects milestone planning specification.
+
+Exclude:
+
+- repository grounding rules
+- repository facts
+- strategic prioritization semantics
+- next-epic selection logic
+- epic validation / disposition logic
+- realignment patch rules
+- reimagination replacement rules
+- CreateNewEpic authoring rules
+- split-epic decomposition rules
+- roadmap completion state
+- completed epic history
+- current roadmap progress
+- implementation instructions
+- execution guidance
+- developer commands
+- tool use instructions
+- operational workflow
+- prompt templates
+- detailed ADR history
+- historical rationale essays
+- full governance workflow
+- belief revision mechanics
+- reasoning architecture
+- information flow architecture
+- research citations
+- task-level plans
+
+If excluded information may matter elsewhere, mention it only in Projection Exclusion Notes.
+
+Do not include the excluded content itself.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the projection.
+
+### Step 1 — Identify candidate Core assertions
+
+Extract all Core statements relevant to transforming epic milestones into planning specifications.
+
+Classify each as:
+
+- Epic Continuity Rule
+- Capability-Stage Semantics
+- Planning Specification Rule
+- Architectural Preservation Rule
+- Dependency Inheritance Rule
+- Boundary Definition Rule
+- Validation Semantics
+- Completion Evidence Rule
+- Execution-Readiness Rule
+- Blocking Rule
+- Traceability Requirement
+- Vocabulary
+- Exclude
+
+### Step 2 — Apply milestone-planning admission test
+
+For each candidate, ask:
+
+1. Would this help preserve the epic while expanding milestones?
+2. Would this help define milestone planning documents?
+3. Would this help distinguish planning from implementation?
+4. Would this help preserve milestone dependencies and sequencing?
+5. Would this help produce auditable completion criteria or validation strategy?
+6. Would this help prevent milestone bleed or architectural drift?
+7. Is this stable and non-regenerable from the selected epic itself?
+
+Retain only candidates that pass.
+
+### Step 3 — Convert retained items into planning semantics
+
+For each retained rule, express how it should affect milestone deep-dive generation.
+
+Do not apply it to any actual epic.
+
+Do not invent milestone content.
+
+Define planning rules only.
+
+### Step 4 — Normalize vocabulary
+
+Preserve canonical terms from the Core.
+
+If the Core has overlapping terms, select the term with strongest authority and note aliases only if necessary.
+
+### Step 5 — Remove implementation and operational noise
+
+Aggressively remove anything that would distract the downstream prompt from milestone planning.
+
+Do not include implementation instructions, execution prompts, repository facts, or roadmap-prioritization content.
+
+### Step 6 — Organize into the required output structure
+
+Output only the projection Markdown.
+
+Do not include your analysis.
+
+---
+
+## Required Output
+
+Output only the full Markdown content for the projection.
+
+Do not wrap the output in commentary.
+
+Do not include prefaces.
+
+Do not include explanations after the document.
+
+Use this exact structure.
+
+---
+
+# Milestone Deep Dive Projection
+
+## Purpose
+
+This projection defines how an epic’s milestones should be transformed into durable implementation-planning specifications.
+
+It exists to support:
+
+- epic-preserving milestone expansion
+- capability-stage refinement
+- architecture-preserving planning
+- dependency-fidelity preservation
+- boundary definition
+- validation strategy creation
+- completion evidence definition
+- execution-readiness preparation
+- traceable milestone planning
+
+It is a projection of the Project Context, not an epic, milestone spec, execution prompt, repository audit, roadmap artifact, or implementation plan.
+
+## Authority Boundary
+
+- The Project Context remains the source of authority.
+- This projection is a task-specific planning view of the Project Context.
+- This projection defines how GenerateMilestoneDeepDivesForEpic should create milestone planning specifications.
+- This projection does not include selected epic content.
+- This projection does not include repository state.
+- This projection does not create milestone deep dives.
+- This projection does not generate implementation tasks.
+- This projection does not create execution prompts.
+- This projection does not modify roadmap, epic, or projection content.
+
+## Projection Metadata
+
+| Field | Value |
+|---|---|
+| Projection Name | {{projection_name_or_default}} |
+| Projection Version | {{projection_version_or_default}} |
+| Projection Date | {{projection_date_or_default}} |
+| Source Core Version | {{core_version_or_unknown}} |
+| Intended Consumer | GenerateMilestoneDeepDivesForEpic |
+| Projection Family | Milestone Deep Dive / Execution Planning |
+
+## Source Coverage
+
+Briefly describe what parts of the Project Context were retained.
+
+Use bullets.
+
+Then briefly describe what parts were intentionally excluded.
+
+Use bullets.
+
+## Epic Continuity Rules
+
+Define what must be preserved when expanding an epic into milestone specs.
+
+| ID | Continuity Rule | Meaning | Milestone Planning Implication |
+|---|---|---|---|
+
+Include rules for:
+
+- strategic purpose preservation
+- desired capability preservation
+- architecture preservation
+- dependency structure preservation
+- constraint preservation
+- acceptance semantics preservation
+- success condition preservation
+- canonical vocabulary preservation
+
+## Capability-Stage Semantics
+
+Define how milestones should be interpreted as stages of capability realization.
+
+| ID | Capability-Stage Rule | Meaning | Planning Implication |
+|---|---|---|---|
+
+Examples:
+
+- milestone outcome states what becomes true
+- milestone represents one coherent capability stage
+- milestone should not be a task bucket
+- milestone should enable downstream capability stages
+- final milestone should prove epic-level success
+
+## Planning Specification Rules
+
+Define what each milestone deep dive should contain.
+
+| ID | Spec Element | Required Purpose | Quality Rule |
+|---|---|---|---|
+
+Include spec elements for:
+
+- purpose
+- capability stage
+- epic context preserved
+- scope
+- non-goals
+- inputs and preconditions
+- outputs and postconditions
+- dependency relationship
+- architectural context
+- constraints
+- assumptions
+- implementation-planning guidance
+- acceptance criteria
+- validation strategy
+- completion evidence
+- risks and watchpoints
+- deferred work
+- required follow-up
+- traceability
+
+## Architectural Preservation Rules
+
+Define how milestone planning must preserve epic architecture.
+
+| ID | Architectural Rule | Applies To | Required Behavior |
+|---|---|---|---|
+
+Examples:
+
+- do not invent new architecture
+- preserve abstraction boundaries
+- preserve capability ownership
+- preserve compatibility boundaries
+- preserve dependency direction
+- mark underspecified architecture as follow-up
+- do not resolve architectural ambiguity by redesigning the epic
+
+## Dependency Inheritance Rules
+
+Define how milestone dependencies should be represented.
+
+| ID | Dependency Rule | Applies When | Required Behavior |
+|---|---|---|---|
+
+Examples:
+
+- upstream milestones must be explicit
+- downstream milestones enabled must be explicit
+- prerequisite completion evidence must be explicit
+- inherited assumptions must be represented
+- inherited constraints must be represented
+- dependency uncertainty must become follow-up
+- dependent milestone cannot be treated as executable before prerequisite completion
+
+## Boundary Definition Rules
+
+Define how each milestone’s boundaries should be expressed.
+
+| ID | Boundary Rule | Meaning | Required Behavior |
+|---|---|---|---|
+
+Include rules for:
+
+- what the milestone owns
+- what the milestone excludes
+- what is deferred to later milestones
+- what is inherited from earlier milestones
+- what must not leak into this milestone
+- how to prevent duplicate ownership
+
+## Validation Semantics
+
+Define how milestone completion should be validated.
+
+| ID | Validation Type | Meaning | Planning Requirement |
+|---|---|---|---|
+
+Include validation types such as:
+
+- capability validation
+- behavior validation
+- interface validation
+- integration validation
+- test validation
+- constraint preservation validation
+- regression validation
+- specification validation
+- readiness validation
+
+Do not define exact tests or code.
+
+## Completion Evidence Rules
+
+Define what evidence should exist when a milestone is complete.
+
+| ID | Evidence Type | What It Demonstrates | Required Use |
+|---|---|---|---|
+
+Examples:
+
+- implemented capability evidence
+- behavior evidence
+- passing test evidence
+- interface evidence
+- integration evidence
+- updated specification evidence
+- migration readiness evidence
+- downstream dependency unlocked
+- constraint preservation evidence
+
+## Execution-Readiness Rules
+
+Define when a milestone deep dive is ready to be used for execution prompt generation.
+
+| ID | Readiness Rule | Required Condition | Failure Handling |
+|---|---|---|---|
+
+Examples:
+
+- scope is clear
+- dependencies are explicit
+- constraints are explicit
+- assumptions are marked
+- acceptance criteria are auditable
+- validation strategy is clear
+- deferred work is explicit
+- follow-up items are resolved or marked
+- architecture ambiguity is not hidden
+
+Failure Handling should explain whether to mark required follow-up, block execution prompt generation, or return to epic correction.
+
+## Blocking Rules
+
+Define when GenerateMilestoneDeepDivesForEpic should refuse or partially block generation.
+
+| ID | Blocking Case | Indicates | Required Handling |
+|---|---|---|---|
+
+Indicates must be one of:
+
+- Epic Realignment Required
+- Epic Reimagination Required
+- Human Clarification Required
+- Insufficient Milestone Structure
+- Projection Conflict
+- Different Prompt Required
+
+Examples:
+
+- selected epic lacks milestone roadmap
+- milestone ordering is contradictory
+- milestone dependencies are unclear
+- milestone completion signals are missing
+- expansion would require redesigning the epic
+- architecture is too underspecified to plan safely
+- acceptance criteria cannot be mapped to milestones
+- milestone boundaries overlap irreconcilably
+
+## Traceability Requirements
+
+Define how milestone specs must prove upward linkage.
+
+| ID | Traceability Requirement | Required Evidence | Failure Handling |
+|---|---|---|---|
+
+Examples:
+
+- milestone purpose must trace to selected epic milestone
+- capability stage must trace to epic desired capability
+- constraints must trace to epic or projection
+- validation strategy must trace to acceptance criteria
+- completion evidence must trace to milestone outcome
+- deferred work must trace to later milestone or non-goal
+- final milestone must trace to epic success conditions
+
+## Canonical Vocabulary
+
+List load-bearing terms that downstream prompts must preserve.
+
+| Term | Definition | Notes / Banned Synonyms |
+|---|---|---|
+
+Rules:
+
+- Include only terms relevant to milestone deep-dive planning.
+- Use Core definitions where available.
+- If a term is undefined in the Core but required for this projection, mark definition as “Projection-local; confirm against Core if promoted.”
+
+## Projection Exclusion Notes
+
+List important Core content intentionally excluded from this projection.
+
+| Excluded Content Type | Reason Excluded | Where It Should Be Used Instead |
+|---|---|---|
+
+Examples:
+
+- repository grounding rules
+- strategic prioritization semantics
+- epic validation logic
+- realignment rules
+- reimagination rules
+- CreateNewEpic authoring rules
+- split-epic decomposition rules
+- execution guidance
+- operational context
+- implementation tasks
+- roadmap completion state
+
+## Known Projection Limitations
+
+List ambiguities or missing Core information that may limit GenerateMilestoneDeepDivesForEpic.
+
+| Limitation | Why It Matters | Recommended Handling |
+|---|---|---|
+
+Examples:
+
+- milestone planning semantics are underspecified
+- validation semantics are incomplete
+- architecture preservation expectations are unclear
+- dependency inheritance rules are ambiguous
+- completion evidence rules are missing
+- execution-readiness criteria are underspecified
+- canonical vocabulary is ambiguous
+
+Do not invent missing information to fix these limitations.
+
+## Downstream Use Instructions
+
+When this projection is used by GenerateMilestoneDeepDivesForEpic:
+
+- Treat this projection as the milestone planning frame.
+- Treat the selected epic as authoritative for milestone content, ordering, dependencies, architecture, constraints, and acceptance criteria.
+- Generate exactly one spec per epic milestone.
+- Preserve the epic’s strategic purpose.
+- Preserve the epic’s desired capability.
+- Preserve the epic’s architecture and abstraction boundaries.
+- Preserve milestone ordering and dependency relationships.
+- Interpret milestones as capability-realization stages.
+- Define scope, non-goals, dependencies, constraints, validation, and completion evidence for each milestone.
+- Make deferred work explicit.
+- Make execution-readiness requirements explicit.
+- Do not redesign the epic.
+- Do not split, merge, delete, or reorder milestones.
+- Do not create implementation tasks.
+- Do not create file-level plans.
+- Do not generate execution prompts.
+- Do not audit the repository.
+- Do not modify roadmap completion context.
+- Block generation if safe milestone expansion requires changing the epic.
+
+## Projection Integrity Checklist
+
+Before finalizing, verify:
+
+- The projection contains milestone planning semantics only.
+- No selected epic content is included.
+- No milestone deep dives are generated.
+- No repository state is included.
+- No roadmap completion state is included.
+- No implementation tasks are included.
+- Every retained statement helps transform epic milestones into planning specifications.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
+- Epic continuity rules are explicit.
+- Capability-stage semantics are explicit.
+- Planning specification rules are explicit.
+- Architectural preservation rules are explicit.
+- Dependency inheritance rules are explicit.
+- Boundary definition rules are explicit.
+- Validation semantics are explicit.
+- Completion evidence rules are explicit.
+- Execution-readiness rules are explicit.
+- Blocking rules are explicit.
+- Traceability requirements are explicit.
+- Canonical vocabulary is preserved.
+- Excluded operational, implementation, repository, prioritization, validation, realignment, reimagination, CreateNewEpic, and split-epic details are not present.
+- The projection is compact enough to be passed into GenerateMilestoneDeepDivesForEpic.

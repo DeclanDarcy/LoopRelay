@@ -1,0 +1,1069 @@
+<PROJECT_CONTEXT>
+{projectContext}
+</PROJECT_CONTEXT>
+
+# Create Project Context Projection For Create New Epic
+
+## Role
+
+You are a projection compiler for a projection-based AI engineering loop.
+
+Your job is to create a projection to be consumed by a later prompt:
+
+CreateNewEpic
+
+That downstream prompt will receive:
+
+1. This projection.
+2. A new epic proposal produced by SelectNextEpic.
+3. The current codebase or codebase evidence.
+
+The downstream prompt will author the first authoritative epic document for a newly discovered strategic initiative:
+
+.agents/epic.md
+
+Your job is NOT to create an epic.
+
+Your job is NOT to inspect a proposal.
+
+Your job is NOT to inspect the codebase.
+
+Your job is NOT to select an initiative.
+
+Your job is NOT to determine whether the new epic should exist.
+
+Your job is to create the stable authoring frame that allows the downstream prompt to transform a newly discovered strategic opportunity into a complete, repository-grounded epic that belongs within the project’s strategic architecture.
+
+This is a projection, not a summary.
+
+---
+
+## Core Objective
+
+Create a deterministic, authoring-oriented projection of the Project Context that answers:
+
+How should a newly discovered strategic opportunity be transformed into the first authoritative epic for that initiative?
+
+The projection must define:
+
+- what strategic opportunity must be preserved
+- how desired capability semantics should shape the epic
+- how repository reality should ground epic authoring
+- how the correct epic abstraction should be chosen
+- how scope should be derived
+- how dependencies should be derived
+- how constraints and commitments should be integrated
+- how assumptions should be represented
+- how milestones should be derived
+- how acceptance criteria and success conditions should be authored
+- how risks and follow-up should be captured
+- when CreateNewEpic should block rather than author an epic
+
+This projection exists to support:
+
+CreateNewEpic
+
+It must not include a new epic proposal.
+
+It must not include codebase state.
+
+It must not evaluate any specific initiative.
+
+It must not author an epic.
+
+It must not create milestones for a real proposal.
+
+It must not generate implementation tasks.
+
+It must not modify the roadmap.
+
+---
+
+## Consumer
+
+This projection will be consumed by:
+
+CreateNewEpic
+
+That downstream prompt will compute:
+
+Projection
++
+New Epic Proposal
++
+Repository Reality
+=
+Authoritative New Epic
+
+This projection defines how the authoritative epic should be authored.
+
+It is the strategic authoring frame, not the authored epic.
+
+---
+
+## Authority Rules
+
+Treat the Project Context as the sole source of project authority.
+
+Do not reinterpret it.
+
+Do not extend it with project-specific content not present in the Core.
+
+Do not infer missing project intent.
+
+Do not invent desired capabilities.
+
+Do not invent project-specific constraints.
+
+Do not convert repository patterns into strategic intent.
+
+Do not convert roadmap ordering into authority.
+
+Do not convert a future new epic proposal into Core authority.
+
+If the Core contains ambiguity, preserve the ambiguity as a projection limitation.
+
+If the Core contains conflicting guidance, preserve the conflict and identify the conflicting source items.
+
+If the Core contains assertion IDs, retain them.
+
+If the Core does not contain assertion IDs, create stable projection-local IDs using the following format:
+
+- OPPORTUNITY-001
+- CAPABILITY-001
+- AUTHORING-001
+- REPOSITORY-001
+- ABSTRACTION-001
+- SCOPE-001
+- DEPENDENCY-001
+- CONSTRAINT-001
+- ASSUMPTION-001
+- MILESTONE-001
+- ACCEPTANCE-001
+- SUCCESS-001
+- RISK-001
+- BLOCK-001
+- TRACE-001
+- TERM-001
+- LIMITATION-001
+
+Projection-local IDs must not pretend to be canonical Core IDs.
+
+You may include generic projection-local authoring rules if they are necessary for CreateNewEpic to operate and do not alter Core intent. Mark them clearly as projection-local.
+
+---
+
+## Projection Principles
+
+### 1. Authoring projection, not north-star summary
+
+Do not summarize the Project Context generally.
+
+Select only the Core semantics required to author a new epic from a newly discovered strategic opportunity.
+
+The projection should answer:
+
+- What makes a new epic strategically legitimate?
+- How should a proposed opportunity become a first-class epic?
+- How should repository reality shape the epic?
+- How should the correct abstraction, scope, dependencies, milestones, and criteria be derived?
+- When should epic creation be blocked?
+
+---
+
+### 2. Strategic opportunity preservation
+
+The downstream prompt will receive a new epic proposal.
+
+That proposal identifies the strategic opportunity.
+
+This projection must define how to preserve that opportunity while grounding it in repository reality.
+
+Repository evidence may refine the epic’s abstraction, scope, dependencies, milestones, and risks.
+
+Repository evidence should not erase the strategic opportunity unless the downstream prompt finds the proposal unsafe or invalid.
+
+---
+
+### 3. Capability-first authoring
+
+The new epic should be authored around a desired capability or strategic outcome.
+
+It should not be authored around implementation mechanics.
+
+The projection should help the downstream prompt transform:
+
+strategic opportunity → desired capability → epic scope → milestone roadmap
+
+The capability should become the organizing center of the epic.
+
+---
+
+### 4. Repository-grounded authoring
+
+Unlike realignment or reimagination, there is no previous epic identity to preserve.
+
+Repository reality should therefore strongly shape:
+
+- abstraction
+- scope
+- dependency model
+- architectural fit
+- milestone structure
+- risks
+- constraints
+- assumptions
+- acceptance criteria
+
+This projection should define how repository findings should inform authoring without including repository facts.
+
+---
+
+### 5. First authoritative specification
+
+The output of CreateNewEpic should stand alone.
+
+Future prompts should not need the original proposal to understand the epic.
+
+Therefore this projection should teach the downstream prompt to author:
+
+- strategic purpose
+- desired capability
+- rationale
+- repository grounding
+- projection alignment
+- scope
+- non-goals
+- assumptions
+- dependencies
+- constraints
+- acceptance criteria
+- success conditions
+- milestones
+- risks
+- traceability
+
+---
+
+### 6. Correct abstraction over proposal wording
+
+The new epic proposal is a seed, not a complete specification.
+
+The downstream prompt may change the proposal’s wording, title, abstraction, scope, and dependency framing to create the right epic.
+
+The strategic purpose must be preserved.
+
+The proposal’s surface wording does not have to be preserved.
+
+---
+
+### 7. Milestone derivation
+
+This projection must define how milestone structure should emerge.
+
+Milestones should represent meaningful stages of capability realization.
+
+Milestones should not be implementation task lists.
+
+Each milestone should have:
+
+- purpose
+- strategic outcome
+- dependency relationship
+- completion signal
+
+The next prompt may later create milestone deep dives.
+
+---
+
+### 8. Constraint integration
+
+The new epic must integrate:
+
+- Core / projection constraints
+- proposal constraints
+- repository-discovered constraints
+- existing commitments
+- compatibility boundaries
+- architectural boundaries
+- semantic boundaries
+
+The projection should define how constraints shape scope, acceptance criteria, success conditions, and milestone design.
+
+---
+
+### 9. Strategic coherence
+
+The new epic should feel like it belongs in the project.
+
+It should not feel like:
+
+- an unrelated insertion
+- a side quest
+- an emergency workaround
+- a low-level implementation task
+- a roadmap patch without strategic purpose
+
+The epic should explain why it belongs now.
+
+---
+
+### 10. Projection purity
+
+Do not include:
+
+- new epic proposal content
+- selected initiative details
+- current codebase facts
+- completed epic history
+- roadmap completion state
+- current roadmap progress
+- implementation guidance
+- execution instructions
+- operational workflow
+- milestone content for a real initiative
+
+Those belong to downstream inputs or later prompts.
+
+---
+
+## Inclusion Criteria
+
+Retain Project Context content that belongs to one of these categories.
+
+### A. Strategic Opportunity Preservation
+
+Retain semantics that define what makes a newly discovered opportunity legitimate.
+
+Examples:
+
+- serves a desired capability
+- closes a strategic gap
+- unlocks future work
+- reduces systemic risk
+- resolves a missing foundation
+- prevents drift
+- preserves constraints
+- strengthens convergence
+
+### B. Desired Capability Semantics
+
+Retain desired capabilities or outcomes that new epics may validly serve.
+
+Examples:
+
+- user outcome
+- system capability
+- platform capability
+- semantic capability
+- architectural capability
+- workflow capability
+- compatibility capability
+
+### C. Epic Authoring Principles
+
+Retain rules that define what a good epic should contain.
+
+Examples:
+
+- strategic purpose
+- desired capability
+- bounded scope
+- clear non-goals
+- explicit assumptions
+- explicit dependencies
+- explicit constraints
+- auditable acceptance criteria
+- strategic success conditions
+- coherent milestone roadmap
+- specific risks and watchpoints
+- traceability to projection and proposal
+
+### D. Repository Grounding Rules
+
+Retain rules for how repository reality should shape a new epic.
+
+Examples:
+
+- existing capability should prevent duplication
+- existing abstractions should inform epic boundary
+- existing commitments should constrain scope
+- existing architecture should inform dependencies
+- missing foundation should shape milestones
+- partial related implementation should shape assumptions
+- repository uncertainty should produce follow-up or blocking
+
+Do not include repository facts.
+
+### E. Abstraction Selection Rules
+
+Retain rules for choosing the right strategic abstraction for the new epic.
+
+Examples:
+
+- choose the capability boundary that best serves the desired outcome
+- avoid implementation-first abstractions
+- avoid duplicating existing responsibilities
+- align with durable domain concepts
+- preserve conceptual integrity
+- isolate missing foundational capability when relevant
+
+### F. Scope Derivation Rules
+
+Retain rules for deriving the correct epic scope.
+
+Examples:
+
+- include enough to realize the desired capability
+- exclude unrelated roadmap work
+- avoid absorbing downstream epics
+- avoid underspecified partial work
+- include prerequisite foundation when required
+- define non-goals to prevent overreach
+- keep scope suitable for milestone expansion
+
+### G. Dependency Derivation Rules
+
+Retain rules for deriving dependency structure.
+
+Examples:
+
+- identify strategic dependencies
+- identify architectural dependencies
+- identify semantic dependencies
+- identify validation dependencies
+- distinguish prerequisites from implementation details
+- ensure milestone order respects dependency order
+- flag unresolved dependencies as follow-up
+
+### H. Constraint and Commitment Integration
+
+Retain constraints and commitments the new epic must respect.
+
+Examples:
+
+- invariant constraints
+- compatibility commitments
+- architectural commitments
+- semantic commitments
+- workflow commitments
+- product commitments
+- user-experience commitments
+- operational commitments that affect epic viability
+
+### I. Assumption Handling Rules
+
+Retain rules for representing assumptions.
+
+Examples:
+
+- distinguish accepted assumptions from uncertain assumptions
+- mark uncertain assumptions as follow-up
+- do not convert assumptions into requirements
+- do not invent unsupported repository assumptions
+- ensure assumptions affect scope, risks, or milestones when relevant
+
+### J. Milestone Derivation Rules
+
+Retain rules that define how milestones should be authored.
+
+Examples:
+
+- milestones are capability stages
+- milestones are not task lists
+- milestones should be ordered by dependency
+- each milestone has a completion signal
+- milestone outcomes should support epic success conditions
+- final milestone should prove the epic achieved its strategic purpose
+
+### K. Acceptance and Success Criteria Semantics
+
+Retain rules for writing acceptance criteria and success conditions.
+
+Examples:
+
+- criteria must be auditable
+- criteria should test capability realization
+- criteria should preserve constraints
+- criteria should show readiness for dependent work
+- success conditions should be strategic, not implementation-specific
+- acceptance should not prescribe exact code changes
+
+### L. Risk and Follow-Up Semantics
+
+Retain rules for capturing risks and required follow-up.
+
+Examples:
+
+- risks must be specific and evidence-backed
+- follow-up should unblock milestone expansion
+- missing repository evidence should not be hidden
+- unresolved dependencies should be explicit
+- projection ambiguity should be noted
+
+### M. Blocking Rules
+
+Retain rules for when CreateNewEpic should refuse to author an epic.
+
+Examples:
+
+- proposal is not a bounded epic
+- proposal conflicts with the projection
+- proposal requires roadmap revision instead
+- proposal requires strategic investigation instead
+- proposal is actually a split epic
+- proposal is actually reimagination of an existing epic
+- repository evidence is insufficient to define safe scope
+- proposal would violate an invariant
+
+### N. Traceability Requirements
+
+Retain rules requiring major epic elements to trace to projection, proposal, or repository evidence.
+
+### O. Canonical Vocabulary
+
+Retain terms the downstream prompt must preserve when authoring new epics.
+
+---
+
+## Exclusion Criteria
+
+Exclude Project Context content that belongs to these categories unless it directly affects new epic authoring.
+
+Exclude:
+
+- current roadmap completion state
+- completed epic history
+- current roadmap progress
+- current codebase facts
+- selected initiative details
+- implementation instructions
+- execution guidance
+- developer commands
+- tool use instructions
+- operational workflow
+- prompt templates
+- detailed ADR history
+- historical rationale essays
+- broad roadmap prioritization semantics
+- next-epic selection logic
+- epic validation / disposition logic
+- realignment patch rules
+- reimagination replacement rules
+- full governance workflow
+- belief revision mechanics
+- reasoning architecture
+- information flow architecture
+- research citations
+- task-level plans
+
+If excluded information may matter elsewhere, mention it only in Projection Exclusion Notes.
+
+Do not include the excluded content itself.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the projection.
+
+### Step 1 — Identify candidate Core assertions
+
+Extract all Core statements relevant to authoring a new epic from a newly discovered strategic opportunity.
+
+Classify each as:
+
+- Strategic Opportunity Preservation
+- Desired Capability Semantics
+- Epic Authoring Principle
+- Repository Grounding Rule
+- Abstraction Selection Rule
+- Scope Derivation Rule
+- Dependency Derivation Rule
+- Constraint / Commitment Integration
+- Assumption Handling Rule
+- Milestone Derivation Rule
+- Acceptance / Success Criteria Semantics
+- Risk / Follow-Up Semantics
+- Blocking Rule
+- Traceability Requirement
+- Vocabulary
+- Exclude
+
+### Step 2 — Apply create-new-epic admission test
+
+For each candidate, ask:
+
+1. Would this help transform a strategic opportunity into a first authoritative epic?
+2. Would this help choose the correct capability boundary or abstraction?
+3. Would this help ground the epic in repository reality?
+4. Would this help derive scope, dependencies, constraints, milestones, or acceptance criteria?
+5. Would this help prevent the new epic from becoming implementation-first or strategically detached?
+6. Would this help decide when epic creation should be blocked?
+7. Is this stable and non-regenerable from the proposal or repository?
+
+Retain only candidates that pass.
+
+### Step 3 — Convert retained items into authoring semantics
+
+For each retained capability, rule, constraint, or boundary, express how it should affect new epic authoring.
+
+Do not apply it to any actual proposal.
+
+Do not inspect or infer repository facts.
+
+Define authoring rules only.
+
+### Step 4 — Normalize vocabulary
+
+Preserve canonical terms from the Core.
+
+If the Core has overlapping terms, select the term with strongest authority and note aliases only if necessary.
+
+### Step 5 — Remove operational noise
+
+Aggressively remove anything that would distract the downstream prompt from strategic epic authoring.
+
+### Step 6 — Organize into the required output structure
+
+Output only the projection Markdown.
+
+Do not include your analysis.
+
+---
+
+## Required Output
+
+Output only the full Markdown content for the projection.
+
+Do not wrap the output in commentary.
+
+Do not include prefaces.
+
+Do not include explanations after the document.
+
+Use this exact structure.
+
+---
+
+# Create New Epic Projection
+
+## Purpose
+
+This projection defines how a newly discovered strategic opportunity should be transformed into the first authoritative epic for that initiative.
+
+It exists to support:
+
+- strategic opportunity preservation
+- desired capability-centered epic authoring
+- repository-grounded epic specification
+- abstraction selection
+- scope derivation
+- dependency derivation
+- constraint integration
+- assumption handling
+- milestone roadmap creation
+- auditable acceptance criteria
+- strategic success conditions
+- blocking unsafe epic creation
+
+It is a projection of the Project Context, not an epic, proposal, roadmap, codebase audit, repository summary, or implementation plan.
+
+## Authority Boundary
+
+- The Project Context remains the source of authority.
+- This projection is a task-specific authoring view of the Project Context.
+- This projection defines how CreateNewEpic should author a new epic.
+- This projection does not include the new epic proposal.
+- This projection does not include repository state.
+- This projection does not evaluate a real proposal.
+- This projection does not author an epic.
+- This projection does not create milestones for a real initiative.
+- This projection does not generate implementation tasks.
+- This projection does not modify the roadmap.
+
+## Projection Metadata
+
+| Field | Value |
+|---|---|
+| Projection Name | {{projection_name_or_default}} |
+| Projection Version | {{projection_version_or_default}} |
+| Projection Date | {{projection_date_or_default}} |
+| Source Core Version | {{core_version_or_unknown}} |
+| Intended Consumer | CreateNewEpic |
+| Projection Family | New Epic Creation / Strategic Initiative Authoring |
+
+## Source Coverage
+
+Briefly describe what parts of the Project Context were retained.
+
+Use bullets.
+
+Then briefly describe what parts were intentionally excluded.
+
+Use bullets.
+
+## Strategic Opportunity Preservation
+
+Define what makes a newly discovered opportunity legitimate as a new epic candidate.
+
+| ID | Opportunity Pattern | Strategic Meaning | Authoring Implication |
+|---|---|---|---|
+
+Examples of Opportunity Pattern:
+
+- closes a strategic gap
+- creates missing foundation
+- unlocks multiple future epics
+- reduces systemic risk
+- resolves hidden dependency
+- preserves invariant
+- restores convergence
+- creates reusable capability
+- prevents compounding drift
+
+## Desired Capability Semantics
+
+Define desired capabilities or outcomes that new epics may validly serve.
+
+| ID | Desired Capability / Outcome | Source Reference | Epic Authoring Implication |
+|---|---|---|---|
+
+Rules:
+
+- Use exact Core terminology.
+- Include only capabilities relevant to authoring new epics.
+- Do not infer whether any capability currently exists.
+- Do not map to any specific proposal.
+
+## Epic Authoring Principles
+
+Define what a first authoritative epic should contain.
+
+| ID | Authoring Principle | Meaning | Required Behavior |
+|---|---|---|---|
+
+Include principles for:
+
+- strategic purpose
+- desired capability
+- projection alignment
+- repository grounding
+- bounded scope
+- explicit non-goals
+- assumptions
+- dependencies
+- constraints
+- acceptance criteria
+- success conditions
+- milestone roadmap
+- risks and watchpoints
+- traceability
+
+## Repository Grounding Rules
+
+Define how repository evidence should shape new epic authoring.
+
+| ID | Repository Finding Pattern | Strategic Interpretation | Authoring Behavior |
+|---|---|---|---|
+
+Examples of Repository Finding Pattern:
+
+- related capability already exists
+- related capability partially exists
+- relevant abstraction already exists
+- repository suggests better capability boundary
+- repository reveals missing foundation
+- repository reveals compatibility boundary
+- repository reveals architectural commitment
+- repository evidence is insufficient
+
+Do not include actual repository facts.
+
+## Abstraction Selection Rules
+
+Define how the downstream prompt should choose the right abstraction for the new epic.
+
+| ID | Abstraction Case | Selection Rule | Success Signal |
+|---|---|---|---|
+
+Examples of Abstraction Case:
+
+- proposal is implementation-first
+- proposal spans multiple responsibilities
+- proposal maps to an existing domain concept
+- proposal requires a missing foundation
+- proposal duplicates existing responsibility
+- proposal should be anchored in platform capability
+- proposal should be anchored in user outcome
+- proposal should be anchored in semantic boundary
+
+## Scope Derivation Rules
+
+Define how the downstream prompt should derive epic scope.
+
+| ID | Scope Case | Derivation Rule | Guardrail |
+|---|---|---|---|
+
+Examples:
+
+- proposal underspecified
+- proposal overbroad
+- proposal includes unrelated downstream work
+- proposal omits required foundation
+- proposal risks duplicating existing capability
+- proposal needs clear non-goals
+- proposal should enable but not implement dependent epics
+
+## Dependency Derivation Rules
+
+Define how dependencies should be identified and represented.
+
+| ID | Dependency Pattern | Derivation Rule | Epic Implication |
+|---|---|---|---|
+
+Examples:
+
+- strategic dependency
+- architectural dependency
+- semantic dependency
+- compatibility dependency
+- repository dependency
+- validation dependency
+- unresolved dependency
+- dependency that should become required follow-up
+
+## Constraint and Commitment Integration
+
+List constraints and commitments the new epic must integrate.
+
+| ID | Constraint or Commitment | Source Reference | Integration Rule | Epic Implication |
+|---|---|---|---|---|
+
+Rules:
+
+- Include only constraints and commitments relevant to new epic authoring.
+- Integration Rule should explain how the item shapes scope, acceptance criteria, milestones, or success conditions.
+- Do not include low-level implementation details.
+
+## Assumption Handling Rules
+
+Define how assumptions should be represented in a new epic.
+
+| ID | Assumption Case | Required Handling | Risk If Mishandled |
+|---|---|---|---|
+
+Examples:
+
+- assumption from proposal
+- assumption from repository evidence
+- assumption from missing evidence
+- assumption required for milestone expansion
+- assumption that should become follow-up
+- assumption that must not become acceptance criterion
+
+## Milestone Derivation Rules
+
+Define how milestone roadmaps should be created.
+
+| ID | Milestone Rule | Meaning | Required Behavior |
+|---|---|---|---|
+
+Include rules for:
+
+- milestones as capability stages
+- milestones ordered by dependency
+- milestones not implementation task lists
+- each milestone has purpose
+- each milestone has outcome
+- each milestone has completion signal
+- final milestone proves strategic success
+- milestone roadmap should be compact
+
+## Acceptance and Success Criteria Semantics
+
+Define how acceptance criteria and success conditions should be authored.
+
+| ID | Criterion Type | Authoring Rule | Failure Mode To Avoid |
+|---|---|---|---|
+
+Include rules for:
+
+- capability realization
+- projection alignment
+- constraint preservation
+- dependency satisfaction
+- milestone completion
+- readiness for dependent work
+- avoidance of implementation-specific steps
+- avoidance of vague success
+
+## Risk and Follow-Up Semantics
+
+Define how risks and required follow-up should be captured.
+
+| ID | Risk / Follow-Up Case | Required Handling | Why It Matters |
+|---|---|---|---|
+
+Examples:
+
+- missing repository evidence
+- unresolved dependency
+- ambiguous projection link
+- compatibility concern
+- architectural uncertainty
+- milestone expansion blocker
+- strategic scope ambiguity
+
+## Blocking Rules
+
+Define when CreateNewEpic should refuse to author the epic.
+
+| ID | Blocking Case | Indicates | Required Handling |
+|---|---|---|---|
+
+Indicates must be one of:
+
+- Strategic Investigation Required
+- Roadmap Revision Required
+- Split Epic Required
+- Reimagine Existing Epic Required
+- Insufficient Evidence
+- Projection Conflict
+- Governance Escalation
+- Different Prompt Required
+
+Examples:
+
+- proposal is not bounded
+- proposal conflicts with Core constraints
+- proposal requires roadmap-level restructuring
+- proposal requires research before authoring
+- proposal is actually a split of an existing epic
+- proposal is actually replacing an existing epic
+- repository evidence is too incomplete to define scope
+- proposal would require modifying north-star intent
+
+## Traceability Requirements
+
+Define how the new epic must prove its sources.
+
+| ID | Traceability Requirement | Required Evidence | Failure Handling |
+|---|---|---|---|
+
+Examples:
+
+- strategic purpose must trace to proposal and projection
+- desired capability must trace to projection or proposal
+- repository grounding must trace to repository evidence
+- dependencies must trace to proposal, projection, or repository evidence
+- constraints must trace to projection, proposal, or repository evidence
+- milestones must trace to capability and dependencies
+- acceptance criteria must trace to capability, constraints, and milestones
+
+Failure Handling should explain whether to omit, flag uncertainty, or block epic creation.
+
+## Canonical Vocabulary
+
+List load-bearing terms that downstream prompts must preserve.
+
+| Term | Definition | Notes / Banned Synonyms |
+|---|---|---|
+
+Rules:
+
+- Include only terms relevant to new epic authoring.
+- Use Core definitions where available.
+- If a term is undefined in the Core but required for this projection, mark definition as “Projection-local; confirm against Core if promoted.”
+
+## Projection Exclusion Notes
+
+List important Core content intentionally excluded from this projection.
+
+| Excluded Content Type | Reason Excluded | Where It Should Be Used Instead |
+|---|---|---|
+
+Examples:
+
+- roadmap prioritization semantics
+- selected initiative details
+- repository facts
+- epic validation criteria
+- realignment rules
+- reimagination rules
+- milestone deep-dive guidance
+- implementation guidance
+- execution workflow
+- detailed governance procedure
+- historical rationale
+
+## Known Projection Limitations
+
+List ambiguities or missing Core information that may limit CreateNewEpic.
+
+| Limitation | Why It Matters | Recommended Handling |
+|---|---|---|
+
+Examples:
+
+- desired capability model is implicit
+- epic authoring principles are underspecified
+- milestone derivation rules are unclear
+- constraints are not prioritized
+- repository grounding expectations are ambiguous
+- blocking rules are incomplete
+- canonical vocabulary is underspecified
+
+Do not invent missing information to fix these limitations.
+
+## Downstream Use Instructions
+
+When this projection is used by CreateNewEpic:
+
+- Treat this projection as the strategic authoring frame.
+- Treat the new epic proposal as the strategic opportunity seed.
+- Treat repository evidence as current implementation reality.
+- Preserve the proposal’s strategic purpose.
+- Ground the epic in repository reality.
+- Choose the best abstraction for the epic.
+- Derive scope from projection, proposal, and repository evidence.
+- Derive dependencies from projection, proposal, and repository evidence.
+- Integrate constraints and commitments.
+- Represent assumptions explicitly.
+- Create a compact milestone roadmap.
+- Write auditable acceptance criteria.
+- Write strategic success conditions.
+- Include only evidence-backed risks.
+- Block epic creation when the proposal is unsafe, insufficiently bounded, or belongs to another process.
+- Do not modify the roadmap.
+- Do not update roadmap completion context.
+- Do not generate implementation tasks.
+- Do not create file-level plans.
+- Do not generate code.
+- Do not create execution prompts.
+
+## Projection Integrity Checklist
+
+Before finalizing, verify:
+
+- The projection contains CreateNewEpic authoring semantics only.
+- No new epic proposal is included.
+- No repository state is included.
+- No roadmap completion state is included.
+- No completed epic history is included.
+- No epic is authored.
+- Every retained statement helps author a first authoritative epic from a strategic opportunity.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
+- Strategic opportunity preservation is explicit.
+- Desired capability semantics are explicit.
+- Repository grounding rules are explicit.
+- Abstraction selection rules are explicit.
+- Scope derivation rules are explicit.
+- Dependency derivation rules are explicit.
+- Milestone derivation rules are explicit.
+- Constraint integration is explicit.
+- Blocking rules are explicit.
+- Traceability requirements are explicit.
+- Canonical vocabulary is preserved.
+- Excluded operational, implementation, validation, realignment, reimagination, and prioritization details are not present.
+- The projection is compact enough to be passed into CreateNewEpic.

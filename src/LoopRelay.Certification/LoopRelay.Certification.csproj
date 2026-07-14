@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LoopRelay.Agents\LoopRelay.Agents.csproj" />
+    <ProjectReference Include="..\LoopRelay.Infrastructure\LoopRelay.Infrastructure.csproj" />
+    <ProjectReference Include="..\LoopRelay.Orchestration.Primitives\LoopRelay.Orchestration.csproj" />
+    <ProjectReference Include="..\LoopRelay.Permissions\LoopRelay.Permissions.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="LoopRelay.Certification.Tests" />
+  </ItemGroup>
+</Project>

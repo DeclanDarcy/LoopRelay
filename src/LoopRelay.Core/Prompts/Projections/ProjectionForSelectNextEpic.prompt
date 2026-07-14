@@ -1,0 +1,831 @@
+<PROJECT_CONTEXT>
+{projectContext}
+</PROJECT_CONTEXT>
+
+# Create Project Context Projection For Select Next Epic
+
+## Role
+
+You are a projection compiler for a projection-based AI engineering loop.
+
+Your job is to create a projection to be consumed by a later prompt:
+
+SelectNextEpic
+
+That downstream prompt will receive:
+
+1. This projection.
+2. The current `.agents/core/roadmap-completion-context.md`.
+3. The current roadmap containing future epics.
+
+The downstream prompt will select the next highest-leverage strategic initiative to pursue.
+
+Your job is NOT to select the next epic.
+
+Your job is to create the stable strategic prioritization frame that allows the downstream prompt to evaluate existing roadmap epics, newly identified intermediary epics, split epics, investigations, and roadmap-revision recommendations under the same framework.
+
+This is a projection, not a summary.
+
+---
+
+## Core Objective
+
+Create a deterministic, strategy-oriented projection of the Project Context that answers:
+
+How should future strategic initiatives be identified, compared, and prioritized?
+
+The projection must define:
+
+- what strategic progress means
+- what desired capabilities matter
+- what makes an initiative high leverage
+- what kinds of dependencies matter
+- what kinds of risks dominate prioritization
+- what justifies creating a new intermediary epic
+- what justifies splitting an existing epic
+- what justifies strategic investigation
+- what justifies roadmap revision
+- how candidate initiatives should compete
+
+This projection exists to support:
+
+SelectNextEpic
+
+It must not select an epic.
+
+It must not evaluate the current roadmap.
+
+It must not inspect the codebase.
+
+It must not include current roadmap completion state.
+
+It must not include completed epic history.
+
+It must not modify the roadmap.
+
+---
+
+## Consumer
+
+This projection will be consumed by:
+
+SelectNextEpic
+
+That downstream prompt will compute:
+
+Desired Strategic State
++
+Current Strategic State
++
+Remaining Roadmap
++
+Newly Discovered Strategic Opportunities
+=
+Best Next Strategic Initiative
+
+This projection defines how candidate initiatives should be evaluated.
+
+It is the strategic prioritization lens, not the selection itself.
+
+---
+
+## Authority Rules
+
+Treat the Project Context as the sole authority.
+
+Do not reinterpret it.
+
+Do not extend it.
+
+Do not make it more conventional.
+
+Do not infer missing intent.
+
+Do not invent desired capabilities.
+
+Do not invent prioritization rules unsupported by the Core.
+
+Do not convert current roadmap structure into strategic authority.
+
+If the Core contains ambiguity, preserve the ambiguity as a projection limitation.
+
+If the Core contains conflicting guidance, preserve the conflict and identify the conflicting source items.
+
+If the Core contains assertion IDs, retain them.
+
+If the Core does not contain assertion IDs, create stable projection-local IDs using the following format:
+
+- CAPABILITY-001
+- LEVERAGE-001
+- DEPENDENCY-001
+- RISK-001
+- INITIATIVE-001
+- PRIORITY-001
+- INVARIANT-001
+- DECISION-001
+- TERM-001
+- LIMITATION-001
+
+Projection-local IDs must not pretend to be canonical Core IDs.
+
+---
+
+## Projection Principles
+
+### 1. Strategy projection, not north-star summary
+
+Do not summarize the Project Context generally.
+
+Select only the Core semantics required to evaluate and prioritize future strategic initiatives.
+
+The projection should answer:
+
+- What kinds of future work matter most?
+- What makes one initiative strategically superior to another?
+- When should the roadmap be followed?
+- When should the roadmap be bypassed, extended, split, or revised?
+
+---
+
+### 2. Opportunity-oriented
+
+The projection exists to evaluate future opportunities.
+
+Retain information that helps identify the best next strategic initiative.
+
+Exclude information that only explains past work, implementation details, operational workflow, or completed history.
+
+---
+
+### 3. Initiative-neutral
+
+The projection must not assume the next initiative is already on the roadmap.
+
+It must support evaluating all candidate initiative types equally:
+
+- existing roadmap epic
+- new intermediary epic
+- split epic
+- strategic investigation
+- roadmap revision
+- no suitable initiative
+
+The roadmap is a candidate source, not the full search space.
+
+---
+
+### 4. Leverage-oriented
+
+Retain Core semantics that define strategic leverage.
+
+Strategic leverage may include:
+
+- closing an important strategic gap
+- unlocking many future epics
+- resolving hidden dependencies
+- reducing existential or systemic risk
+- preserving or restoring invariants
+- strengthening architectural coherence
+- improving semantic convergence
+- creating reusable strategic capability
+- preserving future optionality
+- preventing compounding drift
+
+---
+
+### 5. Gap-oriented
+
+The projection should preserve how gaps should be prioritized.
+
+It should help downstream reasoning distinguish:
+
+- urgent strategic gaps
+- enabling gaps
+- dependency gaps
+- risk-bearing gaps
+- optional future gaps
+- gaps that may require investigation before implementation
+
+Do not include current gap status.
+
+Current gap status belongs to roadmap completion context.
+
+---
+
+### 6. Dependency-aware
+
+The projection should define dependency semantics, not a current dependency graph.
+
+It should help the downstream prompt recognize when a future epic is premature because prerequisite work is missing.
+
+It should support discovery of intermediary epics when the roadmap omits a needed foundation.
+
+---
+
+### 7. Risk-aware
+
+The projection should define which risks dominate strategic prioritization.
+
+Especially preserve risks that can threaten long-horizon project success, such as:
+
+- invariant violation
+- architectural instability
+- semantic inconsistency
+- incorrect abstraction
+- missing foundational capability
+- compatibility risk
+- irreversible commitment
+- compounding drift
+- roadmap staleness
+- blocked future optionality
+
+---
+
+### 8. New-initiative aware
+
+The projection must explicitly support generating candidate initiatives not already present in the roadmap.
+
+It should define when the downstream prompt should consider:
+
+- new intermediary epic
+- architectural stabilization epic
+- migration epic
+- platform or infrastructure epic
+- dependency-resolution epic
+- validation or testing foundation epic
+- semantic consistency epic
+- research / spike / investigation
+- roadmap revision
+
+---
+
+### 9. Prioritization-stable
+
+The same Project Context should produce effectively the same prioritization projection every time.
+
+Avoid creative phrasing.
+
+Avoid speculative interpretation.
+
+Avoid rhetorical style.
+
+Use stable structure and concise assertions.
+
+---
+
+### 10. Projection purity
+
+Do not include:
+
+- current roadmap completion state
+- completed epic history
+- codebase facts
+- implementation status
+- current roadmap ordering as authority
+- operational context
+- execution instructions
+- detailed roadmap contents
+- selected epic details
+
+Those belong to downstream inputs, not this projection.
+
+---
+
+## Inclusion Criteria
+
+Retain Project Context content that belongs to one of these categories.
+
+### A. Desired Capability Model
+
+Retain desired capabilities that future initiatives may advance, unlock, or protect.
+
+### B. Strategic Leverage Model
+
+Retain statements or principles that explain what makes work high leverage.
+
+Examples:
+
+- unlocks multiple future capabilities
+- resolves a foundational gap
+- reduces systemic risk
+- preserves semantic integrity
+- creates reusable infrastructure
+- prevents compounding architectural drift
+- protects future optionality
+
+### C. Dependency Semantics
+
+Retain rules or concepts that help recognize prerequisite work.
+
+Examples:
+
+- capability dependencies
+- architectural prerequisites
+- semantic prerequisites
+- compatibility prerequisites
+- validation prerequisites
+- migration prerequisites
+- platform prerequisites
+
+### D. Risk Semantics
+
+Retain risks that should dominate prioritization when present.
+
+Examples:
+
+- existential project risk
+- invariant risk
+- semantic drift
+- architectural incoherence
+- unvalidated assumption
+- hidden dependency
+- irreversible coupling
+- roadmap staleness
+- compatibility breach
+
+### E. Initiative Generation Rules
+
+Retain rules that help the downstream prompt identify when a new initiative should be proposed.
+
+Examples:
+
+- when to insert an intermediary epic
+- when to split an epic
+- when to recommend investigation
+- when to recommend roadmap revision
+- when to defer an existing epic
+- when to flag an epic for realignment
+- when to treat an epic as a retirement candidate
+
+### F. Prioritization Criteria
+
+Retain criteria for comparing candidate initiatives.
+
+Examples:
+
+- strategic alignment
+- gap closure
+- systemic enablement
+- dependency resolution
+- risk reduction
+- drift reduction
+- invariant preservation
+- commitment compatibility
+- architectural coherence
+- optionality preservation
+- timeliness
+- confidence
+
+### G. Strategic Invariants
+
+Retain non-negotiable principles and constraints that prioritization must never sacrifice.
+
+### H. Decision Authority Rules
+
+Retain rules about the relative authority of:
+
+- Project Context
+- projection
+- roadmap completion context
+- roadmap
+- existing epics
+- newly proposed initiatives
+
+### I. Canonical Vocabulary
+
+Retain terms the downstream prompt must preserve when evaluating future initiatives.
+
+---
+
+## Exclusion Criteria
+
+Exclude Project Context content that belongs to these categories unless it directly affects initiative prioritization.
+
+Exclude:
+
+- completed epic history
+- current roadmap progress
+- current roadmap completion state
+- implementation details
+- codebase status
+- execution guidance
+- operational workflow
+- developer commands
+- prompt templates
+- agent behavior mechanics
+- detailed milestone plans
+- detailed ADR history
+- historical rationale essays
+- full governance workflow
+- belief revision mechanics
+- reasoning architecture
+- information flow architecture
+- research citations
+- broad vision prose that does not change prioritization
+- task-level plans
+- current epic details
+- current roadmap ordering
+
+If excluded information may matter elsewhere, mention it only in Projection Exclusion Notes.
+
+Do not include the excluded content itself.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the projection.
+
+### Step 1 — Identify candidate Core assertions
+
+Extract all Core statements relevant to future initiative selection.
+
+Classify each as:
+
+- Desired Capability
+- Strategic Leverage
+- Dependency Semantics
+- Risk Semantics
+- Initiative Generation Rule
+- Prioritization Criterion
+- Strategic Invariant
+- Decision Authority
+- Vocabulary
+- Exclude
+
+### Step 2 — Apply selection-projection admission test
+
+For each candidate, ask:
+
+1. Would this help compare future strategic initiatives?
+2. Would this help decide whether an existing roadmap epic should be selected now?
+3. Would this help identify a missing intermediary epic?
+4. Would this help detect that an existing epic should be split?
+5. Would this help determine that investigation is required?
+6. Would this help determine that roadmap revision is required?
+7. Is this stable and non-regenerable from roadmap completion context or the roadmap?
+
+Retain only candidates that pass.
+
+### Step 3 — Convert retained items into prioritization semantics
+
+For each retained capability, invariant, dependency, or risk, express how it should affect initiative selection.
+
+Do not evaluate any actual initiative.
+
+Define prioritization rules only.
+
+### Step 4 — Normalize vocabulary
+
+Preserve canonical terms from the Core.
+
+If the Core has overlapping terms, select the term with strongest authority and note aliases only if necessary.
+
+### Step 5 — Remove operational noise
+
+Aggressively remove anything that would distract the downstream selection agent from strategic prioritization.
+
+### Step 6 — Organize into the required output structure
+
+Output only the projection Markdown.
+
+Do not include your analysis.
+
+---
+
+## Required Output
+
+Output only the full Markdown content for the projection.
+
+Do not wrap the output in commentary.
+
+Do not include prefaces.
+
+Do not include explanations after the document.
+
+Use this exact structure.
+
+---
+
+# Select Next Epic Projection
+
+## Purpose
+
+This projection defines how future strategic initiatives should be identified, compared, and prioritized.
+
+It exists to support:
+
+- next strategic initiative selection
+- existing roadmap epic evaluation
+- new intermediary epic discovery
+- split-epic discovery
+- strategic investigation recommendation
+- roadmap revision recommendation
+- strategic leverage comparison
+- risk-aware sequencing
+
+It is a projection of the Project Context, not a roadmap, changelog, or current-state summary.
+
+## Authority Boundary
+
+- The Project Context remains the source of authority.
+- This projection is a task-specific prioritization view of the Project Context.
+- This projection defines how candidate initiatives should be evaluated.
+- This projection does not describe current roadmap completion state.
+- This projection does not include completed epic evidence.
+- This projection does not include codebase state.
+- This projection does not select the next epic.
+- This projection treats the roadmap as advisory, not exhaustive.
+
+## Projection Metadata
+
+| Field | Value |
+|---|---|
+| Projection Name | {{projection_name_or_default}} |
+| Projection Version | {{projection_version_or_default}} |
+| Projection Date | {{projection_date_or_default}} |
+| Source Core Version | {{core_version_or_unknown}} |
+| Intended Consumer | SelectNextEpic |
+| Projection Family | Strategic Initiative Selection / Prioritization |
+
+## Source Coverage
+
+Briefly describe what parts of the Project Context were retained.
+
+Use bullets.
+
+Then briefly describe what parts were intentionally excluded.
+
+Use bullets.
+
+## Desired Capability Model
+
+List desired capabilities that future initiatives may advance, unlock, protect, or restore.
+
+| ID | Desired Capability | Source Reference | Why It Matters for Initiative Selection |
+|---|---|---|---|
+
+Rules:
+
+- Use exact Core terminology.
+- Include only capabilities that influence future initiative selection.
+- Do not infer current completion status.
+- Do not map to specific roadmap epics here.
+
+## Strategic Leverage Model
+
+Define what makes an initiative high leverage.
+
+| ID | Leverage Pattern | Strategic Meaning | Selection Implication |
+|---|---|---|---|
+
+Examples of Leverage Pattern:
+
+- Closes a high-value strategic gap
+- Unlocks multiple future initiatives
+- Resolves a hidden dependency
+- Reduces systemic risk
+- Restores convergence
+- Establishes reusable foundation
+- Preserves optionality
+- Prevents compounding drift
+- Strengthens architectural coherence
+
+Selection Implication should explain how this pattern should affect ranking.
+
+## Dependency Semantics
+
+Define what kinds of dependencies should influence initiative selection.
+
+| ID | Dependency Type | How To Recognize It | Prioritization Rule |
+|---|---|---|---|
+
+Examples of Dependency Type:
+
+- Foundational capability dependency
+- Architectural dependency
+- Semantic dependency
+- Compatibility dependency
+- Validation dependency
+- Migration dependency
+- Platform / infrastructure dependency
+- Unresolved assumption dependency
+
+Prioritization Rule should explain when a dependency justifies an intermediary epic, split epic, investigation, or deferral.
+
+## Risk Semantics
+
+Define risks that should dominate prioritization when present.
+
+| ID | Risk Type | Why It Matters | Selection Implication |
+|---|---|---|---|
+
+Examples of Risk Type:
+
+- Existential project risk
+- Invariant violation risk
+- Architectural incoherence
+- Semantic inconsistency
+- Incorrect abstraction
+- Irreversible commitment
+- Compatibility breach
+- Roadmap staleness
+- Compounding drift
+- Missing foundation
+
+Selection Implication should explain whether the risk should cause selection, deferral, investigation, or roadmap revision.
+
+## Initiative Generation Rules
+
+Define when the downstream prompt should consider initiatives outside the existing roadmap.
+
+| ID | Trigger | Candidate Initiative Type | Required Evidence | Expected Use |
+|---|---|---|---|
+
+Candidate Initiative Type must be one of:
+
+- New Intermediary Epic
+- Split Epic
+- Strategic Investigation
+- Roadmap Revision
+- No Suitable Initiative
+
+Examples:
+
+- A future roadmap epic depends on a missing foundation.
+- Multiple epics share an unmodeled prerequisite.
+- A roadmap epic combines exploratory and implementation work.
+- A drift signal threatens the project’s core intent.
+- A systemic architectural issue would compound if ordinary feature work continues.
+- Strategic uncertainty is too high for safe implementation.
+- The roadmap no longer reflects current strategic state.
+
+## Prioritization Criteria
+
+Define the criteria candidate initiatives should be evaluated against.
+
+| ID | Criterion | Definition | High Rating Means | Low Rating Means |
+|---|---|---|---|---|
+
+Include criteria for:
+
+- Strategic Alignment
+- Gap Closure
+- Systemic Enablement
+- Hidden Dependency Resolution
+- Existential / Systemic Risk Reduction
+- Drift Reduction
+- Invariant Preservation
+- Commitment Compatibility
+- Architectural Coherence
+- Optionality Preservation
+- Timeliness
+- Confidence
+
+Do not assign weights unless the Core explicitly defines them.
+
+If the Core defines priority ordering among criteria, preserve it exactly.
+
+## Strategic Invariants for Selection
+
+List constraints or principles that initiative selection must never sacrifice.
+
+| ID | Invariant | Source Reference | Selection Consequence |
+|---|---|---|---|
+
+Selection Consequence should explain how the invariant affects prioritization.
+
+Examples:
+
+- initiatives that violate this cannot be selected
+- initiatives that protect this outrank ordinary feature progress
+- initiatives with unclear impact on this require investigation
+
+## Recommendation Outcome Rules
+
+Define when each possible SelectNextEpic outcome is appropriate.
+
+| ID | Outcome | Use When | Do Not Use When |
+|---|---|---|---|
+
+Include these outcomes:
+
+- Select Existing Epic
+- Select New Intermediary Epic
+- Select Split Epic
+- Strategic Investigation Required
+- Roadmap Revision Required
+- No Suitable Initiative
+
+Rules:
+
+- Existing roadmap epics and new initiatives must compete equally.
+- Roadmap membership is not itself evidence of superiority.
+- Roadmap revision should be recommended when the roadmap is structurally stale, incomplete, or unsafe to continue.
+- Strategic investigation should be recommended when uncertainty prevents a safe implementation choice.
+
+## Roadmap Authority Rules
+
+Define how the downstream prompt should treat the roadmap.
+
+| ID | Rule | Applies When | Required Behavior |
+|---|---|---|---|
+
+Include rules for:
+
+- roadmap as advisory hypothesis
+- roadmap not exhaustive
+- existing epics not automatically privileged
+- hidden dependencies
+- roadmap staleness
+- roadmap conflict with projection or current strategic state
+- newly identified initiatives competing equally with existing epics
+
+## Canonical Vocabulary
+
+List load-bearing terms that downstream prompts must preserve.
+
+| Term | Definition | Notes / Banned Synonyms |
+|---|---|---|
+
+Rules:
+
+- Include only terms relevant to initiative selection and strategic prioritization.
+- Use Core definitions where available.
+- If a term is undefined in the Core but required for this projection, mark definition as “Projection-local; confirm against Core if promoted.”
+
+## Projection Exclusion Notes
+
+List important Core content intentionally excluded from this projection.
+
+| Excluded Content Type | Reason Excluded | Where It Should Be Used Instead |
+|---|---|---|
+
+Examples:
+
+- roadmap completion state
+- completed epic history
+- codebase facts
+- implementation guidance
+- operational context
+- execution guidance
+- detailed milestone plans
+- audit-specific criteria
+- epic landing update rules
+
+## Known Projection Limitations
+
+List ambiguities or missing Core information that may limit SelectNextEpic.
+
+| Limitation | Why It Matters | Recommended Handling |
+|---|---|---|
+
+Examples:
+
+- prioritization criteria are underspecified
+- desired capabilities are implicit
+- dependency semantics are incomplete
+- initiative-generation rules are missing
+- risk semantics are unclear
+- roadmap authority rules are underspecified
+- canonical vocabulary is ambiguous
+
+Do not invent missing information to fix these limitations.
+
+## Downstream Use Instructions
+
+When this projection is used by SelectNextEpic:
+
+- Treat this projection as the prioritization frame.
+- Treat roadmap completion context as current strategic state.
+- Treat the roadmap as advisory, not exhaustive.
+- Evaluate existing roadmap epics and newly identified initiatives under the same criteria.
+- Do not select an epic merely because it appears first in the roadmap.
+- Actively search for hidden dependencies and missing intermediary initiatives.
+- Consider existential or systemic risks before ordinary feature progress.
+- Prefer initiatives that maximize long-horizon convergence.
+- Preserve invariants and established commitments.
+- Recommend strategic investigation when uncertainty prevents safe selection.
+- Recommend roadmap revision when the roadmap is structurally stale, incomplete, or misaligned.
+- Do not modify the roadmap.
+- Do not rewrite epics.
+- Do not audit the codebase.
+- Do not include implementation plans.
+
+## Projection Integrity Checklist
+
+Before finalizing, verify:
+
+- The projection contains prioritization semantics only.
+- No completed epic history is included.
+- No current roadmap completion state is included.
+- No codebase state is included.
+- No roadmap epic is selected.
+- Every retained statement helps identify, compare, or prioritize future initiatives.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
+- Existing roadmap epics and new initiatives can be evaluated under the same framework.
+- Hidden dependencies and intermediary initiatives are explicitly supported.
+- Roadmap revision and strategic investigation are valid downstream outcomes.
+- Canonical vocabulary is preserved.
+- Excluded operational and implementation details are not present.
+- The projection is compact enough to be passed into SelectNextEpic.

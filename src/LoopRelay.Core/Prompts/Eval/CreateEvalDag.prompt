@@ -1,0 +1,1264 @@
+# Create Eval DAG Prompt
+
+This prompt reads:
+
+```text
+.agents/eval-architectural-catalog.md
+.agents/eval-dependency-inventory.md
+.agents/eval-hypothesis-inventory.md
+```
+
+and creates a directed acyclic graph over deterministically execution-tied evaluation facts representing the prerequisite, evidence, validation, falsifiability, and machine-gate relationships among evaluation dependencies and hypotheses.
+
+You are NOT creating or modifying evaluation specs.
+You are NOT creating or modifying the dependency inventory.
+You are NOT creating or modifying the hypothesis inventory.
+You are NOT creating or modifying the architectural catalog.
+You are NOT creating a roadmap.
+You are NOT creating epics.
+You are NOT creating milestones.
+You are NOT implementing anything.
+You are NOT designing architecture.
+You are NOT writing tests.
+You are NOT executing tests.
+You are NOT reporting evaluation results.
+You are NOT authoring, proposing, validating, or requiring process, review, state-label, assertion, or other non-execution artifacts as dependencies.
+You are NOT deciding whether dependencies or hypotheses are satisfied unless explicitly instructed to assess repository evidence.
+
+Your output must be only the final Markdown content for:
+
+```text
+.agents/eval-dag.md
+```
+
+If the caller provides a different output path, use that path instead.
+
+---
+
+## Core Objective
+
+Create an **Eval Dependency/Hypothesis DAG**.
+
+The file should answer:
+
+> What acyclic prerequisite and validation structure connects execution-tied evaluation dependencies, falsifiable hypotheses, architectural catalog groups, machine evidence obligations, negative controls, and machine-evaluable gates?
+
+The DAG must:
+
+* read the architectural catalog as the primary source of grouped items and relationship edges;
+* read the dependency inventory as the primary source of dependency meanings;
+* read the hypothesis inventory as the primary source of falsifiability and verification meanings;
+* index every included execution-tied dependency and hypothesis;
+* preserve individual item traceability;
+* use architectural catalog groups as primary DAG nodes where valid;
+* create directed edges only where source-derived relationships imply execution prerequisite, machine validation, machine evidence, falsification, or machine-gate ordering;
+* produce an acyclic graph or explicitly report why an acyclic graph cannot be faithfully produced without condensing or resolving cycles;
+* expose cycles, conflicts, missing edges, ambiguous directions, and open questions;
+* provide topological layers suitable for downstream implementation, audit, and test-design planning without creating roadmap, epic, milestone, process, review, state-label, assertion, or release artifacts.
+
+The output should not restate the source inventories.
+
+It should transform them into a graph structure.
+
+---
+
+## Project-Agnostic Rule
+
+This prompt must remain project-agnostic.
+
+Do not hardcode:
+
+* product names;
+* programming languages;
+* frameworks;
+* providers;
+* file extensions;
+* repository paths;
+* architecture names;
+* domain-specific constructs;
+* evaluation IDs;
+* report names;
+* fixture names;
+* hypothesis IDs;
+* dependency IDs;
+* capability names;
+* lifecycle states;
+* public capability rows;
+* ontology categories.
+
+Use project-specific terms only when they appear in the source files.
+
+When the source inventories contain project-specific details, preserve them as source-derived DAG content.
+
+Do not generalize away concrete source meaning.
+
+Do not invent missing nodes, edges, gates, planes, groups, dependencies, hypotheses, or cycle resolutions.
+
+Use `TBD` when a node, edge, direction, layer, cycle, or source interpretation is unclear.
+
+---
+
+## Deterministic Execution Tie
+
+This file is a planning artifact over deterministically execution-tied evaluation facts.
+
+Include a source item only when the source identifies at least one deterministic execution tie:
+
+* executable eval input, fixture, manifest, selector, or runner input;
+* runtime behavior, runtime state, evaluator behavior, provider behavior, or machine-enforced contract;
+* generated eval output, persisted evidence, sidecar, evidence store, validation record, scan output, replay record, fingerprint, comparison artifact, or machine-readable report schema;
+* gate input/output that is machine-readable and produced or consumed by an executable check.
+
+Do not admit a source item merely because it has a state label, review label, assertion label, process label, document name, or human-interpreted prose assertion.
+
+If a source item mixes deterministic execution facts with residual label or prose assertion meaning, represent only the source-explicit execution-tied facts.
+
+Do not create substitute artifacts for omitted source material.
+
+---
+
+## Source Authority
+
+### Architectural Catalog Authority
+
+`.agents/eval-architectural-catalog.md` owns:
+
+* catalog item IDs;
+* dependency item IDs;
+* hypothesis item IDs;
+* architectural planes;
+* minimized groups;
+* item-to-group assignment;
+* relationship edge index;
+* dependency-to-hypothesis mapping;
+* group validation;
+* plane validation;
+* source coverage;
+* gate view;
+* minimization results;
+* open catalog questions.
+
+Use the architectural catalog as the primary source for:
+
+* normalized item identity;
+* grouping;
+* architectural plane membership;
+* source-derived incompatibility relationships;
+* group-level nodes.
+
+### Dependency Inventory Authority
+
+`.agents/eval-dependency-inventory.md` owns:
+
+* dependency definitions;
+* dependency classes;
+* strictness;
+* planning weights;
+* dependency graph relationships;
+* upstream/downstream dependency meanings;
+* required evidence;
+* fixture/input/report/public-surface/schema-change/stability dependency candidates;
+* run/pass/safe-failure/other machine-gate candidates;
+* conditional dependencies;
+* open dependency questions.
+
+Use the dependency inventory to:
+
+* confirm dependency items have deterministic execution ties;
+* enrich DAG node metadata;
+* infer prerequisite edges;
+* identify machine-gate edges;
+* identify missing or ambiguous relationships;
+* validate source dependency direction.
+
+### Hypothesis Inventory Authority
+
+`.agents/eval-hypothesis-inventory.md` owns:
+
+* hypothesis statements;
+* hypothesis classes;
+* source dependency mappings;
+* verification modes;
+* confirmation conditions;
+* falsification conditions;
+* blocked or inconclusive conditions;
+* hypothesis graph relationships;
+* run/pass/safe-failure/other machine-gate hypothesis candidates;
+* conditional hypotheses;
+* dependency-to-hypothesis coverage;
+* open hypothesis questions.
+
+Use the hypothesis inventory to:
+
+* confirm hypothesis items have deterministic execution ties;
+* create validation and falsifiability edges;
+* enrich hypothesis node metadata;
+* identify negative-control edges;
+* identify machine-evidence-before-machine-verification edges;
+* preserve falsification logic.
+
+### Conflict Handling
+
+If the three sources conflict:
+
+* preserve all conflicting source assertions;
+* do not silently choose one;
+* record the conflict in `Open DAG Questions`;
+* mark affected nodes or edges as `TBD`;
+* do not force a misleading acyclic graph.
+
+Repository evidence may be used only if the task explicitly requests current repository satisfaction assessment.
+
+Otherwise, repository satisfaction state remains:
+
+```text
+Not Assessed
+```
+
+---
+
+## Graph Contract
+
+The primary DAG is an **execution-tied evaluation DAG**.
+
+A directed edge:
+
+```text
+A -> B
+```
+
+means:
+
+> A machine-verifiable implementation behavior, runtime state, eval input, eval output, evidence record, or executable check must exist, run, be preserved, or be evaluated before B can be meaningfully used as an execution-tied evaluation prerequisite or machine-verifiable assertion.
+
+This DAG does **not** mean:
+
+* implementation build order;
+* team ownership order;
+* roadmap order by itself;
+* execution sequence by itself;
+* repository module dependency;
+* human-interpreted process, review, state, assertion, or release decision order;
+* temporal order unless the source requires it.
+
+The DAG may inform implementation, audit, and test-design planning, but it is not itself a roadmap, review process, release process, or approval process.
+
+---
+
+## Node Model
+
+### Primary DAG Node
+
+The preferred primary DAG node is a valid minimized group from the architectural catalog.
+
+Use group nodes when:
+
+* the group is valid;
+* all included items identify deterministic execution ties;
+* all items share one horizontal architectural plane;
+* the group contains no internal dependency or falsifiability edge;
+* the group has source traceability;
+* the group can be reasoned about as a unit.
+
+For each valid catalog group, create a group node containing only source items with deterministic execution ties.
+
+Do not present the original mixed group as fully covered.
+
+### Item Node
+
+Use item-level nodes when:
+
+* the catalog is missing or incomplete;
+* a catalog group is invalid;
+* an item has conflicting group assignment;
+* a cycle must be diagnosed at item level;
+* a dependency or hypothesis is not assigned to any valid group;
+* item-level traceability is required to avoid ambiguity.
+
+Create item-level nodes only for source-grounded execution-tied items.
+
+### Gate Node
+
+Create gate nodes only when source inventories define machine-executed run, pass, safe-failure, or other machine-evaluable gates with machine-readable inputs and outputs.
+
+Gate nodes are not dependencies or hypotheses.
+
+They represent executable evaluation checkpoints, not human-interpreted decision points or prose assertions.
+
+Create gate nodes only for source-defined machine-evaluable gates with machine-readable inputs and outputs.
+
+### Synthetic Node Restriction
+
+Do not create synthetic nodes unless necessary to represent:
+
+* source-defined machine-evaluable gates;
+* strongly connected components when true cycles prevent an item-level DAG;
+* unresolved `TBD` placeholder nodes required to preserve ambiguity.
+
+Every synthetic node must be labeled as synthetic and justified.
+
+---
+
+## Edge Model
+
+Create directed edges only from source-derived or logically necessary execution-tied relationships.
+
+Omit candidate edges whose source item, target item, or relationship meaning lacks a deterministic execution tie.
+
+### Prerequisite Edge
+
+Use when one execution-tied item must exist, hold, or be available before another execution-tied item can run, pass, be machine-checked, or be evaluated.
+
+Direction:
+
+```text
+Prerequisite -> Dependent
+```
+
+### Enablement Edge
+
+Use when one execution-tied dependency unlocks or stabilizes another dependency, hypothesis, or machine gate.
+
+Direction:
+
+```text
+Enabler -> Enabled Item
+```
+
+### Evidence Edge
+
+Use when one execution-tied item produces, retains, links, serializes, reports, or exposes machine evidence required by another execution-tied item.
+
+Direction:
+
+```text
+Evidence Producer -> Evidence Consumer
+```
+
+### Validation Edge
+
+Use when a machine-verifiable hypothesis must be checked before an execution-tied dependency, requirement, or machine-verifiable assertion can be trusted.
+
+Direction:
+
+```text
+Hypothesis -> Dependency or Machine Assertion Being Validated
+```
+
+### Falsification Edge
+
+Use when an execution-tied hypothesis, negative control, or safe-failure item can falsify another execution-tied assertion.
+
+Direction:
+
+```text
+Falsifier -> Assertion That Could Be Falsified
+```
+
+### Gate Edge
+
+Use when an execution-tied item is required before a machine-executed run, pass, safe-failure, or other machine-evaluable gate.
+
+Direction:
+
+```text
+Required Item -> Machine Gate
+```
+
+### Conditional Edge
+
+Use when an edge applies only under a source-defined condition.
+
+Direction follows the edge type, and the condition must be preserved.
+
+### Traceability Edge
+
+Traceability edges show derivation or source mapping but do **not** belong in the primary DAG unless they also imply execution prerequisite, machine validation, machine evidence, falsification, or machine-gate ordering.
+
+Examples:
+
+```text
+Dependency -> Hypothesis
+```
+
+may be traceability if it means “hypothesis was derived from dependency.”
+
+```text
+Hypothesis -> Dependency
+```
+
+may be a DAG validation edge if it means "hypothesis must be checked before an execution-tied dependency assertion can be trusted."
+
+Do not include pure traceability edges in the DAG.
+
+List them separately in the traceability view.
+
+### Candidate Edge Without Execution Tie
+
+Use when a candidate source relationship lacks machine-readable input, output, state, evidence, check, comparison, validation record, or gate IO.
+
+Direction:
+
+```text
+No primary DAG edge
+```
+
+Do not include the relationship in primary topology.
+
+---
+
+## Cycle Handling
+
+The output must be a DAG.
+
+However, source inventories may imply cycles.
+
+### Raw Graph
+
+First build the raw directed graph from all candidate DAG edges.
+
+### Cycle Detection
+
+Detect cycles in the raw graph.
+
+For every cycle, record:
+
+* cycle ID;
+* nodes involved;
+* edges involved;
+* edge classes;
+* source basis;
+* whether the cycle is real, ambiguous, or caused by mixed edge meanings;
+* recommended resolution.
+
+### Edge Reinterpretation
+
+If a cycle is caused by mixing traceability edges with execution-tied DAG edges, move traceability-only edges out of the DAG and into the traceability view.
+
+Do not delete true prerequisite, validation, evidence, falsification, or gate edges silently.
+
+### Condensed DAG
+
+If true prerequisite cycles remain, produce a **condensed DAG** using strongly connected components.
+
+Each strongly connected component becomes a synthetic SCC node.
+
+The output must state:
+
+```text
+Individual-item DAG contains unresolved cycles; condensed SCC DAG is provided for acyclic planning.
+```
+
+Do not pretend the original item-level graph is acyclic.
+
+### Faithful DAG Requirement
+
+A DAG is faithful only if:
+
+* all retained DAG edges are source-grounded;
+* all retained DAG nodes and edges pass the deterministic execution-tie test;
+* no true prerequisite edge is dropped to force acyclicity;
+* traceability-only edges are omitted from prerequisite topology;
+* source material without a deterministic execution tie is omitted from generated topology;
+* cycles are disclosed.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the final file.
+
+### Step 1 — Read Source Files
+
+Read:
+
+```text
+.agents/eval-architectural-catalog.md
+.agents/eval-dependency-inventory.md
+.agents/eval-hypothesis-inventory.md
+```
+
+If a path is missing or unreadable, record it in `Open DAG Questions`.
+
+For every source file, identify:
+
+* path;
+* source type;
+* title;
+* version if present;
+* represented state;
+* execution tie basis.
+
+Do not silently ignore files.
+
+---
+
+### Step 2 — Extract Catalog Groups and Items
+
+From the architectural catalog, extract:
+
+* architectural planes;
+* group IDs;
+* group names;
+* group item lists;
+* catalog item IDs;
+* source item IDs;
+* item types;
+* strictness;
+* planning weights;
+* gate relevance;
+* source traces;
+* relationship edge references;
+* group validation finding;
+* plane validation finding.
+
+Validate:
+
+* every item appears in exactly one group;
+* every group has a single primary architectural plane;
+* no group contains internal dependency edges;
+* no group contains internal falsifiability edges.
+
+If a catalog group is invalid, do not use it as a primary DAG node without correction or disclosure.
+
+---
+
+### Step 3 — Extract Dependency Details
+
+From the dependency inventory, extract:
+
+* dependency IDs;
+* dependency classes;
+* dependency graph;
+* foundational dependency map;
+* run/pass/safe-failure/other machine-gate dependency candidates;
+* evidence dependencies;
+* fixture/input dependencies;
+* generated-report and machine-readable evidence artifact candidates;
+* negative-control dependencies;
+* stability dependencies;
+* public/external dependency candidates;
+* schema-change/model-change dependency candidates;
+* conditional dependencies;
+* open dependency questions.
+
+Map dependency IDs to catalog items.
+
+Do not create any dependency node until Step 5 confirms the dependency has a deterministic execution tie.
+
+If a dependency appears in the dependency inventory but not in the catalog, record the catalog coverage gap. Create an ungrouped item-level node only if the dependency is execution-tied or has a separable execution-tied kernel.
+
+---
+
+### Step 4 — Extract Hypothesis Details
+
+From the hypothesis inventory, extract:
+
+* hypothesis IDs;
+* hypothesis statements;
+* hypothesis classes;
+* source dependency mappings;
+* hypothesis graph;
+* run/pass/safe-failure/other machine-gate hypothesis candidates;
+* evidence requirements;
+* verification modes;
+* confirmation and falsification conditions;
+* negative-control hypotheses;
+* stability hypotheses;
+* public/external hypothesis candidates;
+* schema-change/model-change hypothesis candidates;
+* evidence-aggregation hypothesis candidates;
+* conditional hypotheses;
+* open hypothesis questions.
+
+Map hypothesis IDs to catalog items.
+
+Do not create any hypothesis node until Step 5 confirms the hypothesis has a deterministic execution tie.
+
+If a hypothesis appears in the hypothesis inventory but not in the catalog, record the catalog coverage gap. Create an ungrouped item-level node only if the hypothesis is execution-tied or has a separable execution-tied kernel.
+
+---
+
+### Step 5 - Confirm Deterministic Execution Ties
+
+Confirm every dependency, hypothesis, catalog item, catalog group, relationship edge, and gate candidate before node normalization.
+
+For each represented item, record:
+
+* source item ID;
+* source item type;
+* deterministic execution tie;
+* executable input, output, state, evidence record, check, comparison, validation record, or gate IO basis;
+* whether the item may appear in a primary DAG node;
+* whether the item is `TBD` because the execution tie is ambiguous.
+
+Representation rules:
+
+* Include fixtures, fixture manifests, runtime behavior, persisted evidence, generated eval evidence packages, scan outputs, replay artifacts, comparison artifacts, fingerprints, runtime capability metadata, executable negative controls, validation records, and machine-readable report schemas when the source ties them to deterministic execution.
+* Do not include prose-only labels, process markers, document names, or manually interpreted assertions as DAG nodes or edges.
+* Split mixed items only when the source explicitly identifies an execution-tied kernel.
+* Do not invent substitute artifacts for source material that lacks a deterministic execution tie.
+* Mark unclassifiable execution-tied items `TBD` and include a narrow `TBD` item node only when omitting it would hide a source-grounded execution prerequisite.
+
+---
+
+### Step 6 — Normalize DAG Nodes
+
+Create normalized DAG nodes.
+
+For each valid architectural catalog group, create one group-level DAG node only for the execution-tied subset of the group.
+
+Each group-level node must include:
+
+* DAG node ID;
+* catalog group ID;
+* group name;
+* architectural plane;
+* contained execution-tied dependency items;
+* contained execution-tied hypothesis items;
+* execution-filter result;
+* strictness summary;
+* planning weight summary;
+* gate relevance;
+* source traces;
+* node state;
+* notes.
+
+For each ungrouped or invalid execution-tied item, create an item-level DAG node.
+
+For each source-defined machine-evaluable gate, create a gate node.
+
+Create nodes only for source-grounded execution-tied items.
+
+Use stable IDs:
+
+```text
+EVAL-DAG-NODE-001
+EVAL-DAG-GATE-001
+EVAL-DAG-SCC-001
+```
+
+---
+
+### Step 7 — Normalize Directed Edges
+
+Create normalized directed edges from execution-tied relationships in:
+
+* dependency graph relationships;
+* hypothesis graph relationships;
+* dependency-to-hypothesis validation relationships;
+* evidence dependencies;
+* fixture/input dependencies;
+* generated eval report dependencies;
+* negative-control dependencies;
+* stability dependencies;
+* runtime-backed public/external dependencies;
+* machine-enforced schema-change/model-change dependencies;
+* run/pass/safe-failure machine-gate tables;
+* conditional dependency tables;
+* catalog relationship edge index where direction is inferable.
+
+Omit candidate edges that lack deterministic execution ties from the primary DAG.
+
+Each edge must include:
+
+* edge ID;
+* source node;
+* target node;
+* source item;
+* target item;
+* edge class;
+* direction rationale;
+* source basis;
+* condition if conditional;
+* whether included in primary DAG;
+* whether represented only as traceability;
+* execution tie basis;
+* notes.
+
+Use stable IDs:
+
+```text
+EVAL-DAG-EDGE-001
+```
+
+---
+
+### Step 8 — Build Group-Level DAG
+
+Collapse item-level edges into group-level edges where both items belong to valid execution-tied group subsets.
+
+If multiple item edges connect the same group pair, aggregate them into one group edge and preserve item-edge details.
+
+Do not create a self-edge for items within the same group.
+
+If a source edge maps to a self-edge within a group, the group breaks the no-relationship constraint.
+
+Record this as a catalog validation issue.
+
+If the self-edge is traceability-only, exclude it from the DAG and record it in the traceability view.
+
+If the self-edge lacks a deterministic execution tie, omit it from the DAG.
+
+---
+
+### Step 9 — Add Gate Nodes
+
+Create gate nodes only where applicable under the deterministic execution-tie test.
+
+Typical gates may include:
+
+* required before run;
+* required before pass;
+* required for safe failure;
+* other source-defined machine-evaluable gates.
+
+Use only gates present in the source inventories.
+
+Add edges from execution-tied prerequisite nodes to machine gate nodes.
+
+Do not add gate nodes for generic process stages or human-interpreted decision points.
+
+---
+
+### Step 10 — Detect Cycles
+
+Run cycle detection on:
+
+1. item-level raw DAG;
+2. group-level raw DAG;
+3. gate-augmented DAG.
+
+For each detected cycle:
+
+* identify exact nodes;
+* identify exact edges;
+* identify source inventory basis;
+* classify cause;
+* attempt edge reinterpretation only where the edge is traceability-only;
+* otherwise preserve the cycle as unresolved.
+
+---
+
+### Step 11 — Produce Acyclic DAG
+
+If no true cycles remain, produce the primary DAG.
+
+If true cycles remain, produce:
+
+1. cycle report;
+2. condensed SCC DAG;
+3. statement that individual-node DAG is blocked by unresolved cycles;
+4. open questions or remediation recommendations.
+
+The condensed SCC DAG is valid for planning only if each SCC is clearly marked as a cycle-containing synthetic node.
+
+---
+
+### Step 12 — Topologically Sort
+
+Topologically sort the acyclic DAG.
+
+Produce layers:
+
+```text
+Layer 0
+Layer 1
+Layer 2
+...
+```
+
+Each layer contains nodes whose prerequisites are satisfied by earlier layers.
+
+Clarify that DAG layers are vertical prerequisite depth and are not the same as horizontal architectural planes.
+
+For each layer, include:
+
+* node IDs;
+* group IDs;
+* architectural planes represented;
+* gate relevance;
+* downstream gates enabled;
+* notes.
+
+---
+
+### Step 13 — Generate Graph Views
+
+Generate at least these graph views:
+
+1. **Primary DAG View** — group-level DAG.
+2. **Item-Level Edge View** — item-to-item relationships underlying group edges.
+3. **Gate View** — nodes required for machine-evaluable run/pass/safe-failure gates.
+4. **Architectural Plane View** — DAG nodes grouped by horizontal plane.
+5. **Topological Layer View** — DAG nodes grouped by prerequisite depth.
+6. **Traceability View** — traceability-only edges omitted from prerequisite topology.
+7. **Execution Tie View** — represented nodes and edges grouped by deterministic execution-tie basis.
+8. **Cycle View** — cycles found or confirmation that none were found.
+
+Include Mermaid and DOT graph blocks when the graph is reasonably sized.
+
+If the graph is too large, include:
+
+* a summarized Mermaid graph by group;
+* a DOT graph for full group-level DAG;
+* item-level graph omitted with explanation and edge index preserved.
+
+---
+
+### Step 14 — Validate DAG
+
+Before finalizing, verify:
+
+* every source file was considered;
+* every represented dependency item has a deterministic execution tie before node creation;
+* every represented hypothesis item has a deterministic execution tie before node creation;
+* every represented dependency item is mapped to a DAG node;
+* every represented hypothesis item is mapped to a DAG node;
+* every valid catalog group is represented as an execution-tied group subset;
+* every source-derived prerequisite relationship is represented or represented only as traceability;
+* every source-derived falsifiability relationship is represented as validation/falsification edge or traceability edge with rationale;
+* no DAG edge is invented without source or inference rationale;
+* every DAG edge endpoint has a deterministic execution tie or a justified `TBD`;
+* no primary DAG cycle remains unless condensed SCC DAG is used;
+* topological layers are valid;
+* every machine-evaluable gate has incoming prerequisite edges where source requires them;
+* every edge has direction rationale;
+* every open ambiguity is recorded.
+
+---
+
+## Output Requirements
+
+Output only the final Markdown content for:
+
+```text
+.agents/eval-dag.md
+```
+
+Do not include commentary.
+Do not include a preface.
+Do not include hidden analysis.
+Do not include a separate explanation.
+Do not wrap the entire output in code fences.
+
+Use the structure below.
+
+---
+
+# Eval Dependency/Hypothesis DAG
+
+## Purpose of This Document
+
+This document creates a directed acyclic graph from:
+
+```text
+.agents/eval-architectural-catalog.md
+.agents/eval-dependency-inventory.md
+.agents/eval-hypothesis-inventory.md
+```
+
+It represents execution-tied prerequisite, evidence, validation, falsifiability, and machine-gate relationships among evaluation dependencies and hypotheses.
+
+It does not define implementation design, architecture, roadmap, epics, milestones, repository structure, execution workflow, tests, evaluation results, process results, review results, release results, state labels, or non-execution artifacts.
+
+---
+
+## Source Inventory
+
+List every source file read.
+
+| ID                  | Source File     | Source Type                                           | Included In Analysis | Notes     |
+| ------------------- | --------------- | ----------------------------------------------------- | -------------------- | --------- |
+| EVAL-DAG-SOURCE-001 | {{source_file}} | {{catalog_dependency_inventory_hypothesis_inventory}} | {{yes_no}}           | {{notes}} |
+
+---
+
+## Graph Contract
+
+Define the meaning of nodes and edges.
+
+| ID                    | Graph Element            | Definition     | Notes     |
+| --------------------- | ------------------------ | -------------- | --------- |
+| EVAL-DAG-CONTRACT-001 | Execution-tied evaluation DAG | {{definition}} | {{notes}} |
+| EVAL-DAG-CONTRACT-002 | Node                     | {{definition}} | {{notes}} |
+| EVAL-DAG-CONTRACT-003 | Edge                     | {{definition}} | {{notes}} |
+| EVAL-DAG-CONTRACT-004 | Topological layer        | {{definition}} | {{notes}} |
+| EVAL-DAG-CONTRACT-005 | Architectural plane      | {{definition}} | {{notes}} |
+
+---
+
+## Deterministic Execution Tie
+
+Define the positive inclusion test used before DAG construction.
+
+| ID | Inclusion Requirement | Definition | Included In Primary DAG |
+| --- | --- | --- | --- |
+| EVAL-DAG-EXEC-TIE-001 | Execution input | Source identifies an executable eval input, fixture, manifest, selector, or runner input. | Yes |
+| EVAL-DAG-EXEC-TIE-002 | Execution behavior or state | Source identifies runtime behavior, runtime state, evaluator behavior, provider behavior, or machine-enforced contract. | Yes |
+| EVAL-DAG-EXEC-TIE-003 | Machine-readable output or evidence | Source identifies generated eval output, persisted evidence, sidecar, evidence store, validation record, scan output, replay record, fingerprint, comparison artifact, or report schema. | Yes |
+| EVAL-DAG-EXEC-TIE-004 | Machine-evaluable gate IO | Source identifies a gate with machine-readable inputs and outputs. | Yes |
+| EVAL-DAG-EXEC-TIE-005 | Ambiguous execution tie | Source suggests an execution tie but the exact machine input, output, state, or check is unclear. | TBD |
+
+---
+
+## DAG Construction Method
+
+Describe how the DAG was constructed.
+
+| ID                  | Method Rule     | Meaning     | Applied To |
+| ------------------- | --------------- | ----------- | ---------- |
+| EVAL-DAG-METHOD-001 | {{method_rule}} | {{meaning}} | {{scope}}  |
+
+Include rules for:
+
+* source reading;
+* deterministic execution-tie confirmation;
+* node normalization;
+* group-level node creation;
+* item-level fallback nodes;
+* edge extraction;
+* edge direction;
+* traceability-only edge handling;
+* cycle detection;
+* SCC condensation if needed;
+* topological sorting.
+
+---
+
+## Node Model
+
+Define node types used in this DAG.
+
+| ID                     | Node Type  | Definition     | Created From | Included In Primary DAG |
+| ---------------------- | ---------- | -------------- | ------------ | ----------------------- |
+| EVAL-DAG-NODE-TYPE-001 | Group Node | {{definition}} | {{source}}   | {{yes_no}}              |
+| EVAL-DAG-NODE-TYPE-002 | Item Node  | {{definition}} | {{source}}   | {{yes_no_condition}}    |
+| EVAL-DAG-NODE-TYPE-003 | Gate Node  | {{definition}} | {{source}}   | {{yes_no_condition}}    |
+| EVAL-DAG-NODE-TYPE-004 | SCC Node   | {{definition}} | {{source}}   | {{yes_no_condition}}    |
+
+---
+
+## Edge Model
+
+Define edge types used in this DAG.
+
+| ID                     | Edge Type         | Direction Meaning     | Source Basis     | Included In Primary DAG   |
+| ---------------------- | ----------------- | --------------------- | ---------------- | ------------------------- |
+| EVAL-DAG-EDGE-TYPE-001 | Prerequisite      | {{direction_meaning}} | {{source_basis}} | Yes                       |
+| EVAL-DAG-EDGE-TYPE-002 | Enablement        | {{direction_meaning}} | {{source_basis}} | Yes                       |
+| EVAL-DAG-EDGE-TYPE-003 | Evidence          | {{direction_meaning}} | {{source_basis}} | Yes                       |
+| EVAL-DAG-EDGE-TYPE-004 | Validation        | {{direction_meaning}} | {{source_basis}} | Yes                       |
+| EVAL-DAG-EDGE-TYPE-005 | Falsification     | {{direction_meaning}} | {{source_basis}} | Yes                       |
+| EVAL-DAG-EDGE-TYPE-006 | Gate              | {{direction_meaning}} | {{source_basis}} | Yes                       |
+| EVAL-DAG-EDGE-TYPE-007 | Conditional       | {{direction_meaning}} | {{source_basis}} | Yes, if condition applies |
+| EVAL-DAG-EDGE-TYPE-008 | Traceability Only | {{direction_meaning}} | {{source_basis}} | No                        |
+
+---
+
+## Executive Summary
+
+Summarize the DAG.
+
+| ID                   | Summary Area                       | Finding               |
+| -------------------- | ---------------------------------- | --------------------- |
+| EVAL-DAG-SUMMARY-001 | Total source files analyzed        | {{count_and_notes}}   |
+| EVAL-DAG-SUMMARY-002 | Total execution-tied dependency items represented | {{count}} |
+| EVAL-DAG-SUMMARY-003 | Total execution-tied hypothesis items represented | {{count}} |
+| EVAL-DAG-SUMMARY-004 | Total primary DAG nodes            | {{count}}             |
+| EVAL-DAG-SUMMARY-005 | Total primary DAG edges            | {{count}}             |
+| EVAL-DAG-SUMMARY-006 | Total machine gate nodes           | {{count}}             |
+| EVAL-DAG-SUMMARY-007 | Total topological layers           | {{count}}             |
+| EVAL-DAG-SUMMARY-008 | Cycles detected                    | {{none_or_summary}}   |
+| EVAL-DAG-SUMMARY-009 | Condensed SCC DAG required         | {{yes_no_and_reason}} |
+| EVAL-DAG-SUMMARY-010 | Open DAG questions                 | {{summary_or_none}}   |
+
+If repository satisfaction assessment was not requested, state:
+
+```text
+Repository satisfaction state was not assessed.
+```
+
+---
+
+## Primary DAG Node Index
+
+List every primary DAG node.
+
+| DAG Node ID       | Node Type     | Source Group / Item      | Label     | Architectural Plane | Contains Execution-Tied Dependency Items | Contains Execution-Tied Hypothesis Items | Execution Tie Basis | Gate Relevance   | Node State | Notes     |
+| ----------------- | ------------- | ------------------------ | --------- | ------------------- | ------------------------------------------------ | ------------------------------------------------ | ------------------------ | ---------------- | ---------- | --------- |
+| EVAL-DAG-NODE-001 | {{node_type}} | {{source_group_or_item}} | {{label}} | {{plane_or_TBD}}    | {{dependency_item_ids}}                          | {{hypothesis_item_ids}}                          | {{execution_tie_basis}} | {{gate_or_none}} | {{node_state}} | {{notes}} |
+
+---
+
+## Item-to-Node Mapping
+
+Show every represented source item and its DAG node.
+
+| ID                    | Source Item ID     | Source Item Type             | Source File     | Execution Tie Basis | Assigned DAG Node | Source Group      | Coverage State         | Notes |
+| --------------------- | ------------------ | ---------------------------- | --------------- | ----------------------- | ----------------- | ----------------- | ----------------------- | ----------------------- |
+| EVAL-DAG-ITEM-MAP-001 | {{source_item_id}} | {{dependency_or_hypothesis}} | {{source_file}} | {{execution_tie_basis}}      | {{dag_node_id_or_none}} | {{group_or_none}} | {{covered_partial_TBD}} | {{notes_or_none}}      |
+
+Coverage state values:
+
+* Covered
+* Partially Covered
+* TBD
+* Conflict
+
+Do not mark an item `Covered` unless it is execution-tied and represented in exactly one DAG node.
+
+
+---
+
+## Primary DAG Edge Index
+
+List every edge included in the primary DAG.
+
+| DAG Edge ID       | Source Node     | Target Node     | Edge Type     | Source Item(s)   | Target Item(s)   | Direction Rationale | Source Basis     | Conditionality        | Execution Tie Basis | Notes     |
+| ----------------- | --------------- | --------------- | ------------- | ---------------- | ---------------- | ------------------- | ---------------- | --------------------- | ------------------------ | --------- |
+| EVAL-DAG-EDGE-001 | {{source_node}} | {{target_node}} | {{edge_type}} | {{source_items}} | {{target_items}} | {{rationale}}       | {{source_basis}} | {{condition_or_none}} | {{execution_tie_basis}} | {{notes}} |
+
+---
+
+## Item-Level Edge Index
+
+List item-to-item edges underlying primary DAG edges.
+
+| Item Edge ID           | Source Item     | Target Item     | Source Node     | Target Node     | Edge Type     | Included In Primary DAG | Execution Tie Basis | Source Basis     | Notes     |
+| ---------------------- | --------------- | --------------- | --------------- | --------------- | ------------- | ----------------------- | ---------------- | ---------------- | --------- |
+| EVAL-DAG-ITEM-EDGE-001 | {{source_item}} | {{target_item}} | {{source_node}} | {{target_node}} | {{edge_type}} | {{yes_no}}              | {{reason_or_none}} | {{source_basis}} | {{notes}} |
+
+---
+
+## Traceability-Only Edges
+
+List traceability-only edges represented outside prerequisite topology.
+
+| Trace Edge ID      | Source Item     | Target Item     | Trace Meaning     | Omission Rationale  | Source Basis     |
+| ------------------ | --------------- | --------------- | ----------------- | -------------------- | ---------------- |
+| EVAL-DAG-TRACE-001 | {{source_item}} | {{target_item}} | {{trace_meaning}} | {{why_not_DAG_edge}} | {{source_basis}} |
+
+If no traceability-only edges were represented outside the primary DAG, write:
+
+```text
+No traceability-only edges were represented outside the primary DAG.
+```
+
+---
+
+## Topological Layers
+
+List nodes by DAG layer.
+
+| Layer | DAG Nodes    | Architectural Planes Represented | Gate Relevance    | Downstream Enabled Nodes / Gates | Notes     |
+| ----- | ------------ | -------------------------------- | ----------------- | -------------------------------- | --------- |
+| 0     | {{node_ids}} | {{planes}}                       | {{gates_or_none}} | {{enabled_nodes_or_gates}}       | {{notes}} |
+| 1     | {{node_ids}} | {{planes}}                       | {{gates_or_none}} | {{enabled_nodes_or_gates}}       | {{notes}} |
+
+Clarify:
+
+```text
+Topological layers express prerequisite depth, not horizontal architectural plane.
+```
+
+---
+
+## Architectural Plane View
+
+Show DAG nodes by horizontal architectural plane.
+
+| Plane          | DAG Nodes    | Incoming Edge Count | Outgoing Edge Count | Topological Layers Present | Notes     |
+| -------------- | ------------ | ------------------- | ------------------- | -------------------------- | --------- |
+| {{plane_name}} | {{node_ids}} | {{count}}           | {{count}}           | {{layers}}                 | {{notes}} |
+
+---
+
+## Gate View
+
+Show nodes required for each source-defined machine-evaluable gate.
+
+| Gate Node / Gate | Required Upstream Nodes | Required Upstream Edges | Missing Would Mean | Source Basis     |
+| ---------------- | ----------------------- | ----------------------- | ------------------ | ---------------- |
+| {{gate}}         | {{node_ids}}            | {{edge_ids}}            | {{effect}}         | {{source_basis}} |
+
+If no machine-evaluable gates are defined by the source inventories, write:
+
+```text
+No source-defined machine-evaluable gate nodes are required by the inventories.
+```
+
+---
+
+## Cycle Analysis
+
+Report cycle findings.
+
+| ID                         | Cycle Area            | Finding             |
+| -------------------------- | --------------------- | ------------------- |
+| EVAL-DAG-CYCLE-SUMMARY-001 | Item-level raw graph  | {{cycle_finding}}    |
+| EVAL-DAG-CYCLE-SUMMARY-002 | Group-level raw graph | {{cycle_finding}}    |
+| EVAL-DAG-CYCLE-SUMMARY-003 | Gate-augmented graph  | {{cycle_finding}}    |
+| EVAL-DAG-CYCLE-SUMMARY-004 | Condensed SCC DAG     | {{required_or_not}} |
+
+If cycles exist, list them.
+
+| Cycle ID           | Nodes Involved | Edges Involved | Cycle Cause | Source Basis     | Resolution / Handling |
+| ------------------ | -------------- | -------------- | ----------- | ---------------- | --------------------- |
+| EVAL-DAG-CYCLE-001 | {{nodes}}      | {{edges}}      | {{cause}}   | {{source_basis}} | {{handling}}          |
+
+If no cycles exist, write:
+
+```text
+No cycles were detected in the primary DAG.
+```
+
+---
+
+## Condensed SCC DAG
+
+Use this section only if unresolved cycles required SCC condensation.
+
+| SCC Node ID      | Member Nodes     | Cycle Summary | Outgoing Edges | Incoming Edges | Planning Interpretation |
+| ---------------- | ---------------- | ------------- | -------------- | -------------- | ----------------------- |
+| EVAL-DAG-SCC-001 | {{member_nodes}} | {{summary}}   | {{edge_ids}}   | {{edge_ids}}   | {{interpretation}}      |
+
+If no SCC condensation was required, write:
+
+```text
+No condensed SCC DAG is required.
+```
+
+---
+
+## Mermaid DAG
+
+Provide a Mermaid graph for the primary DAG when reasonably sized.
+
+```mermaid
+flowchart TD
+  {{mermaid_nodes_and_edges}}
+```
+
+If the graph is too large, provide a summarized group-level graph and state that the full edge index is authoritative.
+
+---
+
+## DOT DAG
+
+Provide a DOT graph for the primary DAG.
+
+```dot
+digraph EvalDAG {{
+  {{dot_nodes_and_edges}}
+}}
+```
+
+If the graph is too large, provide a summarized group-level graph and state that the full edge index is authoritative.
+
+---
+
+## DAG Validation Matrix
+
+Validate DAG constraints.
+
+| Validation Check                                                | Result            | Evidence / Notes |
+| --------------------------------------------------------------- | ----------------- | ---------------- |
+| Every represented dependency item has a deterministic execution tie before node creation | {{pass_fail_TBD}} | {{notes}} |
+| Every represented hypothesis item has a deterministic execution tie before node creation | {{pass_fail_TBD}} | {{notes}} |
+| Every represented dependency item appears in exactly one DAG node | {{pass_fail_TBD}} | {{notes}}        |
+| Every represented hypothesis item appears in exactly one DAG node | {{pass_fail_TBD}} | {{notes}}        |
+| Every DAG edge has source basis                                 | {{pass_fail_TBD}} | {{notes}}        |
+| Every DAG edge has direction rationale                          | {{pass_fail_TBD}} | {{notes}}        |
+| Every DAG edge endpoint is execution-tied or a justified TBD | {{pass_fail_TBD}} | {{notes}} |
+| Primary DAG is acyclic                                          | {{pass_fail_TBD}} | {{notes}}        |
+| Topological layers are valid                                    | {{pass_fail_TBD}} | {{notes}}        |
+| Gate nodes are source-derived and machine-evaluable             | {{pass_fail_TBD}} | {{notes}}        |
+| Traceability-only edges are omitted from prerequisite topology | {{pass_fail_TBD}} | {{notes}}        |
+| Every represented edge has a deterministic execution tie | {{pass_fail_TBD}} | {{notes}} |
+| Cycles are reported or absent                                   | {{pass_fail_TBD}} | {{notes}}        |
+
+---
+
+## Represented Source Coverage Matrix
+
+Show coverage for represented source items.
+
+| ID                    | Source File     | Source Item ID     | Source Item Type | Execution Tie Basis | DAG Node    | DAG Edges            | Coverage State          | Notes |
+| --------------------- | --------------- | ------------------ | ---------------- | ----------------------- | ----------- | -------------------- | ----------------------- | ----------------------- |
+| EVAL-DAG-COVERAGE-001 | {{source_file}} | {{source_item_id}} | {{type}}         | {{execution_tie_basis}}      | {{node_id_or_none}} | {{edge_ids_or_none}} | {{covered_partial_TBD}} | {{notes_or_none}}      |
+
+---
+
+## Open DAG Questions
+
+List unresolved DAG questions.
+
+| ID                    | Question     | Affected Nodes      | Affected Edges      | Why It Matters     | Recommended Handling     |
+| --------------------- | ------------ | ------------------- | ------------------- | ------------------ | ------------------------ |
+| EVAL-DAG-QUESTION-001 | {{question}} | {{node_ids_or_TBD}} | {{edge_ids_or_TBD}} | {{why_it_matters}} | {{recommended_handling}} |
+
+If no unresolved DAG questions are known, write:
+
+```text
+No unresolved DAG questions are currently known.
+```
+
+---
+
+## DAG Anti-Patterns To Avoid
+
+List anti-patterns relevant to DAG interpretation.
+
+| ID                       | Anti-Pattern                                                    | Why It Is Harmful                                                                 | Corrective Principle                                                                   |
+| ------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| EVAL-DAG-ANTIPATTERN-001 | Treating traceability as prerequisite topology.                 | It can introduce false cycles or misleading ordering.                             | Include traceability-only relationships in the traceability view, not the primary DAG. |
+| EVAL-DAG-ANTIPATTERN-002 | Dropping true edges to force acyclicity.                        | It creates a cleaner graph by hiding required relationships.                      | Report cycles or use SCC condensation rather than deleting source-grounded edges.      |
+| EVAL-DAG-ANTIPATTERN-003 | Treating DAG order as implementation order.                     | The DAG represents execution-tied evaluation prerequisites, not design or execution sequencing. | Use the DAG to inform implementation, audit, and test-design planning, not to prescribe architecture. |
+| EVAL-DAG-ANTIPATTERN-004 | Treating horizontal architectural planes as topological layers. | Plane is architectural concern; layer is prerequisite depth.                      | Preserve both views separately.                                                        |
+| EVAL-DAG-ANTIPATTERN-005 | Creating synthetic nodes without justification.                 | Synthetic nodes can hide missing source meaning.                                  | Label and justify every synthetic gate or SCC node.                                    |
+| EVAL-DAG-ANTIPATTERN-006 | Hiding cycles as open questions only.                           | Cycles materially affect DAG validity.                                            | Include explicit cycle analysis and SCC handling.                                      |
+| EVAL-DAG-ANTIPATTERN-007 | Inventing edges from topical similarity.                        | Similar items may not depend on or validate each other.                           | Only source-derived or logically necessary relationships become edges.                 |
+| EVAL-DAG-ANTIPATTERN-008 | Ignoring invalid catalog groups.                                | Invalid groups can create self-edges or hide dependency/falsifiability conflicts. | Validate catalog groups before using them as DAG nodes.                                |
+| EVAL-DAG-ANTIPATTERN-010 | Inventing execution artifacts for source material without deterministic IO. | It fabricates evidence that no executable source item requires. | Represent only source-explicit execution-tied facts; otherwise leave the material out. |
+
+Add project-specific anti-patterns only if present in the source inventories.
+
+---
+
+## Completeness Checklist
+
+Before finalizing this DAG, verify:
+
+* Every required source file was considered.
+* Every represented source file appears in the Source Inventory.
+* Every represented dependency item has a deterministic execution tie before node creation.
+* Every represented hypothesis item has a deterministic execution tie before node creation.
+* Every represented dependency item is mapped to exactly one DAG node.
+* Every represented hypothesis item is mapped to exactly one DAG node.
+* Mixed items include only source-explicit execution-tied kernels.
+* No substitute execution artifact is invented for residual prose-only source meaning.
+* Invalid catalog groups are reported.
+* Every source-derived prerequisite edge is represented in the primary DAG or in the traceability-only view.
+* Every source-derived validation edge is represented in the primary DAG or in the traceability-only view.
+* Every source-derived falsification edge is represented in the primary DAG or in the traceability-only view.
+* Every source-derived machine-gate dependency is represented.
+* Every edge has a direction rationale.
+* Every edge has source basis.
+* Every primary DAG edge endpoint is execution-tied or a justified `TBD`.
+* No primary DAG cycle remains unless SCC condensation is used.
+* Every cycle is reported.
+* Topological layers are valid.
+* Horizontal architectural planes are preserved separately from topological layers.
+* Mermaid and DOT graph views are included or summarized with rationale.
+* Traceability-only edges are listed separately.
+* Open questions are recorded rather than resolved by invention.
+* Repository satisfaction state is not assessed unless explicitly requested.
+* No roadmap appears.
+* No actual epics appear.
+* No actual milestones appear.
+* No implementation tasks appear.
+* No architecture is invented.
+* No tests are written.
+* No evaluation result, process result, review result, release result, state label, final realization assertion, or non-execution artifact is asserted.
+* The DAG is detailed enough to support downstream implementation, audit, test-design, and remediation planning without creating non-execution artifacts.

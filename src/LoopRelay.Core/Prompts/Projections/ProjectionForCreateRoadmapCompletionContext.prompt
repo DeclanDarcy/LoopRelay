@@ -1,0 +1,653 @@
+<PROJECT_CONTEXT>
+{projectContext}
+</PROJECT_CONTEXT>
+
+# Create Project Context Projection For Create Roadmap Completion Context
+
+## Role
+
+You are a projection compiler for a projection-based AI engineering loop.
+
+Your job is to create a projection to be consumed by a later prompt:
+
+CreateRoadmapCompletionContext
+
+That later prompt will combine this projection with completed epic history to create:
+
+.agents/core/roadmap-completion-context.md
+
+Your job is NOT to create the roadmap completion context.
+
+Your job is to produce the stable strategic reference frame that roadmap completion context generation will use.
+
+You are given the Project Context.
+
+You must extract, preserve, and organize only the subset of the Project Context needed to reason about:
+
+- overall project strategic completion
+- roadmap completion audits
+- roadmap revision
+- next epic selection
+- epic realignment
+- epic retirement
+- completion evaluation
+- strategic drift detection
+
+This is a projection, not a summary.
+
+---
+
+## Core Objective
+
+Create a deterministic, task-specific projection of the Project Context that answers:
+
+What desired strategic future state should completed epic history be compared against?
+
+The projection must define the intended strategic target.
+
+It must not describe current progress.
+
+It must not include completed work.
+
+It must not infer implementation state.
+
+It must not update the roadmap.
+
+It must not choose the next epic.
+
+It must preserve only the Project Context semantics required to later synthesize roadmap completion context.
+
+---
+
+## Consumer
+
+This projection will be consumed by:
+
+CreateRoadmapCompletionContext
+
+That downstream prompt will receive:
+
+1. This projection
+2. Completed epic history
+
+The downstream prompt will use them to synthesize the project’s current strategic completion state.
+
+Therefore this projection must provide the **desired strategic state**, while the downstream roadmap completion context will derive the **current strategic state**.
+
+Conceptually:
+
+Desired Strategic State
+minus
+Completed Epic Evidence
+equals
+Remaining Strategic Work
+
+This projection defines only the Desired Strategic State.
+
+---
+
+## Authority Rules
+
+Treat the Project Context as the sole authority.
+
+Do not reinterpret it.
+
+Do not extend it.
+
+Do not make it more practical.
+
+Do not make it more conventional.
+
+Do not infer missing intent.
+
+Do not invent roadmap structure.
+
+Do not convert implementation details into strategic intent.
+
+If the Core contains ambiguity, preserve the ambiguity explicitly as a projection limitation or strategic question.
+
+If the Core contains conflicting guidance, preserve the conflict and identify the conflicting source items.
+
+If the Core contains assertion IDs, retain them.
+
+If the Core does not contain assertion IDs, create stable projection-local IDs using the following format:
+
+- INTENT-001
+- INVARIANT-001
+- CAPABILITY-001
+- STRUCTURE-001
+- EVAL-001
+- AUTHORITY-001
+- TERM-001
+- QUESTION-001
+
+Projection-local IDs must not pretend to be canonical Core IDs.
+
+---
+
+## Projection Principles
+
+### 1. Projection, not summarization
+
+Do not summarize the Project Context generally.
+
+Select the exact semantic slice required for roadmap completion reasoning.
+
+The projection should be smaller than the Core if the Core contains content unrelated to this task.
+
+The projection should preserve semantics, not prose.
+
+---
+
+### 2. Desired state, not current state
+
+The projection must describe what the project is intended to become.
+
+It must not describe:
+
+- what has already been completed
+- what is currently implemented
+- what is currently missing
+- which epic should come next
+- which epic is already complete
+- whether the codebase is aligned
+
+Those are downstream determinations.
+
+---
+
+### 3. Strategic, not operational
+
+Retain:
+
+- purpose
+- intent anchors
+- invariant constraints
+- desired capabilities
+- strategic structure
+- completion criteria
+- alignment criteria
+- authority rules
+- canonical vocabulary
+
+Exclude:
+
+- implementation instructions
+- execution workflow
+- developer commands
+- tool usage
+- operational context
+- prompt engineering instructions
+- detailed milestone plans
+- codebase facts
+- completed epic history
+
+---
+
+### 4. Capability-oriented
+
+The projection should expose the desired capability model of the project.
+
+Prefer capability statements such as:
+
+- The system must enable...
+- The project should eventually support...
+- The intended user outcome is...
+- A completed roadmap should satisfy...
+
+Avoid prose that merely restates the vision without making future completion evaluable.
+
+---
+
+### 5. Evaluation-aware
+
+The projection must preserve how future work should be judged.
+
+It should make it possible for the downstream prompt to classify completed epic evidence as:
+
+- Realized
+- Partially Realized
+- Not Yet Addressed
+- Misaligned / Drift Suspected
+- Evidence Insufficient
+
+---
+
+### 6. Decision-oriented
+
+Retain a Core item only if it helps one or more of the following:
+
+- determine whether a strategic capability is complete
+- determine whether completed epics introduced drift
+- determine whether future work should be prioritized
+- determine whether an epic should be realigned
+- determine whether an epic should be retired
+- determine whether a capability gap remains
+- determine whether completed work created a durable commitment
+
+If a Core item does not materially improve those decisions, exclude it.
+
+---
+
+### 7. Preserve canonical vocabulary
+
+Use the Project Context’s exact terminology for load-bearing concepts.
+
+Do not rename concepts.
+
+Do not replace domain terms with synonyms.
+
+Do not simplify terms in a way that changes meaning.
+
+If a term is load-bearing, include it in the canonical vocabulary section.
+
+---
+
+### 8. Deterministic output
+
+The same Project Context should produce effectively the same projection every time.
+
+Avoid creative phrasing.
+
+Avoid speculative interpretation.
+
+Avoid rhetorical style.
+
+Use stable structure and concise assertions.
+
+---
+
+## Inclusion Criteria
+
+Retain Project Context content that belongs to one of these categories.
+
+### A. Intent and Purpose Anchors
+
+Retain statements that define:
+
+- why the project exists
+- the durable problem being solved
+- the intended future state
+- the intended user or stakeholder outcome
+- what successful completion should ultimately make true
+
+### B. Invariants and Constraints
+
+Retain statements that define:
+
+- what must never be violated
+- hard architectural constraints
+- compatibility constraints
+- semantic constraints
+- product constraints
+- ethical, safety, privacy, or legal constraints
+- non-negotiable boundaries
+
+### C. Desired Capability Model
+
+Retain statements that define:
+
+- capabilities the completed project should have
+- durable system behaviors
+- user-facing capabilities
+- platform capabilities
+- strategic product abilities
+- core workflows the project must eventually support
+
+### D. Strategic Structure
+
+Retain statements that define:
+
+- major capability areas
+- roadmap-level structure
+- epic-level conceptual groupings
+- dependency relationships between strategic capabilities
+- sequencing constraints that affect roadmap completion
+
+Do not include detailed milestone breakdowns unless they are part of the Core’s durable strategic structure.
+
+### E. Evaluation Criteria
+
+Retain statements that define:
+
+- what counts as completion
+- what counts as alignment
+- what counts as strategic progress
+- what counts as drift
+- what counts as sufficient quality
+- what counts as acceptable convergence
+
+### F. Decision Authority Rules
+
+Retain statements that define:
+
+- how conflicts are resolved
+- which guidance dominates
+- what completed work may and may not redefine
+- when future work should be retired, reimagined, or escalated
+- what authority completed epics do or do not have
+
+### G. Canonical Vocabulary
+
+Retain terms that must be used consistently by:
+
+- roadmap completion context
+- roadmap audits
+- next-epic selection
+- epic realignment
+- completion evaluation
+
+---
+
+## Exclusion Criteria
+
+Exclude Project Context content that belongs to one of these categories unless it is explicitly required for strategic completion reasoning.
+
+Exclude:
+
+- implementation details
+- execution instructions
+- tool use instructions
+- coding conventions
+- operational workflow
+- prompt templates
+- agent behavior details
+- detailed ADR history
+- detailed governance procedure
+- full reasoning architecture
+- belief revision mechanics
+- epistemic runtime mechanics
+- research citations
+- rationale essays
+- historical explanation
+- completed epic records
+- current roadmap progress
+- codebase status
+- task-level milestones
+- temporary assumptions
+- implementation plans
+- commands or file paths
+
+If excluded information seems potentially relevant later, mention it only as:
+
+Projection Exclusion Note
+
+Do not include the excluded content itself.
+
+---
+
+## Required Internal Process
+
+Follow this process internally before writing the projection.
+
+### Step 1 — Identify candidate Core assertions
+
+Extract all Core statements that appear relevant to strategic completion reasoning.
+
+Classify each as:
+
+- Intent
+- Invariant
+- Desired Capability
+- Strategic Structure
+- Evaluation Criterion
+- Decision Authority
+- Vocabulary
+- Exclude
+
+### Step 2 — Apply admission test
+
+For each candidate, ask:
+
+1. Does this materially affect roadmap completion reasoning?
+2. Does this affect future roadmap revision, next-epic selection, or completion evaluation?
+3. Is this non-regenerable from completed epics or codebase state?
+4. Is this stable enough to serve as a reference frame?
+
+Retain only candidates that pass.
+
+### Step 3 — Normalize to projection vocabulary
+
+Preserve canonical terms from the Core.
+
+If the Core has overlapping terms, select the term with the strongest authority and note aliases only when necessary.
+
+### Step 4 — Remove operational noise
+
+Aggressively remove anything that would distract a downstream strategic synthesis agent from comparing desired state against completed epic evidence.
+
+### Step 5 — Organize into the required output structure
+
+Output only the projection Markdown.
+
+Do not include your analysis.
+
+---
+
+## Required Output
+
+Output only the full Markdown content for the projection.
+
+Do not wrap the output in commentary.
+
+Do not include prefaces.
+
+Do not include explanations after the document.
+
+Use this exact structure.
+
+---
+
+# Roadmap Completion Projection
+
+## Purpose
+
+This projection defines the desired strategic state that completed epic history should be compared against when creating roadmap completion context.
+
+It exists to support:
+
+- roadmap completion audits
+- roadmap revision
+- next-epic selection
+- epic realignment
+- epic retirement
+- completion evaluation
+- strategic drift detection
+
+It is a projection of the Project Context, not a summary of project history.
+
+## Authority Boundary
+
+- The Project Context remains the source of authority.
+- This projection is a task-specific view of the Project Context.
+- This projection defines desired strategic state only.
+- This projection does not describe current progress.
+- This projection does not incorporate completed epic evidence.
+- This projection must not be used as a changelog, roadmap status report, or implementation summary.
+
+## Projection Metadata
+
+| Field | Value |
+|---|---|
+| Projection Name | {{projection_name_or_default}} |
+| Projection Version | {{projection_version_or_default}} |
+| Projection Date | {{projection_date_or_default}} |
+| Source Core Version | {{core_version_or_unknown}} |
+| Intended Consumer | CreateRoadmapCompletionContext |
+| Projection Family | Roadmap Completion / Strategic State |
+
+## Source Coverage
+
+Briefly describe what parts of the Project Context were retained.
+
+Use bullets.
+
+Then briefly describe what parts were intentionally excluded.
+
+Use bullets.
+
+## Intent and Purpose Anchors
+
+List the retained intent anchors.
+
+| ID | Intent / Purpose Anchor | Source Reference | Why It Matters for Roadmap Completion |
+|---|---|---|---|
+
+Rules:
+
+- Use exact Core terminology.
+- Keep each anchor concise.
+- Include only anchors that affect roadmap completion reasoning.
+
+## Invariants and Constraints
+
+List all retained constraints future completed work must respect.
+
+| ID | Invariant or Constraint | Source Reference | Completion Implication |
+|---|---|---|---|
+
+Completion Implication should explain how the constraint affects evaluation of completed epics.
+
+Examples:
+
+- completed work that violates this should be treated as drift
+- future work must preserve this
+- roadmap gaps cannot be closed by violating this constraint
+
+## Desired Capability Model
+
+Define the desired strategic capabilities of the project.
+
+| ID | Desired Capability | Project Context Rationale | Completion Signal | Non-Completion Signal |
+|---|---|---|---|---|
+
+Completion Signal should describe what kind of completed epic evidence would suggest this capability is realized.
+
+Non-Completion Signal should describe what kind of evidence would suggest the capability remains absent or partial.
+
+Do not infer whether the capability is currently complete.
+
+## Strategic Structure
+
+Describe the durable roadmap-level structure implied by the Project Context.
+
+Use this table:
+
+| ID | Strategic Area | Contains / Depends On | Why It Matters |
+|---|---|---|---|
+
+Rules:
+
+- Include only durable strategic structure.
+- Do not include detailed milestones unless they are part of the Core’s durable structure.
+- Do not include current completion status.
+
+## Evaluation Criteria
+
+Define how completed epic evidence should be judged.
+
+| ID | Criterion | Applies To | Evidence Required | Failure / Drift Signal |
+|---|---|---|---|---|
+
+Applies To should be one of:
+
+- Capability Completion
+- Strategic Alignment
+- Constraint Preservation
+- Roadmap Progress
+- Epic Retirement
+- Drift Detection
+- Other
+
+## Decision Authority Rules
+
+List the decision rules relevant to roadmap completion synthesis.
+
+| ID | Rule | Applies When | Required Behavior |
+|---|---|---|---|
+
+Include rules for:
+
+- completed epics as evidence, not authority
+- projection / Core authority over completed history
+- conflict handling
+- drift detection
+- retirement caution
+- uncertainty handling
+- future roadmap implications
+
+## Canonical Vocabulary
+
+List load-bearing terms that downstream prompts must preserve.
+
+| Term | Definition | Notes / Banned Synonyms |
+|---|---|---|
+
+Rules:
+
+- Include only terms relevant to roadmap completion reasoning.
+- Do not create unnecessary glossary entries.
+- Use Core definitions where available.
+- If a term is undefined in the Core but required for this projection, mark definition as “Projection-local; confirm against Core if promoted.”
+
+## Projection Exclusion Notes
+
+List important Core content intentionally excluded from this projection.
+
+| Excluded Content Type | Reason Excluded | Where It Should Be Used Instead |
+|---|---|---|
+
+Examples:
+
+- implementation guidance
+- operational context
+- detailed governance process
+- historical rationale
+- milestone detail
+- codebase facts
+
+## Known Projection Limitations
+
+List ambiguities or missing Core information that may limit roadmap completion synthesis.
+
+| Limitation | Why It Matters | Recommended Handling |
+|---|---|---|
+
+Examples:
+
+- desired capabilities are implicit rather than explicit
+- evaluation criteria are underspecified
+- strategic structure is incomplete
+- canonical vocabulary is ambiguous
+- constraints are not clearly prioritized
+
+Do not invent missing information to fix these limitations.
+
+## Downstream Use Instructions
+
+When this projection is used by CreateRoadmapCompletionContext:
+
+- Treat this projection as the desired strategic state.
+- Treat completed epics as evidence of current strategic state.
+- Do not let completed epic history redefine this projection.
+- Compress completed epic history into realized capabilities, commitments, constraints, gaps, and drift signals.
+- Preserve the canonical vocabulary in this projection.
+- Mark evidence as insufficient when completed epic records do not support a claim.
+- Do not infer codebase reality unless completed epic evidence includes implementation evidence.
+- Do not select the next epic.
+- Do not rewrite the roadmap.
+- Do not modify this projection.
+
+## Projection Integrity Checklist
+
+Before finalizing, verify:
+
+- The projection contains desired state only.
+- No completed epic history is included.
+- No implementation state is inferred.
+- Every retained statement materially supports roadmap completion reasoning.
+- Every major retained statement traces to the Project Context or is clearly marked projection-local.
+- Canonical vocabulary is preserved.
+- Excluded operational and implementation details are not present.
+- The projection is compact enough to be passed into CreateRoadmapCompletionContext.
+- The projection can serve as a stable reference frame for comparing completed epic evidence.
