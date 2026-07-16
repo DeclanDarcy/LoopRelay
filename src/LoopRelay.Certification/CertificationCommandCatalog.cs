@@ -34,6 +34,7 @@ public static class CertificationCommandCatalog
     public const string TraditionalFullChain = "traditional-full-chain";
     public const string EvalFullChain = "eval-full-chain";
     public const string ReleaseGate = "release-gate";
+    public const string DiagnoseAttempt = "diagnose-attempt";
 
     public static IReadOnlyList<CertificationCommandDefinition> Commands { get; } =
     [
@@ -53,6 +54,7 @@ public static class CertificationCommandCatalog
         new(FailureOracleMatrix, "Audit maintained failure classes, recovery coverage, oracle controls, and governance.", CertificationCommandKind.Deterministic, false, false, "failure-oracle-matrix.latest.json"),
         new(TraditionalFullChain, "Run the TraditionalRoadmap-to-Plan-to-Execute full chain.", CertificationCommandKind.Live, true, true, "traditional-full-chain.latest.json"),
         new(EvalFullChain, "Run the EvalRoadmap-to-Plan-to-Execute full chain.", CertificationCommandKind.Live, true, true, "eval-full-chain.latest.json"),
+        new(DiagnoseAttempt, "Diagnose an already-retained failed attempt without rerunning its fixture.", CertificationCommandKind.Live, false, true, null),
         new(ReleaseGate, "Evaluate current durable evidence without running fixture campaigns.", CertificationCommandKind.Projection, false, false, "release-gate.latest.json"),
     ];
 

@@ -83,7 +83,11 @@ internal sealed class SessionTelemetryRecorder(
                 inputWait?.Status,
                 inputWait?.EstimatorVersion,
                 providerThreadId,
-                result.ProviderTurnId);
+                result.ProviderTurnId,
+                CertificationInvocationId: Environment.GetEnvironmentVariable(
+                    "LOOPRELAY_CERTIFICATION_INVOCATION_ID"),
+                InvocationRole: Environment.GetEnvironmentVariable(
+                    "LOOPRELAY_CERTIFICATION_INVOCATION_ROLE"));
 
             _sink.Append(record);
         }

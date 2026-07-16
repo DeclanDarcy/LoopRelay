@@ -97,6 +97,32 @@ public class SessionTelemetryRecorderTests
     }
 
     [Fact]
+    public async Task RecordTurn_CarriesCertificationInvocationIdentityFromTheProcessBoundary()
+    {
+        string? priorId = Environment.GetEnvironmentVariable("LOOPRELAY_CERTIFICATION_INVOCATION_ID");
+        string? priorRole = Environment.GetEnvironmentVariable("LOOPRELAY_CERTIFICATION_INVOCATION_ROLE");
+        try
+        {
+            Environment.SetEnvironmentVariable("LOOPRELAY_CERTIFICATION_INVOCATION_ID", "cert-invocation-1");
+            Environment.SetEnvironmentVariable("LOOPRELAY_CERTIFICATION_INVOCATION_ROLE", "product");
+            var k = New();
+
+            await k.Recorder.RecordTurnAsync(
+                "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
+                DateTimeOffset.UnixEpoch, "/cached.jsonl", Turn(), inputWait: null, CancellationToken.None);
+
+            SessionTelemetryRecord record = Assert.Single(k.Sink.Records);
+            Assert.Equal("cert-invocation-1", record.CertificationInvocationId);
+            Assert.Equal("product", record.InvocationRole);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("LOOPRELAY_CERTIFICATION_INVOCATION_ID", priorId);
+            Environment.SetEnvironmentVariable("LOOPRELAY_CERTIFICATION_INVOCATION_ROLE", priorRole);
+        }
+    }
+
+    [Fact]
     public async Task RecordTurn_WhenPostProbeUnavailable_WritesNullCapacities()
     {
         var k = New();

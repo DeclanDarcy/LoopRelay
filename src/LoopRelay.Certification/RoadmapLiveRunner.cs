@@ -13,7 +13,7 @@ using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Certification;
 
-public sealed class RoadmapLiveRunner
+public sealed class RoadmapLiveRunner(ICertificationFailureDiagnoser? failureDiagnoser = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
@@ -31,6 +31,7 @@ public sealed class RoadmapLiveRunner
         string repositoryPath = Path.Combine(root, "repository");
         string codexHome = Path.Combine(root, "codex-home");
         Directory.CreateDirectory(codexHome);
+        Directory.CreateDirectory(repositoryPath);
         File.Copy(authFile, Path.Combine(codexHome, "auth.json"));
         string? priorHome = Environment.GetEnvironmentVariable("CODEX_HOME");
         string? priorExecutable = Environment.GetEnvironmentVariable("CODEX_EXECUTABLE");
@@ -47,6 +48,8 @@ public sealed class RoadmapLiveRunner
         var evidence = new List<string>();
         string version = "unknown";
         string schema = "unknown";
+        string? failedInvocationId = null;
+        string? failedTransition = null;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -57,7 +60,6 @@ public sealed class RoadmapLiveRunner
                 return await Finish(CertificationClassification.UnsupportedCapability);
             }
 
-            Directory.CreateDirectory(repositoryPath);
             await SeedAsync(repositoryPath, traditional, cancellationToken);
             await InitializeGitAsync(
                 repositoryPath,
@@ -121,6 +123,8 @@ public sealed class RoadmapLiveRunner
             foreach (string transition in expected)
             {
                 ProcessResult run = await RunCliAsync(cliPath, repositoryPath, [command], cancellationToken);
+                failedInvocationId = run.CertificationInvocationId;
+                failedTransition = transition;
                 string? actual = ParseOutputValue(run.StandardOutput, "Transition");
                 bool completed = run.ExitCode == 0 && actual == transition;
                 transitions.Add(new ExecuteTransitionCaseResult(
@@ -197,7 +201,8 @@ public sealed class RoadmapLiveRunner
             return await Finish(LiveProviderFailureClassifier.Classify(passed, codexHome),
                 universal, structural, bounded, producer, processesClean);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException &&
+            exception is not CertificationRetentionException)
         {
             evidence.AddRange([exception.GetType().Name, exception.Message]);
             return await Finish(CertificationClassification.EnvironmentFailure);
@@ -230,6 +235,9 @@ public sealed class RoadmapLiveRunner
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(
                 string.Join("\n", evidence.Concat(transitions.SelectMany(item => item.Diagnostics))), authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            string? invocationId = classification == CertificationClassification.Passed
+                ? null
+                : failedInvocationId ?? $"{campaign}-{Guid.NewGuid():N}";
             var result = new RoadmapLiveCertificationResult(
                 CertificationEvidenceSchema.Version,
                 classification,
@@ -243,7 +251,37 @@ public sealed class RoadmapLiveRunner
                 producer,
                 processesClean,
                 privacy,
-                evidence);
+                evidence,
+                invocationId);
+            if (classification != CertificationClassification.Passed)
+            {
+                bool quota = LiveProviderFailureClassifier.HasQuotaExhaustion(codexHome);
+                CertificationDiagnosisOutcome diagnosis = await (failureDiagnoser ?? new CertificationFailureDiagnoser())
+                    .DiagnoseIfNeededAsync(
+                        new CertificationFailureContext(
+                            invocationId!,
+                            failedTransition is not null,
+                            classification,
+                            quota,
+                            FailureExplanation(transitions, evidence),
+                            quota
+                                ? ["codex-rollout:used-percent:100", "codex-rollout:last-agent-message:null"]
+                                : transitions.LastOrDefault(item => !item.Completed)?.Diagnostics ?? evidence,
+                            quota ? "Wait until the confirmed provider quota window resets before an explicit rerun." : null,
+                            result,
+                            authorityRoot,
+                            repositoryPath,
+                            codexHome,
+                            codexExecutable,
+                            CertificationSourceSelection.ResolveExisting(
+                            [
+                                "src/LoopRelay.Certification/RoadmapLiveRunner.cs",
+                                "src/LoopRelay.Orchestration.Primitives/Workflows/CanonicalWorkflowDefinitionSketches.cs",
+                            ]),
+                            failedTransition),
+                        cancellationToken);
+                result = result with { AttemptRecord = diagnosis.AttemptRecord, Diagnosis = diagnosis };
+            }
             string path = Path.Combine(authorityRoot, "evidence", $"{campaign}.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
@@ -420,7 +458,15 @@ public sealed class RoadmapLiveRunner
         }
         all.AddRange(["--repo", repository]);
         all.AddRange(arguments);
-        return await RunProcessAsync(file, all, repository, CertificationFixtureSettings.ProviderTurnTimeout, token);
+        string invocationId = CertificationInvocation.NewId();
+        ProcessResult result = await RunProcessAsync(
+            file,
+            all,
+            repository,
+            CertificationFixtureSettings.ProviderTurnTimeout,
+            token,
+            invocationId);
+        return result with { CertificationInvocationId = invocationId };
     }
 
     private static async Task<ProcessResult> RunProcessAsync(
@@ -428,7 +474,8 @@ public sealed class RoadmapLiveRunner
         IReadOnlyList<string> arguments,
         string workingDirectory,
         TimeSpan timeoutValue,
-        CancellationToken token)
+        CancellationToken token,
+        string? certificationInvocationId = null)
     {
         var start = new ProcessStartInfo
         {
@@ -439,6 +486,8 @@ public sealed class RoadmapLiveRunner
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (certificationInvocationId is { Length: > 0 })
+            CertificationInvocation.Apply(start, certificationInvocationId);
         foreach (string argument in arguments) start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new InvalidOperationException("CLI did not start.");
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(token);
@@ -470,5 +519,19 @@ public sealed class RoadmapLiveRunner
         .ToHashSet();
     private static string Hash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-    private sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
+    private static string FailureExplanation(
+        IReadOnlyList<ExecuteTransitionCaseResult> transitions,
+        IReadOnlyList<string> evidence)
+    {
+        ExecuteTransitionCaseResult? failed = transitions.LastOrDefault(item => !item.Completed);
+        return failed is null
+            ? evidence.LastOrDefault() ?? "Roadmap certification failed after its live transition sequence."
+            : $"Transition {failed.Transition} failed with exit code {failed.ExitCode}: {string.Join("; ", failed.Diagnostics)}";
+    }
+
+    private sealed record ProcessResult(
+        int ExitCode,
+        string StandardOutput,
+        string StandardError,
+        string? CertificationInvocationId = null);
 }

@@ -19,7 +19,7 @@ using LoopRelay.Permissions.Services.Security;
 
 namespace LoopRelay.Certification;
 
-public sealed class ProviderProfileRunner
+public sealed class ProviderProfileRunner(ICertificationFailureDiagnoser? failureDiagnoser = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
@@ -44,6 +44,9 @@ public sealed class ProviderProfileRunner
         var scrubbedEvidence = new List<string>();
         string version = "unknown";
         string schemaDigest = "unknown";
+        string? failedInvocationId = null;
+        string? lastInvocationId = null;
+        bool providerAttempted = false;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -67,11 +70,14 @@ public sealed class ProviderProfileRunner
                 return await Finish(CertificationClassification.UnsupportedCapability);
             }
 
-            AgentTurnResult readOnly = await RunSession(
+            providerAttempted = true;
+            CertificationDirectTurn readOnlyTurn = await RunSession(
                 ReadOnlySpec(repository, AgentEffort.XHigh),
                 permissionGateway: null,
                 "Reply with exactly LIVE_OK. Do not call tools or inspect files.",
                 cancellationToken);
+            AgentTurnResult readOnly = readOnlyTurn.Result;
+            lastInvocationId = readOnlyTurn.InvocationId;
             bool readOnlyPass = readOnly.State == AgentTurnState.Completed &&
                 readOnly.Output.Contains("LIVE_OK", StringComparison.Ordinal);
             checks.Add(new LiveProviderCheck(
@@ -79,6 +85,7 @@ public sealed class ProviderProfileRunner
                 readOnlyPass,
                 readOnlyPass ? "pass" : "product-or-provider-regression",
                 [$"state:{readOnly.State}", "sandbox:read-only", "effort:xhigh", $"diagnostic:{ScrubDiagnostic(readOnly.Diagnostics, repository, codexHome)}"]));
+            if (!readOnlyPass) failedInvocationId = readOnlyTurn.InvocationId;
 
             string allowedRelative = ".agents/allowed.md";
             string deniedRelative = ".agents/denied.md";
@@ -91,12 +98,14 @@ public sealed class ProviderProfileRunner
                 []);
             PermissionGateway gateway = CreateGateway();
             var acceptedRecorder = new List<ApprovalObservation>();
-            AgentTurnResult accepted = await RunSession(
+            CertificationDirectTurn acceptedTurn = await RunSession(
                 ScopedSpec(repository, profile),
                 gateway,
                 $"Create {allowedRelative} containing exactly ALLOWED followed by a newline. Use the file-edit tool, do not run commands, and do not touch any other path.",
                 cancellationToken,
                 acceptedRecorder);
+            AgentTurnResult accepted = acceptedTurn.Result;
+            lastInvocationId = acceptedTurn.InvocationId;
             ApprovalObservation? allowedApproval = acceptedRecorder.FirstOrDefault(item => item.Method.Contains("fileChange", StringComparison.Ordinal));
             bool requestBeforeMutation = allowedApproval is not null && !allowedApproval.TargetExistedWhenRequested;
             string? normalizedTarget = allowedApproval?.TargetPath?.Replace('\\', '/');
@@ -119,16 +128,20 @@ public sealed class ProviderProfileRunner
                 accepted.State == AgentTurnState.Completed && allowedWritten,
                 accepted.State == AgentTurnState.Completed && allowedWritten ? "pass" : "product-or-provider-regression",
                 [$"state:{accepted.State}", $"allowed-written:{allowedWritten}", $"diagnostic:{ScrubDiagnostic(accepted.Diagnostics, repository, codexHome)}"]));
+            if (!requestBeforeMutation || !exactTarget || accepted.State != AgentTurnState.Completed || !allowedWritten)
+                failedInvocationId = acceptedTurn.InvocationId;
 
             var declinedRecorder = new List<ApprovalObservation>();
             using var declineTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             declineTimeout.CancelAfter(TimeSpan.FromMinutes(2));
-            AgentTurnResult declined = await RunSession(
+            CertificationDirectTurn declinedTurn = await RunSession(
                 ScopedSpec(repository, profile),
                 gateway,
                 $"Create {deniedRelative} containing DENIED. Use the file-edit tool, do not run commands, and stop if permission is declined.",
                 declineTimeout.Token,
                 declinedRecorder);
+            AgentTurnResult declined = declinedTurn.Result;
+            lastInvocationId = declinedTurn.InvocationId;
             bool deniedAbsent = !File.Exists(Path.Combine(repository, ".agents", "denied.md"));
             bool denialObserved = declinedRecorder.Any(item =>
                 item.Method.Contains("fileChange", StringComparison.Ordinal) &&
@@ -144,6 +157,8 @@ public sealed class ProviderProfileRunner
                 allowedWritten && deniedAbsent,
                 allowedWritten && deniedAbsent ? "pass" : "product-regression",
                 [$"allowed:{allowedWritten}", $"outside-profile-absent:{deniedAbsent}"]));
+            if (!denialObserved || !deniedAbsent || !allowedWritten)
+                failedInvocationId = declinedTurn.InvocationId;
 
             scrubbedEvidence.AddRange(checks.SelectMany(item => item.Evidence));
             return await Finish(checks.All(item => item.Passed)
@@ -155,7 +170,7 @@ public sealed class ProviderProfileRunner
             checks.Add(new LiveProviderCheck("live-suite-completion", false, "environment-failure", ["timeout-or-cancellation"]));
             return await Finish(CertificationClassification.EnvironmentFailure);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not CertificationRetentionException)
         {
             checks.Add(new LiveProviderCheck("live-suite-completion", false, "environment-failure", [exception.GetType().Name]));
             return await Finish(CertificationClassification.EnvironmentFailure);
@@ -189,13 +204,47 @@ public sealed class ProviderProfileRunner
                 classification = CertificationClassification.OracleDrift;
             }
 
+            string? invocationId = classification == CertificationClassification.Passed
+                ? null
+                : failedInvocationId ?? lastInvocationId ?? $"provider-profile-{Guid.NewGuid():N}";
             var result = new ProviderProfileCertificationResult(
                 CertificationEvidenceSchema.Version,
                 classification,
                 version,
                 schemaDigest,
                 checks,
-                privacy);
+                privacy,
+                invocationId);
+            if (classification != CertificationClassification.Passed)
+            {
+                bool quota = LiveProviderFailureClassifier.HasQuotaExhaustion(codexHome);
+                CertificationDiagnosisOutcome diagnosis = await (failureDiagnoser ?? new CertificationFailureDiagnoser())
+                    .DiagnoseIfNeededAsync(
+                        new CertificationFailureContext(
+                            invocationId!,
+                            providerAttempted,
+                            classification,
+                            quota,
+                            checks.LastOrDefault(item => !item.Passed)?.Identity
+                                ?? "Provider-profile certification failed before a live check completed.",
+                            quota
+                                ? ["codex-rollout:used-percent:100", "codex-rollout:last-agent-message:null"]
+                                : checks.Where(item => !item.Passed).SelectMany(item => item.Evidence).ToArray(),
+                            quota ? "Wait until the confirmed provider quota window resets before an explicit rerun." : null,
+                            result,
+                            authorityRoot,
+                            repository,
+                            codexHome,
+                            codexExecutable,
+                            CertificationSourceSelection.ResolveExisting(
+                            [
+                                "src/LoopRelay.Certification/ProviderProfileRunner.cs",
+                                "src/LoopRelay.Agents/Services/Codex/CodexAppServerSession.cs",
+                            ]),
+                            checks.LastOrDefault(item => !item.Passed)?.Identity),
+                        cancellationToken);
+                result = result with { AttemptRecord = diagnosis.AttemptRecord, Diagnosis = diagnosis };
+            }
             string evidencePath = Path.Combine(authorityRoot, "evidence", "provider-profile.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(evidencePath)!);
             await using FileStream stream = File.Create(evidencePath);
@@ -204,13 +253,14 @@ public sealed class ProviderProfileRunner
         }
     }
 
-    private static async Task<AgentTurnResult> RunSession(
+    private static async Task<CertificationDirectTurn> RunSession(
         AgentSessionSpec spec,
         PermissionGateway? permissionGateway,
         string prompt,
         CancellationToken cancellationToken,
         List<ApprovalObservation>? observations = null)
     {
+        string invocationId = CertificationInvocation.NewId();
         IAgentProcess process = await new ProcessRunner().StartInteractiveAsync(
             Environment.GetEnvironmentVariable("CODEX_EXECUTABLE")!,
             ["app-server", "--listen", "stdio://"],
@@ -222,7 +272,17 @@ public sealed class ProviderProfileRunner
             recording,
             new DeterministicAgentTokenEstimator(),
             permissionGateway);
-        return await session.RunTurnAsync(prompt, cancellationToken: cancellationToken);
+        AgentTurnResult result = await session.RunTurnAsync(prompt, cancellationToken: cancellationToken);
+        await CertificationInvocation.RecordDirectTurnAsync(
+            spec.WorkingDirectory!,
+            Environment.GetEnvironmentVariable("CODEX_HOME")!,
+            invocationId,
+            session.SessionId.Value.ToString(),
+            result.TurnIndex,
+            session.ThreadId,
+            result.ProviderTurnId,
+            cancellationToken);
+        return new CertificationDirectTurn(result, invocationId);
     }
 
     private static AgentSessionSpec ReadOnlySpec(string repository, AgentEffort effort) => new(
@@ -262,6 +322,7 @@ public sealed class ProviderProfileRunner
     }
 
     private sealed record ApprovalObservation(string Method, string? TargetPath, bool TargetExistedWhenRequested);
+    private sealed record CertificationDirectTurn(AgentTurnResult Result, string InvocationId);
 
     private sealed class RecordingAgentProcess(
         IAgentProcess inner,

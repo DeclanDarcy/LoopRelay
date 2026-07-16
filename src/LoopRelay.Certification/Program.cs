@@ -47,6 +47,7 @@ if (!options.TryGetValue("--workspace", out string? workspace) || string.IsNullO
 }
 
 workspace = Path.GetFullPath(workspace);
+CertificationSourceSelection.Configure(workspace);
 CertificationCommandDefinition definition = CertificationCommandCatalog.Commands.Single(item => item.Name == command);
 string? cli = RequireOption(definition.RequiresCli, "--cli", options);
 if (definition.RequiresCli && cli is null) return 2;
@@ -126,6 +127,20 @@ try
                 Path.GetFullPath(cli!), authorityRoot, options.ContainsKey("--retain-case"));
             return WriteResult(chain, chain.Classification);
 
+        case CertificationCommandCatalog.DiagnoseAttempt:
+            if (!options.TryGetValue("--attempt", out string? configuredAttempt)
+                || string.IsNullOrWhiteSpace(configuredAttempt))
+            {
+                Console.Error.WriteLine("--attempt <path> is required for diagnose-attempt.");
+                return 2;
+            }
+            CertificationDiagnosisOutcome rediagnosis = await new CertificationAttemptRediagnoser().RunAsync(
+                Path.GetFullPath(configuredAttempt),
+                Path.GetFullPath(codex!),
+                Path.GetFullPath(auth!));
+            Console.WriteLine(JsonSerializer.Serialize(rediagnosis, json));
+            return rediagnosis.Status.Disposition == CertificationDiagnosisDisposition.Unavailable ? 1 : 0;
+
         case CertificationCommandCatalog.GitPublication:
             GitPublicationCertificationResult publication = await new GitPublicationRunner().RunAsync(
                 Path.GetFullPath(cli!), authorityRoot);
@@ -177,7 +192,7 @@ static string? RequireOption(
 
 static void PrintUsage()
 {
-    Console.WriteLine("Usage: looprelay-certification <command> --workspace <path> [--cli <path>] [--codex <path>] [--auth <path>] [--case-root <path>] [--model <gpt-5.3-codex-spark|gpt-5.4-mini>] [--retain-case]");
+    Console.WriteLine("Usage: looprelay-certification <command> --workspace <path> [--cli <path>] [--codex <path>] [--auth <path>] [--case-root <path>] [--attempt <path>] [--model <gpt-5.3-codex-spark|gpt-5.4-mini>] [--retain-case]");
     Console.WriteLine();
     Console.WriteLine("This executable is reserved for post-epic completion hardening; it is not part of routine run-all-tests verification.");
     Console.WriteLine("Live certification defaults to gpt-5.3-codex-spark at medium effort.");

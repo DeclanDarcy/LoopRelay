@@ -191,7 +191,10 @@ public sealed record ProviderProfileCertificationResult(
     string CodexVersion,
     string SchemaDigest,
     IReadOnlyList<LiveProviderCheck> Checks,
-    IReadOnlyList<string> PrivacyFindings);
+    IReadOnlyList<string> PrivacyFindings,
+    string? InvocationId = null,
+    string? AttemptRecord = null,
+    CertificationDiagnosisOutcome? Diagnosis = null);
 
 public sealed record RecoveryBoundaryCaseResult(
     string Identity,
@@ -214,7 +217,10 @@ public sealed record TransitionRecoveryCertificationResult(
     string CodexVersion,
     string SchemaDigest,
     IReadOnlyList<RecoveryBoundaryCaseResult> Cases,
-    IReadOnlyList<string> PrivacyFindings);
+    IReadOnlyList<string> PrivacyFindings,
+    string? InvocationId = null,
+    string? AttemptRecord = null,
+    CertificationDiagnosisOutcome? Diagnosis = null);
 
 public sealed record PlanTransitionCaseResult(
     string Transition,
@@ -242,7 +248,10 @@ public sealed record PlanWorkflowCertificationResult(
     string CodexVersion,
     string SchemaDigest,
     IReadOnlyList<PlanProducerCaseResult> ProducerCases,
-    IReadOnlyList<string> PrivacyFindings);
+    IReadOnlyList<string> PrivacyFindings,
+    string? InvocationId = null,
+    string? AttemptRecord = null,
+    CertificationDiagnosisOutcome? Diagnosis = null);
 
 public sealed record ExecuteTransitionCaseResult(
     string Transition,
@@ -266,7 +275,10 @@ public sealed record ExecuteWorkflowCertificationResult(
     bool StoppedBeforePublication,
     bool ProviderProcessesCleanedUp,
     IReadOnlyList<string> PrivacyFindings,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    string? InvocationId = null,
+    string? AttemptRecord = null,
+    CertificationDiagnosisOutcome? Diagnosis = null);
 
 public sealed record GitPublicationCaseResult(
     string Identity,
@@ -315,7 +327,10 @@ public sealed record RoadmapLiveCertificationResult(
     bool ProducerIdentityPreserved,
     bool ProviderProcessesCleanedUp,
     IReadOnlyList<string> PrivacyFindings,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    string? InvocationId = null,
+    string? AttemptRecord = null,
+    CertificationDiagnosisOutcome? Diagnosis = null);
 
 public sealed record CompletionClosureCertificationResult(
     string SchemaVersion,
@@ -332,7 +347,10 @@ public sealed record CompletionClosureCertificationResult(
     bool IndependentAcceptancePassed,
     bool ProviderProcessesCleanedUp,
     IReadOnlyList<string> PrivacyFindings,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    string? InvocationId = null,
+    string? AttemptRecord = null,
+    CertificationDiagnosisOutcome? Diagnosis = null);
 
 public sealed record FailureCoverageCaseResult(
     string Identity,
@@ -423,7 +441,81 @@ public sealed record FullChainCertificationResult(
     long ProviderEvidenceBytes,
     string BudgetDecision,
     IReadOnlyList<string> PrivacyFindings,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence,
+    string? InvocationId = null,
+    string? AttemptRecord = null,
+    CertificationDiagnosisOutcome? Diagnosis = null);
+
+public enum CertificationDiagnosisDisposition
+{
+    NotNeeded,
+    Completed,
+    Inconclusive,
+    Unavailable,
+}
+
+public enum CertificationTelemetryResolutionStatus
+{
+    NotAttempted,
+    Resolved,
+    Absent,
+    TurnAbsent,
+    Partial,
+    Corrupt,
+    PermissionDenied,
+    Ambiguous,
+}
+
+public enum CertificationRolloutResolutionMethod
+{
+    None,
+    ExactThread,
+    RecordedPath,
+}
+
+public sealed record CertificationDiagnosisStatus(
+    CertificationDiagnosisDisposition Disposition,
+    string InvocationId,
+    string? BypassOrFailureReason,
+    DateTimeOffset CreatedAt);
+
+public sealed record CertificationEvidenceCitation(
+    string Source,
+    string Location);
+
+public sealed record CertificationDiagnosticStatement(
+    string Text,
+    IReadOnlyList<CertificationEvidenceCitation> Citations);
+
+public sealed record CertificationTelemetryResolution(
+    CertificationTelemetryResolutionStatus Status,
+    CertificationRolloutResolutionMethod Method,
+    string InvocationId,
+    string? CliSessionId,
+    int? CliTurnIndex,
+    string? ProviderThreadId,
+    string? ProviderTurnId,
+    string? RecordedRolloutPath,
+    string? ResolvedRolloutPath,
+    IReadOnlyList<string> Candidates,
+    IReadOnlyList<string> Warnings,
+    string? Diagnostic);
+
+public sealed record CertificationFailureDiagnosis(
+    CertificationDiagnosisDisposition Disposition,
+    string InvocationId,
+    CertificationTelemetryResolution TelemetryResolution,
+    string Summary,
+    IReadOnlyList<CertificationDiagnosticStatement> Facts,
+    IReadOnlyList<CertificationDiagnosticStatement> Inferences,
+    IReadOnlyList<string> MissingEvidence,
+    CertificationDiagnosticStatement? FirstObservedContractDivergence,
+    DateTimeOffset CreatedAt);
+
+public sealed record CertificationDiagnosisOutcome(
+    CertificationDiagnosisStatus Status,
+    string AttemptRecord,
+    CertificationFailureDiagnosis? Diagnosis = null);
 
 public sealed record CertificationEvidenceAdjudication(
     string SchemaVersion,

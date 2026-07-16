@@ -238,7 +238,7 @@ dotnet test LoopRelay.slnx --no-build --no-restore
 
 Provider-dependent approval and posture behavior is certified outside the component suite by the explicit live `provider-profile` campaign, not by skipped component-test placeholders. The routine suite is expected to complete with no skips. Live campaigns require environment inputs and may consume provider capacity; a green component suite does not establish assembled-product reliability.
 
-The separate [certification fixture program](docs/certification.md) is reserved for post-epic completion hardening. It creates disposable repositories, may invoke the live Codex provider, and must not be added to ordinary “run all tests” verification. The guide documents prerequisites, the complete campaign order, evidence handling, and mandatory investigation of non-obvious failures.
+The separate [certification fixture program](docs/certification.md) is reserved for post-epic completion hardening. It creates disposable repositories, may invoke the live Codex provider, and must not be added to ordinary “run all tests” verification. Failed live cases are retained automatically; unexplained failures receive exact thread/turn correlation, a bounded redacted private session segment, and a cited read-only diagnosis before any operator rerun. The guide documents the attempt artifacts, terminal dispositions, and diagnose-before-rerun rule.
 
 The executable lists its descriptive command surface with:
 
@@ -253,7 +253,7 @@ dotnet run --project src/LoopRelay.Certification -- status-canary --workspace . 
 dotnet run --project src/LoopRelay.Certification -- public-cli-contracts --workspace . --cli src/LoopRelay.Cli/bin/Debug/net10.0/LoopRelay.Cli.dll
 ```
 
-Live commands require `--codex <path>` and `--auth <path>` and may consume provider capacity. `provider-profile` is the canonical live gate for Codex approval and posture behavior: it checks the exact profile, read-only `xhigh` acceptance, approval before mutation, precise file-change paths, declined-write completion, and scoped accepted writes. `traditional-full-chain` and `eval-full-chain` exercise the two assembled roadmap-to-execution paths. Evidence defaults to `.tmp/certification/`; use `--case-root` for a dedicated campaign authority. Retention behavior is command-specific and is detailed in the certification guide.
+Live commands require `--codex <path>` and `--auth <path>` and may consume provider capacity. `provider-profile` is the canonical live gate for Codex approval and posture behavior: it checks the exact profile, read-only `xhigh` acceptance, approval before mutation, precise file-change paths, declined-write completion, and scoped accepted writes. `traditional-full-chain` and `eval-full-chain` exercise the two assembled roadmap-to-execution paths. Evidence defaults to `.tmp/certification/`; use `--case-root` for a dedicated campaign authority. Every failed live attempt has a non-overwriting retained record; successful runs and confirmed quota bypasses do not pay private-segment extraction or diagnostic-agent costs.
 
 Checked-in [Codex compatibility fixtures](tests/LoopRelay.Agents.Compatibility.Tests/Fixtures/README.md) cover exact versions `0.142.5`, `0.144.0`, and `0.144.1`. They support exact-ID read/resume claims. Conversation reconstruction limits and lost-response fork reconciliation remain uncertified, so reconstruction and native fork stay gated.
 

@@ -15,7 +15,7 @@ using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Certification;
 
-public sealed class FullChainLiveRunner
+public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureDiagnoser = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -89,6 +89,7 @@ public sealed class FullChainLiveRunner
         string remotePath = Path.Combine(root, "remote.git");
         string agentsRemotePath = Path.Combine(root, "agents-remote.git");
         string codexHome = Path.Combine(root, "codex-home");
+        Directory.CreateDirectory(repositoryPath);
         Directory.CreateDirectory(codexHome);
         File.Copy(authFile, Path.Combine(codexHome, "auth.json"));
         string? priorHome = Environment.GetEnvironmentVariable("CODEX_HOME");
@@ -108,6 +109,9 @@ public sealed class FullChainLiveRunner
         string version = "unknown";
         string schema = "unknown";
         bool preserveCase = false;
+        string? failedInvocationId = null;
+        bool failedCommandCouldInvokeProvider = false;
+        string? failedTransition = null;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -118,7 +122,6 @@ public sealed class FullChainLiveRunner
                 return await Finish(CertificationClassification.UnsupportedCapability);
             }
 
-            Directory.CreateDirectory(repositoryPath);
             await SeedAsync(repositoryPath, traditional, cancellationToken);
             await InitializeGitAsync(repositoryPath, remotePath, agentsRemotePath, cancellationToken);
             string verifierHash = Digest(await File.ReadAllBytesAsync(
@@ -162,6 +165,9 @@ public sealed class FullChainLiveRunner
                     repositoryPath,
                     [boundedCommand],
                     cancellationToken);
+                failedInvocationId = run.CertificationInvocationId;
+                failedCommandCouldInvokeProvider = true;
+                failedTransition = expected[index].Transition;
                 elapsed.Stop();
                 string? actualWorkflow = ParseOutputValue(run.StandardOutput, "Workflow");
                 string? actualTransition = ParseOutputValue(run.StandardOutput, "Transition");
@@ -294,7 +300,8 @@ public sealed class FullChainLiveRunner
                 providerBytes,
                 budgetDecision);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException &&
+            exception is not CertificationRetentionException)
         {
             total.Stop();
             evidence.AddRange([exception.GetType().Name, exception.Message]);
@@ -338,7 +345,10 @@ public sealed class FullChainLiveRunner
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(
                 string.Join('\n', evidence.Concat(transitions.SelectMany(item => item.Evidence))), authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
-            preserveCase = retainFailedCase && classification != CertificationClassification.Passed;
+            preserveCase = classification != CertificationClassification.Passed;
+            string? invocationId = classification == CertificationClassification.Passed
+                ? null
+                : failedInvocationId ?? $"full-chain-{Guid.NewGuid():N}";
             var result = new FullChainCertificationResult(
                 CertificationEvidenceSchema.Version,
                 classification,
@@ -360,7 +370,42 @@ public sealed class FullChainLiveRunner
                 providerBytes,
                 budget,
                 privacy,
-                evidence);
+                evidence,
+                invocationId);
+            if (classification != CertificationClassification.Passed)
+            {
+                bool quota = LiveProviderFailureClassifier.HasQuotaExhaustion(codexHome);
+                ICertificationFailureDiagnoser diagnoser = failureDiagnoser ?? new CertificationFailureDiagnoser();
+                CertificationDiagnosisOutcome diagnosis = await diagnoser.DiagnoseIfNeededAsync(
+                    new CertificationFailureContext(
+                        invocationId!,
+                        failedCommandCouldInvokeProvider,
+                        classification,
+                        quota,
+                        FailureExplanation(transitions, evidence),
+                        quota
+                            ? ["codex-rollout:used-percent:100", "codex-rollout:last-agent-message:null"]
+                            : transitions.LastOrDefault(item => !item.Passed)?.Evidence ?? evidence,
+                        quota ? "Wait until the confirmed provider quota window resets before an explicit rerun." : null,
+                        result,
+                        authorityRoot,
+                        repositoryPath,
+                        codexHome,
+                        codexExecutable,
+                        CertificationSourceSelection.ResolveExisting(
+                        [
+                            "src/LoopRelay.Certification/FullChainLiveRunner.cs",
+                            "src/LoopRelay.Core/Prompts/GenerateHandoff.prompt",
+                            "src/LoopRelay.Cli/Services/Cli/CompositionPromptExecutionOwner.cs",
+                        ]),
+                        failedTransition),
+                    cancellationToken);
+                result = result with
+                {
+                    AttemptRecord = diagnosis.AttemptRecord,
+                    Diagnosis = diagnosis,
+                };
+            }
             string path = Path.Combine(authorityRoot, "evidence", $"{campaign}.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
@@ -780,7 +825,15 @@ public sealed class FullChainLiveRunner
         }
         all.AddRange(["--repo", repository]);
         all.AddRange(arguments);
-        return await RunProcessAsync(file, all, repository, CertificationFixtureSettings.ProviderTurnTimeout, token);
+        string invocationId = Guid.NewGuid().ToString("N");
+        ProcessResult result = await RunProcessAsync(
+            file,
+            all,
+            repository,
+            CertificationFixtureSettings.ProviderTurnTimeout,
+            token,
+            invocationId);
+        return result with { CertificationInvocationId = invocationId };
     }
 
     private static async Task<ProcessResult> RunDefaultUntilFirstTransitionAsync(
@@ -835,7 +888,8 @@ public sealed class FullChainLiveRunner
         IReadOnlyList<string> arguments,
         string workingDirectory,
         TimeSpan timeout,
-        CancellationToken token)
+        CancellationToken token,
+        string? certificationInvocationId = null)
     {
         var start = new ProcessStartInfo
         {
@@ -846,6 +900,11 @@ public sealed class FullChainLiveRunner
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (certificationInvocationId is { Length: > 0 })
+        {
+            start.Environment["LOOPRELAY_CERTIFICATION_INVOCATION_ID"] = certificationInvocationId;
+            start.Environment["LOOPRELAY_CERTIFICATION_INVOCATION_ROLE"] = "product";
+        }
         foreach (string argument in arguments) start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new InvalidOperationException($"{file} did not start.");
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(token);
@@ -890,5 +949,26 @@ public sealed class FullChainLiveRunner
 
     private static string Digest(byte[] value) => Convert.ToHexStringLower(SHA256.HashData(value));
 
-    private sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
+    private static string FailureExplanation(
+        IReadOnlyList<FullChainTransitionResult> transitions,
+        IReadOnlyList<string> evidence)
+    {
+        FullChainTransitionResult? failed = transitions.LastOrDefault(item => !item.Passed);
+        if (failed is not null)
+        {
+            string? explanation = failed.Evidence
+                .FirstOrDefault(item => item.StartsWith("explanation:", StringComparison.Ordinal));
+            return explanation is { Length: > 0 }
+                ? explanation["explanation:".Length..]
+                : $"Transition {failed.ExpectedTransition} failed with exit code {failed.ExitCode}.";
+        }
+
+        return evidence.LastOrDefault() ?? "Full-chain certification failed after the live transition sequence.";
+    }
+
+    private sealed record ProcessResult(
+        int ExitCode,
+        string StandardOutput,
+        string StandardError,
+        string? CertificationInvocationId = null);
 }

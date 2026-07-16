@@ -16,7 +16,7 @@ using LoopRelay.Permissions.Models.Policy;
 
 namespace LoopRelay.Certification;
 
-public sealed class PlanWorkflowRunner
+public sealed class PlanWorkflowRunner(ICertificationFailureDiagnoser? failureDiagnoser = null)
 {
     private static readonly string[] Transitions =
     [
@@ -55,7 +55,9 @@ public sealed class PlanWorkflowRunner
     {
         string root = Path.Combine(authorityRoot, "plan-workflow", Guid.NewGuid().ToString("N"));
         string codexHome = Path.Combine(root, "codex-home");
+        string retentionFallback = Path.Combine(root, "retained-fixture");
         Directory.CreateDirectory(codexHome);
+        Directory.CreateDirectory(retentionFallback);
         File.Copy(authFile, Path.Combine(codexHome, "auth.json"));
         string? priorHome = Environment.GetEnvironmentVariable("CODEX_HOME");
         string? priorExecutable = Environment.GetEnvironmentVariable("CODEX_EXECUTABLE");
@@ -70,6 +72,11 @@ public sealed class PlanWorkflowRunner
         var cases = new List<PlanProducerCaseResult>();
         string version = "unknown";
         string schema = "unknown";
+        string? failedInvocationId = null;
+        string? lastInvocationId = null;
+        string? failedTransition = null;
+        string? failedRepositoryPath = null;
+        string? lastRepositoryPath = null;
 
         try
         {
@@ -89,7 +96,8 @@ public sealed class PlanWorkflowRunner
             return await Finish(LiveProviderFailureClassifier.Classify(
                 cases.All(item => item.Passed), codexHome));
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException &&
+            exception is not CertificationRetentionException)
         {
             cases.Add(new PlanProducerCaseResult(
                 "suite-failure", [], false, false, false, false, false, false, false,
@@ -118,6 +126,7 @@ public sealed class PlanWorkflowRunner
         {
             string caseIdentity = producer == WorkflowIdentity.EvalRoadmap ? "eval-producer" : "traditional-producer";
             string repositoryPath = Path.Combine(root, caseIdentity, "repository");
+            lastRepositoryPath = repositoryPath;
             Directory.CreateDirectory(repositoryPath);
             await SeedRepositoryAsync(repositoryPath, cancellationToken);
             await InitializeGitAsync(
@@ -129,6 +138,7 @@ public sealed class PlanWorkflowRunner
             ProcessResult init = await RunCliAsync(cliPath, repositoryPath, ["storage", "init"], cancellationToken);
             if (init.ExitCode != 0)
             {
+                failedRepositoryPath = repositoryPath;
                 return FailedCase(producer, $"storage-init:{init.ExitCode}:{init.StandardError}");
             }
 
@@ -145,10 +155,17 @@ public sealed class PlanWorkflowRunner
             {
                 Dictionary<string, string> before = SnapshotAgents(repositoryPath);
                 ProcessResult run = await RunCliAsync(cliPath, repositoryPath, ["plan"], cancellationToken);
+                lastInvocationId = run.CertificationInvocationId;
                 Dictionary<string, string> after = SnapshotAgents(repositoryPath);
                 string[] changed = ChangedPaths(before, after);
                 string? actualTransition = ParseTransition(run.StandardOutput);
                 bool completed = run.ExitCode == 0 && string.Equals(actualTransition, expectedTransition, StringComparison.Ordinal);
+                if (!completed)
+                {
+                    failedRepositoryPath = repositoryPath;
+                    failedInvocationId = run.CertificationInvocationId;
+                    failedTransition = expectedTransition;
+                }
                 bool mutationValid = AllowedMutations(expectedTransition, changed);
                 var diagnostics = CompactDiagnostics(actualTransition, run).ToList();
                 if (!completed && actualTransition is not null)
@@ -194,6 +211,12 @@ public sealed class PlanWorkflowRunner
             bool passed = transitionResults.Count == Transitions.Length &&
                 transitionResults.All(result => result.Completed && result.MutationScopeValid) &&
                 sameThread && restarted && exactProducts && bounded && rollback && processesClean;
+            if (!passed)
+            {
+                failedRepositoryPath = repositoryPath;
+                failedInvocationId ??= lastInvocationId;
+                failedTransition ??= transitionResults.LastOrDefault()?.Transition;
+            }
             return new PlanProducerCaseResult(
                 producer.Value,
                 transitionResults,
@@ -225,8 +248,42 @@ public sealed class PlanWorkflowRunner
                 .Concat(cases.SelectMany(item => item.Transitions).SelectMany(item => item.Diagnostics)));
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(scrubbed, authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            string? invocationId = classification == CertificationClassification.Passed
+                ? null
+                : failedInvocationId ?? lastInvocationId ?? $"plan-workflow-{Guid.NewGuid():N}";
             var result = new PlanWorkflowCertificationResult(
-                CertificationEvidenceSchema.Version, classification, version, schema, cases, privacy);
+                CertificationEvidenceSchema.Version, classification, version, schema, cases, privacy, invocationId);
+            if (classification != CertificationClassification.Passed)
+            {
+                bool quota = LiveProviderFailureClassifier.HasQuotaExhaustion(codexHome);
+                CertificationDiagnosisOutcome diagnosis = await (failureDiagnoser ?? new CertificationFailureDiagnoser())
+                    .DiagnoseIfNeededAsync(
+                        new CertificationFailureContext(
+                            invocationId!,
+                            invocationId == failedInvocationId || lastInvocationId is not null,
+                            classification,
+                            quota,
+                            FailureExplanation(cases),
+                            quota
+                                ? ["codex-rollout:used-percent:100", "codex-rollout:last-agent-message:null"]
+                                : cases.SelectMany(item => item.Evidence)
+                                    .Concat(cases.SelectMany(item => item.Transitions)
+                                        .SelectMany(item => item.Diagnostics)).ToArray(),
+                            quota ? "Wait until the confirmed provider quota window resets before an explicit rerun." : null,
+                            result,
+                            authorityRoot,
+                            failedRepositoryPath ?? lastRepositoryPath ?? retentionFallback,
+                            codexHome,
+                            codexExecutable,
+                            CertificationSourceSelection.ResolveExisting(
+                            [
+                                "src/LoopRelay.Certification/PlanWorkflowRunner.cs",
+                                "src/LoopRelay.Orchestration.Primitives/Workflows/CanonicalWorkflowDefinitionSketches.cs",
+                            ]),
+                            failedTransition ?? cases.LastOrDefault()?.Transitions.LastOrDefault()?.Transition),
+                        cancellationToken);
+                result = result with { AttemptRecord = diagnosis.AttemptRecord, Diagnosis = diagnosis };
+            }
             string path = Path.Combine(authorityRoot, "evidence", "plan-workflow.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
@@ -517,7 +574,15 @@ public sealed class PlanWorkflowRunner
         }
         all.AddRange(["--repo", repository]);
         all.AddRange(arguments);
-        return await RunProcessAsync(file, all, repository, cancellationToken, CertificationFixtureSettings.ProviderTurnTimeout);
+        string invocationId = CertificationInvocation.NewId();
+        ProcessResult result = await RunProcessAsync(
+            file,
+            all,
+            repository,
+            cancellationToken,
+            CertificationFixtureSettings.ProviderTurnTimeout,
+            invocationId);
+        return result with { CertificationInvocationId = invocationId };
     }
 
     private static async Task<ProcessResult> RunProcessAsync(
@@ -525,7 +590,8 @@ public sealed class PlanWorkflowRunner
         IReadOnlyList<string> arguments,
         string workingDirectory,
         CancellationToken cancellationToken,
-        TimeSpan timeoutValue)
+        TimeSpan timeoutValue,
+        string? certificationInvocationId = null)
     {
         var start = new ProcessStartInfo
         {
@@ -536,6 +602,8 @@ public sealed class PlanWorkflowRunner
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (certificationInvocationId is { Length: > 0 })
+            CertificationInvocation.Apply(start, certificationInvocationId);
         foreach (string argument in arguments) start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new InvalidOperationException("CLI did not start.");
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
@@ -579,5 +647,19 @@ public sealed class PlanWorkflowRunner
     private static string Digest(string value) => Digest(Encoding.UTF8.GetBytes(value));
     private static string Digest(byte[] value) => Convert.ToHexStringLower(SHA256.HashData(value));
 
-    private sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
+    private static string FailureExplanation(IReadOnlyList<PlanProducerCaseResult> cases)
+    {
+        PlanTransitionCaseResult? failed = cases.SelectMany(item => item.Transitions)
+            .LastOrDefault(item => !item.Completed || !item.MutationScopeValid);
+        return failed is null
+            ? cases.SelectMany(item => item.Evidence).LastOrDefault()
+                ?? "Plan workflow certification failed after its live transition sequence."
+            : $"Transition {failed.Transition} failed with exit code {failed.ExitCode}: {string.Join("; ", failed.Diagnostics)}";
+    }
+
+    private sealed record ProcessResult(
+        int ExitCode,
+        string StandardOutput,
+        string StandardError,
+        string? CertificationInvocationId = null);
 }

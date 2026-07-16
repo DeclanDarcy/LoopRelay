@@ -55,6 +55,7 @@ The command names describe the behavior under certification. Historical certific
 | `failure-oracle-matrix` | Deterministic audit | workspace | Audits maintained failure classes, transition recovery coverage, oracle controls, exclusions, and governance. | `failure-oracle-matrix.latest.json` |
 | `traditional-full-chain` | Live full chain | CLI, Codex, auth | Runs TraditionalRoadmap → Plan → Execute, publication, completion, and rerun checks. | `traditional-full-chain.latest.json` |
 | `eval-full-chain` | Live full chain | CLI, Codex, auth | Runs EvalRoadmap → Plan → Execute, publication, completion, and rerun checks. | `eval-full-chain.latest.json` |
+| `diagnose-attempt` | Retained live diagnosis | Codex, auth, attempt path | Repeats diagnosis over retained evidence without rerunning the certification fixture. | updates the named attempt record |
 | `release-gate` | Projection | workspace, completed evidence | Evaluates evidence freshness, durability, profile, production-surface binding, budgets, and release dimensions. | `release-gate.latest.json` |
 
 ## Prerequisites
@@ -167,45 +168,54 @@ dotnet run --no-build --project $project -- completion-closure `
   --case-root $caseRoot --model $model
 ```
 
-Each live runner creates an isolated `CODEX_HOME`, copies the supplied auth file into it for execution, disables analytics where supported, and removes the copied auth file during cleanup. That cleanup does not make every retained rollout safe to publish.
+Each live runner creates an isolated `CODEX_HOME`, copies the supplied auth file into it for execution, disables analytics where supported, and removes the copied auth file during cleanup. A failed live case is retained automatically in a non-overwriting attempt record; `--retain-case` is not required. Raw rollouts remain private even though the harness copies a bounded redacted segment into the attempt record when diagnosis needs one.
 
 ## Run both full chains
 
-The full chains exercise the assembled product across workflow boundaries. Run both profiles and request failed-case retention so a non-obvious failure remains diagnosable:
+The full chains exercise the assembled product across workflow boundaries. Run both profiles; failed-case retention is automatic:
 
 ```powershell
 dotnet run --no-build --project $project -- traditional-full-chain `
   --workspace $workspace --cli $cli --codex $codex --auth $auth `
-  --case-root $caseRoot --model $model --retain-case
+  --case-root $caseRoot --model $model
 
 dotnet run --no-build --project $project -- eval-full-chain `
   --workspace $workspace --cli $cli --codex $codex --auth $auth `
-  --case-root $caseRoot --model $model --retain-case
+  --case-root $caseRoot --model $model
 ```
 
-For the full-chain commands, `--retain-case` retains a non-passing case; passing cases are still removed after their derived evidence is written. `status-canary` and `public-cli-contracts` also honor `--retain-case`. Other targeted runners have command-specific cleanup behavior, so do not assume the flag preserves them.
+Passing live cases are removed after their derived evidence is written. The deterministic `status-canary` and `public-cli-contracts` commands still honor `--retain-case`; that flag is separate from automatic failed-live-attempt retention.
 
 The current budget contract requires each full chain to complete within two hours, retain no more than 500 MiB of provider evidence, and emit the recognized provisional release-budget decision.
 
 ## Investigate every failure before continuing
 
-A nonzero exit is evidence, not a diagnosis. Stop the campaign and preserve the output before replacing it with a rerun.
+A nonzero live exit creates `evidence/attempts/attempt-<invocation-id>/` before diagnosis begins. The record contains `failure.json`, `diagnosis-status.json`, and `retained-case/`. When correlation or diagnosis is attempted it can also contain `telemetry-reference.json`, `session-segment.private.jsonl`, `retained-case-observations.json`, `diagnosis.json`, and `diagnosis.md`.
 
-At minimum:
+The shared decision gate performs no diagnostic rollout correlation, private-segment extraction, or agent invocation for successful transitions, deterministic non-provider failures, or confirmed quota exhaustion. Quota exhaustion is the only diagnosis-bypass rule: it must have the provider-regression classification, deterministic quota evidence, high confidence, and the actionable reset-window instruction. Every other failed provider-backed attempt is correlated by certification invocation ID, CLI session/turn, exact provider thread/turn, and recorded rollout path. Exact-thread and recorded-path disagreement is `Ambiguous`; an absent recorded turn is `TurnAbsent`. The first implementation never guesses by workspace or time.
 
-1. Read `evidence/<command>.latest.json` and identify the first failed check or transition.
-2. Record expected and actual workflow/transition identities, exit code, explanation, elapsed time, and stdout/stderr digests.
-3. Inspect the disposable repository and persistence ledger to determine which authoritative products and effects actually exist.
-4. For a retained live case, correlate the failure with the exact rollout under `codex-home/sessions/YYYY/MM/DD/rollout-*.jsonl`.
-5. Inspect the relevant Codex tool call and its tool output, then compare the paths or effects it reported with the paths or effects required by the transition contract.
-6. Classify the root cause separately from the harness routing category. `ProductRegression`, for example, is not a sufficient explanation of whether the defect was in orchestration, validation, a provider action, or the fixture.
-7. Produce a sanitized incident summary containing digests and necessary facts. Keep the raw rollout private.
+Only the correlated turn is copied. The private reader pairs calls and outputs by call ID, preserves event order, excludes hidden/encrypted reasoning and unrelated turns, redacts credentials and profile prefixes, and enforces byte/event limits. A separate read-only diagnostic session sees copies of the failure, bounded segment, selected retained-case files, and runner-selected source. The harness validates its schema and citations; the certification failure remains authoritative.
 
-The harness currently scans rollouts automatically only for a narrow quota-exhaustion signature. It does not perform the complete correlation and causal inspection above. That inspection is therefore a required operator responsibility for non-obvious failures.
+Read `diagnosis-status.json` first:
+
+- `NotNeeded` names the structured bypass and existing explanation.
+- `Completed` provides cited facts, separately labeled inferences, and the first observed contract divergence.
+- `Inconclusive` means the available bounded evidence was inspected but did not support a reliable explanation.
+- `Unavailable` preserves the original failure while naming missing telemetry, denied/corrupt evidence, timeout, cancellation, malformed output, or provider unavailability.
+
+Do not automatically or manually repeat an unexplained failed live fixture until its diagnostic attempt reaches `Completed`, `Inconclusive`, or `Unavailable`, and inspect the attempt record before deciding to rerun. A terminal disposition ends diagnostic waiting; it is not automatic permission to repeat. `ProductRegression` remains a routing classification, not a root-cause explanation.
+
+To explicitly repeat diagnosis over already-retained evidence without rerunning certification:
+
+```powershell
+dotnet run --no-build --project $project -- diagnose-attempt `
+  --workspace $workspace --codex $codex --auth $auth `
+  --attempt '<attempt-record-path>' --model $model
+```
 
 Do not publish raw `codex-home` directories. Rollouts can contain prompts, responses, tool arguments, absolute paths, session identifiers, and other private execution context. Never publish the auth file or an environment dump.
 
-If a rerun passes, retain both the original failure evidence and the passing repeat. Do not overwrite the historical failure and report only the later pass. Record whether the failure reproduced and whether the two attempts failed at the same boundary.
+If an explicit later rerun passes, retain both the original failure attempt and the passing repeat. Attempt paths are invocation-scoped and never overwritten. Record whether the failure reproduced and whether the two attempts failed at the same boundary.
 
 ## Evaluate the release gate
 

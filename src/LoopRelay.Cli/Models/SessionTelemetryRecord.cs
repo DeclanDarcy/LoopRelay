@@ -44,4 +44,6 @@ internal sealed record SessionTelemetryRecord(
     string? RecoveryAttemptId = null,
     string? RecoveryPlanDigest = null,
     string? RecoveryMechanism = null,
-    string? RecoveryCompleteness = null);
+    string? RecoveryCompleteness = null,
+    string? CertificationInvocationId = null,
+    string? InvocationRole = null);

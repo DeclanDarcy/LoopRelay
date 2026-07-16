@@ -20,7 +20,7 @@ using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Certification;
 
-public sealed class TransitionRecoveryRunner
+public sealed class TransitionRecoveryRunner(ICertificationFailureDiagnoser? failureDiagnoser = null)
 {
     private static readonly WorkflowTransitionIdentity Transition = new("LiveRecoveryCanary");
     private static readonly ProductIdentity OutputProduct = new("LiveRecoveryEvidence");
@@ -36,7 +36,9 @@ public sealed class TransitionRecoveryRunner
     {
         string root = Path.Combine(authorityRoot, "transition-recovery", Guid.NewGuid().ToString("N"));
         string codexHome = Path.Combine(root, "codex-home");
+        string retentionFallback = Path.Combine(root, "retained-fixture");
         Directory.CreateDirectory(codexHome);
+        Directory.CreateDirectory(retentionFallback);
         File.Copy(authFile, Path.Combine(codexHome, "auth.json"));
         string? priorHome = Environment.GetEnvironmentVariable("CODEX_HOME");
         string? priorExecutable = Environment.GetEnvironmentVariable("CODEX_EXECUTABLE");
@@ -46,6 +48,12 @@ public sealed class TransitionRecoveryRunner
         var cases = new List<RecoveryBoundaryCaseResult>();
         string version = "unknown";
         string schema = "unknown";
+        string? failedInvocationId = null;
+        string? failedRepositoryPath = null;
+        string? failedCaseIdentity = null;
+        string? currentInvocationId = null;
+        string? currentRepositoryPath = null;
+        string? currentCaseIdentity = null;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -102,12 +110,15 @@ public sealed class TransitionRecoveryRunner
                 expectedEffectCalls: 1,
                 requirePublicRecovery: false));
 
-            return await Finish(cases.All(item => item.Passed)
-                ? CertificationClassification.Passed
-                : CertificationClassification.ProductRegression);
+            return await Finish(LiveProviderFailureClassifier.Classify(
+                cases.All(item => item.Passed), codexHome));
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException &&
+            exception is not CertificationRetentionException)
         {
+            failedInvocationId ??= currentInvocationId;
+            failedRepositoryPath ??= currentRepositoryPath;
+            failedCaseIdentity ??= currentCaseIdentity;
             cases.Add(new RecoveryBoundaryCaseResult(
                 "suite-failure", "unknown", "unknown", "unknown", "unknown",
                 0, 0, false, false, false, false, false, [exception.GetType().Name, exception.Message]));
@@ -149,7 +160,10 @@ public sealed class TransitionRecoveryRunner
                 persistence,
                 runId,
                 cancellationToken);
-            var live = new LivePromptExecutor(codexExecutable, repositoryPath);
+            var live = new LivePromptExecutor(codexExecutable, repositoryPath, codexHome);
+            currentRepositoryPath = repositoryPath;
+            currentInvocationId = live.InvocationId;
+            currentCaseIdentity = caseIdentity;
             var journal = new CanonicalTransitionBoundaryJournal(persistence, fault);
             var effects = new MarkerEffectExecutor(
                 Path.Combine(repositoryPath, ".LoopRelay", "evidence", "recovery-effect.marker"),
@@ -268,6 +282,12 @@ public sealed class TransitionRecoveryRunner
                 effects.Calls == expectedEffectCalls &&
                 !duplicateProvider && !duplicateEffect && singleRun &&
                 statusExposed && unblockFailedClosed;
+            if (!passed)
+            {
+                failedRepositoryPath = repositoryPath;
+                failedInvocationId = live.InvocationId;
+                failedCaseIdentity = caseIdentity;
+            }
             return new RecoveryBoundaryCaseResult(
                 caseIdentity,
                 fault.ToString(),
@@ -296,8 +316,42 @@ public sealed class TransitionRecoveryRunner
             string scrubbed = string.Join("\n", cases.SelectMany(item => item.Evidence));
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(scrubbed, authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            string? invocationId = classification == CertificationClassification.Passed
+                ? null
+                : failedInvocationId ?? currentInvocationId ?? $"transition-recovery-{Guid.NewGuid():N}";
             var result = new TransitionRecoveryCertificationResult(
-                CertificationEvidenceSchema.Version, classification, version, schema, cases, privacy);
+                CertificationEvidenceSchema.Version, classification, version, schema, cases, privacy, invocationId);
+            if (classification != CertificationClassification.Passed)
+            {
+                bool quota = LiveProviderFailureClassifier.HasQuotaExhaustion(codexHome);
+                CertificationDiagnosisOutcome diagnosis = await (failureDiagnoser ?? new CertificationFailureDiagnoser())
+                    .DiagnoseIfNeededAsync(
+                        new CertificationFailureContext(
+                            invocationId!,
+                            currentInvocationId is not null,
+                            classification,
+                            quota,
+                            failedCaseIdentity is null && currentCaseIdentity is null
+                                ? "Transition-recovery certification failed before a live case completed."
+                                : $"Transition-recovery case {failedCaseIdentity ?? currentCaseIdentity} failed.",
+                            quota
+                                ? ["codex-rollout:used-percent:100", "codex-rollout:last-agent-message:null"]
+                                : cases.Where(item => !item.Passed).SelectMany(item => item.Evidence).ToArray(),
+                            quota ? "Wait until the confirmed provider quota window resets before an explicit rerun." : null,
+                            result,
+                            authorityRoot,
+                            failedRepositoryPath ?? currentRepositoryPath ?? retentionFallback,
+                            codexHome,
+                            codexExecutable,
+                            CertificationSourceSelection.ResolveExisting(
+                            [
+                                "src/LoopRelay.Certification/TransitionRecoveryRunner.cs",
+                                "src/LoopRelay.Orchestration.Primitives/Runtime/TransitionRuntime.cs",
+                            ]),
+                            failedCaseIdentity ?? currentCaseIdentity),
+                        cancellationToken);
+                result = result with { AttemptRecord = diagnosis.AttemptRecord, Diagnosis = diagnosis };
+            }
             string path = Path.Combine(authorityRoot, "evidence", "transition-recovery.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
@@ -472,8 +526,12 @@ public sealed class TransitionRecoveryRunner
                 "certification/live-recovery"));
     }
 
-    private sealed class LivePromptExecutor(string executable, string repository) : IProviderPromptTransport
+    private sealed class LivePromptExecutor(
+        string executable,
+        string repository,
+        string codexHome) : IProviderPromptTransport
     {
+        public string InvocationId { get; } = CertificationInvocation.NewId();
         public int Calls { get; private set; }
 
         public async Task<PromptExecutionResult> DispatchAsync(
@@ -490,6 +548,15 @@ public sealed class TransitionRecoveryRunner
                 CertificationFixtureSettings.BrainAgentModel, AgentEffort.Low, AgentConfigurationAuthority.Brain, repository);
             await using var session = new CodexAppServerSession(spec, process, new DeterministicAgentTokenEstimator());
             AgentTurnResult result = await session.RunTurnAsync(prompt.Fact.RenderedContent, cancellationToken: token);
+            await CertificationInvocation.RecordDirectTurnAsync(
+                repository,
+                codexHome,
+                InvocationId,
+                session.SessionId.Value.ToString(),
+                result.TurnIndex,
+                session.ThreadId,
+                result.ProviderTurnId,
+                token);
             return new PromptExecutionResult(
                 result.State == AgentTurnState.Completed ? PromptExecutionStatus.Completed : PromptExecutionStatus.Failed,
                 result.Output,

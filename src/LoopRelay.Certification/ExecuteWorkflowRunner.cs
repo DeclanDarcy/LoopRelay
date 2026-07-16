@@ -15,7 +15,7 @@ using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Certification;
 
-public sealed class ExecuteWorkflowRunner
+public sealed class ExecuteWorkflowRunner(ICertificationFailureDiagnoser? failureDiagnoser = null)
 {
     private static readonly string[] Transitions =
     [
@@ -43,6 +43,7 @@ public sealed class ExecuteWorkflowRunner
         string repositoryPath = Path.Combine(root, "repository");
         string codexHome = Path.Combine(root, "codex-home");
         Directory.CreateDirectory(codexHome);
+        Directory.CreateDirectory(repositoryPath);
         File.Copy(authFile, Path.Combine(codexHome, "auth.json"));
         string? priorHome = Environment.GetEnvironmentVariable("CODEX_HOME");
         string? priorExecutable = Environment.GetEnvironmentVariable("CODEX_EXECUTABLE");
@@ -63,6 +64,8 @@ public sealed class ExecuteWorkflowRunner
         string version = "unknown";
         string schema = "unknown";
         HashSet<int> initialCodex = CodexProcessIds();
+        string? failedInvocationId = null;
+        string? failedTransition = null;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -73,7 +76,6 @@ public sealed class ExecuteWorkflowRunner
                 return await Finish(CertificationClassification.UnsupportedCapability);
             }
 
-            Directory.CreateDirectory(repositoryPath);
             await SeedRepositoryAsync(repositoryPath, cancellationToken);
             await InitializeGitAsync(
                 repositoryPath,
@@ -94,6 +96,8 @@ public sealed class ExecuteWorkflowRunner
             {
                 Dictionary<string, string> before = SnapshotRepository(repositoryPath);
                 ProcessResult run = await RunCliAsync(cliPath, repositoryPath, ["execute"], cancellationToken);
+                failedInvocationId = run.CertificationInvocationId;
+                failedTransition = expected;
                 Dictionary<string, string> after = SnapshotRepository(repositoryPath);
                 string? actual = ParseOutputValue(run.StandardOutput, "Transition");
                 bool completed = run.ExitCode == 0 && string.Equals(actual, expected, StringComparison.Ordinal);
@@ -159,7 +163,8 @@ public sealed class ExecuteWorkflowRunner
                 acceptance, verifierUnchanged, sameThread, restarted, durableFacts,
                 decisionContinuity, stoppedBeforePublication, processesClean);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException &&
+            exception is not CertificationRetentionException)
         {
             evidence.AddRange([exception.GetType().Name, exception.Message]);
             return await Finish(CertificationClassification.EnvironmentFailure);
@@ -196,6 +201,9 @@ public sealed class ExecuteWorkflowRunner
             string scrubbed = string.Join("\n", evidence.Concat(transitions.SelectMany(item => item.Diagnostics)));
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(scrubbed, authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            string? invocationId = classification == CertificationClassification.Passed
+                ? null
+                : failedInvocationId ?? $"execute-workflow-{Guid.NewGuid():N}";
             var result = new ExecuteWorkflowCertificationResult(
                 CertificationEvidenceSchema.Version,
                 classification,
@@ -211,7 +219,38 @@ public sealed class ExecuteWorkflowRunner
                 stoppedBeforePublication,
                 processesClean,
                 privacy,
-                evidence);
+                evidence,
+                invocationId);
+            if (classification != CertificationClassification.Passed)
+            {
+                bool quota = LiveProviderFailureClassifier.HasQuotaExhaustion(codexHome);
+                CertificationDiagnosisOutcome diagnosis = await (failureDiagnoser ?? new CertificationFailureDiagnoser())
+                    .DiagnoseIfNeededAsync(
+                        new CertificationFailureContext(
+                            invocationId!,
+                            failedTransition is not null,
+                            classification,
+                            quota,
+                            FailureExplanation(transitions, evidence),
+                            quota
+                                ? ["codex-rollout:used-percent:100", "codex-rollout:last-agent-message:null"]
+                                : transitions.LastOrDefault(item => !item.Completed)?.Diagnostics ?? evidence,
+                            quota ? "Wait until the confirmed provider quota window resets before an explicit rerun." : null,
+                            result,
+                            authorityRoot,
+                            repositoryPath,
+                            codexHome,
+                            codexExecutable,
+                            CertificationSourceSelection.ResolveExisting(
+                            [
+                                "src/LoopRelay.Certification/ExecuteWorkflowRunner.cs",
+                                "src/LoopRelay.Core/Prompts/GenerateHandoff.prompt",
+                                "src/LoopRelay.Cli/Services/Cli/CompositionPromptExecutionOwner.cs",
+                            ]),
+                            failedTransition),
+                        cancellationToken);
+                result = result with { AttemptRecord = diagnosis.AttemptRecord, Diagnosis = diagnosis };
+            }
             string path = Path.Combine(authorityRoot, "evidence", "execute-workflow.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
@@ -464,7 +503,15 @@ public sealed class ExecuteWorkflowRunner
         }
         all.AddRange(["--repo", repository]);
         all.AddRange(arguments);
-        return await RunProcessAsync(file, all, repository, token, CertificationFixtureSettings.ProviderTurnTimeout);
+        string invocationId = CertificationInvocation.NewId();
+        ProcessResult result = await RunProcessAsync(
+            file,
+            all,
+            repository,
+            token,
+            CertificationFixtureSettings.ProviderTurnTimeout,
+            invocationId);
+        return result with { CertificationInvocationId = invocationId };
     }
 
     private static async Task<ProcessResult> RunProcessAsync(
@@ -472,7 +519,8 @@ public sealed class ExecuteWorkflowRunner
         IReadOnlyList<string> arguments,
         string workingDirectory,
         CancellationToken token,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        string? certificationInvocationId = null)
     {
         var start = new ProcessStartInfo
         {
@@ -483,6 +531,8 @@ public sealed class ExecuteWorkflowRunner
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (certificationInvocationId is { Length: > 0 })
+            CertificationInvocation.Apply(start, certificationInvocationId);
         foreach (string argument in arguments) start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new InvalidOperationException($"{file} did not start.");
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(token);
@@ -526,5 +576,19 @@ public sealed class ExecuteWorkflowRunner
 
     private static string Digest(string value) => Digest(Encoding.UTF8.GetBytes(value));
     private static string Digest(byte[] value) => Convert.ToHexStringLower(SHA256.HashData(value));
-    private sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
+    private static string FailureExplanation(
+        IReadOnlyList<ExecuteTransitionCaseResult> transitions,
+        IReadOnlyList<string> evidence)
+    {
+        ExecuteTransitionCaseResult? failed = transitions.LastOrDefault(item => !item.Completed);
+        return failed is null
+            ? evidence.LastOrDefault() ?? "Execute workflow certification failed after its live transition sequence."
+            : $"Transition {failed.Transition} failed with exit code {failed.ExitCode}: {string.Join("; ", failed.Diagnostics)}";
+    }
+
+    private sealed record ProcessResult(
+        int ExitCode,
+        string StandardOutput,
+        string StandardError,
+        string? CertificationInvocationId = null);
 }

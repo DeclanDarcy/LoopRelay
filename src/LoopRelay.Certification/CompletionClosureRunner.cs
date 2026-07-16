@@ -15,7 +15,7 @@ using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Certification;
 
-public sealed class CompletionClosureRunner
+public sealed class CompletionClosureRunner(ICertificationFailureDiagnoser? failureDiagnoser = null)
 {
     private static readonly string[] Transitions =
     [
@@ -40,6 +40,7 @@ public sealed class CompletionClosureRunner
         string repositoryPath = Path.Combine(root, "repository");
         string codexHome = Path.Combine(root, "codex-home");
         Directory.CreateDirectory(codexHome);
+        Directory.CreateDirectory(repositoryPath);
         File.Copy(authFile, Path.Combine(codexHome, "auth.json"));
         string? priorHome = Environment.GetEnvironmentVariable("CODEX_HOME");
         string? priorExecutable = Environment.GetEnvironmentVariable("CODEX_EXECUTABLE");
@@ -56,6 +57,8 @@ public sealed class CompletionClosureRunner
         string version = "unknown";
         string schema = "unknown";
         bool retainCase = false;
+        string? failedInvocationId = null;
+        string? failedTransition = null;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -66,7 +69,6 @@ public sealed class CompletionClosureRunner
                 return await Finish(CertificationClassification.UnsupportedCapability);
             }
 
-            Directory.CreateDirectory(repositoryPath);
             await SeedRepositoryAsync(repositoryPath, cancellationToken);
             ProcessResult preCompletionVerifier = await RunProcessAsync(
                 "pwsh",
@@ -98,6 +100,8 @@ public sealed class CompletionClosureRunner
             {
                 string expected = Transitions[index];
                 ProcessResult run = await RunCliAsync(cliPath, repositoryPath, ["execute"], cancellationToken);
+                failedInvocationId = run.CertificationInvocationId;
+                failedTransition = expected;
                 string? actual = ParseOutputValue(run.StandardOutput, "Transition");
                 bool completed = run.ExitCode == 0 && string.Equals(actual, expected, StringComparison.Ordinal);
                 IReadOnlyList<string> diagnostics = Diagnostics(actual, run);
@@ -213,7 +217,8 @@ public sealed class CompletionClosureRunner
                 independentAcceptance,
                 processesClean);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException &&
+            exception is not CertificationRetentionException)
         {
             retainCase = true;
             evidence.AddRange([exception.GetType().Name, exception.Message]);
@@ -253,6 +258,9 @@ public sealed class CompletionClosureRunner
                 string.Join("\n", evidence.Concat(transitions.SelectMany(item => item.Diagnostics))),
                 authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            string? invocationId = classification == CertificationClassification.Passed
+                ? null
+                : failedInvocationId ?? $"completion-closure-{Guid.NewGuid():N}";
             var result = new CompletionClosureCertificationResult(
                 CertificationEvidenceSchema.Version,
                 classification,
@@ -268,7 +276,38 @@ public sealed class CompletionClosureRunner
                 independentAcceptance,
                 processesClean,
                 privacy,
-                evidence);
+                evidence,
+                invocationId);
+            if (classification != CertificationClassification.Passed)
+            {
+                bool quota = LiveProviderFailureClassifier.HasQuotaExhaustion(codexHome);
+                CertificationDiagnosisOutcome diagnosis = await (failureDiagnoser ?? new CertificationFailureDiagnoser())
+                    .DiagnoseIfNeededAsync(
+                        new CertificationFailureContext(
+                            invocationId!,
+                            failedTransition is not null,
+                            classification,
+                            quota,
+                            FailureExplanation(transitions, evidence),
+                            quota
+                                ? ["codex-rollout:used-percent:100", "codex-rollout:last-agent-message:null"]
+                                : transitions.LastOrDefault(item => !item.Completed)?.Diagnostics ?? evidence,
+                            quota ? "Wait until the confirmed provider quota window resets before an explicit rerun." : null,
+                            result,
+                            authorityRoot,
+                            repositoryPath,
+                            codexHome,
+                            codexExecutable,
+                            CertificationSourceSelection.ResolveExisting(
+                            [
+                                "src/LoopRelay.Certification/CompletionClosureRunner.cs",
+                                "src/LoopRelay.Core/Prompts/GenerateHandoff.prompt",
+                                "src/LoopRelay.Cli/Services/Cli/CompositionPromptExecutionOwner.cs",
+                            ]),
+                            failedTransition),
+                        cancellationToken);
+                result = result with { AttemptRecord = diagnosis.AttemptRecord, Diagnosis = diagnosis };
+            }
             string path = Path.Combine(authorityRoot, "evidence", "completion-closure.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
@@ -662,7 +701,15 @@ public sealed class CompletionClosureRunner
         }
         all.AddRange(["--repo", repository]);
         all.AddRange(arguments);
-        return await RunProcessAsync(file, all, repository, CertificationFixtureSettings.ProviderTurnTimeout, token);
+        string invocationId = CertificationInvocation.NewId();
+        ProcessResult result = await RunProcessAsync(
+            file,
+            all,
+            repository,
+            CertificationFixtureSettings.ProviderTurnTimeout,
+            token,
+            invocationId);
+        return result with { CertificationInvocationId = invocationId };
     }
 
     private static async Task<ProcessResult> RunProcessAsync(
@@ -670,7 +717,8 @@ public sealed class CompletionClosureRunner
         IReadOnlyList<string> arguments,
         string workingDirectory,
         TimeSpan timeout,
-        CancellationToken token)
+        CancellationToken token,
+        string? certificationInvocationId = null)
     {
         var start = new ProcessStartInfo
         {
@@ -681,6 +729,8 @@ public sealed class CompletionClosureRunner
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (certificationInvocationId is { Length: > 0 })
+            CertificationInvocation.Apply(start, certificationInvocationId);
         foreach (string argument in arguments) start.ArgumentList.Add(argument);
         using Process process = Process.Start(start) ?? throw new InvalidOperationException($"{file} did not start.");
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(token);
@@ -717,5 +767,19 @@ public sealed class CompletionClosureRunner
     private static string Digest(byte[] value) =>
         Convert.ToHexStringLower(SHA256.HashData(value));
 
-    private sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
+    private static string FailureExplanation(
+        IReadOnlyList<ExecuteTransitionCaseResult> transitions,
+        IReadOnlyList<string> evidence)
+    {
+        ExecuteTransitionCaseResult? failed = transitions.LastOrDefault(item => !item.Completed);
+        return failed is null
+            ? evidence.LastOrDefault() ?? "Completion-closure certification failed after its live transition sequence."
+            : $"Transition {failed.Transition} failed with exit code {failed.ExitCode}: {string.Join("; ", failed.Diagnostics)}";
+    }
+
+    private sealed record ProcessResult(
+        int ExitCode,
+        string StandardOutput,
+        string StandardError,
+        string? CertificationInvocationId = null);
 }
