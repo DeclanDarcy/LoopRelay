@@ -236,7 +236,7 @@ Run the component suite with:
 dotnet test LoopRelay.slnx --no-build --no-restore
 ```
 
-Provider-dependent approval tests are skipped by default, and live compatibility tests require explicit environment inputs. A green component suite does not establish assembled-product reliability.
+Provider-dependent approval and posture behavior is certified outside the component suite by explicit live campaigns. Those campaigns require environment inputs and may consume provider quota; a green component suite does not establish assembled-product reliability.
 
 The certification executable documents its commands with:
 
@@ -251,7 +251,7 @@ dotnet run --project src/LoopRelay.Certification -- canary --workspace . --cli s
 dotnet run --project src/LoopRelay.Certification -- milestone2 --workspace . --cli src/LoopRelay.Cli/bin/Debug/net10.0/LoopRelay.Cli.dll
 ```
 
-Live commands require `--codex <path>` and `--auth <path>`, may consume provider quota, and belong only in disposable cases. `milestone13` and `milestone14` exercise the traditional and evaluation full chains. Evidence defaults to `.tmp/certification/`; `--case-root` changes the location and `--retain-case` prevents cleanup.
+Live commands require `--codex <path>` and `--auth <path>`, may consume provider quota, and belong only in disposable cases. `milestone3` is the canonical live gate for Codex approval and posture behavior: it checks the exact provider profile, read-only `xhigh` acceptance, approval before mutation, precise file-change paths, declined-write completion, and scoped accepted writes. `milestone13` and `milestone14` exercise the traditional and evaluation full chains. Evidence defaults to `.tmp/certification/`; `--case-root` changes the location and `--retain-case` prevents cleanup.
 
 Checked-in [Codex compatibility fixtures](tests/LoopRelay.Agents.Compatibility.Tests/Fixtures/README.md) cover exact versions `0.142.5`, `0.144.0`, and `0.144.1`. They support exact-ID read/resume claims. Conversation reconstruction limits and lost-response fork reconciliation remain uncertified, so reconstruction and native fork stay gated.
 

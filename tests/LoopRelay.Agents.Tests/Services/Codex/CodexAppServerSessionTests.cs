@@ -361,48 +361,6 @@ public sealed class CodexAppServerSessionTests
         Assert.Equal("medium", turnStart.GetProperty("effort").GetString());
     }
 
-    // m10 (A) LIVE-ONLY: real codex-cli 0.139 acceptance of params.effort=="xhigh" and sandbox=="read-only" on a
-    // real app-server thread CANNOT run in-session (it needs codex login + a live process), so it is kept OFF the
-    // default CI path. The wire-level frame shape it would exercise is fully pinned by the captured-frame tests
-    // above; this skip-fact documents the manual certification step a release engineer runs against a live login.
-    [Fact(Skip = "requires codex login; manual/live cert — verify codex-cli 0.139 accepts effort=xhigh + sandbox=read-only on a live app-server thread")]
-    public void LiveCertification_RealCodexAcceptsXhighEffortAndReadOnlySandbox()
-    {
-        // Manual steps: (1) `codex login`; (2) open a held-open Decision app-server thread via the production
-        // launcher with BuildDecisionSpec's posture; (3) submit a turn and confirm codex accepts effort=xhigh and
-        // the read-only/never sandbox without error. No in-session assertion — see the captured-frame tests above.
-    }
-
-    [Fact(Skip = "requires codex login; manual/live cert — verify read-only app-server sessions request approval before file edits")]
-    public void LiveCertification_ReadOnlyAppServerRequestsApprovalBeforeFileEdits()
-    {
-        // Manual steps: open a scoped artifact operation session with sandbox=read-only and approval on-request,
-        // ask codex to edit an allowed file, and confirm the app-server emits item/fileChange/requestApproval
-        // before any repository mutation is applied.
-    }
-
-    [Fact(Skip = "requires codex login; manual/live cert — verify file-change approvals expose exact target paths")]
-    public void LiveCertification_FileChangeApprovalExposesExactTargetPath()
-    {
-        // Manual steps: capture the raw item/fileChange/requestApproval payload for a scoped artifact edit and
-        // confirm it contains a target path precise enough to compare against the operation profile. If codex only
-        // exposes a broad grantRoot, scoped operations must decline it.
-    }
-
-    [Fact(Skip = "requires codex login; manual/live cert — verify declined scoped approvals do not hang the turn")]
-    public void LiveCertification_DeclinedScopedApprovalDoesNotHang()
-    {
-        // Manual steps: force a scoped operation to request a disallowed edit, verify LoopRelay replies decline,
-        // and confirm codex fails or continues without leaving the turn parked indefinitely.
-    }
-
-    [Fact(Skip = "requires codex login; manual/live cert — verify accepted scoped approvals apply only requested writes")]
-    public void LiveCertification_AcceptedScopedApprovalAllowsOnlyRequestedWrite()
-    {
-        // Manual steps: approve an exact allowed scoped edit, confirm that write succeeds, and confirm a subsequent
-        // non-profile write still triggers and receives a declined approval.
-    }
-
     [Fact]
     public async Task HeldOpenFramesCarryNoMcpServersOrToolsProperties()
     {

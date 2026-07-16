@@ -486,8 +486,8 @@ dotnet test tests/LoopRelay.Cli.Tests/LoopRelay.Cli.Tests.csproj
   415 passed, 0 failed, 0 skipped
 ```
 
-The five skipped tests are live Codex approval/posture checks in
-`LoopRelay.Agents.Tests`; static compatibility tests pass 4/4. The restored suite includes 109
+At the time of this baseline, the five skipped tests were live Codex approval/posture placeholders in
+`LoopRelay.Agents.Tests`; static compatibility tests passed 4/4. The restored suite included 109
 passing Plan CLI tests and 473 passing Roadmap CLI tests.
 
 The reconciled failures covered stale prompt-policy, history, schema diagnostic, terminal
