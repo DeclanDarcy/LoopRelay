@@ -3,18 +3,18 @@ using System.Text.Json;
 
 namespace LoopRelay.Certification;
 
-public sealed class MilestoneTwoRunner
+public sealed class PublicCliContractsRunner
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
     };
 
-    public async Task<MilestoneTwoCertificationResult> RunAsync(
+    public async Task<PublicCliContractsCertificationResult> RunAsync(
         CertificationOptions options,
         CancellationToken cancellationToken = default)
     {
-        string suiteRoot = Path.Combine(options.CaseAuthorityRoot, "milestone-2", Guid.NewGuid().ToString("N"));
+        string suiteRoot = Path.Combine(options.CaseAuthorityRoot, "public-cli-contracts", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(suiteRoot);
         var results = new List<PublicCliCaseResult>();
         try
@@ -66,8 +66,8 @@ public sealed class MilestoneTwoRunner
         CertificationClassification classification = results.All(item => item.Passed)
             ? CertificationClassification.Passed
             : CertificationClassification.ProductRegression;
-        var result = new MilestoneTwoCertificationResult(CertificationRunner.ResultSchemaVersion, classification, results);
-        string evidencePath = Path.Combine(options.CaseAuthorityRoot, "evidence", "milestone-2.latest.json");
+        var result = new PublicCliContractsCertificationResult(CertificationEvidenceSchema.Version, classification, results);
+        string evidencePath = Path.Combine(options.CaseAuthorityRoot, "evidence", "public-cli-contracts.latest.json");
         Directory.CreateDirectory(Path.GetDirectoryName(evidencePath)!);
         await using FileStream stream = File.Create(evidencePath);
         await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);

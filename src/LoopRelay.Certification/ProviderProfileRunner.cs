@@ -19,17 +19,17 @@ using LoopRelay.Permissions.Services.Security;
 
 namespace LoopRelay.Certification;
 
-public sealed class MilestoneThreeRunner
+public sealed class ProviderProfileRunner
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    public async Task<MilestoneThreeCertificationResult> RunAsync(
+    public async Task<ProviderProfileCertificationResult> RunAsync(
         string codexExecutable,
         string authFile,
         string authorityRoot,
         CancellationToken cancellationToken = default)
     {
-        string root = Path.Combine(authorityRoot, "milestone-3", Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(authorityRoot, "provider-profile", Guid.NewGuid().ToString("N"));
         string repository = Path.Combine(root, "repository");
         string codexHome = Path.Combine(root, "codex-home");
         Directory.CreateDirectory(Path.Combine(repository, ".agents"));
@@ -181,7 +181,7 @@ public sealed class MilestoneThreeRunner
             }
         }
 
-        async Task<MilestoneThreeCertificationResult> Finish(CertificationClassification classification)
+        async Task<ProviderProfileCertificationResult> Finish(CertificationClassification classification)
         {
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(string.Join("\n", scrubbedEvidence), authorityRoot);
             if (privacy.Count > 0)
@@ -189,14 +189,14 @@ public sealed class MilestoneThreeRunner
                 classification = CertificationClassification.OracleDrift;
             }
 
-            var result = new MilestoneThreeCertificationResult(
-                CertificationRunner.ResultSchemaVersion,
+            var result = new ProviderProfileCertificationResult(
+                CertificationEvidenceSchema.Version,
                 classification,
                 version,
                 schemaDigest,
                 checks,
                 privacy);
-            string evidencePath = Path.Combine(authorityRoot, "evidence", "milestone-3.latest.json");
+            string evidencePath = Path.Combine(authorityRoot, "evidence", "provider-profile.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(evidencePath)!);
             await using FileStream stream = File.Create(evidencePath);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);

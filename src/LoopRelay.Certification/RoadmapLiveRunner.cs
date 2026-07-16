@@ -26,8 +26,8 @@ public sealed class RoadmapLiveRunner
         CancellationToken cancellationToken = default)
     {
         bool traditional = workflow == WorkflowIdentity.TraditionalRoadmap;
-        string milestone = traditional ? "milestone-9" : "milestone-10";
-        string root = Path.Combine(authorityRoot, milestone, Guid.NewGuid().ToString("N"));
+        string campaign = traditional ? "traditional-roadmap" : "eval-roadmap";
+        string root = Path.Combine(authorityRoot, campaign, Guid.NewGuid().ToString("N"));
         string repositoryPath = Path.Combine(root, "repository");
         string codexHome = Path.Combine(root, "codex-home");
         Directory.CreateDirectory(codexHome);
@@ -68,10 +68,10 @@ public sealed class RoadmapLiveRunner
             if (init.ExitCode != 0) throw new InvalidOperationException("Roadmap storage init failed.");
             if (traditional)
             {
-                var seededRepository = new Repository { Id = Guid.NewGuid(), Name = milestone, Path = repositoryPath };
+                var seededRepository = new Repository { Id = Guid.NewGuid(), Name = campaign, Path = repositoryPath };
                 var store = new CanonicalWorkflowPersistenceStore(seededRepository);
                 DateTimeOffset now = DateTimeOffset.UtcNow;
-                string[] seedEvidence = ["certification:milestone-9:roadmap-context-entry"];
+                string[] seedEvidence = ["certification:traditional-roadmap:roadmap-context-entry"];
                 await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
                     WorkflowIdentity.TraditionalRoadmap,
                     WorkflowResolutionState.Resumable,
@@ -138,7 +138,7 @@ public sealed class RoadmapLiveRunner
                 evidence.AddRange(ArtifactContractDiagnostics(repositoryPath, ".agents/epic.md", "epic"));
             }
 
-            var repository = new Repository { Id = Guid.NewGuid(), Name = milestone, Path = repositoryPath };
+            var repository = new Repository { Id = Guid.NewGuid(), Name = campaign, Path = repositoryPath };
             CanonicalWorkflowPersistenceSnapshot snapshot =
                 await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync(cancellationToken);
             ProductRecord? epicProduct = snapshot.Products.FirstOrDefault(product => product.Identity == ProductIdentity.PreparedEpic);
@@ -231,7 +231,7 @@ public sealed class RoadmapLiveRunner
                 string.Join("\n", evidence.Concat(transitions.SelectMany(item => item.Diagnostics))), authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
             var result = new RoadmapLiveCertificationResult(
-                CertificationRunner.ResultSchemaVersion,
+                CertificationEvidenceSchema.Version,
                 classification,
                 workflow.Value,
                 version,
@@ -244,7 +244,7 @@ public sealed class RoadmapLiveRunner
                 processesClean,
                 privacy,
                 evidence);
-            string path = Path.Combine(authorityRoot, "evidence", $"{milestone}.latest.json");
+            string path = Path.Combine(authorityRoot, "evidence", $"{campaign}.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);

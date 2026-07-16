@@ -3,16 +3,16 @@ using Xunit;
 
 namespace LoopRelay.Certification.Tests;
 
-public sealed class MilestoneTwelveTests
+public sealed class FailureOracleMatrixTests
 {
     [Fact]
     public async Task Failure_matrix_covers_every_canonical_transition_and_rejects_negative_oracles()
     {
         string workspace = FindWorkspace();
-        string authority = Path.Combine(Path.GetTempPath(), "looprelay-m12-" + Guid.NewGuid().ToString("N"));
+        string authority = Path.Combine(Path.GetTempPath(), "looprelay-failure-oracle-matrix-" + Guid.NewGuid().ToString("N"));
         try
         {
-            MilestoneTwelveCertificationResult result = await new MilestoneTwelveRunner().RunAsync(
+            FailureOracleMatrixCertificationResult result = await new FailureOracleMatrixRunner().RunAsync(
                 workspace, authority);
 
             int expectedTransitions = CanonicalWorkflowCatalog.CreateAll()
@@ -60,10 +60,10 @@ public sealed class MilestoneTwelveTests
     public async Task Retired_or_missing_evidence_returns_critical_dimensions_to_uncovered()
     {
         string workspace = FindWorkspace();
-        string authority = Path.Combine(Path.GetTempPath(), "looprelay-continuous-" + Guid.NewGuid().ToString("N"));
+        string authority = Path.Combine(Path.GetTempPath(), "looprelay-release-gate-" + Guid.NewGuid().ToString("N"));
         try
         {
-            ContinuousCertificationResult result = await new ContinuousCertificationRunner().RunAsync(
+            ReleaseGateResult result = await new ReleaseGateRunner().RunAsync(
                 workspace, authority);
 
             Assert.Equal(CertificationClassification.Blocked, result.Classification);
@@ -73,6 +73,8 @@ public sealed class MilestoneTwelveTests
             Assert.Equal("LocalWindowsOnly", result.PlatformClaim);
             Assert.DoesNotContain(result.Dimensions, item => item.Dimension is "windows-platform" or "linux-platform");
             Assert.Contains(result.Tiers, item => item.Identity == "cross-platform-diagnostic" && !item.ReleaseBlocking);
+            Assert.Contains(result.Tiers, item =>
+                item.Identity == "hermetic-fixtures" && item.Cadence == "post-epic-hardening");
             Assert.False(File.Exists(Path.Combine(authority, "evidence", "production-baseline.v1.json")));
         }
         finally

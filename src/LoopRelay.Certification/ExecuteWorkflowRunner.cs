@@ -15,7 +15,7 @@ using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Certification;
 
-public sealed class MilestoneSixRunner
+public sealed class ExecuteWorkflowRunner
 {
     private static readonly string[] Transitions =
     [
@@ -32,14 +32,14 @@ public sealed class MilestoneSixRunner
         Converters = { new JsonStringEnumConverter() },
     };
 
-    public async Task<MilestoneSixCertificationResult> RunAsync(
+    public async Task<ExecuteWorkflowCertificationResult> RunAsync(
         string codexExecutable,
         string authFile,
         string cliPath,
         string authorityRoot,
         CancellationToken cancellationToken = default)
     {
-        string root = Path.Combine(authorityRoot, "milestone-6", Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(authorityRoot, "execute-workflow", Guid.NewGuid().ToString("N"));
         string repositoryPath = Path.Combine(root, "repository");
         string codexHome = Path.Combine(root, "codex-home");
         Directory.CreateDirectory(codexHome);
@@ -88,7 +88,7 @@ public sealed class MilestoneSixRunner
                 return await Finish(CertificationClassification.EnvironmentFailure);
             }
 
-            var repository = new Repository { Id = Guid.NewGuid(), Name = "milestone-6", Path = repositoryPath };
+            var repository = new Repository { Id = Guid.NewGuid(), Name = "execute-workflow", Path = repositoryPath };
             await SeedExecuteEntryProductsAsync(repository, cancellationToken);
             foreach (string expected in Transitions)
             {
@@ -182,7 +182,7 @@ public sealed class MilestoneSixRunner
             }
         }
 
-        async Task<MilestoneSixCertificationResult> Finish(
+        async Task<ExecuteWorkflowCertificationResult> Finish(
             CertificationClassification classification,
             bool acceptance = false,
             bool verifierUnchanged = false,
@@ -196,8 +196,8 @@ public sealed class MilestoneSixRunner
             string scrubbed = string.Join("\n", evidence.Concat(transitions.SelectMany(item => item.Diagnostics)));
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(scrubbed, authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
-            var result = new MilestoneSixCertificationResult(
-                CertificationRunner.ResultSchemaVersion,
+            var result = new ExecuteWorkflowCertificationResult(
+                CertificationEvidenceSchema.Version,
                 classification,
                 version,
                 schema,
@@ -212,7 +212,7 @@ public sealed class MilestoneSixRunner
                 processesClean,
                 privacy,
                 evidence);
-            string path = Path.Combine(authorityRoot, "evidence", "milestone-6.latest.json");
+            string path = Path.Combine(authorityRoot, "evidence", "execute-workflow.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
@@ -272,20 +272,20 @@ public sealed class MilestoneSixRunner
         DateTimeOffset now = DateTimeOffset.UtcNow;
         await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
             WorkflowIdentity.Plan, WorkflowResolutionState.Completed, null, RuntimeOutcomeKind.Completed,
-            now, ["certification:milestone-6:plan-complete"]), token);
+            now, ["certification:execute-workflow:plan-complete"]), token);
         await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
             WorkflowIdentity.Execute,
             WorkflowResolutionState.Resumable,
             new WorkflowStageIdentity("Execution Readiness"),
             RuntimeOutcomeKind.Waiting,
             now,
-            ["certification:milestone-6:execute-entry"]), token);
+            ["certification:execute-workflow:execute-entry"]), token);
         await store.UpsertStageStateAsync(new CanonicalStageStateRecord(
             WorkflowIdentity.Execute,
             new WorkflowStageIdentity("Execution Readiness"),
             WorkflowResolutionState.Active,
             now,
-            ["certification:milestone-6:execute-entry"]), token);
+            ["certification:execute-workflow:execute-entry"]), token);
         (ProductIdentity Identity, string[] Paths)[] products =
         [
             (ProductIdentity.ExecutablePlan, [".agents/plan.md"]),
@@ -302,7 +302,7 @@ public sealed class MilestoneSixRunner
                 new WorkflowTransitionIdentity("VerifyExecuteEntryContract"),
                 [WorkflowIdentity.Execute],
                 "repository-owned certification seed",
-                "independent milestone-6 fixture",
+                "independent execute-workflow fixture",
                 paths,
                 Digest(string.Join('|', paths.Select(path => path + ":" + FileHashIfPresent(repository.Path, path)))),
                 ProductFreshness.Fresh,

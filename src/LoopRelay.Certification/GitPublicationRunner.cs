@@ -11,17 +11,17 @@ using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Certification;
 
-public sealed class MilestoneSevenRunner
+public sealed class GitPublicationRunner
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    public async Task<MilestoneSevenCertificationResult> RunAsync(
+    public async Task<GitPublicationCertificationResult> RunAsync(
         string cliPath,
         string authorityRoot,
         CancellationToken cancellationToken = default)
     {
-        string root = Path.Combine(authorityRoot, "milestone-7", Guid.NewGuid().ToString("N"));
-        string outsidePath = Path.Combine(authorityRoot, "milestone-7.outside-authority.sentinel");
+        string root = Path.Combine(authorityRoot, "git-publication", Guid.NewGuid().ToString("N"));
+        string outsidePath = Path.Combine(authorityRoot, "git-publication.outside-authority.sentinel");
         Directory.CreateDirectory(root);
         await File.WriteAllTextAsync(outsidePath, "outside-authority\n", cancellationToken);
         string outsideHash = Hash(await File.ReadAllBytesAsync(outsidePath, cancellationToken));
@@ -35,9 +35,9 @@ public sealed class MilestoneSevenRunner
             CertificationClassification classification = cases.All(item => item.Passed) && privacy.Count == 0
                 ? CertificationClassification.Passed
                 : CertificationClassification.ProductRegression;
-            var result = new MilestoneSevenCertificationResult(
-                CertificationRunner.ResultSchemaVersion, classification, cases, privacy);
-            string evidencePath = Path.Combine(authorityRoot, "evidence", "milestone-7.latest.json");
+            var result = new GitPublicationCertificationResult(
+                CertificationEvidenceSchema.Version, classification, cases, privacy);
+            string evidencePath = Path.Combine(authorityRoot, "evidence", "git-publication.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(evidencePath)!);
             await using FileStream stream = File.Create(evidencePath);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
@@ -48,12 +48,12 @@ public sealed class MilestoneSevenRunner
             cases.Add(new GitPublicationCaseResult(
                 "suite-failure", "unknown", 1, false, false, false, false, false, false, false,
                 [exception.GetType().Name, exception.Message]));
-            var result = new MilestoneSevenCertificationResult(
-                CertificationRunner.ResultSchemaVersion,
+            var result = new GitPublicationCertificationResult(
+                CertificationEvidenceSchema.Version,
                 CertificationClassification.EnvironmentFailure,
                 cases,
                 PrivacyScanner.Scan(string.Join("\n", cases.SelectMany(item => item.Evidence)), authorityRoot));
-            string evidencePath = Path.Combine(authorityRoot, "evidence", "milestone-7.latest.json");
+            string evidencePath = Path.Combine(authorityRoot, "evidence", "git-publication.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(evidencePath)!);
             await using FileStream stream = File.Create(evidencePath);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
@@ -232,7 +232,7 @@ public sealed class MilestoneSevenRunner
     {
         var store = new CanonicalWorkflowPersistenceStore(repository);
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        string[] evidence = ["certification:milestone-7:publication-entry"];
+        string[] evidence = ["certification:git-publication:publication-entry"];
         await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
             WorkflowIdentity.Execute,
             WorkflowResolutionState.Resumable,
@@ -280,7 +280,7 @@ public sealed class MilestoneSevenRunner
                     : "ExecuteImplementationSlice"),
                 [WorkflowIdentity.Execute],
                 "repository-owned certification seed",
-                "independent milestone-7 fixture",
+                "independent git-publication fixture",
                 [path],
                 Hash(identity.Value),
                 ProductFreshness.Fresh,

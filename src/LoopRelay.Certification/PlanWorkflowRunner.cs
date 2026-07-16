@@ -16,7 +16,7 @@ using LoopRelay.Permissions.Models.Policy;
 
 namespace LoopRelay.Certification;
 
-public sealed class MilestoneFiveRunner
+public sealed class PlanWorkflowRunner
 {
     private static readonly string[] Transitions =
     [
@@ -46,14 +46,14 @@ public sealed class MilestoneFiveRunner
         Converters = { new JsonStringEnumConverter() },
     };
 
-    public async Task<MilestoneFiveCertificationResult> RunAsync(
+    public async Task<PlanWorkflowCertificationResult> RunAsync(
         string codexExecutable,
         string authFile,
         string cliPath,
         string authorityRoot,
         CancellationToken cancellationToken = default)
     {
-        string root = Path.Combine(authorityRoot, "milestone-5", Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(authorityRoot, "plan-workflow", Guid.NewGuid().ToString("N"));
         string codexHome = Path.Combine(root, "codex-home");
         Directory.CreateDirectory(codexHome);
         File.Copy(authFile, Path.Combine(codexHome, "auth.json"));
@@ -219,15 +219,15 @@ public sealed class MilestoneFiveRunner
         PlanProducerCaseResult FailedCase(WorkflowIdentity producer, string diagnostic) => new(
             producer.Value, [], false, false, false, false, false, false, false, [diagnostic]);
 
-        async Task<MilestoneFiveCertificationResult> Finish(CertificationClassification classification)
+        async Task<PlanWorkflowCertificationResult> Finish(CertificationClassification classification)
         {
             string scrubbed = string.Join("\n", cases.SelectMany(item => item.Evidence)
                 .Concat(cases.SelectMany(item => item.Transitions).SelectMany(item => item.Diagnostics)));
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(scrubbed, authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
-            var result = new MilestoneFiveCertificationResult(
-                CertificationRunner.ResultSchemaVersion, classification, version, schema, cases, privacy);
-            string path = Path.Combine(authorityRoot, "evidence", "milestone-5.latest.json");
+            var result = new PlanWorkflowCertificationResult(
+                CertificationEvidenceSchema.Version, classification, version, schema, cases, privacy);
+            string path = Path.Combine(authorityRoot, "evidence", "plan-workflow.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
@@ -285,7 +285,7 @@ public sealed class MilestoneFiveRunner
             new WorkflowTransitionIdentity(producerTransition),
             [WorkflowIdentity.Plan],
             "repository-owned certification seed",
-            "independent milestone-5 fixture",
+            "independent plan-workflow fixture",
             [".agents/epic.md"],
             Digest(await File.ReadAllTextAsync(Path.Combine(repository.Path, ".agents", "epic.md"), token)),
             ProductFreshness.Fresh,
@@ -298,7 +298,7 @@ public sealed class MilestoneFiveRunner
             new WorkflowTransitionIdentity(producerTransition),
             [WorkflowIdentity.Plan],
             "repository-owned certification seed",
-            "independent milestone-5 fixture",
+            "independent plan-workflow fixture",
             [".agents/specs/m1.md"],
             Digest(await File.ReadAllTextAsync(Path.Combine(repository.Path, ".agents", "specs", "m1.md"), token)),
             ProductFreshness.Fresh,

@@ -3,8 +3,26 @@ using Xunit;
 
 namespace LoopRelay.Certification.Tests;
 
-public sealed class MilestoneOneTests
+public sealed class StatusCanaryTests
 {
+    [Fact]
+    public void Certification_commands_use_descriptive_non_milestone_names()
+    {
+        string[] names = CertificationCommandCatalog.Commands.Select(item => item.Name).ToArray();
+
+        Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain(names, name => name.Contains("milestone", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(CertificationCommandCatalog.StatusCanary, names);
+        Assert.Contains(CertificationCommandCatalog.PublicCliContracts, names);
+        Assert.Contains(CertificationCommandCatalog.TraditionalFullChain, names);
+        Assert.Contains(CertificationCommandCatalog.EvalFullChain, names);
+        Assert.Contains(CertificationCommandCatalog.ReleaseGate, names);
+        Assert.Equal(CertificationCommandKind.Deterministic,
+            CertificationCommandCatalog.Commands.Single(item => item.Name == CertificationCommandCatalog.PlatformProbe).Kind);
+        Assert.Equal(CertificationCommandKind.Deterministic,
+            CertificationCommandCatalog.Commands.Single(item => item.Name == CertificationCommandCatalog.FailureOracleMatrix).Kind);
+    }
+
     [Fact]
     public void RepositoryAndScenarioHaveStableIndependentIdentity()
     {

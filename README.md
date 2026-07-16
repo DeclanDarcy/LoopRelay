@@ -230,15 +230,17 @@ Recovery, effect settlement, workflow progression, and completion are separate o
 
 ## Verification and certification
 
-Run the component suite with:
+Run routine component verification with:
 
 ```powershell
 dotnet test LoopRelay.slnx --no-build --no-restore
 ```
 
-Provider-dependent approval and posture behavior is certified outside the component suite by explicit live campaigns. Those campaigns require environment inputs and may consume provider quota; a green component suite does not establish assembled-product reliability.
+Provider-dependent approval and posture behavior is certified outside the component suite by the explicit live `provider-profile` campaign, not by skipped component-test placeholders. The routine suite is expected to complete with no skips. Live campaigns require environment inputs and may consume provider capacity; a green component suite does not establish assembled-product reliability.
 
-The certification executable documents its commands with:
+The separate [certification fixture program](docs/certification.md) is reserved for post-epic completion hardening. It creates disposable repositories, may invoke the live Codex provider, and must not be added to ordinary “run all tests” verification. The guide documents prerequisites, the complete campaign order, evidence handling, and mandatory investigation of non-obvious failures.
+
+The executable lists its descriptive command surface with:
 
 ```powershell
 dotnet run --project src/LoopRelay.Certification -- --help
@@ -247,11 +249,11 @@ dotnet run --project src/LoopRelay.Certification -- --help
 After a Debug build, deterministic disposable-repository certifications can run without provider credentials:
 
 ```powershell
-dotnet run --project src/LoopRelay.Certification -- canary --workspace . --cli src/LoopRelay.Cli/bin/Debug/net10.0/LoopRelay.Cli.dll
-dotnet run --project src/LoopRelay.Certification -- milestone2 --workspace . --cli src/LoopRelay.Cli/bin/Debug/net10.0/LoopRelay.Cli.dll
+dotnet run --project src/LoopRelay.Certification -- status-canary --workspace . --cli src/LoopRelay.Cli/bin/Debug/net10.0/LoopRelay.Cli.dll
+dotnet run --project src/LoopRelay.Certification -- public-cli-contracts --workspace . --cli src/LoopRelay.Cli/bin/Debug/net10.0/LoopRelay.Cli.dll
 ```
 
-Live commands require `--codex <path>` and `--auth <path>`, may consume provider quota, and belong only in disposable cases. `milestone3` is the canonical live gate for Codex approval and posture behavior: it checks the exact provider profile, read-only `xhigh` acceptance, approval before mutation, precise file-change paths, declined-write completion, and scoped accepted writes. `milestone13` and `milestone14` exercise the traditional and evaluation full chains. Evidence defaults to `.tmp/certification/`; `--case-root` changes the location and `--retain-case` prevents cleanup.
+Live commands require `--codex <path>` and `--auth <path>` and may consume provider capacity. `provider-profile` is the canonical live gate for Codex approval and posture behavior: it checks the exact profile, read-only `xhigh` acceptance, approval before mutation, precise file-change paths, declined-write completion, and scoped accepted writes. `traditional-full-chain` and `eval-full-chain` exercise the two assembled roadmap-to-execution paths. Evidence defaults to `.tmp/certification/`; use `--case-root` for a dedicated campaign authority. Retention behavior is command-specific and is detailed in the certification guide.
 
 Checked-in [Codex compatibility fixtures](tests/LoopRelay.Agents.Compatibility.Tests/Fixtures/README.md) cover exact versions `0.142.5`, `0.144.0`, and `0.144.1`. They support exact-ID read/resume claims. Conversation reconstruction limits and lost-response fork reconciliation remain uncertified, so reconstruction and native fork stay gated.
 

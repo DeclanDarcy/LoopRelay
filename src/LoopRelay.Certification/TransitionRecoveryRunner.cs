@@ -20,21 +20,21 @@ using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Certification;
 
-public sealed class MilestoneFourRunner
+public sealed class TransitionRecoveryRunner
 {
     private static readonly WorkflowTransitionIdentity Transition = new("LiveRecoveryCanary");
     private static readonly ProductIdentity OutputProduct = new("LiveRecoveryEvidence");
     private static readonly WorkflowTransitionDefinition Definition = CreateDefinition();
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    public async Task<MilestoneFourCertificationResult> RunAsync(
+    public async Task<TransitionRecoveryCertificationResult> RunAsync(
         string codexExecutable,
         string authFile,
         string cliPath,
         string authorityRoot,
         CancellationToken cancellationToken = default)
     {
-        string root = Path.Combine(authorityRoot, "milestone-4", Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(authorityRoot, "transition-recovery", Guid.NewGuid().ToString("N"));
         string codexHome = Path.Combine(root, "codex-home");
         Directory.CreateDirectory(codexHome);
         File.Copy(authFile, Path.Combine(codexHome, "auth.json"));
@@ -291,14 +291,14 @@ public sealed class MilestoneFourRunner
                 ]);
         }
 
-        async Task<MilestoneFourCertificationResult> Finish(CertificationClassification classification)
+        async Task<TransitionRecoveryCertificationResult> Finish(CertificationClassification classification)
         {
             string scrubbed = string.Join("\n", cases.SelectMany(item => item.Evidence));
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(scrubbed, authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
-            var result = new MilestoneFourCertificationResult(
-                CertificationRunner.ResultSchemaVersion, classification, version, schema, cases, privacy);
-            string path = Path.Combine(authorityRoot, "evidence", "milestone-4.latest.json");
+            var result = new TransitionRecoveryCertificationResult(
+                CertificationEvidenceSchema.Version, classification, version, schema, cases, privacy);
+            string path = Path.Combine(authorityRoot, "evidence", "transition-recovery.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
@@ -355,7 +355,7 @@ public sealed class MilestoneFourRunner
             Transition,
             execution,
             authorization,
-            new Dictionary<string, string> { ["case"] = "milestone-4" });
+            new Dictionary<string, string> { ["case"] = "transition-recovery" });
     }
 
     private static async Task<CanonicalTransitionExecutionContext> SeedExecutionContextAsync(
@@ -370,7 +370,7 @@ public sealed class MilestoneFourRunner
         await persistence.UpsertRunAsync(new RunRecord(
             run.Value,
             workspace.Value,
-            "milestone-4-live-recovery",
+            "transition-recovery-live-recovery",
             InvocationModeKind.BoundedTraditional.ToString(),
             "Active",
             now,
@@ -381,7 +381,7 @@ public sealed class MilestoneFourRunner
             instance.Value,
             run.Value,
             WorkflowIdentity.TraditionalRoadmap,
-            "milestone-4",
+            "transition-recovery",
             "Active",
             now,
             null,
@@ -391,9 +391,9 @@ public sealed class MilestoneFourRunner
             workspace,
             run,
             instance,
-            new PolicyIdentity("policy_milestone_4"),
-            new RuntimeProfileIdentity("runtime_milestone_4"),
-            new PromptPolicyProfileIdentity("prompt_policy_milestone_4"));
+            new PolicyIdentity("policy_transition_recovery"),
+            new RuntimeProfileIdentity("runtime_transition_recovery"),
+            new PromptPolicyProfileIdentity("prompt_policy_transition_recovery"));
     }
 
     private static WorkflowTransitionDefinition CreateDefinition()

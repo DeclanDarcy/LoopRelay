@@ -7,16 +7,16 @@ using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Certification;
 
-public sealed class MilestoneEightRunner
+public sealed class PersistenceLifecycleRunner
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    public async Task<MilestoneEightCertificationResult> RunAsync(
+    public async Task<PersistenceLifecycleCertificationResult> RunAsync(
         string cliPath,
         string authorityRoot,
         CancellationToken cancellationToken = default)
     {
-        string root = Path.Combine(authorityRoot, "milestone-8", Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(authorityRoot, "persistence-lifecycle", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         var cases = new List<PersistenceLifecycleCaseResult>();
         IReadOnlyList<string> tables = [];
@@ -163,9 +163,9 @@ public sealed class MilestoneEightRunner
             CertificationClassification classification = cases.All(item => item.Passed) && privacy.Count == 0
                 ? CertificationClassification.Passed
                 : CertificationClassification.ProductRegression;
-            var result = new MilestoneEightCertificationResult(
-                CertificationRunner.ResultSchemaVersion, classification, tables, columns, cases, privacy);
-            string evidencePath = Path.Combine(authorityRoot, "evidence", "milestone-8.latest.json");
+            var result = new PersistenceLifecycleCertificationResult(
+                CertificationEvidenceSchema.Version, classification, tables, columns, cases, privacy);
+            string evidencePath = Path.Combine(authorityRoot, "evidence", "persistence-lifecycle.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(evidencePath)!);
             await using FileStream stream = File.Create(evidencePath);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);

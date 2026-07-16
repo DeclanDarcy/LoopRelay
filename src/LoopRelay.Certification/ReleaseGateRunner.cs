@@ -6,7 +6,7 @@ using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Certification;
 
-public sealed class ContinuousCertificationRunner
+public sealed class ReleaseGateRunner
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -16,22 +16,22 @@ public sealed class ContinuousCertificationRunner
     private static readonly DimensionSpec[] RequiredDimensions =
     [
         new("status-canary", EvidenceLevel.LiveTransition, "status-canary.latest.json"),
-        new("public-cli", EvidenceLevel.LiveTransition, "milestone-2.latest.json"),
-        new("provider-profile", EvidenceLevel.LiveTransition, "milestone-3.latest.json"),
-        new("transition-recovery", EvidenceLevel.LiveChainRecovery, "milestone-4.latest.json"),
-        new("plan", EvidenceLevel.LiveTransition, "milestone-5.latest.json"),
-        new("execute", EvidenceLevel.LiveTransition, "milestone-6.latest.json"),
-        new("git-publication", EvidenceLevel.LiveTransition, "milestone-7.latest.json"),
-        new("persistence", EvidenceLevel.LiveTransition, "milestone-8.latest.json"),
-        new("traditional-roadmap", EvidenceLevel.LiveTransition, "milestone-9.latest.json"),
-        new("eval-roadmap", EvidenceLevel.LiveTransition, "milestone-10.latest.json"),
-        new("completion-closure", EvidenceLevel.LiveChainRecovery, "milestone-11.latest.json"),
-        new("failure-oracle-matrix", EvidenceLevel.DeterministicComponent, "milestone-12.latest.json"),
-        new("traditional-full-chain", EvidenceLevel.LiveChainRecovery, "milestone-13.latest.json"),
-        new("eval-full-chain", EvidenceLevel.LiveChainRecovery, "milestone-14.latest.json"),
+        new("public-cli-contracts", EvidenceLevel.LiveTransition, "public-cli-contracts.latest.json"),
+        new("provider-profile", EvidenceLevel.LiveTransition, "provider-profile.latest.json"),
+        new("transition-recovery", EvidenceLevel.LiveChainRecovery, "transition-recovery.latest.json"),
+        new("plan-workflow", EvidenceLevel.LiveTransition, "plan-workflow.latest.json"),
+        new("execute-workflow", EvidenceLevel.LiveTransition, "execute-workflow.latest.json"),
+        new("git-publication", EvidenceLevel.LiveTransition, "git-publication.latest.json"),
+        new("persistence-lifecycle", EvidenceLevel.LiveTransition, "persistence-lifecycle.latest.json"),
+        new("traditional-roadmap", EvidenceLevel.LiveTransition, "traditional-roadmap.latest.json"),
+        new("eval-roadmap", EvidenceLevel.LiveTransition, "eval-roadmap.latest.json"),
+        new("completion-closure", EvidenceLevel.LiveChainRecovery, "completion-closure.latest.json"),
+        new("failure-oracle-matrix", EvidenceLevel.DeterministicComponent, "failure-oracle-matrix.latest.json"),
+        new("traditional-full-chain", EvidenceLevel.LiveChainRecovery, "traditional-full-chain.latest.json"),
+        new("eval-full-chain", EvidenceLevel.LiveChainRecovery, "eval-full-chain.latest.json"),
     ];
 
-    public async Task<ContinuousCertificationResult> RunAsync(
+    public async Task<ReleaseGateResult> RunAsync(
         string workspaceRoot,
         string authorityRoot,
         CancellationToken cancellationToken = default)
@@ -139,8 +139,8 @@ public sealed class ContinuousCertificationRunner
         CertificationClassification classification = privacy.Count > 0
             ? CertificationClassification.OracleDrift
             : passed ? CertificationClassification.Passed : CertificationClassification.Blocked;
-        var result = new ContinuousCertificationResult(
-            CertificationRunner.ResultSchemaVersion,
+        var result = new ReleaseGateResult(
+            CertificationEvidenceSchema.Version,
             classification,
             surfaceDigest,
             tiers,
@@ -156,7 +156,7 @@ public sealed class ContinuousCertificationRunner
             future,
             privacy,
             evidence);
-        string resultPath = Path.Combine(evidenceRoot, "milestone-15.latest.json");
+        string resultPath = Path.Combine(evidenceRoot, "release-gate.latest.json");
         await using (FileStream stream = File.Create(resultPath))
         {
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
@@ -178,15 +178,15 @@ public sealed class ContinuousCertificationRunner
 
     private static CertificationTierResult[] Tiers() =>
     [
-        new("hermetic-per-change", "every-change", EvidenceLevel.DeterministicComponent,
+        new("hermetic-fixtures", "post-epic-hardening", EvidenceLevel.DeterministicComponent,
             ["workflow", "persistence", "oracles", "fixtures"], true),
-        new("protocol-replay", "every-change", EvidenceLevel.Replay,
+        new("protocol-replay", "post-epic-hardening-and-profile-change", EvidenceLevel.Replay,
             ["provider-profile", "transport", "recovery"], true),
-        new("low-cost-live", "daily-and-release", EvidenceLevel.LiveTransition,
-            ["public-cli", "provider-profile", "plan", "execute"], true),
-        new("full-chain-smoke", "release-and-denominator-drift", EvidenceLevel.LiveChainRecovery,
+        new("targeted-live", "post-epic-hardening", EvidenceLevel.LiveTransition,
+            ["public-cli-contracts", "provider-profile", "plan-workflow", "execute-workflow"], true),
+        new("full-chain-smoke", "post-epic-hardening-and-denominator-drift", EvidenceLevel.LiveChainRecovery,
             ["traditional-full-chain", "eval-full-chain", "completion-closure"], true),
-        new("scheduled-recovery", "weekly", EvidenceLevel.LiveChainRecovery,
+        new("recovery-hardening", "post-epic-hardening", EvidenceLevel.LiveChainRecovery,
             ["transition-recovery", "failure-oracle-matrix"], true),
         new("cross-platform-diagnostic", "when-cross-platform-is-claimed", EvidenceLevel.Replay,
             ["windows-platform", "linux-platform"], false),
@@ -234,8 +234,8 @@ public sealed class ContinuousCertificationRunner
     {
         string[] paths =
         [
-            Path.Combine(evidenceRoot, "milestone-13.latest.json"),
-            Path.Combine(evidenceRoot, "milestone-14.latest.json"),
+            Path.Combine(evidenceRoot, "traditional-full-chain.latest.json"),
+            Path.Combine(evidenceRoot, "eval-full-chain.latest.json"),
         ];
         foreach (string path in paths)
         {
@@ -324,8 +324,8 @@ public sealed class ContinuousCertificationRunner
         adjudication.ApprovedAtUtc <= DateTimeOffset.UtcNow;
 
     private static bool RequiresFixtureProfile(string dimension) => dimension is
-        "plan" or
-        "execute" or
+        "plan-workflow" or
+        "execute-workflow" or
         "traditional-roadmap" or
         "eval-roadmap" or
         "completion-closure" or

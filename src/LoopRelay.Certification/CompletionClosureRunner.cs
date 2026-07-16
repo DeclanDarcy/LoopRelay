@@ -15,7 +15,7 @@ using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Certification;
 
-public sealed class MilestoneElevenRunner
+public sealed class CompletionClosureRunner
 {
     private static readonly string[] Transitions =
     [
@@ -29,14 +29,14 @@ public sealed class MilestoneElevenRunner
         WriteIndented = true,
     };
 
-    public async Task<MilestoneElevenCertificationResult> RunAsync(
+    public async Task<CompletionClosureCertificationResult> RunAsync(
         string codexExecutable,
         string authFile,
         string cliPath,
         string authorityRoot,
         CancellationToken cancellationToken = default)
     {
-        string root = Path.Combine(authorityRoot, "milestone-11", Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(authorityRoot, "completion-closure", Guid.NewGuid().ToString("N"));
         string repositoryPath = Path.Combine(root, "repository");
         string codexHome = Path.Combine(root, "codex-home");
         Directory.CreateDirectory(codexHome);
@@ -87,8 +87,8 @@ public sealed class MilestoneElevenRunner
                 cancellationToken);
             await CommitHarnessEvidenceAsync(repositoryPath, cancellationToken);
             ProcessResult init = await RunCliAsync(cliPath, repositoryPath, ["storage", "init"], cancellationToken);
-            if (init.ExitCode != 0) throw new InvalidOperationException("Milestone 11 storage init failed.");
-            var repository = new Repository { Id = Guid.NewGuid(), Name = "milestone-11", Path = repositoryPath };
+            if (init.ExitCode != 0) throw new InvalidOperationException("Completion-closure storage initialization failed.");
+            var repository = new Repository { Id = Guid.NewGuid(), Name = "completion-closure", Path = repositoryPath };
             await new SqliteExecutionEvidenceStore(repository)
                 .WriteAsync("harness-verifier-result", harnessVerifierEvidence);
             await SeedCompletionEntryAsync(repository, cancellationToken);
@@ -201,7 +201,7 @@ public sealed class MilestoneElevenRunner
                 restartRoute && archiveComplete && roadmapUpdated && canonicalClosure && continuityRetired &&
                 idempotent && independentAcceptance && processesClean;
             retainCase = !passed;
-            if (retainCase) evidence.Add($"retained-case:milestone-11/{Path.GetFileName(root)}");
+            if (retainCase) evidence.Add($"retained-case:completion-closure/{Path.GetFileName(root)}");
             return await Finish(
                 LiveProviderFailureClassifier.Classify(passed, codexHome),
                 restartRoute,
@@ -217,7 +217,7 @@ public sealed class MilestoneElevenRunner
         {
             retainCase = true;
             evidence.AddRange([exception.GetType().Name, exception.Message]);
-            evidence.Add($"retained-case:milestone-11/{Path.GetFileName(root)}");
+            evidence.Add($"retained-case:completion-closure/{Path.GetFileName(root)}");
             return await Finish(CertificationClassification.EnvironmentFailure);
         }
         finally
@@ -238,7 +238,7 @@ public sealed class MilestoneElevenRunner
             }
         }
 
-        async Task<MilestoneElevenCertificationResult> Finish(
+        async Task<CompletionClosureCertificationResult> Finish(
             CertificationClassification classification,
             bool restartRoute = false,
             bool archiveComplete = false,
@@ -253,8 +253,8 @@ public sealed class MilestoneElevenRunner
                 string.Join("\n", evidence.Concat(transitions.SelectMany(item => item.Diagnostics))),
                 authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
-            var result = new MilestoneElevenCertificationResult(
-                CertificationRunner.ResultSchemaVersion,
+            var result = new CompletionClosureCertificationResult(
+                CertificationEvidenceSchema.Version,
                 classification,
                 version,
                 schema,
@@ -269,7 +269,7 @@ public sealed class MilestoneElevenRunner
                 processesClean,
                 privacy,
                 evidence);
-            string path = Path.Combine(authorityRoot, "evidence", "milestone-11.latest.json");
+            string path = Path.Combine(authorityRoot, "evidence", "completion-closure.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
@@ -425,7 +425,7 @@ public sealed class MilestoneElevenRunner
     {
         var store = new CanonicalWorkflowPersistenceStore(repository);
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        string[] seedEvidence = ["certification:milestone-11:completion-entry"];
+        string[] seedEvidence = ["certification:completion-closure:completion-entry"];
         await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
             WorkflowIdentity.Execute,
             WorkflowResolutionState.Resumable,
@@ -474,7 +474,7 @@ public sealed class MilestoneElevenRunner
             transition,
             [WorkflowIdentity.Execute],
             "repository-owned certification seed",
-            "independent milestone-11 fixture",
+            "independent completion-closure fixture",
             paths,
             Digest(string.Join('|', paths)),
             ProductFreshness.Fresh,

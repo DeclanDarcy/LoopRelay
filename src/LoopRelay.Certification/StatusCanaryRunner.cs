@@ -4,9 +4,8 @@ using System.Text.Json;
 
 namespace LoopRelay.Certification;
 
-public sealed class CertificationRunner
+public sealed class StatusCanaryRunner
 {
-    public const string ResultSchemaVersion = "1";
     public const string OracleVersion = "1";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -14,7 +13,7 @@ public sealed class CertificationRunner
         WriteIndented = true,
     };
 
-    public async Task<CanaryCertificationResult> RunStatusCanaryAsync(
+    public async Task<StatusCanaryCertificationResult> RunStatusCanaryAsync(
         CertificationOptions options,
         CancellationToken cancellationToken = default)
     {
@@ -41,7 +40,7 @@ public sealed class CertificationRunner
                 ? CertificationClassification.Passed
                 : runs.FirstOrDefault(run => run.Classification != CertificationClassification.Passed)?.Classification
                     ?? CertificationClassification.FixtureDrift;
-        var result = new CanaryCertificationResult(ResultSchemaVersion, reproducible, classification, runs);
+        var result = new StatusCanaryCertificationResult(CertificationEvidenceSchema.Version, reproducible, classification, runs);
         string summaryPath = Path.Combine(options.CaseAuthorityRoot, "evidence", "status-canary.latest.json");
         Directory.CreateDirectory(Path.GetDirectoryName(summaryPath)!);
         await WriteJsonAsync(summaryPath, result, cancellationToken);
@@ -106,7 +105,7 @@ public sealed class CertificationRunner
         string stdoutPath = Path.Combine(evidenceRoot, "stdout.txt");
         string stderrPath = Path.Combine(evidenceRoot, "stderr.txt");
         var result = new CertificationRunResult(
-            ResultSchemaVersion,
+            CertificationEvidenceSchema.Version,
             runId,
             startedAt,
             finishedAt,

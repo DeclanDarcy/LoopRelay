@@ -1,15 +1,32 @@
 using System.Text.Json;
 using LoopRelay.Certification;
+using LoopRelay.Orchestration.Workflows;
 
 if (args.Length == 0 || args[0] is "-h" or "--help")
 {
-    Console.WriteLine("Usage: looprelay-certification <command> --workspace <path> [--cli <path>] [--codex <path>] [--auth <path>] [--case-root <path>] [--model <gpt-5.3-codex-spark|gpt-5.4-mini>] [--retain-case]");
-    Console.WriteLine("Live certification defaults to gpt-5.3-codex-spark. Select gpt-5.4-mini manually with --model; both profiles receive equal certification credit.");
+    PrintUsage();
     return 0;
 }
 
 string command = args[0];
-Dictionary<string, string?> options = ParseOptions(args.Skip(1).ToArray());
+if (!CertificationCommandCatalog.IsKnown(command))
+{
+    Console.Error.WriteLine($"Unknown command: {command}");
+    Console.Error.WriteLine("Run with --help to list the post-epic certification commands.");
+    return 2;
+}
+
+Dictionary<string, string?> options;
+try
+{
+    options = ParseOptions(args.Skip(1).ToArray());
+}
+catch (ArgumentException exception)
+{
+    Console.Error.WriteLine(exception.Message);
+    return 2;
+}
+
 if (options.TryGetValue("--model", out string? selectedModel))
 {
     try
@@ -22,6 +39,7 @@ if (options.TryGetValue("--model", out string? selectedModel))
         return 2;
     }
 }
+
 if (!options.TryGetValue("--workspace", out string? workspace) || string.IsNullOrWhiteSpace(workspace))
 {
     Console.Error.WriteLine("--workspace <path> is required.");
@@ -29,178 +47,149 @@ if (!options.TryGetValue("--workspace", out string? workspace) || string.IsNullO
 }
 
 workspace = Path.GetFullPath(workspace);
+CertificationCommandDefinition definition = CertificationCommandCatalog.Commands.Single(item => item.Name == command);
+string? cli = RequireOption(definition.RequiresCli, "--cli", options);
+if (definition.RequiresCli && cli is null) return 2;
+string? codex = RequireOption(definition.RequiresProvider, "--codex", options);
+string? auth = RequireOption(definition.RequiresProvider, "--auth", options);
+if (definition.RequiresProvider && (codex is null || auth is null)) return 2;
+
+string authorityRoot = options.TryGetValue("--case-root", out string? configuredRoot) &&
+    !string.IsNullOrWhiteSpace(configuredRoot)
+        ? Path.GetFullPath(configuredRoot)
+        : Path.Combine(workspace, ".tmp", "certification");
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
-if (command == "ledger")
-{
-    Console.WriteLine(JsonSerializer.Serialize(CoverageLedgerBuilder.Build(workspace), json));
-    return 0;
-}
 
-if (command == "platform")
-{
-    string platformRoot = options.TryGetValue("--case-root", out string? configured) && !string.IsNullOrWhiteSpace(configured)
-        ? Path.GetFullPath(configured)
-        : Path.Combine(workspace, ".tmp", "certification");
-    PlatformCertificationResult platform = await new PlatformCertificationRunner().RunAsync(platformRoot);
-    Console.WriteLine(JsonSerializer.Serialize(platform, json));
-    return platform.Classification == CertificationClassification.Passed ? 0 : 1;
-}
-
-if (command is not ("canary" or "milestone2" or "milestone3" or "milestone4" or "milestone5" or "milestone6" or "milestone7" or "milestone8" or "milestone9" or "milestone10" or "milestone11" or "milestone12" or "milestone13" or "milestone14" or "milestone15"))
-{
-    Console.Error.WriteLine($"Unknown command: {command}");
-    return 2;
-}
-
-if (command == "milestone12")
-{
-    string matrixRoot = options.TryGetValue("--case-root", out string? configured) && !string.IsNullOrWhiteSpace(configured)
-        ? Path.GetFullPath(configured)
-        : Path.Combine(workspace, ".tmp", "certification");
-    MilestoneTwelveCertificationResult matrix = await new MilestoneTwelveRunner().RunAsync(
-        workspace, matrixRoot);
-    Console.WriteLine(JsonSerializer.Serialize(matrix, json));
-    return matrix.Classification == CertificationClassification.Passed ? 0 : 1;
-}
-
-if (command == "milestone15")
-{
-    string continuousRoot = options.TryGetValue("--case-root", out string? configured) && !string.IsNullOrWhiteSpace(configured)
-        ? Path.GetFullPath(configured)
-        : Path.Combine(workspace, ".tmp", "certification");
-    ContinuousCertificationResult continuous = await new ContinuousCertificationRunner().RunAsync(
-        workspace, continuousRoot);
-    Console.WriteLine(JsonSerializer.Serialize(continuous, json));
-    return continuous.Classification == CertificationClassification.Passed ? 0 : 1;
-}
-
-if (command is "milestone3" or "milestone4" or "milestone5" or "milestone6" or "milestone9" or "milestone10" or "milestone11" or "milestone13" or "milestone14")
-{
-    if (!options.TryGetValue("--codex", out string? codex) || string.IsNullOrWhiteSpace(codex) ||
-        !options.TryGetValue("--auth", out string? auth) || string.IsNullOrWhiteSpace(auth))
-    {
-        Console.Error.WriteLine("--codex <path> and --auth <path> are required for live certification.");
-        return 2;
-    }
-
-    string liveRoot = options.TryGetValue("--case-root", out string? liveConfigured) && !string.IsNullOrWhiteSpace(liveConfigured)
-        ? Path.GetFullPath(liveConfigured)
-        : Path.Combine(workspace, ".tmp", "certification");
-    if (command == "milestone3")
-    {
-        MilestoneThreeCertificationResult live = await new MilestoneThreeRunner().RunAsync(
-            Path.GetFullPath(codex), Path.GetFullPath(auth), liveRoot);
-        Console.WriteLine(JsonSerializer.Serialize(live, json));
-        return live.Classification == CertificationClassification.Passed ? 0 : 1;
-    }
-
-    if (!options.TryGetValue("--cli", out string? recoveryCli) || string.IsNullOrWhiteSpace(recoveryCli))
-    {
-        Console.Error.WriteLine("--cli <path> is required for milestone4, milestone5, and milestone6.");
-        return 2;
-    }
-    if (command == "milestone5")
-    {
-        MilestoneFiveCertificationResult plan = await new MilestoneFiveRunner().RunAsync(
-            Path.GetFullPath(codex), Path.GetFullPath(auth), Path.GetFullPath(recoveryCli), liveRoot);
-        Console.WriteLine(JsonSerializer.Serialize(plan, json));
-        return plan.Classification == CertificationClassification.Passed ? 0 : 1;
-    }
-    if (command == "milestone6")
-    {
-        MilestoneSixCertificationResult execute = await new MilestoneSixRunner().RunAsync(
-            Path.GetFullPath(codex), Path.GetFullPath(auth), Path.GetFullPath(recoveryCli), liveRoot);
-        Console.WriteLine(JsonSerializer.Serialize(execute, json));
-        return execute.Classification == CertificationClassification.Passed ? 0 : 1;
-    }
-    if (command is "milestone9" or "milestone10")
-    {
-        if (!options.TryGetValue("--cli", out string? roadmapCli) || string.IsNullOrWhiteSpace(roadmapCli))
-        {
-            Console.Error.WriteLine("--cli <path> is required for live roadmap certification.");
-            return 2;
-        }
-        LoopRelay.Orchestration.Workflows.WorkflowIdentity workflow = command == "milestone9"
-            ? LoopRelay.Orchestration.Workflows.WorkflowIdentity.TraditionalRoadmap
-            : LoopRelay.Orchestration.Workflows.WorkflowIdentity.EvalRoadmap;
-        RoadmapLiveCertificationResult roadmap = await new RoadmapLiveRunner().RunAsync(
-            workflow, Path.GetFullPath(codex), Path.GetFullPath(auth), Path.GetFullPath(roadmapCli), liveRoot);
-        Console.WriteLine(JsonSerializer.Serialize(roadmap, json));
-        return roadmap.Classification == CertificationClassification.Passed ? 0 : 1;
-    }
-    if (command == "milestone11")
-    {
-        MilestoneElevenCertificationResult completion = await new MilestoneElevenRunner().RunAsync(
-            Path.GetFullPath(codex), Path.GetFullPath(auth), Path.GetFullPath(recoveryCli), liveRoot);
-        Console.WriteLine(JsonSerializer.Serialize(completion, json));
-        return completion.Classification == CertificationClassification.Passed ? 0 : 1;
-    }
-    if (command is "milestone13" or "milestone14")
-    {
-        LoopRelay.Orchestration.Workflows.WorkflowIdentity roadmapWorkflow = command == "milestone13"
-            ? LoopRelay.Orchestration.Workflows.WorkflowIdentity.TraditionalRoadmap
-            : LoopRelay.Orchestration.Workflows.WorkflowIdentity.EvalRoadmap;
-        FullChainCertificationResult chain = await new FullChainLiveRunner().RunAsync(
-            roadmapWorkflow, Path.GetFullPath(codex), Path.GetFullPath(auth),
-            Path.GetFullPath(recoveryCli), liveRoot, options.ContainsKey("--retain-case"));
-        Console.WriteLine(JsonSerializer.Serialize(chain, json));
-        return chain.Classification == CertificationClassification.Passed ? 0 : 1;
-    }
-
-    MilestoneFourCertificationResult recovery = await new MilestoneFourRunner().RunAsync(
-        Path.GetFullPath(codex), Path.GetFullPath(auth), Path.GetFullPath(recoveryCli), liveRoot);
-    Console.WriteLine(JsonSerializer.Serialize(recovery, json));
-    return recovery.Classification == CertificationClassification.Passed ? 0 : 1;
-}
-
-if (!options.TryGetValue("--cli", out string? cli) || string.IsNullOrWhiteSpace(cli))
-{
-    Console.Error.WriteLine("--cli <path> is required for canary execution.");
-    return 2;
-}
-
-string caseRoot = options.TryGetValue("--case-root", out string? configuredRoot) && !string.IsNullOrWhiteSpace(configuredRoot)
-    ? Path.GetFullPath(configuredRoot)
-    : Path.Combine(workspace, ".tmp", "certification");
 try
 {
-    if (command == "milestone7")
+    switch (command)
     {
-        MilestoneSevenCertificationResult publication = await new MilestoneSevenRunner().RunAsync(
-            Path.GetFullPath(cli), caseRoot);
-        Console.WriteLine(JsonSerializer.Serialize(publication, json));
-        return publication.Classification == CertificationClassification.Passed ? 0 : 1;
-    }
-    if (command == "milestone8")
-    {
-        MilestoneEightCertificationResult persistence = await new MilestoneEightRunner().RunAsync(
-            Path.GetFullPath(cli), caseRoot);
-        Console.WriteLine(JsonSerializer.Serialize(persistence, json));
-        return persistence.Classification == CertificationClassification.Passed ? 0 : 1;
-    }
+        case CertificationCommandCatalog.CoverageLedger:
+            Console.WriteLine(JsonSerializer.Serialize(CoverageLedgerBuilder.Build(workspace), json));
+            return 0;
 
-    if (command == "milestone2")
-    {
-        MilestoneTwoCertificationResult milestoneTwo = await new MilestoneTwoRunner().RunAsync(
-            new CertificationOptions(workspace, Path.GetFullPath(cli), caseRoot,
-                options.ContainsKey("--retain-case")));
-        Console.WriteLine(JsonSerializer.Serialize(milestoneTwo, json));
-        return milestoneTwo.Classification == CertificationClassification.Passed ? 0 : 1;
-    }
+        case CertificationCommandCatalog.PlatformProbe:
+            PlatformCertificationResult platform = await new PlatformCertificationRunner().RunAsync(authorityRoot);
+            return WriteResult(platform, platform.Classification);
 
-    CanaryCertificationResult result = await new CertificationRunner().RunStatusCanaryAsync(
-        new CertificationOptions(
-            workspace,
-            Path.GetFullPath(cli),
-            caseRoot,
-            options.ContainsKey("--retain-case")));
-    Console.WriteLine(JsonSerializer.Serialize(result, json));
-    return result.Classification == CertificationClassification.Passed ? 0 : 1;
+        case CertificationCommandCatalog.FailureOracleMatrix:
+            FailureOracleMatrixCertificationResult matrix = await new FailureOracleMatrixRunner().RunAsync(
+                workspace, authorityRoot);
+            return WriteResult(matrix, matrix.Classification);
+
+        case CertificationCommandCatalog.ReleaseGate:
+            ReleaseGateResult gate = await new ReleaseGateRunner().RunAsync(workspace, authorityRoot);
+            return WriteResult(gate, gate.Classification);
+
+        case CertificationCommandCatalog.ProviderProfile:
+            ProviderProfileCertificationResult profile = await new ProviderProfileRunner().RunAsync(
+                Path.GetFullPath(codex!), Path.GetFullPath(auth!), authorityRoot);
+            return WriteResult(profile, profile.Classification);
+
+        case CertificationCommandCatalog.TransitionRecovery:
+            TransitionRecoveryCertificationResult recovery = await new TransitionRecoveryRunner().RunAsync(
+                Path.GetFullPath(codex!), Path.GetFullPath(auth!), Path.GetFullPath(cli!), authorityRoot);
+            return WriteResult(recovery, recovery.Classification);
+
+        case CertificationCommandCatalog.PlanWorkflow:
+            PlanWorkflowCertificationResult plan = await new PlanWorkflowRunner().RunAsync(
+                Path.GetFullPath(codex!), Path.GetFullPath(auth!), Path.GetFullPath(cli!), authorityRoot);
+            return WriteResult(plan, plan.Classification);
+
+        case CertificationCommandCatalog.ExecuteWorkflow:
+            ExecuteWorkflowCertificationResult execute = await new ExecuteWorkflowRunner().RunAsync(
+                Path.GetFullPath(codex!), Path.GetFullPath(auth!), Path.GetFullPath(cli!), authorityRoot);
+            return WriteResult(execute, execute.Classification);
+
+        case CertificationCommandCatalog.TraditionalRoadmap:
+        case CertificationCommandCatalog.EvalRoadmap:
+            WorkflowIdentity roadmapWorkflow = command == CertificationCommandCatalog.TraditionalRoadmap
+                ? WorkflowIdentity.TraditionalRoadmap
+                : WorkflowIdentity.EvalRoadmap;
+            RoadmapLiveCertificationResult roadmap = await new RoadmapLiveRunner().RunAsync(
+                roadmapWorkflow, Path.GetFullPath(codex!), Path.GetFullPath(auth!),
+                Path.GetFullPath(cli!), authorityRoot);
+            return WriteResult(roadmap, roadmap.Classification);
+
+        case CertificationCommandCatalog.CompletionClosure:
+            CompletionClosureCertificationResult completion = await new CompletionClosureRunner().RunAsync(
+                Path.GetFullPath(codex!), Path.GetFullPath(auth!), Path.GetFullPath(cli!), authorityRoot);
+            return WriteResult(completion, completion.Classification);
+
+        case CertificationCommandCatalog.TraditionalFullChain:
+        case CertificationCommandCatalog.EvalFullChain:
+            WorkflowIdentity fullChainWorkflow = command == CertificationCommandCatalog.TraditionalFullChain
+                ? WorkflowIdentity.TraditionalRoadmap
+                : WorkflowIdentity.EvalRoadmap;
+            FullChainCertificationResult chain = await new FullChainLiveRunner().RunAsync(
+                fullChainWorkflow, Path.GetFullPath(codex!), Path.GetFullPath(auth!),
+                Path.GetFullPath(cli!), authorityRoot, options.ContainsKey("--retain-case"));
+            return WriteResult(chain, chain.Classification);
+
+        case CertificationCommandCatalog.GitPublication:
+            GitPublicationCertificationResult publication = await new GitPublicationRunner().RunAsync(
+                Path.GetFullPath(cli!), authorityRoot);
+            return WriteResult(publication, publication.Classification);
+
+        case CertificationCommandCatalog.PersistenceLifecycle:
+            PersistenceLifecycleCertificationResult persistence = await new PersistenceLifecycleRunner().RunAsync(
+                Path.GetFullPath(cli!), authorityRoot);
+            return WriteResult(persistence, persistence.Classification);
+
+        case CertificationCommandCatalog.PublicCliContracts:
+            PublicCliContractsCertificationResult publicCli = await new PublicCliContractsRunner().RunAsync(
+                new CertificationOptions(workspace, Path.GetFullPath(cli!), authorityRoot,
+                    options.ContainsKey("--retain-case")));
+            return WriteResult(publicCli, publicCli.Classification);
+
+        case CertificationCommandCatalog.StatusCanary:
+            StatusCanaryCertificationResult status = await new StatusCanaryRunner().RunStatusCanaryAsync(
+                new CertificationOptions(workspace, Path.GetFullPath(cli!), authorityRoot,
+                    options.ContainsKey("--retain-case")));
+            return WriteResult(status, status.Classification);
+
+        default:
+            throw new InvalidOperationException($"Command routing is incomplete for `{command}`.");
+    }
 }
-catch (Exception exception)
+catch (Exception exception) when (exception is not OperationCanceledException)
 {
     Console.Error.WriteLine(exception.Message);
     return 1;
+}
+
+int WriteResult<T>(T result, CertificationClassification classification)
+{
+    Console.WriteLine(JsonSerializer.Serialize(result, json));
+    return classification == CertificationClassification.Passed ? 0 : 1;
+}
+
+static string? RequireOption(
+    bool required,
+    string option,
+    IReadOnlyDictionary<string, string?> options)
+{
+    if (!required) return null;
+    if (options.TryGetValue(option, out string? value) && !string.IsNullOrWhiteSpace(value)) return value;
+    Console.Error.WriteLine($"{option} <path> is required for this certification command.");
+    return null;
+}
+
+static void PrintUsage()
+{
+    Console.WriteLine("Usage: looprelay-certification <command> --workspace <path> [--cli <path>] [--codex <path>] [--auth <path>] [--case-root <path>] [--model <gpt-5.3-codex-spark|gpt-5.4-mini>] [--retain-case]");
+    Console.WriteLine();
+    Console.WriteLine("This executable is reserved for post-epic completion hardening; it is not part of routine run-all-tests verification.");
+    Console.WriteLine("Live certification defaults to gpt-5.3-codex-spark at medium effort.");
+    Console.WriteLine();
+    Console.WriteLine("Commands:");
+    foreach (CertificationCommandDefinition item in CertificationCommandCatalog.Commands)
+    {
+        string kind = item.Kind.ToString().ToLowerInvariant();
+        Console.WriteLine($"  {item.Name,-28} [{kind}] {item.Purpose}");
+    }
+    Console.WriteLine();
+    Console.WriteLine("See docs/certification.md for prerequisites, campaign order, evidence handling, and failure adjudication.");
 }
 
 static Dictionary<string, string?> ParseOptions(string[] values)

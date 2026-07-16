@@ -78,12 +78,12 @@ public static class CoverageLedgerBuilder
             Add("persistence-schema", "LoopRelayWorkspaceDatabase");
         }
 
-        Add("public-cli", "status", creditCanary ? EvidenceLevel.LiveTransition : EvidenceLevel.Uncovered,
-            creditCanary ? ["milestone-1/status-canary"] : []);
+        Add("public-cli-contracts", "status", creditCanary ? EvidenceLevel.LiveTransition : EvidenceLevel.Uncovered,
+            creditCanary ? ["status-canary/status-canary"] : []);
         Add("fixture-lifecycle", "materialize-reset-repeat", creditCanary ? EvidenceLevel.DeterministicComponent : EvidenceLevel.Uncovered,
-            creditCanary ? ["milestone-1/repeated-cycle"] : []);
+            creditCanary ? ["status-canary/repeated-cycle"] : []);
         Add("oracle", "status-exact-structural-invariant", creditCanary ? EvidenceLevel.LiveTransition : EvidenceLevel.Uncovered,
-            creditCanary ? ["milestone-1/status-canary"] : []);
+            creditCanary ? ["status-canary/status-canary"] : []);
 
         CoverageObligation[] distinct = obligations
             .GroupBy(item => (item.Dimension, item.Identity))

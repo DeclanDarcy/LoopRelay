@@ -2,6 +2,11 @@ using System.Text.Json.Serialization;
 
 namespace LoopRelay.Certification;
 
+public static class CertificationEvidenceSchema
+{
+    public const string Version = "1";
+}
+
 [Flags]
 public enum CaseAuthority
 {
@@ -143,7 +148,7 @@ public sealed record CertificationRunResult(
     CoverageLedger Coverage,
     IReadOnlyList<string> EvidenceInventory);
 
-public sealed record CanaryCertificationResult(
+public sealed record StatusCanaryCertificationResult(
     string SchemaVersion,
     bool Reproducible,
     CertificationClassification Classification,
@@ -169,7 +174,7 @@ public sealed record PublicCliCaseResult(
     string NormalizedStandardError,
     IReadOnlyList<string> Diagnostics);
 
-public sealed record MilestoneTwoCertificationResult(
+public sealed record PublicCliContractsCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     IReadOnlyList<PublicCliCaseResult> Cases);
@@ -180,7 +185,7 @@ public sealed record LiveProviderCheck(
     string Classification,
     IReadOnlyList<string> Evidence);
 
-public sealed record MilestoneThreeCertificationResult(
+public sealed record ProviderProfileCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     string CodexVersion,
@@ -203,7 +208,7 @@ public sealed record RecoveryBoundaryCaseResult(
     bool Passed,
     IReadOnlyList<string> Evidence);
 
-public sealed record MilestoneFourCertificationResult(
+public sealed record TransitionRecoveryCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     string CodexVersion,
@@ -231,7 +236,7 @@ public sealed record PlanProducerCaseResult(
     bool Passed,
     IReadOnlyList<string> Evidence);
 
-public sealed record MilestoneFiveCertificationResult(
+public sealed record PlanWorkflowCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     string CodexVersion,
@@ -246,7 +251,7 @@ public sealed record ExecuteTransitionCaseResult(
     bool Completed,
     IReadOnlyList<string> Diagnostics);
 
-public sealed record MilestoneSixCertificationResult(
+public sealed record ExecuteWorkflowCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     string CodexVersion,
@@ -276,7 +281,7 @@ public sealed record GitPublicationCaseResult(
     bool Passed,
     IReadOnlyList<string> Evidence);
 
-public sealed record MilestoneSevenCertificationResult(
+public sealed record GitPublicationCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     IReadOnlyList<GitPublicationCaseResult> Cases,
@@ -289,7 +294,7 @@ public sealed record PersistenceLifecycleCaseResult(
     bool Passed,
     IReadOnlyList<string> Evidence);
 
-public sealed record MilestoneEightCertificationResult(
+public sealed record PersistenceLifecycleCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     IReadOnlyList<string> SchemaTables,
@@ -312,7 +317,7 @@ public sealed record RoadmapLiveCertificationResult(
     IReadOnlyList<string> PrivacyFindings,
     IReadOnlyList<string> Evidence);
 
-public sealed record MilestoneElevenCertificationResult(
+public sealed record CompletionClosureCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     string CodexVersion,
@@ -371,7 +376,7 @@ public sealed record CertificationGovernanceResult(
     IReadOnlyDictionary<string, string> EvidenceRetention,
     bool Passed);
 
-public sealed record MilestoneTwelveCertificationResult(
+public sealed record FailureOracleMatrixCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     IReadOnlyList<FailureCoverageCaseResult> FailureCases,
@@ -497,7 +502,7 @@ public sealed record ObligationEvidenceLink(
     EvidenceCreditStatus CreditStatus,
     string Reason);
 
-public sealed record ContinuousCertificationResult(
+public sealed record ReleaseGateResult(
     string SchemaVersion,
     CertificationClassification Classification,
     string ProductionSurfaceDigest,

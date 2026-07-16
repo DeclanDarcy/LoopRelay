@@ -52,7 +52,7 @@ public sealed class CertificationFixtureSettingsTests
     [InlineData("gpt-5.6-sol", "high", false)]
     [InlineData("", "medium", false)]
     [InlineData("gpt-5.4-mini", "", false)]
-    public void Continuous_evidence_credits_only_the_exact_certified_fixture_profile(
+    public void Release_gate_credits_only_the_exact_certified_fixture_profile(
         string model,
         string effort,
         bool expected)
@@ -60,7 +60,7 @@ public sealed class CertificationFixtureSettingsTests
         using JsonDocument document = JsonDocument.Parse(
             $$"""{"evidence":["model:{{model}}",{"nested":["effort:{{effort}}"]}]}""");
 
-        Assert.Equal(expected, ContinuousCertificationRunner.EvidenceUsesFixtureProfile(document.RootElement));
+        Assert.Equal(expected, ReleaseGateRunner.EvidenceUsesFixtureProfile(document.RootElement));
     }
 
     [Theory]
@@ -116,7 +116,7 @@ public sealed class CertificationFixtureSettingsTests
     {
         var adjudication = new CertificationEvidenceAdjudication(
             "1",
-            "milestone-14.latest.json",
+            "eval-full-chain.latest.json",
             "satisfactory-no-rerun",
             "user",
             DateTimeOffset.UtcNow,
@@ -130,11 +130,11 @@ public sealed class CertificationFixtureSettingsTests
             ["InterpretCompletionRoute", "VerifyWorkflowExitGate"],
             ["explicit-user-adjudication"]);
 
-        Assert.True(ContinuousCertificationRunner.IsAcceptedAdjudication(
+        Assert.True(ReleaseGateRunner.IsAcceptedAdjudication(
             adjudication,
-            "milestone-14.latest.json"));
-        Assert.False(ContinuousCertificationRunner.IsAcceptedAdjudication(
+            "eval-full-chain.latest.json"));
+        Assert.False(ReleaseGateRunner.IsAcceptedAdjudication(
             adjudication,
-            "milestone-13.latest.json"));
+            "traditional-full-chain.latest.json"));
     }
 }

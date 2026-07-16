@@ -93,7 +93,7 @@ public sealed class PlatformCertificationRunner
                 ? CertificationClassification.OracleDrift
                 : passed ? CertificationClassification.Passed : CertificationClassification.EnvironmentFailure;
             var result = new PlatformCertificationResult(
-                CertificationRunner.ResultSchemaVersion,
+                CertificationEvidenceSchema.Version,
                 classification,
                 platform,
                 RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant(),

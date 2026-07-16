@@ -83,8 +83,8 @@ public sealed class FullChainLiveRunner
         CancellationToken cancellationToken = default)
     {
         bool traditional = roadmapWorkflow == WorkflowIdentity.TraditionalRoadmap;
-        string milestone = traditional ? "milestone-13" : "milestone-14";
-        string root = Path.Combine(authorityRoot, milestone, Guid.NewGuid().ToString("N"));
+        string campaign = traditional ? "traditional-full-chain" : "eval-full-chain";
+        string root = Path.Combine(authorityRoot, campaign, Guid.NewGuid().ToString("N"));
         string repositoryPath = Path.Combine(root, "repository");
         string remotePath = Path.Combine(root, "remote.git");
         string agentsRemotePath = Path.Combine(root, "agents-remote.git");
@@ -185,7 +185,7 @@ public sealed class FullChainLiveRunner
             var repository = new Repository
             {
                 Id = Guid.NewGuid(),
-                Name = milestone,
+                Name = campaign,
                 Path = repositoryPath,
             };
             CanonicalWorkflowPersistenceSnapshot snapshot =
@@ -340,7 +340,7 @@ public sealed class FullChainLiveRunner
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
             preserveCase = retainFailedCase && classification != CertificationClassification.Passed;
             var result = new FullChainCertificationResult(
-                CertificationRunner.ResultSchemaVersion,
+                CertificationEvidenceSchema.Version,
                 classification,
                 traditional ? "TraditionalRoadmap->Plan->Execute" : "EvalRoadmap->Plan->Execute",
                 version,
@@ -361,7 +361,7 @@ public sealed class FullChainLiveRunner
                 budget,
                 privacy,
                 evidence);
-            string path = Path.Combine(authorityRoot, "evidence", $"{milestone}.latest.json");
+            string path = Path.Combine(authorityRoot, "evidence", $"{campaign}.latest.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using FileStream stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
