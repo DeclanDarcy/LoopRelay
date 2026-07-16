@@ -267,20 +267,30 @@ public sealed class ProviderProfileRunner(ICertificationFailureDiagnoser? failur
             spec.WorkingDirectory!,
             cancellationToken);
         var recording = new RecordingAgentProcess(process, spec.WorkingDirectory!, observations ?? []);
-        await using var session = new CodexAppServerSession(
+        var session = new CodexAppServerSession(
             spec,
             recording,
             new DeterministicAgentTokenEstimator(),
             permissionGateway);
-        AgentTurnResult result = await session.RunTurnAsync(prompt, cancellationToken: cancellationToken);
-        await CertificationInvocation.RecordDirectTurnAsync(
-            spec.WorkingDirectory!,
-            Environment.GetEnvironmentVariable("CODEX_HOME")!,
-            invocationId,
-            session.SessionId.Value.ToString(),
-            result.TurnIndex,
-            session.ThreadId,
-            result.ProviderTurnId,
+        string sessionId = session.SessionId.Value.ToString();
+        string? providerThreadId = null;
+        AgentTurnResult result = await CertificationDirectTurnLifecycle.RunAndRecordAsync(
+            session,
+            async token =>
+            {
+                AgentTurnResult turn = await session.RunTurnAsync(prompt, cancellationToken: token);
+                providerThreadId = session.ThreadId;
+                return turn;
+            },
+            (turn, token) => CertificationInvocation.RecordDirectTurnAsync(
+                spec.WorkingDirectory!,
+                Environment.GetEnvironmentVariable("CODEX_HOME")!,
+                invocationId,
+                sessionId,
+                turn.TurnIndex,
+                providerThreadId,
+                turn.ProviderTurnId,
+                token),
             cancellationToken);
         return new CertificationDirectTurn(result, invocationId);
     }

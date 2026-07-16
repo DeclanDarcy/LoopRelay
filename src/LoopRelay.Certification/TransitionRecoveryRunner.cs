@@ -546,16 +546,28 @@ public sealed class TransitionRecoveryRunner(ICertificationFailureDiagnoser? fai
                 SessionIdentity.New(), "m4-live-recovery", SessionRole.OperationalExecution,
                 new SandboxProfile("read-only", false, false, false),
                 CertificationFixtureSettings.BrainAgentModel, AgentEffort.Low, AgentConfigurationAuthority.Brain, repository);
-            await using var session = new CodexAppServerSession(spec, process, new DeterministicAgentTokenEstimator());
-            AgentTurnResult result = await session.RunTurnAsync(prompt.Fact.RenderedContent, cancellationToken: token);
-            await CertificationInvocation.RecordDirectTurnAsync(
-                repository,
-                codexHome,
-                InvocationId,
-                session.SessionId.Value.ToString(),
-                result.TurnIndex,
-                session.ThreadId,
-                result.ProviderTurnId,
+            var session = new CodexAppServerSession(spec, process, new DeterministicAgentTokenEstimator());
+            string sessionId = session.SessionId.Value.ToString();
+            string? providerThreadId = null;
+            AgentTurnResult result = await CertificationDirectTurnLifecycle.RunAndRecordAsync(
+                session,
+                async cancellationToken =>
+                {
+                    AgentTurnResult turn = await session.RunTurnAsync(
+                        prompt.Fact.RenderedContent,
+                        cancellationToken: cancellationToken);
+                    providerThreadId = session.ThreadId;
+                    return turn;
+                },
+                (turn, cancellationToken) => CertificationInvocation.RecordDirectTurnAsync(
+                    repository,
+                    codexHome,
+                    InvocationId,
+                    sessionId,
+                    turn.TurnIndex,
+                    providerThreadId,
+                    turn.ProviderTurnId,
+                    cancellationToken),
                 token);
             return new PromptExecutionResult(
                 result.State == AgentTurnState.Completed ? PromptExecutionStatus.Completed : PromptExecutionStatus.Failed,

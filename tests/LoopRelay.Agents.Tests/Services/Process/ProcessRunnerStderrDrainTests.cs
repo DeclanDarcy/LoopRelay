@@ -174,4 +174,70 @@ public sealed class ProcessRunnerStderrDrainTests
             }
         }
     }
+
+    [Fact]
+    public async Task DisposeAsync_WaitsForChildFileLocksToBeReleased()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        string directory = Path.GetTempPath();
+        string scriptPath = Path.Combine(directory, $"hold-lock-{Guid.NewGuid():N}.ps1");
+        string lockPath = Path.Combine(directory, $"held-{Guid.NewGuid():N}.lock");
+        await File.WriteAllTextAsync(scriptPath, """
+            param([string]$Path)
+            $stream = [System.IO.File]::Open(
+                $Path,
+                [System.IO.FileMode]::OpenOrCreate,
+                [System.IO.FileAccess]::ReadWrite,
+                [System.IO.FileShare]::None)
+            try {
+                [Console]::Out.WriteLine('LOCKED')
+                [Console]::Out.Flush()
+                [Console]::In.ReadLine() | Out-Null
+            }
+            finally {
+                $stream.Dispose()
+            }
+            """);
+
+        IAgentProcess? process = null;
+        try
+        {
+            process = await new ProcessRunner().StartInteractiveAsync(
+                "pwsh",
+                ["-NoProfile", "-File", scriptPath, lockPath],
+                directory);
+
+            await foreach (string line in process.ReadOutputLinesAsync())
+            {
+                Assert.Equal("LOCKED", line);
+                break;
+            }
+
+            Assert.Throws<IOException>(() => File.Open(
+                lockPath,
+                FileMode.Open,
+                FileAccess.ReadWrite,
+                FileShare.None));
+
+            await process.DisposeAsync();
+            process = null;
+
+            using FileStream reopened = File.Open(
+                lockPath,
+                FileMode.Open,
+                FileAccess.ReadWrite,
+                FileShare.None);
+        }
+        finally
+        {
+            if (process is not null)
+            {
+                await process.DisposeAsync();
+            }
+
+            File.Delete(scriptPath);
+            File.Delete(lockPath);
+        }
+    }
 }

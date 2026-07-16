@@ -216,15 +216,48 @@ internal sealed class AgentProcess(System.Diagnostics.Process _process) : IAgent
         }
 
         disposed = true;
-
-        if (!_process.HasExited)
+        bool canceled = !_process.HasExited;
+        if (canceled)
         {
             _process.Kill(entireProcessTree: true);
             State = AgentProcessState.Canceled;
         }
 
+        using var bounded = new CancellationTokenSource(ExitCaptureTimeout);
+        try
+        {
+            // The exit observer owns the single process wait and captures the terminal state. Waiting
+            // on its completion avoids racing a second WaitForExitAsync against process disposal.
+            await completion.Task.WaitAsync(bounded.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // A killed process should exit promptly. Keep teardown bounded if the OS does not settle it.
+        }
+        catch
+        {
+            // Process observation failed during teardown; disposal remains best-effort and bounded.
+        }
+
+        if (_process.HasExited)
+        {
+            ExitCode = _process.ExitCode;
+            State = canceled ? AgentProcessState.Canceled : AgentProcessState.Exited;
+        }
+
+        if (errorDrain is { } drain)
+        {
+            try
+            {
+                await drain.WaitAsync(bounded.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Preserve bounded teardown if stderr does not reach EOF after process termination.
+            }
+        }
+
         _process.Dispose();
-        await ValueTask.CompletedTask;
     }
 
     private async Task ObserveExitAsync()
