@@ -47,6 +47,7 @@ public sealed class ProviderProfileRunner(ICertificationFailureDiagnoser? failur
         string? failedInvocationId = null;
         string? lastInvocationId = null;
         bool providerAttempted = false;
+        bool preserveCase = false;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -185,7 +186,7 @@ public sealed class ProviderProfileRunner(ICertificationFailureDiagnoser? failur
                 File.Delete(authCopy);
             }
 
-            if (Directory.Exists(root))
+            if (!preserveCase && Directory.Exists(root))
             {
                 foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
@@ -203,6 +204,7 @@ public sealed class ProviderProfileRunner(ICertificationFailureDiagnoser? failur
             {
                 classification = CertificationClassification.OracleDrift;
             }
+            preserveCase = CertificationCaseRetention.ShouldPreserve(false, classification);
 
             string? invocationId = classification == CertificationClassification.Passed
                 ? null

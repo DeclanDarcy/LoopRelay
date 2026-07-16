@@ -66,6 +66,7 @@ public sealed class ExecuteWorkflowRunner(ICertificationFailureDiagnoser? failur
         HashSet<int> initialCodex = CodexProcessIds();
         string? failedInvocationId = null;
         string? failedTransition = null;
+        bool preserveCase = false;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -177,7 +178,7 @@ public sealed class ExecuteWorkflowRunner(ICertificationFailureDiagnoser? failur
             Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", priorSettings);
             string authCopy = Path.Combine(codexHome, "auth.json");
             if (File.Exists(authCopy)) File.Delete(authCopy);
-            if (Directory.Exists(root))
+            if (!preserveCase && Directory.Exists(root))
             {
                 foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
@@ -201,6 +202,7 @@ public sealed class ExecuteWorkflowRunner(ICertificationFailureDiagnoser? failur
             string scrubbed = string.Join("\n", evidence.Concat(transitions.SelectMany(item => item.Diagnostics)));
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(scrubbed, authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            preserveCase = CertificationCaseRetention.ShouldPreserve(false, classification);
             string? invocationId = classification == CertificationClassification.Passed
                 ? null
                 : failedInvocationId ?? $"execute-workflow-{Guid.NewGuid():N}";

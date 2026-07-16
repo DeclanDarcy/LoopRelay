@@ -77,7 +77,7 @@ Use the current installed Codex executable. Do not reuse a binary copied into an
 & $codex --version
 ```
 
-The harness accepts the certified models `gpt-5.3-codex-spark` and `gpt-5.4-mini` at medium effort. It defaults to `gpt-5.3-codex-spark`; pass `--model` explicitly in an evidence-producing campaign so the operator command records the intended profile.
+The harness accepts only the certified model `gpt-5.6-luna` at medium effort. Luna is also the default; pass `--model gpt-5.6-luna` explicitly in an evidence-producing campaign so the operator command records the intended profile. Other model names are rejected by the certification executable.
 
 ## Establish the campaign paths
 
@@ -90,7 +90,7 @@ $cli = (Resolve-Path 'src/LoopRelay.Cli/bin/Debug/net10.0/LoopRelay.Cli.dll').Pa
 $codex = (Resolve-Path '<current-native-codex-executable>').Path
 $auth = (Resolve-Path (Join-Path $env:USERPROFILE '.codex/auth.json')).Path
 $caseRoot = 'C:\LoopRelay-certification-evidence\<commit-or-campaign-id>'
-$model = 'gpt-5.3-codex-spark'
+$model = 'gpt-5.6-luna'
 ```
 
 Choose a case root outside `.tmp` when its JSON evidence must receive durable release-gate credit. The release gate classifies evidence beneath a `.tmp` path as local temporary evidence. Raw retained cases should remain in restricted storage even when the derived JSON evidence is copied into a durable bundle.
@@ -168,23 +168,23 @@ dotnet run --no-build --project $project -- completion-closure `
   --case-root $caseRoot --model $model
 ```
 
-Each live runner creates an isolated `CODEX_HOME`, copies the supplied auth file into it for execution, disables analytics where supported, and removes the copied auth file during cleanup. A failed live case is retained automatically in a non-overwriting attempt record; `--retain-case` is not required. Raw rollouts remain private even though the harness copies a bounded redacted segment into the attempt record when diagnosis needs one.
+Each live runner creates an isolated `CODEX_HOME`, copies the supplied auth file into it for execution, disables analytics where supported, and removes the copied auth file during cleanup. A failed live case is retained automatically; `--retain-case` is not required. The non-overwriting attempt record contains the repository copy and derived diagnosis, while the original private `<caseRoot>/<command>/<case-guid>/` remains available with its credential-free `codex-home` rollouts when automatic correlation cannot select a turn. Raw rollouts remain private even though the harness copies a bounded redacted segment into the attempt record when diagnosis needs one.
 
 ## Run both full chains
 
-The full chains exercise the assembled product across workflow boundaries. Run both profiles; failed-case retention is automatic:
+The full chains exercise the assembled product across workflow boundaries. Run both profiles; failed-case retention is automatic. Add `--retain-case` when the successful generated repositories are required as private fixture inputs for an evidence artifact:
 
 ```powershell
 dotnet run --no-build --project $project -- traditional-full-chain `
   --workspace $workspace --cli $cli --codex $codex --auth $auth `
-  --case-root $caseRoot --model $model
+  --case-root $caseRoot --model $model --retain-case
 
 dotnet run --no-build --project $project -- eval-full-chain `
   --workspace $workspace --cli $cli --codex $codex --auth $auth `
-  --case-root $caseRoot --model $model
+  --case-root $caseRoot --model $model --retain-case
 ```
 
-Passing live cases are removed after their derived evidence is written. The deterministic `status-canary` and `public-cli-contracts` commands still honor `--retain-case`; that flag is separate from automatic failed-live-attempt retention.
+Passing live cases are removed after their derived evidence is written unless the command supports and receives `--retain-case`. The full-chain runners and the deterministic `status-canary` and `public-cli-contracts` commands honor that flag. Automatic failed-live-attempt retention remains independent and does not require the flag.
 
 The current budget contract requires each full chain to complete within two hours, retain no more than 500 MiB of provider evidence, and emit the recognized provisional release-budget decision.
 

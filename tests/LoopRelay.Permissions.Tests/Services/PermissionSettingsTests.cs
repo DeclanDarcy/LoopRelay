@@ -87,6 +87,8 @@ public sealed class PermissionSettingsTests
     [Theory]
     [InlineData("model", "")]
     [InlineData("model", "gpt-unknown")]
+    [InlineData("model", "gpt-5.3-codex-spark")]
+    [InlineData("model", "gpt-5.4-mini")]
     [InlineData("effort", "")]
     [InlineData("effort", "extreme")]
     public void Loader_rejects_blank_or_unsupported_runtime_facts(string property, string value)
@@ -104,7 +106,7 @@ public sealed class PermissionSettingsTests
         JsonObject settings = DefaultSettings();
         settings.Remove("schemaVersion");
         settings.Remove("runtime");
-        settings["brainModel"] = "gpt-5.4-mini";
+        settings["brainModel"] = "gpt-5.6-luna";
         settings["brainEffort"] = "medium";
         settings["continuity"] = new JsonObject
         {
@@ -123,7 +125,7 @@ public sealed class PermissionSettingsTests
         CliSettingsLoadResult result = CliSettingsLoader.LoadFromFile(WriteSettings(settings));
 
         Assert.Equal("legacy-unversioned", result.Source.SchemaVersion);
-        Assert.Equal(AgentModel.Gpt54Mini, result.Runtime.Brain.Model);
+        Assert.Equal(AgentModel.Gpt56Luna, result.Runtime.Brain.Model);
         Assert.Equal(AgentEffort.Medium, result.Runtime.Brain.Effort);
         Assert.Equal(["codex-0.144"], result.Runtime.SupportedCodexProfiles);
         Assert.False(result.PolicyInputs.DecisionSessionResume);

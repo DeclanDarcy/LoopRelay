@@ -54,6 +54,7 @@ public sealed class TransitionRecoveryRunner(ICertificationFailureDiagnoser? fai
         string? currentInvocationId = null;
         string? currentRepositoryPath = null;
         string? currentCaseIdentity = null;
+        bool preserveCase = false;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -130,7 +131,7 @@ public sealed class TransitionRecoveryRunner(ICertificationFailureDiagnoser? fai
             Environment.SetEnvironmentVariable("CODEX_EXECUTABLE", priorExecutable);
             string authCopy = Path.Combine(codexHome, "auth.json");
             if (File.Exists(authCopy)) File.Delete(authCopy);
-            if (Directory.Exists(root))
+            if (!preserveCase && Directory.Exists(root))
             {
                 foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
@@ -316,6 +317,7 @@ public sealed class TransitionRecoveryRunner(ICertificationFailureDiagnoser? fai
             string scrubbed = string.Join("\n", cases.SelectMany(item => item.Evidence));
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(scrubbed, authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            preserveCase = CertificationCaseRetention.ShouldPreserve(false, classification);
             string? invocationId = classification == CertificationClassification.Passed
                 ? null
                 : failedInvocationId ?? currentInvocationId ?? $"transition-recovery-{Guid.NewGuid():N}";

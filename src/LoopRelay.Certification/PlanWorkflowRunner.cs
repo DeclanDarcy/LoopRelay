@@ -77,6 +77,7 @@ public sealed class PlanWorkflowRunner(ICertificationFailureDiagnoser? failureDi
         string? failedTransition = null;
         string? failedRepositoryPath = null;
         string? lastRepositoryPath = null;
+        bool preserveCase = false;
 
         try
         {
@@ -112,7 +113,7 @@ public sealed class PlanWorkflowRunner(ICertificationFailureDiagnoser? failureDi
             Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", priorSettings);
             string authCopy = Path.Combine(codexHome, "auth.json");
             if (File.Exists(authCopy)) File.Delete(authCopy);
-            if (Directory.Exists(root) && cases.All(item => item.Passed))
+            if (!preserveCase && Directory.Exists(root))
             {
                 foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
@@ -248,6 +249,7 @@ public sealed class PlanWorkflowRunner(ICertificationFailureDiagnoser? failureDi
                 .Concat(cases.SelectMany(item => item.Transitions).SelectMany(item => item.Diagnostics)));
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(scrubbed, authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            preserveCase = CertificationCaseRetention.ShouldPreserve(false, classification);
             string? invocationId = classification == CertificationClassification.Passed
                 ? null
                 : failedInvocationId ?? lastInvocationId ?? $"plan-workflow-{Guid.NewGuid():N}";

@@ -192,10 +192,10 @@ static string? RequireOption(
 
 static void PrintUsage()
 {
-    Console.WriteLine("Usage: looprelay-certification <command> --workspace <path> [--cli <path>] [--codex <path>] [--auth <path>] [--case-root <path>] [--attempt <path>] [--model <gpt-5.3-codex-spark|gpt-5.4-mini>] [--retain-case]");
+    Console.WriteLine("Usage: looprelay-certification <command> --workspace <path> [--cli <path>] [--codex <path>] [--auth <path>] [--case-root <path>] [--attempt <path>] [--model <gpt-5.6-luna>] [--retain-case]");
     Console.WriteLine();
     Console.WriteLine("This executable is reserved for post-epic completion hardening; it is not part of routine run-all-tests verification.");
-    Console.WriteLine("Live certification defaults to gpt-5.3-codex-spark at medium effort.");
+    Console.WriteLine("Live certification uses gpt-5.6-luna at medium effort.");
     Console.WriteLine();
     Console.WriteLine("Commands:");
     foreach (CertificationCommandDefinition item in CertificationCommandCatalog.Commands)

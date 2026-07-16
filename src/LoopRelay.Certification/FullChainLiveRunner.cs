@@ -15,6 +15,22 @@ using LoopRelay.Orchestration.Workflows;
 
 namespace LoopRelay.Certification;
 
+internal sealed record FullChainRepeatabilityRun(
+    int Run,
+    string CleanState,
+    string WorkingDirectory,
+    string ImplementationInvocation,
+    int ImplementationExitCode,
+    string GreetingSha256,
+    int GreetingByteLength,
+    bool Utf8Valid,
+    bool Utf8BomPresent,
+    string VerifierInvocation,
+    int VerifierExitCode,
+    string VerifierSha256,
+    DateTimeOffset StartedAt,
+    DateTimeOffset CompletedAt);
+
 public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureDiagnoser = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -79,7 +95,7 @@ public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureD
         string authFile,
         string cliPath,
         string authorityRoot,
-        bool retainFailedCase = false,
+        bool retainCase = false,
         CancellationToken cancellationToken = default)
     {
         bool traditional = roadmapWorkflow == WorkflowIdentity.TraditionalRoadmap;
@@ -345,7 +361,11 @@ public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureD
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(
                 string.Join('\n', evidence.Concat(transitions.SelectMany(item => item.Evidence))), authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
-            preserveCase = classification != CertificationClassification.Passed;
+            preserveCase = CertificationCaseRetention.ShouldPreserve(retainCase, classification);
+            if (retainCase && classification == CertificationClassification.Passed)
+            {
+                evidence.Add($"retained-case:{campaign}/{Path.GetFileName(root)}");
+            }
             string? invocationId = classification == CertificationClassification.Passed
                 ? null
                 : failedInvocationId ?? $"full-chain-{Guid.NewGuid():N}";
@@ -575,12 +595,12 @@ public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureD
             throw new InvalidOperationException("Independent completion evidence requires GREETING.md.");
         }
 
+        IReadOnlyList<FullChainRepeatabilityRun> repeatabilityRuns =
+            await RecordImplementationRepeatabilityAsync(repository, cancellationToken);
         byte[] exactBytes = await File.ReadAllBytesAsync(greeting, cancellationToken);
-        DateTimeOffset verificationStartedAt = DateTimeOffset.UtcNow;
-        string verifierHashBefore = Digest(await File.ReadAllBytesAsync(verifier, cancellationToken));
-        ProcessResult positiveBefore = await RunProcessAsync(
-            "pwsh", ["-NoProfile", "-File", "verify.ps1"], repository,
-            TimeSpan.FromMinutes(2), cancellationToken);
+        DateTimeOffset verificationStartedAt = repeatabilityRuns[0].StartedAt;
+        string verifierHashBefore = repeatabilityRuns[0].VerifierSha256;
+        int positiveBeforeExit = repeatabilityRuns[^1].VerifierExitCode;
         string missingPath = greeting + ".certification-missing";
         ProcessResult missing;
         File.Move(greeting, missingPath);
@@ -621,22 +641,36 @@ public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureD
             committedVerifier.StandardOutput.Trim() == workingVerifier.StandardOutput.Trim();
         bool exactGreeting = exactBytes.AsSpan().SequenceEqual(
             Encoding.UTF8.GetBytes("Hello from Loop Relay.\n"));
-        if (positiveBefore.ExitCode != 0 || positiveAfter.ExitCode != 0 ||
+        if (positiveBeforeExit != 0 || positiveAfter.ExitCode != 0 ||
             missing.ExitCode == 0 || altered.ExitCode == 0 || !verifierIdentity || !exactGreeting)
         {
             throw new InvalidOperationException(
                 "Independent completion verifier or negative-control evidence failed before certification.");
         }
 
+        string repeatabilityRows = string.Join(
+            Environment.NewLine,
+            repeatabilityRuns.Select(run =>
+                $"| {run.Run} | `{run.CleanState}` | `{run.ImplementationInvocation}` | `{run.WorkingDirectory}` | " +
+                $"{run.ImplementationExitCode} | `{run.GreetingSha256}` | {run.GreetingByteLength} | " +
+                $"{run.Utf8Valid} | {run.Utf8BomPresent} | `{run.VerifierInvocation}` | {run.VerifierExitCode} | " +
+                $"`{run.VerifierSha256}` | {run.StartedAt:O} | {run.CompletedAt:O} |"));
         string evidence = $"""
             # Independent Full-Chain Completion Evidence
 
             | Field | Value |
             |---|---|
             | Authority | LoopRelay.Certification independent harness |
+            | Required Clean Implementation Runs | 2 |
+            | Successful Clean Implementation Runs | {repeatabilityRuns.Count} |
+            | Clean State Definition | Generated `GREETING.md` absent before each implementation run; implementation and verifier inputs unchanged |
+            | Equivalent Clean States | True |
+            | Repeat Output Bytes Identical | True |
+            | Repeat Implementation Exit Behavior Identical | True |
+            | Repeat Verifier Exit Behavior Identical | True |
             | Baseline Scenario | baseline |
             | Baseline Status | pass |
-            | Positive Verifier Exit Before Controls | {positiveBefore.ExitCode} |
+            | Positive Verifier Exit Before Controls | {positiveBeforeExit} |
             | Missing Scenario | NC-006-missing-output |
             | Missing Status | non-pass |
             | Missing Greeting Negative-Control Exit | {missing.ExitCode} |
@@ -658,20 +692,24 @@ public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureD
             | Verifier Git Blob Identity Matches | {verifierIdentity} |
             | Executed Before Completion Certification | True |
 
-            The harness proved the exact positive case, proved both required negative controls, restored the exact
-            accepted bytes, reran the positive verifier, and confirmed the immutable verifier matches Git authority.
+            ## Clean Implementation Repeatability Runs
+
+            | run | clean state | implementation invocation | working directory | implementation exit | greeting SHA-256 | byte length | UTF-8 valid | UTF-8 BOM present | verifier invocation | verifier exit | verifier SHA-256 | started at | completed at |
+            |---:|---|---|---|---:|---|---:|---|---|---|---:|---|---|---|
+            {repeatabilityRows}
+
+            The harness executed the implementation and verifier twice from equivalent clean states, proved identical
+            exact output and exit behavior, proved both required negative controls, restored the exact accepted bytes,
+            reran the positive verifier, and confirmed the immutable verifier matches Git authority.
             """;
         const string relativeEvidence = ".agents/evidence/execution/full-chain-verifier-result.md";
         await WriteAsync(repository, relativeEvidence, evidence, cancellationToken);
         string milestoneRelativePath = await RecordMilestoneCompletionAsync(
             repository,
-            positiveBefore.ExitCode,
+            repeatabilityRuns,
             missing.ExitCode,
             altered.ExitCode,
-            verificationStartedAt,
             verificationCompletedAt,
-            Digest(exactBytes),
-            verifierHashBefore,
             cancellationToken);
         var repositoryModel = new Repository
         {
@@ -703,15 +741,121 @@ public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureD
         }
     }
 
+    internal static async Task<IReadOnlyList<FullChainRepeatabilityRun>>
+        RecordImplementationRepeatabilityAsync(
+            string repository,
+            CancellationToken cancellationToken)
+    {
+        const string implementationInvocation = "pwsh -NoProfile -File implement.ps1";
+        const string verifierInvocation = "pwsh -NoProfile -File verify.ps1";
+        const string cleanState = "GREETING.md absent";
+        const string workingDirectory = ". (repository root)";
+        string implementation = Path.Combine(repository, "implement.ps1");
+        string verifier = Path.Combine(repository, "verify.ps1");
+        string greeting = Path.Combine(repository, "GREETING.md");
+        if (!File.Exists(implementation) || !File.Exists(verifier))
+        {
+            throw new InvalidOperationException(
+                "Independent repeatability evidence requires implement.ps1 and verify.ps1.");
+        }
+
+        byte[] expectedGreeting = Encoding.UTF8.GetBytes("Hello from Loop Relay.\n");
+        var runs = new List<FullChainRepeatabilityRun>(2);
+        for (int run = 1; run <= 2; run++)
+        {
+            File.Delete(greeting);
+            if (File.Exists(greeting))
+            {
+                throw new InvalidOperationException(
+                    $"Clean implementation run {run} could not remove prior generated output.");
+            }
+
+            DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+            ProcessResult implementationResult = await RunProcessAsync(
+                "pwsh", ["-NoProfile", "-File", "implement.ps1"], repository,
+                TimeSpan.FromMinutes(2), cancellationToken);
+            if (implementationResult.ExitCode != 0 || !File.Exists(greeting))
+            {
+                throw new InvalidOperationException(
+                    $"Clean implementation run {run} failed to produce GREETING.md with exit code " +
+                    $"{implementationResult.ExitCode}.");
+            }
+
+            byte[] greetingBytes = await File.ReadAllBytesAsync(greeting, cancellationToken);
+            string verifierHash = Digest(await File.ReadAllBytesAsync(verifier, cancellationToken));
+            ProcessResult verifierResult = await RunProcessAsync(
+                "pwsh", ["-NoProfile", "-File", "verify.ps1"], repository,
+                TimeSpan.FromMinutes(2), cancellationToken);
+            DateTimeOffset completedAt = DateTimeOffset.UtcNow;
+            bool utf8Valid = IsValidUtf8(greetingBytes);
+            bool utf8BomPresent = greetingBytes.Length >= 3 &&
+                greetingBytes[0] == 0xEF && greetingBytes[1] == 0xBB && greetingBytes[2] == 0xBF;
+            if (verifierResult.ExitCode != 0 ||
+                !greetingBytes.AsSpan().SequenceEqual(expectedGreeting) ||
+                !utf8Valid || utf8BomPresent)
+            {
+                throw new InvalidOperationException(
+                    $"Clean implementation run {run} failed exact output or verifier requirements.");
+            }
+
+            runs.Add(new FullChainRepeatabilityRun(
+                run,
+                cleanState,
+                workingDirectory,
+                implementationInvocation,
+                implementationResult.ExitCode,
+                Digest(greetingBytes),
+                greetingBytes.Length,
+                utf8Valid,
+                utf8BomPresent,
+                verifierInvocation,
+                verifierResult.ExitCode,
+                verifierHash,
+                startedAt,
+                completedAt));
+        }
+
+        if (runs.Count != 2 || runs
+                .Select(run => new
+                {
+                    run.ImplementationExitCode,
+                    run.GreetingSha256,
+                    run.GreetingByteLength,
+                    run.Utf8Valid,
+                    run.Utf8BomPresent,
+                    run.VerifierExitCode,
+                    run.VerifierSha256,
+                })
+                .Distinct()
+                .Count() != 1)
+        {
+            throw new InvalidOperationException(
+                "Independent clean implementation runs did not produce equivalent results.");
+        }
+
+        return runs;
+    }
+
+    private static bool IsValidUtf8(byte[] bytes)
+    {
+        try
+        {
+            _ = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+                .GetString(bytes);
+            return true;
+        }
+        catch (DecoderFallbackException)
+        {
+            return false;
+        }
+    }
+
     private static async Task<string> RecordMilestoneCompletionAsync(
         string repository,
-        int baselineExit,
+        IReadOnlyList<FullChainRepeatabilityRun> repeatabilityRuns,
         int missingExit,
         int alteredExit,
-        DateTimeOffset startedAt,
         DateTimeOffset completedAt,
-        string greetingHash,
-        string verifierHash,
         CancellationToken cancellationToken)
     {
         string milestones = Path.Combine(repository, ".agents", "milestones");
@@ -731,6 +875,13 @@ public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureD
             content,
             @"(?im)^(Milestone state:\s*)pending\s*$",
             "$1complete");
+        string repeatabilityRows = string.Join(
+            Environment.NewLine,
+            repeatabilityRuns.Select(run =>
+                $"| {run.Run} | `{run.CleanState}` | `{run.ImplementationInvocation}` | `{run.WorkingDirectory}` | " +
+                $"{run.ImplementationExitCode} | `{run.GreetingSha256}` | {run.GreetingByteLength} | " +
+                $"{run.Utf8Valid} | {run.Utf8BomPresent} | `{run.VerifierInvocation}` | " +
+                $"{run.VerifierExitCode} | `{run.VerifierSha256}` | {run.StartedAt:O} | {run.CompletedAt:O} |"));
         content += $"""
 
             ## Independent Harness Completion Record
@@ -738,20 +889,25 @@ public sealed class FullChainLiveRunner(ICertificationFailureDiagnoser? failureD
             Milestone state: complete
 
             - [x] Canonical implementation produced the exact greeting bytes.
-            - [x] Baseline verifier exited `0`.
+            - [x] Two equivalent clean implementation and positive-verification runs completed.
+            - [x] Both implementation runs exited `0` with identical exact output bytes.
+            - [x] Both positive verifier runs exited `0` with the same verifier identity.
             - [x] Missing-output control exited nonzero.
             - [x] Altered-content control exited nonzero.
-            - [x] Ordered sequence `exact -> missing -> altered` completed.
+            - [x] Ordered negative-control sequence `missing -> altered -> exact restore` completed.
             - [x] Verifier identity remained unchanged.
 
-            | sequence | case | command | status | exit_code | artifact_state | observed_at |
-            |---:|---|---|---|---:|---|---|
-            | 1 | exact | `pwsh -NoProfile -File implement.ps1`; `pwsh -NoProfile -File verify.ps1` | pass | {baselineExit} | `GREETING.md` SHA-256 `{greetingHash}` | {startedAt:O} |
-            | 2 | missing | `pwsh -NoProfile -File verify.ps1` | non-pass | {missingExit} | `GREETING.md` absent, then restored | {startedAt:O} |
-            | 3 | altered | `pwsh -NoProfile -File verify.ps1` | non-pass | {alteredExit} | altered bytes rejected, then exact bytes restored | {completedAt:O} |
+            | run | clean state | implementation invocation | working directory | implementation exit | greeting SHA-256 | byte length | UTF-8 valid | UTF-8 BOM present | verifier invocation | verifier exit | verifier SHA-256 | started at | completed at |
+            |---:|---|---|---|---:|---|---:|---|---|---|---:|---|---|---|
+            {repeatabilityRows}
 
-            Verifier SHA-256 before and after: `{verifierHash}`. Pass/non-pass classification derives only from
-            process exit codes. The independent harness recorded this completion before epic certification.
+            | control | verifier invocation | expected status | observed exit | completed at |
+            |---|---|---|---:|---|
+            | missing output | `pwsh -NoProfile -File verify.ps1` | non-pass | {missingExit} | {completedAt:O} |
+            | altered output | `pwsh -NoProfile -File verify.ps1` | non-pass | {alteredExit} | {completedAt:O} |
+
+            The exact successful implementation-run count is `{repeatabilityRuns.Count}`. Pass/non-pass classification
+            derives only from process exit codes. The independent harness recorded this completion before epic certification.
             """;
         await File.WriteAllTextAsync(path, content, cancellationToken);
         return Path.GetRelativePath(Path.Combine(repository, ".agents"), path).Replace('\\', '/');

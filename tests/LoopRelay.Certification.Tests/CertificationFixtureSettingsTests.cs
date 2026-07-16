@@ -6,12 +6,10 @@ namespace LoopRelay.Certification.Tests;
 
 public sealed class CertificationFixtureSettingsTests
 {
-    [Theory]
-    [InlineData("gpt-5.3-codex-spark")]
-    [InlineData("gpt-5.4-mini")]
-    public async Task Materialized_settings_use_the_manually_selected_certification_brain_profile(
-        string model)
+    [Fact]
+    public async Task Materialized_settings_use_the_certified_luna_brain_profile()
     {
+        const string model = "gpt-5.6-luna";
         string root = Directory.CreateTempSubdirectory("looprelay-fixture-settings").FullName;
         try
         {
@@ -47,11 +45,12 @@ public sealed class CertificationFixtureSettingsTests
     }
 
     [Theory]
-    [InlineData("gpt-5.4-mini", "medium", true)]
-    [InlineData("gpt-5.3-codex-spark", "medium", true)]
+    [InlineData("gpt-5.6-luna", "medium", true)]
+    [InlineData("gpt-5.3-codex-spark", "medium", false)]
+    [InlineData("gpt-5.4-mini", "medium", false)]
     [InlineData("gpt-5.6-sol", "high", false)]
     [InlineData("", "medium", false)]
-    [InlineData("gpt-5.4-mini", "", false)]
+    [InlineData("gpt-5.6-luna", "", false)]
     public void Release_gate_credits_only_the_exact_certified_fixture_profile(
         string model,
         string effort,
@@ -64,25 +63,26 @@ public sealed class CertificationFixtureSettingsTests
     }
 
     [Theory]
-    [InlineData(null, "gpt-5.3-codex-spark")]
-    [InlineData("", "gpt-5.3-codex-spark")]
-    [InlineData("gpt-5.3-codex-spark", "gpt-5.3-codex-spark")]
-    [InlineData("gpt-5.4-mini", "gpt-5.4-mini")]
-    public void Manual_model_selection_accepts_the_certification_equivalence_set(
+    [InlineData(null, "gpt-5.6-luna")]
+    [InlineData("", "gpt-5.6-luna")]
+    [InlineData("gpt-5.6-luna", "gpt-5.6-luna")]
+    public void Model_selection_accepts_only_the_certified_luna_profile(
         string? configured,
         string expected)
     {
         Assert.Equal(expected, CertificationFixtureSettings.ResolveBrainModel(configured));
     }
 
-    [Fact]
-    public void Manual_model_selection_rejects_models_outside_the_certification_equivalence_set()
+    [Theory]
+    [InlineData("gpt-5.3-codex-spark")]
+    [InlineData("gpt-5.4-mini")]
+    [InlineData("gpt-5.6-sol")]
+    public void Model_selection_rejects_every_non_certified_model(string model)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(() =>
-            CertificationFixtureSettings.ResolveBrainModel("gpt-5.6-sol"));
+            CertificationFixtureSettings.ResolveBrainModel(model));
 
-        Assert.Contains("gpt-5.3-codex-spark", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("gpt-5.4-mini", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("gpt-5.6-luna", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public sealed class CertificationFixtureSettingsTests
             1,
             1,
             "provisional-release-budget:test",
-            ["gpt-5.4-mini/medium", "gpt-5.3-codex-spark/medium"],
+            ["gpt-5.6-luna/medium"],
             ["RunCompletionCertification"],
             ["InterpretCompletionRoute", "VerifyWorkflowExitGate"],
             ["explicit-user-adjudication"]);

@@ -258,6 +258,7 @@ public sealed class CompletionClosureRunner(ICertificationFailureDiagnoser? fail
                 string.Join("\n", evidence.Concat(transitions.SelectMany(item => item.Diagnostics))),
                 authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            retainCase = CertificationCaseRetention.ShouldPreserve(false, classification);
             string? invocationId = classification == CertificationClassification.Passed
                 ? null
                 : failedInvocationId ?? $"completion-closure-{Guid.NewGuid():N}";

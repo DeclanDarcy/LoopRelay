@@ -21,7 +21,7 @@ public sealed class ReleaseEvidenceProjectionTests
     public void Exact_profile_requires_static_and_live_evidence_before_promotion()
     {
         ProviderProfileLifecycleProjection projection = ReleaseEvidenceProjection.ProjectProfile(new(
-            "gpt-5.3-codex-spark/medium",
+            "gpt-5.6-luna/medium",
             StaticProtocolFixturesPassed: true,
             LiveCapabilityEvidencePassed: false,
             CurrentlyActive: false,

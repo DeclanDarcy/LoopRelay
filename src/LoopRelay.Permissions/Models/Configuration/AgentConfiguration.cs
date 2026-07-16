@@ -2,8 +2,6 @@ namespace LoopRelay.Permissions.Models.Configuration;
 
 public enum AgentModel
 {
-    Gpt53CodexSpark,
-    Gpt54Mini,
     Gpt55,
     Gpt56Luna,
     Gpt56Terra,
@@ -52,8 +50,6 @@ public static class AgentConfigurationCatalog
 {
     private static readonly (AgentModel Value, string Name)[] Models =
     [
-        (AgentModel.Gpt53CodexSpark, "gpt-5.3-codex-spark"),
-        (AgentModel.Gpt54Mini, "gpt-5.4-mini"),
         (AgentModel.Gpt55, "gpt-5.5"),
         (AgentModel.Gpt56Luna, "gpt-5.6-luna"),
         (AgentModel.Gpt56Terra, "gpt-5.6-terra"),

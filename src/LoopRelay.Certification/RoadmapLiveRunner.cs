@@ -50,6 +50,7 @@ public sealed class RoadmapLiveRunner(ICertificationFailureDiagnoser? failureDia
         string schema = "unknown";
         string? failedInvocationId = null;
         string? failedTransition = null;
+        bool preserveCase = false;
         try
         {
             CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
@@ -214,7 +215,7 @@ public sealed class RoadmapLiveRunner(ICertificationFailureDiagnoser? failureDia
             Environment.SetEnvironmentVariable("LOOPRELAY_SETTINGS_PATH", priorSettings);
             string authCopy = Path.Combine(codexHome, "auth.json");
             if (File.Exists(authCopy)) File.Delete(authCopy);
-            if (Directory.Exists(root))
+            if (!preserveCase && Directory.Exists(root))
             {
                 foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
                 {
@@ -235,6 +236,7 @@ public sealed class RoadmapLiveRunner(ICertificationFailureDiagnoser? failureDia
             IReadOnlyList<string> privacy = PrivacyScanner.Scan(
                 string.Join("\n", evidence.Concat(transitions.SelectMany(item => item.Diagnostics))), authorityRoot);
             if (privacy.Count > 0) classification = CertificationClassification.OracleDrift;
+            preserveCase = CertificationCaseRetention.ShouldPreserve(false, classification);
             string? invocationId = classification == CertificationClassification.Passed
                 ? null
                 : failedInvocationId ?? $"{campaign}-{Guid.NewGuid():N}";

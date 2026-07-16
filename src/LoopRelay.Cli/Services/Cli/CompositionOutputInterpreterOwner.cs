@@ -330,7 +330,14 @@ internal sealed partial class LoopRelayCompositionRoot
                 if (trimmed.StartsWith("# FILE:", StringComparison.OrdinalIgnoreCase))
                 {
                     CompleteCurrent();
-                    currentPath = ValidateMilestoneBundlePath(trimmed["# FILE:".Length..].Trim());
+                    try
+                    {
+                        currentPath = ValidateMilestoneBundlePath(trimmed["# FILE:".Length..].Trim());
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        return [];
+                    }
                     continue;
                 }
 
@@ -380,7 +387,12 @@ internal sealed partial class LoopRelayCompositionRoot
 
         private static string ValidateMilestoneBundlePath(string candidate)
         {
-            string normalized = candidate.Replace('\\', '/');
+            string normalized = candidate.Trim();
+            if (normalized.Length >= 2 && normalized[0] == '`' && normalized[^1] == '`')
+            {
+                normalized = normalized[1..^1].Trim();
+            }
+            normalized = normalized.Replace('\\', '/');
             const string prefix = ".agents/specs/";
             string fileName = normalized.StartsWith(prefix, StringComparison.Ordinal)
                 ? normalized[prefix.Length..]

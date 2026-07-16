@@ -1,0 +1,10 @@
+{
+  "serverVersion": "0.144.5",
+  "schemaDigest": "d3639dd0e04172c9dbb9ca7af048e32cfe197d482d9344a137d2bca95f946c6f",
+  "initializeReportsExperimentalApi": false,
+  "injectMaterializesThread": true,
+  "readPreservesIdentity": true,
+  "resumePreservesIdentity": true,
+  "forkProducesDistinctChild": true,
+  "evidenceDigest": "5548cf3418c99ec6602fe08369a342dd5b0f5e4c7952005763412c9b237c28b1"
+}

@@ -6,32 +6,30 @@ namespace LoopRelay.Certification;
 
 public static class CertificationFixtureSettings
 {
-    private static string _brainModel = PrimaryBrainModel;
+    private static string _brainModel = CertifiedBrainModel;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
     };
 
-    public const string PrimaryBrainModel = "gpt-5.3-codex-spark";
-    public const string AlternateBrainModel = "gpt-5.4-mini";
+    public const string CertifiedBrainModel = "gpt-5.6-luna";
     public const string BrainEffort = "medium";
     public static readonly TimeSpan ProviderTurnTimeout = TimeSpan.FromMinutes(60);
 
     public static IReadOnlyList<string> CertifiedBrainModels { get; } =
-        Array.AsReadOnly([PrimaryBrainModel, AlternateBrainModel]);
+        Array.AsReadOnly([CertifiedBrainModel]);
 
     public static string BrainModel => _brainModel;
 
     public static AgentModel BrainAgentModel => AgentConfigurationCatalog.ParseModel(BrainModel);
 
-    public static string CertifiedProfileIdentity =>
-        $"equivalent[{string.Join('|', CertifiedBrainModels)}]/{BrainEffort}";
+    public static string CertifiedProfileIdentity => $"{CertifiedBrainModel}/{BrainEffort}";
 
     public static string ResolveBrainModel(string? configuredModel)
     {
         string model = string.IsNullOrWhiteSpace(configuredModel)
-            ? PrimaryBrainModel
+            ? CertifiedBrainModel
             : configuredModel;
         if (!IsCertifiedBrainModel(model))
         {

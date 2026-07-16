@@ -478,7 +478,7 @@ public sealed class LoopRelayCompositionRootTests
     }
 
     [Fact]
-    public async Task TraditionalRoadmap_workflow_transitions_run_through_canonical_runtime()
+    public async Task TraditionalRoadmap_accepts_inline_code_file_markers_from_provider_output()
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-traditional-full-runtime").FullName;
         await WriteProjectContextAsync(repo);
@@ -505,13 +505,29 @@ public sealed class LoopRelayCompositionRootTests
             return new AgentTurnResult(3, AgentTurnState.Completed, """
                 # Milestone Deep Dive Bundle
 
-                # FILE: .agents/specs/m1.md
+                # FILE: `.agents/specs/m1.md`
 
                 # Milestone Spec: Implement the roadmap capability
 
                 ## Purpose
 
                 Implement the roadmap capability.
+
+                # FILE: `.agents/specs/m2.md`
+
+                # Milestone Spec: Verify the roadmap capability
+
+                ## Purpose
+
+                Verify the roadmap capability.
+
+                # FILE: `.agents/specs/m3.md`
+
+                # Milestone Spec: Harden the roadmap capability
+
+                ## Purpose
+
+                Harden the roadmap capability.
                 """, AgentTokenUsage.Zero);
         }));
         LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository, runtime);
@@ -553,7 +569,9 @@ public sealed class LoopRelayCompositionRootTests
             product.StorageRepresentations.Contains(".agents/epic.md"));
         Assert.Contains(snapshot.Products, product =>
             product.Identity == ProductIdentity.MilestoneSpecificationSet &&
-            product.StorageRepresentations.Contains(".agents/specs/m1.md"));
+            product.StorageRepresentations.Contains(".agents/specs/m1.md") &&
+            product.StorageRepresentations.Contains(".agents/specs/m2.md") &&
+            product.StorageRepresentations.Contains(".agents/specs/m3.md"));
         string effectEvidencePath = Path.Combine(
             repo,
             ".LoopRelay",

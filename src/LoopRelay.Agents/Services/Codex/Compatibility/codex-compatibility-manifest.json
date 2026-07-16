@@ -39,6 +39,19 @@
       "writeSupport": "Unknown",
       "maximumRecoverableContext": null,
       "evidenceDigest": "25b5ed3bdbb55dee15f88b287beee1297750a9d4d729c5e87031dd878b29e4b3"
+    },
+    {
+      "id": "codex-0.144.5-app-server-v2-d3639dd0",
+      "serverVersion": "0.144.5",
+      "schemaDigest": "d3639dd0e04172c9dbb9ca7af048e32cfe197d482d9344a137d2bca95f946c6f",
+      "fixtureIdentity": "codex-0.144.5-certification.v1",
+      "resumeSupport": "Supported",
+      "excludeTurnsSupport": "Supported",
+      "forkSupport": "Unknown",
+      "readSupport": "Supported",
+      "writeSupport": "Unknown",
+      "maximumRecoverableContext": null,
+      "evidenceDigest": "5548cf3418c99ec6602fe08369a342dd5b0f5e4c7952005763412c9b237c28b1"
     }
   ]
 }

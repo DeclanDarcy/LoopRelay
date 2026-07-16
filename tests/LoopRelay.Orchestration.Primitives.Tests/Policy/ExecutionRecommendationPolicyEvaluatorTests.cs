@@ -45,7 +45,7 @@ public sealed class ExecutionRecommendationPolicyEvaluatorTests
         DecisionProductVersionIdentity decision = DecisionProductVersionIdentity.New();
         ResolvedRuntimeProfile fallback = Fallback();
         RuntimeProfileEvaluation evaluation = Evaluate(
-            Recommendation(decision, AgentModel.Gpt53CodexSpark, AgentEffort.Low),
+            Recommendation(decision, AgentModel.Gpt56Luna, AgentEffort.Low),
             decision,
             fallback,
             availableModels: [AgentModel.Gpt56Sol]);
