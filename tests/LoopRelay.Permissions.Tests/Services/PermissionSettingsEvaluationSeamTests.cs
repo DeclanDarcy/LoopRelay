@@ -41,11 +41,16 @@ public sealed class PermissionSettingsEvaluationSeamTests
     [Fact]
     public void FloorDeniedCommand_FromPermissiveSettingsJson_IsStillDenied()
     {
-        // Attempt to permit 'sudo' by listing it as a safe bash command in settings.json; the
-        // hard-deny floor merged in by PermissionPolicyFactory.MergeWithMinimum must still win
-        // over operator configuration. This is the guarantee that makes the PERF-07 behavior
-        // change (honoring configured policy) safe.
+        // The loaded settings.json OMITS 'sudo' from its own hardDeny.privilegeEscalationCommands
+        // (as Loader_does_not_merge_minimum_permission_policy proves the loader lets through
+        // unmerged) and additionally lists 'sudo' as a safe bash command. Only
+        // PermissionEvaluatorEngine's constructor, via PermissionPolicyFactory.MergeWithMinimum,
+        // puts 'sudo' back into HardDeny; if that merge were skipped, this command would fall
+        // through to the allow list and be permitted. Asserting Deny here proves the code-level
+        // floor rescues a config that omits the protection - the guarantee that makes the
+        // PERF-07 behavior change (honoring configured policy) safe.
         JsonObject settings = DefaultSettings();
+        Object(Object(settings, "permissions"), "hardDeny")["privilegeEscalationCommands"] = new JsonArray();
         Array(Object(settings, "permissions"), "safeBashCommands").Add("sudo");
 
         PermissionPolicyOptions policy =
