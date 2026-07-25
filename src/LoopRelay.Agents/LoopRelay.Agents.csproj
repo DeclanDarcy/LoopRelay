@@ -19,4 +19,8 @@
     <EmbeddedResource Include="Services\Codex\Compatibility\codex-compatibility-manifest.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="LoopRelay.Agents.Compatibility.Tests" />
+  </ItemGroup>
+
 </Project>
