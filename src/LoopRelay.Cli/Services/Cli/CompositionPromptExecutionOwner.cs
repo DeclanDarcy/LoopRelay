@@ -1052,59 +1052,62 @@ internal sealed partial class LoopRelayCompositionRoot
                 executeRecoveryStore ??= new CanonicalDecisionRecoveryStore(
                     _repository,
                     new SqliteRecoveryStore(_repository));
-                IAgentSessionContinuityRuntime continuityRuntime = Runtime as IAgentSessionContinuityRuntime
-                    ?? _continuityRuntime
-                    ?? throw new InvalidOperationException("The configured agent runtime does not support decision continuity.");
-                string codexHome = _providerEnvironment.CodexHome;
-                ResumeRecoveryStrategy recoveryPolicy = _policy.Resume.RecoveryStrategy;
-                var recoveryMechanisms = new List<IRecoveryMechanism>();
-                if (recoveryPolicy is ResumeRecoveryStrategy.Reconstructed or ResumeRecoveryStrategy.Certified)
+                if (executeDecisionSession is null)
                 {
-                    recoveryMechanisms.Add(new ThreadReadReconstructionMechanism());
-                    recoveryMechanisms.Add(new RolloutReconstructionMechanism());
-                    recoveryMechanisms.Add(new RepositoryReconstructionMechanism());
-                }
-                if (recoveryPolicy == ResumeRecoveryStrategy.Certified)
-                {
-                    recoveryMechanisms.Add(new NativeForkRecoveryMechanism());
-                }
-                var recoveryRuntime = new RecoveryRuntime(
-                    executeRecoveryStore,
-                    continuityRuntime,
-                    new RecoverySourceCatalog(
-                    [
-                        new ThreadReadRecoverySource(continuityRuntime),
-                        new RolloutSalvageRecoverySource(new CodexRolloutRepository(), codexHome),
-                        new RepositoryContinuationRecoverySource(_repository),
-                    ]),
-                    new RecoveryPlanner(),
-                    new RecoveryMechanismCatalog(recoveryMechanisms),
-                    new CanonicalRecoveryEnvelopeFactory(),
-                    _canonicalStore: new CanonicalRecoveryStore(_repository));
-                LoopArtifacts decisionArtifacts = CreateLoopArtifacts();
-                executeDecisionSession ??= new DecisionSession(
-                    Runtime!,
-                    new DecisionSessionRouter(),
-                    decisionArtifacts,
-                    console,
-                    _repository,
-                    _rolePolicy.Brain,
-                    _costModel: null,
-                    _resumeStore: null,
-                    _projectionService: null,
-                    _resumeEnabled: _policy.Resume.Enabled,
-                    _continuityRuntime: continuityRuntime,
-                    _recoveryStore: executeRecoveryStore,
-                    _recoveryRuntime: recoveryRuntime,
-                    _recoveryPolicyVersion: recoveryPolicy switch
+                    IAgentSessionContinuityRuntime continuityRuntime = Runtime as IAgentSessionContinuityRuntime
+                        ?? _continuityRuntime
+                        ?? throw new InvalidOperationException("The configured agent runtime does not support decision continuity.");
+                    string codexHome = _providerEnvironment.CodexHome;
+                    ResumeRecoveryStrategy recoveryPolicy = _policy.Resume.RecoveryStrategy;
+                    var recoveryMechanisms = new List<IRecoveryMechanism>();
+                    if (recoveryPolicy is ResumeRecoveryStrategy.Reconstructed or ResumeRecoveryStrategy.Certified)
                     {
-                        ResumeRecoveryStrategy.ResumeOnly => "decision-recovery-resume-only.v1",
-                        ResumeRecoveryStrategy.Reconstructed => "decision-recovery-reconstructed.v1",
-                        _ => "decision-recovery-certified.v1",
-                    },
-                    _operationalContextGrowthStreakWarningThreshold: _policy.OperationalContextGrowthWarningStreak,
-                    _promptDispatcher: CreateDecisionPromptDispatcher(),
-                    _artifactEffects: new DurableLoopArtifactEffectCoordinator(_repository, decisionArtifacts));
+                        recoveryMechanisms.Add(new ThreadReadReconstructionMechanism());
+                        recoveryMechanisms.Add(new RolloutReconstructionMechanism());
+                        recoveryMechanisms.Add(new RepositoryReconstructionMechanism());
+                    }
+                    if (recoveryPolicy == ResumeRecoveryStrategy.Certified)
+                    {
+                        recoveryMechanisms.Add(new NativeForkRecoveryMechanism());
+                    }
+                    var recoveryRuntime = new RecoveryRuntime(
+                        executeRecoveryStore,
+                        continuityRuntime,
+                        new RecoverySourceCatalog(
+                        [
+                            new ThreadReadRecoverySource(continuityRuntime),
+                            new RolloutSalvageRecoverySource(new CodexRolloutRepository(), codexHome),
+                            new RepositoryContinuationRecoverySource(_repository),
+                        ]),
+                        new RecoveryPlanner(),
+                        new RecoveryMechanismCatalog(recoveryMechanisms),
+                        new CanonicalRecoveryEnvelopeFactory(),
+                        _canonicalStore: new CanonicalRecoveryStore(_repository));
+                    LoopArtifacts decisionArtifacts = CreateLoopArtifacts();
+                    executeDecisionSession = new DecisionSession(
+                        Runtime!,
+                        new DecisionSessionRouter(),
+                        decisionArtifacts,
+                        console,
+                        _repository,
+                        _rolePolicy.Brain,
+                        _costModel: null,
+                        _resumeStore: null,
+                        _projectionService: null,
+                        _resumeEnabled: _policy.Resume.Enabled,
+                        _continuityRuntime: continuityRuntime,
+                        _recoveryStore: executeRecoveryStore,
+                        _recoveryRuntime: recoveryRuntime,
+                        _recoveryPolicyVersion: recoveryPolicy switch
+                        {
+                            ResumeRecoveryStrategy.ResumeOnly => "decision-recovery-resume-only.v1",
+                            ResumeRecoveryStrategy.Reconstructed => "decision-recovery-reconstructed.v1",
+                            _ => "decision-recovery-certified.v1",
+                        },
+                        _operationalContextGrowthStreakWarningThreshold: _policy.OperationalContextGrowthWarningStreak,
+                        _promptDispatcher: CreateDecisionPromptDispatcher(),
+                        _artifactEffects: new DurableLoopArtifactEffectCoordinator(_repository, decisionArtifacts));
+                }
                 DecisionSessionScope scope = await new DecisionSessionScopeResolver(_repository)
                     .ResolveAsync(cancellationToken);
                 await executeDecisionSession.RunAsync(
