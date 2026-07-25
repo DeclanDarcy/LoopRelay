@@ -27,7 +27,7 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
 
         foreach (ref readonly CanonicalCommand command in commands.AsSpan())
         {
-            EvalResult single = EvaluateSingle(command);
+            EvalResult single = EvaluateSingleCore(command);
             if (single.Decision == RuleDecision.Deny)
             {
                 return single;
@@ -42,9 +42,6 @@ public sealed class PermissionEvaluatorEngine : IPermissionEvaluatorEngine
 
         return new EvalResult(aggregated, aggregatedReason);
     }
-
-    internal static EvalResult EvaluateSingle(in CanonicalCommand command) =>
-        new PermissionEvaluatorEngine().EvaluateSingleCore(command);
 
     private EvalResult EvaluateSingleCore(in CanonicalCommand command)
     {

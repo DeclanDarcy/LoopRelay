@@ -13,14 +13,15 @@ public static class PermissionPolicyFactory
     public static PermissionPolicyOptions MergeWithMinimum(PermissionPolicyOptions policy)
     {
         ArgumentNullException.ThrowIfNull(policy);
-        ValidateRequiredInvariants(MergeHardDeny(policy.HardDeny, Minimum.HardDeny));
+        var hardDeny = MergeHardDeny(policy.HardDeny, Minimum.HardDeny);
+        ValidateRequiredInvariants(hardDeny);
 
         return new PermissionPolicyOptions(
             RequireScalar("permissions.fingerprintVersion", policy.FingerprintVersion),
             policy.CommandsWithSubcommands,
             policy.SafeTools,
             policy.SafeBashCommands,
-            MergeHardDeny(policy.HardDeny, Minimum.HardDeny),
+            hardDeny,
             policy.ReviewRequired,
             policy.Allow);
     }
