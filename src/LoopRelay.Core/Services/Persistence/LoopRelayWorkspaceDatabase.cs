@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using Microsoft.Data.Sqlite;
@@ -70,26 +72,203 @@ public static class LoopRelayWorkspaceDatabase
     public const int CurrentSchemaVersion = 15;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
-    public static string CanonicalV9ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV9Requirements.Select(requirement => requirement.Token));
+    // These were `=>` LINQ-chain computed properties that rebuilt the ~190-element requirement
+    // lists (below) and re-hashed the fingerprint on every access. They are now built once, in
+    // dependency order, by the static constructor and cached as plain fields.
+    public static readonly string CanonicalV9ShapeFingerprint;
+    public static readonly string CanonicalV10ShapeFingerprint;
+    public static readonly string CanonicalV11ShapeFingerprint;
+    public static readonly string CanonicalV12ShapeFingerprint;
+    public static readonly string CanonicalV13ShapeFingerprint;
+    public static readonly string CanonicalV14ShapeFingerprint;
+    public static readonly string CanonicalV15ShapeFingerprint;
 
-    public static string CanonicalV10ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV10Requirements.Select(requirement => requirement.Token));
+    /// <summary>
+    /// Per-process memo of schemas already verified complete, keyed by the full path of the
+    /// database file (<c>connection.DataSource</c>). Populated only after a successful full
+    /// verification pass; consulted by <see cref="EnsureSchemaAsync"/> to skip re-running the
+    /// full inspection/identity-validation pipeline when the on-disk stamp has not moved.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, (long Version, string ShapeFingerprint)> VerifiedSchemas = new();
 
-    public static string CanonicalV11ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV11Requirements.Select(requirement => requirement.Token));
+    /// <summary>Test-only observability: how many times the full verification pipeline ran.</summary>
+    internal static int FullVerificationRuns;
 
-    public static string CanonicalV12ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV12Requirements.Select(requirement => requirement.Token));
+    /// <summary>Test-only: clears the per-process memo and resets <see cref="FullVerificationRuns"/>.</summary>
+    internal static void ResetSchemaVerificationCacheForTesting()
+    {
+        VerifiedSchemas.Clear();
+        Interlocked.Exchange(ref FullVerificationRuns, 0);
+    }
 
-    public static string CanonicalV13ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV13Requirements.Select(requirement => requirement.Token));
+    static LoopRelayWorkspaceDatabase()
+    {
+        CoreCanonicalSignatureRequirements =
+        [
+            ShapeRequirement.Table("workspace_identity"),
+            ShapeRequirement.Table("runs"),
+            ShapeRequirement.Table("workflow_instances"),
+            ShapeRequirement.Table("attempts"),
+            ShapeRequirement.Table("agent_sessions"),
+            ShapeRequirement.Table("agent_turns"),
+            ShapeRequirement.Table("canonical_rendered_prompts"),
+        ];
 
-    public static string CanonicalV14ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV14Requirements.Select(requirement => requirement.Token));
+        Merge4V9Requirements = Merge4V9TableNames.Select(ShapeRequirement.Table)
+            .Concat(V9CausalColumns.Select(item => ShapeRequirement.Column(item.Table, item.Column, "text")))
+            .Concat(Merge4V9IndexNames.Select(ShapeRequirement.Index))
+            .Concat(
+            [
+                ShapeRequirement.ForeignKey("decision_session_lineage", "scope_id", "decision_session_scopes", "scope_id"),
+                ShapeRequirement.ForeignKey("decision_session_lineage", "parent_lineage_id", "decision_session_lineage", "lineage_id"),
+                ShapeRequirement.ForeignKey("session_recovery_attempts", "scope_id", "decision_session_scopes", "scope_id"),
+                ShapeRequirement.ForeignKey("decision_session_turns", "scope_id", "decision_session_scopes", "scope_id"),
+                ShapeRequirement.ForeignKey("history_evidence_items", "evidence_set_id", "history_evidence_sets", "evidence_set_id"),
+            ])
+            .ToArray();
 
-    public static string CanonicalV15ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV15Requirements.Select(requirement => requirement.Token));
+        ArchitectureConvergenceV9Requirements = V9TurnEvidenceColumns
+            .Select(item => ShapeRequirement.Column("agent_turns", item.Column, item.Type))
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_runtime_prerequisites"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "prerequisite_check_id", "text"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "run_id", "text"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "checked_at", "text"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "diagnostics_json", "text"),
+                ShapeRequirement.Index("idx_canonical_runtime_prerequisites_run"),
+            ])
+            .ToArray();
+
+        ConvergenceReceiptRequirements =
+        [
+            ShapeRequirement.Table("workspace_schema_convergences"),
+            ShapeRequirement.Column("workspace_schema_convergences", "convergence_id", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "source_shape", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "source_fingerprint", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "source_version", "integer"),
+            ShapeRequirement.Column("workspace_schema_convergences", "target_fingerprint", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "workspace_id", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "completed_at", "text"),
+        ];
+
+        CanonicalV9Requirements = CanonicalCoreTableNames.Select(ShapeRequirement.Table)
+            .Concat(Merge4V9Requirements)
+            .Concat(ArchitectureConvergenceV9Requirements)
+            .Concat(ConvergenceReceiptRequirements)
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV10Requirements = CanonicalV9Requirements
+            .Concat(V10EffectIntentColumns.Select(item => ShapeRequirement.Column(
+                "canonical_effect_intents",
+                item.Column,
+                item.Declaration.StartsWith("integer", StringComparison.Ordinal) ? "integer" : "text")))
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_effect_lifecycle_events"),
+                ShapeRequirement.Table("canonical_effect_receipts"),
+                ShapeRequirement.Table("canonical_effect_reconciliation_attempts"),
+                ShapeRequirement.Index("idx_effect_intents_unsettled"),
+                ShapeRequirement.Index("idx_effect_intents_lease"),
+                ShapeRequirement.Index("idx_effect_intents_transition_attempt"),
+                ShapeRequirement.Index("idx_effect_intents_semantic_operation"),
+                ShapeRequirement.Index("idx_effect_receipts_intent"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV11Requirements = CanonicalV10Requirements
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_recovery_cases"),
+                ShapeRequirement.Table("canonical_recovery_classifications"),
+                ShapeRequirement.Table("canonical_recovery_source_links"),
+                ShapeRequirement.Table("canonical_recovery_plans"),
+                ShapeRequirement.Table("canonical_recovery_action_events"),
+                ShapeRequirement.Column("canonical_recovery_cases", "scope_identity", "text"),
+                ShapeRequirement.Column("canonical_recovery_plans", "compatibility_document_json", "text"),
+                ShapeRequirement.Column("canonical_recovery_action_events", "document_json", "text"),
+                ShapeRequirement.Index("idx_recovery_cases_subject"),
+                ShapeRequirement.Index("idx_recovery_classifications_case"),
+                ShapeRequirement.Index("idx_recovery_source_links_classification"),
+                ShapeRequirement.Index("idx_recovery_plans_case"),
+                ShapeRequirement.Index("idx_recovery_action_events_plan"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV12Requirements = CanonicalV11Requirements
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_interaction_requests"),
+                ShapeRequirement.Table("canonical_interaction_policy_evaluations"),
+                ShapeRequirement.Table("canonical_interaction_responses"),
+                ShapeRequirement.Table("canonical_interaction_lifecycle_events"),
+                ShapeRequirement.Index("idx_interaction_requests_state"),
+                ShapeRequirement.Index("idx_interaction_requests_causality"),
+                ShapeRequirement.Index("idx_interaction_events_request"),
+                ShapeRequirement.Index("idx_interaction_responses_semantic"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV13Requirements = CanonicalV12Requirements
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_storage_operation_plans"),
+                ShapeRequirement.Table("canonical_storage_operation_events"),
+                ShapeRequirement.Table("canonical_storage_operation_receipts"),
+                ShapeRequirement.Index("idx_storage_operation_events_operation"),
+                ShapeRequirement.Index("idx_storage_operation_plans_lifecycle"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV14Requirements = CanonicalV13Requirements.Concat(
+            [
+                ShapeRequirement.Table("canonical_import_detections"),
+                ShapeRequirement.Table("canonical_import_previews"),
+                ShapeRequirement.Table("canonical_import_mappings"),
+                ShapeRequirement.Table("canonical_import_verifications"),
+                ShapeRequirement.Table("canonical_import_receipts"),
+                ShapeRequirement.Table("canonical_source_authority"),
+                ShapeRequirement.Table("canonical_import_adapter_exhaustion"),
+                ShapeRequirement.Table("canonical_kernel_decisions"),
+                ShapeRequirement.Column("canonical_import_previews", "import_id", "text"),
+                ShapeRequirement.Column("runs", "catalog_identity", "text"),
+                ShapeRequirement.Column("runs", "catalog_version", "text"),
+                ShapeRequirement.Column("workflow_instances", "catalog_identity", "text"),
+                ShapeRequirement.Column("attempts", "agent_role_policy_id", "text"),
+                ShapeRequirement.Table("canonical_agent_role_policies"),
+                ShapeRequirement.Index("idx_import_previews_fingerprint"),
+                ShapeRequirement.Index("idx_import_mappings_preview"),
+                ShapeRequirement.Index("idx_import_receipts_fingerprint"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV15Requirements = CanonicalV14Requirements.Concat(
+            [
+                ShapeRequirement.Table("canonical_completion_decisions"),
+                ShapeRequirement.Table("canonical_completion_certificates"),
+                ShapeRequirement.Table("canonical_completion_closure_plans"),
+                ShapeRequirement.Table("canonical_completion_settlements"),
+                ShapeRequirement.Table("canonical_certified_terminal_facts"),
+                ShapeRequirement.Index("idx_completion_decisions_root"),
+                ShapeRequirement.Index("idx_completion_settlements_plan"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV9ShapeFingerprint = ComputeShapeFingerprint(CanonicalV9Requirements.Select(requirement => requirement.Token));
+        CanonicalV10ShapeFingerprint = ComputeShapeFingerprint(CanonicalV10Requirements.Select(requirement => requirement.Token));
+        CanonicalV11ShapeFingerprint = ComputeShapeFingerprint(CanonicalV11Requirements.Select(requirement => requirement.Token));
+        CanonicalV12ShapeFingerprint = ComputeShapeFingerprint(CanonicalV12Requirements.Select(requirement => requirement.Token));
+        CanonicalV13ShapeFingerprint = ComputeShapeFingerprint(CanonicalV13Requirements.Select(requirement => requirement.Token));
+        CanonicalV14ShapeFingerprint = ComputeShapeFingerprint(CanonicalV14Requirements.Select(requirement => requirement.Token));
+        CanonicalV15ShapeFingerprint = ComputeShapeFingerprint(CanonicalV15Requirements.Select(requirement => requirement.Token));
+    }
 
     public static string Resolve(Repository repository)
     {
@@ -110,7 +289,25 @@ public static class LoopRelayWorkspaceDatabase
         SqliteConnection connection,
         CancellationToken cancellationToken = default)
     {
+        // PRAGMA state is per-connection (not persisted in the database file), so this must run
+        // on every call regardless of whether the fast path below applies.
         await ExecuteAsync(connection, "PRAGMA foreign_keys = ON;", cancellationToken);
+
+        string cacheKey = Path.GetFullPath(connection.DataSource);
+        if (VerifiedSchemas.TryGetValue(cacheKey, out (long Version, string ShapeFingerprint) cached) &&
+            await MatchesCachedStampAsync(connection, cached, cancellationToken))
+        {
+            // Multi-process stance is unresolved by design: trust the in-memory memo only as far
+            // as this cheap re-read of the stamp confirms nothing else has moved it since. The
+            // memo only ever holds a CanonicalV15Complete stamp, so this is exactly the
+            // structurally-complete branch below, without paying for the ~190-probe inspection or
+            // identity re-validation.
+            await RunStructurallyCompleteBranchAsync(connection, cacheKey, cancellationToken);
+            return;
+        }
+
+        Interlocked.Increment(ref FullVerificationRuns);
+
         WorkspaceSchemaInspection inspection = await InspectSchemaAsync(connection, cancellationToken);
         if (inspection.Family == WorkspaceSchemaFamily.LegacyContinuity)
         {
@@ -138,58 +335,135 @@ public static class LoopRelayWorkspaceDatabase
                 "Canonical v15 is stamped complete but has no immutable workspace identity.");
         }
 
+        if (structurallyComplete)
+        {
+            await RunStructurallyCompleteBranchAsync(connection, cacheKey, cancellationToken);
+            return;
+        }
+
+        LegacyResumeImport? legacyResume = await ReadLegacyResumeAsync(connection, cancellationToken);
+        await using SqliteTransaction migrationTransaction = connection.BeginTransaction(deferred: false);
+        try
+        {
+            await EnsureCanonicalV8ShapeAsync(connection, migrationTransaction, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV9Sql, cancellationToken);
+            await EnsureV9ColumnsAsync(connection, migrationTransaction, cancellationToken);
+            await EnsureV10ColumnsAsync(connection, migrationTransaction, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV10Sql, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV11Sql, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV12Sql, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV13Sql, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV14Sql, cancellationToken);
+            await EnsureV14ColumnsAsync(connection, migrationTransaction, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV15Sql, cancellationToken);
+            if (legacyResume is not null)
+            {
+                await ImportLegacyResumeAsync(connection, migrationTransaction, legacyResume, cancellationToken);
+            }
+            await ExecuteAsync(connection, migrationTransaction, CanonicalDataRepairSql, cancellationToken);
+            string workspaceId = await EnsureImmutableWorkspaceIdentityAsync(
+                connection,
+                migrationTransaction,
+                inspection,
+                preservedWorkspaceId,
+                cancellationToken);
+            await VerifyCanonicalV15ShapeAsync(connection, migrationTransaction, cancellationToken);
+            await RecordSchemaConvergenceAsync(
+                connection,
+                migrationTransaction,
+                inspection,
+                workspaceId,
+                cancellationToken);
+            await StampCanonicalSchemaAsync(connection, migrationTransaction, cancellationToken);
+            await migrationTransaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await migrationTransaction.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+
+        VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV15ShapeFingerprint);
+    }
+
+    /// <summary>
+    /// The structurally-complete branch: reached either directly from the memoized fast path
+    /// (stamp matched, so this is known to be CanonicalV15Complete without re-inspecting), or
+    /// from a full verification pass that just confirmed the same thing.
+    ///
+    /// <para>
+    /// This still imports a legacy resume document when present and still runs
+    /// <see cref="CanonicalDataRepairSql"/> on every call, including the fast path. That SQL is
+    /// idempotent (5 <c>UPDATE ... WHERE state = 'Blocked'</c> statements and a
+    /// <c>DROP TABLE IF EXISTS</c>) and, when nothing needs repairing, touches zero rows and
+    /// dirties no pages — verified empirically to leave <c>PRAGMA data_version</c> unchanged, so
+    /// it does not reintroduce the write-per-operation cost this task targets. It is kept
+    /// unconditional (rather than confined to the migration branch only) because a downstream
+    /// consumer (LoopRelay.Orchestration.Primitives' WorkflowResolverTests,
+    /// <c>Previously_latched_blocked_workflow_resolves_on_its_real_gate_condition_after_migration</c>)
+    /// relies on every <see cref="EnsureSchemaAsync"/> call — even on an already
+    /// CanonicalV15Complete database, even one reached via the memoized fast path — normalizing a
+    /// stray legacy 'Blocked' label with no separate "unblock" command available. Dropping that
+    /// guarantee (as the original per-store-operation reading of "confine repair SQL to the
+    /// migration branch" would have required) regressed that test; see the task report for detail.
+    /// </para>
+    /// </summary>
+    private static async Task RunStructurallyCompleteBranchAsync(
+        SqliteConnection connection,
+        string cacheKey,
+        CancellationToken cancellationToken)
+    {
         LegacyResumeImport? legacyResume = await ReadLegacyResumeAsync(connection, cancellationToken);
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         try
         {
-            if (structurallyComplete)
-            {
-                if (legacyResume is not null)
-                {
-                    await ImportLegacyResumeAsync(connection, transaction, legacyResume, cancellationToken);
-                }
-
-                await ExecuteAsync(connection, transaction, CanonicalDataRepairSql, cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return;
-            }
-
-            await EnsureCanonicalV8ShapeAsync(connection, transaction, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV9Sql, cancellationToken);
-            await EnsureV9ColumnsAsync(connection, transaction, cancellationToken);
-            await EnsureV10ColumnsAsync(connection, transaction, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV10Sql, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV11Sql, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV12Sql, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV13Sql, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV14Sql, cancellationToken);
-            await EnsureV14ColumnsAsync(connection, transaction, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV15Sql, cancellationToken);
             if (legacyResume is not null)
             {
                 await ImportLegacyResumeAsync(connection, transaction, legacyResume, cancellationToken);
             }
+
             await ExecuteAsync(connection, transaction, CanonicalDataRepairSql, cancellationToken);
-            string workspaceId = await EnsureImmutableWorkspaceIdentityAsync(
-                connection,
-                transaction,
-                inspection,
-                preservedWorkspaceId,
-                cancellationToken);
-            await VerifyCanonicalV15ShapeAsync(connection, transaction, cancellationToken);
-            await RecordSchemaConvergenceAsync(
-                connection,
-                transaction,
-                inspection,
-                workspaceId,
-                cancellationToken);
-            await StampCanonicalSchemaAsync(connection, transaction, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None);
             throw;
+        }
+
+        VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV15ShapeFingerprint);
+    }
+
+    /// <summary>
+    /// Cheap re-read (2 small SELECTs) of the stamped <c>schema_version</c>/<c>schema_shape</c>
+    /// to confirm the memoized verification result for this path is still valid. Deliberately
+    /// does not re-run any of the ~190 structural probes; a false positive here (stamp unchanged
+    /// but physical shape corrupted by something other than this contract) is an accepted
+    /// trade-off of the memoization, not one this re-read attempts to catch.
+    /// </summary>
+    private static async Task<bool> MatchesCachedStampAsync(
+        SqliteConnection connection,
+        (long Version, string ShapeFingerprint) cached,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? versionText = await ReadMetadataValueAsync(connection, "schema_version", cancellationToken);
+            if (versionText is null ||
+                !long.TryParse(versionText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long version) ||
+                version != cached.Version)
+            {
+                return false;
+            }
+
+            string? shape = await ReadMetadataValueAsync(connection, SchemaShapeMetadataKey, cancellationToken);
+            return string.Equals(shape, cached.ShapeFingerprint, StringComparison.Ordinal);
+        }
+        catch (SqliteException)
+        {
+            // schema_metadata (or the database file) no longer looks like what we last verified;
+            // fall through to the full pipeline instead of trusting the memo.
+            return false;
         }
     }
 
@@ -1247,172 +1521,20 @@ public static class LoopRelayWorkspaceDatabase
         "idx_decision_turn_transition",
     ];
 
-    private static IReadOnlyList<ShapeRequirement> CoreCanonicalSignatureRequirements =>
-    [
-        ShapeRequirement.Table("workspace_identity"),
-        ShapeRequirement.Table("runs"),
-        ShapeRequirement.Table("workflow_instances"),
-        ShapeRequirement.Table("attempts"),
-        ShapeRequirement.Table("agent_sessions"),
-        ShapeRequirement.Table("agent_turns"),
-        ShapeRequirement.Table("canonical_rendered_prompts"),
-    ];
-
-    private static IReadOnlyList<ShapeRequirement> Merge4V9Requirements =>
-        Merge4V9TableNames.Select(ShapeRequirement.Table)
-            .Concat(V9CausalColumns.Select(item => ShapeRequirement.Column(item.Table, item.Column, "text")))
-            .Concat(Merge4V9IndexNames.Select(ShapeRequirement.Index))
-            .Concat(
-            [
-                ShapeRequirement.ForeignKey("decision_session_lineage", "scope_id", "decision_session_scopes", "scope_id"),
-                ShapeRequirement.ForeignKey("decision_session_lineage", "parent_lineage_id", "decision_session_lineage", "lineage_id"),
-                ShapeRequirement.ForeignKey("session_recovery_attempts", "scope_id", "decision_session_scopes", "scope_id"),
-                ShapeRequirement.ForeignKey("decision_session_turns", "scope_id", "decision_session_scopes", "scope_id"),
-                ShapeRequirement.ForeignKey("history_evidence_items", "evidence_set_id", "history_evidence_sets", "evidence_set_id"),
-            ])
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> ArchitectureConvergenceV9Requirements =>
-        V9TurnEvidenceColumns
-            .Select(item => ShapeRequirement.Column("agent_turns", item.Column, item.Type))
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_runtime_prerequisites"),
-                ShapeRequirement.Column("canonical_runtime_prerequisites", "prerequisite_check_id", "text"),
-                ShapeRequirement.Column("canonical_runtime_prerequisites", "run_id", "text"),
-                ShapeRequirement.Column("canonical_runtime_prerequisites", "checked_at", "text"),
-                ShapeRequirement.Column("canonical_runtime_prerequisites", "diagnostics_json", "text"),
-                ShapeRequirement.Index("idx_canonical_runtime_prerequisites_run"),
-            ])
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> ConvergenceReceiptRequirements =>
-    [
-        ShapeRequirement.Table("workspace_schema_convergences"),
-        ShapeRequirement.Column("workspace_schema_convergences", "convergence_id", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "source_shape", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "source_fingerprint", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "source_version", "integer"),
-        ShapeRequirement.Column("workspace_schema_convergences", "target_fingerprint", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "workspace_id", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "completed_at", "text"),
-    ];
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV9Requirements =>
-        CanonicalCoreTableNames.Select(ShapeRequirement.Table)
-            .Concat(Merge4V9Requirements)
-            .Concat(ArchitectureConvergenceV9Requirements)
-            .Concat(ConvergenceReceiptRequirements)
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV10Requirements =>
-        CanonicalV9Requirements
-            .Concat(V10EffectIntentColumns.Select(item => ShapeRequirement.Column(
-                "canonical_effect_intents",
-                item.Column,
-                item.Declaration.StartsWith("integer", StringComparison.Ordinal) ? "integer" : "text")))
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_effect_lifecycle_events"),
-                ShapeRequirement.Table("canonical_effect_receipts"),
-                ShapeRequirement.Table("canonical_effect_reconciliation_attempts"),
-                ShapeRequirement.Index("idx_effect_intents_unsettled"),
-                ShapeRequirement.Index("idx_effect_intents_lease"),
-                ShapeRequirement.Index("idx_effect_intents_transition_attempt"),
-                ShapeRequirement.Index("idx_effect_intents_semantic_operation"),
-                ShapeRequirement.Index("idx_effect_receipts_intent"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV11Requirements =>
-        CanonicalV10Requirements
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_recovery_cases"),
-                ShapeRequirement.Table("canonical_recovery_classifications"),
-                ShapeRequirement.Table("canonical_recovery_source_links"),
-                ShapeRequirement.Table("canonical_recovery_plans"),
-                ShapeRequirement.Table("canonical_recovery_action_events"),
-                ShapeRequirement.Column("canonical_recovery_cases", "scope_identity", "text"),
-                ShapeRequirement.Column("canonical_recovery_plans", "compatibility_document_json", "text"),
-                ShapeRequirement.Column("canonical_recovery_action_events", "document_json", "text"),
-                ShapeRequirement.Index("idx_recovery_cases_subject"),
-                ShapeRequirement.Index("idx_recovery_classifications_case"),
-                ShapeRequirement.Index("idx_recovery_source_links_classification"),
-                ShapeRequirement.Index("idx_recovery_plans_case"),
-                ShapeRequirement.Index("idx_recovery_action_events_plan"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV12Requirements =>
-        CanonicalV11Requirements
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_interaction_requests"),
-                ShapeRequirement.Table("canonical_interaction_policy_evaluations"),
-                ShapeRequirement.Table("canonical_interaction_responses"),
-                ShapeRequirement.Table("canonical_interaction_lifecycle_events"),
-                ShapeRequirement.Index("idx_interaction_requests_state"),
-                ShapeRequirement.Index("idx_interaction_requests_causality"),
-                ShapeRequirement.Index("idx_interaction_events_request"),
-                ShapeRequirement.Index("idx_interaction_responses_semantic"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV13Requirements =>
-        CanonicalV12Requirements
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_storage_operation_plans"),
-                ShapeRequirement.Table("canonical_storage_operation_events"),
-                ShapeRequirement.Table("canonical_storage_operation_receipts"),
-                ShapeRequirement.Index("idx_storage_operation_events_operation"),
-                ShapeRequirement.Index("idx_storage_operation_plans_lifecycle"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV14Requirements =>
-        CanonicalV13Requirements.Concat(
-            [
-                ShapeRequirement.Table("canonical_import_detections"),
-                ShapeRequirement.Table("canonical_import_previews"),
-                ShapeRequirement.Table("canonical_import_mappings"),
-                ShapeRequirement.Table("canonical_import_verifications"),
-                ShapeRequirement.Table("canonical_import_receipts"),
-                ShapeRequirement.Table("canonical_source_authority"),
-                ShapeRequirement.Table("canonical_import_adapter_exhaustion"),
-                ShapeRequirement.Table("canonical_kernel_decisions"),
-                ShapeRequirement.Column("canonical_import_previews", "import_id", "text"),
-                ShapeRequirement.Column("runs", "catalog_identity", "text"),
-                ShapeRequirement.Column("runs", "catalog_version", "text"),
-                ShapeRequirement.Column("workflow_instances", "catalog_identity", "text"),
-                ShapeRequirement.Column("attempts", "agent_role_policy_id", "text"),
-                ShapeRequirement.Table("canonical_agent_role_policies"),
-                ShapeRequirement.Index("idx_import_previews_fingerprint"),
-                ShapeRequirement.Index("idx_import_mappings_preview"),
-                ShapeRequirement.Index("idx_import_receipts_fingerprint"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV15Requirements =>
-        CanonicalV14Requirements.Concat(
-            [
-                ShapeRequirement.Table("canonical_completion_decisions"),
-                ShapeRequirement.Table("canonical_completion_certificates"),
-                ShapeRequirement.Table("canonical_completion_closure_plans"),
-                ShapeRequirement.Table("canonical_completion_settlements"),
-                ShapeRequirement.Table("canonical_certified_terminal_facts"),
-                ShapeRequirement.Index("idx_completion_decisions_root"),
-                ShapeRequirement.Index("idx_completion_settlements_plan"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
+    // These were `=>` LINQ-chain computed properties, rebuilding their lists (and, for the
+    // Canonical*Requirements chain, every earlier version's list transitively) on every access.
+    // They are now built once by the static constructor above and cached as plain fields.
+    private static readonly IReadOnlyList<ShapeRequirement> CoreCanonicalSignatureRequirements;
+    private static readonly IReadOnlyList<ShapeRequirement> Merge4V9Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> ArchitectureConvergenceV9Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> ConvergenceReceiptRequirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV9Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV10Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV11Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV12Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV13Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV14Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV15Requirements;
 
     private enum ShapeRequirementKind
     {

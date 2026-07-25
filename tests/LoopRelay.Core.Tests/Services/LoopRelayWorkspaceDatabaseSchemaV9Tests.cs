@@ -587,6 +587,13 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
 
         WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
         Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV15, inspection.Shape);
+
+        // This tampering drops a table without touching the schema_version/schema_shape stamp,
+        // so the per-process memo populated by the first EnsureSchemaAsync call above would
+        // otherwise still match and skip the full verification that would catch this corruption.
+        // Reset the memo to exercise the full pipeline, matching what a freshly started process
+        // (which has no memo entry yet) would actually observe.
+        LoopRelayWorkspaceDatabase.ResetSchemaVerificationCacheForTesting();
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));
     }
