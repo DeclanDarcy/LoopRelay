@@ -91,11 +91,23 @@ public sealed partial class SqliteExecutionEvidenceStore(Repository repository) 
         await using SqliteConnection connection = OpenReadOnly(databasePath);
         await connection.OpenAsync();
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT stem, sequence, logical_path, body, content_hash
-            FROM execution_evidence
-            ORDER BY stem, sequence;
-            """;
+        string? likeFilter = TryBuildLikeSuperset(searchPattern);
+        command.CommandText = likeFilter is null
+            ? """
+              SELECT stem, sequence, logical_path, body, content_hash
+              FROM execution_evidence
+              ORDER BY stem, sequence;
+              """
+            : """
+              SELECT stem, sequence, logical_path, body, content_hash
+              FROM execution_evidence
+              WHERE logical_path LIKE $like ESCAPE '\'
+              ORDER BY stem, sequence;
+              """;
+        if (likeFilter is not null)
+        {
+            command.Parameters.AddWithValue("$like", likeFilter);
+        }
 
         var records = new List<ExecutionEvidenceRecord>();
         await using SqliteDataReader reader = await command.ExecuteReaderAsync();
@@ -118,6 +130,106 @@ public sealed partial class SqliteExecutionEvidenceStore(Repository repository) 
 
         return records;
     }
+
+    /// <summary>
+    /// Path-only listing (PERF-14): the same rows <see cref="ListAsync"/> would return, without
+    /// their bodies. Consumers that only enumerate what evidence exists - rather than read what it
+    /// says - pay neither the multi-kilobyte body fetch per row nor the SHA-256 validation of a
+    /// document they are about to discard.
+    ///
+    /// <para>
+    /// Hash validation is deliberately absent rather than forgotten: it is a statement about a body,
+    /// and no body is read here. <see cref="ListAsync"/> remains the content path and still
+    /// validates every row it returns, so nothing weakens for consumers that need the text.
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<ExecutionEvidencePath>> ListPathsAsync(string searchPattern = "*.md")
+    {
+        string databasePath = ResolveDatabase(repository);
+        await using SqliteConnection connection = OpenReadOnly(databasePath);
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        string? likeFilter = TryBuildLikeSuperset(searchPattern);
+        command.CommandText = likeFilter is null
+            ? """
+              SELECT stem, sequence, logical_path
+              FROM execution_evidence
+              ORDER BY stem, sequence;
+              """
+            : """
+              SELECT stem, sequence, logical_path
+              FROM execution_evidence
+              WHERE logical_path LIKE $like ESCAPE '\'
+              ORDER BY stem, sequence;
+              """;
+        if (likeFilter is not null)
+        {
+            command.Parameters.AddWithValue("$like", likeFilter);
+        }
+
+        var paths = new List<ExecutionEvidencePath>();
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            string relativePath = reader.GetString(2);
+            if (!GlobMatches(Path.GetFileName(relativePath), searchPattern))
+            {
+                continue;
+            }
+
+            paths.Add(new ExecutionEvidencePath(
+                reader.GetString(0),
+                reader.GetInt32(1),
+                relativePath));
+        }
+
+        return paths;
+    }
+
+    /// <summary>
+    /// Builds a SQL <c>LIKE</c> pattern that matches a strict superset of what
+    /// <see cref="GlobMatches"/> accepts, so SQLite can discard obviously-irrelevant rows before
+    /// they are materialized while <see cref="GlobMatches"/> stays the sole authority on the
+    /// result. Returns <see langword="null"/> when no safe filter can be derived, in which case
+    /// every row is read and filtered in memory exactly as before.
+    ///
+    /// <para>
+    /// Superset, never equivalence: a filter that excluded a row <see cref="GlobMatches"/> would
+    /// have accepted would silently change results, so the two ways that could happen are both
+    /// ruled out below - <c>LIKE</c> metacharacters in the caller's pattern are escaped, and
+    /// non-ASCII patterns decline the filter entirely because SQLite's <c>LIKE</c> folds case for
+    /// ASCII only while <see cref="StringComparison.OrdinalIgnoreCase"/> folds the full Unicode
+    /// range.
+    /// </para>
+    /// </summary>
+    private static string? TryBuildLikeSuperset(string searchPattern)
+    {
+        if (searchPattern == "*")
+        {
+            return null;
+        }
+
+        int star = searchPattern.IndexOf('*', StringComparison.Ordinal);
+        string prefix = star < 0 ? searchPattern : searchPattern[..star];
+        string suffix = star < 0 ? string.Empty : searchPattern[(star + 1)..];
+        if (!Ascii.IsValid(prefix) || !Ascii.IsValid(suffix))
+        {
+            return null;
+        }
+
+        // A logical path always ends with the file name the glob is matched against, so "file name
+        // equals the pattern" implies "path ends with the pattern", and "file name starts with
+        // prefix and ends with suffix" implies "path contains prefix somewhere ahead of a trailing
+        // suffix" - GlobMatches' own length check rules out the two overlapping.
+        return star < 0
+            ? "%" + EscapeLike(prefix)
+            : "%" + EscapeLike(prefix) + "%" + EscapeLike(suffix);
+    }
+
+    private static string EscapeLike(string value) => value
+        .Replace("\\", "\\\\", StringComparison.Ordinal)
+        .Replace("%", "\\%", StringComparison.Ordinal)
+        .Replace("_", "\\_", StringComparison.Ordinal);
 
     private static async Task<int> NextSequenceAsync(
         SqliteConnection connection,
