@@ -18,10 +18,18 @@ public sealed class PermissionHandler(
 {
     private static readonly PermissionEvaluationFlow EvaluationFlow = PermissionEvaluationFlow.Default;
 
-    public PermissionResult Evaluate(PermissionRequest request)
+    // PermissionEvaluationFlow is only ever PermissionEvaluationFlow.Default today (it is never
+    // injected), so the guard only needs to validate that one static structure. A static
+    // constructor runs exactly once per process, before the type is first used, so re-validating
+    // the flow on every Evaluate() call (on the synchronous codex approval read pump) is wasted
+    // work. If flow ever becomes injectable, guard non-default instances where they're received.
+    static PermissionHandler()
     {
         GuardEvaluationFlow(EvaluationFlow);
+    }
 
+    public PermissionResult Evaluate(PermissionRequest request)
+    {
         ParseResult parsed = _parser.Parse(request.ToolName, request.RawCommand);
         if (parsed.HasUnknownSyntax)
         {
@@ -57,7 +65,7 @@ public sealed class PermissionHandler(
     private static PermissionResult Deny(string? reason) =>
         new(RuleDecision.Deny, reason ?? "Unknown error");
 
-    private static void GuardEvaluationFlow(PermissionEvaluationFlow flow)
+    internal static void GuardEvaluationFlow(PermissionEvaluationFlow flow)
     {
         ArgumentNullException.ThrowIfNull(flow);
 
