@@ -104,35 +104,32 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
     }
 
     [Fact]
-    public async Task Database_UsesWalAndBusyTimeout()
+    public async Task Database_UsesBusyTimeout()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
 
-        // First writable contact: this is the (process, path) first-contact call that must flip
-        // the database file itself into WAL mode (a persistent, on-disk property of the database,
-        // not per-connection state) and must also set busy_timeout on this very connection.
+        // First writable contact: this is the (process, path) first-contact call that must set
+        // busy_timeout on this very connection. (WAL mode is deferred - see the Core performance
+        // remediation plan's Decisions section - so it is not asserted here.)
         await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
         {
             await connection.OpenAsync();
             await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-            Assert.Equal("wal", await ScalarStringAsync(connection, "PRAGMA journal_mode;"));
             Assert.Equal(
                 LoopRelayWorkspaceDatabase.BusyTimeoutMilliseconds,
                 await ScalarLongAsync(connection, "PRAGMA busy_timeout;"));
         }
 
         // A brand-new connection to the same path, in the same process, after the memoized fast
-        // path is in play: WAL is a database-file property so it must already be in effect
-        // without re-running full verification; busy_timeout is per-connection state so it must be
-        // (re-)applied on this fresh connection too.
+        // path is in play: busy_timeout is per-connection state so it must be (re-)applied on this
+        // fresh connection too.
         await using (SqliteConnection fresh = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
         {
             await fresh.OpenAsync();
             await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(fresh);
 
-            Assert.Equal("wal", await ScalarStringAsync(fresh, "PRAGMA journal_mode;"));
             Assert.Equal(
                 LoopRelayWorkspaceDatabase.BusyTimeoutMilliseconds,
                 await ScalarLongAsync(fresh, "PRAGMA busy_timeout;"));

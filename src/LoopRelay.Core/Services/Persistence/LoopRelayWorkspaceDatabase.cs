@@ -337,15 +337,6 @@ public static class LoopRelayWorkspaceDatabase
 
         Interlocked.Increment(ref FullVerificationRuns);
 
-        // WAL is a persistent, on-disk property of the database file itself (stored in the file
-        // header), not per-connection state — unlike `foreign_keys`/`busy_timeout` above, it does
-        // not need to be re-applied on every connection. Folding it into this first-contact/
-        // cache-miss branch (piggybacking on Task 1's per-(process, path) memoization) means it
-        // runs exactly once per process for an already-WAL database, and exactly once ever for a
-        // database that has never been switched. The PRAGMA is idempotent regardless: if the file
-        // is already in WAL mode this is a cheap no-op that just reports "wal" back.
-        await ExecuteAsync(connection, "PRAGMA journal_mode = WAL;", cancellationToken);
-
         WorkspaceSchemaInspection inspection = await InspectSchemaAsync(connection, cancellationToken);
         if (inspection.Family == WorkspaceSchemaFamily.LegacyContinuity)
         {
