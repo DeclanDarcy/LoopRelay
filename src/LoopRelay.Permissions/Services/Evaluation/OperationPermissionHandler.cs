@@ -222,12 +222,18 @@ public sealed class OperationPermissionHandler
             StringSplitOptions.RemoveEmptyEntries))
         {
             current = Path.Combine(current, segment);
-            if (!File.Exists(current) && !Directory.Exists(current))
+
+            FileAttributes attributes;
+            try
             {
+                attributes = File.GetAttributes(current);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or IOException)
+            {
+                // Segment does not exist on disk (yet): nothing to inspect, keep walking.
                 continue;
             }
 
-            FileAttributes attributes = File.GetAttributes(current);
             if ((attributes & FileAttributes.ReparsePoint) != 0)
             {
                 return true;

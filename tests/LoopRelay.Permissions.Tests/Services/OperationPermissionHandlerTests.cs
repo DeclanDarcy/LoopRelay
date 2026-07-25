@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LoopRelay.Permissions.Models;
 using LoopRelay.Permissions.Models.Evaluation;
 using LoopRelay.Permissions.Models.Policy;
@@ -161,6 +162,117 @@ public sealed class OperationPermissionHandlerTests
             Profile(repo.Root));
 
         Assert.Equal(RuleDecision.Deny, result.Decision);
+    }
+
+    [Fact]
+    public void Allows_write_path_when_segments_do_not_exist_on_disk()
+    {
+        using TempRepo repo = TempRepo.Create();
+
+        // Nothing under repo.Root is created on disk: every path segment is absent.
+        PermissionResult result = Handler.Evaluate(
+            FileChange("write", ".agents/details.md"),
+            Profile(repo.Root));
+
+        Assert.Equal(RuleDecision.Allow, result.Decision);
+    }
+
+    [Fact]
+    public void Allows_write_path_through_real_directory_chain_without_reparse_points()
+    {
+        using TempRepo repo = TempRepo.Create();
+        Directory.CreateDirectory(Path.Combine(repo.Root, ".agents"));
+        File.WriteAllText(Path.Combine(repo.Root, ".agents", "details.md"), "content");
+
+        PermissionResult result = Handler.Evaluate(
+            FileChange("write", ".agents/details.md"),
+            Profile(repo.Root));
+
+        Assert.Equal(RuleDecision.Allow, result.Decision);
+    }
+
+    [Fact]
+    public void Denies_write_path_through_directory_junction_reparse_point()
+    {
+        using TempRepo repo = TempRepo.Create();
+        string realTarget = Path.Combine(
+            Path.GetTempPath(),
+            "looprelay-permissions-tests-junction-target",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(realTarget);
+
+        string junctionPath = Path.Combine(repo.Root, ".agents");
+
+        if (!TryCreateDirectoryJunction(junctionPath, realTarget, out string? failureReason))
+        {
+            Directory.Delete(realTarget, recursive: true);
+
+            // Reparse-point creation can require elevated privilege / Developer Mode in some
+            // sandboxes. Treat only an access/privilege style failure as an environment
+            // limitation (not a code defect); anything else fails the test loudly.
+            bool looksLikePrivilegeIssue = failureReason is not null
+                && (failureReason.Contains("privilege", StringComparison.OrdinalIgnoreCase)
+                    || failureReason.Contains("denied", StringComparison.OrdinalIgnoreCase)
+                    || failureReason.Contains("not authorized", StringComparison.OrdinalIgnoreCase));
+
+            Assert.True(
+                looksLikePrivilegeIssue,
+                $"Junction creation failed for an unexpected reason (not an access/privilege issue): {failureReason}");
+            return;
+        }
+
+        try
+        {
+            PermissionResult result = Handler.Evaluate(
+                FileChange("write", ".agents/details.md"),
+                Profile(repo.Root));
+
+            Assert.Equal(RuleDecision.Deny, result.Decision);
+        }
+        finally
+        {
+            Directory.Delete(junctionPath);
+            Directory.Delete(realTarget, recursive: true);
+        }
+    }
+
+    private static bool TryCreateDirectoryJunction(string junctionPath, string targetPath, out string? failureReason)
+    {
+        failureReason = null;
+        try
+        {
+            var startInfo = new ProcessStartInfo("cmd.exe", $"/c mklink /J \"{junctionPath}\" \"{targetPath}\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using Process? process = Process.Start(startInfo);
+            if (process is null)
+            {
+                failureReason = "Unable to start mklink process.";
+                return false;
+            }
+
+            string stdout = process.StandardOutput.ReadToEnd();
+            string stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0 || !Directory.Exists(junctionPath))
+            {
+                failureReason = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            failureReason = ex.Message;
+            return false;
+        }
     }
 
     private static OperationPermissionProfile Profile(string root) =>
