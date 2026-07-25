@@ -52,7 +52,15 @@ public sealed class WorkspaceSchemaMigrationExecutor
         await using SqliteConnection connection = WorkspaceDatabaseConnectionFactory.OpenMigrationTarget(databasePath);
         await connection.OpenAsync(cancellationToken);
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
-        return await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection, cancellationToken);
+
+        // EnsureSchemaAsync has just verified this database's shape - inside its own transaction on
+        // the migration path (VerifyCanonicalV15ShapeAsync), or against the stamp on the memoized
+        // fast path. Re-running the full ~190-probe classification here only to describe what we
+        // already proved is the redundant second inspection PERF-15 calls out. The stamped read
+        // reports the identical result (see InspectStampedAsync), and its "trusts the stamp" caveat
+        // does not apply here: the call above is the thing that established the stamp's truth, on
+        // this same connection, moments ago.
+        return await LoopRelayWorkspaceDatabase.InspectStampedAsync(connection, cancellationToken);
     }
 }
 

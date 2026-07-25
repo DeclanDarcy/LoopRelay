@@ -11,6 +11,7 @@ namespace LoopRelay.Core.Tests.Services;
 /// transaction, while still detecting a stamp that has moved and still enforcing fail-closed
 /// behavior on first contact.
 /// </summary>
+[Collection("WorkspaceDatabaseCounters")]
 public sealed class LoopRelayWorkspaceDatabaseEnsureTests
 {
     [Fact]

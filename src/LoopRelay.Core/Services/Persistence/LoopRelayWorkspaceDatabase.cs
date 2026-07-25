@@ -116,6 +116,14 @@ public static class LoopRelayWorkspaceDatabase
     internal static int RepairTransactionsOpened;
 
     /// <summary>
+    /// Test-only observability: how many individual shape-requirement probes have been issued
+    /// (one per table/column/index/foreign-key check). <see cref="InspectSchemaAsync"/> issues
+    /// ~190 of these per call on a canonical-v15 database; <see cref="InspectStampedAsync"/> must
+    /// issue none when it can answer from the stamp.
+    /// </summary>
+    internal static int ShapeRequirementProbes;
+
+    /// <summary>
     /// Test-only: clears the per-process memo and resets <see cref="FullVerificationRuns"/> and
     /// <see cref="RepairTransactionsOpened"/>.
     /// </summary>
@@ -758,6 +766,75 @@ public static class LoopRelayWorkspaceDatabase
                 WorkspaceSchemaShape.Unknown,
                 null,
                 $"Schema version {version?.ToString(CultureInfo.InvariantCulture) ?? "(missing)"} has an unknown structural fingerprint.");
+    }
+
+    /// <summary>
+    /// Stamped fast path for read-side schema inspection (PERF-15). Answers from
+    /// <c>schema_metadata</c> alone - four small SELECTs - when the stamp is well-formed for the
+    /// current canonical contract, instead of the ~190 structural probes
+    /// <see cref="InspectSchemaAsync"/> issues. Falls back to the full classification, unchanged,
+    /// whenever the stamp is absent, malformed, or internally inconsistent.
+    ///
+    /// <para>
+    /// The returned <see cref="WorkspaceSchemaInspection"/> is field-for-field identical to what
+    /// <see cref="InspectSchemaAsync"/> returns for the same database. That equivalence holds by
+    /// construction rather than coincidence: the full path only reports
+    /// <see cref="WorkspaceSchemaShape.CanonicalV15Complete"/> when every
+    /// <c>CanonicalV15Requirements</c> token is satisfied, and in exactly that case its observed
+    /// fingerprint is the hash of that same complete token set - which is
+    /// <see cref="CanonicalV15ShapeFingerprint"/>.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The trade-off, stated explicitly:</b> this trusts the stamp over the physical shape. A
+    /// database whose stamp still claims a complete v15 shape while a required table has been
+    /// dropped out-of-band is reported healthy here and corrupt by
+    /// <see cref="InspectSchemaAsync"/>. Callers that are the authority on whether mutation may
+    /// proceed against an untrusted file must keep using the full classification;
+    /// <see cref="EnsureSchemaAsync"/> does exactly that on first contact per process.
+    /// </para>
+    /// </summary>
+    public static async Task<WorkspaceSchemaInspection> InspectStampedAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!await TableExistsAsync(connection, "schema_metadata", cancellationToken))
+            {
+                return await InspectSchemaAsync(connection, cancellationToken);
+            }
+
+            string? identity = await ReadMetadataValueAsync(connection, "schema_identity", cancellationToken);
+            string? family = await ReadMetadataValueAsync(connection, "schema_family", cancellationToken);
+            string? stampedShape = await ReadMetadataValueAsync(connection, SchemaShapeMetadataKey, cancellationToken);
+            int? version = await ReadExistingSchemaVersionAsync(connection, cancellationToken);
+
+            bool wellFormedStamp =
+                string.Equals(identity, SchemaIdentity, StringComparison.Ordinal) &&
+                string.Equals(family, SchemaFamily, StringComparison.Ordinal) &&
+                version == CurrentSchemaVersion &&
+                string.Equals(stampedShape, CanonicalV15ShapeFingerprint, StringComparison.Ordinal);
+            if (!wellFormedStamp)
+            {
+                return await InspectSchemaAsync(connection, cancellationToken);
+            }
+
+            return new WorkspaceSchemaInspection(
+                SchemaIdentity,
+                WorkspaceSchemaFamily.CanonicalWorkspace,
+                CurrentSchemaVersion,
+                true,
+                WorkspaceSchemaShape.CanonicalV15Complete,
+                CanonicalV15ShapeFingerprint,
+                "Canonical workspace v15 lineage and complete physical-shape fingerprint verified.");
+        }
+        catch (SqliteException)
+        {
+            // The metadata reads themselves failed, so nothing about this file is trustworthy
+            // enough to short-circuit on. Let the full classification produce the diagnostic.
+            return await InspectSchemaAsync(connection, cancellationToken);
+        }
     }
 
     private static async Task<WorkspaceSchemaInspection> ClassifyV9ShapeAsync(
@@ -1689,6 +1766,7 @@ public static class LoopRelayWorkspaceDatabase
         ShapeRequirement requirement,
         CancellationToken cancellationToken)
     {
+        Interlocked.Increment(ref ShapeRequirementProbes);
         switch (requirement.Kind)
         {
             case ShapeRequirementKind.Table:
