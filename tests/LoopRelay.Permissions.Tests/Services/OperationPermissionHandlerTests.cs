@@ -194,6 +194,8 @@ public sealed class OperationPermissionHandlerTests
     [Fact]
     public void Denies_write_path_through_directory_junction_reparse_point()
     {
+        if (!OperatingSystem.IsWindows()) return;
+
         using TempRepo repo = TempRepo.Create();
         string realTarget = Path.Combine(
             Path.GetTempPath(),
