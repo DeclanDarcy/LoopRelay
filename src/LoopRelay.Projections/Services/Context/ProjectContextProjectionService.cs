@@ -75,13 +75,13 @@ public sealed class ProjectContextProjectionService(
 
         if (!validation.IsValid)
         {
-            await _manifestStore.UpsertAsync(entry);
+            await _manifestStore.UpsertAsync(manifest, entry, cancellationToken);
             throw new ProjectionException($"Projection validation failed for {runtimePromptName}: {validation.Error}");
         }
 
         if (!freshness.IsFresh && refreshPolicy == ProjectionRefreshPolicy.BlockWhenStale)
         {
-            await _manifestStore.UpsertAsync(entry);
+            await _manifestStore.UpsertAsync(manifest, entry, cancellationToken);
             throw new ProjectionException($"Projection is stale for {runtimePromptName}: {FormatReasons(freshness.Reasons)}.");
         }
 
@@ -90,7 +90,7 @@ public sealed class ProjectContextProjectionService(
             await _artifacts.WriteAsync(definition.ProjectionPath, content);
         }
 
-        await _manifestStore.UpsertAsync(entry);
+        await _manifestStore.UpsertAsync(manifest, entry, cancellationToken);
         return new ProjectContextProjectionResult(definition, content, generated, freshness.Status, freshness.Reasons);
     }
 
