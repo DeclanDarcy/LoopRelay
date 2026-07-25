@@ -103,10 +103,26 @@ public static class LoopRelayWorkspaceDatabase
     /// <summary>Test-only observability: how many times the full verification pipeline ran.</summary>
     internal static int FullVerificationRuns;
 
-    /// <summary>Test-only: clears the per-process memo and resets <see cref="FullVerificationRuns"/>.</summary>
+    /// <summary>
+    /// Test-only observability: how many times <see cref="RunStructurallyCompleteBranchAsync"/>
+    /// actually opened a write transaction (as opposed to taking the zero-transaction path because
+    /// <see cref="HasRepairableLegacyBlockedVocabularyAsync"/> found nothing to repair and no
+    /// legacy resume was pending). This is the direct, unambiguous signal for "did this call
+    /// perturb anything write-shaped," which - per empirical measurement - a physical proxy like
+    /// <c>PRAGMA data_version</c> or <c>-wal</c> file length cannot reliably distinguish for a
+    /// transaction that dirties zero pages: such a transaction changes neither on real
+    /// Microsoft.Data.Sqlite/SQLite behavior observed in this codebase.
+    /// </summary>
+    internal static int RepairTransactionsOpened;
+
+    /// <summary>
+    /// Test-only: clears the per-process memo and resets <see cref="FullVerificationRuns"/> and
+    /// <see cref="RepairTransactionsOpened"/>.
+    /// </summary>
     internal static void ResetSchemaVerificationCacheForTesting()
     {
         VerifiedSchemas.Clear();
+        Interlocked.Exchange(ref RepairTransactionsOpened, 0);
         Interlocked.Exchange(ref FullVerificationRuns, 0);
     }
 
@@ -414,20 +430,29 @@ public static class LoopRelayWorkspaceDatabase
     /// from a full verification pass that just confirmed the same thing.
     ///
     /// <para>
-    /// This still imports a legacy resume document when present and still runs
-    /// <see cref="CanonicalDataRepairSql"/> on every call, including the fast path. That SQL is
-    /// idempotent (5 <c>UPDATE ... WHERE state = 'Blocked'</c> statements and a
-    /// <c>DROP TABLE IF EXISTS</c>) and, when nothing needs repairing, touches zero rows and
-    /// dirties no pages — verified empirically to leave <c>PRAGMA data_version</c> unchanged, so
-    /// it does not reintroduce the write-per-operation cost this task targets. It is kept
-    /// unconditional (rather than confined to the migration branch only) because a downstream
-    /// consumer (LoopRelay.Orchestration.Primitives' WorkflowResolverTests,
-    /// <c>Previously_latched_blocked_workflow_resolves_on_its_real_gate_condition_after_migration</c>)
-    /// relies on every <see cref="EnsureSchemaAsync"/> call — even on an already
-    /// CanonicalV15Complete database, even one reached via the memoized fast path — normalizing a
-    /// stray legacy 'Blocked' label with no separate "unblock" command available. Dropping that
-    /// guarantee (as the original per-store-operation reading of "confine repair SQL to the
-    /// migration branch" would have required) regressed that test; see the task report for detail.
+    /// This still imports a legacy resume document when present, and still self-heals stray
+    /// legacy <c>'Blocked'</c> vocabulary via <see cref="CanonicalDataRepairSql"/> when there is
+    /// any to heal — on every call, including the fast path, with no separate "unblock" command
+    /// available. A downstream consumer (LoopRelay.Orchestration.Primitives'
+    /// <c>WorkflowResolverTests.Previously_latched_blocked_workflow_resolves_on_its_real_gate_condition_after_migration</c>)
+    /// depends on this: dropping it entirely regressed that test (see the Task 1 decision log
+    /// entry in <c>performance-remediation-plan.md</c>).
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Refinement (supersedes the Task 1 "always open the transaction" reading):</b> the write
+    /// transaction is now opened only when <see cref="HasRepairableLegacyBlockedVocabularyAsync"/>
+    /// finds an actual stray <c>'Blocked'</c> row/table to repair, or when a legacy resume import
+    /// is pending. Task 1 measured the transaction as a no-op by <c>PRAGMA data_version</c> (a
+    /// page-dirtying signal) and treated that as sufficient; Task 2 enabling WAL exposed a
+    /// different, page-independent cost — opening a write transaction under WAL perturbs the
+    /// <c>-wal</c>/<c>-shm</c> side files even when it dirties zero pages, which broke
+    /// byte/tree-stability tests that don't tolerate any side-file churn on a healthy read. The
+    /// probe below is a single read-only <c>SELECT EXISTS</c> (no transaction, so it cannot itself
+    /// perturb anything) that costs the same full-table-scan the old unconditional
+    /// <c>UPDATE ... WHERE</c> already paid (none of the relevant columns are indexed), so this
+    /// costs nothing extra on the "needs repair" path while making the far more common "healthy"
+    /// path a genuine zero-transaction read.
     /// </para>
     /// </summary>
     private static async Task RunStructurallyCompleteBranchAsync(
@@ -436,6 +461,18 @@ public static class LoopRelayWorkspaceDatabase
         CancellationToken cancellationToken)
     {
         LegacyResumeImport? legacyResume = await ReadLegacyResumeAsync(connection, cancellationToken);
+        bool needsRepair = legacyResume is not null ||
+            await HasRepairableLegacyBlockedVocabularyAsync(connection, cancellationToken);
+        if (!needsRepair)
+        {
+            // The literal read-only fast path: nothing to import, nothing to repair, so no write
+            // transaction is opened at all - this connection never touches the -wal/-shm side
+            // files next to the database.
+            VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV15ShapeFingerprint);
+            return;
+        }
+
+        Interlocked.Increment(ref RepairTransactionsOpened);
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         try
         {
@@ -454,6 +491,37 @@ public static class LoopRelayWorkspaceDatabase
         }
 
         VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV15ShapeFingerprint);
+    }
+
+    /// <summary>
+    /// Cheap, read-only existence probe for exactly the legacy <c>'Blocked'</c> vocabulary
+    /// <see cref="CanonicalDataRepairSql"/> targets: any row with <c>state = 'Blocked'</c> or
+    /// <c>outcome = 'Blocked'</c> in <c>canonical_workflow_states</c>; any row with
+    /// <c>state = 'Blocked'</c> in <c>canonical_stage_states</c>; any row with
+    /// <c>state = 'Blocked'</c> or <c>outcome = 'Blocked'</c> in <c>canonical_transition_runs</c>;
+    /// or the (legacy, should-be-dropped) <c>canonical_blockers</c> table still existing. A single
+    /// <c>SELECT EXISTS(... UNION ALL ...)</c> so SQLite can short-circuit on the first hit rather
+    /// than running four independent round trips. This is a plain <c>SELECT</c> outside any
+    /// transaction - it takes no write lock and cannot itself perturb the WAL side files.
+    /// </summary>
+    private static async Task<bool> HasRepairableLegacyBlockedVocabularyAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT EXISTS(
+                SELECT 1 FROM canonical_workflow_states WHERE state = 'Blocked' OR outcome = 'Blocked'
+                UNION ALL
+                SELECT 1 FROM canonical_stage_states WHERE state = 'Blocked'
+                UNION ALL
+                SELECT 1 FROM canonical_transition_runs WHERE state = 'Blocked' OR outcome = 'Blocked'
+                UNION ALL
+                SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'canonical_blockers'
+            );
+            """;
+        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt64(scalar, CultureInfo.InvariantCulture) == 1;
     }
 
     /// <summary>

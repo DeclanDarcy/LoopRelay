@@ -140,6 +140,109 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
     }
 
     [Fact]
+    public async Task EnsureSchema_OnHealthyDb_MemoizedFastPath_OpensNoWriteTransaction()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+        string walPath = databasePath + "-wal";
+        string shmPath = databasePath + "-shm";
+
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await connection.OpenAsync();
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        }
+
+        // The migration connection above ran the real (migrationTransaction) branch, not
+        // RunStructurallyCompleteBranchAsync, so it never touches RepairTransactionsOpened. Reset
+        // it here purely so the counter below reflects only the memoized fast-path call.
+        LoopRelayWorkspaceDatabase.ResetSchemaVerificationCacheForTesting();
+        await using (SqliteConnection reverify = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
+        {
+            await reverify.OpenAsync();
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(reverify);
+        }
+        int baseline = LoopRelayWorkspaceDatabase.RepairTransactionsOpened;
+
+        // The migration connection above is now fully closed. Whatever WAL side-file state that
+        // leaves behind is the baseline this test cares about preserving - not asserting it is
+        // empty (that is a property of SQLite's own checkpoint-on-close behavior, not of this
+        // regression), but capturing it so the memoized fast path below can be held to "did not
+        // change this" rather than to an assumption about what the baseline should be.
+        long walLengthBefore = File.Exists(walPath) ? new FileInfo(walPath).Length : -1;
+        long shmLengthBefore = File.Exists(shmPath) ? new FileInfo(shmPath).Length : -1;
+
+        // A brand-new connection/open on the same path: with the in-process memo already
+        // populated from the calls above, this is unambiguously the memoized fast path
+        // (RunStructurallyCompleteBranchAsync). On a genuinely healthy database - no legacy
+        // resume pending, no stray legacy 'Blocked' vocabulary anywhere - this must not open any
+        // write transaction at all. RepairTransactionsOpened is the direct, unambiguous signal for
+        // that (see its doc comment: neither PRAGMA data_version nor -wal file length reliably
+        // distinguishes a zero-row-affecting transaction from no transaction at all on this
+        // codebase's SQLite/Microsoft.Data.Sqlite version - verified empirically). The -wal/-shm
+        // length assertions below are kept as secondary, real-signal corroboration of the same
+        // "nothing was touched" claim once the counter has already proven no transaction opened.
+        await using (SqliteConnection second = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
+        {
+            await second.OpenAsync();
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(second);
+        }
+
+        Assert.Equal(baseline, LoopRelayWorkspaceDatabase.RepairTransactionsOpened);
+
+        long walLengthAfter = File.Exists(walPath) ? new FileInfo(walPath).Length : -1;
+        long shmLengthAfter = File.Exists(shmPath) ? new FileInfo(shmPath).Length : -1;
+
+        Assert.Equal(walLengthBefore, walLengthAfter);
+        Assert.Equal(shmLengthBefore, shmLengthAfter);
+    }
+
+    [Fact]
+    public async Task EnsureSchema_MemoizedFastPath_StillRepairsStrayLegacyBlockedVocabulary()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await connection.OpenAsync();
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        }
+
+        // Insert a stray legacy 'Blocked' row directly, bypassing EnsureSchemaAsync entirely, the
+        // same way an out-of-band writer (or a pre-migration artifact) could leave one behind.
+        // This must be visible to - and repaired by - the very next EnsureSchemaAsync call, even
+        // though the in-process memo for this path is already populated and that next call is
+        // therefore the memoized fast path, not a full verification pass.
+        await using (SqliteConnection tamper = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
+        {
+            await tamper.OpenAsync();
+            await ExecuteAsync(
+                tamper,
+                """
+                INSERT INTO canonical_workflow_states
+                    (workflow_identity, state, current_stage, outcome, updated_at, evidence_json)
+                VALUES
+                    ('wf-stray-blocked', 'Blocked', NULL, NULL, '2026-01-01T00:00:00Z', '{}');
+                """);
+        }
+
+        await using (SqliteConnection third = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
+        {
+            await third.OpenAsync();
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(third);
+        }
+
+        await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath);
+        await verify.OpenAsync();
+        string? repairedState = await ScalarStringAsync(
+            verify,
+            "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'wf-stray-blocked';");
+
+        Assert.Equal("Resumable", repairedState);
+    }
+
+    [Fact]
     public async Task EnsureSchema_LegacyContinuity_StillThrowsImportRequired()
     {
         Repository repository = CreateRepository();
