@@ -84,6 +84,30 @@ public sealed class CodexRolloutRepositoryLocateTests
         Assert.Equal(newerByName, found);
     }
 
+    [Fact]
+    public async Task Locate_PicksNewestAcrossFilenameAndProbedMatches()
+    {
+        string home = TempHome();
+        string sessions = Directory.CreateDirectory(Path.Combine(home, "sessions")).FullName;
+
+        const string targetId = "019daaaa-bbbb-cccc-dddd-eeeeffff0000";
+
+        // Conforms to the naming convention, resolvable by filename alone — but it is the OLDER duplicate.
+        string conformingPath = Path.Combine(sessions, $"rollout-2026-01-01T10-00-00-{targetId}.jsonl");
+        File.WriteAllText(conformingPath, "irrelevant");
+        File.SetLastWriteTimeUtc(conformingPath, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        // Legacy/renamed filename that does not conform to the convention, so it is only discoverable via
+        // the first-line session_meta probe. It is the genuinely NEWER duplicate and must win.
+        string nonConformingPath = Path.Combine(sessions, "legacy-renamed-rollout.jsonl");
+        await File.WriteAllTextAsync(nonConformingPath, SessionMetaLine(targetId) + "\n{\"type\":\"event\"}\n");
+        File.SetLastWriteTimeUtc(nonConformingPath, new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        string? found = await new CodexRolloutRepository().LocateAsync(home, targetId);
+
+        Assert.Equal(nonConformingPath, found);
+    }
+
     private static FileStream OpenExclusive(string path) =>
         new(path, FileMode.Open, FileAccess.Read, FileShare.None);
 

@@ -82,9 +82,21 @@ public sealed class CodexRolloutRepository
     /// <summary>
     /// Resolves only the path of the rollout file for <paramref name="providerThreadId"/> — no content is
     /// parsed, hashed, or materialized. Filename matches (the common case) never open the file at all;
-    /// only filenames that don't conform to the rollout naming convention fall back to a first-line probe.
-    /// Fails open (returns null) on any error, per the telemetry contract this lookup serves.
+    /// only filenames that don't conform to the rollout naming convention are ever candidates for a
+    /// first-line probe, and even then only when they could possibly outrank the newest filename match
+    /// already found (see <see cref="PickNewest"/> below).
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Deliberately diverges from <see cref="ReadExactAsync"/> on duplicate thread ids.</b>
+    /// <see cref="ReadExactAsync"/> returns <see cref="CodexRolloutReadStatus.Ambiguous"/> and refuses to
+    /// pick when a thread id resolves to more than one rollout file, because it serves diagnosis — guessing
+    /// there would be worse than admitting uncertainty. <see cref="LocateAsync"/> instead confidently
+    /// returns the newest match by file time. It serves the fail-open telemetry path, where a best-effort
+    /// location hint beats no hint at all, and staleness (not correctness) is the acceptable risk. This
+    /// divergence is intentional and ratified; do not "fix" one method to match the other.
+    /// </para>
+    /// </remarks>
     public async Task<string?> LocateAsync(
         string codexHome,
         string providerThreadId,
@@ -114,21 +126,42 @@ public sealed class CodexRolloutRepository
                 unresolvedByName.Add(path);
             }
 
-            var matches = filenameMatches;
-            if (matches.Count == 0)
+            // Non-conforming filenames must always be considered, even when a filename match already
+            // exists: a duplicate under a legacy/renamed filename could be the genuinely newest file, and
+            // the newest-match contract has to hold regardless of which naming convention won the race.
+            var candidates = new List<string>(filenameMatches);
+            if (unresolvedByName.Count > 0)
             {
-                matches = [];
+                // When a filename match already exists, an unresolved file can only change the outcome by
+                // being strictly newer than the best filename match so far — anything older or tied loses
+                // to it in PickNewest's tie-break regardless of content, so skip probing those for free.
+                // With no filename match yet, every unresolved file is still a live candidate for the
+                // (possibly sole) answer, so none can be skipped.
+                DateTime? notOlderThan = filenameMatches.Count == 0
+                    ? null
+                    : filenameMatches.Max(File.GetLastWriteTimeUtc);
+
                 foreach (string path in unresolvedByName)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
+                    if (notOlderThan is DateTime bound && File.GetLastWriteTimeUtc(path) <= bound)
+                    {
+                        continue;
+                    }
+
                     if (await FirstLineMatchesThreadIdAsync(path, providerThreadId, cancellationToken))
                     {
-                        matches.Add(path);
+                        candidates.Add(path);
                     }
                 }
             }
 
-            return matches.Count == 0 ? null : PickNewest(matches);
+            return candidates.Count == 0 ? null : PickNewest(candidates);
+        }
+        catch (OperationCanceledException)
+        {
+            throw; // cancellation is caller-directed; propagate it instead of reporting a false "not found".
         }
         catch
         {
