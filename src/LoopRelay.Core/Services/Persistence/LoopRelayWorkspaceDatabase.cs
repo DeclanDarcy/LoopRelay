@@ -72,6 +72,15 @@ public static class LoopRelayWorkspaceDatabase
     public const int CurrentSchemaVersion = 15;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
+    /// <summary>
+    /// `PRAGMA busy_timeout` value (milliseconds) applied to every connection. This is
+    /// per-connection state (not persisted in the database file), so it must be re-applied on
+    /// every open, alongside `PRAGMA foreign_keys = ON`. 10000ms matches the value already used
+    /// ad hoc for concurrent-writer contention in
+    /// <c>LoopRelay.Certification.PersistenceLifecycleRunner</c>.
+    /// </summary>
+    public const int BusyTimeoutMilliseconds = 10000;
+
     // These were `=>` LINQ-chain computed properties that rebuilt the ~190-element requirement
     // lists (below) and re-hashed the fingerprint on every access. They are now built once, in
     // dependency order, by the static constructor and cached as plain fields.
@@ -292,6 +301,10 @@ public static class LoopRelayWorkspaceDatabase
         // PRAGMA state is per-connection (not persisted in the database file), so this must run
         // on every call regardless of whether the fast path below applies.
         await ExecuteAsync(connection, "PRAGMA foreign_keys = ON;", cancellationToken);
+        await ExecuteAsync(
+            connection,
+            $"PRAGMA busy_timeout = {BusyTimeoutMilliseconds};",
+            cancellationToken);
 
         string cacheKey = Path.GetFullPath(connection.DataSource);
         if (VerifiedSchemas.TryGetValue(cacheKey, out (long Version, string ShapeFingerprint) cached) &&
@@ -307,6 +320,15 @@ public static class LoopRelayWorkspaceDatabase
         }
 
         Interlocked.Increment(ref FullVerificationRuns);
+
+        // WAL is a persistent, on-disk property of the database file itself (stored in the file
+        // header), not per-connection state — unlike `foreign_keys`/`busy_timeout` above, it does
+        // not need to be re-applied on every connection. Folding it into this first-contact/
+        // cache-miss branch (piggybacking on Task 1's per-(process, path) memoization) means it
+        // runs exactly once per process for an already-WAL database, and exactly once ever for a
+        // database that has never been switched. The PRAGMA is idempotent regardless: if the file
+        // is already in WAL mode this is a cheap no-op that just reports "wal" back.
+        await ExecuteAsync(connection, "PRAGMA journal_mode = WAL;", cancellationToken);
 
         WorkspaceSchemaInspection inspection = await InspectSchemaAsync(connection, cancellationToken);
         if (inspection.Family == WorkspaceSchemaFamily.LegacyContinuity)
