@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Threading;
 using LoopRelay.Core.Services.Persistence;
 using Microsoft.Data.Sqlite;
 
@@ -7,6 +8,14 @@ namespace LoopRelay.Orchestration.Storage;
 
 public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
 {
+    /// <summary>
+    /// Test-only observability: how many times <see cref="HashFileAsync"/> has computed a
+    /// SHA-256 digest, across every file and every call, in this process. Used to prove that
+    /// <see cref="VerifyAsync"/> reuses the inventory's hash for the database file instead of
+    /// hashing it a second time (PERF: hash workspace database once per verification).
+    /// </summary>
+    internal static int FileHashInvocations;
+
     public async Task<StorageInspection> VerifyAsync(
         StorageVerifyRequest request,
         CancellationToken cancellationToken = default)
@@ -26,6 +35,12 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
 
         long length = new FileInfo(database).Length;
         string databaseRelativePath = Path.GetRelativePath(root, database).Replace('\\', '/');
+        // OrdinalIgnoreCase: entry.RelativePath carries the on-disk casing reported by
+        // Directory.GetFiles in InventoryAsync, which need not match the constant casing of
+        // LoopRelayWorkspaceDatabase.RelativeDatabasePath baked into databaseRelativePath (e.g.
+        // case-insensitive filesystems, or a file renamed only in case). Comparing ordinally
+        // here would silently miss the inventory entry and force the redundant rehash below on
+        // every verification, defeating the single-hash optimization without failing anything.
         string byteHash = inventory.FirstOrDefault(entry =>
                 string.Equals(entry.RelativePath, databaseRelativePath, StringComparison.OrdinalIgnoreCase))
             is { } databaseEntry
@@ -173,6 +188,7 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
 
     private static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
     {
+        Interlocked.Increment(ref FileHashInvocations);
         await using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
             64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));

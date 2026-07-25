@@ -58,12 +58,21 @@ public sealed class WorkspaceStorageAuthorityTests
         File.Move(path, renamedPath);
         byte[] bytes = await File.ReadAllBytesAsync(renamedPath);
         string expectedHash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        int hashInvocationsBefore = WorkspaceStorageInspector.FileHashInvocations;
 
         StorageInspection result = await new WorkspaceStorageInspector().VerifyAsync(new(repository.Path));
 
         Assert.Equal(StorageHealth.Healthy, result.Health);
         Assert.Equal(expectedHash, result.ByteSha256);
         Assert.Contains($"bytes-sha256:{expectedHash}", result.Evidence);
+        // The on-disk name (renamed to uppercase above) never matches
+        // LoopRelayWorkspaceDatabase.RelativeDatabasePath's constant casing, so this is the one
+        // scenario where an OrdinalIgnoreCase regression (or a reverted optimization) forces a
+        // second HashFileAsync call on the database. Every file in the inventory - here, just
+        // the renamed database itself - is hashed once while building it; VerifyAsync must reuse
+        // that hash rather than rehashing, so total invocations should equal the inventory size,
+        // not one more.
+        Assert.Equal(result.PersistenceTree.Count, WorkspaceStorageInspector.FileHashInvocations - hashInvocationsBefore);
     }
 
     [Fact]
