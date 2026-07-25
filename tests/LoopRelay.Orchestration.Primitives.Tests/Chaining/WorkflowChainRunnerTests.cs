@@ -77,7 +77,7 @@ public sealed class WorkflowChainRunnerTests
     }
 
     [Fact]
-    public async Task Required_effects_pending_prevents_chain_progression_after_reobservation()
+    public async Task Required_effects_pending_prevents_chain_progression_without_redundant_observation()
     {
         RepositoryObservation observation = Observation();
         Harness harness = new(observation);
@@ -102,7 +102,11 @@ public sealed class WorkflowChainRunnerTests
         Assert.Equal(WorkflowStopReason.RequiredEffectsPending, result.StopReason);
         Assert.True(result.Decision.RequiredEffectsPending);
         Assert.Equal(1, harness.Effects.CallCount);
-        Assert.True(harness.Observations.CallCount > 0);
+        // The controller no longer performs a post-attempt observation solely to populate a
+        // consumerless field, and this path never reaches the chain runner's own boundary-crossing
+        // re-observation (that only fires when advancing past a *completed* workflow). Zero
+        // observation calls is the correct, exact count here.
+        Assert.Equal(0, harness.Observations.CallCount);
     }
 
     [Fact]
@@ -149,7 +153,54 @@ public sealed class WorkflowChainRunnerTests
         KernelDecisionFact decision = Assert.Single(decisions.Decisions);
         Assert.Equal(context.Run, decision.RootRun);
         Assert.Equal(CanonicalWorkflowCatalog.Current.Identity, decision.CatalogIdentity);
-        Assert.True(harness.Observations.CallCount >= 2);
+        // Exactly one observation for this single completed-attempt cycle: the kernel's own
+        // re-observation at the cycle boundary (OrchestrationKernel.RunAsync). The controller's
+        // former post-attempt observation, which only fed the consumerless ObservationAfter
+        // field, is gone.
+        Assert.Equal(1, harness.Observations.CallCount);
+    }
+
+    [Fact]
+    public async Task Kernel_multi_cycle_run_sequences_stop_reasons_and_drops_redundant_post_attempt_observation()
+    {
+        RepositoryObservation observation = Observation();
+        Harness harness = new(observation);
+        // Cycle 0: attempt completes outright -> kernel continues to the next cycle.
+        harness.Runtime.Sequence.Enqueue(RuntimeResult());
+        // Cycle 1: attempt requires effect coordination that remains pending -> kernel stops.
+        harness.Runtime.Sequence.Enqueue(RuntimeResult(
+            RuntimeOutcomeKind.EffectsPending,
+            TransitionDurableState.EffectsPending,
+            effectsPending: true));
+        harness.Effects.Result = new TransitionEffectCoordinationResult(
+            RequiredEffectsPending: true,
+            Failed: false,
+            "push pending",
+            ["effect:push"]);
+        var decisions = new RecordingKernelDecisionStore();
+        var kernel = new OrchestrationKernel(harness.Runner, harness.Observations,
+            new DurableKernelAttemptAuthorizationSelector(), decisions);
+        WorkflowRunContext context = NewContext();
+
+        KernelResult result = await kernel.RunAsync(new KernelCommand(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain), observation,
+            TraditionalRoadmapChain, CanonicalWorkflowCatalog.Current, context, ObservationBudget: 5));
+
+        // Scripted sequence of stop reasons across the two real cycles, recorded in kernel
+        // decision facts (one per cycle actually executed, before the loop decides to stop).
+        Assert.Equal(
+            [WorkflowStopReason.TransitionCompleted, WorkflowStopReason.RequiredEffectsPending],
+            decisions.Decisions.Select(decision => decision.Outcome));
+        Assert.Equal(WorkflowStopReason.RequiredEffectsPending, result.StopReason);
+        Assert.Equal(RuntimeOutcomeKind.EffectsPending, result.Outcome);
+        // Both scripted attempts actually ran (the generous budget of 5 proves the loop stopped
+        // because of the second attempt's outcome, not because the budget was exhausted).
+        Assert.Equal(2, harness.Runtime.Requests.Count);
+        // Exactly one observation total: the kernel's cycle-boundary re-observation after cycle 0
+        // (StopReason == TransitionCompleted). The per-attempt controller observation that used to
+        // fire on *both* cycles is gone, so the count drops by exactly one per attempt (2 -> 0)
+        // while the load-bearing kernel-boundary observation (0 -> 1 in this scenario) is untouched.
+        Assert.Equal(1, harness.Observations.CallCount);
     }
 
     private sealed class Harness
@@ -207,12 +258,19 @@ public sealed class WorkflowChainRunnerTests
         public List<TransitionRuntimeRequest> Requests { get; } = [];
         public TransitionRuntimeResult Result { get; set; } = RuntimeResult();
 
+        /// <summary>
+        /// Optional scripted per-call outcomes for multi-cycle scenarios. Dequeued in order;
+        /// falls back to <see cref="Result"/> once exhausted (or if never populated).
+        /// </summary>
+        public Queue<TransitionRuntimeResult> Sequence { get; } = new();
+
         public Task<TransitionRuntimeResult> RunAsync(
             TransitionRuntimeRequest request,
             CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
-            return Task.FromResult(Result);
+            TransitionRuntimeResult result = Sequence.Count > 0 ? Sequence.Dequeue() : Result;
+            return Task.FromResult(result);
         }
     }
 

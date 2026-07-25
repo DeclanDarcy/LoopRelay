@@ -103,7 +103,6 @@ public sealed record WorkflowControllerResult(
     TransitionRuntimeResult? Transition,
     WorkflowStopReason StopReason,
     string Explanation,
-    RepositoryObservation ObservationAfter,
     TransitionEffectCoordinationResult? EffectCoordination = null);
 
 public sealed record WorkflowChainRunRequest(
@@ -309,8 +308,7 @@ public sealed class WorkflowController(
         if (terminal is not null)
         {
             return new WorkflowControllerResult(
-                resolution, null, terminal.Value, resolution.Explanation.Decision,
-                request.Observation);
+                resolution, null, terminal.Value, resolution.Explanation.Decision);
         }
 
         TransitionEligibility? selectedTransition = resolution.TransitionEligibility
@@ -328,8 +326,7 @@ public sealed class WorkflowController(
                 reason,
                 missingRequiredInput
                     ? "Every candidate transition is missing a required input product."
-                    : "No eligible transition was available for the selected stage.",
-                request.Observation);
+                    : "No eligible transition was available for the selected stage.");
         }
 
         TransitionRuntimeResult attempt = await _transitionRuntime.RunAsync(
@@ -349,9 +346,11 @@ public sealed class WorkflowController(
             coordination = await _effects.CoordinateAsync(transitionRun, cancellationToken);
         }
 
-        // Runtime results are evidence, not progression authority. Re-observe canonical state after
-        // every attempt/effect cycle before selecting a stop or successor decision.
-        RepositoryObservation observed = await _observations.ObserveAsync(cancellationToken);
+        // Runtime results are evidence, not progression authority, but the stop/successor decision
+        // below is computed entirely from `attempt` and `coordination` — it never reads canonical
+        // state. The kernel (OrchestrationKernel.RunAsync) performs its own fresh observation at
+        // the cycle boundary before the next attempt is authorized, which is what actually matters
+        // for progression authority; an additional observation here had no consumer.
         WorkflowStopReason stop = coordination?.Outcome is { } coordinatedOutcome
             ? StopReasonFor(coordinatedOutcome)
             : coordination is { Failed: true }
@@ -366,7 +365,6 @@ public sealed class WorkflowController(
             attempt,
             stop,
             coordination?.Explanation ?? attempt.Explanation,
-            observed,
             coordination);
     }
 
