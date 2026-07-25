@@ -228,9 +228,13 @@ public sealed class OperationPermissionHandler
             {
                 attributes = File.GetAttributes(current);
             }
-            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or IOException)
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
             {
                 // Segment does not exist on disk (yet): nothing to inspect, keep walking.
+                // Other IOException-derived failures (e.g. a genuine I/O error or
+                // PathTooLongException) on a segment that does exist must propagate
+                // uncaught rather than being silently treated as "absent" - this walk
+                // gates a security-sensitive path-escape check.
                 continue;
             }
 
