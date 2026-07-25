@@ -630,6 +630,48 @@ public class DecisionSessionTests
     }
 
     [Fact]
+    public async Task Run_Transfer_WritesTheOperationalDeltaToTheRepoExactlyOnce()
+    {
+        // TransferAsync writes delta.Output to OperationalDelta so the evolution step below can read it
+        // back; EvolveOperationalContextAsync used to write the same identical content to the same path
+        // again before that read. Assert the write count directly so a reintroduced duplicate write fails
+        // this test even though the content (and every other observable) would look identical either way.
+        var store = new CountingStore(new MemoryArtifactStore());
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        var session = new DecisionSession(
+            rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
+            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcher);
+
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        // Round 1: propose (occupancy 20 -> round 2 crosses the guard).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        // Round 2: Transfer (delta + update + optimize + propose; no reseed turn).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
+        {
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose
+        await session.RunAsync(CancellationToken.None);
+
+        // Exactly one write to the delta path across the whole transfer — the evolution turn's read-back
+        // still sees "DELTA-TEXT" because TransferAsync's single write precedes it.
+        Assert.Equal(1, store.WritesTo(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
+    }
+
+    [Fact]
     public async Task Run_Transfer_WritesOperationalDeltaHistoryToTheLedger()
     {
         using var repo = new TempFileRepo();

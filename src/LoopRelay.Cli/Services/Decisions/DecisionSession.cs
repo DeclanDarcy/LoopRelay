@@ -911,7 +911,7 @@ internal sealed class DecisionSession(
         await CloseAsync();
 
         _console.Phase("Decision: Transfer/UpdateOperationalContext");
-        AgentTurnResult update = await EvolveOperationalContextAsync(delta.Output, cancellationToken);
+        AgentTurnResult update = await EvolveOperationalContextAsync(cancellationToken);
 
         _console.Phase("Decision: Transfer/OptimizeOperationalDocuments");
         AgentTurnResult optimize = await OptimizeOperationalDocumentsAsync(cancellationToken);
@@ -950,11 +950,10 @@ internal sealed class DecisionSession(
 
     // Evolves the operational context through a fresh app-server session scoped to the context and delta artifacts.
     // Direct repository writes are wrapped in a rollback transaction so a failed turn/gate preserves inputs.
-    private async Task<AgentTurnResult> EvolveOperationalContextAsync(
-        string deltaOutput, CancellationToken cancellationToken)
+    private async Task<AgentTurnResult> EvolveOperationalContextAsync(CancellationToken cancellationToken)
     {
-        await _artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, deltaOutput);
-
+        // OperationalDelta was already written by TransferAsync before this method was called; the
+        // evolution operation reads it back below via its AllowedReads, so no re-write is needed here.
         var operation = new DecisionArtifactOperation(
             Label: "operational-context-evolution",
             PromptIdentity: "UpdateOperationalContext",
