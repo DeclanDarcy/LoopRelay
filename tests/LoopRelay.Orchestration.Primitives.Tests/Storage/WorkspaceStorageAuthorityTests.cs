@@ -34,6 +34,39 @@ public sealed class WorkspaceStorageAuthorityTests
     }
 
     [Fact]
+    public async Task Verify_emits_bytes_sha256_note_matching_independently_computed_hash()
+    {
+        Repository repository = CreateRepository();
+        await CreateCanonicalAsync(repository);
+        string path = LoopRelayWorkspaceDatabase.Resolve(repository);
+        byte[] bytes = await File.ReadAllBytesAsync(path);
+        string expectedHash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+        StorageInspection result = await new WorkspaceStorageInspector().VerifyAsync(new(repository.Path));
+
+        Assert.Equal(expectedHash, result.ByteSha256);
+        Assert.Contains($"bytes-sha256:{expectedHash}", result.Evidence);
+    }
+
+    [Fact]
+    public async Task Verify_matches_inventory_entry_despite_on_disk_filename_case_difference()
+    {
+        Repository repository = CreateRepository();
+        await CreateCanonicalAsync(repository);
+        string path = LoopRelayWorkspaceDatabase.Resolve(repository);
+        string renamedPath = Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileName(path).ToUpperInvariant());
+        File.Move(path, renamedPath);
+        byte[] bytes = await File.ReadAllBytesAsync(renamedPath);
+        string expectedHash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+        StorageInspection result = await new WorkspaceStorageInspector().VerifyAsync(new(repository.Path));
+
+        Assert.Equal(StorageHealth.Healthy, result.Health);
+        Assert.Equal(expectedHash, result.ByteSha256);
+        Assert.Contains($"bytes-sha256:{expectedHash}", result.Evidence);
+    }
+
+    [Fact]
     public async Task Recognized_v8_reports_migration_chain_without_mutation()
     {
         Repository repository = CreateRepository();

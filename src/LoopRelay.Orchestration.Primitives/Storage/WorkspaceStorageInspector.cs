@@ -25,7 +25,12 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
         }
 
         long length = new FileInfo(database).Length;
-        string byteHash = await HashFileAsync(database, cancellationToken);
+        string databaseRelativePath = Path.GetRelativePath(root, database).Replace('\\', '/');
+        string byteHash = inventory.FirstOrDefault(entry =>
+                string.Equals(entry.RelativePath, databaseRelativePath, StringComparison.OrdinalIgnoreCase))
+            is { } databaseEntry
+            ? databaseEntry.Sha256
+            : await HashFileAsync(database, cancellationToken);
         WorkspaceSchemaInspection schema;
         IReadOnlyList<string> unresolved;
         try
