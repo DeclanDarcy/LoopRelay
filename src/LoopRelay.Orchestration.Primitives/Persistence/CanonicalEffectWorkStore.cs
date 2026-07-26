@@ -177,24 +177,12 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         CancellationToken cancellationToken)
     {
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT effect_intent_id FROM canonical_effect_intents
-            WHERE transition_run_id = $transition
-            ORDER BY effect_order, planned_at, effect_intent_id;
-            """;
-        command.Parameters.AddWithValue("$transition", transitionRun.Value);
-        var identities = new List<EffectIntentIdentity>();
-        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
-        {
-            while (await reader.ReadAsync(cancellationToken)) identities.Add(new(reader.GetString(0)));
-        }
-        var result = new List<EffectWorkItem>(identities.Count);
-        foreach (EffectIntentIdentity identity in identities)
-        {
-            result.Add(await ReadRequiredAsync(connection, null, identity, cancellationToken));
-        }
-        return result;
+        return await ReadScopeAsync(
+            connection,
+            "intent.transition_run_id = $scope",
+            "intent.effect_order, intent.planned_at, intent.effect_intent_id",
+            transitionRun.Value,
+            cancellationToken);
     }
 
     public async Task<IReadOnlyList<EffectWorkItem>> ReadRunAsync(
@@ -202,22 +190,12 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         CancellationToken cancellationToken = default)
     {
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT effect_intent_id FROM canonical_effect_intents
-            WHERE run_id = $run ORDER BY planned_at,effect_order,effect_intent_id;
-            """;
-        command.Parameters.AddWithValue("$run", run.Value);
-        var identities = new List<EffectIntentIdentity>();
-        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
-            while (await reader.ReadAsync(cancellationToken)) identities.Add(new(reader.GetString(0)));
-        var result = new List<EffectWorkItem>(identities.Count);
-        foreach (EffectIntentIdentity identity in identities)
-        {
-            EffectWorkItem? item = await ReadAsync(identity, cancellationToken);
-            if (item is not null) result.Add(item);
-        }
-        return result;
+        return await ReadScopeAsync(
+            connection,
+            "intent.run_id = $scope",
+            "intent.planned_at, intent.effect_order, intent.effect_intent_id",
+            run.Value,
+            cancellationToken);
     }
 
     public async Task<IReadOnlyList<EffectWorkItem>> ReadBySemanticOperationAsync(
@@ -226,24 +204,92 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(semanticOperationKey);
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT effect_intent_id FROM canonical_effect_intents
-            WHERE semantic_operation_key = $semantic
-            ORDER BY planned_at, effect_order, effect_intent_id;
+        return await ReadScopeAsync(
+            connection,
+            "intent.semantic_operation_key = $scope",
+            "intent.planned_at, intent.effect_order, intent.effect_intent_id",
+            semanticOperationKey,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Answers one dependency's gate from columns alone. <c>definition_json</c> is never selected:
+    /// it is the serialised intent, and for filesystem-write effects that document embeds the file
+    /// content being written, so a yes/no question must not pay for it. Every value the gate needs
+    /// — lifecycle status, terminal receipt, effect order, planned time, dependency list, owning
+    /// transition run — is a first-class column written identically by both writers into
+    /// <c>canonical_effect_intents</c> (this store's <c>AppendPlanAsync</c> and
+    /// <c>CanonicalWorkflowPersistenceStore.CommitTransitionAsync</c>).
+    /// <para>
+    /// Every call reads live rows. Nothing here may be memoised: the barrier exists precisely
+    /// because durable state changes underneath a worker pass.
+    /// </para>
+    /// </summary>
+    public async Task<bool> DependencySatisfiedAsync(
+        EffectIntent candidate,
+        EffectIntentIdentity dependency,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        string transitionRun;
+        await using (SqliteCommand settled = connection.CreateCommand())
+        {
+            settled.CommandText = """
+                SELECT dependency.transition_run_id,
+                       CASE WHEN dependency.status = 'Succeeded'
+                                  AND receipt.receipt_id IS NOT NULL
+                                  AND receipt.postcondition_satisfied = 1
+                            THEN 1 ELSE 0 END
+                FROM canonical_effect_intents AS dependency
+                LEFT JOIN canonical_effect_receipts AS receipt
+                  ON receipt.receipt_id = dependency.terminal_receipt_id
+                WHERE dependency.effect_intent_id = $dependency;
+                """;
+            settled.Parameters.AddWithValue("$dependency", dependency.Value);
+            await using SqliteDataReader reader = await settled.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken)) return false;
+            if (reader.GetInt64(1) != 1) return false;
+            transitionRun = reader.GetString(0);
+        }
+
+        // The durable barrier, as `EffectWorker.DependenciesSettledAsync` describes it: a sibling
+        // ordered at or before the candidate, planned after it, sharing this dependency and not yet
+        // settled, holds the candidate back even though the dependency's own receipt is present.
+        // This must stay a question asked of the database. Answering it from anything already in
+        // memory — a plan read earlier in the pass, a previous dependency's answer — is what lets a
+        // pre-planned publication effect overtake the child mutation it is meant to publish.
+        await using SqliteCommand barrier = connection.CreateCommand();
+        barrier.CommandText = """
+            SELECT sibling.planned_at
+            FROM canonical_effect_intents AS sibling
+            LEFT JOIN canonical_effect_receipts AS receipt
+              ON receipt.receipt_id = sibling.terminal_receipt_id
+            WHERE sibling.transition_run_id = $transition
+              AND sibling.effect_intent_id <> $candidate
+              AND sibling.effect_order <= $order
+              AND EXISTS (
+                  SELECT 1 FROM json_each(sibling.dependencies_json) AS element
+                  WHERE json_extract(element.value, '$.value') = $dependency)
+              AND NOT (sibling.status = 'Succeeded'
+                       AND receipt.receipt_id IS NOT NULL
+                       AND receipt.postcondition_satisfied = 1);
             """;
-        command.Parameters.AddWithValue("$semantic", semanticOperationKey);
-        var identities = new List<EffectIntentIdentity>();
-        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
+        Add(barrier, ("$transition", transitionRun), ("$candidate", candidate.Identity.Value),
+            ("$order", candidate.Order), ("$dependency", dependency.Value));
+        await using SqliteDataReader siblings = await barrier.ExecuteReaderAsync(cancellationToken);
+        while (await siblings.ReadAsync(cancellationToken))
         {
-            while (await reader.ReadAsync(cancellationToken)) identities.Add(new(reader.GetString(0)));
+            // The "planned after this candidate" half of the barrier is compared here rather than
+            // in SQL: `planned_at` is an ISO-8601 string whose offset is whatever the writer held,
+            // so ordering it as text is only correct while every writer normalises to UTC. Parsing
+            // restores the instant comparison the barrier has always made.
+            if (DateTimeOffset.Parse(siblings.GetString(0), CultureInfo.InvariantCulture) > candidate.PlannedAt)
+            {
+                return false;
+            }
         }
-        var result = new List<EffectWorkItem>(identities.Count);
-        foreach (EffectIntentIdentity identity in identities)
-        {
-            result.Add(await ReadRequiredAsync(connection, null, identity, cancellationToken));
-        }
-        return result;
+        return true;
     }
 
     public async Task<EffectLease?> TryLeaseAsync(
@@ -512,6 +558,108 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         return new EffectWorkItem(intent, state, rowVersion, leaseOwner, leaseExpiry, attemptCount, receipt, events);
     }
 
+    /// <summary>
+    /// Hydrates every effect work item in a scope with three set-based statements — intents, then
+    /// their receipts, then their lifecycle events — instead of one identity query plus a core row,
+    /// an event history and a receipt per item.
+    /// <para>
+    /// Three statements rather than one wide join: joining intents to lifecycle events in a single
+    /// result set would repeat <c>definition_json</c>, which embeds file contents, once per event.
+    /// </para>
+    /// <para>
+    /// <paramref name="scopePredicate"/> and <paramref name="ordering"/> are compile-time literals
+    /// supplied by this class; <paramref name="scopeValue"/> is the only caller data and it is
+    /// always bound as the <c>$scope</c> parameter.
+    /// </para>
+    /// </summary>
+    private static async Task<IReadOnlyList<EffectWorkItem>> ReadScopeAsync(
+        SqliteConnection connection,
+        string scopePredicate,
+        string ordering,
+        string scopeValue,
+        CancellationToken cancellationToken)
+    {
+        var rows = new List<(EffectIntentIdentity Identity, EffectIntent Intent, EffectLifecycle State,
+            long RowVersion, string? LeaseOwner, DateTimeOffset? LeaseExpiresAt, int AttemptCount)>();
+        await using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.CommandText = $"""
+                SELECT intent.effect_intent_id, intent.definition_json, intent.status, intent.row_version,
+                       intent.lease_owner, intent.lease_expires_at, intent.attempt_count
+                FROM canonical_effect_intents AS intent
+                WHERE {scopePredicate}
+                ORDER BY {ordering};
+                """;
+            command.Parameters.AddWithValue("$scope", scopeValue);
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add((
+                    new(reader.GetString(0)),
+                    JsonSerializer.Deserialize<EffectIntent>(reader.GetString(1), JsonOptions)
+                        ?? throw new InvalidOperationException("Effect intent document is invalid."),
+                    Enum.Parse<EffectLifecycle>(reader.GetString(2)),
+                    reader.GetInt64(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture),
+                    reader.GetInt32(6)));
+            }
+        }
+        // Nothing to stitch receipts or events onto, so neither statement is worth issuing.
+        if (rows.Count == 0) return [];
+
+        var receipts = new Dictionary<EffectIntentIdentity, EffectReceipt>();
+        await using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.CommandText = $"""
+                SELECT intent.effect_intent_id, receipt.receipt_id, receipt.effect_intent_id,
+                       receipt.executor_key, receipt.executor_version, receipt.observed_target_identity,
+                       receipt.before_facts_json, receipt.after_facts_json, receipt.postcondition_satisfied,
+                       receipt.external_correlation, receipt.evidence_json, receipt.recorded_at
+                FROM canonical_effect_intents AS intent
+                JOIN canonical_effect_receipts AS receipt
+                  ON receipt.receipt_id = intent.terminal_receipt_id
+                WHERE {scopePredicate};
+                """;
+            command.Parameters.AddWithValue("$scope", scopeValue);
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                receipts[new(reader.GetString(0))] = MapReceipt(reader, offset: 1);
+            }
+        }
+
+        var events = new Dictionary<EffectIntentIdentity, List<EffectLifecycleEvent>>();
+        await using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.CommandText = $"""
+                SELECT event.effect_intent_id, event.event_id, event.lifecycle, event.worker_id,
+                       event.explanation, event.evidence_json, event.recorded_at
+                FROM canonical_effect_lifecycle_events AS event
+                JOIN canonical_effect_intents AS intent
+                  ON intent.effect_intent_id = event.effect_intent_id
+                WHERE {scopePredicate}
+                ORDER BY event.event_id;
+                """;
+            command.Parameters.AddWithValue("$scope", scopeValue);
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                EffectIntentIdentity identity = new(reader.GetString(0));
+                if (!events.TryGetValue(identity, out List<EffectLifecycleEvent>? history))
+                {
+                    events[identity] = history = [];
+                }
+                history.Add(MapEvent(reader, offset: 1, identity));
+            }
+        }
+
+        return [.. rows.Select(row => new EffectWorkItem(
+            row.Intent, row.State, row.RowVersion, row.LeaseOwner, row.LeaseExpiresAt, row.AttemptCount,
+            receipts.GetValueOrDefault(row.Identity),
+            events.TryGetValue(row.Identity, out List<EffectLifecycleEvent>? history) ? history : []))];
+    }
+
     private static async Task<EffectReceipt?> ReadReceiptAsync(SqliteConnection connection, SqliteTransaction? transaction,
         string receiptId, CancellationToken cancellationToken)
     {
@@ -525,12 +673,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
             """;
         command.Parameters.AddWithValue("$receipt", receiptId);
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-        if (!await reader.ReadAsync(cancellationToken)) return null;
-        return new EffectReceipt(new(reader.GetString(0)), new(reader.GetString(1)), new(reader.GetString(2)), reader.GetString(3),
-            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetBoolean(7),
-            reader.IsDBNull(8) ? null : reader.GetString(8),
-            JsonSerializer.Deserialize<IReadOnlyList<string>>(reader.GetString(9), JsonOptions) ?? [],
-            DateTimeOffset.Parse(reader.GetString(10), CultureInfo.InvariantCulture));
+        return await reader.ReadAsync(cancellationToken) ? MapReceipt(reader, offset: 0) : null;
     }
 
     private static async Task<IReadOnlyList<EffectLifecycleEvent>> ReadEventsAsync(SqliteConnection connection,
@@ -545,15 +688,27 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         command.Parameters.AddWithValue("$intent", identity.Value);
         var result = new List<EffectLifecycleEvent>();
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            result.Add(new EffectLifecycleEvent(reader.GetInt64(0), identity, Enum.Parse<EffectLifecycle>(reader.GetString(1)),
-                reader.GetString(2), reader.GetString(3),
-                JsonSerializer.Deserialize<IReadOnlyList<string>>(reader.GetString(4), JsonOptions) ?? [],
-                DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture)));
-        }
+        while (await reader.ReadAsync(cancellationToken)) result.Add(MapEvent(reader, offset: 0, identity));
         return result;
     }
+
+    /// <summary>
+    /// Reads a receipt from <paramref name="offset"/>, shared by the item-at-a-time and set-based
+    /// reads so the two cannot drift into observing the same row differently.
+    /// </summary>
+    private static EffectReceipt MapReceipt(SqliteDataReader reader, int offset) => new(
+        new(reader.GetString(offset)), new(reader.GetString(offset + 1)), new(reader.GetString(offset + 2)),
+        reader.GetString(offset + 3), reader.GetString(offset + 4), reader.GetString(offset + 5),
+        reader.GetString(offset + 6), reader.GetBoolean(offset + 7),
+        reader.IsDBNull(offset + 8) ? null : reader.GetString(offset + 8),
+        JsonSerializer.Deserialize<IReadOnlyList<string>>(reader.GetString(offset + 9), JsonOptions) ?? [],
+        DateTimeOffset.Parse(reader.GetString(offset + 10), CultureInfo.InvariantCulture));
+
+    private static EffectLifecycleEvent MapEvent(SqliteDataReader reader, int offset, EffectIntentIdentity identity) => new(
+        reader.GetInt64(offset), identity, Enum.Parse<EffectLifecycle>(reader.GetString(offset + 1)),
+        reader.GetString(offset + 2), reader.GetString(offset + 3),
+        JsonSerializer.Deserialize<IReadOnlyList<string>>(reader.GetString(offset + 4), JsonOptions) ?? [],
+        DateTimeOffset.Parse(reader.GetString(offset + 5), CultureInfo.InvariantCulture));
 
     /// <summary>
     /// Appends a lifecycle event inside <paramref name="transaction"/> and returns the

@@ -325,6 +325,36 @@ public sealed class EffectWorkerTests
             }
         }
 
+        /// <summary>
+        /// Mirrors the durable gate: the dependency must carry a verified receipt, and no sibling
+        /// ordered at or before the candidate, planned after it and sharing the dependency, may
+        /// still be unsettled. Answered from live state on every call, exactly as the store does.
+        /// </summary>
+        public Task<bool> DependencySatisfiedAsync(
+            EffectIntent candidate,
+            EffectIntentIdentity dependency,
+            CancellationToken cancellationToken)
+        {
+            lock (_gate)
+            {
+                if (!_items.TryGetValue(dependency, out MutableItem? item) ||
+                    item.State != EffectLifecycle.Succeeded ||
+                    item.Receipt is null || !item.Receipt.PostconditionSatisfied)
+                {
+                    return Task.FromResult(false);
+                }
+                bool childPending = _items.Values.Any(sibling =>
+                    sibling.Intent.Causality.TransitionRun == item.Intent.Causality.TransitionRun &&
+                    sibling.Intent.Identity != candidate.Identity &&
+                    sibling.Intent.Order <= candidate.Order &&
+                    sibling.Intent.PlannedAt > candidate.PlannedAt &&
+                    sibling.Intent.Dependencies.Contains(dependency) &&
+                    (sibling.State != EffectLifecycle.Succeeded ||
+                     sibling.Receipt is null || !sibling.Receipt.PostconditionSatisfied));
+                return Task.FromResult(!childPending);
+            }
+        }
+
         public Task<EffectLease?> TryLeaseAsync(
             EffectIntentIdentity identity,
             long expectedRowVersion,

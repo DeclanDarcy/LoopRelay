@@ -227,6 +227,7 @@ public sealed class DurableEffectSettlementReturnTests
         internal const int ScanOpens = 1;
         private const int ReadOpens = 1;
         private const int PlanReadOpens = 1;
+        private const int DependencyGateOpens = 1;
         private const int LeaseOpens = 1;
         private const int LifecycleAppendOpens = 1;
         private const int ReceiptRecordOpens = 1;
@@ -235,13 +236,15 @@ public sealed class DurableEffectSettlementReturnTests
         public int Scans { get; private set; }
         public int Reads { get; private set; }
         public int PlanReads { get; private set; }
+        public int DependencyGates { get; private set; }
         public int Leases { get; private set; }
         public int LifecycleAppends { get; private set; }
         public int ReceiptRecords { get; private set; }
         public int Reconciliations { get; private set; }
 
         public int DerivedConnectionOpens =>
-            (Scans * ScanOpens) + (Reads * ReadOpens) + (PlanReads * PlanReadOpens) + (Leases * LeaseOpens) +
+            (Scans * ScanOpens) + (Reads * ReadOpens) + (PlanReads * PlanReadOpens) +
+            (DependencyGates * DependencyGateOpens) + (Leases * LeaseOpens) +
             (LifecycleAppends * LifecycleAppendOpens) + (ReceiptRecords * ReceiptRecordOpens) +
             (Reconciliations * ReconciliationOpens);
 
@@ -264,6 +267,13 @@ public sealed class DurableEffectSettlementReturnTests
         {
             Reads++;
             return _inner.ReadAsync(identity, cancellationToken);
+        }
+
+        public Task<bool> DependencySatisfiedAsync(
+            EffectIntent candidate, EffectIntentIdentity dependency, CancellationToken cancellationToken)
+        {
+            DependencyGates++;
+            return _inner.DependencySatisfiedAsync(candidate, dependency, cancellationToken);
         }
 
         public Task<EffectLease?> TryLeaseAsync(

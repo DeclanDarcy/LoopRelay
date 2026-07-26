@@ -326,6 +326,19 @@ public interface IEffectWorkStore
     Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken cancellationToken, IReadOnlySet<EffectIntentIdentity>? only = null);
     Task<IReadOnlyList<EffectWorkItem>> ReadPlanAsync(TransitionRunIdentity transitionRun, CancellationToken cancellationToken);
     Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reports whether <paramref name="dependency"/> carries a verified terminal receipt and no
+    /// later-planned sibling still stands as a durable barrier ahead of <paramref name="candidate"/>.
+    /// This is the whole dependency gate for one dependency, answered as a yes/no question rather
+    /// than by hydrating a plan, so no intent document is loaded to decide it.
+    /// <para>
+    /// Implementations MUST observe live durable state on every call. An answer reused from an
+    /// earlier observation — even one taken during the same worker pass — reorders effects across
+    /// the barrier, because a feature executor can plan a child effect between the two.
+    /// </para>
+    /// </summary>
+    Task<bool> DependencySatisfiedAsync(EffectIntent candidate, EffectIntentIdentity dependency, CancellationToken cancellationToken);
     Task<EffectLease?> TryLeaseAsync(EffectIntentIdentity identity, long expectedRowVersion, string worker, DateTimeOffset now, TimeSpan duration, CancellationToken cancellationToken);
     Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset recordedAt, CancellationToken cancellationToken);
     Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectReceipt receipt, string worker, CancellationToken cancellationToken);
