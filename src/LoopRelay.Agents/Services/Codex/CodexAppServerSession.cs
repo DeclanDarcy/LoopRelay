@@ -51,12 +51,6 @@ public sealed class CodexAppServerSession : IAgentSession
     private readonly Task pumpTask;
     private readonly Task writerTask;
 
-    /// <summary>Test-only observability (PERF-27c): how many times <see cref="EnrichFileChangeApproval"/>
-    /// re-tokenized the raw frame text from scratch instead of reusing the read pump's already-parsed
-    /// <see cref="CodexAppServerMessage.CompleteResponse"/>. Must stay 0 on the fixed path — approval
-    /// handling runs synchronously on the pump thread while codex blocks awaiting the reply.</summary>
-    internal int FileChangeApprovalReparses;
-
     private long nextId;
     private bool initialized;
     private string? threadId;
@@ -593,7 +587,7 @@ public sealed class CodexAppServerSession : IAgentSession
 
         try
         {
-            rawLine = EnrichFileChangeApproval(rawLine, message);
+            rawLine = EnrichFileChangeApproval(message) ?? rawLine;
             byte[] response = _permissionGateway.Evaluate(
                 Encoding.UTF8.GetBytes(rawLine),
                 new PermissionGatewayContext(
@@ -638,7 +632,15 @@ public sealed class CodexAppServerSession : IAgentSession
         }
     }
 
-    private string EnrichFileChangeApproval(string rawLine, CodexAppServerMessage message)
+    // Deliberately takes only the parsed message, never the raw frame text: EnrichFileChangeApproval
+    // must reuse the read pump's already-parsed CodexAppServerMessage.CompleteResponse to build its
+    // mutable JsonNode view, and must never re-tokenize the frame from scratch on this codex-blocking
+    // path. Not accepting rawLine here makes that structurally enforced rather than merely tested — a
+    // future change that wants a raw-text reparse would have to re-plumb the raw string all the way
+    // through the call chain (EnqueueApprovalResponse -> here), which is a visible, reviewable edit
+    // rather than a silent one-liner. Returns null (instead of echoing the caller's raw line back) when
+    // no enrichment applies, so the caller decides what "unchanged" means.
+    private string? EnrichFileChangeApproval(CodexAppServerMessage message)
     {
         if (!string.Equals(message.Method, "item/fileChange/requestApproval", StringComparison.Ordinal) ||
             message.Params.ValueKind != JsonValueKind.Object ||
@@ -647,19 +649,14 @@ public sealed class CodexAppServerSession : IAgentSession
             !fileChangeTargets.TryGetValue(itemId.GetString()!, out IReadOnlyList<string>? targets) ||
             targets.Count == 0)
         {
-            return rawLine;
+            return null;
         }
 
-        // PERF-27c: the read pump already parsed this exact frame into message.CompleteResponse
-        // (CodexAppServerMessage.Parse). Build the mutable JsonNode view from that parsed JsonElement
-        // instead of re-tokenizing rawLine — the frame is parsed once, not twice, on the codex-blocking
-        // approval path. FileChangeApprovalReparses stays 0; a regression that reintroduces a raw-text
-        // reparse here should increment it back.
         JsonNode? root = JsonObject.Create(message.CompleteResponse);
         JsonObject? parameters = root?["params"] as JsonObject;
         if (parameters is null)
         {
-            return rawLine;
+            return null;
         }
 
         if (targets.Count == 1)

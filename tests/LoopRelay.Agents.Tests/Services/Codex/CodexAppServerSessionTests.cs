@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
@@ -263,17 +264,19 @@ public sealed class CodexAppServerSessionTests
     }
 
     // ---------------------------------------------------------------------------------------------------------
-    // PERF-27c — the read pump already parses each approval frame once (CodexAppServerMessage.Parse). These pin
-    // today's exact enrichment output (round-trip parity) and the redundant-reparse count on the codex-blocking
-    // approval path, so a later fix that threads the parsed representation through can be proven behavior-identical.
+    // PERF-27c — the read pump already parses each approval frame once (CodexAppServerMessage.Parse), and
+    // EnrichFileChangeApproval only ever sees that parsed CodexAppServerMessage (it has no rawLine parameter
+    // to fall back on), so a re-parse of the raw frame text is structurally impossible here, not just tested.
+    // These two tests pin today's exact enrichment output (full-payload round-trip parity), so a later change
+    // to how the parsed representation is threaded through can be proven behavior-identical.
     // ---------------------------------------------------------------------------------------------------------
 
     [Fact]
     public async Task FileChangeApprovalEnrichmentPayloadCarriesTheCorrelatedTargetPathAndIsUnchangedOtherwise()
     {
-        // Round-trip parity: the enriched frame handed to the permission adapter must carry the same
-        // envelope (method/id/itemId) plus the correlated targetPath — regardless of how the enrichment
-        // step obtains its mutable JSON view of the already-parsed frame.
+        // Round-trip parity: the enriched frame handed to the permission adapter must be identical to the
+        // raw frame in every respect except the correlated targetPath — asserted by comparing the FULL
+        // serialized payload structurally (JsonNode.DeepEquals), not just a handful of selected fields.
         var process = new ScriptedAppServerProcess
         {
             EmitApprovalRequest = true,
@@ -290,19 +293,31 @@ public sealed class CodexAppServerSessionTests
 
         Assert.Equal(AgentTurnState.Completed, result.State);
         Assert.NotNull(gateway.LastPayload);
-        using JsonDocument document = JsonDocument.Parse(gateway.LastPayload!);
-        JsonElement root = document.RootElement;
-        Assert.Equal("item/fileChange/requestApproval", root.GetProperty("method").GetString());
-        Assert.Equal("appr-1", root.GetProperty("id").GetString());
-        JsonElement @params = root.GetProperty("params");
-        Assert.Equal("i1", @params.GetProperty("itemId").GetString());
-        Assert.Equal(".agents/details.md", @params.GetProperty("targetPath").GetString());
+        JsonNode? actual = JsonNode.Parse(gateway.LastPayload!);
+        JsonNode? expected = JsonNode.Parse("""
+            {
+              "id": "appr-1",
+              "method": "item/fileChange/requestApproval",
+              "params": {
+                "itemId": "i1",
+                "operation": "write",
+                "targetPath": ".agents/details.md",
+                "grantRoot": null
+              }
+            }
+            """);
+        Assert.True(
+            JsonNode.DeepEquals(actual, expected),
+            $"Expected the full enriched payload to match exactly.{Environment.NewLine}" +
+            $"Expected: {expected!.ToJsonString()}{Environment.NewLine}" +
+            $"Actual:   {actual!.ToJsonString()}");
     }
 
     [Fact]
     public async Task FileChangeApprovalEnrichmentCarriesMultipleCorrelatedTargetPathsWhenSeveralFilesChanged()
     {
-        // Round-trip parity for the multi-target branch (targetPaths array rather than a single targetPath).
+        // Round-trip parity for the multi-target branch (targetPaths array rather than a single targetPath),
+        // again asserted against the FULL serialized payload rather than one plucked-out field.
         var process = new ScriptedAppServerProcess
         {
             EmitApprovalRequest = true,
@@ -318,32 +333,25 @@ public sealed class CodexAppServerSessionTests
         await process.ApprovalAccepted.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.NotNull(gateway.LastPayload);
-        using JsonDocument document = JsonDocument.Parse(gateway.LastPayload!);
-        JsonElement targetPaths = document.RootElement.GetProperty("params").GetProperty("targetPaths");
-        Assert.Equal(
-            [".agents/plan.md", ".agents/milestones/m1.md"],
-            targetPaths.EnumerateArray().Select(e => e.GetString()!).ToArray());
-    }
-
-    [Fact]
-    public async Task FileChangeApprovalEnrichmentDoesNotReparseTheAlreadyParsedFrame()
-    {
-        // PERF-27c: the read pump already parsed this exact frame (CodexAppServerMessage.Parse). Enrichment
-        // must reuse that parsed representation instead of re-tokenizing rawLine a second time.
-        var process = new ScriptedAppServerProcess
-        {
-            EmitApprovalRequest = true,
-            EmitFileChangeApproval = true,
-            FileChangePathOnlyInItemStarted = true,
-            ApprovalTargetPath = ".agents/details.md",
-        };
-        await using var session = new CodexAppServerSession(
-            OperationSpec(".agents/details.md"), process, new DeterministicAgentTokenEstimator(), PermissionGateway());
-
-        await session.RunTurnAsync("hello");
-        await process.ApprovalAccepted.WaitAsync(TimeSpan.FromSeconds(5));
-
-        Assert.Equal(0, session.FileChangeApprovalReparses);
+        JsonNode? actual = JsonNode.Parse(gateway.LastPayload!);
+        JsonNode? expected = JsonNode.Parse("""
+            {
+              "id": "appr-1",
+              "method": "item/fileChange/requestApproval",
+              "params": {
+                "itemId": "i1",
+                "operation": "write",
+                "targetPath": null,
+                "grantRoot": null,
+                "targetPaths": [".agents/plan.md", ".agents/milestones/m1.md"]
+              }
+            }
+            """);
+        Assert.True(
+            JsonNode.DeepEquals(actual, expected),
+            $"Expected the full enriched payload to match exactly.{Environment.NewLine}" +
+            $"Expected: {expected!.ToJsonString()}{Environment.NewLine}" +
+            $"Actual:   {actual!.ToJsonString()}");
     }
 
     [Fact]
