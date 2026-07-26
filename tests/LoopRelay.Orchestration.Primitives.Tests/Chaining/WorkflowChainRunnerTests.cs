@@ -257,6 +257,61 @@ public sealed class WorkflowChainRunnerTests
         Assert.Equal(1, workflowStates.EnumerationCount);
     }
 
+    [Fact]
+    public async Task Controller_reresolves_when_the_carried_cycle_was_computed_from_a_different_observation()
+    {
+        var invocation = new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain);
+        var resolver = new WorkflowResolver();
+
+        // The request's own observation: the workflow is already completed, so a correct controller
+        // must stop immediately without attempting any transition.
+        RepositoryObservation requestObservation = Observation([Completed(WorkflowIdentity.TraditionalRoadmap)]);
+
+        // A resolution computed from a DIFFERENT observation instance -- nothing has completed here,
+        // so the workflow is eligible to start and has an eligible transition. This stands in for a
+        // stale cycle a caller mistakenly hands down alongside a request carrying a different
+        // observation.
+        RepositoryObservation staleObservation = Observation();
+        WorkflowCycleResolution staleCycle = WorkflowCycleResolution.Resolve(
+            resolver, invocation, staleObservation, Definitions);
+
+        // Sanity check: the two observations really do produce observably different resolutions, so
+        // this test can only pass if the controller actually discards the stale cycle and re-resolves
+        // from its own request.Observation rather than trusting the carried one.
+        Assert.Equal(RepositoryClassification.Fresh, staleCycle.Resolution.Classification);
+
+        var runtime = new FakeTransitionRuntime();
+        var effects = new FakeEffectCoordinator();
+        var controller = new WorkflowController(resolver, runtime, effects);
+        WorkflowRunContext context = NewContext();
+        var execution = new CanonicalTransitionExecutionContext(
+            invocation,
+            context.Workspace,
+            context.Run,
+            WorkflowInstanceIdentity.New(),
+            context.Policy,
+            context.RuntimeProfile,
+            context.PromptPolicyProfile,
+            context.AgentRolePolicyIdentity);
+
+        WorkflowControllerResult result = await controller.RunAsync(new WorkflowControllerRequest(
+            invocation,
+            requestObservation,
+            Definitions,
+            execution,
+            FreshAttemptAuthorization.Instance,
+            Interactive: false,
+            Cycle: staleCycle));
+
+        // The returned resolution reflects the request's own (completed) observation, not the stale
+        // cycle's (fresh) one -- proof the mismatch was detected and the controller re-resolved.
+        Assert.Equal(RepositoryClassification.Completed, result.Resolution.Classification);
+        Assert.Equal(WorkflowStopReason.ChainCompleted, result.StopReason);
+        // A resolution taken from the stale cycle would have found an eligible transition and
+        // invoked the runtime; the correctly re-resolved (completed) result must never reach that.
+        Assert.Empty(runtime.Requests);
+    }
+
     /// <summary>
     /// Counts how many times the observed workflow states are enumerated, which is a direct count
     /// of <see cref="WorkflowResolver.Resolve"/> calls over this observation.
