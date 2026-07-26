@@ -128,6 +128,13 @@ public sealed class WorkspaceStorageVerificationTierTests
         StorageInspection unqualified = await inspector.VerifyAsync(new(repository.Path));
 
         Assert.Equal(StorageVerificationDepth.Deep, new StorageVerifyRequest(repository.Path).Depth);
+        // Deep is also the ZERO value of the enum, so a depth that arrives without naming a member
+        // (default(...), deserialization, a zero-initialized field) lands on the thorough tier.
+        Assert.Equal(StorageVerificationDepth.Deep, default(StorageVerificationDepth));
+        // Pin the fixture's tree size before comparing it to the hash count: the database plus the
+        // two companion files. Without this, an empty inventory would satisfy the equality below as
+        // 0 == 0 and the assertion would certify nothing.
+        Assert.Equal(3, unqualified.PersistenceTree.Count);
         Assert.Equal(unqualified.PersistenceTree.Count, inspector.FileHashInvocations);
     }
 
@@ -230,11 +237,30 @@ public sealed class WorkspaceStorageVerificationTierTests
         StorageInspection light = await new WorkspaceStorageInspector().VerifyAsync(
             new(repository.Path, StorageVerificationDepth.Light));
 
-        // The documented, sanctioned deferral: `PRAGMA foreign_key_check` is a deep check. No
-        // mutation guard consults UnresolvedReferences - the storage commands that refuse on it
-        // (migrate/export/sync) all run the deep tier, and EnsureSchemaAsync (the authority for
-        // every write) turns foreign_keys ON per connection so violations are refused at write
-        // time regardless of what an observation reported.
+        // The documented, sanctioned deferral: `PRAGMA foreign_key_check` is a deep check, and the
+        // plan permits tiering to defer deep checks (never mutation guards). No mutation guard
+        // consults UnresolvedReferences - the storage commands that refuse on it
+        // (migrate/export/sync) all run the deep tier.
+        //
+        // What is true about the write path, scoped honestly: LoopRelay cannot *create* a dangling
+        // reference through its own writes, because EnsureSchemaAsync executes `PRAGMA
+        // foreign_keys = ON` on every write connection and SQLite then refuses the offending
+        // INSERT/UPDATE/DELETE. That is why this fixture needs an explicit `foreign_keys = OFF`
+        // above to manufacture the violation at all.
+        //
+        // What is NOT true - and must not be inferred from the above - is that violations are
+        // "refused at write time regardless of what an observation reported". SQLite enforces
+        // foreign keys PER STATEMENT; `foreign_keys = ON` does not validate a database that already
+        // holds dangling references, and opening such a database succeeds. So for violations
+        // introduced from outside LoopRelay's write path - a compatibility import, a restore from
+        // backup, a hand-edited database file, or a database migrated up from a schema version that
+        // did not declare the constraint - nothing refuses them at write time.
+        //
+        // Residual, accepted and recorded: for such a database the light tier reports Healthy, so
+        // StorageVerificationResult.UsableAuthority is true and WorkflowEntryGateEvaluator
+        // (WorkflowChaining.cs) no longer refuses workflow entry on it. The violation goes
+        // UNDETECTED on the routine-observation path until someone runs `storage verify`, which is
+        // the deep tier asserted below. Detection is deferred, not preserved.
         Assert.NotEmpty(deep.UnresolvedReferences);
         Assert.Equal(StorageHealth.ActionRequired, deep.Health);
         Assert.Contains(deep.RequiredActions,

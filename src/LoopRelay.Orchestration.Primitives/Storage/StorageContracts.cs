@@ -39,9 +39,28 @@ public readonly record struct StorageOperationIdentity(string Value)
 
 /// <summary>
 /// How much work a storage verification is authorized to do.
+///
+/// <para>
+/// <b>Member order is load-bearing:</b> <see cref="Deep"/> is deliberately the zero value, so that
+/// <c>default(StorageVerificationDepth)</c> - and any future path that materializes this enum
+/// without naming a member (deserialization, a zero-initialized struct field, an
+/// <c>Enum.ToObject</c> of an out-of-range value) - yields the thorough, fail-closed tier rather
+/// than the cheap one. This is a corruption-detection subsystem: the failure mode of accidentally
+/// getting <see cref="Deep"/> is wasted work, while the failure mode of accidentally getting
+/// <see cref="Light"/> is a deferred check nobody asked to defer. Do not reorder these members to
+/// put <see cref="Light"/> first.
+/// </para>
 /// </summary>
 public enum StorageVerificationDepth
 {
+    /// <summary>
+    /// Everything <see cref="Light"/> does, plus a SHA-256 for every file under the persistence
+    /// directory, the full structural classification, and <c>PRAGMA foreign_key_check</c>. This is
+    /// what the explicit <c>storage</c> commands verify with, and the default for an unqualified
+    /// request.
+    /// </summary>
+    Deep,
+
     /// <summary>
     /// Per-observation health. Enumerates the persistence tree by name only, hashes the database
     /// file once, answers the schema from <see cref="LoopRelayWorkspaceDatabase.InspectStampedAsync"/>,
@@ -50,14 +69,6 @@ public enum StorageVerificationDepth
     /// ~190-probe structural classification while the stamp is well-formed.
     /// </summary>
     Light,
-
-    /// <summary>
-    /// Everything <see cref="Light"/> does, plus a SHA-256 for every file under the persistence
-    /// directory, the full structural classification, and <c>PRAGMA foreign_key_check</c>. This is
-    /// what the explicit <c>storage</c> commands verify with, and the default for an unqualified
-    /// request.
-    /// </summary>
-    Deep,
 }
 
 /// <summary>

@@ -84,10 +84,24 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
         {
             // Deep is the authority on physical shape and runs the ~190-probe classification. Light
             // answers from the stamp, falling back to that same classification whenever the stamp is
-            // absent, malformed, or internally inconsistent. The residual gap - a well-formed stamp
-            // over a shape that has since been mutated out-of-band - is closed for mutation by
-            // LoopRelayWorkspaceDatabase.EnsureSchemaAsync, which every writing store calls and
-            // which runs the full classification on first contact per process.
+            // absent, malformed, or internally inconsistent.
+            //
+            // Residual gap, stated precisely: a well-formed stamp over a physical shape that has
+            // since been mutated out-of-band. Do NOT read the mutation path as an independent second
+            // layer that re-checks physical shape here. LoopRelayWorkspaceDatabase.EnsureSchemaAsync
+            // runs the full InspectSchemaAsync classification only on FIRST CONTACT PER PROCESS for
+            // a given database path; thereafter its per-process memo short-circuits on
+            // MatchesCachedStampAsync, which re-reads only `schema_version` and the shape
+            // fingerprint back out of `schema_metadata` - the stamp, not the shape. So after first
+            // contact the mutation guard trusts the stamp on exactly the same terms the light tier
+            // does; that is Core commit fa8a5286's documented, tested trade-off (see the doc comment
+            // on MatchesCachedStampAsync, which says so in as many words), not an extra guarantee
+            // available to this method.
+            //
+            // What EnsureSchemaAsync does still contribute unconditionally is `PRAGMA
+            // foreign_keys = ON`, executed on every call before the memo is consulted, because
+            // PRAGMA state is per-connection and cannot be memoized. That part holds for every
+            // write connection, first contact or not.
             schema = deep
                 ? await new WorkspaceSchemaReadOnlyInspector().InspectAsync(database, cancellationToken)
                 : await StampedSchemaAsync(database, cancellationToken);
