@@ -242,6 +242,47 @@ public sealed class CanonicalTransitionPersistenceStoresTests
     }
 
     [Fact]
+    public async Task AppendAsync_ledger_sequence_is_1_based_insertion_order_including_pre_existing_rows()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var promptStore = new CanonicalRenderedPromptFactStore(persistence);
+
+        // Pre-existing, unrelated history the sequence must still count.
+        const int historySize = 4;
+        for (int i = 0; i < historySize; i++)
+        {
+            CanonicalCausalContext other = await SeedCausalityAsync(persistence);
+            await promptStore.AppendAsync(PromptFact(other), CancellationToken.None);
+        }
+
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        PersistedRenderedPromptFact first = await promptStore.AppendAsync(PromptFact(causality), CancellationToken.None);
+        PersistedRenderedPromptFact second = await promptStore.AppendAsync(PromptFact(causality), CancellationToken.None);
+        PersistedRenderedPromptFact third = await promptStore.AppendAsync(PromptFact(causality), CancellationToken.None);
+
+        // Same values the old FindIndex(...) + 1 over the full table would have produced.
+        Assert.Equal(historySize + 1, first.LedgerSequence);
+        Assert.Equal(historySize + 2, second.LedgerSequence);
+        Assert.Equal(historySize + 3, third.LedgerSequence);
+    }
+
+    [Fact]
+    public void EnsureReadableAfterAppend_throws_the_documented_message_when_the_row_was_not_found()
+    {
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => CanonicalRenderedPromptFactStore.EnsureReadableAfterAppend(readableAfterAppend: false));
+
+        Assert.Equal("Rendered prompt fact was not readable after append.", exception.Message);
+    }
+
+    [Fact]
+    public void EnsureReadableAfterAppend_does_not_throw_when_the_row_was_found()
+    {
+        CanonicalRenderedPromptFactStore.EnsureReadableAfterAppend(readableAfterAppend: true);
+    }
+
+    [Fact]
     public async Task ReadTransitionRunAsync_matches_full_snapshot_lookup_for_existing_and_missing_runs()
     {
         Repository repository = CreateRepository();
