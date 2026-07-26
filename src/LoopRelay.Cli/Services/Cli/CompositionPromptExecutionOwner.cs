@@ -1929,9 +1929,10 @@ internal sealed partial class LoopRelayCompositionRoot
         /// scan plus a workspace-identity read, per call, to rebuild a value this executor was handed.
         /// The two are equal field for field: the attempt row is written from this same spine, and the
         /// workspace identity both sides used comes from the one row the workspace store owns.
-        /// Equivalence is asserted end to end by
-        /// <c>Dispatch_authorized_causality_round_trips_through_the_database_for_eval_transitions</c>,
-        /// and is independently enforced in production on every dispatch by
+        /// Run and workflow-instance equivalence is asserted end to end by
+        /// <c>Resolved_causality_written_into_the_effect_ledger_matches_the_durable_attempt_row</c>;
+        /// workspace identity has a single source and is not independently derivable in a test, so it
+        /// rests instead on the check enforced in production on every dispatch by
         /// <see cref="LoadingPromptRuntimeDispatcher"/>, which refuses to dispatch unless the
         /// store-derived prompt-fact causality matches this authorization on all five identities.
         /// The cancellation token is retained: callers await this as the resolution seam, and only the
