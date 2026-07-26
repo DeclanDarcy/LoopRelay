@@ -29,7 +29,7 @@ public sealed class EffectWorker(
         IReadOnlySet<EffectIntentIdentity>? only = null)
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        IReadOnlyList<EffectWorkItem> discovered = await _store.ScanUnsettledAsync(_scanLimit, now, cancellationToken);
+        IReadOnlyList<EffectWorkItem> discovered = await _store.ScanUnsettledAsync(_scanLimit, now, cancellationToken, only);
         var settled = new HashSet<EffectIntentIdentity>();
         var unsettled = new List<EffectIntentIdentity>();
         int leased = 0;
@@ -37,6 +37,8 @@ public sealed class EffectWorker(
         int pending = 0;
         int recovery = 0;
 
+        // The store applies `only` as a SQL predicate; this repeats it because IEffectWorkStore's
+        // filter parameter is optional and an implementation is free to ignore it.
         foreach (EffectWorkItem item in discovered
             .Where(item => only is null || only.Contains(item.Intent.Identity))
             .OrderBy(value => value.Intent.Order)

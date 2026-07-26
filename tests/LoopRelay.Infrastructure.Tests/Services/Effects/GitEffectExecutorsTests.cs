@@ -271,7 +271,7 @@ public sealed class GitEffectExecutorsTests
     private sealed class FailFirstReceiptStore(IEffectWorkStore inner) : IEffectWorkStore
     {
         private bool _failed;
-        public Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken token) => inner.ScanUnsettledAsync(limit, now, token);
+        public Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken token, IReadOnlySet<EffectIntentIdentity>? only = null) => inner.ScanUnsettledAsync(limit, now, token, only);
         public Task<IReadOnlyList<EffectWorkItem>> ReadPlanAsync(TransitionRunIdentity transition, CancellationToken token) => inner.ReadPlanAsync(transition, token);
         public Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken token) => inner.ReadAsync(identity, token);
         public Task<EffectLease?> TryLeaseAsync(EffectIntentIdentity identity, long version, string worker, DateTimeOffset now, TimeSpan duration, CancellationToken token) => inner.TryLeaseAsync(identity, version, worker, now, duration, token);

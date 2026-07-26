@@ -285,13 +285,15 @@ public sealed class EffectWorkerTests
         }
 
         public Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(
-            int limit, DateTimeOffset now, CancellationToken cancellationToken)
+            int limit, DateTimeOffset now, CancellationToken cancellationToken,
+            IReadOnlySet<EffectIntentIdentity>? only = null)
         {
             lock (_gate)
             {
                 IReadOnlyList<EffectWorkItem> result = _items.Values
                     .Where(item => item.State != EffectLifecycle.Succeeded)
                     .Where(item => item.LeaseExpiresAt is null || item.LeaseExpiresAt <= now || item.LeaseOwner is null)
+                    .Where(item => only is null || only.Contains(item.Intent.Identity))
                     .OrderBy(item => item.Intent.Order)
                     .Take(limit)
                     .Select(item => item.Snapshot())

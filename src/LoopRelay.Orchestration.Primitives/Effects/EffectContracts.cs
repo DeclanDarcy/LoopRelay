@@ -317,7 +317,13 @@ public sealed record EffectReconciliationObservation(
 
 public interface IEffectWorkStore
 {
-    Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken cancellationToken);
+    /// <summary>
+    /// Discovers unsettled effect work. When <paramref name="only"/> is supplied the restriction is
+    /// part of the query, not a filter applied to the result: <paramref name="limit"/> bounds the
+    /// scan window, so filtering afterwards lets a requested intent fall outside that window and be
+    /// silently skipped.
+    /// </summary>
+    Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken cancellationToken, IReadOnlySet<EffectIntentIdentity>? only = null);
     Task<IReadOnlyList<EffectWorkItem>> ReadPlanAsync(TransitionRunIdentity transitionRun, CancellationToken cancellationToken);
     Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken cancellationToken);
     Task<EffectLease?> TryLeaseAsync(EffectIntentIdentity identity, long expectedRowVersion, string worker, DateTimeOffset now, TimeSpan duration, CancellationToken cancellationToken);

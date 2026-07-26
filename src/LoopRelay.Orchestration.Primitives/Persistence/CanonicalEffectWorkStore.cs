@@ -116,22 +116,42 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
     public async Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(
         int limit,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlySet<EffectIntentIdentity>? only = null)
     {
         if (limit is <= 0 or > 1024) throw new ArgumentOutOfRangeException(nameof(limit));
+        if (only is { Count: 0 }) return [];
+        // The identity restriction belongs in the predicate, not in a filter over the result: LIMIT
+        // bounds the scan window, so a requested intent ordered past the window would otherwise be
+        // scanned away and the targeted run would silently settle nothing. For the same reason the
+        // window is widened to at least the size of the requested set. `effect_intent_id IN (...)`
+        // resolves on the primary key rather than idx_effect_intents_unsettled, which may turn the
+        // ORDER BY into a sort; that is immaterial at the row counts this scan bounds.
+        string restriction = only is null
+            ? string.Empty
+            : $" AND effect_intent_id IN ({string.Join(", ", Enumerable.Range(0, only.Count).Select(index => $"$only{index}"))})";
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
+        command.CommandText = $"""
             SELECT effect_intent_id
             FROM canonical_effect_intents
             WHERE terminal_receipt_id IS NULL
               AND status IN ('Planned', 'Pending', 'Started', 'Unknown', 'Reconciling', 'RetryAuthorized', 'Leased')
-              AND (lease_owner IS NULL OR lease_expires_at IS NULL OR lease_expires_at <= $now)
+              AND (lease_owner IS NULL OR lease_expires_at IS NULL OR lease_expires_at <= $now){restriction}
             ORDER BY effect_order, planned_at, effect_intent_id
             LIMIT $limit;
             """;
         command.Parameters.AddWithValue("$now", Format(now));
-        command.Parameters.AddWithValue("$limit", limit);
+        command.Parameters.AddWithValue("$limit", only is null ? limit : Math.Max(limit, only.Count));
+        if (only is not null)
+        {
+            int index = 0;
+            foreach (EffectIntentIdentity identity in only)
+            {
+                command.Parameters.AddWithValue($"$only{index++}", identity.Value);
+            }
+        }
+
         var identities = new List<EffectIntentIdentity>();
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
         {
