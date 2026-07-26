@@ -13,7 +13,8 @@ namespace LoopRelay.Cli.Services.Agents;
 /// A session wrapper that delegates each turn to <see cref="Inner"/>, records one telemetry row per
 /// attempt, and — when the turn failed because codex hit its usage limit — waits out the advertised reset
 /// and reruns the same prompt on the same warm session. The codex rollout log path is resolved once
-/// (lazily, after the first turn) and cached for the session's remaining turns.
+/// (lazily, after the first turn) and cached for the session's remaining turns — the recorder hands back
+/// whatever it wants held, and drops the cache itself if that rollout is rotated away mid-session.
 /// </summary>
 internal sealed class GatedAgentSession(
     IAgentSession _inner,
