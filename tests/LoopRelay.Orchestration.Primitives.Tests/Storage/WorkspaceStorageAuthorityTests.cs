@@ -58,9 +58,9 @@ public sealed class WorkspaceStorageAuthorityTests
         File.Move(path, renamedPath);
         byte[] bytes = await File.ReadAllBytesAsync(renamedPath);
         string expectedHash = Convert.ToHexStringLower(SHA256.HashData(bytes));
-        int hashInvocationsBefore = WorkspaceStorageInspector.FileHashInvocations;
+        var inspector = new WorkspaceStorageInspector();
 
-        StorageInspection result = await new WorkspaceStorageInspector().VerifyAsync(new(repository.Path));
+        StorageInspection result = await inspector.VerifyAsync(new(repository.Path));
 
         Assert.Equal(StorageHealth.Healthy, result.Health);
         Assert.Equal(expectedHash, result.ByteSha256);
@@ -71,8 +71,10 @@ public sealed class WorkspaceStorageAuthorityTests
         // second HashFileAsync call on the database. Every file in the inventory - here, just
         // the renamed database itself - is hashed once while building it; VerifyAsync must reuse
         // that hash rather than rehashing, so total invocations should equal the inventory size,
-        // not one more.
-        Assert.Equal(result.PersistenceTree.Count, WorkspaceStorageInspector.FileHashInvocations - hashInvocationsBefore);
+        // not one more. FileHashInvocations is instance-scoped (not static) specifically so this
+        // count can never be polluted by other tests/classes running concurrently against their
+        // own WorkspaceStorageInspector instances.
+        Assert.Equal(result.PersistenceTree.Count, inspector.FileHashInvocations);
     }
 
     [Fact]

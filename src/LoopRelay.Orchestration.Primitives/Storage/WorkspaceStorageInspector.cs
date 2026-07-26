@@ -10,11 +10,15 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
 {
     /// <summary>
     /// Test-only observability: how many times <see cref="HashFileAsync"/> has computed a
-    /// SHA-256 digest, across every file and every call, in this process. Used to prove that
-    /// <see cref="VerifyAsync"/> reuses the inventory's hash for the database file instead of
-    /// hashing it a second time (PERF: hash workspace database once per verification).
+    /// SHA-256 digest, across every file and every call, on this instance. Instance-scoped
+    /// (rather than process-wide) so that concurrent xUnit test classes constructing their own
+    /// <see cref="WorkspaceStorageInspector"/> - directly, or indirectly through
+    /// <see cref="WorkspaceStorageVerifierAdapter"/> / <c>RepositoryObserver</c>'s
+    /// <c>FileSystemStorageVerifier</c> - cannot pollute a count under assertion elsewhere. Used
+    /// to prove that <see cref="VerifyAsync"/> reuses the inventory's hash for the database file
+    /// instead of hashing it a second time (PERF: hash workspace database once per verification).
     /// </summary>
-    internal static int FileHashInvocations;
+    internal int FileHashInvocations;
 
     public async Task<StorageInspection> VerifyAsync(
         StorageVerifyRequest request,
@@ -104,7 +108,7 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
              $"bytes-sha256:{byteHash}"]);
     }
 
-    private static async Task<IReadOnlyList<StorageTreeEntry>> InventoryAsync(
+    private async Task<IReadOnlyList<StorageTreeEntry>> InventoryAsync(
         string root,
         string persistence,
         CancellationToken cancellationToken)
@@ -186,7 +190,7 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
         return result;
     }
 
-    private static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
+    private async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref FileHashInvocations);
         await using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
