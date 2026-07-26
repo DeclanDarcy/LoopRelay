@@ -140,6 +140,13 @@ internal sealed class FileSystemCodexRolloutLocator : ICodexRolloutLocator
                 continue;
             }
 
+            // Rollouts sitting straight in the year directory carry no month or day to be judged on, so the
+            // floor has nothing to say about them and they stay in. Same for the month directory below.
+            foreach (FileInfo file in Rollouts(year, SearchOption.TopDirectoryOnly))
+            {
+                yield return file;
+            }
+
             foreach (DirectoryInfo month in year.EnumerateDirectories())
             {
                 if (!TryReadDatePart(month.Name, out int m) || m > floor.Month)
@@ -155,6 +162,11 @@ internal sealed class FileSystemCodexRolloutLocator : ICodexRolloutLocator
                 if (m < floor.Month)
                 {
                     continue;
+                }
+
+                foreach (FileInfo file in Rollouts(month, SearchOption.TopDirectoryOnly))
+                {
+                    yield return file;
                 }
 
                 foreach (DirectoryInfo day in month.EnumerateDirectories())

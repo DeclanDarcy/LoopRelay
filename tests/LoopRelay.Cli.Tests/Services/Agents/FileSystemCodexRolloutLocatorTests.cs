@@ -144,6 +144,34 @@ public class FileSystemCodexRolloutLocatorTests : IDisposable
     }
 
     [Fact]
+    public void Resolve_StillFindsARolloutFiledDirectlyInItsMonthDirectory()
+    {
+        // No day directory means no day for the floor to judge, so the file has to survive the walk rather
+        // than fall through the gap between "this month" and "the days in it".
+        DateTimeOffset opened = DateTimeOffset.UtcNow;
+        string cwd = Path.Combine(root, "work");
+        string month = Path.Combine(opened.UtcDateTime.Year.ToString("D4"), opened.UtcDateTime.Month.ToString("D2"));
+        string expected = WriteRollout("rollout-a.jsonl", cwd, opened.AddSeconds(30), month);
+
+        string? found = new FileSystemCodexRolloutLocator(root).Resolve(cwd, opened);
+
+        Assert.Equal(expected, found);
+    }
+
+    [Fact]
+    public void Resolve_StillFindsARolloutFiledDirectlyInItsYearDirectory()
+    {
+        DateTimeOffset opened = DateTimeOffset.UtcNow;
+        string cwd = Path.Combine(root, "work");
+        string expected = WriteRollout(
+            "rollout-a.jsonl", cwd, opened.AddSeconds(30), opened.UtcDateTime.Year.ToString("D4"));
+
+        string? found = new FileSystemCodexRolloutLocator(root).Resolve(cwd, opened);
+
+        Assert.Equal(expected, found);
+    }
+
+    [Fact]
     public void Resolve_StillScansDirectoriesThatAreNotNamedForADate()
     {
         // A layout the date bound cannot reason about must never silently lose a rollout: the per-file time
