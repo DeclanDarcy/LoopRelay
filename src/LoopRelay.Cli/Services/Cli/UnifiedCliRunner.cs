@@ -370,8 +370,17 @@ internal sealed class CanonicalCliApplicationService(LoopRelayCompositionRoot _c
             return 4;
         }
 
-        await _composition.EffectWorker.RunOnceAsync(cancellationToken);
-        observation = await _composition.ObserveAsync(cancellationToken);
+        // The effect worker is the only thing that can invalidate the observation above, and it
+        // only touches the workspace for work it discovered: with nothing unsettled to scan, its
+        // whole pass is read-only and the first observation still describes the workspace. A
+        // quiet startup therefore verifies storage once, not twice. `Discovered` (not the
+        // executed/settled counters) is the guard because a discovered intent leases and appends
+        // lifecycle rows even when it never reaches a terminal state.
+        EffectWorkerResult effects = await _composition.EffectWorker.RunOnceAsync(cancellationToken);
+        if (effects.Discovered > 0)
+        {
+            observation = await _composition.ObserveAsync(cancellationToken);
+        }
 
         // M7: runtime prerequisites are inspected before any agent launches — an Error aborts
         // with the typed MissingRuntimePrerequisite outcome instead of the raw resolver
@@ -610,10 +619,10 @@ internal sealed class CanonicalCliApplicationService(LoopRelayCompositionRoot _c
         int budget = invocation.IsBounded
             ? 1
             : _composition.Policy.MaxUnboundedContinuationSteps;
-        string chainIdentity = _composition.SelectChain(invocation, observation).Identity;
+        WorkflowChainDefinition chain = _composition.SelectChain(invocation, observation);
+        string chainIdentity = chain.Identity;
         string invocationMode = invocation.Mode.ToString();
         string workspaceId = await _composition.Persistence.ReadWorkspaceIdentityAsync(cancellationToken);
-        WorkflowChainDefinition chain = _composition.SelectChain(invocation, observation);
         KernelRootEntry entry = await new CanonicalKernelRootRunCoordinator(_composition.Persistence).EnterAsync(
             workspaceId, chainIdentity, invocationMode, _composition.WorkflowCatalog, cancellationToken);
         if (entry.Kind is KernelRootEntryKind.Ambiguous or KernelRootEntryKind.RecoveryRequired)

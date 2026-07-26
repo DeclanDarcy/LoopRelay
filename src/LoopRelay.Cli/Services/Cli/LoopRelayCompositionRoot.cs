@@ -206,13 +206,19 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
     /// environment — the default reads the real environment and filesystem.</summary>
     internal RuntimePrerequisiteDoctor RuntimePrerequisiteDoctor { get; set; } = new();
 
-    internal static LoopRelayCompositionRoot CreateForTests(Repository repository) =>
+    /// <param name="storageVerifier">Replaces the verifier the repository observer runs, so a
+    /// test can count how many times a run verifies workspace storage - one verification is one
+    /// repository observation. Null keeps the composition's own choice.</param>
+    internal static LoopRelayCompositionRoot CreateForTests(
+        Repository repository,
+        IStorageVerifier? storageVerifier = null) =>
         CreateCore(
             repository,
             agentRuntime: null,
             processRunner: new ProcessRunner(),
             RequireBrain(CliSettingsLoader.Load()),
-            provider: null);
+            provider: null,
+            storageVerifier: storageVerifier);
 
     public static LoopRelayCompositionRoot CreateProduction(
         Repository repository,
@@ -370,7 +376,8 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
         TextWriter? error = null,
         IAgentSessionContinuityRuntime? continuityRuntime = null,
         ResolvedOperationalPolicy? policy = null,
-        bool productionRuntime = false)
+        bool productionRuntime = false,
+        IStorageVerifier? storageVerifier = null)
     {
         // Non-production compositions execute under the built-in defaults so every attempt
         // still records one resolved policy identity.
@@ -379,7 +386,7 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
             "built-in",
             [],
             PermissionPolicyFactory.Minimum);
-        IStorageVerifier storageVerifier = productionRuntime
+        storageVerifier ??= productionRuntime
             ? new WorkspaceStorageVerifierAdapter()
             : new FileSystemStorageVerifier();
         var repositoryObserver = new RepositoryObserver(storageVerifier);

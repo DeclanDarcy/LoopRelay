@@ -134,6 +134,54 @@ public sealed class UnifiedCliRunnerTests
     }
 
     [Fact]
+    public async Task Quiet_startup_verifies_workspace_storage_once_not_twice()
+    {
+        // PERF-24b: startup observed, ran the effect worker, then re-observed unconditionally.
+        // The worker's result is now read: a workspace with nothing unsettled cannot have been
+        // mutated by it, so the first observation still holds and the second is skipped. This
+        // fixture stops at the runtime-prerequisite gate, immediately after that step, so the
+        // count isolates startup from anything the workflow chain would observe later.
+        Repository repository = CreateRepository();
+        var verifier = new CountingStorageVerifier();
+        LoopRelayCompositionRoot composition =
+            LoopRelayCompositionRoot.CreateForTests(repository, verifier);
+        composition.ProductionRuntime = true;
+        composition.RuntimePrerequisiteProfile = HostProfile();
+        composition.RuntimePrerequisiteDoctor = new RuntimePrerequisiteDoctor(_ => null, _ => false);
+        var invocation = new TestApplicationInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        int exitCode = await new UnifiedCliRunner(composition, output, error)
+            .RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(4, exitCode);
+        Assert.Contains("Stop reason: MissingRuntimePrerequisite", output.ToString(), StringComparison.Ordinal);
+        Assert.Empty(await new CanonicalEffectWorkStore(repository)
+            .ScanUnsettledAsync(128, DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(1, verifier.Verifications);
+    }
+
+    private sealed class CountingStorageVerifier : IStorageVerifier
+    {
+        private readonly FileSystemStorageVerifier inner = new();
+        private int verifications;
+
+        public int Verifications => verifications;
+
+        public Task<StorageVerificationResult> VerifyAsync(
+            string repositoryPath,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref verifications);
+            return inner.VerifyAsync(repositoryPath, cancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task Non_production_compositions_have_no_runtime_prerequisites_to_inspect()
     {
         // Injected runtimes have no provider prerequisites: the inspection returns nothing and
