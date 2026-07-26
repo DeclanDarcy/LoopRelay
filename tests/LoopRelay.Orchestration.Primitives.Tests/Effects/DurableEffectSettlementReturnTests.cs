@@ -139,7 +139,8 @@ public sealed class DurableEffectSettlementReturnTests
             .ToArray();
         var store = new CanonicalEffectWorkStore(repository);
         await store.AppendPlanAsync(intents, CancellationToken.None);
-        var counting = new ConnectionOpenCountingStore(store);
+        // Watching starts here, so the plan append above is outside the tally.
+        using var counting = new ConnectionOpenCountingStore(store);
 
         EffectWorkerResult result = await Worker(counting, new RecordingExecutor()).RunOnceAsync(CancellationToken.None);
 
@@ -152,8 +153,21 @@ public sealed class DurableEffectSettlementReturnTests
         Assert.Equal(10, counting.LifecycleAppends);
         Assert.Equal(10, counting.ReceiptRecords);
         Assert.Equal(0, counting.PlanReads);
-        Assert.Equal(41, counting.DerivedConnectionOpens);
-        Assert.Equal(4, (counting.DerivedConnectionOpens - ConnectionOpenCountingStore.ScanOpens) / result.Succeeded);
+        // Counted, not modelled: the store reports every connection it opens, attributed to the
+        // call that was running. Nothing below is a constant this test declares, so re-adding an
+        // open inside any settlement write raises the tally without anyone editing this file.
+        Assert.Equal(0, counting.UnattributedOpens);
+        Assert.Equal(41, counting.ConnectionOpens);
+        Assert.Equal(4, (counting.ConnectionOpens - counting.ScanOpens) / result.Succeeded);
+        // The four, decomposed by the step that opened them.
+        Assert.Equal(1, counting.ScanOpens);
+        Assert.Equal(10, counting.LeaseOpens);
+        Assert.Equal(10, counting.ReadOpens);
+        Assert.Equal(10, counting.LifecycleAppendOpens);
+        Assert.Equal(10, counting.ReceiptRecordOpens);
+        Assert.Equal(0, counting.PlanReadOpens);
+        Assert.Equal(0, counting.DependencyGateOpens);
+        Assert.Equal(0, counting.ReconciliationOpens);
     }
 
     private static void AssertMatches(EffectWorkItem observed, EffectWorkItem returned)
@@ -215,23 +229,35 @@ public sealed class DurableEffectSettlementReturnTests
     }
 
     /// <summary>
-    /// Counts the work-store calls a run makes and derives connection opens from them, using the
-    /// same audited per-method constants the wave-5 reconnaissance used so the numbers stay
-    /// comparable to its baseline. Every <see cref="CanonicalEffectWorkStore"/> entry point opens
-    /// exactly one connection; before the in-transaction returns, the two settlement writes opened
-    /// a second one each for their post-commit re-read. Changing the number of opens inside any of
-    /// these methods means changing the matching constant here.
+    /// Counts the work-store calls a run makes, and counts the connections the store really opens
+    /// while each of those calls is running.
+    /// <para>
+    /// The opens are observed, not derived: it installs itself on
+    /// <see cref="CanonicalEffectWorkStore.ConnectionObserverForTesting"/>, which the store invokes
+    /// once per connection it opens, and attributes each open to the decorated call in flight. A
+    /// declared per-method constant could not catch a regression here — re-adding an open inside a
+    /// settlement write would keep satisfying it until someone hand-edited the constant, which is
+    /// the whole point of the assertion. <see cref="EffectWorker"/> drives the store strictly
+    /// sequentially, so "the call in flight" is unambiguous, and any open that arrives outside one
+    /// lands in <see cref="UnattributedOpens"/> rather than being silently absorbed.
+    /// </para>
     /// </summary>
-    private sealed class ConnectionOpenCountingStore(IEffectWorkStore _inner) : IEffectWorkStore
+    private sealed class ConnectionOpenCountingStore : IEffectWorkStore, IDisposable
     {
-        internal const int ScanOpens = 1;
-        private const int ReadOpens = 1;
-        private const int PlanReadOpens = 1;
-        private const int DependencyGateOpens = 1;
-        private const int LeaseOpens = 1;
-        private const int LifecycleAppendOpens = 1;
-        private const int ReceiptRecordOpens = 1;
-        private const int ReconciliationOpens = 1;
+        private readonly CanonicalEffectWorkStore _inner;
+        private readonly int[] _opens = new int[Enum.GetValues<StoreCall>().Length];
+        private StoreCall _inFlight = StoreCall.None;
+
+        public ConnectionOpenCountingStore(CanonicalEffectWorkStore inner)
+        {
+            _inner = inner;
+            inner.ConnectionObserverForTesting = _ => _opens[(int)_inFlight]++;
+        }
+
+        private enum StoreCall
+        {
+            None, Scan, Read, PlanRead, DependencyGate, Lease, LifecycleAppend, ReceiptRecord, Reconciliation,
+        }
 
         public int Scans { get; private set; }
         public int Reads { get; private set; }
@@ -242,38 +268,49 @@ public sealed class DurableEffectSettlementReturnTests
         public int ReceiptRecords { get; private set; }
         public int Reconciliations { get; private set; }
 
-        public int DerivedConnectionOpens =>
-            (Scans * ScanOpens) + (Reads * ReadOpens) + (PlanReads * PlanReadOpens) +
-            (DependencyGates * DependencyGateOpens) + (Leases * LeaseOpens) +
-            (LifecycleAppends * LifecycleAppendOpens) + (ReceiptRecords * ReceiptRecordOpens) +
-            (Reconciliations * ReconciliationOpens);
+        public int ConnectionOpens => _opens.Sum();
+        public int UnattributedOpens => _opens[(int)StoreCall.None];
+        public int ScanOpens => _opens[(int)StoreCall.Scan];
+        public int ReadOpens => _opens[(int)StoreCall.Read];
+        public int PlanReadOpens => _opens[(int)StoreCall.PlanRead];
+        public int DependencyGateOpens => _opens[(int)StoreCall.DependencyGate];
+        public int LeaseOpens => _opens[(int)StoreCall.Lease];
+        public int LifecycleAppendOpens => _opens[(int)StoreCall.LifecycleAppend];
+        public int ReceiptRecordOpens => _opens[(int)StoreCall.ReceiptRecord];
+        public int ReconciliationOpens => _opens[(int)StoreCall.Reconciliation];
+
+        public void Dispose() => _inner.ConnectionObserverForTesting = null;
 
         public Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(
             int limit, DateTimeOffset now, CancellationToken cancellationToken,
             IReadOnlySet<EffectIntentIdentity>? only = null)
         {
             Scans++;
-            return _inner.ScanUnsettledAsync(limit, now, cancellationToken, only);
+            return AttributeAsync(
+                StoreCall.Scan, () => _inner.ScanUnsettledAsync(limit, now, cancellationToken, only));
         }
 
         public Task<IReadOnlyList<EffectWorkItem>> ReadPlanAsync(
             TransitionRunIdentity transitionRun, CancellationToken cancellationToken)
         {
             PlanReads++;
-            return _inner.ReadPlanAsync(transitionRun, cancellationToken);
+            return AttributeAsync(
+                StoreCall.PlanRead, () => _inner.ReadPlanAsync(transitionRun, cancellationToken));
         }
 
         public Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken cancellationToken)
         {
             Reads++;
-            return _inner.ReadAsync(identity, cancellationToken);
+            return AttributeAsync(StoreCall.Read, () => _inner.ReadAsync(identity, cancellationToken));
         }
 
         public Task<bool> DependencySatisfiedAsync(
             EffectIntent candidate, EffectIntentIdentity dependency, CancellationToken cancellationToken)
         {
             DependencyGates++;
-            return _inner.DependencySatisfiedAsync(candidate, dependency, cancellationToken);
+            return AttributeAsync(
+                StoreCall.DependencyGate,
+                () => _inner.DependencySatisfiedAsync(candidate, dependency, cancellationToken));
         }
 
         public Task<EffectLease?> TryLeaseAsync(
@@ -281,7 +318,9 @@ public sealed class DurableEffectSettlementReturnTests
             TimeSpan duration, CancellationToken cancellationToken)
         {
             Leases++;
-            return _inner.TryLeaseAsync(identity, expectedRowVersion, worker, now, duration, cancellationToken);
+            return AttributeAsync(
+                StoreCall.Lease,
+                () => _inner.TryLeaseAsync(identity, expectedRowVersion, worker, now, duration, cancellationToken));
         }
 
         public Task<EffectWorkItem> AppendLifecycleAsync(
@@ -290,8 +329,10 @@ public sealed class DurableEffectSettlementReturnTests
             CancellationToken cancellationToken)
         {
             LifecycleAppends++;
-            return _inner.AppendLifecycleAsync(
-                identity, expectedRowVersion, state, worker, explanation, evidence, recordedAt, cancellationToken);
+            return AttributeAsync(
+                StoreCall.LifecycleAppend,
+                () => _inner.AppendLifecycleAsync(
+                    identity, expectedRowVersion, state, worker, explanation, evidence, recordedAt, cancellationToken));
         }
 
         public Task<EffectWorkItem> RecordReceiptAsync(
@@ -299,16 +340,43 @@ public sealed class DurableEffectSettlementReturnTests
             CancellationToken cancellationToken)
         {
             ReceiptRecords++;
-            return _inner.RecordReceiptAsync(identity, expectedRowVersion, receipt, worker, cancellationToken);
+            return AttributeAsync(
+                StoreCall.ReceiptRecord,
+                () => _inner.RecordReceiptAsync(identity, expectedRowVersion, receipt, worker, cancellationToken));
         }
 
-        public Task RecordReconciliationAsync(
+        public async Task RecordReconciliationAsync(
             EffectIntentIdentity identity, long expectedRowVersion, EffectReconciliationObservation observation,
             string worker, DateTimeOffset recordedAt, CancellationToken cancellationToken)
         {
             Reconciliations++;
-            return _inner.RecordReconciliationAsync(
-                identity, expectedRowVersion, observation, worker, recordedAt, cancellationToken);
+            await AttributeAsync<object?>(
+                StoreCall.Reconciliation,
+                async () =>
+                {
+                    await _inner.RecordReconciliationAsync(
+                        identity, expectedRowVersion, observation, worker, recordedAt, cancellationToken);
+                    return null;
+                });
+        }
+
+        /// <summary>
+        /// Runs one store call with <paramref name="call"/> marked as in flight, restoring whatever
+        /// was in flight before rather than assuming nothing was, so a nested call cannot make the
+        /// opens after it look unattributed.
+        /// </summary>
+        private async Task<T> AttributeAsync<T>(StoreCall call, Func<Task<T>> body)
+        {
+            StoreCall enclosing = _inFlight;
+            _inFlight = call;
+            try
+            {
+                return await body();
+            }
+            finally
+            {
+                _inFlight = enclosing;
+            }
         }
     }
 
