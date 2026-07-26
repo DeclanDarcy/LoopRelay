@@ -19,9 +19,9 @@ internal sealed class CompletionKernelBoundaryObserver(Repository _repository) :
                 new WorkflowTransitionIdentity("VerifyWorkflowExitGate"))
             return;
         var store = new CanonicalCompletionAuthorityStore(_repository);
-        CanonicalCompletionSnapshot snapshot = await store.ReadSnapshotAsync(cancellationToken);
+        CanonicalCompletionSnapshot snapshot = await store.ReadSnapshotAsync(command.Context.Run, cancellationToken);
         CompletionDecision? decision = snapshot.Decisions.LastOrDefault(item =>
-            item.RootRun == command.Context.Run && item.Kind == CompletionDecisionKind.CertifiedCandidate);
+            item.Kind == CompletionDecisionKind.CertifiedCandidate);
         if (decision is null) return;
         CompletionCertificate certificate = snapshot.Certificates.Single(item => item.Decision == decision.Identity);
         CompletionClosurePlan plan = snapshot.ClosurePlans.Single(item => item.Certificate == certificate.Identity);

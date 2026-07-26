@@ -119,15 +119,51 @@ public sealed class CanonicalCompletionAuthorityStore(Repository _repository)
         await transaction.CommitAsync(cancellationToken);
     }
 
-    public async Task<CanonicalCompletionSnapshot> ReadSnapshotAsync(
-        CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Whole-workspace read across every root run. Status and projection consumers depend on this;
+    /// consumers that only care about one root run should use the run-scoped overload instead.
+    /// </summary>
+    public Task<CanonicalCompletionSnapshot> ReadSnapshotAsync(
+        CancellationToken cancellationToken = default) =>
+        ReadSnapshotCoreAsync(rootRun: null, cancellationToken);
+
+    /// <summary>
+    /// Reads only the completion authority owned by one root run. Both overloads share one
+    /// implementation — including <see cref="OpenAsync"/>, so schema-compatibility failures are
+    /// classified and thrown identically whether or not the read is run-scoped.
+    /// </summary>
+    public Task<CanonicalCompletionSnapshot> ReadSnapshotAsync(
+        RunIdentity rootRun,
+        CancellationToken cancellationToken = default) =>
+        ReadSnapshotCoreAsync(rootRun, cancellationToken);
+
+    private async Task<CanonicalCompletionSnapshot> ReadSnapshotCoreAsync(
+        RunIdentity? rootRun,
+        CancellationToken cancellationToken)
     {
+        // Only `canonical_completion_decisions` and `canonical_certified_terminal_facts` carry a run
+        // column. Certificates, closure plans, and settlements are narrowed by reachability from this
+        // run's decisions (`decision_id`, and `plan_id` for settlements) instead.
+        //
+        // That substitution is lossless only because every row in those three tables is written with a
+        // committed parent: `PersistCertifiedCandidateAsync` commits the decision, certificate, and plan
+        // in one transaction, and `AppendSettlementAsync` is only ever reached for a plan already read
+        // back from this store. No FOREIGN KEY enforces it (the schema declares none) — the guarantee is
+        // procedural. A future writer that bypasses that discipline could orphan a row, and this read
+        // would silently omit it while the unfiltered overload still returned it.
+        string runScope = rootRun is null ? string.Empty : " WHERE root_run_id = $run";
+        const string DecisionsOfRun =
+            "SELECT decision_id FROM canonical_completion_decisions WHERE root_run_id = $run";
+        string decisionScope = rootRun is null ? string.Empty : $" WHERE decision_id IN ({DecisionsOfRun})";
+        string planScope = rootRun is null ? string.Empty
+            : $" WHERE plan_id IN (SELECT plan_id FROM canonical_completion_closure_plans WHERE decision_id IN ({DecisionsOfRun}))";
+
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         var decisions = new List<CompletionDecision>();
-        await using (SqliteCommand command = Command(connection, """
+        await using (SqliteCommand command = Command(connection, $"""
             SELECT decision_id,root_run_id,attempt_id,kind,reason,evidence_json,gate_identities_json,
-                   review_identities_json,decided_at FROM canonical_completion_decisions ORDER BY decided_at,decision_id;
-            """))
+                   review_identities_json,decided_at FROM canonical_completion_decisions{runScope} ORDER BY decided_at,decision_id;
+            """, rootRun))
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
             while (await reader.ReadAsync(cancellationToken))
                 decisions.Add(new(new(reader.GetString(0)), new(reader.GetString(1)), new(reader.GetString(2)),
@@ -136,13 +172,13 @@ public sealed class CanonicalCompletionAuthorityStore(Repository _repository)
                     ReadList(reader, 5), ReadList(reader, 6), ReadList(reader, 7), Parse(reader.GetString(8))));
         var certificates = new List<CompletionCertificate>();
         await using (SqliteCommand command = Command(connection,
-            "SELECT certificate_id,decision_id,evidence_json,certified_at FROM canonical_completion_certificates ORDER BY certified_at,certificate_id;"))
+            $"SELECT certificate_id,decision_id,evidence_json,certified_at FROM canonical_completion_certificates{decisionScope} ORDER BY certified_at,certificate_id;", rootRun))
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
             while (await reader.ReadAsync(cancellationToken))
                 certificates.Add(new(new(reader.GetString(0)), new(reader.GetString(1)), ReadList(reader, 2), Parse(reader.GetString(3))));
         var plans = new List<CompletionClosurePlan>();
         await using (SqliteCommand command = Command(connection,
-            "SELECT plan_id,decision_id,certificate_id,operations_json,content_hash,planned_at FROM canonical_completion_closure_plans ORDER BY planned_at,plan_id;"))
+            $"SELECT plan_id,decision_id,certificate_id,operations_json,content_hash,planned_at FROM canonical_completion_closure_plans{decisionScope} ORDER BY planned_at,plan_id;", rootRun))
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
             while (await reader.ReadAsync(cancellationToken))
                 plans.Add(new(new(reader.GetString(0)), new(reader.GetString(1)), new(reader.GetString(2)),
@@ -150,7 +186,7 @@ public sealed class CanonicalCompletionAuthorityStore(Repository _repository)
                     reader.GetString(4), Parse(reader.GetString(5))));
         var settlements = new List<CompletionSettlement>();
         await using (SqliteCommand command = Command(connection,
-            "SELECT settlement_id,plan_id,kind,pending_operations_json,evidence_json,reason,settled_at FROM canonical_completion_settlements ORDER BY settled_at,settlement_id;"))
+            $"SELECT settlement_id,plan_id,kind,pending_operations_json,evidence_json,reason,settled_at FROM canonical_completion_settlements{planScope} ORDER BY settled_at,settlement_id;", rootRun))
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
             while (await reader.ReadAsync(cancellationToken))
                 settlements.Add(new(new(reader.GetString(0)), new(reader.GetString(1)),
@@ -158,10 +194,10 @@ public sealed class CanonicalCompletionAuthorityStore(Repository _repository)
                     reader.IsDBNull(5) ? null : Enum.Parse<CompletionCannotProceedReason>(reader.GetString(5)),
                     Parse(reader.GetString(6))));
         var terminal = new List<CertifiedTerminalFact>();
-        await using (SqliteCommand command = Command(connection, """
+        await using (SqliteCommand command = Command(connection, $"""
             SELECT terminal_id,root_run_id,decision_id,certificate_id,plan_id,settlement_id,
-                   effect_receipts_json,recorded_at FROM canonical_certified_terminal_facts ORDER BY recorded_at,terminal_id;
-            """))
+                   effect_receipts_json,recorded_at FROM canonical_certified_terminal_facts{runScope} ORDER BY recorded_at,terminal_id;
+            """, rootRun))
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
             while (await reader.ReadAsync(cancellationToken))
                 terminal.Add(new(new(reader.GetString(0)), new(reader.GetString(1)), new(reader.GetString(2)),
@@ -207,10 +243,12 @@ public sealed class CanonicalCompletionAuthorityStore(Repository _repository)
         return connection;
     }
 
-    private static SqliteCommand Command(SqliteConnection connection, string sql)
+    private static SqliteCommand Command(SqliteConnection connection, string sql, RunIdentity? rootRun = null)
     {
         SqliteCommand command = connection.CreateCommand();
         command.CommandText = sql;
+        if (rootRun.HasValue)
+            command.Parameters.AddWithValue("$run", rootRun.Value.Value);
         return command;
     }
 

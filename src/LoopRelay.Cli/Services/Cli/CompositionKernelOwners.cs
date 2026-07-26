@@ -230,9 +230,9 @@ internal sealed partial class LoopRelayCompositionRoot
             CancellationToken cancellationToken)
         {
             CanonicalCompletionSnapshot snapshot = await new CanonicalCompletionAuthorityStore(_repository)
-                .ReadSnapshotAsync(cancellationToken);
+                .ReadSnapshotAsync(context.Causality.Run, cancellationToken);
             CompletionDecision? decision = snapshot.Decisions.LastOrDefault(item =>
-                item.RootRun == context.Causality.Run && item.Kind == CompletionDecisionKind.CertifiedCandidate);
+                item.Kind == CompletionDecisionKind.CertifiedCandidate);
             CompletionCertificate? certificate = decision is null ? null : snapshot.Certificates
                 .SingleOrDefault(item => item.Decision == decision.Identity);
             CompletionClosurePlan? plan = certificate is null ? null : snapshot.ClosurePlans

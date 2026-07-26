@@ -165,6 +165,190 @@ public sealed class CompletionAuthorityTests
         Assert.Empty((await store.ReadSnapshotAsync()).TerminalFacts);
     }
 
+    [Fact]
+    public async Task Run_scoped_snapshot_equals_the_in_memory_filtered_unfiltered_snapshot()
+    {
+        string path = Directory.CreateTempSubdirectory("looprelay-completion-run-scope").FullName;
+        var repository = new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(path), Path = path };
+        var store = new CanonicalCompletionAuthorityStore(repository);
+        DateTimeOffset baseline = new(2026, 7, 25, 12, 0, 0, TimeSpan.Zero);
+        // Two runs, interleaved in time, so a wrong filter shows up as extra, missing, or
+        // misordered rows instead of as an empty-versus-empty pass.
+        RunIdentity first = await SeedRunAsync(store, baseline, lane: 0);
+        RunIdentity second = await SeedRunAsync(store, baseline, lane: 1);
+        Assert.NotEqual(first, second);
+
+        CanonicalCompletionSnapshot unfiltered = await store.ReadSnapshotAsync();
+        Assert.Equal(4, unfiltered.Decisions.Count);
+        Assert.Equal(2, unfiltered.Certificates.Count);
+        Assert.Equal(2, unfiltered.ClosurePlans.Count);
+        Assert.Equal(4, unfiltered.Settlements.Count);
+        Assert.Equal(2, unfiltered.TerminalFacts.Count);
+
+        foreach (RunIdentity run in new[] { first, second })
+        {
+            CanonicalCompletionSnapshot expected = FilterInMemory(unfiltered, run);
+            Assert.Equal(2, expected.Decisions.Count);
+            Assert.Single(expected.Certificates);
+            Assert.Single(expected.ClosurePlans);
+            Assert.Equal(2, expected.Settlements.Count);
+            Assert.Single(expected.TerminalFacts);
+
+            CanonicalCompletionSnapshot scoped = await store.ReadSnapshotAsync(run, CancellationToken.None);
+            AssertSnapshotsMatch(expected, scoped);
+        }
+    }
+
+    /// <summary>
+    /// Seeds one root run: a continue decision, a certified candidate with its certificate and closure
+    /// plan, a non-terminal settlement, and a terminal settlement (which also writes the terminal fact).
+    /// <paramref name="lane"/> offsets every timestamp by one second so two seeded runs interleave in
+    /// the unfiltered ordering and a run-scoped read has to preserve relative order.
+    /// </summary>
+    private static async Task<RunIdentity> SeedRunAsync(
+        CanonicalCompletionAuthorityStore store, DateTimeOffset baseline, int lane)
+    {
+        var authority = new CompletionAuthority();
+        RunIdentity run = RunIdentity.New();
+        DateTimeOffset At(int step) => baseline.AddSeconds((step * 2) + lane);
+
+        await store.AppendDecisionAsync(authority.Decide(new(run, AttemptIdentity.New(),
+            false, false, false, true, null, ["evidence:continue"], [], []), At(0)));
+
+        CompletionDecision certified = authority.Decide(new(run, AttemptIdentity.New(),
+            false, false, false, false, null,
+            ["evidence:completion"], ["gate:milestones"], ["review:non-implementation"]), At(1));
+        CompletionCertificate certificate = CompletionCertificate.Create(certified, At(2));
+        CompletionClosurePlan plan = CompletionClosurePlan.Build(
+            certified, certificate, nestedAgentsChanged: true, parentRepositoryChanged: true, At(3));
+        await store.PersistCertifiedCandidateAsync(certified, certificate, plan);
+
+        Dictionary<string, CompletionClosureOperationState> states = plan.Operations
+            .ToDictionary(item => item.Identity, _ => CompletionClosureOperationState.Succeeded);
+        states[plan.Operations[0].Identity] = CompletionClosureOperationState.Unknown;
+        CompletionSettlement recovery = authority.Settle(plan, states, ["effect:unknown"], At(4));
+        Assert.Equal(CompletionSettlementKind.RecoveryRequired, recovery.Kind);
+        await store.AppendSettlementAsync(certified, certificate, plan, recovery, []);
+
+        states[plan.Operations[0].Identity] = CompletionClosureOperationState.Succeeded;
+        CompletionSettlement terminal = authority.Settle(plan, states, ["postcondition:verified"], At(5));
+        CompletionClosureReceipt[] receipts = plan.Operations
+            .Where(item => item.Kind != CompletionClosureOperationKind.CertifiedTerminalFact)
+            .Select(item => new CompletionClosureReceipt(item.Identity, "receipt:" + item.Identity)).ToArray();
+        await store.AppendSettlementAsync(certified, certificate, plan, terminal, receipts);
+        return run;
+    }
+
+    /// <summary>
+    /// The reference semantics the run-scoped read must reproduce: decisions and terminal facts by
+    /// their own run column, certificates and closure plans by reachability from this run's decisions,
+    /// settlements by reachability from this run's closure plans.
+    /// </summary>
+    private static CanonicalCompletionSnapshot FilterInMemory(
+        CanonicalCompletionSnapshot snapshot, RunIdentity run)
+    {
+        CompletionDecision[] decisions = snapshot.Decisions.Where(item => item.RootRun == run).ToArray();
+        HashSet<CompletionDecisionIdentity> decisionIdentities = decisions.Select(item => item.Identity).ToHashSet();
+        CompletionCertificate[] certificates = snapshot.Certificates
+            .Where(item => decisionIdentities.Contains(item.Decision)).ToArray();
+        CompletionClosurePlan[] plans = snapshot.ClosurePlans
+            .Where(item => decisionIdentities.Contains(item.Decision)).ToArray();
+        HashSet<CompletionClosurePlanIdentity> planIdentities = plans.Select(item => item.Identity).ToHashSet();
+        CompletionSettlement[] settlements = snapshot.Settlements
+            .Where(item => planIdentities.Contains(item.Plan)).ToArray();
+        CertifiedTerminalFact[] terminal = snapshot.TerminalFacts.Where(item => item.RootRun == run).ToArray();
+        return new(decisions, certificates, plans, settlements, terminal);
+    }
+
+    // Field-by-field on purpose. `CanonicalCompletionSnapshot` and the records it carries are C#
+    // records whose synthesised `==` compares collection-typed members by reference, so
+    // `Assert.Equal(expected, actual)` on whole snapshots would compare two structurally identical
+    // values as unequal — and a shallow pass would say nothing about nested contents.
+    private static void AssertSnapshotsMatch(
+        CanonicalCompletionSnapshot expected, CanonicalCompletionSnapshot actual)
+    {
+        Assert.Equal(expected.Decisions.Count, actual.Decisions.Count);
+        for (int index = 0; index < expected.Decisions.Count; index++)
+        {
+            CompletionDecision want = expected.Decisions[index], got = actual.Decisions[index];
+            Assert.Equal(want.Identity.Value, got.Identity.Value);
+            Assert.Equal(want.RootRun.Value, got.RootRun.Value);
+            Assert.Equal(want.Attempt.Value, got.Attempt.Value);
+            Assert.Equal(want.Kind, got.Kind);
+            Assert.Equal(want.CannotProceedReason, got.CannotProceedReason);
+            Assert.Equal<string>(want.EvidenceIdentities, got.EvidenceIdentities);
+            Assert.Equal<string>(want.GateIdentities, got.GateIdentities);
+            Assert.Equal<string>(want.ReviewIdentities, got.ReviewIdentities);
+            Assert.Equal(want.DecidedAt, got.DecidedAt);
+        }
+
+        Assert.Equal(expected.Certificates.Count, actual.Certificates.Count);
+        for (int index = 0; index < expected.Certificates.Count; index++)
+        {
+            CompletionCertificate want = expected.Certificates[index], got = actual.Certificates[index];
+            Assert.Equal(want.Identity.Value, got.Identity.Value);
+            Assert.Equal(want.Decision.Value, got.Decision.Value);
+            Assert.Equal<string>(want.EvidenceIdentities, got.EvidenceIdentities);
+            Assert.Equal(want.CertifiedAt, got.CertifiedAt);
+        }
+
+        Assert.Equal(expected.ClosurePlans.Count, actual.ClosurePlans.Count);
+        for (int index = 0; index < expected.ClosurePlans.Count; index++)
+        {
+            CompletionClosurePlan want = expected.ClosurePlans[index], got = actual.ClosurePlans[index];
+            Assert.Equal(want.Identity.Value, got.Identity.Value);
+            Assert.Equal(want.Decision.Value, got.Decision.Value);
+            Assert.Equal(want.Certificate.Value, got.Certificate.Value);
+            Assert.Equal(want.ContentHash, got.ContentHash);
+            Assert.Equal(want.PlannedAt, got.PlannedAt);
+            Assert.Equal(want.Operations.Count, got.Operations.Count);
+            for (int operation = 0; operation < want.Operations.Count; operation++)
+            {
+                CompletionClosureOperation wantOperation = want.Operations[operation];
+                CompletionClosureOperation gotOperation = got.Operations[operation];
+                Assert.Equal(wantOperation.Identity, gotOperation.Identity);
+                Assert.Equal(wantOperation.Kind, gotOperation.Kind);
+                Assert.Equal(wantOperation.Order, gotOperation.Order);
+                Assert.Equal(wantOperation.Required, gotOperation.Required);
+                Assert.Equal<string>(wantOperation.Dependencies, gotOperation.Dependencies);
+            }
+        }
+
+        Assert.Equal(expected.Settlements.Count, actual.Settlements.Count);
+        for (int index = 0; index < expected.Settlements.Count; index++)
+        {
+            CompletionSettlement want = expected.Settlements[index], got = actual.Settlements[index];
+            Assert.Equal(want.Identity.Value, got.Identity.Value);
+            Assert.Equal(want.Plan.Value, got.Plan.Value);
+            Assert.Equal(want.Kind, got.Kind);
+            Assert.Equal<string>(want.PendingOperations, got.PendingOperations);
+            Assert.Equal<string>(want.EvidenceIdentities, got.EvidenceIdentities);
+            Assert.Equal(want.CannotProceedReason, got.CannotProceedReason);
+            Assert.Equal(want.SettledAt, got.SettledAt);
+        }
+
+        Assert.Equal(expected.TerminalFacts.Count, actual.TerminalFacts.Count);
+        for (int index = 0; index < expected.TerminalFacts.Count; index++)
+        {
+            CertifiedTerminalFact want = expected.TerminalFacts[index], got = actual.TerminalFacts[index];
+            Assert.Equal(want.Identity.Value, got.Identity.Value);
+            Assert.Equal(want.RootRun.Value, got.RootRun.Value);
+            Assert.Equal(want.Decision.Value, got.Decision.Value);
+            Assert.Equal(want.Certificate.Value, got.Certificate.Value);
+            Assert.Equal(want.Plan.Value, got.Plan.Value);
+            Assert.Equal(want.Settlement.Value, got.Settlement.Value);
+            Assert.Equal(want.RecordedAt, got.RecordedAt);
+            Assert.Equal(want.EffectReceipts.Count, got.EffectReceipts.Count);
+            for (int receipt = 0; receipt < want.EffectReceipts.Count; receipt++)
+            {
+                Assert.Equal(want.EffectReceipts[receipt].OperationIdentity,
+                    got.EffectReceipts[receipt].OperationIdentity);
+                Assert.Equal(want.EffectReceipts[receipt].EffectReceiptIdentity,
+                    got.EffectReceipts[receipt].EffectReceiptIdentity);
+            }
+        }
+    }
+
     private static CompletionDecision Certified(CompletionAuthority authority) => authority.Decide(new(
         RunIdentity.New(), AttemptIdentity.New(), false, false, false, false, null,
         ["evidence:completion"], ["gate:milestones"], ["review:non-implementation"]),
