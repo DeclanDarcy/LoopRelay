@@ -19,6 +19,21 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         Converters = { new JsonStringEnumConverter() },
     };
 
+    /// <summary>
+    /// Test-only observability: every connection this store opens is offered here once it is open
+    /// and schema-verified, immediately before the calling read or write issues its own statements.
+    /// A test installs a SQLite authorizer on it and counts the statements a path really prepares.
+    /// <para>
+    /// This exists because there is no other way to observe that cost. Microsoft.Data.Sqlite
+    /// exposes no statement hook, SQLitePCLRaw's only statement-level hook - the authorizer - is
+    /// per connection, and this store opens its connections itself with pooling disabled, so a test
+    /// can never reach the handle a read actually ran on. Without this seam, a statement-count
+    /// assertion can only restate a hand-maintained model, which is exactly what a per-row
+    /// regression would keep satisfying. Instance-scoped, so a test observes only its own store.
+    /// </para>
+    /// </summary>
+    internal Action<SqliteConnection>? ConnectionObserverForTesting { get; set; }
+
     public async Task AppendPlanAsync(
         IReadOnlyList<EffectIntent> intents,
         CancellationToken cancellationToken)
@@ -523,6 +538,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
         await connection.OpenAsync(cancellationToken);
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
+        ConnectionObserverForTesting?.Invoke(connection);
         return connection;
     }
 

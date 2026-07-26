@@ -5,6 +5,7 @@ using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Persistence;
 using Microsoft.Data.Sqlite;
+using SQLitePCL;
 
 namespace LoopRelay.Orchestration.Tests.Effects;
 
@@ -121,9 +122,16 @@ public sealed class DurableEffectPlanHydrationTests
     }
 
     /// <summary>
-    /// Plan hydration costs a fixed number of statements regardless of plan size. Measured the way
-    /// the wave-5 reconnaissance measured it: a decorator records the shape of each
-    /// <c>ReadPlanAsync</c> result and the audited per-method statement model turns it into a count.
+    /// Plan hydration costs a fixed number of statements regardless of plan size, counted from the
+    /// statements <c>ReadPlanAsync</c> really compiles rather than from a model of them: one per
+    /// table — intents, receipts, lifecycle events — at every plan size.
+    /// <para>
+    /// The fixture is settled first, so every item carries a receipt and a lifecycle history. That
+    /// is what makes the sizes discriminating: item-at-a-time hydration paid <c>1 + 2N + R</c> here
+    /// — an identity query, then a core row and an event history per item plus a receipt per
+    /// settled one — so twenty items cost 61 statements against the set-based three, and a
+    /// regression to per-row reads cannot land inside the asserted count at any of these sizes.
+    /// </para>
     /// </summary>
     [Theory]
     [InlineData(4)]
@@ -132,21 +140,29 @@ public sealed class DurableEffectPlanHydrationTests
     public async Task Plan_hydration_costs_the_same_number_of_statements_at_every_plan_size(int items)
     {
         Repository repository = CreateRepository();
-        var inner = new CanonicalEffectWorkStore(repository);
-        var store = new PlanHydrationStatementCountingStore(inner);
+        var store = new CanonicalEffectWorkStore(repository);
         CanonicalCausalContext causality = Causality();
-        await inner.AppendPlanAsync(
+        await store.AppendPlanAsync(
             [.. Enumerable.Range(0, items).Select(index => Intent(causality, index, $"item-{index}"))],
             CancellationToken.None);
-        await Worker(inner, [new RecordingExecutor(new ExecutionRecorder())]).RunOnceAsync(CancellationToken.None);
+        await Worker(store, [new RecordingExecutor(new ExecutionRecorder())]).RunOnceAsync(CancellationToken.None);
 
-        IReadOnlyList<EffectWorkItem> plan = await store.ReadPlanAsync(
-            causality.TransitionRun, CancellationToken.None);
+        var counter = new PreparedStatementCounter();
+        store.ConnectionObserverForTesting = counter.Watch;
+        IReadOnlyList<EffectWorkItem> plan;
+        try
+        {
+            plan = await store.ReadPlanAsync(causality.TransitionRun, CancellationToken.None);
+        }
+        finally
+        {
+            store.ConnectionObserverForTesting = null;
+        }
 
         Assert.Equal(items, plan.Count);
         Assert.All(plan, item => Assert.NotNull(item.Receipt));
-        // One statement per table, at every plan size: intents, receipts, lifecycle events.
-        Assert.Equal(3, Assert.Single(store.PlanReadStatementCounts));
+        // Counted, not modelled: one statement per table, and no term in the plan's size.
+        Assert.Equal(3, counter.Statements);
     }
 
     [Fact]
@@ -345,41 +361,37 @@ public sealed class DurableEffectPlanHydrationTests
     }
 
     /// <summary>
-    /// Records the shape of every <c>ReadPlanAsync</c> result and turns it into a SQL statement
-    /// count with the audited statement model, the same derivation the wave-5 reconnaissance used
-    /// so the numbers stay comparable to its baseline.
+    /// Counts the SQL statements a store connection actually compiles, by installing a SQLite
+    /// authorizer on it. SQLite consults the authorizer while preparing a statement and raises
+    /// <c>SQLITE_SELECT</c> exactly once for each SELECT it compiles, so the tally is the read
+    /// path's real statement count — nothing here models what the implementation ought to cost, and
+    /// a per-row implementation reports its per-row tally.
     /// <para>
-    /// Set-based hydration issues one statement per table — intents, receipts, lifecycle events —
-    /// and the plan's size does not enter the model at all. Item-at-a-time hydration cost
-    /// <c>1 + 2N + R</c>: one identity query, then a core row and an event history for every item
-    /// plus a receipt for every settled one.
-    /// </para>
-    /// <para>
-    /// The model is audited, not observed: Microsoft.Data.Sqlite exposes no statement hook, so
-    /// changing how <see cref="CanonicalEffectWorkStore.ReadPlanAsync"/> reaches the database means
-    /// changing <see cref="Statements"/> to match. What the assertion pins without help is that the
-    /// model has no term in the plan size.
+    /// The authorizer is the only statement-level hook SQLitePCLRaw exposes and it is per
+    /// connection, which is why the store hands its connections to
+    /// <see cref="CanonicalEffectWorkStore.ConnectionObserverForTesting"/>: it opens them itself,
+    /// with pooling off, so a test cannot otherwise reach the handle a read ran on.
     /// </para>
     /// </summary>
-    private sealed class PlanHydrationStatementCountingStore(IEffectWorkStore _inner)
+    private sealed class PreparedStatementCounter
     {
-        private readonly List<int> _planReadStatementCounts = [];
+        // Held for the lifetime of the counter: SQLite keeps calling this for as long as the
+        // connection lives, so it must not be collected once `Watch` returns.
+        private readonly delegate_authorizer _authorizer;
+        private int _statements;
 
-        public IReadOnlyList<int> PlanReadStatementCounts => _planReadStatementCounts;
+        public PreparedStatementCounter() => _authorizer = Authorize;
 
-        /// <summary>
-        /// One statement per table, with no term in the plan's size. The item-at-a-time model this
-        /// replaced was <c>1 + 2N + R</c>.
-        /// </summary>
-        public const int Statements = 3;
+        public int Statements => Volatile.Read(ref _statements);
 
-        public async Task<IReadOnlyList<EffectWorkItem>> ReadPlanAsync(
-            TransitionRunIdentity transitionRun,
-            CancellationToken cancellationToken)
+        public void Watch(SqliteConnection connection) => Assert.Equal(
+            raw.SQLITE_OK, raw.sqlite3_set_authorizer(connection.Handle, _authorizer, null));
+
+        private int Authorize(
+            object userData, int action, utf8z first, utf8z second, utf8z database, utf8z trigger)
         {
-            IReadOnlyList<EffectWorkItem> plan = await _inner.ReadPlanAsync(transitionRun, cancellationToken);
-            _planReadStatementCounts.Add(Statements);
-            return plan;
+            if (action == raw.SQLITE_SELECT) Interlocked.Increment(ref _statements);
+            return raw.SQLITE_OK;
         }
     }
 }
