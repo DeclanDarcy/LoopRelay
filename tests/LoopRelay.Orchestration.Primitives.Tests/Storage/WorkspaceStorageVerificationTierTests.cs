@@ -186,8 +186,8 @@ public sealed class WorkspaceStorageVerificationTierTests
                 $"schema:{LoopRelayWorkspaceDatabase.SchemaIdentity}",
                 $"family:{WorkspaceSchemaFamily.CanonicalWorkspace}",
                 $"version:{LoopRelayWorkspaceDatabase.CurrentSchemaVersion}",
-                $"shape:{WorkspaceSchemaShape.CanonicalV15Complete}",
-                $"shape-fingerprint:{LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint}",
+                $"shape:{WorkspaceSchemaShape.CanonicalV16Complete}",
+                $"shape-fingerprint:{LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint}",
                 $"bytes-sha256:{expectedHash}",
             ],
             deep.Evidence);

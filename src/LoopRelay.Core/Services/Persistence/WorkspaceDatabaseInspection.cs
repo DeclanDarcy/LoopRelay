@@ -14,7 +14,7 @@ public static class WorkspaceSchemaMigrationCatalog
         LoopRelayWorkspaceDatabase.CurrentSchemaVersion,
         LoopRelayWorkspaceDatabase.SchemaIdentity,
         LoopRelayWorkspaceDatabase.SchemaFamily,
-        LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint);
+        LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint);
 
     public static IReadOnlyList<int> Plan(int? sourceVersion)
     {
@@ -54,7 +54,7 @@ public sealed class WorkspaceSchemaMigrationExecutor
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
 
         // EnsureSchemaAsync has just verified this database's shape - inside its own transaction on
-        // the migration path (VerifyCanonicalV15ShapeAsync), or against the stamp on the memoized
+        // the migration path (VerifyCanonicalV16ShapeAsync), or against the stamp on the memoized
         // fast path. Re-running the full ~190-probe classification here only to describe what we
         // already proved is the redundant second inspection PERF-15 calls out. The stamped read
         // reports the identical result (see InspectStampedAsync), and its "trusts the stamp" caveat

@@ -126,7 +126,7 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
             health = StorageHealth.Unsupported;
             actions.Add($"Use a LoopRelay version supporting schema v{schema.Version}.");
         }
-        else if (schema.Shape == WorkspaceSchemaShape.CanonicalV15Complete &&
+        else if (schema.Shape == WorkspaceSchemaShape.CanonicalV16Complete &&
                  unresolved.Count == 0 && interrupted.Length == 0)
         {
             health = StorageHealth.Healthy;
@@ -136,7 +136,7 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
                      WorkspaceSchemaShape.CorruptCanonicalV9 or WorkspaceSchemaShape.CorruptCanonicalV10 or
                      WorkspaceSchemaShape.CorruptCanonicalV11 or WorkspaceSchemaShape.CorruptCanonicalV12 or
                      WorkspaceSchemaShape.CorruptCanonicalV13 or WorkspaceSchemaShape.CorruptCanonicalV14 or
-                     WorkspaceSchemaShape.CorruptCanonicalV15))
+                     WorkspaceSchemaShape.CorruptCanonicalV15 or WorkspaceSchemaShape.CorruptCanonicalV16))
         {
             health = StorageHealth.ActionRequired;
             string chain = string.Join(" -> ", WorkspaceSchemaMigrationCatalog.Plan(schema.Version));

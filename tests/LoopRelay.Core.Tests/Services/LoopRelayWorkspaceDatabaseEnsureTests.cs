@@ -7,7 +7,7 @@ namespace LoopRelay.Core.Tests.Services;
 /// <summary>
 /// Covers PERF-01: <see cref="LoopRelayWorkspaceDatabase.EnsureSchemaAsync"/> must memoize a
 /// successful full verification per (path, stamp) so repeat calls on an unchanged, already
-/// canonical-v15 database skip both the ~190-probe structural inspection and any write
+/// canonical-v16 database skip both the ~190-probe structural inspection and any write
 /// transaction, while still detecting a stamp that has moved and still enforcing fail-closed
 /// behavior on first contact.
 /// </summary>

@@ -195,20 +195,42 @@ public sealed class CanonicalDecisionRecoveryStore(
         return latest is not null && !Terminal(latest.Status) ? latest : null;
     }
 
+    /// <summary>
+    /// The warm-session latest-attempt lookup, verbatim as executed (PERF-20).
+    ///
+    /// <para>
+    /// This used to join <c>canonical_recovery_action_events</c> to <c>canonical_recovery_cases</c>
+    /// on <c>json_extract(event.document_json, '$.scopeId') = recovery_case.scope_identity</c>,
+    /// which no index can serve: every candidate row had to be read and its JSON parsed. The scope
+    /// is now denormalised into the indexed <c>scope_id</c> column, and the case table's only
+    /// remaining role - gating on a warm-session case existing for this scope - is expressed as the
+    /// <c>EXISTS</c> guard it always semantically was. The inner join could match several case rows
+    /// for one scope, but every duplicate paired with the same ordered event set, so
+    /// <c>ORDER BY event.event_id DESC LIMIT 1</c> selected the identical row either way.
+    /// </para>
+    ///
+    /// <para>
+    /// Exposed to the test assembly so the index-backing assertion can
+    /// <c>EXPLAIN QUERY PLAN</c> the real statement rather than a copy of it.
+    /// </para>
+    /// </summary>
+    internal const string LatestAttemptByScopeSql = """
+        SELECT event.document_json
+        FROM canonical_recovery_action_events AS event
+        WHERE event.scope_id = $scope
+          AND event.document_json IS NOT NULL
+          AND EXISTS (
+              SELECT 1 FROM canonical_recovery_cases AS recovery_case
+              WHERE recovery_case.scope_kind = 'WarmSession'
+                AND recovery_case.scope_identity = $scope)
+        ORDER BY event.event_id DESC LIMIT 1;
+        """;
+
     public async Task<RecoveryAttempt?> ReadLatestAttemptAsync(string scopeId, CancellationToken cancellationToken = default)
     {
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT event.document_json
-            FROM canonical_recovery_cases AS recovery_case
-            JOIN canonical_recovery_action_events AS event
-              ON json_extract(event.document_json, '$.scopeId') = recovery_case.scope_identity
-            WHERE recovery_case.scope_kind = 'WarmSession'
-              AND recovery_case.scope_identity = $scope
-              AND event.document_json IS NOT NULL
-            ORDER BY event.event_id DESC LIMIT 1;
-            """;
+        command.CommandText = LatestAttemptByScopeSql;
         command.Parameters.AddWithValue("$scope", scopeId);
         object? value = await command.ExecuteScalarAsync(cancellationToken);
         return value is string json ? JsonSerializer.Deserialize<RecoveryAttempt>(json, JsonOptions) : null;
@@ -220,16 +242,21 @@ public sealed class CanonicalDecisionRecoveryStore(
             ?? throw new InvalidOperationException("Canonical warm-session recovery case was not persisted before action journaling.");
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
+        // `scope_id` is the denormalised, indexed copy of the document's `$.scopeId`; `document_json`
+        // stays the source of truth (it is what the read path deserializes), so the column is
+        // written from the same `attempt.ScopeId` that serializes into the document.
         command.CommandText = """
             INSERT INTO canonical_recovery_action_events (
-                action_id, plan_id, lifecycle, explanation, evidence_json, document_json, recorded_at
-            ) VALUES ($action, $plan, $lifecycle, $explanation, '[]', $document, $recorded);
+                action_id, plan_id, lifecycle, explanation, evidence_json, document_json,
+                scope_id, recorded_at
+            ) VALUES ($action, $plan, $lifecycle, $explanation, '[]', $document, $scope, $recorded);
             """;
         Add(command,
             ("$action", attempt.AttemptId), ("$plan", attempt.PlanDigest ?? $"attempt:{attempt.AttemptId}"),
             ("$lifecycle", Lifecycle(attempt.Status).ToString()),
             ("$explanation", $"Rich session recovery state: {attempt.Status}."),
-            ("$document", JsonSerializer.Serialize(attempt, JsonOptions)), ("$recorded", Format(attempt.UpdatedAt)));
+            ("$document", JsonSerializer.Serialize(attempt, JsonOptions)), ("$scope", attempt.ScopeId),
+            ("$recorded", Format(attempt.UpdatedAt)));
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 

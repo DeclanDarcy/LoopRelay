@@ -33,6 +33,7 @@ public enum WorkspaceSchemaShape
     CanonicalV13Complete,
     CanonicalV14Complete,
     CanonicalV15Complete,
+    CanonicalV16Complete,
     UnknownV9Shape,
     CorruptCanonicalV9,
     CorruptCanonicalV10,
@@ -41,6 +42,7 @@ public enum WorkspaceSchemaShape
     CorruptCanonicalV13,
     CorruptCanonicalV14,
     CorruptCanonicalV15,
+    CorruptCanonicalV16,
     Unknown,
 }
 
@@ -69,7 +71,7 @@ public static class LoopRelayWorkspaceDatabase
     public const string SchemaIdentity = "looprelay.workspace-state";
     public const string SchemaFamily = "CanonicalWorkspace";
     public const string SchemaShapeMetadataKey = "schema_shape";
-    public const int CurrentSchemaVersion = 15;
+    public const int CurrentSchemaVersion = 16;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
     /// <summary>
@@ -91,6 +93,7 @@ public static class LoopRelayWorkspaceDatabase
     public static readonly string CanonicalV13ShapeFingerprint;
     public static readonly string CanonicalV14ShapeFingerprint;
     public static readonly string CanonicalV15ShapeFingerprint;
+    public static readonly string CanonicalV16ShapeFingerprint;
 
     /// <summary>
     /// Per-process memo of schemas already verified complete, keyed by the full path of the
@@ -118,7 +121,7 @@ public static class LoopRelayWorkspaceDatabase
     /// <summary>
     /// Test-only observability: how many individual shape-requirement probes have been issued
     /// (one per table/column/index/foreign-key check). <see cref="InspectSchemaAsync"/> issues
-    /// ~190 of these per call on a canonical-v15 database; <see cref="InspectStampedAsync"/> must
+    /// ~190 of these per call on a canonical-v16 database; <see cref="InspectStampedAsync"/> must
     /// issue none when it can answer from the stamp.
     /// </summary>
     internal static int ShapeRequirementProbes;
@@ -294,6 +297,17 @@ public static class LoopRelayWorkspaceDatabase
             .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
             .ToArray();
 
+        // v16 denormalises `scopeId` out of `canonical_recovery_action_events.document_json` into a
+        // real, indexed column so the warm-session recovery lookup stops joining on
+        // `json_extract(...)`, which no index can serve (PERF-20).
+        CanonicalV16Requirements = CanonicalV15Requirements.Concat(
+            [
+                ShapeRequirement.Column("canonical_recovery_action_events", "scope_id", "text"),
+                ShapeRequirement.Index("idx_recovery_action_events_scope"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
         CanonicalV9ShapeFingerprint = ComputeShapeFingerprint(CanonicalV9Requirements.Select(requirement => requirement.Token));
         CanonicalV10ShapeFingerprint = ComputeShapeFingerprint(CanonicalV10Requirements.Select(requirement => requirement.Token));
         CanonicalV11ShapeFingerprint = ComputeShapeFingerprint(CanonicalV11Requirements.Select(requirement => requirement.Token));
@@ -301,6 +315,7 @@ public static class LoopRelayWorkspaceDatabase
         CanonicalV13ShapeFingerprint = ComputeShapeFingerprint(CanonicalV13Requirements.Select(requirement => requirement.Token));
         CanonicalV14ShapeFingerprint = ComputeShapeFingerprint(CanonicalV14Requirements.Select(requirement => requirement.Token));
         CanonicalV15ShapeFingerprint = ComputeShapeFingerprint(CanonicalV15Requirements.Select(requirement => requirement.Token));
+        CanonicalV16ShapeFingerprint = ComputeShapeFingerprint(CanonicalV16Requirements.Select(requirement => requirement.Token));
     }
 
     public static string Resolve(Repository repository)
@@ -336,7 +351,7 @@ public static class LoopRelayWorkspaceDatabase
         {
             // Multi-process stance is unresolved by design: trust the in-memory memo only as far
             // as this cheap re-read of the stamp confirms nothing else has moved it since. The
-            // memo only ever holds a CanonicalV15Complete stamp, so this is exactly the
+            // memo only ever holds a CanonicalV16Complete stamp, so this is exactly the
             // structurally-complete branch below, without paying for the ~190-probe inspection or
             // identity re-validation.
             await RunStructurallyCompleteBranchAsync(connection, cacheKey, cancellationToken);
@@ -365,11 +380,11 @@ public static class LoopRelayWorkspaceDatabase
         string? preservedWorkspaceId = await ValidateExistingWorkspaceIdentityAsync(
             connection,
             cancellationToken);
-        bool structurallyComplete = inspection.Shape == WorkspaceSchemaShape.CanonicalV15Complete;
+        bool structurallyComplete = inspection.Shape == WorkspaceSchemaShape.CanonicalV16Complete;
         if (structurallyComplete && preservedWorkspaceId is null)
         {
             throw new InvalidOperationException(
-                "Canonical v15 is stamped complete but has no immutable workspace identity.");
+                "Canonical v16 is stamped complete but has no immutable workspace identity.");
         }
 
         if (structurallyComplete)
@@ -393,6 +408,8 @@ public static class LoopRelayWorkspaceDatabase
             await ExecuteAsync(connection, migrationTransaction, SchemaV14Sql, cancellationToken);
             await EnsureV14ColumnsAsync(connection, migrationTransaction, cancellationToken);
             await ExecuteAsync(connection, migrationTransaction, SchemaV15Sql, cancellationToken);
+            await EnsureV16ColumnsAsync(connection, migrationTransaction, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV16Sql, cancellationToken);
             if (legacyResume is not null)
             {
                 await ImportLegacyResumeAsync(connection, migrationTransaction, legacyResume, cancellationToken);
@@ -404,7 +421,7 @@ public static class LoopRelayWorkspaceDatabase
                 inspection,
                 preservedWorkspaceId,
                 cancellationToken);
-            await VerifyCanonicalV15ShapeAsync(connection, migrationTransaction, cancellationToken);
+            await VerifyCanonicalV16ShapeAsync(connection, migrationTransaction, cancellationToken);
             await RecordSchemaConvergenceAsync(
                 connection,
                 migrationTransaction,
@@ -420,12 +437,12 @@ public static class LoopRelayWorkspaceDatabase
             throw;
         }
 
-        VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV15ShapeFingerprint);
+        VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV16ShapeFingerprint);
     }
 
     /// <summary>
     /// The structurally-complete branch: reached either directly from the memoized fast path
-    /// (stamp matched, so this is known to be CanonicalV15Complete without re-inspecting), or
+    /// (stamp matched, so this is known to be CanonicalV16Complete without re-inspecting), or
     /// from a full verification pass that just confirmed the same thing.
     ///
     /// <para>
@@ -467,7 +484,7 @@ public static class LoopRelayWorkspaceDatabase
             // The literal read-only fast path: nothing to import, nothing to repair, so no write
             // transaction is opened at all - this connection never touches the -wal/-shm side
             // files next to the database.
-            VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV15ShapeFingerprint);
+            VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV16ShapeFingerprint);
             return;
         }
 
@@ -489,7 +506,7 @@ public static class LoopRelayWorkspaceDatabase
             throw;
         }
 
-        VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV15ShapeFingerprint);
+        VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV16ShapeFingerprint);
     }
 
     /// <summary>
@@ -595,12 +612,18 @@ public static class LoopRelayWorkspaceDatabase
 
             if (version == CurrentSchemaVersion)
             {
-                return await ClassifyV15ShapeAsync(
+                return await ClassifyV16ShapeAsync(
                     connection,
                     identity,
                     hasExplicitLineage: true,
                     stampedShape,
                     cancellationToken);
+            }
+
+            if (version == 15)
+            {
+                return await ClassifyV15ShapeAsync(
+                    connection, identity, hasExplicitLineage: true, stampedShape, cancellationToken);
             }
 
             if (version == 14)
@@ -694,12 +717,18 @@ public static class LoopRelayWorkspaceDatabase
 
         if (version == CurrentSchemaVersion)
         {
-            return await ClassifyV15ShapeAsync(
+            return await ClassifyV16ShapeAsync(
                 connection,
                 schemaIdentity: null,
                 hasExplicitLineage: false,
                 stampedShape,
                 cancellationToken);
+        }
+
+        if (version == 15)
+        {
+            return await ClassifyV15ShapeAsync(
+                connection, schemaIdentity: null, hasExplicitLineage: false, stampedShape, cancellationToken);
         }
 
         if (version == 14)
@@ -779,10 +808,10 @@ public static class LoopRelayWorkspaceDatabase
     /// The returned <see cref="WorkspaceSchemaInspection"/> is field-for-field identical to what
     /// <see cref="InspectSchemaAsync"/> returns for the same database. That equivalence holds by
     /// construction rather than coincidence: the full path only reports
-    /// <see cref="WorkspaceSchemaShape.CanonicalV15Complete"/> when every
-    /// <c>CanonicalV15Requirements</c> token is satisfied, and in exactly that case its observed
+    /// <see cref="WorkspaceSchemaShape.CanonicalV16Complete"/> when every
+    /// <c>CanonicalV16Requirements</c> token is satisfied, and in exactly that case its observed
     /// fingerprint is the hash of that same complete token set - which is
-    /// <see cref="CanonicalV15ShapeFingerprint"/>.
+    /// <see cref="CanonicalV16ShapeFingerprint"/>.
     /// </para>
     ///
     /// <para>
@@ -814,7 +843,7 @@ public static class LoopRelayWorkspaceDatabase
                 string.Equals(identity, SchemaIdentity, StringComparison.Ordinal) &&
                 string.Equals(family, SchemaFamily, StringComparison.Ordinal) &&
                 version == CurrentSchemaVersion &&
-                string.Equals(stampedShape, CanonicalV15ShapeFingerprint, StringComparison.Ordinal);
+                string.Equals(stampedShape, CanonicalV16ShapeFingerprint, StringComparison.Ordinal);
             if (!wellFormedStamp)
             {
                 return await InspectSchemaAsync(connection, cancellationToken);
@@ -825,9 +854,9 @@ public static class LoopRelayWorkspaceDatabase
                 WorkspaceSchemaFamily.CanonicalWorkspace,
                 CurrentSchemaVersion,
                 true,
-                WorkspaceSchemaShape.CanonicalV15Complete,
-                CanonicalV15ShapeFingerprint,
-                "Canonical workspace v15 lineage and complete physical-shape fingerprint verified.");
+                WorkspaceSchemaShape.CanonicalV16Complete,
+                CanonicalV16ShapeFingerprint,
+                "Canonical workspace v16 lineage and complete physical-shape fingerprint verified.");
         }
         catch (SqliteException)
         {
@@ -1103,6 +1132,25 @@ public static class LoopRelayWorkspaceDatabase
             "Canonical workspace v15 lineage and complete physical-shape fingerprint verified.");
     }
 
+    private static async Task<WorkspaceSchemaInspection> ClassifyV16ShapeAsync(
+        SqliteConnection connection, string? schemaIdentity, bool hasExplicitLineage,
+        string? stampedShape, CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection, CanonicalV16Requirements, transaction: null, cancellationToken);
+        string observedFingerprint = ComputeShapeFingerprint(satisfied);
+        bool validStamp = hasExplicitLineage &&
+            string.Equals(stampedShape, CanonicalV16ShapeFingerprint, StringComparison.Ordinal) &&
+            HasAll(satisfied, CanonicalV16Requirements);
+        if (!validStamp)
+            return new WorkspaceSchemaInspection(schemaIdentity, WorkspaceSchemaFamily.Unknown, 16,
+                hasExplicitLineage, WorkspaceSchemaShape.CorruptCanonicalV16, observedFingerprint,
+                "Canonical-v16 shape stamp is missing its declared recovery-scope contract or lineage; mutation is blocked.");
+        return new WorkspaceSchemaInspection(SchemaIdentity, WorkspaceSchemaFamily.CanonicalWorkspace, 16, true,
+            WorkspaceSchemaShape.CanonicalV16Complete, observedFingerprint,
+            "Canonical workspace v16 lineage and complete physical-shape fingerprint verified.");
+    }
+
     private static async Task<string?> ValidateExistingWorkspaceIdentityAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
@@ -1150,17 +1198,17 @@ public static class LoopRelayWorkspaceDatabase
         return scalar is null or DBNull ? null : Convert.ToString(scalar, CultureInfo.InvariantCulture);
     }
 
-    private static async Task VerifyCanonicalV15ShapeAsync(
+    private static async Task VerifyCanonicalV16ShapeAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         CancellationToken cancellationToken)
     {
         HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
             connection,
-            CanonicalV15Requirements,
+            CanonicalV16Requirements,
             transaction,
             cancellationToken);
-        string[] missing = CanonicalV15Requirements
+        string[] missing = CanonicalV16Requirements
             .Where(requirement => !satisfied.Contains(requirement.Token))
             .Select(requirement => requirement.Token)
             .Distinct(StringComparer.Ordinal)
@@ -1169,16 +1217,16 @@ public static class LoopRelayWorkspaceDatabase
         if (missing.Length > 0)
         {
             throw new InvalidOperationException(
-                "Canonical-v15 migration verification failed. Missing contract requirements: " +
+                "Canonical-v16 migration verification failed. Missing contract requirements: " +
                 string.Join(", ", missing.Take(12)) +
                 (missing.Length > 12 ? $" (+{missing.Length - 12} more)." : "."));
         }
 
         string fingerprint = ComputeShapeFingerprint(satisfied);
-        if (!string.Equals(fingerprint, CanonicalV15ShapeFingerprint, StringComparison.Ordinal))
+        if (!string.Equals(fingerprint, CanonicalV16ShapeFingerprint, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Canonical-v15 migration produced fingerprint '{fingerprint}', expected '{CanonicalV15ShapeFingerprint}'.");
+                $"Canonical-v16 migration produced fingerprint '{fingerprint}', expected '{CanonicalV16ShapeFingerprint}'.");
         }
     }
 
@@ -1328,7 +1376,7 @@ public static class LoopRelayWorkspaceDatabase
             new("schema_identity", SchemaIdentity),
             new("schema_family", SchemaFamily),
             new("schema_version", CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture)),
-            new(SchemaShapeMetadataKey, CanonicalV15ShapeFingerprint),
+            new(SchemaShapeMetadataKey, CanonicalV16ShapeFingerprint),
         ])
         {
             await ExecuteAsync(
@@ -1405,11 +1453,11 @@ public static class LoopRelayWorkspaceDatabase
             ON CONFLICT(convergence_id) DO NOTHING;
             """,
             cancellationToken,
-            ("$convergence_id", $"canonical-v15:{workspaceId}:{inspection.Shape}:{sourceFingerprint}"),
+            ("$convergence_id", $"canonical-v16:{workspaceId}:{inspection.Shape}:{sourceFingerprint}"),
             ("$source_shape", inspection.Shape.ToString()),
             ("$source_fingerprint", sourceFingerprint),
             ("$source_version", inspection.Version),
-            ("$target_fingerprint", CanonicalV15ShapeFingerprint),
+            ("$target_fingerprint", CanonicalV16ShapeFingerprint),
             ("$workspace_id", workspaceId),
             ("$completed_at", completedAt));
     }
@@ -1446,6 +1494,20 @@ public static class LoopRelayWorkspaceDatabase
         await AddColumnIfMissingAsync(connection, transaction, "attempts", "agent_role_policy_id",
             "text", cancellationToken);
     }
+
+    /// <summary>
+    /// v16 adds the denormalised warm-session scope key to the recovery action ledger. The column
+    /// is deliberately <b>nullable</b>: <c>canonical_recovery_action_events.document_json</c> is
+    /// itself nullable (the plain action-journal writer never populates it), and a document that
+    /// carries no <c>scopeId</c> member extracts to NULL. A <c>NOT NULL</c> declaration would fail
+    /// the migration on the first such row in a real workspace.
+    /// </summary>
+    private static async Task EnsureV16ColumnsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken) =>
+        await AddColumnIfMissingAsync(connection, transaction, "canonical_recovery_action_events",
+            "scope_id", "text", cancellationToken);
 
     public static async Task<string> ReadWorkspaceIdentityAsync(
         SqliteConnection connection,
@@ -1693,6 +1755,7 @@ public static class LoopRelayWorkspaceDatabase
     private static readonly IReadOnlyList<ShapeRequirement> CanonicalV13Requirements;
     private static readonly IReadOnlyList<ShapeRequirement> CanonicalV14Requirements;
     private static readonly IReadOnlyList<ShapeRequirement> CanonicalV15Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV16Requirements;
 
     private enum ShapeRequirementKind
     {
@@ -2907,6 +2970,32 @@ public static class LoopRelayWorkspaceDatabase
             ON canonical_completion_decisions(root_run_id, decided_at);
         CREATE INDEX IF NOT EXISTS idx_completion_settlements_plan
             ON canonical_completion_settlements(plan_id, settled_at);
+        """;
+
+    /// <summary>
+    /// v16 backfill + index for the denormalised warm-session recovery scope (PERF-20). Runs after
+    /// <c>EnsureV16ColumnsAsync</c> has added the column, inside the same migration transaction.
+    ///
+    /// <para>
+    /// <c>document_json</c> stays the source of truth for the attempt itself - the read path still
+    /// deserializes it. <c>scope_id</c> is purely a derived lookup key, so the backfill copies out
+    /// of the document and never the other way round. Rows with no document, or a document with no
+    /// <c>scopeId</c> member, extract to NULL and stay NULL: they are exactly the rows the lookup
+    /// already excluded via <c>document_json IS NOT NULL</c>.
+    /// </para>
+    ///
+    /// <para>
+    /// The <c>WHERE scope_id IS NULL</c> guard keeps re-running the convergence a no-op over rows
+    /// an earlier pass already populated, so this never rewrites a fact row twice.
+    /// </para>
+    /// </summary>
+    private const string SchemaV16Sql = """
+        UPDATE canonical_recovery_action_events
+        SET scope_id = json_extract(document_json, '$.scopeId')
+        WHERE scope_id IS NULL AND document_json IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_recovery_action_events_scope
+            ON canonical_recovery_action_events(scope_id, event_id);
         """;
 
     private const string SchemaSql = """

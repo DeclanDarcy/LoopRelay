@@ -6,7 +6,7 @@ namespace LoopRelay.Core.Tests.Services;
 
 /// <summary>
 /// Covers PERF-15: <see cref="LoopRelayWorkspaceDatabase.InspectStampedAsync"/> must answer from
-/// the <c>schema_metadata</c> stamp alone on a well-formed canonical-v15 database - issuing none
+/// the <c>schema_metadata</c> stamp alone on a well-formed canonical-v16 database - issuing none
 /// of the ~190 structural probes <see cref="LoopRelayWorkspaceDatabase.InspectSchemaAsync"/> runs -
 /// while remaining indistinguishable from full classification in its result, and falling back to
 /// full classification whenever the stamp is absent, malformed, or internally inconsistent.
@@ -28,7 +28,7 @@ public sealed class LoopRelayWorkspaceDatabaseInspectStampedTests
         WorkspaceSchemaInspection stamped =
             await LoopRelayWorkspaceDatabase.InspectStampedAsync(connection);
 
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, stamped.Shape);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV16Complete, stamped.Shape);
         Assert.Equal(baseline, LoopRelayWorkspaceDatabase.ShapeRequirementProbes);
 
         // Guards against a vacuous pass: if the counter never moved for anything, the assertion
@@ -109,7 +109,7 @@ public sealed class LoopRelayWorkspaceDatabaseInspectStampedTests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        // The stamp now disagrees with the physical shape. Trusting it would report a healthy v15
+        // The stamp now disagrees with the physical shape. Trusting it would report a healthy v16
         // database; full classification must run instead and reject it, because corrupt-stamp
         // detection has to keep blocking mutation.
         await ExecuteAsync(
@@ -119,7 +119,7 @@ public sealed class LoopRelayWorkspaceDatabaseInspectStampedTests
         WorkspaceSchemaInspection full = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
         WorkspaceSchemaInspection stamped = await LoopRelayWorkspaceDatabase.InspectStampedAsync(connection);
 
-        Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV15, stamped.Shape);
+        Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV16, stamped.Shape);
         Assert.Equal(full, stamped);
     }
 
@@ -133,7 +133,7 @@ public sealed class LoopRelayWorkspaceDatabaseInspectStampedTests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        // A stamp that still claims a complete v15 shape while the physical shape underneath it has
+        // A stamp that still claims a complete v16 shape while the physical shape underneath it has
         // lost a required table. This is the case the fast path cannot detect by construction (it
         // reads only the stamp), so it is recorded here as the deliberate, documented limit of the
         // trade-off rather than left as an unexamined gap: InspectStampedAsync reports healthy.
@@ -142,8 +142,8 @@ public sealed class LoopRelayWorkspaceDatabaseInspectStampedTests
         WorkspaceSchemaInspection full = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
         WorkspaceSchemaInspection stamped = await LoopRelayWorkspaceDatabase.InspectStampedAsync(connection);
 
-        Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV15, full.Shape);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, stamped.Shape);
+        Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV16, full.Shape);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV16Complete, stamped.Shape);
     }
 
     private static Repository CreateRepository()

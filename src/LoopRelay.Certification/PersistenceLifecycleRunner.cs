@@ -30,10 +30,10 @@ public sealed class PersistenceLifecycleRunner
             (tables, columns) = await InspectSchemaAsync(database, cancellationToken);
             WorkspaceSchemaInspection schemaInspection = await InspectCanonicalSchemaAsync(database, cancellationToken);
             bool canonicalInventory = schemaInspection.Version == LoopRelayWorkspaceDatabase.CurrentSchemaVersion &&
-                schemaInspection.Shape == WorkspaceSchemaShape.CanonicalV15Complete &&
+                schemaInspection.Shape == WorkspaceSchemaShape.CanonicalV16Complete &&
                 string.Equals(
                     schemaInspection.ShapeFingerprint,
-                    LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint,
+                    LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint,
                     StringComparison.Ordinal) &&
                 columns.Count == tables.Count && columns.All(pair => pair.Value.Count > 0);
             string workspaceIdBefore = await WorkspaceIdAsync(database, cancellationToken);
@@ -50,7 +50,7 @@ public sealed class PersistenceLifecycleRunner
                 $"columns:{columns.Sum(pair => pair.Value.Count)}",
                 $"schema-version:{await SchemaVersionAsync(database, cancellationToken)}",
                 $"schema-shape:{schemaInspection.Shape}",
-                $"shape-fingerprint-match:{string.Equals(schemaInspection.ShapeFingerprint, LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, StringComparison.Ordinal)}",
+                $"shape-fingerprint-match:{string.Equals(schemaInspection.ShapeFingerprint, LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, StringComparison.Ordinal)}",
                 $"workspace-id-digest:{Hash(workspaceIdBefore)}"));
 
             Dictionary<string, string> verifyBefore = SnapshotFiles(healthy);
