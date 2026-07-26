@@ -2477,6 +2477,27 @@ public static class LoopRelayWorkspaceDatabase
             ON history_evidence_items(evidence_set_id, evidence_kind);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_loop_history_history_id
             ON loop_history(history_id) WHERE history_id IS NOT NULL;
+        -- The structural backstop for loop-history convergence. LedgerLoopHistoryStore.AppendAsync
+        -- converges on (kind, content_hash) with a read taken before its transaction opens, which
+        -- makes a re-executed rotation idempotent but only for a single writer: two appends racing
+        -- that read would both pass it and both insert, minting the second history fact, evidence
+        -- set and projection intent that convergence exists to prevent. This index makes the
+        -- invariant true by construction instead of by a read a later refactor could remove.
+        --
+        -- Deliberately partial on the same predicate the pre-check uses. Canonical facts are the
+        -- only rows carrying a history_id; rows without one are written by other paths that may
+        -- legitimately repeat a content hash - SqliteRecoveryStore's decision-turn append stores
+        -- Sha256(output) under kind 'decisions' with no history_id, so two recovery turns emitting
+        -- byte-identical output are a working flow a total index would turn into a crash. Matching
+        -- the pre-check exactly keeps the index a backstop for what convergence already covers and
+        -- nothing more.
+        --
+        -- No ON CONFLICT clause targets this index anywhere, and that is intentional: SQLite
+        -- resolves a conflict target at prepare time, so an INSERT naming one would fail outright
+        -- on any database that somehow lacks the index, whereas an unreferenced index leaves every
+        -- existing statement byte-for-byte unchanged.
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_loop_history_kind_content_hash
+            ON loop_history(kind, content_hash) WHERE history_id IS NOT NULL;
         CREATE INDEX IF NOT EXISTS idx_history_evidence_provider
             ON history_evidence_items(provider, provider_thread_id, provider_turn_id);
         CREATE INDEX IF NOT EXISTS idx_history_evidence_recovery

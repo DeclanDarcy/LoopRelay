@@ -172,6 +172,92 @@ public sealed class LedgerLoopHistoryStoreTests
             "SELECT COUNT(*) FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Handoff';"));
     }
 
+    /// <summary>
+    /// Convergence must not rest solely on the pre-check in
+    /// <see cref="LedgerLoopHistoryStore.AppendAsync"/>: that read happens outside the transaction,
+    /// so two writers racing it would both pass and both insert. This asserts the storage-layer
+    /// backstop is physically present on a database built by the ordinary schema path - not merely
+    /// present in a DDL string - and that it actually rejects the second row.
+    /// </summary>
+    [Fact]
+    public async Task A_fresh_database_carries_the_unique_index_backing_history_convergence()
+    {
+        Harness harness = await NewAsync();
+
+        await using SqliteConnection connection = await OpenAsync(harness.Repository, readOnly: true);
+        string? definition = await ScalarStringAsync(
+            connection,
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_loop_history_kind_content_hash';");
+
+        Assert.NotNull(definition);
+        Assert.Contains("UNIQUE", definition, StringComparison.Ordinal);
+        Assert.Contains("loop_history(kind, content_hash)", definition, StringComparison.Ordinal);
+        Assert.Contains("WHERE history_id IS NOT NULL", definition, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The backstop enforces, and enforces only over canonical rows. A second canonical fact sharing
+    /// a (kind, content_hash) is refused by the database even when the pre-check is bypassed
+    /// entirely; a row without a <c>history_id</c> is still admitted, because non-canonical writers
+    /// (notably <c>SqliteRecoveryStore</c>'s decision-turn append) may legitimately repeat a content
+    /// hash and a total index would convert that working flow into a crash.
+    /// </summary>
+    [Fact]
+    public async Task The_backstop_refuses_a_second_canonical_row_but_admits_legacy_rows()
+    {
+        Harness harness = await NewAsync();
+        LoopHistoryRecord fact = await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Decisions, "decided once", harness.Causality));
+
+        await using SqliteConnection connection = await OpenAsync(harness.Repository, readOnly: false);
+        SqliteException rejected = await Assert.ThrowsAsync<SqliteException>(() => InsertRawAsync(
+            connection,
+            sequence: fact.Sequence + 1,
+            logicalPath: ".agents/decisions/decisions.9001.md",
+            contentHash: fact.ContentHash,
+            historyId: HistoryFactIdentity.New().Value));
+
+        // SQLite reports a violated index either by its columns or by its name depending on the
+        // build; both spellings carry `content_hash`, and no other unique constraint on this table
+        // mentions it.
+        Assert.Equal(19, rejected.SqliteErrorCode);
+        Assert.Contains("UNIQUE constraint failed", rejected.Message, StringComparison.Ordinal);
+        Assert.Contains("content_hash", rejected.Message, StringComparison.Ordinal);
+
+        // The same collision without a canonical identity falls outside the partial predicate.
+        await InsertRawAsync(
+            connection,
+            sequence: fact.Sequence + 2,
+            logicalPath: ".agents/decisions/decisions.9002.md",
+            contentHash: fact.ContentHash,
+            historyId: null);
+        Assert.Equal(2L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM loop_history;"));
+    }
+
+    /// <summary>
+    /// Writes a <c>loop_history</c> row directly, bypassing the store's pre-check, so the database
+    /// constraint is what is under test rather than the read in front of it.
+    /// </summary>
+    private static async Task InsertRawAsync(
+        SqliteConnection connection,
+        long sequence,
+        string logicalPath,
+        string contentHash,
+        string? historyId)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO loop_history (kind, sequence, logical_path, body, content_hash, created_at, history_id)
+            VALUES ('Decisions', $sequence, $logical_path, 'decided once', $content_hash,
+                    '2026-01-01T00:00:00.0000000+00:00', $history_id);
+            """;
+        command.Parameters.AddWithValue("$sequence", sequence);
+        command.Parameters.AddWithValue("$logical_path", logicalPath);
+        command.Parameters.AddWithValue("$content_hash", contentHash);
+        command.Parameters.AddWithValue("$history_id", (object?)historyId ?? DBNull.Value);
+        await command.ExecuteNonQueryAsync();
+    }
+
     private static async Task<Harness> NewAsync()
     {
         string root = Directory.CreateTempSubdirectory("cc-cli-ledger-history").FullName;
