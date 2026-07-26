@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
@@ -32,7 +31,6 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
 
     private string? _cachedDate;
     private string? _cachedFile;
-    private long _cachedLength;
 
     /// <summary>Test-only observability: how many times this instance has run the O(files)
     /// candidate scan. The load-bearing assertion for this task is that two same-day appends
@@ -68,7 +66,6 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
             string date = _clock.UtcNow.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             string activeFile = ResolveActiveFileLocked(date, forceRescan);
             File.AppendAllText(activeFile, line + "\n");
-            _cachedLength += Encoding.UTF8.GetByteCount(line) + 1;
             return true;
         }
         catch (IOException)
@@ -87,7 +84,6 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
     {
         _cachedDate = null;
         _cachedFile = null;
-        _cachedLength = 0;
     }
 
     private string ResolveActiveFileLocked(string date, bool forceRescan)
@@ -98,7 +94,6 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
             var info = new FileInfo(_cachedFile!);
             if (info.Exists && info.Length < _maxBytes)
             {
-                _cachedLength = info.Length;
                 return _cachedFile!;
             }
 
@@ -112,11 +107,6 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
         string resolved = ScanForActiveFile(date);
         _cachedDate = date;
         _cachedFile = resolved;
-        // ScanForActiveFile can return a brand-new (not-yet-created) candidate, whose FileInfo
-        // .Length getter throws FileNotFoundException rather than returning 0 - check .Exists
-        // first so a fresh file correctly seeds the cache at length 0.
-        var resolvedInfo = new FileInfo(resolved);
-        _cachedLength = resolvedInfo.Exists ? resolvedInfo.Length : 0;
         return resolved;
     }
 

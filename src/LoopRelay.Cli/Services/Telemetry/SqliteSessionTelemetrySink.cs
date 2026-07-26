@@ -25,6 +25,21 @@ namespace LoopRelay.Cli.Services.Telemetry;
 /// one - see <see cref="ApplyRequiredPragmas"/> for the one correctness wrinkle that follows from
 /// still opening a new connection on every append.
 /// </para>
+///
+/// <para>
+/// <b>Dependency on Core's stamp re-read (do not narrow the catch below):</b>
+/// <see cref="LoopRelayWorkspaceDatabase.EnsureSchemaAsync"/> memoizes verified schemas
+/// process-wide but, by design, still re-reads the stamped schema version on every single call as
+/// a cheap concession to the unresolved multi-process question. <see cref="schemaEnsured"/> skips
+/// even that cheap re-read for appends 2..N of this sink - once true, this sink calls
+/// <see cref="ApplyRequiredPragmas"/> instead of <c>EnsureSchemaAsync</c> and never asks Core to
+/// re-check the stamp again. That is an accepted risk (telemetry is fail-open; worst case is one
+/// lost row), but only because the broad <c>catch (SqliteException)</c> in <see cref="Append"/> is
+/// this sink's sole remaining self-healing path: it is what resets <see cref="schemaEnsured"/> so
+/// the next append re-verifies from scratch if the schema ever drifted out from under the cached
+/// flag. Narrowing that catch to exclude insert-level errors would remove that recovery path
+/// entirely - do not narrow it.
+/// </para>
 /// </summary>
 internal sealed class SqliteSessionTelemetrySink(Repository repository) : ISessionTelemetrySink
 {
@@ -94,6 +109,11 @@ internal sealed class SqliteSessionTelemetrySink(Repository repository) : ISessi
             }
             catch (SqliteException)
             {
+                // Deliberately broad: this is the only self-healing path for schemaEnsured (see
+                // the type-level doc comment). It fires for insert-level SQLite errors too, not
+                // just schema-verification ones - that is intentional, not a bug. Do not narrow
+                // this to a schema-specific SQLite error code; doing so would leave a drifted or
+                // corrupted schema permanently cached as "ensured" until the process restarts.
                 schemaEnsured = false;
             }
         }
@@ -107,6 +127,16 @@ internal sealed class SqliteSessionTelemetrySink(Repository repository) : ISessi
     /// short-lived deliberately, per the type-level design note), which still needs these two
     /// statements even though it does not need the far more expensive stamp/legacy-resume/repair
     /// checks <c>EnsureSchemaAsync</c> also performs on every call.
+    ///
+    /// <para>
+    /// <b><see cref="LoopRelayWorkspaceDatabase"/> is the source of truth for this pragma set</b>
+    /// (currently <c>PRAGMA foreign_keys</c> and <c>PRAGMA busy_timeout</c>, applied at the top of
+    /// <c>EnsureSchemaAsync</c> in <c>src/LoopRelay.Core/Services/Persistence/LoopRelayWorkspaceDatabase.cs</c>,
+    /// lines 327-331 as of this writing). Nothing enforces that this hand-copy stays in sync - if
+    /// Core's per-connection pragma set ever changes (e.g. a pragma added to enable WAL), this
+    /// method must be re-checked and updated to match, and the cited line numbers re-located
+    /// before being cited again.
+    /// </para>
     /// </summary>
     private static void ApplyRequiredPragmas(SqliteConnection connection)
     {

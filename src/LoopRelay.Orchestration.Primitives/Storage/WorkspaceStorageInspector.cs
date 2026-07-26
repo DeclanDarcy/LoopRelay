@@ -17,8 +17,23 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
     /// <c>FileSystemStorageVerifier</c> - cannot pollute a count under assertion elsewhere. Used
     /// to prove that <see cref="VerifyAsync"/> reuses the inventory's hash for the database file
     /// instead of hashing it a second time (PERF: hash workspace database once per verification).
+    ///
+    /// <para>
+    /// Exposed as a get-only property backed by <see cref="fileHashInvocations"/> (rather than a
+    /// bare mutable field) for shape consistency with the other test-only counters added by this
+    /// wave - <c>RotatingJsonlTelemetrySink.RescanCount</c> and
+    /// <c>SqliteSessionTelemetrySink.InitializationCount</c> - both of which are properties with
+    /// private setters so test code cannot write the counter. This one stays get-only rather than
+    /// <c>{ get; private set; }</c> because the increment below still needs
+    /// <see cref="Interlocked.Increment(ref int)"/> on a real field for atomicity; a property
+    /// setter cannot be passed by <c>ref</c>. Kept instance-scoped (not static) - do not change
+    /// that back; it was deliberately converted from static to instance in commit
+    /// <c>ac7ce40e</c> to fix a real cross-test flake.
+    /// </para>
     /// </summary>
-    internal int FileHashInvocations;
+    internal int FileHashInvocations => fileHashInvocations;
+
+    private int fileHashInvocations;
 
     public async Task<StorageInspection> VerifyAsync(
         StorageVerifyRequest request,
@@ -37,6 +52,13 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
                 inventory.Select(item => item.RelativePath).ToArray());
         }
 
+        // Sampling-order note: byteHash below is normally satisfied from the inventory entry
+        // computed inside InventoryAsync, which ran before this Length read - so under a
+        // concurrent writer, length and hash are now sampled in the opposite order relative to
+        // each other compared to when the hash used to be computed here, after the length read.
+        // Acceptable: VerifyAsync is read-only verification, not a consistency-guaranteeing
+        // snapshot, so a stale-relative-to-each-other length/hash pair here is cosmetic, not a
+        // defect.
         long length = new FileInfo(database).Length;
         string databaseRelativePath = Path.GetRelativePath(root, database).Replace('\\', '/');
         // OrdinalIgnoreCase: entry.RelativePath carries the on-disk casing reported by
@@ -192,7 +214,7 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
 
     private async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
     {
-        Interlocked.Increment(ref FileHashInvocations);
+        Interlocked.Increment(ref fileHashInvocations);
         await using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
             64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
