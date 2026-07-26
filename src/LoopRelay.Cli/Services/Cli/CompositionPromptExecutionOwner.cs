@@ -1922,19 +1922,23 @@ internal sealed partial class LoopRelayCompositionRoot
                 await ResolveCausalityAsync(cancellationToken), transaction,
                 operation.Transition.Value, cancellationToken);
 
-        private async Task<CanonicalCausalContext> ResolveCausalityAsync(
-            CancellationToken cancellationToken)
-        {
-            AttemptRecord attempt = (await _persistence.ReadAttemptsAsync(cancellationToken))
-                .Single(item => item.AttemptId == CurrentExecutionContext.AttemptId &&
-                    item.TransitionRunId == CurrentExecutionContext.TransitionRunId);
-            return new CanonicalCausalContext(
-                new WorkspaceIdentity(await _persistence.ReadWorkspaceIdentityAsync(cancellationToken)),
-                new RunIdentity(attempt.RunId),
-                new WorkflowInstanceIdentity(attempt.WorkflowInstanceId),
-                new TransitionRunIdentity(attempt.TransitionRunId),
-                new AttemptIdentity(attempt.AttemptId));
-        }
+        /// <summary>The attempt's causal spine, answered from the authorization this dispatch already
+        /// carries. TransitionRuntime builds that spine exactly once and hands it to
+        /// <see cref="PromptDispatchAuthorization"/>, which arrives here as
+        /// <see cref="CurrentAuthorization"/> at dispatch — so re-deriving it cost a full attempt-table
+        /// scan plus a workspace-identity read, per call, to rebuild a value this executor was handed.
+        /// The two are equal field for field: the attempt row is written from this same spine, and the
+        /// workspace identity both sides used comes from the one row the workspace store owns.
+        /// Equivalence is asserted end to end by
+        /// <c>Dispatch_authorized_causality_round_trips_through_the_database_for_eval_transitions</c>,
+        /// and is independently enforced in production on every dispatch by
+        /// <see cref="LoadingPromptRuntimeDispatcher"/>, which refuses to dispatch unless the
+        /// store-derived prompt-fact causality matches this authorization on all five identities.
+        /// The cancellation token is retained: callers await this as the resolution seam, and only the
+        /// derivation behind it became local.</summary>
+        private Task<CanonicalCausalContext> ResolveCausalityAsync(
+            CancellationToken cancellationToken) =>
+            Task.FromResult(RequireCurrentAuthorization().Causality);
 
         private async Task<CanonicalRecoveryPlan> EnsureWarmRecoveryPlanAsync(
             CanonicalCausalContext causality,

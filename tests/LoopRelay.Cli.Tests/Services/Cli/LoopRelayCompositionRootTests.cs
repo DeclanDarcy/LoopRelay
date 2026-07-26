@@ -2086,7 +2086,20 @@ public sealed class LoopRelayCompositionRootTests
 
     private static async Task<TransitionRuntimeResult> RunSettledAttemptAsync(
         LoopRelayCompositionRoot composition,
-        TransitionRuntimeRequest request)
+        TransitionRuntimeRequest request) =>
+        (await RunSettledAttemptCapturingExecutionAsync(composition, request)).Result;
+
+    /// <summary>
+    /// Same settled-attempt run as <see cref="RunSettledAttemptAsync"/>, additionally returning the
+    /// execution context the runtime was actually entered with. Callers that need to reason about
+    /// the attempt's causal identity need it: the runtime builds the attempt's
+    /// <see cref="CanonicalCausalContext"/> from this context plus the authorized attempt
+    /// identities, and only the latter come back out on the result.
+    /// </summary>
+    private static async Task<(CanonicalTransitionExecutionContext Execution, TransitionRuntimeResult Result)>
+        RunSettledAttemptCapturingExecutionAsync(
+            LoopRelayCompositionRoot composition,
+            TransitionRuntimeRequest request)
     {
         CanonicalTransitionExecutionContext original =
             Assert.IsType<CanonicalTransitionExecutionContext>(request.ExecutionContext);
@@ -2103,7 +2116,7 @@ public sealed class LoopRelayCompositionRootTests
             request with { ExecutionContext = execution });
         if (!attempt.RequiredEffectsPending)
         {
-            return attempt;
+            return (execution, attempt);
         }
 
         TransitionEffectCoordinationResult coordination = await composition.EffectCoordinator.CoordinateAsync(
@@ -2122,14 +2135,115 @@ public sealed class LoopRelayCompositionRootTests
             RuntimeOutcomeKind.RecoveryRequired => TransitionDurableState.EffectsPartiallyApplied,
             _ => TransitionDurableState.EffectsPending,
         };
-        return attempt with
+        return (execution, attempt with
         {
             Outcome = outcome,
             DurableState = state,
             Explanation = coordination.Explanation,
             Evidence = attempt.Evidence.Concat(coordination.Evidence).Distinct(StringComparer.Ordinal).ToArray(),
             RequiredEffectsPending = coordination.RequiredEffectsPending,
-        };
+        });
+    }
+
+    /// <summary>
+    /// PERF-11 (W4-4) canary. <c>CompositionPromptExecutionOwner.ResolveCausalityAsync</c> no longer
+    /// re-derives an attempt's causal context from the durable store; it answers from the
+    /// authorization the dispatch already carries. This test is the standing guard on the premise
+    /// that made that substitution safe -- that the durable record and the authorized value are the
+    /// same causal identity -- and it stays live precisely because those values feed the durable
+    /// causal chain written into evidence.
+    /// </summary>
+    [Fact]
+    public async Task Dispatch_authorized_causality_round_trips_through_the_database_for_eval_transitions()
+    {
+        string repo = Directory.CreateTempSubdirectory("cc-cli-causality-eval").FullName;
+        await WriteAsync(repo, ".agents/evals/e1.md", "# Eval Intent\n\nEvaluate the capability.");
+        await WriteProjectContextAsync(repo);
+        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
+        var repository = new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(repo), Path = repo };
+        var runtime = new FakeAgentRuntime(new MemoryArtifactStore());
+        EnqueueEvalOutput(runtime, "CreateEvalDependencyInventory", "# Dependency Inventory");
+        await using LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository, runtime);
+
+        (CanonicalTransitionExecutionContext selectExecution, TransitionRuntimeResult select) =
+            await RunSettledAttemptCapturingExecutionAsync(
+                composition,
+                Request(
+                    WorkflowIdentity.EvalRoadmap,
+                    new WorkflowStageIdentity("Evaluation Foundation"),
+                    new WorkflowTransitionIdentity("SelectEvaluationIntent")));
+        (CanonicalTransitionExecutionContext inventoryExecution, TransitionRuntimeResult inventory) =
+            await RunSettledAttemptCapturingExecutionAsync(
+                composition,
+                Request(
+                    WorkflowIdentity.EvalRoadmap,
+                    new WorkflowStageIdentity("Dependency Inventory"),
+                    new WorkflowTransitionIdentity("CreateEvalDependencyInventory")));
+
+        Assert.True(select.AttemptCompleted, select.Explanation);
+        Assert.True(inventory.AttemptCompleted, inventory.Explanation);
+        await AssertAuthorizedCausalityRoundTripsAsync(repository, selectExecution, select);
+        await AssertAuthorizedCausalityRoundTripsAsync(repository, inventoryExecution, inventory);
+    }
+
+    /// <summary>
+    /// Asserts that re-deriving an attempt's causal context from the durable store yields exactly
+    /// the context the attempt was authorized with. The re-derivation below is a literal
+    /// transcription of the read <c>CompositionPromptExecutionOwner.ResolveCausalityAsync</c> used
+    /// to perform before PERF-11: filter the attempt table down to the authorized attempt, then take
+    /// workspace identity from its own single-row read and the remaining identities off the attempt
+    /// row. Production no longer performs that read, so this transcription now exists only here --
+    /// which is the point. It keeps the substitution's premise under a live assertion: were the
+    /// durable attempt row ever to disagree with the authorized identity, the causal chain written
+    /// into evidence would silently diverge from the attempt table, and this test is what fails.
+    /// </summary>
+    private static async Task AssertAuthorizedCausalityRoundTripsAsync(
+        Repository repository,
+        CanonicalTransitionExecutionContext execution,
+        TransitionRuntimeResult attempt)
+    {
+        // The value the runtime authorizes: built exactly once, from the execution context plus the
+        // authorized attempt identities, and handed unchanged to PromptDispatchAuthorization -- which
+        // the prompt executor stores as CurrentAuthorization at dispatch.
+        var authorized = new CanonicalCausalContext(
+            execution.Workspace,
+            execution.Run,
+            execution.WorkflowInstance,
+            attempt.TransitionRun ?? throw new InvalidOperationException("Attempt has no transition run identity."),
+            attempt.Attempt ?? throw new InvalidOperationException("Attempt has no attempt identity."));
+
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        AttemptRecord row = (await persistence.ReadAttemptsAsync(CancellationToken.None))
+            .Single(item => item.AttemptId == authorized.Attempt.Value &&
+                item.TransitionRunId == authorized.TransitionRun.Value);
+        var database = new CanonicalCausalContext(
+            new WorkspaceIdentity(await persistence.ReadWorkspaceIdentityAsync(CancellationToken.None)),
+            new RunIdentity(row.RunId),
+            new WorkflowInstanceIdentity(row.WorkflowInstanceId),
+            new TransitionRunIdentity(row.TransitionRunId),
+            new AttemptIdentity(row.AttemptId));
+
+        // Compared member by member on the underlying identity string, never with record equality:
+        // CanonicalCausalContext is a record, and a synthesised `==` compares any reference-typed
+        // member by reference -- which would let a shallow pass hide a nested difference.
+        // Workspace, Run and WorkflowInstance are the substantive assertions: the workspace comes
+        // from a second, independent single-row read, and run/instance come off the attempt row.
+        Assert.Equal(authorized.Workspace.Value, database.Workspace.Value);
+        Assert.Equal(authorized.Run.Value, database.Run.Value);
+        Assert.Equal(authorized.WorkflowInstance.Value, database.WorkflowInstance.Value);
+        // Keyed-by-construction (the row was selected on this pair), asserted so the transcription
+        // above stays honest about which identities production reads back off the row.
+        Assert.Equal(authorized.TransitionRun.Value, database.TransitionRun.Value);
+        Assert.Equal(authorized.Attempt.Value, database.Attempt.Value);
+        // The re-derivation is attempt-level on both sides: neither carries session or turn.
+        Assert.Null(authorized.Session);
+        Assert.Null(database.Session);
+        Assert.Null(authorized.Turn);
+        Assert.Null(database.Turn);
+        // Guards this comparison's own completeness. Causal-identity values feed the durable causal
+        // chain, so a member added to the spine must be added to the comparison above rather than
+        // silently escaping it.
+        Assert.Equal(7, typeof(CanonicalCausalContext).GetProperties().Length);
     }
 
     [Fact]
