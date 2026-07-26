@@ -115,6 +115,38 @@ public class FileSystemCodexRolloutLocatorTests : IDisposable
     }
 
     [Fact]
+    public void Resolve_FindsARolloutStartedJustWithinTheStartTolerance()
+    {
+        // Pins the accepting edge of the 5-minute StartTolerance window: a rollout that started
+        // just inside it (here, one second short of the 5-minute limit) must still be matched.
+        DateTimeOffset opened = DateTimeOffset.UtcNow;
+        string cwd = Path.Combine(root, "work");
+        string expected = WriteRollout(
+            "rollout-a.jsonl", cwd, opened.AddMinutes(-5).AddSeconds(1), DayDirectory(opened));
+
+        string? found = new FileSystemCodexRolloutLocator(root).Resolve(cwd, opened);
+
+        Assert.Equal(expected, found);
+    }
+
+    [Fact]
+    public void Resolve_RejectsARolloutStartedBeyondTheStartTolerance()
+    {
+        // Pins the rejecting edge of the 5-minute StartTolerance window. Without this, nothing in
+        // the suite proves a rollout started outside the window is excluded -- StartTolerance
+        // could be widened to TimeSpan.MaxValue and every other test here would still pass, which
+        // would let a predecessor session's rollout in the same working directory be matched and
+        // recorded into durable evidence.
+        DateTimeOffset opened = DateTimeOffset.UtcNow;
+        string cwd = Path.Combine(root, "work");
+        WriteRollout("rollout-a.jsonl", cwd, opened.AddMinutes(-6), DayDirectory(opened));
+
+        string? found = new FileSystemCodexRolloutLocator(root).Resolve(cwd, opened);
+
+        Assert.Null(found);
+    }
+
+    [Fact]
     public void Resolve_FindsARolloutFiledUnderThePrecedingCalendarDay()
     {
         // Codex names day directories from local time while openedAtUtc is UTC, so around midnight the two
