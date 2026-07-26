@@ -1,3 +1,4 @@
+using System.Collections;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Resolution;
@@ -201,6 +202,81 @@ public sealed class WorkflowChainRunnerTests
         // fire on *both* cycles is gone, so the count drops by exactly one per attempt (2 -> 0)
         // while the load-bearing kernel-boundary observation (0 -> 1 in this scenario) is untouched.
         Assert.Equal(1, harness.Observations.CallCount);
+    }
+
+    [Fact]
+    public async Task Kernel_decision_facts_report_the_controller_eligible_and_rejected_alternatives()
+    {
+        RepositoryObservation observation = Observation();
+        Harness harness = new(observation);
+        var decisions = new RecordingKernelDecisionStore();
+        var kernel = new OrchestrationKernel(harness.Runner, harness.Observations,
+            new DurableKernelAttemptAuthorizationSelector(), decisions);
+
+        await kernel.RunAsync(new KernelCommand(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain), observation,
+            TraditionalRoadmapChain, CanonicalWorkflowCatalog.Current, NewContext(), 1));
+
+        // The first TraditionalRoadmap stage ("Roadmap Context") offers two transitions:
+        // BootstrapRoadmapCompletionContext requires no input products, while
+        // UpdateRoadmapCompletionContext requires the roadmap completion context this observation
+        // does not carry. Both decision-fact lists are therefore non-empty, which is exactly what
+        // makes them sensitive to *which* resolution the controller reported: a resolution computed
+        // from any other (invocation, observation, definitions) triple would change these strings.
+        KernelDecisionFact decision = Assert.Single(decisions.Decisions);
+        Assert.Equal(["BootstrapRoadmapCompletionContext"], decision.EligibleAlternatives);
+        Assert.Equal(
+            ["UpdateRoadmapCompletionContext:MissingRequiredInput:"],
+            decision.RejectedAlternatives);
+        Assert.Equal(
+            new WorkflowTransitionIdentity("BootstrapRoadmapCompletionContext"),
+            Assert.Single(harness.Runtime.Requests).Transition);
+    }
+
+    [Fact]
+    public async Task Chain_cycle_resolves_the_workflow_once_and_hands_the_resolution_to_the_controller()
+    {
+        var workflowStates = new CountingWorkflowStates([]);
+        RepositoryObservation observation = Observation(workflowStates);
+        Harness harness = new(observation);
+
+        WorkflowChainRunResult result = await harness.Runner.RunAsync(new WorkflowChainRunRequest(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            observation,
+            TraditionalRoadmapChain,
+            Definitions,
+            NewContext(),
+            FreshAttemptAuthorization.Instance));
+
+        Assert.Equal(WorkflowStopReason.TransitionCompleted, result.StopReason);
+        // WorkflowResolver.Resolve enumerates observation.WorkflowStates exactly once per call, and
+        // on this path it is the only reader: WorkflowExitGateEvaluator (the sole other reader)
+        // runs only when the workflow is already completed, which is not this scenario. One
+        // enumeration therefore means one resolution for the cycle -- the chain runner resolves and
+        // hands the result down instead of the controller resolving the identical triple again.
+        Assert.Equal(1, workflowStates.EnumerationCount);
+    }
+
+    /// <summary>
+    /// Counts how many times the observed workflow states are enumerated, which is a direct count
+    /// of <see cref="WorkflowResolver.Resolve"/> calls over this observation.
+    /// </summary>
+    private sealed class CountingWorkflowStates(IReadOnlyList<ObservedWorkflowState> _states)
+        : IReadOnlyList<ObservedWorkflowState>
+    {
+        public int EnumerationCount { get; private set; }
+
+        public int Count => _states.Count;
+
+        public ObservedWorkflowState this[int index] => _states[index];
+
+        public IEnumerator<ObservedWorkflowState> GetEnumerator()
+        {
+            EnumerationCount++;
+            return _states.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private sealed class Harness
