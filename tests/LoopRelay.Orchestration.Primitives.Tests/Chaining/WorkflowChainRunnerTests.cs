@@ -213,7 +213,7 @@ public sealed class WorkflowChainRunnerTests
             Instances = new FakeInstanceRecorder();
             Boundaries = new RecordingBoundaryStore();
             var controller = new WorkflowController(
-                new WorkflowResolver(), Runtime, Effects, Observations);
+                new WorkflowResolver(), Runtime, Effects);
             Runner = new WorkflowChainRunner(
                 new WorkflowResolver(),
                 controller,

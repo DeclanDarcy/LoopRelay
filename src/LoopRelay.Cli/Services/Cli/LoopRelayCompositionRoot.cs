@@ -550,8 +550,7 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
         var workflowController = new WorkflowController(
             workflowResolver,
             transitionRuntime,
-            effectCoordinator,
-            observationSource);
+            effectCoordinator);
         var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter(
             new CanonicalChainBoundaryEvidenceStore(persistence));
         var workflowChainRunner = new WorkflowChainRunner(

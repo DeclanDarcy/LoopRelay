@@ -54,12 +54,6 @@ public sealed record WorkflowBoundaryEvaluation(
     bool CanAdvance,
     string Explanation);
 
-public sealed record WorkflowBoundaryEvidenceRecord(
-    WorkflowIdentity SourceWorkflow,
-    WorkflowIdentity? TargetWorkflow,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
-
 public sealed record ChainBoundaryEvidenceCapture(
     RunIdentity Run,
     string ChainIdentity,
@@ -264,26 +258,12 @@ public sealed class ProductTransferEvaluator
 
 public sealed class WorkflowBoundaryEvidenceWriter(IChainBoundaryEvidenceStore _boundaryStore)
 {
-    private readonly List<WorkflowBoundaryEvidenceRecord> records = [];
-
-    public IReadOnlyList<WorkflowBoundaryEvidenceRecord> Records => records;
-
     public async Task WriteAsync(
         WorkflowBoundaryEvaluation evaluation,
         RunIdentity run,
         string chainIdentity,
         CancellationToken cancellationToken = default)
     {
-        string[] evidence = evaluation.ExitGate.Evidence
-            .Concat(evaluation.EntryGate?.Evidence ?? [])
-            .Concat(evaluation.ProductTransfer?.Gate.Evidence ?? [])
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        records.Add(new WorkflowBoundaryEvidenceRecord(
-            evaluation.SourceWorkflow,
-            evaluation.TargetWorkflow,
-            evaluation.Explanation,
-            evidence));
         await _boundaryStore.AppendAsync(
             new ChainBoundaryEvidenceCapture(run, chainIdentity, evaluation, DateTimeOffset.UtcNow),
             cancellationToken);
@@ -293,8 +273,7 @@ public sealed class WorkflowBoundaryEvidenceWriter(IChainBoundaryEvidenceStore _
 public sealed class WorkflowController(
     WorkflowResolver _resolver,
     ITransitionRuntime _transitionRuntime,
-    ITransitionEffectCoordinator _effects,
-    ICanonicalRepositoryObservationSource _observations)
+    ITransitionEffectCoordinator _effects)
 {
     public async Task<WorkflowControllerResult> RunAsync(
         WorkflowControllerRequest request,
