@@ -346,9 +346,21 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         Add(update, ("$state", state.ToString()), ("$retain", retainLease ? 1 : 0),
             ("$explanation", explanation), ("$intent", identity.Value), ("$version", expectedRowVersion));
         if (await update.ExecuteNonQueryAsync(cancellationToken) != 1) throw new InvalidOperationException("Effect row-version conflict.");
-        await AppendEventAsync(connection, transaction, identity, state, worker, explanation, evidence, recordedAt, cancellationToken);
+        long sequence = await AppendEventAsync(
+            connection, transaction, identity, state, worker, explanation, evidence, recordedAt, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return (await ReadAsync(identity, cancellationToken))!;
+        // Projected from what this transaction wrote rather than re-read after commit: the row
+        // version is the one the guarded UPDATE produced, and the lease fields mirror the CASE above
+        // exactly, so the next compare-and-set sees what the database holds.
+        return current with
+        {
+            State = state,
+            RowVersion = expectedRowVersion + 1,
+            LeaseOwner = retainLease ? current.LeaseOwner : null,
+            LeaseExpiresAt = retainLease ? current.LeaseExpiresAt : null,
+            Events = [.. current.Events, new EffectLifecycleEvent(
+                sequence, identity, state, worker, explanation, evidence, recordedAt)],
+        };
     }
 
     public async Task<EffectWorkItem> RecordReceiptAsync(
@@ -399,10 +411,22 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
                 ("$intent", identity.Value), ("$version", expectedRowVersion));
             if (await update.ExecuteNonQueryAsync(cancellationToken) != 1) throw new InvalidOperationException("Effect row-version conflict.");
         }
-        await AppendEventAsync(connection, transaction, identity, EffectLifecycle.Succeeded, worker,
-            "Verified effect receipt recorded.", receipt.Evidence, receipt.RecordedAt, cancellationToken);
+        const string explanation = "Verified effect receipt recorded.";
+        long sequence = await AppendEventAsync(connection, transaction, identity, EffectLifecycle.Succeeded, worker,
+            explanation, receipt.Evidence, receipt.RecordedAt, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return (await ReadAsync(identity, cancellationToken))!;
+        // Projected from what this transaction wrote rather than re-read after commit; the UPDATE
+        // above is what makes this receipt terminal and clears the lease.
+        return current with
+        {
+            State = EffectLifecycle.Succeeded,
+            RowVersion = expectedRowVersion + 1,
+            LeaseOwner = null,
+            LeaseExpiresAt = null,
+            Receipt = receipt,
+            Events = [.. current.Events, new EffectLifecycleEvent(
+                sequence, identity, EffectLifecycle.Succeeded, worker, explanation, receipt.Evidence, receipt.RecordedAt)],
+        };
     }
 
     public async Task RecordReconciliationAsync(
@@ -531,7 +555,13 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         return result;
     }
 
-    private static async Task AppendEventAsync(SqliteConnection connection, SqliteTransaction transaction,
+    /// <summary>
+    /// Appends a lifecycle event inside <paramref name="transaction"/> and returns the
+    /// <c>AUTOINCREMENT</c> identifier the database assigned it. Event order is that identifier, so
+    /// callers that project the appended event into a return value must take it from here rather
+    /// than synthesise one.
+    /// </summary>
+    private static async Task<long> AppendEventAsync(SqliteConnection connection, SqliteTransaction transaction,
         EffectIntentIdentity identity, EffectLifecycle lifecycle, string worker, string explanation,
         IReadOnlyList<string> evidence, DateTimeOffset recordedAt, CancellationToken cancellationToken)
     {
@@ -546,6 +576,10 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
             ("$explanation", explanation), ("$evidence", JsonSerializer.Serialize(evidence, JsonOptions)),
             ("$recorded", Format(recordedAt)));
         await command.ExecuteNonQueryAsync(cancellationToken);
+        await using SqliteCommand sequence = connection.CreateCommand();
+        sequence.Transaction = transaction;
+        sequence.CommandText = "SELECT last_insert_rowid();";
+        return Convert.ToInt64(await sequence.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
     }
 
     private static void Add(SqliteCommand command, params (string Name, object? Value)[] values)

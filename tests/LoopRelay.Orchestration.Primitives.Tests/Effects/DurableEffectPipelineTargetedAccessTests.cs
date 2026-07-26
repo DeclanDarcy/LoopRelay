@@ -65,6 +65,31 @@ public sealed class DurableEffectPipelineTargetedAccessTests
     }
 
     [Fact]
+    public async Task Targeted_scan_narrows_the_unsettled_predicate_rather_than_replacing_it()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalEffectWorkStore(repository);
+        CanonicalCausalContext causality = Causality();
+        EffectIntent settled = Intent(causality, order: 0, key: "settled");
+        await store.AppendPlanAsync([settled], CancellationToken.None);
+        await Worker(store, new RecordingExecutor()).RunOnceAsync(CancellationToken.None);
+
+        IReadOnlyList<EffectWorkItem> naming = await store.ScanUnsettledAsync(
+            ScanLimit,
+            DateTimeOffset.UtcNow,
+            CancellationToken.None,
+            new HashSet<EffectIntentIdentity> { settled.Identity });
+        IReadOnlyList<EffectWorkItem> nothing = await store.ScanUnsettledAsync(
+            ScanLimit, DateTimeOffset.UtcNow, CancellationToken.None, new HashSet<EffectIntentIdentity>());
+
+        Assert.Equal(
+            EffectLifecycle.Succeeded,
+            (await store.ReadAsync(settled.Identity, CancellationToken.None))!.State);
+        Assert.Empty(naming);
+        Assert.Empty(nothing);
+    }
+
+    [Fact]
     public async Task Targeted_run_settles_selected_intents_in_lifecycle_order_and_reports_only_them_as_discovered()
     {
         Repository repository = CreateRepository();
