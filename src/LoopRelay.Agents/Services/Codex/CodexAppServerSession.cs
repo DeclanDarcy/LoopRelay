@@ -51,6 +51,12 @@ public sealed class CodexAppServerSession : IAgentSession
     private readonly Task pumpTask;
     private readonly Task writerTask;
 
+    /// <summary>Test-only observability (PERF-27c): how many times <see cref="EnrichFileChangeApproval"/>
+    /// re-tokenized the raw frame text from scratch instead of reusing the read pump's already-parsed
+    /// <see cref="CodexAppServerMessage.CompleteResponse"/>. Must stay 0 on the fixed path — approval
+    /// handling runs synchronously on the pump thread while codex blocks awaiting the reply.</summary>
+    internal int FileChangeApprovalReparses;
+
     private long nextId;
     private bool initialized;
     private string? threadId;
@@ -644,7 +650,12 @@ public sealed class CodexAppServerSession : IAgentSession
             return rawLine;
         }
 
-        JsonNode? root = JsonNode.Parse(rawLine);
+        // PERF-27c: the read pump already parsed this exact frame into message.CompleteResponse
+        // (CodexAppServerMessage.Parse). Build the mutable JsonNode view from that parsed JsonElement
+        // instead of re-tokenizing rawLine — the frame is parsed once, not twice, on the codex-blocking
+        // approval path. FileChangeApprovalReparses stays 0; a regression that reintroduces a raw-text
+        // reparse here should increment it back.
+        JsonNode? root = JsonObject.Create(message.CompleteResponse);
         JsonObject? parameters = root?["params"] as JsonObject;
         if (parameters is null)
         {

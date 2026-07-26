@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="LoopRelay.Agents.Compatibility.Tests" />
+    <InternalsVisibleTo Include="LoopRelay.Agents.Tests" />
   </ItemGroup>
 
 </Project>

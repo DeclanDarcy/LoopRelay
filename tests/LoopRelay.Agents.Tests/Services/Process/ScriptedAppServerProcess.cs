@@ -35,6 +35,10 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
 
     public string ApprovalCommand { get; init; } = "git push";
 
+    /// <summary>When set, overrides the method name on the command-execution approval request — lets a
+    /// test drive the REAL CodexPermissionAdapter's "unknown method" rejection end-to-end.</summary>
+    public string? ApprovalMethodOverride { get; init; }
+
     public bool EmitFileChangeApproval { get; init; }
 
     public string ApprovalTargetPath { get; init; } = ".agents/details.md";
@@ -306,7 +310,10 @@ internal sealed class ScriptedAppServerProcess : IAgentProcess
                     }
                     else
                     {
-                        EmitServerRequest("appr-1", "item/commandExecution/requestApproval", new { itemId = "i1", command = ApprovalCommand });
+                        EmitServerRequest(
+                            "appr-1",
+                            ApprovalMethodOverride ?? "item/commandExecution/requestApproval",
+                            new { itemId = "i1", command = ApprovalCommand });
                     }
                 }
 
