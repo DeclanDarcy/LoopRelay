@@ -241,6 +241,231 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         Assert.Equal("RetryNewAttempt", Convert.ToString(await command.ExecuteScalarAsync()));
     }
 
+    [Fact]
+    public async Task ReadTransitionRunAsync_matches_full_snapshot_lookup_for_existing_and_missing_runs()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var runs = new CanonicalTransitionRunStore(persistence);
+        WorkflowTransitionDefinition definition = Definition(withEffect: false);
+        var seededRunIds = new List<string>();
+        for (int i = 0; i < 3; i++)
+        {
+            CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+            PersistedRenderedPromptFact prompt = await new CanonicalRenderedPromptFactStore(persistence)
+                .AppendAsync(PromptFact(causality), CancellationToken.None);
+            await runs.PersistStartedAsync(new TransitionRunStarted(
+                causality,
+                DateTimeOffset.UtcNow,
+                Request(causality),
+                definition,
+                new TransitionInputSnapshot($"snapshot-{i}", [], new Dictionary<string, string>(), []),
+                prompt), CancellationToken.None);
+            seededRunIds.Add(causality.TransitionRun.Value);
+        }
+
+        CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
+        Assert.Equal(3, snapshot.TransitionRuns.Count);
+
+        foreach (string runId in seededRunIds)
+        {
+            CanonicalTransitionRunRecord expected = Assert.Single(
+                snapshot.TransitionRuns, run => run.RunId == runId);
+            CanonicalTransitionRunRecord? actual = await persistence.ReadTransitionRunAsync(runId, CancellationToken.None);
+            Assert.NotNull(actual);
+            AssertSameTransitionRun(expected, actual!);
+        }
+
+        Assert.Null(await persistence.ReadTransitionRunAsync("does-not-exist", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PersistStateAsync_updates_the_correct_existing_run_when_history_has_many_rows()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var runs = new CanonicalTransitionRunStore(persistence);
+        WorkflowTransitionDefinition definition = Definition(withEffect: false);
+
+        // Unrelated history rows the keyed read must not be distracted by.
+        for (int i = 0; i < 5; i++)
+        {
+            CanonicalCausalContext other = await SeedCausalityAsync(persistence);
+            PersistedRenderedPromptFact otherPrompt = await new CanonicalRenderedPromptFactStore(persistence)
+                .AppendAsync(PromptFact(other), CancellationToken.None);
+            await runs.PersistStartedAsync(new TransitionRunStarted(
+                other,
+                DateTimeOffset.UtcNow,
+                Request(other),
+                definition,
+                new TransitionInputSnapshot($"other-{i}", [], new Dictionary<string, string>(), []),
+                otherPrompt), CancellationToken.None);
+        }
+
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        PersistedRenderedPromptFact prompt = await new CanonicalRenderedPromptFactStore(persistence)
+            .AppendAsync(PromptFact(causality), CancellationToken.None);
+        await runs.PersistStartedAsync(new TransitionRunStarted(
+            causality,
+            DateTimeOffset.UtcNow,
+            Request(causality),
+            definition,
+            new TransitionInputSnapshot("target", [], new Dictionary<string, string>(), []),
+            prompt), CancellationToken.None);
+
+        CanonicalTransitionRunRecord before = Assert.Single(
+            (await persistence.LoadSnapshotAsync()).TransitionRuns,
+            run => run.RunId == causality.TransitionRun.Value);
+
+        var update = new TransitionRunStateUpdate(
+            causality, DateTimeOffset.UtcNow, definition.Identity,
+            TransitionDurableState.Stalled, "stalled explanation", ["stalled-evidence"]);
+        await runs.PersistStateAsync(update, CancellationToken.None);
+
+        CanonicalWorkflowPersistenceSnapshot afterSnapshot = await persistence.LoadSnapshotAsync();
+        CanonicalTransitionRunRecord after = Assert.Single(
+            afterSnapshot.TransitionRuns, run => run.RunId == causality.TransitionRun.Value);
+
+        // Fields untouched by PersistStateAsync must survive from the pre-update row, proving the
+        // keyed read found the real seeded row rather than falling back.
+        Assert.Equal(before.RunId, after.RunId);
+        Assert.Equal(before.Workflow, after.Workflow);
+        Assert.Equal(before.Stage, after.Stage);
+        Assert.Equal(before.Transition, after.Transition);
+        Assert.Equal(before.StartedAt, after.StartedAt);
+        Assert.Equal(before.InputSnapshotHash, after.InputSnapshotHash);
+
+        // Fields PersistStateAsync overwrites must reflect the update.
+        Assert.Equal(TransitionDurableState.Stalled, after.State);
+        Assert.Equal(RuntimeOutcomeKind.Stalled, after.Outcome);
+        Assert.Equal(update.RecordedAt, after.CompletedAt);
+        Assert.Equal("stalled explanation", after.Explanation);
+        Assert.Equal(new[] { "stalled-evidence" }, after.Evidence);
+
+        // The unrelated history rows were left alone.
+        Assert.Equal(6, afterSnapshot.TransitionRuns.Count);
+    }
+
+    [Fact]
+    public async Task PersistStateAsync_builds_the_documented_fallback_record_when_no_start_record_exists()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var runs = new CanonicalTransitionRunStore(persistence);
+        WorkflowTransitionDefinition definition = Definition(withEffect: false);
+
+        // An unrelated run must not be mistaken for the orphaned one below.
+        CanonicalCausalContext other = await SeedCausalityAsync(persistence);
+        PersistedRenderedPromptFact otherPrompt = await new CanonicalRenderedPromptFactStore(persistence)
+            .AppendAsync(PromptFact(other), CancellationToken.None);
+        await runs.PersistStartedAsync(new TransitionRunStarted(
+            other,
+            DateTimeOffset.UtcNow,
+            Request(other),
+            definition,
+            new TransitionInputSnapshot("other", [], new Dictionary<string, string>(), []),
+            otherPrompt), CancellationToken.None);
+
+        CanonicalCausalContext orphan = await SeedCausalityAsync(persistence);
+        var transition = new WorkflowTransitionIdentity("WritePlan");
+        var update = new TransitionRunStateUpdate(
+            orphan, DateTimeOffset.UtcNow, transition,
+            TransitionDurableState.Completed, "completed without a start record", ["orphan-evidence"]);
+
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+        await runs.PersistStateAsync(update, CancellationToken.None);
+        DateTimeOffset after = DateTimeOffset.UtcNow;
+
+        CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
+        Assert.Equal(2, snapshot.TransitionRuns.Count);
+        CanonicalTransitionRunRecord fallback = Assert.Single(
+            snapshot.TransitionRuns, run => run.RunId == orphan.TransitionRun.Value);
+
+        Assert.Equal(new WorkflowIdentity("Unknown"), fallback.Workflow);
+        Assert.Equal(new WorkflowStageIdentity("Unknown"), fallback.Stage);
+        Assert.Equal(transition, fallback.Transition);
+        Assert.Null(fallback.InputSnapshotHash);
+        Assert.Equal(TransitionDurableState.Completed, fallback.State);
+        Assert.Equal(RuntimeOutcomeKind.Completed, fallback.Outcome);
+        Assert.Equal(update.RecordedAt, fallback.CompletedAt);
+        Assert.Equal("completed without a start record", fallback.Explanation);
+        Assert.Equal(new[] { "orphan-evidence" }, fallback.Evidence);
+        Assert.InRange(fallback.StartedAt, before, after);
+    }
+
+    [Fact]
+    public async Task ReadTransitionRunAsync_reads_exactly_one_row_no_matter_how_large_the_history_table_is()
+    {
+        const int historySize = 50;
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var runs = new CanonicalTransitionRunStore(persistence);
+        WorkflowTransitionDefinition definition = Definition(withEffect: false);
+
+        for (int i = 0; i < historySize; i++)
+        {
+            CanonicalCausalContext other = await SeedCausalityAsync(persistence);
+            PersistedRenderedPromptFact otherPrompt = await new CanonicalRenderedPromptFactStore(persistence)
+                .AppendAsync(PromptFact(other), CancellationToken.None);
+            await runs.PersistStartedAsync(new TransitionRunStarted(
+                other,
+                DateTimeOffset.UtcNow,
+                Request(other),
+                definition,
+                new TransitionInputSnapshot($"history-{i}", [], new Dictionary<string, string>(), []),
+                otherPrompt), CancellationToken.None);
+        }
+
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        PersistedRenderedPromptFact prompt = await new CanonicalRenderedPromptFactStore(persistence)
+            .AppendAsync(PromptFact(causality), CancellationToken.None);
+        await runs.PersistStartedAsync(new TransitionRunStarted(
+            causality,
+            DateTimeOffset.UtcNow,
+            Request(causality),
+            definition,
+            new TransitionInputSnapshot("target", [], new Dictionary<string, string>(), []),
+            prompt), CancellationToken.None);
+
+        // Ground truth: the full snapshot's transition-run table has grown to historySize + 1 rows.
+        // The old ExistingOrFallbackAsync (LoadSnapshotAsync().TransitionRuns.FirstOrDefault) would
+        // have read all of them, on every single PersistStateAsync call, regardless of which one it
+        // actually needed.
+        CanonicalWorkflowPersistenceSnapshot snapshot = await persistence.LoadSnapshotAsync();
+        Assert.Equal(historySize + 1, snapshot.TransitionRuns.Count);
+
+        // The keyed read the current ExistingOrFallbackAsync uses reads exactly one row -- flat,
+        // not proportional to historySize.
+        CanonicalTransitionRunRecord? keyed = await persistence.ReadTransitionRunAsync(
+            causality.TransitionRun.Value, CancellationToken.None);
+        Assert.NotNull(keyed);
+        Assert.Equal(causality.TransitionRun.Value, keyed!.RunId);
+
+        await runs.PersistStateAsync(
+            new TransitionRunStateUpdate(
+                causality, DateTimeOffset.UtcNow, definition.Identity,
+                TransitionDurableState.Stalled, "measured", ["measured"]),
+            CancellationToken.None);
+
+        // The write via the keyed path did not touch or duplicate any unrelated history rows.
+        Assert.Equal(historySize + 1, (await persistence.LoadSnapshotAsync()).TransitionRuns.Count);
+    }
+
+    private static void AssertSameTransitionRun(CanonicalTransitionRunRecord expected, CanonicalTransitionRunRecord actual)
+    {
+        Assert.Equal(expected.RunId, actual.RunId);
+        Assert.Equal(expected.Workflow, actual.Workflow);
+        Assert.Equal(expected.Stage, actual.Stage);
+        Assert.Equal(expected.Transition, actual.Transition);
+        Assert.Equal(expected.State, actual.State);
+        Assert.Equal(expected.Outcome, actual.Outcome);
+        Assert.Equal(expected.StartedAt, actual.StartedAt);
+        Assert.Equal(expected.CompletedAt, actual.CompletedAt);
+        Assert.Equal(expected.InputSnapshotHash, actual.InputSnapshotHash);
+        Assert.Equal(expected.Explanation, actual.Explanation);
+        Assert.Equal(expected.Evidence, actual.Evidence);
+    }
+
     private static async Task<CanonicalCausalContext> SeedCausalityAsync(
         CanonicalWorkflowPersistenceStore persistence)
     {

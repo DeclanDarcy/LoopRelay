@@ -1564,36 +1564,71 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         return rows;
     }
 
+    private const string TransitionRunColumns = """
+        run_id, workflow_identity, stage_identity, transition_identity, state, outcome,
+        started_at, completed_at, input_snapshot_hash, explanation, evidence_json
+        """;
+
     private static async Task<IReadOnlyList<CanonicalTransitionRunRecord>> ReadTransitionRunsAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
         var rows = new List<CanonicalTransitionRunRecord>();
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT run_id, workflow_identity, stage_identity, transition_identity, state, outcome,
-                   started_at, completed_at, input_snapshot_hash, explanation, evidence_json
+        command.CommandText = $"""
+            SELECT {TransitionRunColumns}
             FROM canonical_transition_runs ORDER BY started_at, run_id;
             """;
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            rows.Add(new CanonicalTransitionRunRecord(
-                reader.GetString(0),
-                new WorkflowIdentity(reader.GetString(1)),
-                new WorkflowStageIdentity(reader.GetString(2)),
-                new WorkflowTransitionIdentity(reader.GetString(3)),
-                ParseEnum<TransitionDurableState>(reader.GetString(4)),
-                ParseEnum<RuntimeOutcomeKind>(reader.GetString(5)),
-                ParseDate(reader.GetString(6)),
-                reader.IsDBNull(7) ? null : ParseDate(reader.GetString(7)),
-                reader.IsDBNull(8) ? null : reader.GetString(8),
-                reader.GetString(9),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(10))));
+            rows.Add(MapTransitionRun(reader));
         }
 
         return rows;
     }
+
+    /// <summary>
+    /// Reads a single transition run row by id without loading the full nine-table
+    /// persistence snapshot. Used by <see cref="CanonicalTransitionRunStore"/> to find the
+    /// prior run record for a state update or completion without scanning the whole
+    /// <c>canonical_transition_runs</c> history.
+    /// </summary>
+    public async Task<CanonicalTransitionRunRecord?> ReadTransitionRunAsync(
+        string runId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return null;
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT {TransitionRunColumns}
+            FROM canonical_transition_runs WHERE run_id = $runId;
+            """;
+        command.Parameters.AddWithValue("$runId", runId);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? MapTransitionRun(reader) : null;
+    }
+
+    private static CanonicalTransitionRunRecord MapTransitionRun(SqliteDataReader reader) =>
+        new(
+            reader.GetString(0),
+            new WorkflowIdentity(reader.GetString(1)),
+            new WorkflowStageIdentity(reader.GetString(2)),
+            new WorkflowTransitionIdentity(reader.GetString(3)),
+            ParseEnum<TransitionDurableState>(reader.GetString(4)),
+            ParseEnum<RuntimeOutcomeKind>(reader.GetString(5)),
+            ParseDate(reader.GetString(6)),
+            reader.IsDBNull(7) ? null : ParseDate(reader.GetString(7)),
+            reader.IsDBNull(8) ? null : reader.GetString(8),
+            reader.GetString(9),
+            ReadJson<IReadOnlyList<string>>(reader.GetString(10)));
 
     private static async Task<IReadOnlyList<CanonicalTransitionEvidenceRecord>> ReadTransitionEvidenceAsync(
         SqliteConnection connection,

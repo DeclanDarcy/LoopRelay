@@ -154,8 +154,7 @@ public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStor
         WorkflowTransitionIdentity transition,
         CancellationToken cancellationToken)
     {
-        CanonicalWorkflowPersistenceSnapshot snapshot = await _store.LoadSnapshotAsync(cancellationToken);
-        CanonicalTransitionRunRecord? existing = snapshot.TransitionRuns.FirstOrDefault(run => run.RunId == runId);
+        CanonicalTransitionRunRecord? existing = await _store.ReadTransitionRunAsync(runId, cancellationToken);
         return existing ?? new CanonicalTransitionRunRecord(
             runId,
             new WorkflowIdentity("Unknown"),
