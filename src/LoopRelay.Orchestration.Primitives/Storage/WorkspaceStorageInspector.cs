@@ -16,7 +16,9 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
     /// <see cref="WorkspaceStorageVerifierAdapter"/> / <c>RepositoryObserver</c>'s
     /// <c>FileSystemStorageVerifier</c> - cannot pollute a count under assertion elsewhere. Used
     /// to prove that <see cref="VerifyAsync"/> reuses the inventory's hash for the database file
-    /// instead of hashing it a second time (PERF: hash workspace database once per verification).
+    /// instead of hashing it a second time (PERF: hash workspace database once per verification),
+    /// and - since the tier split - that a <see cref="StorageVerificationDepth.Light"/> verification
+    /// digests the database file and nothing else, however many files the persistence tree holds.
     ///
     /// <para>
     /// Exposed as a get-only property backed by <see cref="fileHashInvocations"/> (rather than a
@@ -39,11 +41,12 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
         StorageVerifyRequest request,
         CancellationToken cancellationToken = default)
     {
+        bool deep = request.Depth == StorageVerificationDepth.Deep;
         string root = Path.GetFullPath(request.RepositoryPath);
         string database = Path.Combine(root,
             LoopRelayWorkspaceDatabase.RelativeDatabasePath.Replace('/', Path.DirectorySeparatorChar));
         string persistence = Path.GetDirectoryName(database)!;
-        IReadOnlyList<StorageTreeEntry> inventory = await InventoryAsync(root, persistence, cancellationToken);
+        IReadOnlyList<StorageTreeEntry> inventory = await InventoryAsync(root, persistence, deep, cancellationToken);
         if (!File.Exists(database))
         {
             return new StorageInspection(
@@ -52,8 +55,8 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
                 inventory.Select(item => item.RelativePath).ToArray());
         }
 
-        // Sampling-order note: byteHash below is normally satisfied from the inventory entry
-        // computed inside InventoryAsync, which ran before this Length read - so under a
+        // Sampling-order note: on the deep tier byteHash below is satisfied from the inventory
+        // entry computed inside InventoryAsync, which ran before this Length read - so under a
         // concurrent writer, length and hash are now sampled in the opposite order relative to
         // each other compared to when the hash used to be computed here, after the length read.
         // Acceptable: VerifyAsync is read-only verification, not a consistency-guaranteeing
@@ -67,17 +70,28 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
         // case-insensitive filesystems, or a file renamed only in case). Comparing ordinally
         // here would silently miss the inventory entry and force the redundant rehash below on
         // every verification, defeating the single-hash optimization without failing anything.
+        //
+        // The light tier's inventory carries no digests at all, so the coalesce below is also what
+        // buys it its one - and only one - hash. The database's digest is not optional at either
+        // depth: it is the `bytes-sha256:` evidence line, and that line reaches durable state
+        // through OrchestrationKernel.Snapshot.
         string byteHash = inventory.FirstOrDefault(entry =>
                 string.Equals(entry.RelativePath, databaseRelativePath, StringComparison.OrdinalIgnoreCase))
-            is { } databaseEntry
-            ? databaseEntry.Sha256
-            : await HashFileAsync(database, cancellationToken);
+            ?.Sha256 ?? await HashFileAsync(database, cancellationToken);
         WorkspaceSchemaInspection schema;
         IReadOnlyList<string> unresolved;
         try
         {
-            schema = await new WorkspaceSchemaReadOnlyInspector().InspectAsync(database, cancellationToken);
-            unresolved = await ForeignKeyViolationsAsync(database, cancellationToken);
+            // Deep is the authority on physical shape and runs the ~190-probe classification. Light
+            // answers from the stamp, falling back to that same classification whenever the stamp is
+            // absent, malformed, or internally inconsistent. The residual gap - a well-formed stamp
+            // over a shape that has since been mutated out-of-band - is closed for mutation by
+            // LoopRelayWorkspaceDatabase.EnsureSchemaAsync, which every writing store calls and
+            // which runs the full classification on first contact per process.
+            schema = deep
+                ? await new WorkspaceSchemaReadOnlyInspector().InspectAsync(database, cancellationToken)
+                : await StampedSchemaAsync(database, cancellationToken);
+            unresolved = deep ? await ForeignKeyViolationsAsync(database, cancellationToken) : [];
         }
         catch (Exception exception) when (exception is SqliteException or InvalidDataException)
         {
@@ -130,9 +144,17 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
              $"bytes-sha256:{byteHash}"]);
     }
 
+    /// <summary>
+    /// Lists the persistence tree. <paramref name="hashContents"/> is the whole cost difference
+    /// between the two tiers: every consumer of the tree's <em>digests</em> is a deep consumer, and
+    /// the routine-observation path needs only the relative paths, because
+    /// <see cref="Interrupted"/> looks at nothing else. Lengths are read at both depths so the
+    /// entries stay honest about the one field a light listing can still answer cheaply.
+    /// </summary>
     private async Task<IReadOnlyList<StorageTreeEntry>> InventoryAsync(
         string root,
         string persistence,
+        bool hashContents,
         CancellationToken cancellationToken)
     {
         if (!Directory.Exists(persistence)) return [];
@@ -143,9 +165,25 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
             result.Add(new StorageTreeEntry(
                 Path.GetRelativePath(root, file).Replace('\\', '/'),
                 new FileInfo(file).Length,
-                await HashFileAsync(file, cancellationToken)));
+                hashContents ? await HashFileAsync(file, cancellationToken) : null));
         }
         return result;
+    }
+
+    /// <summary>
+    /// The light tier's schema read. Deliberately reaches
+    /// <see cref="LoopRelayWorkspaceDatabase.InspectStampedAsync"/> directly rather than going
+    /// through <see cref="WorkspaceSchemaReadOnlyInspector"/>: that inspector stays on the full
+    /// classification on purpose, because it is also the thing that inspects untrusted files on
+    /// demand. The <c>File.Exists</c> guard it applies is already satisfied by the caller.
+    /// </summary>
+    private static async Task<WorkspaceSchemaInspection> StampedSchemaAsync(
+        string database,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteConnection connection = WorkspaceDatabaseConnectionFactory.OpenReadOnly(database);
+        await connection.OpenAsync(cancellationToken);
+        return await LoopRelayWorkspaceDatabase.InspectStampedAsync(connection, cancellationToken);
     }
 
     private static string[] Interrupted(IReadOnlyList<StorageTreeEntry> inventory) => inventory

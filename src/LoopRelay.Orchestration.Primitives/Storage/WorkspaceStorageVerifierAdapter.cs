@@ -3,6 +3,14 @@ using LoopRelay.Orchestration.Resolution;
 
 namespace LoopRelay.Orchestration.Storage;
 
+/// <summary>
+/// The only thing between <see cref="IWorkspaceStorageInspector"/> and <c>RepositoryObserver</c>,
+/// and therefore the place that decides which verification tier routine observation pays for. It
+/// reads only <c>Health</c>, <c>Exists</c>, <c>Schema</c>, <c>RequiredActions</c>, <c>Evidence</c>,
+/// <c>UnresolvedReferences</c> and <c>InterruptedOperations</c> - never the inventory's digests -
+/// so it requests <see cref="StorageVerificationDepth.Light"/>. The explicit <c>storage</c>
+/// commands go to the inspector directly and keep the deep default.
+/// </summary>
 public sealed class WorkspaceStorageVerifierAdapter(IWorkspaceStorageInspector? inspector = null) : IStorageVerifier
 {
     private readonly IWorkspaceStorageInspector _inspector = inspector ?? new WorkspaceStorageInspector();
@@ -12,7 +20,7 @@ public sealed class WorkspaceStorageVerifierAdapter(IWorkspaceStorageInspector? 
         CancellationToken cancellationToken)
     {
         StorageInspection inspection = await _inspector.VerifyAsync(
-            new StorageVerifyRequest(repositoryPath), cancellationToken);
+            new StorageVerifyRequest(repositoryPath, StorageVerificationDepth.Light), cancellationToken);
         StorageAuthorityKind authority = inspection.Health switch
         {
             StorageHealth.Corrupt => StorageAuthorityKind.Corrupt,
