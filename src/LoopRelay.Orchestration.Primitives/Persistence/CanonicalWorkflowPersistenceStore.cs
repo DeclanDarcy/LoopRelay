@@ -1542,12 +1542,19 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
         await connection.OpenAsync(cancellationToken);
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
+        // Every open of this store asserts the workspace is canonical, but on all but the first
+        // open the row already reads 'canonical'. The WHERE guard keeps the 'imported' ->
+        // 'canonical' transition (and the first insert) while making the overwhelmingly common
+        // rewrite-with-the-same-value case dirty no page and take no write lock. Nothing consumes
+        // this statement's changed-row count - ExecuteAsync discards it - and no trigger observes
+        // workspace_metadata, so dropping to zero rows changed on the no-op path is unobservable.
         await ExecuteAsync(
             connection,
             """
             INSERT INTO workspace_metadata (key, value)
             VALUES ('persistence_state', 'canonical')
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            WHERE workspace_metadata.value <> excluded.value;
             """,
             cancellationToken);
         return connection;

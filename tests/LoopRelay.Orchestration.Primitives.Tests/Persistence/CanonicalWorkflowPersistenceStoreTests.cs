@@ -1,3 +1,4 @@
+using System.Globalization;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
@@ -1168,6 +1169,86 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
 
         Assert.Empty(await store.ReadProductsByIdentitiesAsync([ProductIdentity.ExecutablePlan]));
     }
+
+    [Fact]
+    public async Task Open_skips_the_persistence_state_write_when_the_row_is_already_canonical()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+
+        // First open creates the database and drives persistence_state to 'canonical'.
+        await store.ReadWorkspaceIdentityAsync();
+
+        await using SqliteConnection observer =
+            LoopRelayWorkspaceDatabase.OpenReadWriteCreate(LoopRelayWorkspaceDatabase.Resolve(repository));
+        await observer.OpenAsync();
+        Assert.Equal("canonical", await ReadPersistenceStateAsync(observer));
+
+        await InstallPersistenceStateWriteObserverAsync(observer);
+
+        // Second open: the row already reads 'canonical', so the upsert must not rewrite it.
+        await store.ReadWorkspaceIdentityAsync();
+
+        Assert.Equal(0, await ReadObservedWriteCountAsync(observer));
+        Assert.Equal("canonical", await ReadPersistenceStateAsync(observer));
+    }
+
+    [Fact]
+    public async Task Open_still_writes_the_persistence_state_row_when_it_is_imported()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        await store.ReadWorkspaceIdentityAsync();
+
+        await using SqliteConnection observer =
+            LoopRelayWorkspaceDatabase.OpenReadWriteCreate(LoopRelayWorkspaceDatabase.Resolve(repository));
+        await observer.OpenAsync();
+        await ExecuteAsync(
+            observer,
+            "UPDATE workspace_metadata SET value = 'imported' WHERE key = 'persistence_state';");
+
+        await InstallPersistenceStateWriteObserverAsync(observer);
+
+        await store.ReadWorkspaceIdentityAsync();
+
+        // The 'imported' -> 'canonical' transition is the one case where the write must happen.
+        Assert.Equal(1, await ReadObservedWriteCountAsync(observer));
+        Assert.Equal("canonical", await ReadPersistenceStateAsync(observer));
+    }
+
+    /// <summary>
+    /// Installs a real SQLite trigger that fires only when the persistence_state row is actually
+    /// rewritten. A value-equality assertion cannot tell a skipped write from a redundant one -
+    /// the row reads 'canonical' either way - so the trigger is what makes "the write was skipped"
+    /// observable, and what fails if an unconditional upsert is ever restored. The counter lives
+    /// under a second key in workspace_metadata so the probe adds no table of its own; that key
+    /// fails the trigger's WHEN clause, so the trigger cannot re-enter itself.
+    /// </summary>
+    private static Task InstallPersistenceStateWriteObserverAsync(SqliteConnection connection) =>
+        ExecuteAsync(
+            connection,
+            """
+            CREATE TRIGGER observe_persistence_state_write
+            AFTER UPDATE OF value ON workspace_metadata
+            WHEN NEW.key = 'persistence_state'
+            BEGIN
+                INSERT INTO workspace_metadata (key, value) VALUES ('observed_writes', '1')
+                ON CONFLICT(key) DO UPDATE SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT);
+            END;
+            """);
+
+    private static async Task<int> ReadObservedWriteCountAsync(SqliteConnection connection)
+    {
+        string? observed = await ScalarStringAsync(
+            connection,
+            "SELECT value FROM workspace_metadata WHERE key = 'observed_writes';");
+        return observed is null ? 0 : int.Parse(observed, CultureInfo.InvariantCulture);
+    }
+
+    private static Task<string?> ReadPersistenceStateAsync(SqliteConnection connection) =>
+        ScalarStringAsync(
+            connection,
+            "SELECT value FROM workspace_metadata WHERE key = 'persistence_state';");
 
     private static Repository CreateRepository()
     {
