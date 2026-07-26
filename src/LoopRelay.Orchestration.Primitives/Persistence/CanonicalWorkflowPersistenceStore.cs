@@ -1697,6 +1697,12 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         return rows;
     }
 
+    private const string ProductColumns = """
+        product_identity, producer_workflow, producer_transition, intended_consumers_json,
+        repository_ownership, authority, storage_representations_json, causal_identity,
+        freshness, validation_state, lifecycle, evidence_locations_json
+        """;
+
     private static async Task<IReadOnlyList<ProductRecord>> ReadProductsAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
@@ -1711,39 +1717,103 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         var rows = new List<ProductRecord>();
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = hasSchemaVersion
-            ? """
-              SELECT product_identity, producer_workflow, producer_transition, intended_consumers_json,
-                     repository_ownership, authority, storage_representations_json, causal_identity,
-                     freshness, validation_state, lifecycle, evidence_locations_json, schema_version
+            ? $"""
+              SELECT {ProductColumns}, schema_version
               FROM canonical_product_records ORDER BY product_identity;
               """
-            : """
-              SELECT product_identity, producer_workflow, producer_transition, intended_consumers_json,
-                     repository_ownership, authority, storage_representations_json, causal_identity,
-                     freshness, validation_state, lifecycle, evidence_locations_json
+            : $"""
+              SELECT {ProductColumns}
               FROM canonical_product_records ORDER BY product_identity;
               """;
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            rows.Add(new ProductRecord(
-                new ProductIdentity(reader.GetString(0)),
-                new WorkflowIdentity(reader.GetString(1)),
-                new WorkflowTransitionIdentity(reader.GetString(2)),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(3)).Select(value => new WorkflowIdentity(value)).ToArray(),
-                reader.GetString(4),
-                reader.GetString(5),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(6)),
-                reader.GetString(7),
-                ParseEnum<ProductFreshness>(reader.GetString(8)),
-                ParseEnum<ProductValidationState>(reader.GetString(9)),
-                ParseEnum<ProductLifecycle>(reader.GetString(10)),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(11)),
-                hasSchemaVersion ? reader.GetString(12) : "1"));
+            rows.Add(MapProduct(reader, hasSchemaVersion));
         }
 
         return rows;
     }
+
+    /// <summary>
+    /// Reads committed product rows filtered to a specific set of product identities, without
+    /// loading the full nine-table persistence snapshot. Used by
+    /// <c>LoopRelay.Cli.Services.Cli.CanonicalFeatureEffectExecutor</c> to re-observe just the
+    /// products a transition produces at effect-execution time, instead of loading and then
+    /// in-memory filtering every canonical product (and every other snapshot table) on each
+    /// effect execution.
+    /// </summary>
+    public async Task<IReadOnlyList<ProductRecord>> ReadProductsByIdentitiesAsync(
+        IReadOnlyCollection<ProductIdentity> identities,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(identities);
+        if (identities.Count == 0)
+        {
+            return [];
+        }
+
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+
+        // The schema_version column arrived with schema v5; snapshots open read-only without
+        // migrating, so a pre-v5 database is read with the column defaulted rather than crashing.
+        bool hasSchemaVersion = await ColumnExistsAsync(
+            connection,
+            "canonical_product_records",
+            "schema_version",
+            cancellationToken);
+        var rows = new List<ProductRecord>();
+        await using SqliteCommand command = connection.CreateCommand();
+        string[] parameterNames = identities.Select((_, index) => $"$id{index}").ToArray();
+        string placeholders = string.Join(", ", parameterNames);
+        command.CommandText = hasSchemaVersion
+            ? $"""
+              SELECT {ProductColumns}, schema_version
+              FROM canonical_product_records WHERE product_identity IN ({placeholders})
+              ORDER BY product_identity;
+              """
+            : $"""
+              SELECT {ProductColumns}
+              FROM canonical_product_records WHERE product_identity IN ({placeholders})
+              ORDER BY product_identity;
+              """;
+        int parameterIndex = 0;
+        foreach (ProductIdentity identity in identities)
+        {
+            command.Parameters.AddWithValue(parameterNames[parameterIndex], identity.Value);
+            parameterIndex++;
+        }
+
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(MapProduct(reader, hasSchemaVersion));
+        }
+
+        return rows;
+    }
+
+    private static ProductRecord MapProduct(SqliteDataReader reader, bool hasSchemaVersion) =>
+        new(
+            new ProductIdentity(reader.GetString(0)),
+            new WorkflowIdentity(reader.GetString(1)),
+            new WorkflowTransitionIdentity(reader.GetString(2)),
+            ReadJson<IReadOnlyList<string>>(reader.GetString(3)).Select(value => new WorkflowIdentity(value)).ToArray(),
+            reader.GetString(4),
+            reader.GetString(5),
+            ReadJson<IReadOnlyList<string>>(reader.GetString(6)),
+            reader.GetString(7),
+            ParseEnum<ProductFreshness>(reader.GetString(8)),
+            ParseEnum<ProductValidationState>(reader.GetString(9)),
+            ParseEnum<ProductLifecycle>(reader.GetString(10)),
+            ReadJson<IReadOnlyList<string>>(reader.GetString(11)),
+            hasSchemaVersion ? reader.GetString(12) : "1");
 
     private static async Task<bool> ColumnExistsAsync(
         SqliteConnection connection,

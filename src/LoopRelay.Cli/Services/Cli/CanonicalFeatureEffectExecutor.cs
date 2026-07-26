@@ -93,9 +93,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
         HashSet<ProductIdentity> produced = definition.ProducedProducts
             .Select(product => product.Identity)
             .ToHashSet();
-        CanonicalWorkflowPersistenceSnapshot snapshot = await _store.LoadSnapshotAsync(cancellationToken);
-        ProductRecord[] products = snapshot.Products
-            .Where(product => produced.Contains(product.Identity))
+        ProductRecord[] products = (await _store.ReadProductsByIdentitiesAsync(produced, cancellationToken))
             .ToArray();
         var validation = new ProductValidationResult(
             ProductValidationStatus.Valid,

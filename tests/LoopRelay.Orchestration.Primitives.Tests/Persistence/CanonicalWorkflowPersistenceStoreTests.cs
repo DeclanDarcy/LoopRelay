@@ -1093,6 +1093,82 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Equal("2", product.SchemaVersion);
     }
 
+    [Fact]
+    public async Task ReadProductsByIdentitiesAsync_returns_only_the_requested_committed_identities()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        await store.UpsertProductAsync(new ProductRecord(
+            ProductIdentity.ExecutablePlan,
+            WorkflowIdentity.Plan,
+            new WorkflowTransitionIdentity("WriteExecutablePlan"),
+            [WorkflowIdentity.Execute],
+            "repository-owned",
+            "canonical",
+            [".agents/plan.md"],
+            "causal-hash-plan",
+            ProductFreshness.Fresh,
+            ProductValidationState.Valid,
+            ProductLifecycle.Active,
+            ["plan.md"],
+            SchemaVersion: "2"));
+        await store.UpsertProductAsync(new ProductRecord(
+            ProductIdentity.EvaluationIntent,
+            WorkflowIdentity.EvalRoadmap,
+            new WorkflowTransitionIdentity("SelectEvaluationIntent"),
+            [],
+            "repository-owned",
+            "canonical",
+            [".agents/evaluation-intent.md"],
+            "causal-hash-evaluation-intent",
+            ProductFreshness.Fresh,
+            ProductValidationState.Valid,
+            ProductLifecycle.Active,
+            ["evaluation-intent.md"]));
+
+        // Requests ExecutablePlan (committed) and PreparedEpic (never committed); EvaluationIntent
+        // is committed but not requested, so a full-table scan-then-filter and this keyed read
+        // must agree it is excluded from the result.
+        IReadOnlyList<ProductRecord> products = await store.ReadProductsByIdentitiesAsync(
+            [ProductIdentity.ExecutablePlan, ProductIdentity.PreparedEpic]);
+
+        ProductRecord product = Assert.Single(products);
+        Assert.Equal(ProductIdentity.ExecutablePlan, product.Identity);
+        Assert.Equal("2", product.SchemaVersion);
+        Assert.Equal("causal-hash-plan", product.CausalIdentity);
+    }
+
+    [Fact]
+    public async Task ReadProductsByIdentitiesAsync_returns_empty_without_querying_when_no_identities_are_requested()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        await store.UpsertProductAsync(new ProductRecord(
+            ProductIdentity.ExecutablePlan,
+            WorkflowIdentity.Plan,
+            new WorkflowTransitionIdentity("WriteExecutablePlan"),
+            [WorkflowIdentity.Execute],
+            "repository-owned",
+            "canonical",
+            [".agents/plan.md"],
+            "causal-hash-plan",
+            ProductFreshness.Fresh,
+            ProductValidationState.Valid,
+            ProductLifecycle.Active,
+            ["plan.md"]));
+
+        Assert.Empty(await store.ReadProductsByIdentitiesAsync([]));
+    }
+
+    [Fact]
+    public async Task ReadProductsByIdentitiesAsync_returns_empty_when_no_database_file_exists_yet()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+
+        Assert.Empty(await store.ReadProductsByIdentitiesAsync([ProductIdentity.ExecutablePlan]));
+    }
+
     private static Repository CreateRepository()
     {
         string path = Directory.CreateTempSubdirectory("looprelay-canonical-persistence-").FullName;
