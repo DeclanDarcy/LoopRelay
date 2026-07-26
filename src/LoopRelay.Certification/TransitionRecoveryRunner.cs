@@ -493,6 +493,12 @@ public sealed class TransitionRecoveryRunner(ICertificationFailureDiagnoser? fai
     {
         public Task<ProductResolutionResult> ResolveAsync(IReadOnlyList<ProductRequirement> requirements, CancellationToken token) =>
             Task.FromResult(new ProductResolutionResult([], [], [], [], []));
+
+        // The recovery canary declares no input products, so both observation owners resolve
+        // to the same empty result.
+        public Task<ProductResolutionResult> ResolveFromObservationAsync(
+            RepositoryObservation observation, IReadOnlyList<ProductRequirement> requirements, CancellationToken token) =>
+            ResolveAsync(requirements, token);
     }
 
     private sealed class SatisfiedGateEvaluator : IGateEvaluator

@@ -130,6 +130,36 @@ public sealed class TransitionRuntimeTests
         Assert.Equal(2, Assert.Single(retry.Attempts.Started).AttemptIndex);
     }
 
+    [Fact]
+    public async Task Attempt_start_resolves_required_inputs_from_the_cycle_observation_it_is_handed()
+    {
+        // PERF-03: the kernel cycle already owns an observation, and the controller hands it
+        // down. Attempt-start resolution must answer from that one rather than rebuilding a
+        // global observation of its own.
+        Harness harness = new();
+        RepositoryObservation cycleObservation = await ObserveEmptyWorkspaceAsync();
+
+        await harness.Runtime.RunAsync(harness.Request with { Observation = cycleObservation });
+
+        Assert.Same(cycleObservation, Assert.Single(harness.Products.ObservationsResolvedFrom));
+        Assert.Equal(0, harness.Products.FreshResolutions);
+    }
+
+    [Fact]
+    public async Task Attempt_start_takes_its_own_observation_when_no_cycle_observation_is_handed_down()
+    {
+        Harness harness = new();
+
+        await harness.Runtime.RunAsync(harness.Request);
+
+        Assert.Equal(1, harness.Products.FreshResolutions);
+        Assert.Empty(harness.Products.ObservationsResolvedFrom);
+    }
+
+    private static Task<RepositoryObservation> ObserveEmptyWorkspaceAsync() =>
+        new RepositoryObserver().ObserveAsync(
+            Directory.CreateTempSubdirectory("looprelay-cycle-observation-").FullName);
+
     private sealed class Harness
     {
         public Harness(
@@ -288,10 +318,26 @@ public sealed class TransitionRuntimeTests
 
     private sealed class FakeProductResolver : IProductResolver
     {
+        public int FreshResolutions { get; private set; }
+
+        public List<RepositoryObservation> ObservationsResolvedFrom { get; } = [];
+
         public Task<ProductResolutionResult> ResolveAsync(
             IReadOnlyList<ProductRequirement> requirements,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(new ProductResolutionResult([], [], [], [], []));
+            CancellationToken cancellationToken)
+        {
+            FreshResolutions++;
+            return Task.FromResult(new ProductResolutionResult([], [], [], [], []));
+        }
+
+        public Task<ProductResolutionResult> ResolveFromObservationAsync(
+            RepositoryObservation observation,
+            IReadOnlyList<ProductRequirement> requirements,
+            CancellationToken cancellationToken)
+        {
+            ObservationsResolvedFrom.Add(observation);
+            return Task.FromResult(new ProductResolutionResult([], [], [], [], []));
+        }
     }
 
     private sealed class FakeGateEvaluator : IGateEvaluator

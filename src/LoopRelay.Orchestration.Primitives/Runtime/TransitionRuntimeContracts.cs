@@ -146,6 +146,11 @@ public sealed record LegacyTransitionExecutionContext : TransitionExecutionConte
     public string CompatibilitySource { get; }
 }
 
+/// <param name="Observation">
+/// The observation the kernel cycle already owns, handed down so attempt-start product
+/// resolution does not rebuild a global one. Null means the caller owns no cycle observation
+/// and attempt-start resolution takes its own.
+/// </param>
 public sealed record TransitionRuntimeRequest(
     WorkflowIdentity Workflow,
     WorkflowStageIdentity Stage,
@@ -153,7 +158,8 @@ public sealed record TransitionRuntimeRequest(
     TransitionExecutionContext ExecutionContext,
     AttemptAuthorization Authorization,
     IReadOnlyDictionary<string, string>? Metadata = null,
-    bool Interactive = false);
+    bool Interactive = false,
+    RepositoryObservation? Observation = null);
 
 public sealed record InputGateEvaluationContext(
     TransitionRuntimeRequest Request,
@@ -520,9 +526,32 @@ public interface ITransitionRuntime
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Answers "which required input products are usable" from a repository observation. The two
+/// members differ only in who owns the observation, and that difference is load-bearing:
+/// <see cref="SnapshotInputFreshnessValidator"/> depends on <see cref="ResolveAsync"/> taking its
+/// own observation at promotion time, while <see cref="TransitionRuntime"/>'s attempt-start
+/// resolution reuses the observation the kernel cycle already owns. A single injected instance
+/// serves both callers, so neither semantic may be folded into the other.
+/// </summary>
 public interface IProductResolver
 {
+    /// <summary>
+    /// Resolves against an observation this resolver takes itself, at call time. Promotion-time
+    /// freshness validation requires exactly this: reusing an older observation there would
+    /// narrow the concurrent-change detection window.
+    /// </summary>
     Task<ProductResolutionResult> ResolveAsync(
+        IReadOnlyList<ProductRequirement> requirements,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resolves against an observation the caller already owns, taking none of its own. Implement
+    /// it as the same projection <see cref="ResolveAsync"/> applies to its own observation —
+    /// never as a silent fall-through to a fresh observation, which would defeat the point.
+    /// </summary>
+    Task<ProductResolutionResult> ResolveFromObservationAsync(
+        RepositoryObservation observation,
         IReadOnlyList<ProductRequirement> requirements,
         CancellationToken cancellationToken);
 }

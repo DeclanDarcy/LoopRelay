@@ -55,8 +55,16 @@ public sealed class TransitionRuntime(
             execution.WorkflowInstance,
             transitionRun,
             attempt);
-        ProductResolutionResult inputs =
-            await _productResolver.ResolveAsync(definition.RequiredInputProducts, cancellationToken);
+        // Attempt-start resolution answers from the observation the kernel cycle already owns
+        // when the caller hands one down - the same observation transition eligibility was
+        // decided from, so the input gate and that decision agree on one snapshot instead of
+        // rebuilding a global one here. Promotion-time freshness keeps its own fresh
+        // observation (SnapshotInputFreshnessValidator), so an older snapshot here only widens
+        // the concurrent-change detection window, never narrows it.
+        ProductResolutionResult inputs = request.Observation is { } cycleObservation
+            ? await _productResolver.ResolveFromObservationAsync(
+                cycleObservation, definition.RequiredInputProducts, cancellationToken)
+            : await _productResolver.ResolveAsync(definition.RequiredInputProducts, cancellationToken);
         GateResult inputGate =
             await _gateEvaluator.EvaluateInputGateAsync(
                 definition.InputGate,

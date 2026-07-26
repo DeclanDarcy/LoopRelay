@@ -315,7 +315,10 @@ public sealed class WorkflowController(
                 selectedTransition.Transition,
                 request.ExecutionContext,
                 request.Authorization,
-                Interactive: request.Interactive),
+                Interactive: request.Interactive,
+                // The cycle's observation, which `resolution` above was already computed from,
+                // is handed down so attempt-start product resolution reuses it.
+                Observation: request.Observation),
             cancellationToken);
         TransitionEffectCoordinationResult? coordination = null;
         if (attempt.RequiredEffectsPending)
