@@ -38,13 +38,25 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
                 "History fact causality belongs to a different workspace identity.");
         }
 
+        // Rotation is a convergence, not an accumulation. A crash between this append committing and
+        // the rotation executor deleting its live source leaves both, so the re-executed effect reads
+        // byte-identical content and appends again. Converging here - before the transaction opens -
+        // is what makes that retry idempotent: answering with the already-committed fact mints no
+        // second identity, writes no second evidence set, and plans no second projection effect.
+        string contentHash = LoopHistoryRecord.ComputeContentHash(request.Content);
+        LoopHistoryRecord? converged = await ReadByContentHashAsync(
+            connection, spec, request.Kind, contentHash, cancellationToken);
+        if (converged is not null)
+        {
+            return converged;
+        }
+
         await using SqliteTransaction transaction =
             (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
 
         long sequence = await NextSequenceAsync(connection, transaction, spec, cancellationToken);
         HistoryFactIdentity historyIdentity = HistoryFactIdentity.New();
         string relativePath = spec.HistoricalPath(checked((int)sequence));
-        string contentHash = LoopHistoryRecord.ComputeContentHash(request.Content);
         DateTimeOffset recordedAt = DateTimeOffset.UtcNow;
         await InsertFactAsync(
             connection,
@@ -160,6 +172,70 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
             evidence,
             reader.IsDBNull(13) ? null : new HistoryFactIdentity(reader.GetString(13)),
             relativePath);
+    }
+
+    /// <summary>
+    /// Returns the committed fact for a (kind, content hash) pair, or null. This is the read that
+    /// makes <see cref="AppendAsync"/> idempotent under re-execution; see the comment at its call
+    /// site. Rows without a canonical <c>history_id</c> are legacy and are deliberately not matched:
+    /// they carry no canonical causality to answer with, so they fall through to a fresh append
+    /// exactly as they do today rather than failing the caller.
+    /// </summary>
+    private static async Task<LoopHistoryRecord?> ReadByContentHashAsync(
+        SqliteConnection connection,
+        LoopHistorySpec spec,
+        LoopHistoryKind kind,
+        string contentHash,
+        CancellationToken cancellationToken)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT history_id, sequence, logical_path, body, content_hash, created_at,
+                   workspace_id, run_id, workflow_instance_id, transition_run_id, attempt_id,
+                   session_id, turn_id, supersedes_id
+            FROM loop_history
+            WHERE kind = $kind AND content_hash = $content_hash AND history_id IS NOT NULL
+            ORDER BY sequence
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$kind", spec.KindToken);
+        command.Parameters.AddWithValue("$content_hash", contentHash);
+        HistoryFactIdentity identity;
+        long sequence;
+        string relativePath;
+        string content;
+        DateTimeOffset recordedAt;
+        CanonicalCausalContext causality;
+        HistoryFactIdentity? supersedes;
+        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return null;
+            }
+
+            identity = new HistoryFactIdentity(reader.GetString(0));
+            sequence = reader.GetInt64(1);
+            relativePath = reader.GetString(2);
+            content = reader.GetString(3);
+            recordedAt = DateTimeOffset.Parse(
+                reader.GetString(5), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+            causality = new CanonicalCausalContext(
+                new WorkspaceIdentity(reader.GetString(6)),
+                new RunIdentity(reader.GetString(7)),
+                new WorkflowInstanceIdentity(reader.GetString(8)),
+                new TransitionRunIdentity(reader.GetString(9)),
+                new AttemptIdentity(reader.GetString(10)),
+                reader.IsDBNull(11) ? null : new AgentSessionIdentity(reader.GetString(11)),
+                reader.IsDBNull(12) ? null : new TurnIdentity(reader.GetString(12)));
+            supersedes = reader.IsDBNull(13) ? null : new HistoryFactIdentity(reader.GetString(13));
+        }
+
+        // The reader is closed first: ReadEvidenceAsync creates its own command on this connection.
+        HistoryEvidenceAttachments evidence = await ReadEvidenceAsync(connection, identity, cancellationToken);
+        return new LoopHistoryRecord(
+            identity, kind, sequence, recordedAt, content, contentHash,
+            causality, evidence, supersedes, relativePath);
     }
 
     private static async Task InsertFactAsync(

@@ -1,11 +1,15 @@
 using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Infrastructure.Services.Effects;
 using LoopRelay.Orchestration.Effects;
+using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Services;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -111,6 +115,63 @@ public sealed class LedgerLoopHistoryStoreTests
         Assert.Equal(0L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM loop_history;"));
     }
 
+    [Fact]
+    public async Task Appending_the_same_content_twice_for_one_kind_converges_on_one_fact()
+    {
+        Harness harness = await NewAsync();
+        var request = new LoopHistoryAppendRequest(
+            LoopHistoryKind.Handoff, "handoff body pinned for duplicate detection", harness.Causality);
+
+        LoopHistoryRecord first = await harness.Store.AppendAsync(request);
+        // Reproduce the crash window: the fact committed, the live file was never deleted, so the
+        // rotation executor reads the same bytes again and appends again.
+        LoopHistoryRecord second = await harness.Store.AppendAsync(request);
+
+        Assert.Equal(first.Identity, second.Identity);
+        Assert.Equal(first.Sequence, second.Sequence);
+        Assert.Equal(first.MaterializedRelativePath, second.MaterializedRelativePath);
+        await using SqliteConnection connection = await OpenAsync(harness.Repository, readOnly: true);
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM loop_history;"));
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM history_evidence_sets;"));
+        Assert.Equal(1L, await ScalarLongAsync(
+            connection,
+            "SELECT COUNT(*) FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Handoff';"));
+    }
+
+    /// <summary>
+    /// The crash this task exists for, driven through the real rotation path rather than through two
+    /// bare store calls: <see cref="LoopArtifacts.RotateLiveHandoffAsync"/> commits the history fact
+    /// and only then deletes the live source. Killing the process in that window leaves both, and the
+    /// re-executed effect re-reads byte-identical source and rotates a second time.
+    /// </summary>
+    [Fact]
+    public async Task Rotation_interrupted_before_its_source_delete_converges_when_it_re_executes()
+    {
+        Harness harness = await NewAsync();
+        var files = new CrashOnDeleteArtifactStore(new MemoryArtifactStore());
+        var artifacts = new LoopArtifacts(
+            files, harness.Repository, harness.Store, new NoRecommendationStore());
+        await artifacts.WriteAsync(OrchestrationArtifactPaths.LiveHandoff, "handoff awaiting rotation");
+
+        files.FailNextDelete = true;
+        await Assert.ThrowsAsync<IOException>(() => artifacts.RotateLiveHandoffAsync(harness.Causality));
+        Assert.Equal(
+            "handoff awaiting rotation",
+            await artifacts.ReadAsync(OrchestrationArtifactPaths.LiveHandoff));
+
+        Assert.Equal(
+            "handoff awaiting rotation",
+            await artifacts.RotateLiveHandoffAsync(harness.Causality));
+
+        Assert.False(await artifacts.ExistsAsync(OrchestrationArtifactPaths.LiveHandoff));
+        await using SqliteConnection connection = await OpenAsync(harness.Repository, readOnly: true);
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM loop_history;"));
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM history_evidence_sets;"));
+        Assert.Equal(1L, await ScalarLongAsync(
+            connection,
+            "SELECT COUNT(*) FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Handoff';"));
+    }
+
     private static async Task<Harness> NewAsync()
     {
         string root = Directory.CreateTempSubdirectory("cc-cli-ledger-history").FullName;
@@ -177,4 +238,45 @@ public sealed class LedgerLoopHistoryStoreTests
         Repository Repository,
         LedgerLoopHistoryStore Store,
         CanonicalCausalContext Causality);
+
+    /// <summary>
+    /// Stands in for the process dying between the authoritative history commit and the deletion of
+    /// the live source: one delete is lost, everything the append already committed survives.
+    /// </summary>
+    private sealed class CrashOnDeleteArtifactStore(IArtifactStore _inner) : IArtifactStore
+    {
+        public bool FailNextDelete { get; set; }
+
+        public Task<bool> ExistsAsync(string path) => _inner.ExistsAsync(path);
+        public Task<string?> ReadAsync(string path) => _inner.ReadAsync(path);
+        public Task WriteAsync(string path, string content) => _inner.WriteAsync(path, content);
+        public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern) =>
+            _inner.ListAsync(path, searchPattern);
+        public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path) =>
+            _inner.ListDirectoriesAsync(path);
+
+        public Task DeleteAsync(string path)
+        {
+            if (!FailNextDelete) return _inner.DeleteAsync(path);
+            FailNextDelete = false;
+            throw new IOException("process died before the live source was deleted");
+        }
+    }
+
+    private sealed class NoRecommendationStore : IExecutionRecommendationEvidenceStore
+    {
+        public Task AppendAsync(
+            ExecutionRecommendationEvidence evidence,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<ExecutionRecommendationEvidence?> ReadAsync(
+            ExecutionRecommendationIdentity identity,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<ExecutionRecommendationEvidence?>(null);
+
+        public Task<ExecutionRecommendationEvidence?> ReadForDecisionAsync(
+            DecisionProductVersionIdentity decisionProduct,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<ExecutionRecommendationEvidence?>(null);
+    }
 }
