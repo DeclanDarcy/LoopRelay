@@ -113,14 +113,15 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 // filename set is a superset carry-over from the five-class split: three files above
 // (CompositionRootLedgerHandoffAndRevisionTests, CompositionRootRunDecisionAndWarmSessionTests,
 // CompositionRootMixedTransitionAndSessionTests) are new; the other five keep their prior names
-// even though their membership changed, because
-// src/LoopRelay.Certification/FailureOracleMatrixRunner.cs hardcodes a path to
-// CompositionRootTraditionalRoadmapAndSpineTests.cs as evidence for the
-// "corrected-malformed-output" failure oracle, and that file still holds the referenced
-// TraditionalRoadmap_accepts_inline_code_file_markers_from_provider_output test. All 41 methods
-// moved verbatim between the five prior sibling classes and the three new ones added here; no
-// test body changed. Shared static helpers and the two nested private fakes below are unchanged
-// by this rebalance.
+// only because renaming them was never worth the churn. These names are now free to change: the
+// certification matrix used to hardcode a source path to
+// CompositionRootTraditionalRoadmapAndSpineTests.cs as "evidence" for the
+// "corrected-malformed-output" failure oracle, and a File.Exists on that path was the entire
+// check, so a rename failed the release matrix from six commits away. That path check has been
+// deleted; no certification code refers to any file in this directory. All 41 methods moved
+// verbatim between the five prior sibling classes and the three new ones added here; no test body
+// changed. Shared static helpers and the two nested private fakes below are unchanged by this
+// rebalance.
 public abstract class CompositionRootTestBase
 {
     /// <summary>

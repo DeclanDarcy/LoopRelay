@@ -218,16 +218,13 @@ public sealed class ReleaseGateRunner
             "quota-coordination",
             "ordering-independent-oracle",
             "cancellation-fan-out",
-        }.Select(identity => new FailureCoverageCaseResult(
+        }.Select(identity => FailureCoverageCaseResult.ForReviewedExclusion(
             identity,
             "future-topology",
             "remain-uncovered-until-production-support",
-            EvidenceLevel.Uncovered,
-            false,
-            true,
+            reviewedExclusion: true,
             "architecture-certification",
             $"Recertify when production introduces {identity}.",
-            true,
             ["release-visible-nonproduction-obligation"])).ToArray();
 
     private static async Task<bool> BudgetsPassedAsync(string evidenceRoot, CancellationToken token)
