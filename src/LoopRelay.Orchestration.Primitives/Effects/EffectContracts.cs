@@ -325,22 +325,18 @@ public sealed record EffectParent(EffectIntentIdentity Identity, int Order);
 public sealed record EffectWorkItem(
     EffectIntent Intent,
     EffectLifecycle State,
-    long RowVersion,
-    string? LeaseOwner,
-    DateTimeOffset? LeaseExpiresAt,
     EffectReceipt? Receipt,
     IReadOnlyList<EffectLifecycleEvent> Events);
 
 /// <summary>
 /// What the effect worker actually reads from a scan. Deliberately not an <see cref="EffectWorkItem"/>:
-/// the worker consumes only the intent, the lifecycle status and the row version, and hydrating
-/// receipts and full event history per discovered row costs 2N+1 statements per pass against a
-/// history that grows for the life of the workspace.
+/// the worker consumes only the intent and the lifecycle status, and hydrating receipts and full
+/// event history per discovered row costs 2N+1 statements per pass against a history that grows for
+/// the life of the workspace.
 /// </summary>
 public sealed record EffectScanRow(
     EffectIntent Intent,
-    EffectLifecycle State,
-    long RowVersion);
+    EffectLifecycle State);
 
 public sealed record EffectExecutionObservation(
     EffectLifecycle State,
@@ -390,9 +386,9 @@ public interface IEffectWorkStore
     /// record, because the durable gates read it off the status column and this path writes no
     /// receipt; use <see cref="RecordReceiptAsync"/>.
     /// </summary>
-    Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset recordedAt, CancellationToken cancellationToken);
-    Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectReceipt receipt, string worker, CancellationToken cancellationToken);
-    Task RecordReconciliationAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectReconciliationObservation observation, string worker, DateTimeOffset recordedAt, CancellationToken cancellationToken);
+    Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset recordedAt, CancellationToken cancellationToken);
+    Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, EffectReceipt receipt, string worker, CancellationToken cancellationToken);
+    Task RecordReconciliationAsync(EffectIntentIdentity identity, EffectReconciliationObservation observation, string worker, DateTimeOffset recordedAt, CancellationToken cancellationToken);
 }
 
 public interface IEffectPlanStore

@@ -23,16 +23,14 @@ public sealed class DurableEffectSettlementReturnTests
         EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
 
         EffectWorkItem returned = await store.AppendLifecycleAsync(
-            intent.Identity, planned.RowVersion, EffectLifecycle.Unknown, "worker-a",
+            intent.Identity, EffectLifecycle.Unknown, "worker-a",
             "Effect execution ended without a trustworthy observation.", ["IOException", "socket closed"],
             DateTimeOffset.UtcNow, CancellationToken.None);
 
         EffectWorkItem observed = (await new CanonicalEffectWorkStore(repository)
             .ReadAsync(intent.Identity, CancellationToken.None))!;
+        Assert.Equal(EffectLifecycle.Planned, planned.State);
         Assert.Equal(EffectLifecycle.Unknown, returned.State);
-        Assert.Equal(planned.RowVersion + 1, returned.RowVersion);
-        Assert.Null(returned.LeaseOwner);
-        Assert.Null(returned.LeaseExpiresAt);
         AssertMatches(observed, returned);
     }
 
@@ -50,16 +48,34 @@ public sealed class DurableEffectSettlementReturnTests
             DateTimeOffset.UtcNow);
 
         EffectWorkItem returned = await store.RecordReceiptAsync(
-            intent.Identity, planned.RowVersion, receipt, "worker-a", CancellationToken.None);
+            intent.Identity, receipt, "worker-a", CancellationToken.None);
 
         EffectWorkItem observed = (await new CanonicalEffectWorkStore(repository)
             .ReadAsync(intent.Identity, CancellationToken.None))!;
+        Assert.Equal(EffectLifecycle.Planned, planned.State);
         Assert.Equal(EffectLifecycle.Succeeded, returned.State);
-        Assert.Equal(planned.RowVersion + 1, returned.RowVersion);
-        Assert.Null(returned.LeaseOwner);
-        Assert.Null(returned.LeaseExpiresAt);
         Assert.Equal(receipt.Identity, returned.Receipt!.Identity);
         AssertMatches(observed, returned);
+    }
+
+    [Fact]
+    public async Task Settling_an_effect_needs_no_expected_row_version_from_the_caller()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalEffectWorkStore(repository);
+        EffectIntent intent = Intent(Causality(), order: 0, key: "versionless");
+        await store.AppendPlanAsync([intent], CancellationToken.None);
+        var receipt = new EffectReceipt(
+            EffectReceiptIdentity.New(), intent.Identity, intent.Executor, intent.ExecutorVersion,
+            intent.Target.Identity, "absent", "present", true, null, ["file:written"], DateTimeOffset.UtcNow);
+
+        EffectWorkItem settled = await store.RecordReceiptAsync(
+            intent.Identity, receipt, "worker", CancellationToken.None);
+
+        Assert.Equal(EffectLifecycle.Succeeded, settled.State);
+        Assert.DoesNotContain(
+            typeof(IEffectWorkStore).GetMethods().SelectMany(method => method.GetParameters()),
+            parameter => parameter.Name is "expectedRowVersion");
     }
 
     [Fact]
@@ -177,9 +193,6 @@ public sealed class DurableEffectSettlementReturnTests
     {
         Assert.Equal(observed.Intent.Identity, returned.Intent.Identity);
         Assert.Equal(observed.State, returned.State);
-        Assert.Equal(observed.RowVersion, returned.RowVersion);
-        Assert.Equal(observed.LeaseOwner, returned.LeaseOwner);
-        Assert.Equal(observed.LeaseExpiresAt, returned.LeaseExpiresAt);
         Assert.Equal(observed.Receipt?.Identity, returned.Receipt?.Identity);
         Assert.Equal(observed.Receipt?.Evidence, returned.Receipt?.Evidence);
         Assert.Equal(observed.Receipt?.RecordedAt, returned.Receipt?.RecordedAt);
@@ -313,7 +326,7 @@ public sealed class DurableEffectSettlementReturnTests
         }
 
         public Task<EffectWorkItem> AppendLifecycleAsync(
-            EffectIntentIdentity identity, long expectedRowVersion, EffectLifecycle state, string worker,
+            EffectIntentIdentity identity, EffectLifecycle state, string worker,
             string explanation, IReadOnlyList<string> evidence, DateTimeOffset recordedAt,
             CancellationToken cancellationToken)
         {
@@ -321,21 +334,21 @@ public sealed class DurableEffectSettlementReturnTests
             return AttributeAsync(
                 StoreCall.LifecycleAppend,
                 () => _inner.AppendLifecycleAsync(
-                    identity, expectedRowVersion, state, worker, explanation, evidence, recordedAt, cancellationToken));
+                    identity, state, worker, explanation, evidence, recordedAt, cancellationToken));
         }
 
         public Task<EffectWorkItem> RecordReceiptAsync(
-            EffectIntentIdentity identity, long expectedRowVersion, EffectReceipt receipt, string worker,
+            EffectIntentIdentity identity, EffectReceipt receipt, string worker,
             CancellationToken cancellationToken)
         {
             ReceiptRecords++;
             return AttributeAsync(
                 StoreCall.ReceiptRecord,
-                () => _inner.RecordReceiptAsync(identity, expectedRowVersion, receipt, worker, cancellationToken));
+                () => _inner.RecordReceiptAsync(identity, receipt, worker, cancellationToken));
         }
 
         public async Task RecordReconciliationAsync(
-            EffectIntentIdentity identity, long expectedRowVersion, EffectReconciliationObservation observation,
+            EffectIntentIdentity identity, EffectReconciliationObservation observation,
             string worker, DateTimeOffset recordedAt, CancellationToken cancellationToken)
         {
             Reconciliations++;
@@ -344,7 +357,7 @@ public sealed class DurableEffectSettlementReturnTests
                 async () =>
                 {
                     await _inner.RecordReconciliationAsync(
-                        identity, expectedRowVersion, observation, worker, recordedAt, cancellationToken);
+                        identity, observation, worker, recordedAt, cancellationToken);
                     return null;
                 });
         }

@@ -23,7 +23,7 @@ public sealed class CanonicalEffectWorkStoreTests
             EffectReceiptIdentity.New(), intent.Identity, intent.Executor, intent.ExecutorVersion,
             intent.Target.Identity, "before", "after", true, "commit:abc", ["git-observation"], DateTimeOffset.UtcNow);
         await firstStore.RecordReceiptAsync(
-            intent.Identity, planned.RowVersion, receipt, "worker-a", CancellationToken.None);
+            intent.Identity, receipt, "worker-a", CancellationToken.None);
 
         var restarted = new CanonicalEffectWorkStore(repository);
         EffectWorkItem settled = Assert.IsType<EffectWorkItem>(await restarted.ReadAsync(intent.Identity, CancellationToken.None));
@@ -187,8 +187,9 @@ public sealed class CanonicalEffectWorkStoreTests
 
         InvalidOperationException refusal = await Assert.ThrowsAsync<InvalidOperationException>(
             () => store.RecordReceiptAsync(
-                intent.Identity, settled.RowVersion, Receipt(intent), "worker", CancellationToken.None));
+                intent.Identity, Receipt(intent), "worker", CancellationToken.None));
         Assert.Equal("Illegal effect lifecycle transition: Succeeded -> Succeeded.", refusal.Message);
+        Assert.Equal(EffectLifecycle.Succeeded, settled.State);
         Assert.Equal(1L, await CountAsync(
             repository,
             "SELECT COUNT(*) FROM canonical_effect_receipts WHERE effect_intent_id = $intent;",
@@ -217,7 +218,7 @@ public sealed class CanonicalEffectWorkStoreTests
 
         InvalidOperationException refusal = await Assert.ThrowsAsync<InvalidOperationException>(
             () => store.AppendLifecycleAsync(
-                intent.Identity, planned.RowVersion, EffectLifecycle.Succeeded, "worker",
+                intent.Identity, EffectLifecycle.Succeeded, "worker",
                 "settled without a receipt", [], DateTimeOffset.UtcNow, CancellationToken.None));
         Assert.Equal(
             "Effect success is recorded by receipt: use RecordReceiptAsync, not a lifecycle append.",
@@ -232,10 +233,11 @@ public sealed class CanonicalEffectWorkStoreTests
 
         // The refusal leaves the row exactly as it was, and the receipt path still settles it.
         EffectWorkItem afterRefusal = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
+        Assert.Equal(planned.State, afterRefusal.State);
         Assert.Equal(EffectLifecycle.Planned, afterRefusal.State);
-        Assert.Equal(planned.RowVersion, afterRefusal.RowVersion);
+        Assert.Equal(planned.Events.Select(item => item.Sequence), afterRefusal.Events.Select(item => item.Sequence));
         EffectWorkItem settled = await store.RecordReceiptAsync(
-            intent.Identity, planned.RowVersion, Receipt(intent), "worker", CancellationToken.None);
+            intent.Identity, Receipt(intent), "worker", CancellationToken.None);
         Assert.Equal(EffectLifecycle.Succeeded, settled.State);
         Assert.Equal(1L, await CountAsync(
             repository,
@@ -281,9 +283,8 @@ public sealed class CanonicalEffectWorkStoreTests
 
     private static async Task<EffectWorkItem> SettleAsync(CanonicalEffectWorkStore store, EffectIntent intent)
     {
-        EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
         return await store.RecordReceiptAsync(
-            intent.Identity, planned.RowVersion, Receipt(intent), "worker", CancellationToken.None);
+            intent.Identity, Receipt(intent), "worker", CancellationToken.None);
     }
 
     private static EffectReceipt Receipt(EffectIntent intent) => new(

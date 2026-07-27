@@ -275,16 +275,16 @@ public sealed class GitEffectExecutorsTests
         public Task<IReadOnlyList<EffectWorkItem>> ReadPlanAsync(TransitionRunIdentity transition, CancellationToken token) => inner.ReadPlanAsync(transition, token);
         public Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken token) => inner.ReadAsync(identity, token);
         public Task<bool> DependencySatisfiedAsync(EffectIntent candidate, EffectIntentIdentity dependency, CancellationToken token) => inner.DependencySatisfiedAsync(candidate, dependency, token);
-        public Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, long version, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset at, CancellationToken token) => inner.AppendLifecycleAsync(identity, version, state, worker, explanation, evidence, at, token);
-        public Task RecordReconciliationAsync(EffectIntentIdentity identity, long version, EffectReconciliationObservation observation, string worker, DateTimeOffset at, CancellationToken token) => inner.RecordReconciliationAsync(identity, version, observation, worker, at, token);
-        public Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, long version, EffectReceipt receipt, string worker, CancellationToken token)
+        public Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset at, CancellationToken token) => inner.AppendLifecycleAsync(identity, state, worker, explanation, evidence, at, token);
+        public Task RecordReconciliationAsync(EffectIntentIdentity identity, EffectReconciliationObservation observation, string worker, DateTimeOffset at, CancellationToken token) => inner.RecordReconciliationAsync(identity, observation, worker, at, token);
+        public Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, EffectReceipt receipt, string worker, CancellationToken token)
         {
             if (!_failed)
             {
                 _failed = true;
                 throw new IOException("Injected receipt persistence loss.");
             }
-            return inner.RecordReceiptAsync(identity, version, receipt, worker, token);
+            return inner.RecordReceiptAsync(identity, receipt, worker, token);
         }
     }
 }

@@ -206,7 +206,6 @@ public static class LoopRelayWorkspaceDatabase
                 ShapeRequirement.Table("canonical_effect_receipts"),
                 ShapeRequirement.Table("canonical_effect_reconciliation_attempts"),
                 ShapeRequirement.Index("idx_effect_intents_unsettled"),
-                ShapeRequirement.Index("idx_effect_intents_lease"),
                 ShapeRequirement.Index("idx_effect_intents_transition_attempt"),
                 ShapeRequirement.Index("idx_effect_intents_semantic_operation"),
                 ShapeRequirement.Index("idx_effect_receipts_intent"),
@@ -1677,9 +1676,6 @@ public static class LoopRelayWorkspaceDatabase
         ("precondition_json", "text"),
         ("postcondition_json", "text"),
         ("reconciliation_policy", "text"),
-        ("row_version", "integer not null default 0"),
-        ("lease_owner", "text"),
-        ("lease_expires_at", "text"),
         ("terminal_receipt_id", "text"),
     ];
 
@@ -2587,8 +2583,6 @@ public static class LoopRelayWorkspaceDatabase
 
         CREATE INDEX IF NOT EXISTS idx_effect_intents_unsettled
             ON canonical_effect_intents(status, requiredness, effect_order, planned_at);
-        CREATE INDEX IF NOT EXISTS idx_effect_intents_lease
-            ON canonical_effect_intents(lease_expires_at, row_version);
         CREATE INDEX IF NOT EXISTS idx_effect_intents_transition_attempt
             ON canonical_effect_intents(transition_run_id, attempt_id, effect_order);
         CREATE INDEX IF NOT EXISTS idx_effect_intents_semantic_operation
@@ -2645,10 +2639,7 @@ public static class LoopRelayWorkspaceDatabase
             precondition_json = COALESCE(precondition_json, '{"kind":"legacy-unknown"}'),
             postcondition_json = COALESCE(postcondition_json, '{"kind":"legacy-unknown"}'),
             reconciliation_policy = COALESCE(reconciliation_policy, 'human-decision-required'),
-            status = CASE WHEN executor_key IS NULL THEN 'HumanActionRequired' ELSE status END,
-            row_version = CASE WHEN executor_key IS NULL THEN row_version + 1 ELSE row_version END,
-            lease_owner = NULL,
-            lease_expires_at = NULL;
+            status = CASE WHEN executor_key IS NULL THEN 'HumanActionRequired' ELSE status END;
         """;
 
     private const string SchemaV11Sql = """

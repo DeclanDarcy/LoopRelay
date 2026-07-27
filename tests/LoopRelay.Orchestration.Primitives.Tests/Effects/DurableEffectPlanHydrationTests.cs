@@ -211,9 +211,6 @@ public sealed class DurableEffectPlanHydrationTests
         Assert.Equal(expected.Intent.IdempotencyKey, actual.Intent.IdempotencyKey);
         Assert.Equal(expected.Intent.Dependencies, actual.Intent.Dependencies);
         Assert.Equal(expected.State, actual.State);
-        Assert.Equal(expected.RowVersion, actual.RowVersion);
-        Assert.Equal(expected.LeaseOwner, actual.LeaseOwner);
-        Assert.Equal(expected.LeaseExpiresAt, actual.LeaseExpiresAt);
         Assert.Equal(expected.Receipt?.Identity, actual.Receipt?.Identity);
         Assert.Equal(expected.Receipt?.Intent, actual.Receipt?.Intent);
         Assert.Equal(expected.Receipt?.PostconditionSatisfied, actual.Receipt?.PostconditionSatisfied);

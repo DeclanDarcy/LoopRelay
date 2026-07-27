@@ -407,18 +407,28 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "workspace_id", "run_id", "workflow_instance_id", "semantic_operation_key",
             "executor_key", "executor_version", "target_json", "payload_json", "payload_hash",
             "requiredness", "dependencies_json", "precondition_json", "postcondition_json",
-            "reconciliation_policy", "row_version", "lease_owner", "lease_expires_at",
-            "terminal_receipt_id",
+            "reconciliation_policy", "terminal_receipt_id",
         })
         {
             Assert.Contains(column, columns);
         }
 
-        // `attempt_count` was incremented only by the effect lease, which commit 94dcd313 deleted.
-        // It is not in the base `CREATE TABLE`, so removing its `V10EffectIntentColumns` entry both
-        // stops the ALTER that used to add it and drops its `ShapeRequirement` -- a fresh database
-        // must now come up without the column at all rather than carrying a permanently-zero one.
-        Assert.DoesNotContain("attempt_count", columns);
+        // Each of these lost its last writer to an earlier cut and then its last reader, and none is
+        // in the base `CREATE TABLE`: each existed only as one `V10EffectIntentColumns` entry, which
+        // is the single source for both the ALTER that used to add it and its `ShapeRequirement`.
+        // Removing the entry drops the DDL and the shape contract together, so a fresh database must
+        // now come up without the column at all rather than carrying a permanently-inert one.
+        // `attempt_count` went with the lease's increment (94dcd313, 01f47c25); `lease_owner` and
+        // `lease_expires_at` went with the lease itself (94dcd313); `row_version` was the last
+        // compare-and-set guard on a single-writer table and is asserted absent here so its drop is
+        // proven against a real database rather than inferred from the declaration.
+        foreach (string column in new[]
+        {
+            "attempt_count", "row_version", "lease_owner", "lease_expires_at",
+        })
+        {
+            Assert.DoesNotContain(column, columns);
+        }
     }
 
     [Fact]

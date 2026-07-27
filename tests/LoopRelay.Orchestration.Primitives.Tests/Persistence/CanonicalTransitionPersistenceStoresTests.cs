@@ -161,7 +161,6 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         var effectStore = new CanonicalEffectWorkStore(repository);
         await effectStore.RecordReceiptAsync(
             work.Intent.Identity,
-            work.RowVersion,
             new EffectReceipt(
                 EffectReceiptIdentity.New(), work.Intent.Identity, work.Intent.Executor,
                 work.Intent.ExecutorVersion, work.Intent.Target.Identity, "before", "after",

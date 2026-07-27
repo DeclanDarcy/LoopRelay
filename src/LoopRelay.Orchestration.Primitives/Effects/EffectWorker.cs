@@ -59,7 +59,7 @@ public sealed class EffectWorker(
 
             if (item.State is EffectLifecycle.Unknown or EffectLifecycle.Reconciling)
             {
-                EffectWorkItem reconciled = await ReconcileAsync(item.Intent, item.RowVersion, cancellationToken);
+                EffectWorkItem reconciled = await ReconcileAsync(item.Intent, cancellationToken);
                 if (reconciled.State == EffectLifecycle.Succeeded)
                 {
                     settled.Add(reconciled.Intent.Identity);
@@ -87,7 +87,7 @@ public sealed class EffectWorker(
             // No claim and no start marker. Every executor is idempotent, so a crash between here
             // and the terminal write leaves a row that is simply re-executed on the next pass.
             dispatched++;
-            EffectWorkItem current = new(item.Intent, item.State, item.RowVersion, null, null, null, []);
+            EffectWorkItem current = new(item.Intent, item.State, null, []);
             try
             {
                 IEffectExecutor executor = _executors.Resolve(current.Intent.Executor, current.Intent.ExecutorVersion);
@@ -96,7 +96,6 @@ public sealed class EffectWorker(
                 {
                     current = await _store.RecordReceiptAsync(
                         current.Intent.Identity,
-                        current.RowVersion,
                         Receipt(current.Intent, observation),
                         _workerIdentity,
                         CancellationToken.None);
@@ -110,7 +109,6 @@ public sealed class EffectWorker(
                         : observation.State;
                     current = await _store.AppendLifecycleAsync(
                         current.Intent.Identity,
-                        current.RowVersion,
                         state,
                         _workerIdentity,
                         observation.Explanation,
@@ -129,7 +127,6 @@ public sealed class EffectWorker(
             {
                 await _store.AppendLifecycleAsync(
                     current.Intent.Identity,
-                    current.RowVersion,
                     EffectLifecycle.Unknown,
                     _workerIdentity,
                     "Effect execution ended without a trustworthy observation.",
@@ -174,12 +171,10 @@ public sealed class EffectWorker(
 
     private async Task<EffectWorkItem> ReconcileAsync(
         EffectIntent intent,
-        long rowVersion,
         CancellationToken cancellationToken)
     {
         EffectWorkItem current = await _store.AppendLifecycleAsync(
             intent.Identity,
-            rowVersion,
             EffectLifecycle.Reconciling,
             _workerIdentity,
             "Independent postcondition reconciliation started.",
@@ -189,7 +184,6 @@ public sealed class EffectWorker(
         EffectReconciliationObservation observation = await _reconciler.ReconcileAsync(current.Intent, cancellationToken);
         await _store.RecordReconciliationAsync(
             current.Intent.Identity,
-            current.RowVersion,
             observation,
             _workerIdentity,
             DateTimeOffset.UtcNow,
@@ -206,7 +200,6 @@ public sealed class EffectWorker(
                 observation.ExternalCorrelation);
             return await _store.RecordReceiptAsync(
                 current.Intent.Identity,
-                current.RowVersion,
                 Receipt(current.Intent, execution),
                 _workerIdentity,
                 CancellationToken.None);
@@ -220,7 +213,6 @@ public sealed class EffectWorker(
         };
         return await _store.AppendLifecycleAsync(
             current.Intent.Identity,
-            current.RowVersion,
             state,
             _workerIdentity,
             observation.Explanation,

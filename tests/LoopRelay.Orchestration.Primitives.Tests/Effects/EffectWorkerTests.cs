@@ -317,7 +317,7 @@ public sealed class EffectWorkerTests
                     .OrderBy(item => item.Intent.Order)
                     .Take(limit)
                     .Select(item => item.Snapshot())
-                    .Select(item => new EffectScanRow(item.Intent, item.State, item.RowVersion))
+                    .Select(item => new EffectScanRow(item.Intent, item.State))
                     .ToArray();
                 return Task.FromResult(result);
             }
@@ -378,7 +378,6 @@ public sealed class EffectWorkerTests
 
         public Task<EffectWorkItem> AppendLifecycleAsync(
             EffectIntentIdentity identity,
-            long expectedRowVersion,
             EffectLifecycle state,
             string worker,
             string explanation,
@@ -388,10 +387,9 @@ public sealed class EffectWorkerTests
         {
             lock (_gate)
             {
-                MutableItem item = RequireVersion(identity, expectedRowVersion);
+                MutableItem item = Require(identity);
                 EffectLifecyclePolicy.RequireTransition(item.State, state);
                 item.State = state;
-                item.RowVersion++;
                 item.Events.Add(Event(item, worker, explanation, evidence));
                 return Task.FromResult(item.Snapshot());
             }
@@ -399,22 +397,18 @@ public sealed class EffectWorkerTests
 
         public Task<EffectWorkItem> RecordReceiptAsync(
             EffectIntentIdentity identity,
-            long expectedRowVersion,
             EffectReceipt receipt,
             string worker,
             CancellationToken cancellationToken)
         {
             lock (_gate)
             {
-                MutableItem item = RequireVersion(identity, expectedRowVersion);
+                MutableItem item = Require(identity);
                 Assert.Equal(identity, receipt.Intent);
                 Assert.True(receipt.PostconditionSatisfied);
                 EffectLifecyclePolicy.RequireTransition(item.State, EffectLifecycle.Succeeded);
                 item.Receipt = receipt;
                 item.State = EffectLifecycle.Succeeded;
-                item.RowVersion++;
-                item.LeaseOwner = null;
-                item.LeaseExpiresAt = null;
                 item.Events.Add(Event(item, worker, "Receipt recorded.", receipt.Evidence));
                 return Task.FromResult(item.Snapshot());
             }
@@ -422,7 +416,6 @@ public sealed class EffectWorkerTests
 
         public Task RecordReconciliationAsync(
             EffectIntentIdentity identity,
-            long expectedRowVersion,
             EffectReconciliationObservation observation,
             string worker,
             DateTimeOffset recordedAt,
@@ -430,19 +423,19 @@ public sealed class EffectWorkerTests
         {
             lock (_gate)
             {
-                MutableItem item = RequireVersion(identity, expectedRowVersion);
+                MutableItem item = Require(identity);
                 if (item.State != EffectLifecycle.Reconciling)
-                    throw new InvalidOperationException("Reconciliation observation lost its effect row version.");
+                    throw new InvalidOperationException("Reconciliation observation lost its effect row.");
                 return Task.CompletedTask;
             }
         }
 
-        private MutableItem RequireVersion(EffectIntentIdentity identity, long expected)
-        {
-            MutableItem item = _items[identity];
-            if (item.RowVersion != expected) throw new InvalidOperationException("Compare-and-set conflict.");
-            return item;
-        }
+        /// <summary>
+        /// Mirrors <c>ReadRequiredAsync</c>: the row must exist. There is no compare-and-set left to
+        /// mirror -- the store decides on state it re-reads inside its own write transaction, and so
+        /// does this.
+        /// </summary>
+        private MutableItem Require(EffectIntentIdentity identity) => _items[identity];
 
         private EffectLifecycleEvent Event(MutableItem item, string worker, string explanation, IReadOnlyList<string> evidence) =>
             new(++_sequence, item.Intent.Identity, item.State, worker, explanation, evidence, DateTimeOffset.UtcNow);
@@ -451,13 +444,9 @@ public sealed class EffectWorkerTests
         {
             public EffectIntent Intent { get; } = intent;
             public EffectLifecycle State { get; set; } = EffectLifecycle.Planned;
-            public long RowVersion { get; set; }
-            public string? LeaseOwner { get; set; }
-            public DateTimeOffset? LeaseExpiresAt { get; set; }
             public EffectReceipt? Receipt { get; set; }
             public List<EffectLifecycleEvent> Events { get; } = [];
-            public EffectWorkItem Snapshot() => new(
-                Intent, State, RowVersion, LeaseOwner, LeaseExpiresAt, Receipt, Events.ToArray());
+            public EffectWorkItem Snapshot() => new(Intent, State, Receipt, Events.ToArray());
         }
     }
 }

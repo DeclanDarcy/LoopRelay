@@ -77,12 +77,12 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
                         workspace_id, run_id, workflow_instance_id, semantic_operation_key,
                         executor_key, executor_version, target_json, payload_json, payload_hash,
                         requiredness, dependencies_json, precondition_json, postcondition_json,
-                        reconciliation_policy, row_version
+                        reconciliation_policy
                     ) VALUES (
                         $intent, $transition, $attempt, $semantic, 'Canonical', $order, $idempotency,
                         'Planned', $definition, $planned, $workspace, $run, $workflow, $semantic,
                         $executor, $executor_version, $target, $payload, $payload_hash, $requiredness,
-                        $dependencies, $precondition, $postcondition, $reconciliation, 0
+                        $dependencies, $precondition, $postcondition, $reconciliation
                     )
                     ON CONFLICT(idempotency_key) DO NOTHING;
                     """;
@@ -165,9 +165,9 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         await using SqliteCommand command = CreateCommand(connection);
         // 'Started' and 'Leased' are retired tokens kept only so pre-cut rows are still found;
         // ParseStatus maps both to Planned. There is no lease-expiry disjunction any more, because
-        // nothing writes lease_owner: a row is discoverable on its status alone.
+        // the lease columns are gone: a row is discoverable on its status alone.
         command.CommandText = $"""
-            SELECT definition_json, status, row_version
+            SELECT definition_json, status
             FROM canonical_effect_intents
             WHERE status IN ('Planned', 'Pending', 'Started', 'Unknown', 'Reconciling', 'RetryAuthorized', 'Leased'){restriction}
             ORDER BY effect_order, planned_at, effect_intent_id
@@ -191,8 +191,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
                 ?? throw new InvalidOperationException("Effect intent document is invalid.");
             rows.Add(new EffectScanRow(
                 intent,
-                ParseStatus(reader.GetString(1)),
-                reader.GetInt64(2)));
+                ParseStatus(reader.GetString(1))));
         }
         return rows;
     }
@@ -330,7 +329,6 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
 
     public async Task<EffectWorkItem> AppendLifecycleAsync(
         EffectIntentIdentity identity,
-        long expectedRowVersion,
         EffectLifecycle state,
         string worker,
         string explanation,
@@ -341,38 +339,40 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         ArgumentException.ThrowIfNullOrWhiteSpace(worker);
         ArgumentException.ThrowIfNullOrWhiteSpace(explanation);
         // This UPDATE writes `status` and never writes `terminal_receipt_id`, and every durable gate
-        // now reads settlement off `status` alone (`:270`, `:297`, `:169`, `:849`). Refused before any
-        // I/O so the only way for a row to reach 'Succeeded' is `RecordReceiptAsync`, which writes the
-        // status and the receipt pointer in the same statement (`:473`).
+        // now reads settlement off `status` alone. Refused before any I/O so the only way for a row to
+        // reach 'Succeeded' is `RecordReceiptAsync`, which writes the status and the receipt pointer
+        // in the same statement.
         EffectLifecyclePolicy.RequireAppendableState(state);
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
+        // The state this decides on is re-read inside the write transaction, never carried in from
+        // the caller: `BEGIN IMMEDIATE` takes the write lock before this read, so `current.State` is
+        // the committed state no other writer can move until this transaction ends. That is what
+        // makes the transition check a real guard rather than a check against a stale snapshot, and
+        // it is why no caller-supplied row version is needed to establish the same thing.
         EffectWorkItem current = await ReadRequiredAsync(connection, transaction, identity, cancellationToken);
-        if (current.RowVersion != expectedRowVersion) throw new InvalidOperationException("Effect row-version conflict.");
         EffectLifecyclePolicy.RequireTransition(current.State, state);
         await using SqliteCommand update = connection.CreateCommand();
         update.Transaction = transaction;
         update.CommandText = """
             UPDATE canonical_effect_intents
-            SET status = $state, row_version = row_version + 1,
+            SET status = $state,
                 failure = CASE WHEN $state IN ('Failed','Stalled','Unknown','HumanActionRequired') THEN $explanation ELSE failure END
-            WHERE effect_intent_id = $intent AND row_version = $version;
+            WHERE effect_intent_id = $intent;
             """;
         Add(update, ("$state", state.ToString()),
-            ("$explanation", explanation), ("$intent", identity.Value), ("$version", expectedRowVersion));
-        if (await update.ExecuteNonQueryAsync(cancellationToken) != 1) throw new InvalidOperationException("Effect row-version conflict.");
+            ("$explanation", explanation), ("$intent", identity.Value));
+        if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+        {
+            throw new InvalidOperationException("Effect intent row disappeared during lifecycle append.");
+        }
         long sequence = await AppendEventAsync(
             connection, transaction, identity, state, worker, explanation, evidence, recordedAt, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        // Projected from what this transaction wrote rather than re-read after commit: the row
-        // version is the one the guarded UPDATE produced. The lease columns are never written by
-        // anything now, so an unsettled row always reads back null on both.
+        // Projected from what this transaction wrote rather than re-read after commit.
         return current with
         {
             State = state,
-            RowVersion = expectedRowVersion + 1,
-            LeaseOwner = null,
-            LeaseExpiresAt = null,
             Events = [.. current.Events, new EffectLifecycleEvent(
                 sequence, identity, state, worker, explanation, evidence, recordedAt)],
         };
@@ -380,7 +380,6 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
 
     public async Task<EffectWorkItem> RecordReceiptAsync(
         EffectIntentIdentity identity,
-        long expectedRowVersion,
         EffectReceipt receipt,
         string worker,
         CancellationToken cancellationToken)
@@ -391,7 +390,6 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         EffectWorkItem current = await ReadRequiredAsync(connection, transaction, identity, cancellationToken);
-        if (current.RowVersion != expectedRowVersion) throw new InvalidOperationException("Effect row-version conflict.");
         EffectLifecyclePolicy.RequireTransition(current.State, EffectLifecycle.Succeeded);
 
         await using (SqliteCommand insert = connection.CreateCommand())
@@ -418,13 +416,21 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
             update.Transaction = transaction;
             update.CommandText = """
                 UPDATE canonical_effect_intents
-                SET status = 'Succeeded', terminal_receipt_id = $receipt, row_version = row_version + 1,
+                SET status = 'Succeeded', terminal_receipt_id = $receipt,
                     completed_at = $recorded
-                WHERE effect_intent_id = $intent AND row_version = $version AND status <> 'Succeeded';
+                WHERE effect_intent_id = $intent AND status <> 'Succeeded';
                 """;
             Add(update, ("$receipt", receipt.Identity.Value), ("$recorded", Format(receipt.RecordedAt)),
-                ("$intent", identity.Value), ("$version", expectedRowVersion));
-            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1) throw new InvalidOperationException("Effect row-version conflict.");
+                ("$intent", identity.Value));
+            // `status <> 'Succeeded'` is the guard that matters and it stays: it is what makes a
+            // second terminal write for an already-settled row a refusal rather than an overwrite,
+            // and unlike a row version it is evaluated against durable state rather than against a
+            // number the caller carried in.
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+            {
+                throw new InvalidOperationException(
+                    "Effect intent row was already terminal or disappeared during receipt recording.");
+            }
         }
         const string explanation = "Verified effect receipt recorded.";
         long sequence = await AppendEventAsync(connection, transaction, identity, EffectLifecycle.Succeeded, worker,
@@ -435,9 +441,6 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         return current with
         {
             State = EffectLifecycle.Succeeded,
-            RowVersion = expectedRowVersion + 1,
-            LeaseOwner = null,
-            LeaseExpiresAt = null,
             Receipt = receipt,
             Events = [.. current.Events, new EffectLifecycleEvent(
                 sequence, identity, EffectLifecycle.Succeeded, worker, explanation, receipt.Evidence, receipt.RecordedAt)],
@@ -446,7 +449,6 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
 
     public async Task RecordReconciliationAsync(
         EffectIntentIdentity identity,
-        long expectedRowVersion,
         EffectReconciliationObservation observation,
         string worker,
         DateTimeOffset recordedAt,
@@ -456,13 +458,12 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         EffectWorkItem current = await ReadRequiredAsync(connection, transaction, identity, cancellationToken);
-        // No lease-owner clause: nothing writes lease_owner any more, so comparing it to the worker
-        // would be permanently false and every reconciliation would throw. The row version and the
-        // Reconciling status are what actually establish that this observation is still the one in
-        // flight.
-        if (current.RowVersion != expectedRowVersion || current.State != EffectLifecycle.Reconciling)
+        // The Reconciling status, read inside this write transaction, is what establishes that the
+        // observation being recorded is still the one in flight: only `ReconcileAsync` puts a row
+        // into that state, and it does so immediately before calling here.
+        if (current.State != EffectLifecycle.Reconciling)
         {
-            throw new InvalidOperationException("Reconciliation observation lost its effect row version.");
+            throw new InvalidOperationException("Reconciliation observation lost its effect row.");
         }
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -509,8 +510,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
     {
         await using SqliteCommand command = CreateCommand(connection, transaction);
         command.CommandText = """
-            SELECT definition_json, status, row_version, lease_owner, lease_expires_at,
-                   terminal_receipt_id
+            SELECT definition_json, status, terminal_receipt_id
             FROM canonical_effect_intents WHERE effect_intent_id = $intent;
             """;
         command.Parameters.AddWithValue("$intent", identity.Value);
@@ -519,14 +519,11 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         EffectIntent intent = JsonSerializer.Deserialize<EffectIntent>(reader.GetString(0), JsonOptions)
             ?? throw new InvalidOperationException("Effect intent document is invalid.");
         EffectLifecycle state = ParseStatus(reader.GetString(1));
-        long rowVersion = reader.GetInt64(2);
-        string? leaseOwner = reader.IsDBNull(3) ? null : reader.GetString(3);
-        DateTimeOffset? leaseExpiry = reader.IsDBNull(4) ? null : DateTimeOffset.Parse(reader.GetString(4), CultureInfo.InvariantCulture);
-        string? receiptId = reader.IsDBNull(5) ? null : reader.GetString(5);
+        string? receiptId = reader.IsDBNull(2) ? null : reader.GetString(2);
         await reader.DisposeAsync();
         EffectReceipt? receipt = receiptId is null ? null : await ReadReceiptAsync(connection, transaction, receiptId, cancellationToken);
         IReadOnlyList<EffectLifecycleEvent> events = await ReadEventsAsync(connection, transaction, identity, cancellationToken);
-        return new EffectWorkItem(intent, state, rowVersion, leaseOwner, leaseExpiry, receipt, events);
+        return new EffectWorkItem(intent, state, receipt, events);
     }
 
     /// <summary>
@@ -550,13 +547,11 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         string scopeValue,
         CancellationToken cancellationToken)
     {
-        var rows = new List<(EffectIntentIdentity Identity, EffectIntent Intent, EffectLifecycle State,
-            long RowVersion, string? LeaseOwner, DateTimeOffset? LeaseExpiresAt)>();
+        var rows = new List<(EffectIntentIdentity Identity, EffectIntent Intent, EffectLifecycle State)>();
         await using (SqliteCommand command = connection.CreateCommand())
         {
             command.CommandText = $"""
-                SELECT intent.effect_intent_id, intent.definition_json, intent.status, intent.row_version,
-                       intent.lease_owner, intent.lease_expires_at
+                SELECT intent.effect_intent_id, intent.definition_json, intent.status
                 FROM canonical_effect_intents AS intent
                 WHERE {scopePredicate}
                 ORDER BY {ordering};
@@ -569,10 +564,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
                     new(reader.GetString(0)),
                     JsonSerializer.Deserialize<EffectIntent>(reader.GetString(1), JsonOptions)
                         ?? throw new InvalidOperationException("Effect intent document is invalid."),
-                    ParseStatus(reader.GetString(2)),
-                    reader.GetInt64(3),
-                    reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture)));
+                    ParseStatus(reader.GetString(2))));
             }
         }
         // Nothing to stitch receipts or events onto, so neither statement is worth issuing.
@@ -625,7 +617,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         }
 
         return [.. rows.Select(row => new EffectWorkItem(
-            row.Intent, row.State, row.RowVersion, row.LeaseOwner, row.LeaseExpiresAt,
+            row.Intent, row.State,
             receipts.GetValueOrDefault(row.Identity),
             events.TryGetValue(row.Identity, out List<EffectLifecycleEvent>? history) ? history : []))];
     }
