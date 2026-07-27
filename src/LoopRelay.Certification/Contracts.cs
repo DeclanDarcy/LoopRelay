@@ -415,14 +415,20 @@ public sealed record OracleControlCaseResult(
     bool Passed,
     IReadOnlyList<string> Evidence);
 
+/// <summary>
+/// The declared certification governance policy: how many times to repeat a run, what flake rate
+/// is tolerated, how a rerun is adjudicated, what quarantines must carry, and what evidence each
+/// outcome retains. This is a DECLARATION, not a verdict - it has no input to validate, so it
+/// deliberately carries no Passed flag and contributes nothing to a classification. A Passed here
+/// could only ever restate its own literals back to itself.
+/// </summary>
 public sealed record CertificationGovernanceResult(
     int MinimumRepeatedRuns,
     double FlakeThreshold,
     string RerunRule,
     bool QuarantinesRequireOwner,
     bool QuarantinesRequireExpiryOrRecertification,
-    IReadOnlyDictionary<string, string> EvidenceRetention,
-    bool Passed);
+    IReadOnlyDictionary<string, string> EvidenceRetention);
 
 public sealed record FailureOracleMatrixCertificationResult(
     string SchemaVersion,

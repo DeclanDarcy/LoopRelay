@@ -97,7 +97,7 @@ public sealed class FailureOracleMatrixRunner
             item.DuplicateProviderTurnPrevented && item.DuplicateOrderedEffectPrevented);
         bool unsupportedVisible = exclusions.Length > 0 && exclusions.All(item => item.Passed);
         bool passed = everyTransition && noDuplicates && unsupportedVisible &&
-            oracles.All(item => item.Passed) && governance.Passed;
+            oracles.All(item => item.Passed);
         string[] evidence =
         [
             $"declared-failure-taxonomy:{MaintainedFailures.Length}",
@@ -265,8 +265,7 @@ public sealed class FailureOracleMatrixRunner
             "Rerun identical behavior identity; classify variance before product blame; never erase the first failure.",
             true,
             true,
-            retention,
-            retention.Count == 6);
+            retention);
     }
 
     private static FailureSpec Recover(
