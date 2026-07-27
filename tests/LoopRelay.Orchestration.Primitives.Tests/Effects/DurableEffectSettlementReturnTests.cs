@@ -145,7 +145,6 @@ public sealed class DurableEffectSettlementReturnTests
         Assert.Equal(10, counting.ReceiptRecordOpens);
         Assert.Equal(0, counting.PlanReadOpens);
         Assert.Equal(0, counting.DependencyGateOpens);
-        Assert.Equal(0, counting.ReconciliationOpens);
     }
 
     /// <summary>
@@ -270,7 +269,7 @@ public sealed class DurableEffectSettlementReturnTests
 
         private enum StoreCall
         {
-            None, Scan, Read, PlanRead, DependencyGate, LifecycleAppend, ReceiptRecord, Reconciliation,
+            None, Scan, Read, PlanRead, DependencyGate, LifecycleAppend, ReceiptRecord,
         }
 
         public int Scans { get; private set; }
@@ -279,7 +278,6 @@ public sealed class DurableEffectSettlementReturnTests
         public int DependencyGates { get; private set; }
         public int LifecycleAppends { get; private set; }
         public int ReceiptRecords { get; private set; }
-        public int Reconciliations { get; private set; }
 
         public int ConnectionOpens => _opens.Sum();
         public int UnattributedOpens => _opens[(int)StoreCall.None];
@@ -289,7 +287,6 @@ public sealed class DurableEffectSettlementReturnTests
         public int DependencyGateOpens => _opens[(int)StoreCall.DependencyGate];
         public int LifecycleAppendOpens => _opens[(int)StoreCall.LifecycleAppend];
         public int ReceiptRecordOpens => _opens[(int)StoreCall.ReceiptRecord];
-        public int ReconciliationOpens => _opens[(int)StoreCall.Reconciliation];
 
         public void Dispose() => _inner.ConnectionObserverForTesting = null;
 
@@ -345,21 +342,6 @@ public sealed class DurableEffectSettlementReturnTests
             return AttributeAsync(
                 StoreCall.ReceiptRecord,
                 () => _inner.RecordReceiptAsync(identity, receipt, worker, cancellationToken));
-        }
-
-        public async Task RecordReconciliationAsync(
-            EffectIntentIdentity identity, EffectReconciliationObservation observation,
-            string worker, DateTimeOffset recordedAt, CancellationToken cancellationToken)
-        {
-            Reconciliations++;
-            await AttributeAsync<object?>(
-                StoreCall.Reconciliation,
-                async () =>
-                {
-                    await _inner.RecordReconciliationAsync(
-                        identity, observation, worker, recordedAt, cancellationToken);
-                    return null;
-                });
         }
 
         /// <summary>

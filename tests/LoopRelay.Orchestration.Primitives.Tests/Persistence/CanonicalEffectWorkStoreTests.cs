@@ -97,13 +97,15 @@ public sealed class CanonicalEffectWorkStoreTests
         Assert.Equal(1, restarted.Succeeded);
         Assert.Equal(EffectLifecycle.Succeeded,
             (await restartedStore.ReadAsync(intent.Identity, CancellationToken.None))!.State);
-        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(
-            LoopRelayWorkspaceDatabase.Resolve(repository));
-        await connection.OpenAsync();
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM canonical_effect_reconciliation_attempts WHERE effect_intent_id = $intent;";
-        command.Parameters.AddWithValue("$intent", intent.Identity.Value);
-        Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        // The reconciler's verdict is durable because the lifecycle log says so, not because a
+        // parallel attempts row said so. `canonical_effect_reconciliation_attempts` was written and
+        // never read; with that write gone, the reconciled `Succeeded` must still be reconstructible
+        // from the events alone, which is what the whole visibility fence actually rests on.
+        EffectWorkItem reconciled = Assert.IsType<EffectWorkItem>(
+            await restartedStore.ReadAsync(intent.Identity, CancellationToken.None));
+        Assert.Equal(
+            [EffectLifecycle.Planned, EffectLifecycle.Unknown, EffectLifecycle.Reconciling, EffectLifecycle.Succeeded],
+            reconciled.Events.Select(item => item.State));
     }
 
     /// <summary>

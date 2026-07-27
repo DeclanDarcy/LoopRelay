@@ -395,11 +395,18 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "canonical_effect_intents",
             "canonical_effect_lifecycle_events",
             "canonical_effect_receipts",
-            "canonical_effect_reconciliation_attempts",
         })
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected v10 table `{table}`.");
         }
+
+        // `canonical_effect_reconciliation_attempts` was write-only: `RecordReconciliationAsync`
+        // inserted into it and nothing ever selected from it, because the reconciler's verdict
+        // reaches durability through the lifecycle append that follows it. Unlike a dropped column,
+        // a dropped table has no single declaration driving both its DDL and its
+        // `ShapeRequirement`, so both were removed by hand; a fresh database is asserted here to
+        // come up without the table at all rather than carrying a permanently-inert one.
+        Assert.False(await TableExistsAsync(connection, "canonical_effect_reconciliation_attempts"));
 
         IReadOnlyList<string> columns = await TableColumnsAsync(connection, "canonical_effect_intents");
         foreach (string column in new[]
@@ -444,7 +451,6 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             DELETE FROM schema_metadata WHERE key = 'schema_shape';
             DROP TABLE canonical_effect_lifecycle_events;
             DROP TABLE canonical_effect_receipts;
-            DROP TABLE canonical_effect_reconciliation_attempts;
             INSERT INTO canonical_effect_intents (
                 effect_intent_id, transition_run_id, attempt_id, effect_identity, category,
                 effect_order, idempotency_key, status, definition_json, planned_at

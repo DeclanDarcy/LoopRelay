@@ -414,22 +414,6 @@ public sealed class EffectWorkerTests
             }
         }
 
-        public Task RecordReconciliationAsync(
-            EffectIntentIdentity identity,
-            EffectReconciliationObservation observation,
-            string worker,
-            DateTimeOffset recordedAt,
-            CancellationToken cancellationToken)
-        {
-            lock (_gate)
-            {
-                MutableItem item = Require(identity);
-                if (item.State != EffectLifecycle.Reconciling)
-                    throw new InvalidOperationException("Reconciliation observation lost its effect row.");
-                return Task.CompletedTask;
-            }
-        }
-
         /// <summary>
         /// Mirrors <c>ReadRequiredAsync</c>: the row must exist. There is no compare-and-set left to
         /// mirror -- the store decides on state it re-reads inside its own write transaction, and so

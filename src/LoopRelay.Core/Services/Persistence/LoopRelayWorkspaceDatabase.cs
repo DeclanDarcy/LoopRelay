@@ -204,7 +204,6 @@ public static class LoopRelayWorkspaceDatabase
             [
                 ShapeRequirement.Table("canonical_effect_lifecycle_events"),
                 ShapeRequirement.Table("canonical_effect_receipts"),
-                ShapeRequirement.Table("canonical_effect_reconciliation_attempts"),
                 ShapeRequirement.Index("idx_effect_intents_unsettled"),
                 ShapeRequirement.Index("idx_effect_intents_transition_attempt"),
                 ShapeRequirement.Index("idx_effect_intents_semantic_operation"),
@@ -2569,18 +2568,6 @@ public static class LoopRelayWorkspaceDatabase
             recorded_at text not null
         );
 
-        CREATE TABLE IF NOT EXISTS canonical_effect_reconciliation_attempts(
-            reconciliation_id text primary key,
-            effect_intent_id text not null,
-            worker_id text not null,
-            verdict text not null,
-            before_facts_json text not null,
-            after_facts_json text not null,
-            external_correlation text,
-            evidence_json text not null,
-            recorded_at text not null
-        );
-
         CREATE INDEX IF NOT EXISTS idx_effect_intents_unsettled
             ON canonical_effect_intents(status, requiredness, effect_order, planned_at);
         CREATE INDEX IF NOT EXISTS idx_effect_intents_transition_attempt
@@ -2591,8 +2578,6 @@ public static class LoopRelayWorkspaceDatabase
             ON canonical_effect_receipts(effect_intent_id, recorded_at);
         CREATE INDEX IF NOT EXISTS idx_effect_lifecycle_intent
             ON canonical_effect_lifecycle_events(effect_intent_id, event_id);
-        CREATE INDEX IF NOT EXISTS idx_effect_reconciliation_intent
-            ON canonical_effect_reconciliation_attempts(effect_intent_id, recorded_at);
 
         INSERT INTO canonical_effect_lifecycle_events (
             effect_intent_id, lifecycle, worker_id, explanation, evidence_json, recorded_at

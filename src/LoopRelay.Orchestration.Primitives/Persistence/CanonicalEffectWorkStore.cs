@@ -447,48 +447,6 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         };
     }
 
-    public async Task RecordReconciliationAsync(
-        EffectIntentIdentity identity,
-        EffectReconciliationObservation observation,
-        string worker,
-        DateTimeOffset recordedAt,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(observation);
-        await using SqliteConnection connection = await OpenAsync(cancellationToken);
-        await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
-        EffectWorkItem current = await ReadRequiredAsync(connection, transaction, identity, cancellationToken);
-        // The Reconciling status, read inside this write transaction, is what establishes that the
-        // observation being recorded is still the one in flight: only `ReconcileAsync` puts a row
-        // into that state, and it does so immediately before calling here.
-        if (current.State != EffectLifecycle.Reconciling)
-        {
-            throw new InvalidOperationException("Reconciliation observation lost its effect row.");
-        }
-        await using SqliteCommand command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = """
-            INSERT INTO canonical_effect_reconciliation_attempts (
-                reconciliation_id, effect_intent_id, worker_id, verdict,
-                before_facts_json, after_facts_json, external_correlation,
-                evidence_json, recorded_at
-            ) VALUES ($reconciliation, $intent, $worker, $verdict, $before, $after,
-                      $correlation, $evidence, $recorded);
-            """;
-        Add(command,
-            ("$reconciliation", EffectReconciliationIdentity.New().Value),
-            ("$intent", identity.Value),
-            ("$worker", worker),
-            ("$verdict", observation.Verdict.ToString()),
-            ("$before", observation.BeforeFacts),
-            ("$after", observation.AfterFacts),
-            ("$correlation", observation.ExternalCorrelation),
-            ("$evidence", JsonSerializer.Serialize(observation.Evidence, JsonOptions)),
-            ("$recorded", Format(recordedAt)));
-        await command.ExecuteNonQueryAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-    }
-
     private async Task<SqliteConnection> OpenAsync(CancellationToken cancellationToken)
     {
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);

@@ -276,7 +276,6 @@ public sealed class GitEffectExecutorsTests
         public Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken token) => inner.ReadAsync(identity, token);
         public Task<bool> DependencySatisfiedAsync(EffectIntent candidate, EffectIntentIdentity dependency, CancellationToken token) => inner.DependencySatisfiedAsync(candidate, dependency, token);
         public Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset at, CancellationToken token) => inner.AppendLifecycleAsync(identity, state, worker, explanation, evidence, at, token);
-        public Task RecordReconciliationAsync(EffectIntentIdentity identity, EffectReconciliationObservation observation, string worker, DateTimeOffset at, CancellationToken token) => inner.RecordReconciliationAsync(identity, observation, worker, at, token);
         public Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, EffectReceipt receipt, string worker, CancellationToken token)
         {
             if (!_failed)

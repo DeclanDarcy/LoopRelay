@@ -182,12 +182,6 @@ public sealed class EffectWorker(
             DateTimeOffset.UtcNow,
             CancellationToken.None);
         EffectReconciliationObservation observation = await _reconciler.ReconcileAsync(current.Intent, cancellationToken);
-        await _store.RecordReconciliationAsync(
-            current.Intent.Identity,
-            observation,
-            _workerIdentity,
-            DateTimeOffset.UtcNow,
-            CancellationToken.None);
         if (observation.Verdict == EffectReconciliationVerdict.Succeeded)
         {
             var execution = new EffectExecutionObservation(

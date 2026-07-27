@@ -388,7 +388,6 @@ public interface IEffectWorkStore
     /// </summary>
     Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset recordedAt, CancellationToken cancellationToken);
     Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, EffectReceipt receipt, string worker, CancellationToken cancellationToken);
-    Task RecordReconciliationAsync(EffectIntentIdentity identity, EffectReconciliationObservation observation, string worker, DateTimeOffset recordedAt, CancellationToken cancellationToken);
 }
 
 public interface IEffectPlanStore
