@@ -124,11 +124,17 @@ public class InputWaitProgressAgentRuntimeTests
         {
             await renderer.WaitingEntered.WaitAsync(TimeSpan.FromSeconds(60));
 
-            // Deliver the chunk on a dedicated thread and release the suspended waiting render only once
-            // that thread is provably parked on the tracker's lock, which the render loop holds while it
-            // sits inside Waiting. Waiting for that observable state forces the contention a fixed delay
-            // could only hope to hit; if the chunk never blocks, the thread simply ends and the spin exits
-            // at once, so the ordering below is decided by the production lock, never by scheduling luck.
+            // Deliver the chunk on a dedicated thread and release the suspended waiting render once that
+            // thread is observed blocked, which is the state it reaches when it parks on the tracker's
+            // lock that the render loop holds while sitting inside Waiting. This forces the contention a
+            // fixed delay could only hope to hit; if the chunk never blocks, the thread simply ends and
+            // the spin exits at once, which is an accepted outcome.
+            //
+            // Caveat, so the guarantee is not overstated: ThreadState.WaitSleepJoin is set by ANY blocking
+            // wait, so observing it does not prove this thread reached the tracker lock specifically -- the
+            // spin can exit early on an unrelated block. Thread.ThreadState is a debugging aid, not a
+            // synchronization primitive. This is still strictly better than the fixed 25 ms delay it
+            // replaced (which could elapse while testing nothing), but it is a best-effort interleave.
             Exception? chunkFailure = null;
             var chunkThread = new Thread(() =>
             {

@@ -47,7 +47,7 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 // grab-bag. Names describe what a class actually contains, not a taxonomy the contents don't
 // support.
 //
-// Final grouping (41 methods / 44 cases / 329.9s measured-parallel total):
+// Final grouping (40 methods / 43 cases / 329.9s measured-parallel total):
 //
 //   CompositionRootPlanCanonicalRuntimeTests        45.9s  (1 method)
 //     45.9s Plan_workflow_transitions_run_through_canonical_runtime
@@ -88,7 +88,7 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 //      2.9s EvalRoadmap_prompt_transition_renders_generated_prompt_asset_before_executor_integration
 //      2.3s Execute_commit_evaluation_stall_persists_canonical_evidence
 //
-//   CompositionRootGuardsAndInvariantsTests         23.2s  (16 methods / 19 cases)
+//   CompositionRootGuardsAndInvariantsTests         23.2s  (15 methods / 18 cases)
 //      8.9s Execute_implementation_rejects_provider_completion_without_implementation_progress
 //      8.0s Plan_revision_blocks_precisely_when_exact_thread_resume_fails
 //      5.4s Plan_adversarial_review_context_starts_read_only_prompt_with_plan_and_projection_products
@@ -105,7 +105,6 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 //           Production_decision_session_routes_loop_artifact_rotation_through_durable_effect_authority,
 //           Production_cli_composition_does_not_construct_legacy_loop_runner,
 //           Policy_source_descriptor_names_the_settings_file_without_its_directory (Theory, 4 cases),
-//           Retired_plan_and_roadmap_compositions_are_not_available_as_active_authorities,
 //           Execute_entry_rejects_milestone_cardinality_that_conflicts_with_strategic_context,
 //           Composition_exposes_one_resolved_versioned_policy_for_the_invocation
 //

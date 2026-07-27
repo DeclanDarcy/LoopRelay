@@ -37,6 +37,15 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         Assert.Equal(WorkspaceSchemaFamily.CanonicalWorkspace, inspection.Family);
         Assert.Equal(WorkspaceSchemaShape.CanonicalV16Complete, inspection.Shape);
         Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, inspection.ShapeFingerprint);
+
+        // The fingerprints are computed at static init from each version's requirement token set,
+        // not hardcoded, so this is a live check that v16 actually requires something v15 did not.
+        // Adding a column or index to the schema SQL but forgetting to register it in
+        // CanonicalV16Requirements collapses the two token sets onto the same fingerprint; the
+        // per-(path, stamp) verification memo would then accept a non-conforming database.
+        Assert.NotEqual(
+            LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint,
+            LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint);
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist.");
