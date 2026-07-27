@@ -94,6 +94,30 @@ public static class EffectLifecyclePolicy
             throw new InvalidOperationException($"Illegal effect lifecycle transition: {current} -> {next}.");
         }
     }
+
+    /// <summary>
+    /// Guards the lifecycle-append path, which writes a status and nothing else.
+    /// <see cref="EffectLifecycle.Succeeded"/> is not appendable: every durable gate — the dependency
+    /// gate, the sibling barrier, the unsettled scan and the readiness count — reads settlement off
+    /// the status column, so a status appended without a receipt would be read as settled while the
+    /// verified terminal receipt it stands for does not exist. Success is therefore recorded only by
+    /// <c>IEffectWorkStore.RecordReceiptAsync</c>, which writes the status and the terminal receipt
+    /// pointer in one transaction.
+    /// <para>
+    /// The transition table alone does not carry this: it permits <c>Started</c>, <c>Pending</c> and
+    /// <c>Reconciling</c> to reach <see cref="EffectLifecycle.Succeeded"/>, because the receipt path
+    /// needs exactly those transitions. This separates "the state machine allows it" from "the append
+    /// path may write it", so the invariant is held by construction rather than by caller discipline.
+    /// </para>
+    /// </summary>
+    public static void RequireAppendableState(EffectLifecycle next)
+    {
+        if (next == EffectLifecycle.Succeeded)
+        {
+            throw new InvalidOperationException(
+                "Effect success is recorded by receipt: use RecordReceiptAsync, not a lifecycle append.");
+        }
+    }
 }
 
 public sealed record EffectTargetDescriptor(string Kind, string Identity, string Document)
@@ -363,6 +387,13 @@ public interface IEffectWorkStore
     /// </summary>
     Task<bool> DependencySatisfiedAsync(EffectIntent candidate, EffectIntentIdentity dependency, CancellationToken cancellationToken);
     Task<EffectLease?> TryLeaseAsync(EffectIntentIdentity identity, long expectedRowVersion, string worker, DateTimeOffset now, TimeSpan duration, CancellationToken cancellationToken);
+    /// <summary>
+    /// Appends a non-terminal lifecycle observation. <see cref="EffectLifecycle.Succeeded"/> is not
+    /// accepted here — implementations MUST refuse it via
+    /// <see cref="EffectLifecyclePolicy.RequireAppendableState"/>. Settlement is the receipt's to
+    /// record, because the durable gates read it off the status column and this path writes no
+    /// receipt; use <see cref="RecordReceiptAsync"/>.
+    /// </summary>
     Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset recordedAt, CancellationToken cancellationToken);
     Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectReceipt receipt, string worker, CancellationToken cancellationToken);
     Task RecordReconciliationAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectReconciliationObservation observation, string worker, DateTimeOffset recordedAt, CancellationToken cancellationToken);

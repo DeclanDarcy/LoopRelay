@@ -222,6 +222,63 @@ public sealed class CanonicalEffectWorkStoreTests
             ("$intent", intent.Identity.Value)));
     }
 
+    /// <summary>
+    /// Every durable gate now reads settlement off <c>status</c>: the dependency gate, the sibling
+    /// barrier and the readiness count all compare the status column rather than the terminal
+    /// receipt pointer. <c>AppendLifecycleAsync</c> writes <c>status</c> and never writes a receipt,
+    /// and the lifecycle policy on its own permits <c>Started -&gt; Succeeded</c>, so without a guard
+    /// a caller can mint a row those gates read as settled while it carries no receipt at all. That
+    /// invariant used to be held only by what today's callers happen to pass; this holds it by
+    /// construction, and pins that the real settle path stays open.
+    /// </summary>
+    [Fact]
+    public async Task LifecycleAppendRefusesSuccessBecauseOnlyAReceiptMaySettleAnEffect()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalEffectWorkStore(repository);
+        EffectIntent intent = Intent();
+        await store.AppendPlanAsync([intent], CancellationToken.None);
+        EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
+        EffectLease lease = (await store.TryLeaseAsync(
+            intent.Identity, planned.RowVersion, "worker", DateTimeOffset.UtcNow,
+            TimeSpan.FromMinutes(1), CancellationToken.None))!;
+        EffectWorkItem started = await store.AppendLifecycleAsync(
+            intent.Identity, lease.RowVersion, EffectLifecycle.Started, "worker", "started", [],
+            DateTimeOffset.UtcNow, CancellationToken.None);
+        // The state machine alone does not stop this, which is exactly why the append path must.
+        Assert.True(EffectLifecyclePolicy.CanTransition(EffectLifecycle.Started, EffectLifecycle.Succeeded));
+
+        InvalidOperationException refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => store.AppendLifecycleAsync(
+                intent.Identity, started.RowVersion, EffectLifecycle.Succeeded, "worker",
+                "settled without a receipt", [], DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(
+            "Effect success is recorded by receipt: use RecordReceiptAsync, not a lifecycle append.",
+            refusal.Message);
+        Assert.Equal(0L, await CountAsync(
+            repository,
+            """
+            SELECT COUNT(*) FROM canonical_effect_intents
+            WHERE effect_intent_id = $intent AND status = 'Succeeded' AND terminal_receipt_id IS NULL;
+            """,
+            ("$intent", intent.Identity.Value)));
+
+        // The refusal leaves the row exactly as it was, and the receipt path still settles it.
+        EffectWorkItem afterRefusal = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
+        Assert.Equal(EffectLifecycle.Started, afterRefusal.State);
+        Assert.Equal(started.RowVersion, afterRefusal.RowVersion);
+        EffectWorkItem settled = await store.RecordReceiptAsync(
+            intent.Identity, started.RowVersion, Receipt(intent), "worker", CancellationToken.None);
+        Assert.Equal(EffectLifecycle.Succeeded, settled.State);
+        Assert.Equal(1L, await CountAsync(
+            repository,
+            """
+            SELECT COUNT(*) FROM canonical_effect_intents
+            WHERE effect_intent_id = $intent AND status = 'Succeeded' AND terminal_receipt_id IS NOT NULL;
+            """,
+            ("$intent", intent.Identity.Value)));
+    }
+
     private static async Task<EffectWorkItem> SettleAsync(CanonicalEffectWorkStore store, EffectIntent intent)
     {
         EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;

@@ -394,6 +394,11 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(worker);
         ArgumentException.ThrowIfNullOrWhiteSpace(explanation);
+        // This UPDATE writes `status` and never writes `terminal_receipt_id`, and every durable gate
+        // now reads settlement off `status` alone (`:270`, `:297`, `:169`, `:849`). Refused before any
+        // I/O so the only way for a row to reach 'Succeeded' is `RecordReceiptAsync`, which writes the
+        // status and the receipt pointer in the same statement (`:473`).
+        EffectLifecyclePolicy.RequireAppendableState(state);
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         EffectWorkItem current = await ReadRequiredAsync(connection, transaction, identity, cancellationToken);
