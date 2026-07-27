@@ -32,61 +32,6 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 public sealed class CompositionRootGuardsAndInvariantsTests : CompositionRootTestBase
 {
     [Fact]
-    public async Task Plan_warm_session_transitions_execute_and_reuse_one_authoring_session()
-    {
-        string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-warm-session").FullName;
-        await WriteAsync(repo, ".agents/epic.md", "# Active Epic");
-        await WriteAsync(repo, ".agents/specs/s1.md", "# Milestone Spec");
-        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
-        var repository = new Repository
-        {
-            Id = Guid.NewGuid(),
-            Name = Path.GetFileName(repo),
-            Path = repo,
-        };
-        var runtime = new FakeAgentRuntime(new MemoryArtifactStore());
-        runtime.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
-        {
-            Assert.Equal(SessionRole.Planning, spec.Role);
-            Assert.Contains("Prompt identity: WritePlan", prompt, StringComparison.Ordinal);
-            File.WriteAllText(Path.Combine(repo, ".agents", "plan.md"), "# Plan v1");
-            return new AgentTurnResult(0, AgentTurnState.Completed, "wrote plan", AgentTokenUsage.Zero);
-        }));
-        runtime.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, _) =>
-        {
-            Assert.Equal(SessionRole.Planning, spec.Role);
-            Assert.Contains("Prompt identity: ReviewAndRevisePlan", prompt, StringComparison.Ordinal);
-            Assert.Contains("Adversarial Review", prompt, StringComparison.Ordinal);
-            Assert.Contains("tighten the plan", prompt, StringComparison.Ordinal);
-            File.WriteAllText(Path.Combine(repo, ".agents", "plan.md"), "# Plan v2");
-            return new AgentTurnResult(1, AgentTurnState.Completed, "revised plan", AgentTokenUsage.Zero);
-        }));
-        LoopRelayCompositionRoot composition = LoopRelayCompositionRoot.CreateForTests(repository, runtime);
-
-        TransitionRuntimeResult write = await RunPlanAsync(composition, "Planning", "WriteExecutablePlan");
-        await WriteAdversarialReviewProductAsync(repository, "tighten the plan");
-        // RevisePlan declares `.agents/plan.md` as a clean-input surface, so the plan the
-        // warm session just wrote must be committed before it is consumed.
-        await GitWorkspace.CommitAgentsInputsAsync(repo);
-        TransitionRuntimeResult revise = await RunPlanAsync(composition, "Plan Validation", "RevisePlan");
-
-        Assert.Equal(RuntimeOutcomeKind.Completed, write.Outcome);
-        Assert.Equal(RuntimeOutcomeKind.Completed, revise.Outcome);
-        Assert.Equal(1, runtime.OpenSessions);
-        Assert.Equal(1, runtime.ClosedSessions);
-        Assert.Equal(2, runtime.SessionCalls.Count);
-        Assert.Equal("# Plan v2", await File.ReadAllTextAsync(Path.Combine(repo, ".agents", "plan.md")));
-        CanonicalWorkflowPersistenceSnapshot snapshot =
-            await new CanonicalWorkflowPersistenceStore(repository).LoadSnapshotAsync();
-        Assert.Contains(snapshot.Products, product =>
-            product.Identity == ProductIdentity.ExecutablePlan &&
-            product.ProducerTransition == new WorkflowTransitionIdentity("RevisePlan") &&
-            product.CausalIdentity.Length == 64);
-        await AssertEffectStateAsync(repository, "persist-draft-plan", EffectLifecycle.Succeeded);
-        await AssertEffectStateAsync(repository, "persist-reviewed-plan", EffectLifecycle.Succeeded);
-    }
-
-    [Fact]
     public async Task Plan_revision_blocks_precisely_when_exact_thread_resume_fails()
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-warm-resume-fail").FullName;
@@ -119,41 +64,6 @@ public sealed class CompositionRootGuardsAndInvariantsTests : CompositionRootTes
         Assert.Single(runtime.SessionCalls);
         await AssertCanonicalRecoveryPlanAsync(
             repository, $"plan:{checkpoint.ProviderThreadId}", CanonicalRecoveryAction.ResumeSession);
-    }
-
-    [Fact]
-    public async Task Execute_handoff_blocks_precisely_when_exact_implementation_thread_resume_fails()
-    {
-        (string repo, Repository repository, FakeAgentRuntime runtime, FakeProcessRunner process) = await PrepareExecuteContinuityCaseAsync(
-            "cc-cli-unified-execute-warm-resume-fail");
-        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
-            new AgentTurnResult(0, AgentTurnState.Completed, "# Decisions\n\nCreate src/feature.cs.", AgentTokenUsage.Zero)));
-        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
-        {
-            Directory.CreateDirectory(Path.Combine(repo, "src"));
-            File.WriteAllText(Path.Combine(repo, "src", "feature.cs"), "feature\n");
-            return new AgentTurnResult(1, AgentTurnState.Completed, "implemented", AgentTokenUsage.Zero);
-        }));
-        LoopRelayCompositionRoot first = LoopRelayCompositionRoot.CreateForTests(repository, runtime, process);
-        await RunPlanAsync(first, "Workflow Completion", "VerifyExecuteEntryContract");
-        await RunExecuteAsync(first, "Execution Readiness", "VerifyExecutionReadiness");
-        await RunExecuteAsync(first, "Implementation Planning", "GenerateDecision");
-        await RunExecuteAsync(first, "Implementation", "ExecuteImplementationSlice");
-        ExecutionWarmSessionContinuity checkpoint = Assert.IsType<ExecutionWarmSessionContinuity>(
-            await new CanonicalCheckpointStore(repository).ReadAsync<ExecutionWarmSessionContinuity>(CanonicalCheckpointKeys.ExecutionWarmSession, CancellationToken.None));
-        await first.DisposeAsync();
-        runtime.FailResume = true;
-
-        await using LoopRelayCompositionRoot restarted = LoopRelayCompositionRoot.CreateForTests(repository, runtime, process);
-        TransitionRuntimeResult handoff = await RunExecuteAsync(
-            restarted, "Execution Continuity", "GenerateHandoff");
-
-        Assert.Equal(RuntimeOutcomeKind.RecoveryRequired, handoff.Outcome);
-        Assert.Equal(TransitionDurableState.ProviderOutcomeUnknown, handoff.DurableState);
-        Assert.Contains("could not resume the exact execution thread", handoff.Explanation, StringComparison.Ordinal);
-        Assert.False(File.Exists(Path.Combine(repo, ".agents", "handoffs", "handoff.md")));
-        await AssertCanonicalRecoveryPlanAsync(
-            repository, $"execute:{checkpoint.ProviderThreadId}", CanonicalRecoveryAction.ResumeSession);
     }
 
     [Fact]
@@ -240,33 +150,6 @@ public sealed class CompositionRootGuardsAndInvariantsTests : CompositionRootTes
         CanonicalTransitionRunRecord run = Assert.Single(snapshot.TransitionRuns);
         Assert.Equal(TransitionDurableState.Failed, run.State);
         Assert.NotNull(run.InputSnapshotHash);
-    }
-
-    [Fact]
-    public async Task EvalRoadmap_milestone_deep_dive_stops_on_empty_active_epic_context()
-    {
-        string repo = Directory.CreateTempSubdirectory("cc-cli-unified-eval-context").FullName;
-        Directory.CreateDirectory(Path.Combine(repo, ".agents"));
-        await File.WriteAllTextAsync(Path.Combine(repo, ".agents", "epic.md"), "   ");
-        await GitWorkspace.InitializeWithAgentsInputsAsync(repo);
-        var repository = new Repository
-        {
-            Id = Guid.NewGuid(),
-            Name = Path.GetFileName(repo),
-            Path = repo,
-        };
-        var composition = LoopRelayCompositionRoot.CreateForTests(repository);
-
-        TransitionRuntimeResult result = await composition.TransitionRuntime.RunAsync(
-            Request(
-                WorkflowIdentity.EvalRoadmap,
-                new WorkflowStageIdentity("Milestone Specification"),
-                new WorkflowTransitionIdentity("GenerateMilestoneDeepDivesForEpic")));
-
-        Assert.Equal(RuntimeOutcomeKind.MissingRequiredInput, result.Outcome);
-        Assert.Equal(TransitionDurableState.InputUnsatisfied, result.DurableState);
-        Assert.Contains("Active Epic prompt context is empty", result.Explanation, StringComparison.Ordinal);
-        Assert.Contains(".agents/epic.md", result.Evidence);
     }
 
     [Fact]

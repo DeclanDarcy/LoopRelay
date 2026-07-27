@@ -29,78 +29,99 @@ using Xunit;
 
 namespace LoopRelay.Cli.Tests.Services.Cli;
 
-// LoopRelayCompositionRootTests was one xUnit collection (one class = strictly serial),
-// so its wall-clock time was the whole suite's critical path. It has been split into five
-// sibling classes sharing this base so xUnit can run them as separate, parallel collections.
+// LoopRelayCompositionRootTests was one xUnit collection (one class = strictly serial), so its
+// wall-clock time was the whole suite's critical path. It was first split into five sibling
+// classes sharing this base, balanced on serial per-test timings (185.7s -> 74.3s measured
+// serially). A follow-up full-suite run under real parallel load then showed those five classes
+// actually ran at 72.1 / 71.4 / 65.4 / 64.7 / 56.3s -- because these tests are I/O-bound (temp
+// dirs, SQLite, spawning git) and contend on disk, per-test durations inflate roughly 1.5-1.9x
+// under parallelism, so a packing balanced on serial numbers does not balance the parallel wall.
+// This is a second rebalance, onto eight sibling classes, using durations measured under that
+// SAME parallel full-suite run (see .superpowers/sdd/tperf-resplit-timings.txt) -- not serial
+// numbers.
 //
-// Grouping was built from measured per-method durations (a fresh trx run; see
-// .superpowers/sdd/tperf-task-4-timings.txt), balanced by duration via a greedy
-// longest-processing-time bin-pack across 5 bins -- NOT by the name-prefix buckets the
-// original task brief suggested, because those buckets, scored against real data, produce an
-// 86.4s Plan_* class that would forfeit more than half of the available parallelism gain.
-// Plan_workflow_transitions_run_through_canonical_runtime (30.0s) is a single indivisible
-// test and is therefore the hard floor for the slowest class.
+// Plan_workflow_transitions_run_through_canonical_runtime measures 45.9s under parallel load and
+// is a single indivisible test, so it is the hard floor no class can beat. Grouping below is a
+// longest-processing-time bin-pack across 8 bins against that floor. None of these eight classes
+// is a name-prefix family; the packing is duration-driven and several classes are frankly a
+// grab-bag. Names describe what a class actually contains, not a taxonomy the contents don't
+// support.
 //
-// Final grouping (41 methods / 44 cases / 185.0s measured total):
+// Final grouping (41 methods / 44 cases / 329.9s measured-parallel total):
 //
-//   CompositionRootPlanCanonicalRuntimeTests        36.9s  (4 methods)
-//     30.0s Plan_workflow_transitions_run_through_canonical_runtime
-//      3.6s Plan_scoped_artifact_milestone_without_checkboxes_rolls_back_declared_writes
-//      2.8s Prompt_transitions_record_agent_session_and_turn_rows
-//      0.5s Execute_commit_evaluation_stall_persists_canonical_evidence
+//   CompositionRootPlanCanonicalRuntimeTests        45.9s  (1 method)
+//     45.9s Plan_workflow_transitions_run_through_canonical_runtime
 //
-//   CompositionRootEvalRoadmapAndContinuityTests    37.2s  (6 methods)
-//     17.4s EvalRoadmap_workflow_transitions_run_through_canonical_runtime
-//      6.4s Execute_handoff_resumes_exact_implementation_thread_and_restores_slice_facts_after_restart
-//      5.0s Resolved_causality_written_into_the_effect_ledger_matches_the_durable_attempt_row
-//      4.0s GenerateDecision_honors_the_composed_observers_storage_verdict_over_a_fresh_default
-//      2.9s Plan_prompt_transition_renders_generated_prompt_asset_before_executor_integration
-//      1.5s TraditionalRoadmap_invalid_prepared_epic_fails_with_recovery_marker
+//   CompositionRootTraditionalRoadmapAndSpineTests  45.1s  (2 methods)
+//     38.3s TraditionalRoadmap_accepts_inline_code_file_markers_from_provider_output
+//      6.8s TraditionalRoadmap_invalid_prepared_epic_fails_with_recovery_marker
 //
-//   CompositionRootGuardsAndInvariantsTests         36.7s  (19 methods)
-//     14.2s Plan_warm_session_transitions_execute_and_reuse_one_authoring_session
-//      6.5s Plan_revision_blocks_precisely_when_exact_thread_resume_fails
-//      5.7s Execute_handoff_blocks_precisely_when_exact_implementation_thread_resume_fails
-//      4.9s Execute_implementation_rejects_provider_completion_without_implementation_progress
-//      3.4s Plan_adversarial_review_context_starts_read_only_prompt_with_plan_and_projection_products
-//      2.0s EvalRoadmap_milestone_deep_dive_stops_on_empty_active_epic_context
-//      0.0s (x13 methods / 16 cases) all remaining zero-duration guard/retirement/policy checks -- free to place
-//           anywhere; grouped here because this class is already guard/invariant-themed:
-//           Execute_entry_rejects_milestone_cardinality_that_conflicts_with_strategic_context,
-//           Composition_exposes_one_resolved_versioned_policy_for_the_invocation,
+//   CompositionRootEvalRoadmapAndContinuityTests    42.1s  (2 methods)
+//     30.2s EvalRoadmap_workflow_transitions_run_through_canonical_runtime
+//     11.9s Plan_scoped_artifact_milestone_without_checkboxes_rolls_back_declared_writes
+//
+//   CompositionRootExecuteWorkflowAndArtifactTests  44.2s  (3 methods)
+//     17.8s Plan_scoped_artifact_transitions_execute_with_operation_profiles_and_persist_products
+//     17.3s Execute_implementation_rejects_and_rolls_back_milestone_file_set_changes
+//      9.1s Execute_workflow_transitions_run_through_canonical_runtime
+//
+//   CompositionRootLedgerHandoffAndRevisionTests    45.1s  (4 methods)
+//     13.5s Resolved_causality_written_into_the_effect_ledger_matches_the_durable_attempt_row
+//     12.3s EvalRoadmap_milestone_deep_dive_stops_on_empty_active_epic_context
+//     11.0s Execute_handoff_blocks_precisely_when_exact_implementation_thread_resume_fails
+//      8.3s Plan_revision_resumes_exact_authoring_thread_after_composition_restart
+//
+//   CompositionRootRunDecisionAndWarmSessionTests   44.6s  (5 methods)
+//     11.7s Run_command_records_workflow_instance_and_attempt_rows_linked_to_the_run
+//     10.8s GenerateDecision_honors_the_composed_observers_storage_verdict_over_a_fresh_default
+//      9.8s Plan_warm_session_transitions_execute_and_reuse_one_authoring_session
+//      9.5s Plan_warm_session_materializes_structurally_valid_returned_plan_when_tool_write_is_absent
+//      2.8s Plan_prompt_transition_renders_generated_prompt_asset_before_executor_integration
+//
+//   CompositionRootMixedTransitionAndSessionTests   39.7s  (8 methods)
+//      8.9s Plan_warm_session_prompt_success_without_plan_file_fails_product_validation
+//      7.3s Execute_handoff_resumes_exact_implementation_thread_and_restores_slice_facts_after_restart
+//      5.4s Generate_operational_context_runs_as_deterministic_canonical_artifact_transition
+//      4.6s Prompt_transitions_record_agent_session_and_turn_rows
+//      4.2s Cancelled_turns_leave_terminal_turn_evidence_instead_of_vanishing_from_the_spine
+//      4.1s Verify_execute_entry_contract_completes_plan_and_persists_execution_readiness
+//      2.9s EvalRoadmap_prompt_transition_renders_generated_prompt_asset_before_executor_integration
+//      2.3s Execute_commit_evaluation_stall_persists_canonical_evidence
+//
+//   CompositionRootGuardsAndInvariantsTests         23.2s  (16 methods / 19 cases)
+//      8.9s Execute_implementation_rejects_provider_completion_without_implementation_progress
+//      8.0s Plan_revision_blocks_precisely_when_exact_thread_resume_fails
+//      5.4s Plan_adversarial_review_context_starts_read_only_prompt_with_plan_and_projection_products
+//      0.7s Verify_execute_entry_contract_stops_on_milestone_set_without_trackable_checkboxes
+//      0.2s Create_wires_canonical_observation_resolution_definitions_and_chains
+//      0.0s (x11 methods / 14 cases) all remaining zero-duration guard/retirement/policy checks --
+//           free to place anywhere; grouped here because this class is already
+//           guard/invariant-themed:
+//           Decision_resume_kill_switch_flows_through_the_invocation_layer,
 //           Session_log_environment_variable_flows_through_the_invocation_layer,
 //           SelectChain_returns_single_workflow_chain_for_bounded_plan_and_execute,
-//           Create_wires_canonical_observation_resolution_definitions_and_chains,
-//           Decision_resume_kill_switch_flows_through_the_invocation_layer,
 //           Production_recovery_routes_legacy_session_tables_only_through_the_migration_compatibility_boundary,
 //           Production_feature_handlers_cannot_mutate_files_git_or_canonical_progress_directly,
 //           Production_decision_session_routes_loop_artifact_rotation_through_durable_effect_authority,
 //           Production_cli_composition_does_not_construct_legacy_loop_runner,
 //           Policy_source_descriptor_names_the_settings_file_without_its_directory (Theory, 4 cases),
 //           Retired_plan_and_roadmap_compositions_are_not_available_as_active_authorities,
-//           Verify_execute_entry_contract_stops_on_milestone_set_without_trackable_checkboxes
+//           Execute_entry_rejects_milestone_cardinality_that_conflicts_with_strategic_context,
+//           Composition_exposes_one_resolved_versioned_policy_for_the_invocation
 //
-//   CompositionRootTraditionalRoadmapAndSpineTests  37.2s  (6 methods)
-//     14.1s TraditionalRoadmap_accepts_inline_code_file_markers_from_provider_output
-//      6.7s Run_command_records_workflow_instance_and_attempt_rows_linked_to_the_run
-//      5.6s Plan_revision_resumes_exact_authoring_thread_after_composition_restart
-//      4.5s Verify_execute_entry_contract_completes_plan_and_persists_execution_readiness
-//      3.5s Generate_operational_context_runs_as_deterministic_canonical_artifact_transition
-//      2.8s Cancelled_turns_leave_terminal_turn_evidence_instead_of_vanishing_from_the_spine
-//
-//   CompositionRootExecuteWorkflowAndArtifactTests  37.0s  (6 methods)
-//     13.2s Plan_scoped_artifact_transitions_execute_with_operation_profiles_and_persist_products
-//      8.4s Execute_workflow_transitions_run_through_canonical_runtime
-//      5.4s Execute_implementation_rejects_and_rolls_back_milestone_file_set_changes
-//      4.4s Plan_warm_session_materializes_structurally_valid_returned_plan_when_tool_write_is_absent
-//      3.0s EvalRoadmap_prompt_transition_renders_generated_prompt_asset_before_executor_integration
-//      2.6s Plan_warm_session_prompt_success_without_plan_file_fails_product_validation
-//
-// None of these class names is a pure family bucket -- every class is a duration-balanced mix.
-// Each name reflects its two heaviest/anchor tests' theme; the full membership above is the
-// authoritative record. All 41 methods moved verbatim from the original
-// LoopRelayCompositionRootTests (deleted by this change); shared static helpers and the two
-// nested private fakes below moved here unchanged except private -> protected.
+// 45.9 + 45.1 + 42.1 + 44.2 + 45.1 + 44.6 + 39.7 + 23.2 = 329.9s, matching the sum of all
+// per-method durations above; every class's authoritative membership is the list above. This
+// filename set is a superset carry-over from the five-class split: three files above
+// (CompositionRootLedgerHandoffAndRevisionTests, CompositionRootRunDecisionAndWarmSessionTests,
+// CompositionRootMixedTransitionAndSessionTests) are new; the other five keep their prior names
+// even though their membership changed, because
+// src/LoopRelay.Certification/FailureOracleMatrixRunner.cs hardcodes a path to
+// CompositionRootTraditionalRoadmapAndSpineTests.cs as evidence for the
+// "corrected-malformed-output" failure oracle, and that file still holds the referenced
+// TraditionalRoadmap_accepts_inline_code_file_markers_from_provider_output test. All 41 methods
+// moved verbatim between the five prior sibling classes and the three new ones added here; no
+// test body changed. Shared static helpers and the two nested private fakes below are unchanged
+// by this rebalance.
 public abstract class CompositionRootTestBase
 {
     /// <summary>
