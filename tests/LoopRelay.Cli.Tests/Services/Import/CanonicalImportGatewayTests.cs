@@ -63,6 +63,71 @@ public sealed class CanonicalImportGatewayTests
     }
 
     [Fact]
+    public async Task Legacy_continuity_import_with_a_foreign_key_violation_is_refused_before_promotion()
+    {
+        string root = Directory.CreateTempSubdirectory("looprelay-import-legacy-fk").FullName;
+        try
+        {
+            Repository repository = new() { Id = Guid.NewGuid(), Name = "fixture", Path = root };
+            string database = LoopRelayWorkspaceDatabase.Resolve(repository);
+            _ = await new WorkspaceSchemaMigrationExecutor().ExecuteAsync(database, CancellationToken.None);
+            await using (SqliteConnection connection = WorkspaceDatabaseConnectionFactory.OpenMigrationTarget(database))
+            {
+                await connection.OpenAsync();
+                await using SqliteCommand command = connection.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO decision_session_scopes(
+                        scope_id,workspace_id,workflow_identity,prepared_epic_causal_id,
+                        executable_plan_causal_id,session_role,contract_version,lifecycle_state,created_at
+                    ) VALUES('scope_legacyfkfixture','workspace_fixture','Execute','epic_fixture',
+                        'plan_fixture','decision','1','Active','2026-01-01T00:00:00Z');
+                    PRAGMA foreign_keys = OFF;
+                    CREATE TABLE import_fixture_fk_parent(id INTEGER PRIMARY KEY);
+                    CREATE TABLE import_fixture_fk_child(id INTEGER PRIMARY KEY, parent INTEGER REFERENCES import_fixture_fk_parent(id));
+                    INSERT INTO import_fixture_fk_child(id, parent) VALUES (1, 999);
+                    DELETE FROM schema_metadata WHERE key IN ('schema_identity','schema_family');
+                    UPDATE schema_metadata SET value='3' WHERE key='schema_version';
+                    DROP TABLE workspace_identity;
+                    """;
+                // `foreign_keys = OFF` is required to manufacture the dangling reference at all: every
+                // LoopRelay write connection enforces `foreign_keys = ON` (EnsureSchemaAsync sets it on
+                // every call), so a dangling reference cannot be introduced through the normal mutation
+                // path. This mirrors the fixture trick WorkspaceStorageVerificationTierTests uses for the
+                // identical reason. The resulting dangling row survives `LegacyContinuityWorkspaceImporter
+                // .ImportToShadowAsync`'s `SqliteConnection.BackupDatabase` (a raw page-level copy that
+                // does not run FK enforcement), which is exactly the "externally-introduced" corruption
+                // vector this test exists to close: a legacy source database that was corrupted before
+                // LoopRelay ever wrote to it.
+                await command.ExecuteNonQueryAsync();
+            }
+            var gateway = new CanonicalImportGateway(repository);
+            ImportResult detected = await gateway.DetectAsync(root);
+            ImportResult previewed = await gateway.PreviewAsync(detected.Detection!.Identity);
+            ImportPreview preview = previewed.Preview!;
+            _ = await gateway.ApproveAsync(new ImportApproval(preview.Identity,
+                preview.Detection.SourceFingerprint, "test-operator", ["authenticated", "mutation-authorized"],
+                null, DateTimeOffset.UtcNow));
+
+            ImportResult result = await gateway.ExecuteAsync(preview.Identity);
+
+            Assert.NotEqual(ImportLifecycle.Completed, result.Lifecycle);
+            Assert.Equal(ImportLifecycle.Refused, result.Lifecycle);
+            Assert.Contains(result.Evidence, value => value.Contains("import_fixture_fk_child", StringComparison.Ordinal));
+            // `database` (== `target`) is the raw legacy source itself here - LegacyContinuityWorkspaceImporter
+            // reads it and writes the shadow copy to `working`, never touching `target` - so its mere
+            // existence proves nothing about whether promotion ran. IsCanonicalOnly and the absence of a
+            // `.legacy-nonauthoritative-*` archive are the promotion-evidence signals the happy-path test
+            // (above) asserts on success; here they must both be absent, proving ImportAuthorityPromotionEffectExecutor's
+            // File.Move to `target` was never reached.
+            Assert.False(CanonicalSourceAuthorityGuard.IsCanonicalOnly(database),
+                "the pre-existing (legacy, non-canonical) target must not have been promoted over when the imported database carries unresolved foreign-key references.");
+            Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(database)!, "looprelay.sqlite3.legacy-nonauthoritative-*"));
+            SqliteConnection.ClearAllPools();
+        }
+        finally { await DeleteRootAsync(root); }
+    }
+
+    [Fact]
     public async Task Approved_filesystem_import_promotes_verified_authority_and_reuses_receipt()
     {
         string root = Directory.CreateTempSubdirectory("looprelay-import-gateway").FullName;

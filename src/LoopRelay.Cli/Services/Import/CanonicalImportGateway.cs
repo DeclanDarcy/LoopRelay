@@ -174,6 +174,27 @@ internal sealed class CanonicalImportGateway(Repository _repository) : IImportGa
 
         CanonicalStorageExportPackage targetProjection = await new CanonicalStorageExportCodec()
             .ExportAsync(workingDatabase, cancellationToken);
+        // Deep-verify the staged working database before it is ever offered for promotion. `working`
+        // is not yet `target` - promotion (below, via ImportAuthorityPromotionEffectExecutor) has not
+        // been planned - so refusing here needs no rollback: nothing has mutated the canonical
+        // authority yet. This closes the residual Wave 3 recorded and accepted: a database carrying
+        // externally-introduced foreign-key violations (e.g. a LegacyContinuity source corrupted
+        // before LoopRelay ever wrote to it, then faithfully page-copied by
+        // LegacyContinuityWorkspaceImporter's SqliteConnection.BackupDatabase) passes routine LIGHT
+        // observation as Healthy and was, until now, never checked by the import boundary at all.
+        // WorkspaceStorageInspector.VerifyAsync cannot be pointed at `working` directly - it resolves
+        // its target from a repository root via the fixed `.LoopRelay/persistence/looprelay.sqlite3`
+        // convention, and `working`'s filename (`import-{operation}.sqlite3`) never matches that
+        // convention - so this calls the same PRAGMA foreign_key_check the Deep tier runs, directly
+        // against the raw staged path.
+        IReadOnlyList<string> unresolvedForeignKeys = await WorkspaceStorageInspector.ForeignKeyViolationsAsync(
+            workingDatabase, cancellationToken);
+        if (unresolvedForeignKeys.Count > 0)
+            return new ImportResult(ImportLifecycle.Refused, preview.Detection, preview, operation, null,
+                "Deep storage verification found unresolved foreign-key references in the imported " +
+                "authority; import refused before promotion. Canonical-only authority is monotonic, " +
+                "so no rollback was necessary: the working database was never promoted.",
+                unresolvedForeignKeys);
         string[] missingDomains = preview.Mappings.Select(item => item.Domain).Distinct(StringComparer.Ordinal)
             .Where(domain => !preview.SemanticDelta.Any(delta => delta.Domain == domain)).ToArray();
         var verification = new ImportVerification(missingDomains.Length == 0, missingDomains,

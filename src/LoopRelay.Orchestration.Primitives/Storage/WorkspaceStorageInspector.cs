@@ -249,9 +249,18 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) == 1;
     }
 
-    private static async Task<IReadOnlyList<string>> ForeignKeyViolationsAsync(
+    /// <summary>
+    /// Runs <c>PRAGMA foreign_key_check</c> against an arbitrary database file. Unlike
+    /// <see cref="VerifyAsync"/>, this does not resolve its target from a repository root via
+    /// <see cref="LoopRelayWorkspaceDatabase.RelativeDatabasePath"/> - it is exposed publicly for
+    /// callers (<c>CanonicalImportGateway.ExecuteAsync</c>) that must run the same deep, fail-closed
+    /// FK check against a staged working database that has not - and, if the check fails, must
+    /// never - been promoted to a repository's canonical location, and so has no repository path to
+    /// resolve one from.
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> ForeignKeyViolationsAsync(
         string database,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         await using SqliteConnection connection = WorkspaceDatabaseConnectionFactory.OpenReadOnly(database);
         await connection.OpenAsync(cancellationToken);
