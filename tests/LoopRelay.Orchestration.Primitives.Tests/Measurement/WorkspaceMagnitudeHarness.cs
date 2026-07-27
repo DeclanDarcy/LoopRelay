@@ -30,7 +30,7 @@ namespace LoopRelay.Orchestration.Tests.Measurement;
 /// costs, which is exactly what M2 forbids.
 /// </para>
 /// <para>
-/// Opt-in: the single fact below returns immediately unless <c>LOOPRELAY_MEASUREMENT_OUTPUT</c>
+/// Opt-in: the single fact below reports Skipped unless <c>LOOPRELAY_MEASUREMENT_OUTPUT</c>
 /// names a directory to write results into. It is a data-collection run, not an assertion, so it
 /// must not lengthen the ordinary suite. Set <c>LOOPRELAY_MEASUREMENT_N</c> to a comma-separated
 /// list to override the default 100 / 1000 / 10000 scales.
@@ -61,14 +61,12 @@ public sealed class WorkspaceMagnitudeHarness
 
     private static readonly JsonSerializerOptions ReportJson = new() { WriteIndented = true };
 
-    [Fact]
+    [SkippableFact]
     public async Task Record_measurement_plan_numbers()
     {
         string? output = Environment.GetEnvironmentVariable(OutputVariable);
-        if (string.IsNullOrWhiteSpace(output))
-        {
-            return;
-        }
+        Skip.If(string.IsNullOrWhiteSpace(output),
+            "Set LOOPRELAY_MEASUREMENT_OUTPUT to a directory to run the workspace magnitude harness.");
 
         Directory.CreateDirectory(output);
         var report = new Dictionary<string, object>(StringComparer.Ordinal)
