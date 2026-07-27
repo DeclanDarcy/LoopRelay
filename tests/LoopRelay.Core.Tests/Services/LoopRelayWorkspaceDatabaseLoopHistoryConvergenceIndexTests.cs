@@ -38,25 +38,17 @@ public sealed class LoopRelayWorkspaceDatabaseLoopHistoryConvergenceIndexTests
     public async Task Registering_the_convergence_index_moved_the_canonical_v16_shape_fingerprint()
     {
         await using SqliteConnection connection = await CreateCanonicalDatabaseAsync();
-        Assert.Equal(
-            LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint,
-            await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_shape';"));
 
         await ExecuteAsync(connection, $"DROP INDEX {ConvergenceIndex};");
         LoopRelayWorkspaceDatabase.ResetSchemaVerificationCacheForTesting();
         WorkspaceSchemaInspection withoutIndex = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
 
         // The token is genuinely in the contract: dropping only this index moves the observed
-        // fingerprint and drops the database out of `CanonicalV16Complete`.
+        // fingerprint and drops the database out of `CanonicalV16Complete`. The canonical V16
+        // fingerprint's own value is proven once, by LoopRelayWorkspaceDatabaseSchemaV9Tests; this
+        // assertion is about this index's membership in that contract, not the constant itself.
         Assert.NotEqual(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, withoutIndex.ShapeFingerprint);
         Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV16, withoutIndex.Shape);
-
-        // Earlier contracts are deliberately untouched, so genuine pre-v16 databases - none of
-        // which can carry an index introduced after they were stamped - stay migratable.
-        Assert.NotEqual(
-            LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint,
-            LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint);
-        Assert.Equal(16, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
     }
 
     [Fact]

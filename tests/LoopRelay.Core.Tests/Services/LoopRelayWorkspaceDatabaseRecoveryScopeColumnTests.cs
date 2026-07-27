@@ -20,18 +20,6 @@ namespace LoopRelay.Core.Tests.Services;
 public sealed class LoopRelayWorkspaceDatabaseRecoveryScopeColumnTests
 {
     [Fact]
-    public void Canonical_v16_shape_fingerprint_differs_from_v15()
-    {
-        // The per-(path, stamp) verification memo is keyed on the schema-version stamp *and* this
-        // fingerprint. Adding a column and an index without moving the fingerprint would leave the
-        // memo accepting a database that no longer matches the contract.
-        Assert.NotEqual(
-            LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint,
-            LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint);
-        Assert.Equal(16, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
-    }
-
-    [Fact]
     public async Task EnsureSchemaAsync_backfills_recovery_scope_id_on_an_existing_pre_v16_database()
     {
         Repository repository = CreateRepository();
@@ -53,12 +41,8 @@ public sealed class LoopRelayWorkspaceDatabaseRecoveryScopeColumnTests
 
         WorkspaceSchemaInspection after = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
         Assert.Equal(WorkspaceSchemaShape.CanonicalV16Complete, after.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, after.ShapeFingerprint);
         Assert.Equal("16", await ScalarStringAsync(
             connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
-        Assert.Equal(
-            LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint,
-            await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_shape';"));
         Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
         Assert.Equal(1L, await ScalarLongAsync(
             connection,
@@ -81,6 +65,10 @@ public sealed class LoopRelayWorkspaceDatabaseRecoveryScopeColumnTests
         Assert.True(
             await IndexExistsAsync(connection, "idx_recovery_action_events_scope"),
             "Expected the migration to create `idx_recovery_action_events_scope`.");
+        Assert.Equal(
+            "text",
+            await ColumnTypeAsync(connection, "canonical_recovery_action_events", "scope_id"),
+            StringComparer.OrdinalIgnoreCase);
 
         // Re-running the convergence is idempotent: the column is added once, never duplicated.
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
@@ -177,6 +165,16 @@ public sealed class LoopRelayWorkspaceDatabaseRecoveryScopeColumnTests
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = $index;";
         command.Parameters.AddWithValue("$index", index);
         return Convert.ToInt64(await command.ExecuteScalarAsync()) == 1;
+    }
+
+    private static async Task<string?> ColumnTypeAsync(SqliteConnection connection, string table, string column)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT type FROM pragma_table_info($table) WHERE name = $column;";
+        command.Parameters.AddWithValue("$table", table);
+        command.Parameters.AddWithValue("$column", column);
+        object? scalar = await command.ExecuteScalarAsync();
+        return scalar is null or DBNull ? null : Convert.ToString(scalar);
     }
 
     private static async Task<IReadOnlyList<string>> TableColumnsAsync(SqliteConnection connection, string table)
