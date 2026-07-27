@@ -1,4 +1,4 @@
-﻿using LoopRelay.Core.Models.Identity;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Effects;

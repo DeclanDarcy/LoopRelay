@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Services.Process;
 using LoopRelay.Core.Models.Identity;

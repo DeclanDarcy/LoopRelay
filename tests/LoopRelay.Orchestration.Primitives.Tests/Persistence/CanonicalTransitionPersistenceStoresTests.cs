@@ -1,4 +1,4 @@
-﻿using LoopRelay.Core.Models.Identity;
+using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Effects;

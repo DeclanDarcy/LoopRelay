@@ -1,4 +1,4 @@
-﻿using LoopRelay.Cli.Abstractions.Persistence;
+using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;

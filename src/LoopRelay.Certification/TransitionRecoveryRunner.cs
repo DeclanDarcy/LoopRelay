@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Process;
