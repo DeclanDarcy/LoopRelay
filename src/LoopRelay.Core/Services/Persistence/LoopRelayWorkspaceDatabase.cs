@@ -1680,7 +1680,6 @@ public static class LoopRelayWorkspaceDatabase
         ("row_version", "integer not null default 0"),
         ("lease_owner", "text"),
         ("lease_expires_at", "text"),
-        ("attempt_count", "integer not null default 0"),
         ("terminal_receipt_id", "text"),
     ];
 

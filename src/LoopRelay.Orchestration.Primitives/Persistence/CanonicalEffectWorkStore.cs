@@ -77,12 +77,12 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
                         workspace_id, run_id, workflow_instance_id, semantic_operation_key,
                         executor_key, executor_version, target_json, payload_json, payload_hash,
                         requiredness, dependencies_json, precondition_json, postcondition_json,
-                        reconciliation_policy, row_version, attempt_count
+                        reconciliation_policy, row_version
                     ) VALUES (
                         $intent, $transition, $attempt, $semantic, 'Canonical', $order, $idempotency,
                         'Planned', $definition, $planned, $workspace, $run, $workflow, $semantic,
                         $executor, $executor_version, $target, $payload, $payload_hash, $requiredness,
-                        $dependencies, $precondition, $postcondition, $reconciliation, 0, 0
+                        $dependencies, $precondition, $postcondition, $reconciliation, 0
                     )
                     ON CONFLICT(idempotency_key) DO NOTHING;
                     """;
@@ -509,7 +509,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
     {
         await using SqliteCommand command = CreateCommand(connection, transaction);
         command.CommandText = """
-            SELECT definition_json, status, row_version, lease_owner, lease_expires_at, attempt_count,
+            SELECT definition_json, status, row_version, lease_owner, lease_expires_at,
                    terminal_receipt_id
             FROM canonical_effect_intents WHERE effect_intent_id = $intent;
             """;
@@ -522,12 +522,11 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         long rowVersion = reader.GetInt64(2);
         string? leaseOwner = reader.IsDBNull(3) ? null : reader.GetString(3);
         DateTimeOffset? leaseExpiry = reader.IsDBNull(4) ? null : DateTimeOffset.Parse(reader.GetString(4), CultureInfo.InvariantCulture);
-        int attemptCount = reader.GetInt32(5);
-        string? receiptId = reader.IsDBNull(6) ? null : reader.GetString(6);
+        string? receiptId = reader.IsDBNull(5) ? null : reader.GetString(5);
         await reader.DisposeAsync();
         EffectReceipt? receipt = receiptId is null ? null : await ReadReceiptAsync(connection, transaction, receiptId, cancellationToken);
         IReadOnlyList<EffectLifecycleEvent> events = await ReadEventsAsync(connection, transaction, identity, cancellationToken);
-        return new EffectWorkItem(intent, state, rowVersion, leaseOwner, leaseExpiry, attemptCount, receipt, events);
+        return new EffectWorkItem(intent, state, rowVersion, leaseOwner, leaseExpiry, receipt, events);
     }
 
     /// <summary>
@@ -552,12 +551,12 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         CancellationToken cancellationToken)
     {
         var rows = new List<(EffectIntentIdentity Identity, EffectIntent Intent, EffectLifecycle State,
-            long RowVersion, string? LeaseOwner, DateTimeOffset? LeaseExpiresAt, int AttemptCount)>();
+            long RowVersion, string? LeaseOwner, DateTimeOffset? LeaseExpiresAt)>();
         await using (SqliteCommand command = connection.CreateCommand())
         {
             command.CommandText = $"""
                 SELECT intent.effect_intent_id, intent.definition_json, intent.status, intent.row_version,
-                       intent.lease_owner, intent.lease_expires_at, intent.attempt_count
+                       intent.lease_owner, intent.lease_expires_at
                 FROM canonical_effect_intents AS intent
                 WHERE {scopePredicate}
                 ORDER BY {ordering};
@@ -573,8 +572,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
                     ParseStatus(reader.GetString(2)),
                     reader.GetInt64(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture),
-                    reader.GetInt32(6)));
+                    reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5), CultureInfo.InvariantCulture)));
             }
         }
         // Nothing to stitch receipts or events onto, so neither statement is worth issuing.
@@ -627,7 +625,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         }
 
         return [.. rows.Select(row => new EffectWorkItem(
-            row.Intent, row.State, row.RowVersion, row.LeaseOwner, row.LeaseExpiresAt, row.AttemptCount,
+            row.Intent, row.State, row.RowVersion, row.LeaseOwner, row.LeaseExpiresAt,
             receipts.GetValueOrDefault(row.Identity),
             events.TryGetValue(row.Identity, out List<EffectLifecycleEvent>? history) ? history : []))];
     }

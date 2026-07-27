@@ -408,11 +408,17 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "executor_key", "executor_version", "target_json", "payload_json", "payload_hash",
             "requiredness", "dependencies_json", "precondition_json", "postcondition_json",
             "reconciliation_policy", "row_version", "lease_owner", "lease_expires_at",
-            "attempt_count", "terminal_receipt_id",
+            "terminal_receipt_id",
         })
         {
             Assert.Contains(column, columns);
         }
+
+        // `attempt_count` was incremented only by the effect lease, which commit 94dcd313 deleted.
+        // It is not in the base `CREATE TABLE`, so removing its `V10EffectIntentColumns` entry both
+        // stops the ALTER that used to add it and drops its `ShapeRequirement` -- a fresh database
+        // must now come up without the column at all rather than carrying a permanently-zero one.
+        Assert.DoesNotContain("attempt_count", columns);
     }
 
     [Fact]

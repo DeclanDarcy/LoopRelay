@@ -454,11 +454,10 @@ public sealed class EffectWorkerTests
             public long RowVersion { get; set; }
             public string? LeaseOwner { get; set; }
             public DateTimeOffset? LeaseExpiresAt { get; set; }
-            public int AttemptCount { get; set; }
             public EffectReceipt? Receipt { get; set; }
             public List<EffectLifecycleEvent> Events { get; } = [];
             public EffectWorkItem Snapshot() => new(
-                Intent, State, RowVersion, LeaseOwner, LeaseExpiresAt, AttemptCount, Receipt, Events.ToArray());
+                Intent, State, RowVersion, LeaseOwner, LeaseExpiresAt, Receipt, Events.ToArray());
         }
     }
 }

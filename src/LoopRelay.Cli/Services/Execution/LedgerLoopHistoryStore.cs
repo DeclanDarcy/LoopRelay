@@ -423,14 +423,14 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
                 workspace_id, run_id, workflow_instance_id, semantic_operation_key,
                 executor_key, executor_version, target_json, payload_json, payload_hash,
                 requiredness, dependencies_json, precondition_json, postcondition_json,
-                reconciliation_policy, row_version, attempt_count
+                reconciliation_policy, row_version
             ) VALUES (
                 $intent, $transition, $attempt, $effect_identity, 'Archive',
                 $order, $key, 'Planned', $definition, $at,
                 $workspace, $run, $workflow_instance, $semantic,
                 $executor, $executor_version, $target, $payload, $payload_hash,
                 $requiredness, $dependencies, $precondition, $postcondition,
-                $reconciliation, 0, 0
+                $reconciliation, 0
             );
             INSERT INTO canonical_effect_lifecycle_events (
                 effect_intent_id, lifecycle, worker_id, explanation, evidence_json, recorded_at

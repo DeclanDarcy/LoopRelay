@@ -87,7 +87,7 @@ public sealed class EffectWorker(
             // No claim and no start marker. Every executor is idempotent, so a crash between here
             // and the terminal write leaves a row that is simply re-executed on the next pass.
             dispatched++;
-            EffectWorkItem current = new(item.Intent, item.State, item.RowVersion, null, null, 0, null, []);
+            EffectWorkItem current = new(item.Intent, item.State, item.RowVersion, null, null, null, []);
             try
             {
                 IEffectExecutor executor = _executors.Resolve(current.Intent.Executor, current.Intent.ExecutorVersion);

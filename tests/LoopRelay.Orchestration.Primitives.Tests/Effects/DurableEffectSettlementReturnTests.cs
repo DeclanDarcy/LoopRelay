@@ -180,7 +180,6 @@ public sealed class DurableEffectSettlementReturnTests
         Assert.Equal(observed.RowVersion, returned.RowVersion);
         Assert.Equal(observed.LeaseOwner, returned.LeaseOwner);
         Assert.Equal(observed.LeaseExpiresAt, returned.LeaseExpiresAt);
-        Assert.Equal(observed.AttemptCount, returned.AttemptCount);
         Assert.Equal(observed.Receipt?.Identity, returned.Receipt?.Identity);
         Assert.Equal(observed.Receipt?.Evidence, returned.Receipt?.Evidence);
         Assert.Equal(observed.Receipt?.RecordedAt, returned.Receipt?.RecordedAt);

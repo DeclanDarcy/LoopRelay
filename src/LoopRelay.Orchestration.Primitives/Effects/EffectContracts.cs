@@ -328,7 +328,6 @@ public sealed record EffectWorkItem(
     long RowVersion,
     string? LeaseOwner,
     DateTimeOffset? LeaseExpiresAt,
-    int AttemptCount,
     EffectReceipt? Receipt,
     IReadOnlyList<EffectLifecycleEvent> Events);
 

@@ -265,12 +265,12 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                         workspace_id, run_id, workflow_instance_id, semantic_operation_key,
                         executor_key, executor_version, target_json, payload_json, payload_hash,
                         requiredness, dependencies_json, precondition_json, postcondition_json,
-                        reconciliation_policy, row_version, attempt_count
+                        reconciliation_policy, row_version
                     ) VALUES ($intent, $run, $attempt, $effect, $category, $order, $key,
                               'Planned', $definition, $at, $workspace, $root_run, $workflow_instance,
                               $semantic, $executor, $executor_version, $target, $payload, $payload_hash,
                               $requiredness, $dependencies, $precondition, $postcondition,
-                              $reconciliation, 0, 0)
+                              $reconciliation, 0)
                     ON CONFLICT(idempotency_key) DO NOTHING;
                     INSERT INTO canonical_effect_lifecycle_events (
                         effect_intent_id, lifecycle, worker_id, explanation, evidence_json, recorded_at
