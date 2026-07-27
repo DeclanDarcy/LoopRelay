@@ -165,22 +165,6 @@ public sealed class UnifiedCliRunnerTests
         Assert.Equal(1, verifier.Verifications);
     }
 
-    private sealed class CountingStorageVerifier : IStorageVerifier
-    {
-        private readonly FileSystemStorageVerifier inner = new();
-        private int verifications;
-
-        public int Verifications => verifications;
-
-        public Task<StorageVerificationResult> VerifyAsync(
-            string repositoryPath,
-            CancellationToken cancellationToken)
-        {
-            Interlocked.Increment(ref verifications);
-            return inner.VerifyAsync(repositoryPath, cancellationToken);
-        }
-    }
-
     [Fact]
     public async Task Non_production_compositions_have_no_runtime_prerequisites_to_inspect()
     {
@@ -945,6 +929,22 @@ public sealed class UnifiedCliRunnerTests
             {
                 _source.Cancel();
             }
+        }
+    }
+
+    private sealed class CountingStorageVerifier : IStorageVerifier
+    {
+        private readonly FileSystemStorageVerifier inner = new();
+        private int verifications;
+
+        public int Verifications => verifications;
+
+        public Task<StorageVerificationResult> VerifyAsync(
+            string repositoryPath,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref verifications);
+            return inner.VerifyAsync(repositoryPath, cancellationToken);
         }
     }
 

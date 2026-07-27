@@ -16,8 +16,6 @@ internal sealed class CountingStore(IArtifactStore inner) : IArtifactStore
 
     public int Lists { get; private set; }
 
-    public int Writes { get; private set; }
-
     public int WritesTo(string path) => writesByPath.TryGetValue(path, out int count) ? count : 0;
 
     public Task<bool> ExistsAsync(string path) => inner.ExistsAsync(path);
@@ -30,7 +28,6 @@ internal sealed class CountingStore(IArtifactStore inner) : IArtifactStore
 
     public Task WriteAsync(string path, string content)
     {
-        Writes++;
         writesByPath[path] = writesByPath.GetValueOrDefault(path) + 1;
         return inner.WriteAsync(path, content);
     }
