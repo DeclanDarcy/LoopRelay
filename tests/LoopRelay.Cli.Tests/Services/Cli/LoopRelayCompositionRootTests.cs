@@ -1114,51 +1114,95 @@ public sealed class LoopRelayCompositionRootTests
     }
 
     [Fact]
-    public async Task GenerateDecision_resolves_scope_from_the_composed_repository_observer_not_a_default_one()
+    public async Task GenerateDecision_honors_the_composed_observers_storage_verdict_over_a_fresh_default()
     {
         // The decision-session scope resolver used to construct its own bare RepositoryObserver
         // (defaulting to FileSystemStorageVerifier) instead of consulting the composition's own
         // observer whenever the caller omitted one - which every production call site did. A
-        // composition-supplied CountingStorageVerifier only sees calls that flow through the
-        // composition's RepositoryObserver, so an under-count after GenerateDecision proves the
-        // resolver bypassed it in favor of a freshly constructed default.
+        // call-count spy can only prove the plumbing ran through the composed instance; it cannot
+        // prove the two observers ever disagree about anything a caller could act on. They do: for
+        // a missing canonical database, FileSystemStorageVerifier.VerifyAsync special-cases it to
+        // UsableAuthority=true with Health left at its default Healthy (see the bottom of
+        // RepositoryObserver.cs), so IsUnusable is false; WorkspaceStorageVerifierAdapter - what
+        // production actually composes - delegates to WorkspaceStorageInspector, which reports
+        // Health=ActionRequired for a missing database (WorkspaceStorageInspector.VerifyAsync), so
+        // UsableAuthority=false and BlockingConditions is non-empty, making IsUnusable true.
+        // DecisionSessionScopeResolver.ResolveAsync throws exactly when IsUnusable is true
+        // (DecisionSessionScopeResolver.cs), so the identical repository reaches opposite verdicts
+        // at this gate depending on which observer answers it.
+        //
+        // That specific divergence cannot be reproduced here by deleting the database file: the
+        // very first durable write this attempt performs (persisting the attempt-started row,
+        // before the prompt is ever dispatched) reopens the database in create mode and recreates
+        // a fresh, healthy schema, so by the time GenerateDecision's own storage check runs the
+        // file exists again and every observer agrees. To isolate the gate this test protects
+        // (rather than merely "was the composed observer consulted at all"), the injected verifier
+        // below reports a blocking condition directly, reproducing the same disagreement in
+        // IsUnusable without touching the database file, and without disturbing
+        // UsableAuthority/Health - which the "Implementation Planning" stage's own
+        // ExecutionReadiness requirement needs to observe canonical products earlier in this same
+        // attempt at all (RepositoryObserver.ObserveAsync only short-circuits canonical persistence
+        // projection on UsableAuthority, never on IsUnusable).
         (string repo, Repository repository, FakeAgentRuntime runtime, FakeProcessRunner process) =
-            await PrepareExecuteContinuityCaseAsync("cc-cli-unified-decision-scope-observer");
+            await PrepareExecuteContinuityCaseAsync("cc-cli-unified-decision-scope-storage-verdict");
         LoopRelayCompositionRoot first = LoopRelayCompositionRoot.CreateForTests(repository, runtime, process);
         await RunPlanAsync(first, "Workflow Completion", "VerifyExecuteEntryContract");
         await RunExecuteAsync(first, "Execution Readiness", "VerifyExecutionReadiness");
         await first.DisposeAsync();
 
-        var verifier = new CountingStorageVerifier();
         runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             new AgentTurnResult(0, AgentTurnState.Completed, "# Decisions\n\nDo the thing.", AgentTokenUsage.Zero)));
-        await using LoopRelayCompositionRoot restarted =
-            LoopRelayCompositionRoot.CreateForTests(repository, runtime, process, verifier);
+        await using LoopRelayCompositionRoot restarted = LoopRelayCompositionRoot.CreateForTests(
+            repository, runtime, process, new BlockedAuthorityStorageVerifier());
 
         TransitionRuntimeResult decision = await RunExecuteAsync(
             restarted, "Implementation Planning", "GenerateDecision");
 
-        Assert.Equal(RuntimeOutcomeKind.Completed, decision.Outcome);
-        // Empirically: a single GenerateDecision attempt against a fresh composition verifies
-        // storage twice for transition eligibility/gating and once more for decision-session
-        // scope resolution. Before the fix, the third verification bypassed this spy (it ran
-        // through the resolver's own default RepositoryObserver instead), so this count was 2.
-        Assert.Equal(3, verifier.Verifications);
+        // If DecisionSessionScopeResolver still consulted a freshly constructed default
+        // RepositoryObserver instead of the composed one, it would see this repository's real,
+        // healthy, un-blocked database and complete normally instead of failing with this
+        // explanation.
+        Assert.Equal(RuntimeOutcomeKind.Failed, decision.Outcome);
+        Assert.Equal(TransitionDurableState.Failed, decision.DurableState);
+        Assert.Contains(
+            "Execute continuity scope cannot be resolved from blocked storage authority.",
+            decision.Explanation,
+            StringComparison.Ordinal);
     }
 
-    private sealed class CountingStorageVerifier : IStorageVerifier
+    /// <summary>
+    /// Reports the same blocked-storage verdict a production verifier gives for an unusable
+    /// workspace authority - a non-empty <see cref="StorageVerificationResult.BlockingConditions"/>,
+    /// which makes <see cref="StorageVerificationResult.IsUnusable"/> true - while leaving
+    /// <see cref="StorageVerificationResult.UsableAuthority"/> and
+    /// <see cref="StorageVerificationResult.Health"/> exactly as the real, healthy repository
+    /// reports them, so canonical product resolution earlier in the same attempt (which keys off
+    /// <c>UsableAuthority</c>, not <c>IsUnusable</c>) is unaffected. Only the specific gate under
+    /// test - <c>DecisionSessionScopeResolver</c>'s <c>IsUnusable</c> check - sees a difference
+    /// from the deleted fallback's independent <see cref="FileSystemStorageVerifier"/>, which never
+    /// observes this blocking condition because it never runs against this repository at all.
+    /// </summary>
+    private sealed class BlockedAuthorityStorageVerifier : IStorageVerifier
     {
         private readonly FileSystemStorageVerifier inner = new();
-        private int verifications;
 
-        public int Verifications => verifications;
-
-        public Task<StorageVerificationResult> VerifyAsync(
+        public async Task<StorageVerificationResult> VerifyAsync(
             string repositoryPath,
             CancellationToken cancellationToken)
         {
-            Interlocked.Increment(ref verifications);
-            return inner.VerifyAsync(repositoryPath, cancellationToken);
+            StorageVerificationResult result = await inner.VerifyAsync(repositoryPath, cancellationToken);
+            return result with
+            {
+                BlockingConditions =
+                [
+                    new ResolutionWarning(
+                        WarningCategory.Storage,
+                        "Test-injected blocking condition.",
+                        "test authority",
+                        "n/a",
+                        []),
+                ],
+            };
         }
     }
 
