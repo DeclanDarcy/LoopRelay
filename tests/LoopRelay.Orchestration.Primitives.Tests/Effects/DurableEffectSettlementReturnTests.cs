@@ -130,7 +130,7 @@ public sealed class DurableEffectSettlementReturnTests
     }
 
     [Fact]
-    public async Task Settling_an_effect_stays_within_the_four_connection_open_budget()
+    public async Task Settling_an_effect_stays_within_the_three_connection_open_budget()
     {
         Repository repository = CreateRepository();
         CanonicalCausalContext causality = Causality();
@@ -145,10 +145,10 @@ public sealed class DurableEffectSettlementReturnTests
         EffectWorkerResult result = await Worker(counting, new RecordingExecutor()).RunOnceAsync(CancellationToken.None);
 
         Assert.Equal(10, result.Succeeded);
-        // Directly measured call shape: one scan, then lease + post-lease read + start + receipt
-        // per effect, and no plan read because nothing has a dependency.
+        // Ten independent effects in one pass. Directly measured call shape: one scan, then lease +
+        // start + receipt per effect, and no plan read because nothing has a dependency.
         Assert.Equal(1, counting.Scans);
-        Assert.Equal(10, counting.Reads);
+        Assert.Equal(0, counting.Reads);
         Assert.Equal(10, counting.Leases);
         Assert.Equal(10, counting.LifecycleAppends);
         Assert.Equal(10, counting.ReceiptRecords);
@@ -157,12 +157,14 @@ public sealed class DurableEffectSettlementReturnTests
         // call that was running. Nothing below is a constant this test declares, so re-adding an
         // open inside any settlement write raises the tally without anyone editing this file.
         Assert.Equal(0, counting.UnattributedOpens);
-        Assert.Equal(41, counting.ConnectionOpens);
-        Assert.Equal(4, (counting.ConnectionOpens - counting.ScanOpens) / result.Succeeded);
-        // The four, decomposed by the step that opened them.
+        // Total INCLUDING the one shared scan open.
+        Assert.Equal(31, counting.ConnectionOpens);
+        // Per settled independent effect, EXCLUDING the shared scan open.
+        Assert.Equal(3, (counting.ConnectionOpens - counting.ScanOpens) / result.Succeeded);
+        // The three, decomposed by the step that opened them.
         Assert.Equal(1, counting.ScanOpens);
         Assert.Equal(10, counting.LeaseOpens);
-        Assert.Equal(10, counting.ReadOpens);
+        Assert.Equal(0, counting.ReadOpens);
         Assert.Equal(10, counting.LifecycleAppendOpens);
         Assert.Equal(10, counting.ReceiptRecordOpens);
         Assert.Equal(0, counting.PlanReadOpens);

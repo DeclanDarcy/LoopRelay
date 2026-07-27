@@ -71,38 +71,39 @@ public sealed class EffectWorker(
             }
 
             leased++;
+            // The lease already carries the intent and the row version its own guarded UPDATE
+            // produced, so nothing below re-reads the row it just wrote.
             EffectLifecycle previous = lease.PreviousState;
-            EffectWorkItem current = (await _store.ReadAsync(item.Intent.Identity, cancellationToken))!;
             if (previous is EffectLifecycle.Started or EffectLifecycle.Unknown or EffectLifecycle.Reconciling)
             {
-                current = await ReconcileAsync(current, cancellationToken);
-                if (current.State == EffectLifecycle.Succeeded)
+                EffectWorkItem reconciled = await ReconcileAsync(lease.Intent, lease.RowVersion, cancellationToken);
+                if (reconciled.State == EffectLifecycle.Succeeded)
                 {
-                    settled.Add(current.Intent.Identity);
+                    settled.Add(reconciled.Intent.Identity);
                     succeeded++;
                 }
                 else
                 {
-                    unsettled.Add(current.Intent.Identity);
+                    unsettled.Add(reconciled.Intent.Identity);
                     recovery++;
                     await RecordRecoveryAsync(
-                        current.Intent,
-                        ["effect-reconciliation-unsettled", $"state:{current.State}"],
-                        evidenceComplete: current.State != EffectLifecycle.Unknown);
+                        reconciled.Intent,
+                        ["effect-reconciliation-unsettled", $"state:{reconciled.State}"],
+                        evidenceComplete: reconciled.State != EffectLifecycle.Unknown);
                 }
                 continue;
             }
 
             if (previous is not (EffectLifecycle.Planned or EffectLifecycle.Pending or EffectLifecycle.RetryAuthorized or EffectLifecycle.Leased))
             {
-                unsettled.Add(current.Intent.Identity);
+                unsettled.Add(lease.Intent.Identity);
                 recovery++;
                 continue;
             }
 
-            current = await _store.AppendLifecycleAsync(
-                current.Intent.Identity,
-                current.RowVersion,
+            EffectWorkItem current = await _store.AppendLifecycleAsync(
+                lease.Intent.Identity,
+                lease.RowVersion,
                 EffectLifecycle.Started,
                 _workerIdentity,
                 "Outward effect execution started.",
@@ -193,11 +194,14 @@ public sealed class EffectWorker(
             CancellationToken.None);
     }
 
-    private async Task<EffectWorkItem> ReconcileAsync(EffectWorkItem current, CancellationToken cancellationToken)
+    private async Task<EffectWorkItem> ReconcileAsync(
+        EffectIntent intent,
+        long rowVersion,
+        CancellationToken cancellationToken)
     {
-        current = await _store.AppendLifecycleAsync(
-            current.Intent.Identity,
-            current.RowVersion,
+        EffectWorkItem current = await _store.AppendLifecycleAsync(
+            intent.Identity,
+            rowVersion,
             EffectLifecycle.Reconciling,
             _workerIdentity,
             "Independent postcondition reconciliation started.",
