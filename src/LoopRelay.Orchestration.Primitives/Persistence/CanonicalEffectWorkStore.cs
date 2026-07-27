@@ -34,6 +34,22 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
     /// </summary>
     internal Action<SqliteConnection>? ConnectionObserverForTesting { get; set; }
 
+    /// <summary>
+    /// Fires once for every statement this store issues through <see cref="CreateCommand"/>, which
+    /// covers the unsettled scan and the three per-item read helpers behind it. Test seam only: the
+    /// scan's cost is statements against a growing event history, not connections, so the
+    /// connection observer cannot see it.
+    /// </summary>
+    internal Action<SqliteCommand>? CommandObserverForTesting { get; set; }
+
+    private SqliteCommand CreateCommand(SqliteConnection connection, SqliteTransaction? transaction = null)
+    {
+        SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        CommandObserverForTesting?.Invoke(command);
+        return command;
+    }
+
     public async Task AppendPlanAsync(
         IReadOnlyList<EffectIntent> intents,
         CancellationToken cancellationToken)
@@ -128,7 +144,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         }
     }
 
-    public async Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(
+    public async Task<IReadOnlyList<EffectScanRow>> ScanUnsettledAsync(
         int limit,
         DateTimeOffset now,
         CancellationToken cancellationToken,
@@ -146,9 +162,9 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
             ? string.Empty
             : $" AND effect_intent_id IN ({string.Join(", ", Enumerable.Range(0, only.Count).Select(index => $"$only{index}"))})";
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
+        await using SqliteCommand command = CreateCommand(connection);
         command.CommandText = $"""
-            SELECT effect_intent_id
+            SELECT definition_json, status, row_version
             FROM canonical_effect_intents
             WHERE terminal_receipt_id IS NULL
               AND status IN ('Planned', 'Pending', 'Started', 'Unknown', 'Reconciling', 'RetryAuthorized', 'Leased')
@@ -167,18 +183,18 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
             }
         }
 
-        var identities = new List<EffectIntentIdentity>();
-        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
+        var rows = new List<EffectScanRow>();
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
-            while (await reader.ReadAsync(cancellationToken)) identities.Add(new(reader.GetString(0)));
+            EffectIntent intent = JsonSerializer.Deserialize<EffectIntent>(reader.GetString(0), JsonOptions)
+                ?? throw new InvalidOperationException("Effect intent document is invalid.");
+            rows.Add(new EffectScanRow(
+                intent,
+                Enum.Parse<EffectLifecycle>(reader.GetString(1)),
+                reader.GetInt64(2)));
         }
-
-        var items = new List<EffectWorkItem>(identities.Count);
-        foreach (EffectIntentIdentity identity in identities)
-        {
-            items.Add(await ReadRequiredAsync(connection, null, identity, cancellationToken));
-        }
-        return items;
+        return rows;
     }
 
     public async Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken cancellationToken)
@@ -542,16 +558,15 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         return connection;
     }
 
-    private static async Task<EffectWorkItem> ReadRequiredAsync(SqliteConnection connection, SqliteTransaction? transaction,
+    private async Task<EffectWorkItem> ReadRequiredAsync(SqliteConnection connection, SqliteTransaction? transaction,
         EffectIntentIdentity identity, CancellationToken cancellationToken) =>
         await ReadCoreAsync(connection, transaction, identity, cancellationToken)
         ?? throw new InvalidOperationException($"Effect intent '{identity}' was not found.");
 
-    private static async Task<EffectWorkItem?> ReadCoreAsync(SqliteConnection connection, SqliteTransaction? transaction,
+    private async Task<EffectWorkItem?> ReadCoreAsync(SqliteConnection connection, SqliteTransaction? transaction,
         EffectIntentIdentity identity, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.Transaction = transaction;
+        await using SqliteCommand command = CreateCommand(connection, transaction);
         command.CommandText = """
             SELECT definition_json, status, row_version, lease_owner, lease_expires_at, attempt_count,
                    terminal_receipt_id
@@ -676,11 +691,10 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
             events.TryGetValue(row.Identity, out List<EffectLifecycleEvent>? history) ? history : []))];
     }
 
-    private static async Task<EffectReceipt?> ReadReceiptAsync(SqliteConnection connection, SqliteTransaction? transaction,
+    private async Task<EffectReceipt?> ReadReceiptAsync(SqliteConnection connection, SqliteTransaction? transaction,
         string receiptId, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.Transaction = transaction;
+        await using SqliteCommand command = CreateCommand(connection, transaction);
         command.CommandText = """
             SELECT receipt_id, effect_intent_id, executor_key, executor_version, observed_target_identity,
                    before_facts_json, after_facts_json, postcondition_satisfied, external_correlation,
@@ -692,11 +706,10 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         return await reader.ReadAsync(cancellationToken) ? MapReceipt(reader, offset: 0) : null;
     }
 
-    private static async Task<IReadOnlyList<EffectLifecycleEvent>> ReadEventsAsync(SqliteConnection connection,
+    private async Task<IReadOnlyList<EffectLifecycleEvent>> ReadEventsAsync(SqliteConnection connection,
         SqliteTransaction? transaction, EffectIntentIdentity identity, CancellationToken cancellationToken)
     {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.Transaction = transaction;
+        await using SqliteCommand command = CreateCommand(connection, transaction);
         command.CommandText = """
             SELECT event_id, lifecycle, worker_id, explanation, evidence_json, recorded_at
             FROM canonical_effect_lifecycle_events WHERE effect_intent_id = $intent ORDER BY event_id;

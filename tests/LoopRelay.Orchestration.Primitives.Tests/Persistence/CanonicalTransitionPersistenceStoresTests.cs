@@ -145,7 +145,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         Assert.Equal(product.Identity, Assert.Single(snapshot.Products).Identity);
         Assert.Equal(TransitionDurableState.EffectsPending, Assert.Single(snapshot.TransitionRuns).State);
         Assert.Empty(snapshot.EffectRecords);
-        EffectWorkItem work = Assert.Single(await new CanonicalEffectWorkStore(repository)
+        EffectScanRow work = Assert.Single(await new CanonicalEffectWorkStore(repository)
             .ScanUnsettledAsync(10, DateTimeOffset.UtcNow, CancellationToken.None));
         Assert.Equal(EffectLifecycle.Planned, work.State);
         Assert.Equal("EffectsPending", Assert.Single(await persistence.ReadAttemptsAsync()).Outcome);

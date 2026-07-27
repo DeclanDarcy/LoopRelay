@@ -170,6 +170,47 @@ public sealed class DurableEffectSettlementReturnTests
         Assert.Equal(0, counting.ReconciliationOpens);
     }
 
+    /// <summary>
+    /// The scan's cost is statements, not connections: it hands its own connection to every
+    /// per-row read, so the connection-open budget above cannot see a per-row hydration at all.
+    /// Counted through <see cref="CanonicalEffectWorkStore.CommandObserverForTesting"/>, which the
+    /// store invokes once per statement it prepares, so re-introducing any per-row read raises the
+    /// tally without anyone editing this file. Nothing below is a constant this test declares.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(6)]
+    [InlineData(25)]
+    public async Task Scanning_unsettled_work_issues_one_statement_regardless_of_row_count(int rowCount)
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalEffectWorkStore(repository);
+        CanonicalCausalContext causality = Causality();
+        EffectIntent[] intents = Enumerable.Range(0, rowCount)
+            .Select(index => Intent(causality, order: index, key: $"scan-{index}"))
+            .ToArray();
+        await store.AppendPlanAsync(intents, CancellationToken.None);
+
+        // Watching starts here, so the plan append above is outside the tally.
+        int statements = 0;
+        store.CommandObserverForTesting = _ => statements++;
+        try
+        {
+            IReadOnlyList<EffectScanRow> rows =
+                await store.ScanUnsettledAsync(128, DateTimeOffset.UtcNow, CancellationToken.None);
+
+            Assert.Equal(rowCount, rows.Count);
+            Assert.All(rows, row => Assert.Equal(EffectLifecycle.Planned, row.State));
+        }
+        finally
+        {
+            store.CommandObserverForTesting = null;
+        }
+
+        // Constant in the row count: the per-row hydration this replaced cost 2N+1.
+        Assert.Equal(1, statements);
+    }
+
     private static void AssertMatches(EffectWorkItem observed, EffectWorkItem returned)
     {
         Assert.Equal(observed.Intent.Identity, returned.Intent.Identity);
@@ -281,7 +322,7 @@ public sealed class DurableEffectSettlementReturnTests
 
         public void Dispose() => _inner.ConnectionObserverForTesting = null;
 
-        public Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(
+        public Task<IReadOnlyList<EffectScanRow>> ScanUnsettledAsync(
             int limit, DateTimeOffset now, CancellationToken cancellationToken,
             IReadOnlySet<EffectIntentIdentity>? only = null)
         {

@@ -284,19 +284,20 @@ public sealed class EffectWorkerTests
             lock (_gate) _items.Add(intent.Identity, new MutableItem(intent));
         }
 
-        public Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(
+        public Task<IReadOnlyList<EffectScanRow>> ScanUnsettledAsync(
             int limit, DateTimeOffset now, CancellationToken cancellationToken,
             IReadOnlySet<EffectIntentIdentity>? only = null)
         {
             lock (_gate)
             {
-                IReadOnlyList<EffectWorkItem> result = _items.Values
+                IReadOnlyList<EffectScanRow> result = _items.Values
                     .Where(item => item.State != EffectLifecycle.Succeeded)
                     .Where(item => item.LeaseExpiresAt is null || item.LeaseExpiresAt <= now || item.LeaseOwner is null)
                     .Where(item => only is null || only.Contains(item.Intent.Identity))
                     .OrderBy(item => item.Intent.Order)
                     .Take(limit)
                     .Select(item => item.Snapshot())
+                    .Select(item => new EffectScanRow(item.Intent, item.State, item.RowVersion))
                     .ToArray();
                 return Task.FromResult(result);
             }

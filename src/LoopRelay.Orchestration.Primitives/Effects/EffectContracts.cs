@@ -291,6 +291,17 @@ public sealed record EffectWorkItem(
     EffectReceipt? Receipt,
     IReadOnlyList<EffectLifecycleEvent> Events);
 
+/// <summary>
+/// What the effect worker actually reads from a scan. Deliberately not an <see cref="EffectWorkItem"/>:
+/// the worker consumes only the intent, the lifecycle status and the row version, and hydrating
+/// receipts and full event history per discovered row costs 2N+1 statements per pass against a
+/// history that grows for the life of the workspace.
+/// </summary>
+public sealed record EffectScanRow(
+    EffectIntent Intent,
+    EffectLifecycle State,
+    long RowVersion);
+
 public sealed record EffectLease(
     EffectIntent Intent,
     long RowVersion,
@@ -323,7 +334,7 @@ public interface IEffectWorkStore
     /// scan window, so filtering afterwards lets a requested intent fall outside that window and be
     /// silently skipped.
     /// </summary>
-    Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken cancellationToken, IReadOnlySet<EffectIntentIdentity>? only = null);
+    Task<IReadOnlyList<EffectScanRow>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken cancellationToken, IReadOnlySet<EffectIntentIdentity>? only = null);
     Task<IReadOnlyList<EffectWorkItem>> ReadPlanAsync(TransitionRunIdentity transitionRun, CancellationToken cancellationToken);
     Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken cancellationToken);
 

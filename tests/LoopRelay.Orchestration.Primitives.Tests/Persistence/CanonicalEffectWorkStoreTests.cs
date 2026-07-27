@@ -17,7 +17,7 @@ public sealed class CanonicalEffectWorkStoreTests
         var firstStore = new CanonicalEffectWorkStore(repository);
         await firstStore.AppendPlanAsync([intent], CancellationToken.None);
 
-        EffectWorkItem planned = Assert.Single(await firstStore.ScanUnsettledAsync(10, DateTimeOffset.UtcNow, CancellationToken.None));
+        EffectScanRow planned = Assert.Single(await firstStore.ScanUnsettledAsync(10, DateTimeOffset.UtcNow, CancellationToken.None));
         Assert.Equal(EffectLifecycle.Planned, planned.State);
         EffectLease lease = Assert.IsType<EffectLease>(await firstStore.TryLeaseAsync(
             intent.Identity, planned.RowVersion, "worker-a", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1), CancellationToken.None));
@@ -92,7 +92,7 @@ public sealed class CanonicalEffectWorkStoreTests
             intent.Identity, planned.RowVersion, "dead-worker", now, TimeSpan.FromMilliseconds(1), CancellationToken.None))!;
         EffectWorkItem leased = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
 
-        IReadOnlyList<EffectWorkItem> discovered = await store.ScanUnsettledAsync(10, now.AddSeconds(1), CancellationToken.None);
+        IReadOnlyList<EffectScanRow> discovered = await store.ScanUnsettledAsync(10, now.AddSeconds(1), CancellationToken.None);
         Assert.Single(discovered);
         EffectLease replacement = (await store.TryLeaseAsync(
             intent.Identity, leased.RowVersion, "restart-worker", now.AddSeconds(1), TimeSpan.FromMinutes(1), CancellationToken.None))!;

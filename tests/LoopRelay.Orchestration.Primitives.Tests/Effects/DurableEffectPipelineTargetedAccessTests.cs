@@ -52,12 +52,12 @@ public sealed class DurableEffectPipelineTargetedAccessTests
         EffectIntent target = Intent(causality, order: 11, key: "target");
         await store.AppendPlanAsync([.. backlog, target], CancellationToken.None);
 
-        IReadOnlyList<EffectWorkItem> targeted = await store.ScanUnsettledAsync(
+        IReadOnlyList<EffectScanRow>targeted = await store.ScanUnsettledAsync(
             ScanLimit,
             DateTimeOffset.UtcNow,
             CancellationToken.None,
             new HashSet<EffectIntentIdentity> { target.Identity });
-        IReadOnlyList<EffectWorkItem> unfiltered = await store.ScanUnsettledAsync(
+        IReadOnlyList<EffectScanRow>unfiltered = await store.ScanUnsettledAsync(
             ScanLimit, DateTimeOffset.UtcNow, CancellationToken.None);
 
         Assert.Equal([target.Identity], targeted.Select(item => item.Intent.Identity));
@@ -74,12 +74,12 @@ public sealed class DurableEffectPipelineTargetedAccessTests
         await store.AppendPlanAsync([settled], CancellationToken.None);
         await Worker(store, new RecordingExecutor()).RunOnceAsync(CancellationToken.None);
 
-        IReadOnlyList<EffectWorkItem> naming = await store.ScanUnsettledAsync(
+        IReadOnlyList<EffectScanRow>naming = await store.ScanUnsettledAsync(
             ScanLimit,
             DateTimeOffset.UtcNow,
             CancellationToken.None,
             new HashSet<EffectIntentIdentity> { settled.Identity });
-        IReadOnlyList<EffectWorkItem> nothing = await store.ScanUnsettledAsync(
+        IReadOnlyList<EffectScanRow>nothing = await store.ScanUnsettledAsync(
             ScanLimit, DateTimeOffset.UtcNow, CancellationToken.None, new HashSet<EffectIntentIdentity>());
 
         Assert.Equal(
