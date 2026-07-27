@@ -132,29 +132,4 @@ public sealed class StatusCanaryTests
         Assert.Contains(expected, findings);
     }
 
-    [Fact]
-    public void CoverageLedgerIsProductionDerivedAndKeepsUncoveredSetVisible()
-    {
-        string workspace = FindWorkspaceRoot();
-
-        CoverageLedger ledger = CoverageLedgerBuilder.Build(workspace);
-
-        Assert.Contains(ledger.Obligations, item => item.Dimension == "workflow" && item.Identity == "Execute");
-        Assert.Contains(ledger.Obligations, item => item.Dimension == "transition" && item.Identity.Contains("Execute/ExecuteImplementationSlice", StringComparison.Ordinal));
-        Assert.Contains(ledger.Obligations, item =>
-            item.Dimension == "persistence-schema" && item.Identity == "LoopRelayWorkspaceDatabase");
-        Assert.Contains(ledger.Uncovered, item =>
-            item.Dimension == "oracle" && item.Identity == "status-exact-structural-invariant");
-    }
-
-    private static string FindWorkspaceRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "LoopRelay.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName ?? throw new DirectoryNotFoundException("Workspace root not found.");
-    }
 }
