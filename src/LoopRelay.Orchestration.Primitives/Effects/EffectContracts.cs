@@ -32,13 +32,6 @@ public static class TransitionalFeatureEffectExecutorKeys
     }
 }
 
-public readonly record struct EffectReconciliationIdentity(string Value)
-{
-    public static EffectReconciliationIdentity New() => new(CausalUlid.NewId("effectreconciliation"));
-    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
-    public override string ToString() => Value;
-}
-
 public enum EffectRequiredness
 {
     BlockingLocal,
