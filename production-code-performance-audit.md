@@ -1114,18 +1114,32 @@ an opt-in harness that generates fixture workspaces by **replaying attempt write
 production stores** (no bulk inserts) and then measures against them. Re-run it to re-baseline after
 a fix lands:
 
+PowerShell (this repo's primary shell):
+
+```powershell
+$env:LOOPRELAY_MEASUREMENT_OUTPUT = '<dir>'
+$env:LOOPRELAY_MEASUREMENT_N = '100,1000,10000'
+$env:LOOPRELAY_MEASUREMENT_HOST_REPO = '<checkout>'
+dotnet test tests/LoopRelay.Orchestration.Primitives.Tests/LoopRelay.Orchestration.Tests.csproj `
+  --filter "FullyQualifiedName~WorkspaceMagnitudeHarness"
 ```
+
+bash (the `VAR=x command` prefix form below is a parse error in PowerShell — use the block above there):
+
+```bash
 LOOPRELAY_MEASUREMENT_OUTPUT=<dir> LOOPRELAY_MEASUREMENT_N=100,1000,10000 \
 LOOPRELAY_MEASUREMENT_HOST_REPO=<checkout> \
 dotnet test tests/LoopRelay.Orchestration.Primitives.Tests/LoopRelay.Orchestration.Tests.csproj \
   --filter "FullyQualifiedName~WorkspaceMagnitudeHarness"
 ```
 
-**Conditions.** One machine, Windows 11, .NET 10.0.301, Debug, warm single-threaded process, local SSD
-temp directory. Production SQLite settings: rollback journal (no WAL), `Pooling = false`, no
-`busy_timeout`. Fixtures are fresh `git init` directories with no working-tree files. First attempt
-and one warm-up iteration discarded per loop. **Run-to-run variance is roughly ±30%: the results are
-the ratios and orders of magnitude, not any individual millisecond.**
+**Conditions.** Taken **2026-07-27** against commit **`fd8065cd`**; re-run and update this section
+after a remediation fix lands so figures stay anchored to what they were measured against. One
+machine, Windows 11, .NET 10.0.301, Debug, warm single-threaded process, local SSD temp directory.
+Production SQLite settings: rollback journal (no WAL), `Pooling = false`, no `busy_timeout`. Fixtures
+are fresh `git init` directories with no working-tree files. First attempt and one warm-up iteration
+discarded per loop. **Run-to-run variance is roughly ±30%: the results are the ratios and orders of
+magnitude, not any individual millisecond.**
 
 **Route (a) was attempted first and is unavailable.** The only LoopRelay workspace database on the
 machine (`LoopRelay-2/.tmp/readme-smoke-20260713/`) holds **zero rows** — 1,134,592 bytes of empty
@@ -1192,18 +1206,22 @@ Schema-ensure cost, measured with a SQLite authorizer on a connection opened exa
 | Warm steady state (mean of 20 opens) | — | **0.948 ms** |
 
 `ShapeRequirementProbes` rises by **exactly 182 per database created and 0 per subsequent open**
-(182 → 364 → 546 → 728 across four databases that performed 22, 270, 2,574 and 25,722 opens
-respectively). `RepairTransactionsOpened` stayed **0** throughout; `FullVerificationRuns` rose by
-exactly 1 per database.
+(182 → 364 → 546 → 728 across the four databases this run created). `RepairTransactionsOpened`
+stayed **0** throughout; `FullVerificationRuns` rose by exactly 1 per database.
 
 > **M1's decision threshold is not met on a warm process.** Ensure contributes ~0.95 ms of a ~58 ms
 > store operation — **~1.6% of wall time, not >30%** — and its shape probes are already memoized per
-> database rather than per open. The ~58 ms is durability: one synchronous journal flush per write
-> transaction. **This redirects the highest-leverage persistence item from PERF-01 to PERF-10 (WAL +
-> `busy_timeout` + pooling), and answers the "M1 residual" gate §13 step 7 was waiting on.** Caveats:
-> single machine, warm process, and because per-operation statement counts are unmeasurable (below),
-> the 1.6% is a ratio of wall times, not of statements. The once-per-process first open (478 ms, 264
-> statements) is real and PERF-01 would still shrink it.
+> database rather than per open. **Hypothesis, not measured: the remaining ~58 ms is durability — one
+> synchronous journal flush per write transaction.** No WAL/pooling comparison was run in this pass,
+> and 58 ms is large for a single local-SSD fsync, so this attribution should not be treated as
+> established. It would be confirmed or refuted by re-running M1 against the same fixtures with
+> `PRAGMA journal_mode=WAL` (or `PRAGMA synchronous=NORMAL`) and comparing per-write-transaction cost
+> against this rollback-journal baseline. **Provisionally — pending that confirmation — this redirects
+> the highest-leverage persistence item from PERF-01 to PERF-10 (WAL + `busy_timeout` + pooling), and
+> answers the "M1 residual" gate §13 step 7 was waiting on.** Caveats: single machine, warm process,
+> and because per-operation statement counts are unmeasurable (below), the 1.6% is a ratio of wall
+> times, not of statements. The once-per-process first open (478 ms, 264 statements) is real and
+> PERF-01 would still shrink it.
 
 **Statements per attempt: not measured.** `CanonicalWorkflowPersistenceStore.OpenAsync` (`:1538`)
 opens its own unpooled connection and exposes no observer, and SQLitePCLRaw's only statement-level
@@ -1215,12 +1233,16 @@ This is the same constraint documented on `CanonicalEffectWorkStore.ConnectionOb
 
 ### M2 — `PersistStateAsync` / `ProjectAsync` cost vs. history size *(measured; rows read not measured)*
 
-| Target N | Evidence rows | `PersistStateAsync` | `ProjectAsync` | `LoadSnapshotAsync` |
+| Target N | Evidence rows | `PersistStateAsync` (n=10) | `ProjectAsync` (n=5) | `LoadSnapshotAsync` (n=1) |
 |---|---|---|---|---|
 | 10² | 105 | 51.2 ms | 4.23 ms | 1.58 ms |
 | 10³ | 1,001 | 91.2 ms | 9.04 ms | 11.03 ms |
 | 10⁴ | 10,003 | **49.6 ms** | **95.59 ms** | **74.69 ms** |
-| growth 10²→10⁴ | 95× | **1.0× (flat)** | **22.6×** | **47.3×** |
+| growth 10²→10⁴ | 95× | **1.0× (flat)** | **22.6×** | **47.3× (n=1 sample at each point)** |
+
+`LoadSnapshotAsync` is a **single un-repeated sample at each scale (n=1)** — no warm-up call is
+discarded and no distribution is taken, unlike `PersistStateAsync` (n=10) and `ProjectAsync` (n=5).
+The 47.3× figure it drives should be read as indicative, not as a distribution-backed measurement.
 
 > **M2's hypothesis is confirmed exactly as stated: "linear growth in N; keyed read flat."**
 > `PersistStateAsync` is **flat** across a 95× change in history (51.2 → 91.2 → 49.6 ms — the middle
@@ -1247,6 +1269,18 @@ subprocess is given alongside as a reference for how much of that remainder git 
 | 10³ | 76.8 ms | 7.2 ms (9%) | 9.7 ms (13%) | **59.9 ms (78%)** | 60.0 ms |
 | 10⁴ | 163.7 ms | **48.3 ms (29%)** | **77.7 ms (47%)** | 37.8 ms (23%) | 58.7 ms |
 
+**`ProjectAsync` at 10⁴ appears twice in this section — 95.59 ms under M2, 77.7 ms here under
+M3 — and these are two different measurement conditions, not one figure repeated.** M2 times 5
+back-to-back calls on a freshly constructed `CanonicalPersistenceProjection`, immediately after 10
+`PersistStateAsync` writes, in isolation from verification, git, and hashing. M3 times the identical
+call decorated inside `RepositoryObserver.ObserveAsync` over 5 iterations, each of which runs a full
+storage-verification pass (double full-DB SHA-256, tree hash, `foreign_key_check`) immediately before
+projection — plausibly leaving the database's pages warmer in the OS file cache by the time
+projection runs there, which would bias the M3 figure low relative to M2's colder-cache condition.
+The two were not designed to be compared directly, and the 19% gap between them is within the
+harness's own stated ±30% run-to-run variance (see Conditions above), so it is not treated as a
+discrepancy requiring reconciliation.
+
 Measured 1.0 storage verifications and 1.0 projections per observation at every scale, confirming
 `RepositoryObserver.cs:54` and `:68-70` run once each per call.
 
@@ -1254,10 +1288,13 @@ Measured 1.0 storage verifications and 1.0 projections per observation at every 
 > small workspaces the `git status` subprocess dominates (the remainder tracks the standalone git
 > figure closely at 10² and 10³). By 10⁴, **verification + projection are 77% of the observation
 > (126.0 ms of 163.7 ms) and still growing**, while git does not grow with ledger size. **M3's
-> expectation that verification is the dominant, growing share is confirmed — but only at scale, and
-> it grows with *ledger* size rather than with tree size.** This supports PERF-04's verification
-> tiering, and — because projection is the single largest phase at 10⁴ — reinforces PERF-05
-> read-scoping as the higher-leverage of the two.
+> expectation was that verification, together with hashing, would become the dominant, growing share;
+> that is only partly confirmed.** Hashing measured ≈0 in this fixture (see Caveats below), and at 10⁴
+> the largest single phase is projection (47%), not verification (29%). What the measurement does
+> confirm is narrower: verification's share grows with *ledger* size (7% → 9% → 29%) rather than with
+> tree size, unlike git, which does not grow with ledger size at all. This supports PERF-04's
+> verification tiering, and — because projection is the single largest phase at 10⁴ — reinforces
+> PERF-05 read-scoping as the higher-leverage of the two.
 
 Caveats: the fixture is an **empty** git repository, so a real working tree makes `git status`
 slower, not faster. The fixture has **no `.agents/` tree**, so `HashExistingFiles` does essentially
@@ -1281,7 +1318,10 @@ cycle.
 
 One Execute transition, 10 evidence candidates, counted through the effect store's existing
 `ConnectionObserverForTesting` / `CommandObserverForTesting` seams with a SQLite authorizer per
-connection:
+connection. **The observer is installed only after `AppendPlanAsync` (plan creation) completes, so
+the counts below exclude plan-creation opens/statements/commands and cover settlement only** — a
+defensible scope, but undisclosed until now, and the "4–6 opens per effect" expectation this section
+compares against may have included plan creation:
 
 | Target N | Connection opens | per effect | SELECT compiled | per effect | Commands | Settlement wall |
 |---|---|---|---|---|---|---|

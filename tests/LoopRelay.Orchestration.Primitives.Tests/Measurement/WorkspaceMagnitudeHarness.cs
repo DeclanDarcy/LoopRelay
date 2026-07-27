@@ -134,58 +134,66 @@ public sealed class WorkspaceMagnitudeHarness
     private static async Task<Dictionary<string, object>> MeasureEmptySchemaFloorAsync()
     {
         Repository repository = CreateRepository("looprelay-schema-floor-");
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
-        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-
-        var first = new AuthorizerCounter();
-        var firstWatch = Stopwatch.StartNew();
-        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        try
         {
-            await connection.OpenAsync();
-            first.Watch(connection);
-            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+            string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+            Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+
+            var first = new AuthorizerCounter();
+            var firstWatch = Stopwatch.StartNew();
+            await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+            {
+                await connection.OpenAsync();
+                first.Watch(connection);
+                await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+            }
+            firstWatch.Stop();
+
+            var second = new AuthorizerCounter();
+            var secondWatch = Stopwatch.StartNew();
+            await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+            {
+                await connection.OpenAsync();
+                second.Watch(connection);
+                await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+            }
+            secondWatch.Stop();
+
+            // A third open, timed only, after the process is warm: this is the number that multiplies by
+            // every store operation in an attempt.
+            var warm = new List<double>();
+            for (int index = 0; index < 20; index++)
+            {
+                var watch = Stopwatch.StartNew();
+                await using SqliteConnection connection =
+                    LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+                await connection.OpenAsync();
+                await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+                watch.Stop();
+                warm.Add(watch.Elapsed.TotalMilliseconds);
+            }
+
+            Dictionary<string, object> counters = ReadDatabaseCounters();
+            return new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["databaseBytes"] = new FileInfo(databasePath).Length,
+                ["pageCount"] = await ScalarLongAsync(databasePath, "SELECT * FROM pragma_page_count();"),
+                ["pageSizeBytes"] = await ScalarLongAsync(databasePath, "SELECT * FROM pragma_page_size();"),
+                ["tableCount"] = await ScalarLongAsync(
+                    databasePath,
+                    "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';"),
+                ["indexCount"] = await ScalarLongAsync(
+                    databasePath, "SELECT count(*) FROM sqlite_master WHERE type = 'index';"),
+                ["firstOpen"] = first.Snapshot(firstWatch.Elapsed.TotalMilliseconds),
+                ["secondOpen"] = second.Snapshot(secondWatch.Elapsed.TotalMilliseconds),
+                ["warmOpenAndEnsureMs"] = Distribution(warm),
+                ["coreCountersAfterOpens"] = counters,
+            };
         }
-        firstWatch.Stop();
-
-        var second = new AuthorizerCounter();
-        var secondWatch = Stopwatch.StartNew();
-        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        finally
         {
-            await connection.OpenAsync();
-            second.Watch(connection);
-            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+            DeleteFixture(repository.Path);
         }
-        secondWatch.Stop();
-
-        // A third open, timed only, after the process is warm: this is the number that multiplies by
-        // every store operation in an attempt.
-        var warm = new List<double>();
-        for (int index = 0; index < 20; index++)
-        {
-            var watch = Stopwatch.StartNew();
-            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
-            await connection.OpenAsync();
-            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
-            watch.Stop();
-            warm.Add(watch.Elapsed.TotalMilliseconds);
-        }
-
-        Dictionary<string, object> counters = ReadDatabaseCounters();
-        return new Dictionary<string, object>(StringComparer.Ordinal)
-        {
-            ["databaseBytes"] = new FileInfo(databasePath).Length,
-            ["pageCount"] = await ScalarLongAsync(databasePath, "SELECT * FROM pragma_page_count();"),
-            ["pageSizeBytes"] = await ScalarLongAsync(databasePath, "SELECT * FROM pragma_page_size();"),
-            ["tableCount"] = await ScalarLongAsync(
-                databasePath,
-                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';"),
-            ["indexCount"] = await ScalarLongAsync(
-                databasePath, "SELECT count(*) FROM sqlite_master WHERE type = 'index';"),
-            ["firstOpen"] = first.Snapshot(firstWatch.Elapsed.TotalMilliseconds),
-            ["secondOpen"] = second.Snapshot(secondWatch.Elapsed.TotalMilliseconds),
-            ["warmOpenAndEnsureMs"] = Distribution(warm),
-            ["coreCountersAfterOpens"] = counters,
-        };
     }
 
     /// <summary>
@@ -255,90 +263,97 @@ public sealed class WorkspaceMagnitudeHarness
     {
         Repository repository = CreateRepository(
             $"looprelay-magnitude-{targetEvidenceRows}-", asGitRepository: true);
-        var store = new CanonicalWorkflowPersistenceStore(repository);
-        var evidenceStore = new CanonicalTransitionEvidenceStore(store);
-        var boundaryJournal = new CanonicalTransitionBoundaryJournal(store);
-        var runStore = new CanonicalTransitionRunStore(store);
-        var effectStore = new CanonicalEffectWorkStore(repository);
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
-
-        var root = new RunRecord(
-            CausalUlid.NewId("run"),
-            WorkspaceIdentity.New().Value,
-            "magnitude-chain",
-            "unbounded",
-            "running",
-            DateTimeOffset.UtcNow,
-            null,
-            null,
-            "Generated workspace magnitude fixture.");
-        await store.UpsertRunAsync(root);
-        var instance = new WorkflowInstanceRecord(
-            CausalUlid.NewId("wfi"),
-            root.RunId,
-            WorkflowIdentity.Execute,
-            "1",
-            "running",
-            DateTimeOffset.UtcNow,
-            null,
-            null);
-        await store.UpsertWorkflowInstanceAsync(instance);
-
-        int attempts = (targetEvidenceRows + EvidenceRowsPerAttempt - 1) / EvidenceRowsPerAttempt;
-        var attemptDurations = new List<double>(attempts);
-        var generation = Stopwatch.StartNew();
-        for (int index = 0; index < attempts; index++)
+        try
         {
-            var watch = Stopwatch.StartNew();
-            await ReplayAttemptAsync(
-                store,
-                evidenceStore,
-                boundaryJournal,
-                runStore,
-                effectStore,
-                repository,
-                root,
-                instance,
-                index,
-                EffectsPerAttempt);
-            watch.Stop();
-            attemptDurations.Add(watch.Elapsed.TotalMilliseconds);
-        }
+            var store = new CanonicalWorkflowPersistenceStore(repository);
+            var evidenceStore = new CanonicalTransitionEvidenceStore(store);
+            var boundaryJournal = new CanonicalTransitionBoundaryJournal(store);
+            var runStore = new CanonicalTransitionRunStore(store);
+            var effectStore = new CanonicalEffectWorkStore(repository);
+            string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
 
-        generation.Stop();
+            var root = new RunRecord(
+                CausalUlid.NewId("run"),
+                WorkspaceIdentity.New().Value,
+                "magnitude-chain",
+                "unbounded",
+                "running",
+                DateTimeOffset.UtcNow,
+                null,
+                null,
+                "Generated workspace magnitude fixture.");
+            await store.UpsertRunAsync(root);
+            var instance = new WorkflowInstanceRecord(
+                CausalUlid.NewId("wfi"),
+                root.RunId,
+                WorkflowIdentity.Execute,
+                "1",
+                "running",
+                DateTimeOffset.UtcNow,
+                null,
+                null);
+            await store.UpsertWorkflowInstanceAsync(instance);
 
-        // M1's stated distortion: attempt 1 pays the schema creation. Discard it.
-        List<double> steadyState = attemptDurations.Skip(1).ToList();
-
-        return new Dictionary<string, object>(StringComparer.Ordinal)
-        {
-            ["targetEvidenceRows"] = targetEvidenceRows,
-            ["attemptsReplayed"] = attempts,
-            ["generationSeconds"] = Math.Round(generation.Elapsed.TotalSeconds, 3),
-            ["m6"] = await CollectMagnitudesAsync(repository, databasePath),
-            ["m1"] = new Dictionary<string, object>(StringComparer.Ordinal)
+            int attempts = (targetEvidenceRows + EvidenceRowsPerAttempt - 1) / EvidenceRowsPerAttempt;
+            var attemptDurations = new List<double>(attempts);
+            var generation = Stopwatch.StartNew();
+            for (int index = 0; index < attempts; index++)
             {
-                ["attemptWallMsFirst"] = Math.Round(attemptDurations[0], 3),
-                ["attemptWallMsSteadyState"] = Distribution(steadyState),
-                // Measured growth curve: if an attempt's cost were independent of how much history
-                // the workspace already holds, these two would match. They are reported rather than
-                // summarised so supra-constant growth is visible instead of inferred.
-                ["attemptWallMsFirstDecile"] = Distribution(Decile(steadyState, first: true)),
-                ["attemptWallMsLastDecile"] = Distribution(Decile(steadyState, first: false)),
-                ["storeOperationsPerAttempt"] = StoreOperationsPerAttempt(EffectsPerAttempt),
-                ["coreCounters"] = ReadDatabaseCounters(),
-                ["statementsPerAttempt"] = "not measured",
-                ["statementsPerAttemptReason"] =
-                    "CanonicalWorkflowPersistenceStore.OpenAsync (CanonicalWorkflowPersistenceStore.cs:1538) "
-                    + "opens its own unpooled connection and exposes no connection or command observer, "
-                    + "unlike CanonicalEffectWorkStore. SQLitePCLRaw's only statement-level hook is the "
-                    + "per-connection authorizer, so no test-side seam can reach the handle a write ran on. "
-                    + "Counting them would require adding an observer to production code, which this task forbids.",
-            },
-            ["m2"] = await MeasureM2Async(repository, store, runStore, databasePath),
-            ["m3"] = await MeasureM3Async(repository),
-            ["m4"] = await MeasureM4Async(repository, store, root, instance),
-        };
+                var watch = Stopwatch.StartNew();
+                await ReplayAttemptAsync(
+                    store,
+                    evidenceStore,
+                    boundaryJournal,
+                    runStore,
+                    effectStore,
+                    repository,
+                    root,
+                    instance,
+                    index,
+                    EffectsPerAttempt);
+                watch.Stop();
+                attemptDurations.Add(watch.Elapsed.TotalMilliseconds);
+            }
+
+            generation.Stop();
+
+            // M1's stated distortion: attempt 1 pays the schema creation. Discard it.
+            List<double> steadyState = attemptDurations.Skip(1).ToList();
+
+            return new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["targetEvidenceRows"] = targetEvidenceRows,
+                ["attemptsReplayed"] = attempts,
+                ["generationSeconds"] = Math.Round(generation.Elapsed.TotalSeconds, 3),
+                ["m6"] = await CollectMagnitudesAsync(repository, databasePath),
+                ["m1"] = new Dictionary<string, object>(StringComparer.Ordinal)
+                {
+                    ["attemptWallMsFirst"] = Math.Round(attemptDurations[0], 3),
+                    ["attemptWallMsSteadyState"] = Distribution(steadyState),
+                    // Measured growth curve: if an attempt's cost were independent of how much history
+                    // the workspace already holds, these two would match. They are reported rather than
+                    // summarised so supra-constant growth is visible instead of inferred.
+                    ["attemptWallMsFirstDecile"] = Distribution(Decile(steadyState, first: true)),
+                    ["attemptWallMsLastDecile"] = Distribution(Decile(steadyState, first: false)),
+                    ["storeOperationsPerAttempt"] = StoreOperationsPerAttempt(EffectsPerAttempt),
+                    ["coreCounters"] = ReadDatabaseCounters(),
+                    ["statementsPerAttempt"] = "not measured",
+                    ["statementsPerAttemptReason"] =
+                        "CanonicalWorkflowPersistenceStore.OpenAsync (CanonicalWorkflowPersistenceStore.cs:1538) "
+                        + "opens its own unpooled connection and exposes no connection or command observer, "
+                        + "unlike CanonicalEffectWorkStore. SQLitePCLRaw's only statement-level hook is the "
+                        + "per-connection authorizer, so no test-side seam can reach the handle a write ran on. "
+                        + "Counting them would require adding an observer to production code, which this task forbids.",
+                },
+                ["m2"] = await MeasureM2Async(repository, store, runStore, databasePath),
+                ["m3"] = await MeasureM3Async(repository),
+                ["m4"] = await MeasureM4Async(repository, store, root, instance),
+            };
+        }
+        finally
+        {
+            DeleteFixture(repository.Path);
+        }
     }
 
     /// <summary>
@@ -663,7 +678,9 @@ public sealed class WorkspaceMagnitudeHarness
         }
 
         // What LoadSnapshotAsync — the read PersistStateAsync used to depend on, and the read
-        // ProjectAsync still performs — must traverse at this scale.
+        // ProjectAsync still performs — must traverse at this scale. Unlike persistStateAsyncMs
+        // (n=10) and projectAsyncMs (n=5) above, this is a single, un-repeated sample (n=1): there is
+        // no warm-up/discard and no distribution, so it must not be read with the same confidence.
         var snapshotWatch = Stopwatch.StartNew();
         CanonicalWorkflowPersistenceSnapshot snapshot = await store.LoadSnapshotAsync(CancellationToken.None);
         snapshotWatch.Stop();
@@ -673,6 +690,10 @@ public sealed class WorkspaceMagnitudeHarness
             ["persistStateAsyncMs"] = Distribution(persist),
             ["projectAsyncMs"] = Distribution(project),
             ["loadSnapshotAsyncMs"] = Math.Round(snapshotWatch.Elapsed.TotalMilliseconds, 3),
+            ["loadSnapshotAsyncSamples"] = 1,
+            ["loadSnapshotAsyncSampleNote"] =
+                "single un-repeated sample (n=1), unlike persistStateAsyncMs (n=10) and projectAsyncMs "
+                + "(n=5) above; no warm-up call was discarded for this one.",
             ["snapshotTransitionEvidenceRows"] = snapshot.TransitionEvidence.Count,
             ["snapshotTransitionRunRows"] = snapshot.TransitionRuns.Count,
             ["rowsReadPerCall"] = "not measured",
@@ -834,6 +855,10 @@ public sealed class WorkspaceMagnitudeHarness
             .Range(0, M4EffectCandidates)
             .Select(order => Intent(causality, order, $"m4-{order}"))
             .ToArray();
+        // The observer is installed only after this call, so the opens AppendPlanAsync itself issues
+        // to create the plan are not counted below. That is a deliberate, but previously undisclosed,
+        // scope: the reported connectionOpens/selectStatementsCompiled cover settlement only, not plan
+        // creation. See excludesPlanCreationOpens(Reason) in the returned dictionary.
         await store.AppendPlanAsync(intents, CancellationToken.None);
 
         var counter = new StoreAccessCounter();
@@ -875,6 +900,12 @@ public sealed class WorkspaceMagnitudeHarness
                 + "different type with no observer at all, and opens its connection directly rather "
                 + "than through OpenAsync, so the connection observer never sees it. It is exactly one "
                 + "additional open per settlement attempt, by inspection of that line.",
+            ["excludesPlanCreationOpens"] = true,
+            ["excludesPlanCreationOpensReason"] =
+                "store.ConnectionObserverForTesting is installed after AppendPlanAsync above, so the "
+                + "opens/statements/commands counted here cover EffectWorker.RunOnceAsync (settlement) "
+                + "only, not the opens AppendPlanAsync itself issues to create the plan. This is a "
+                + "defensible scope but was previously undisclosed where the figure is reported.",
         };
     }
 
@@ -924,6 +955,33 @@ public sealed class WorkspaceMagnitudeHarness
         }
 
         return new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(path), Path = path };
+    }
+
+    /// <summary>
+    /// Best-effort recursive delete of a fixture directory created by <see cref="CreateRepository"/>.
+    /// A full run at the default scales creates four such fixtures (~62 MB combined at N = 10,000) and,
+    /// before this existed, left every one of them behind in <c>%TEMP%</c> with nothing to remove
+    /// them — the report's claim that they were "deleted afterwards" described a manual step, not
+    /// something the harness did. Failures are swallowed rather than thrown: a handle that has not
+    /// finished releasing on Windows should not fail a 30-minute measurement run over a cleanup step.
+    /// </summary>
+    private static void DeleteFixture(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Best effort: a file handle may still be releasing.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best effort: same as above.
+        }
     }
 
     private static void RunGit(string root, params string[] arguments)
