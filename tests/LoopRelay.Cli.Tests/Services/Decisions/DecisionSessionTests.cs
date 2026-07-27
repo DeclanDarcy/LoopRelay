@@ -1,6 +1,7 @@
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Sessions;
+using LoopRelay.Agents.Services.Sessions;
 using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Decisions;
@@ -1181,6 +1182,151 @@ public class DecisionSessionTests
         DecisionSessionTurnRecord repaired = (await recoveryStore.ReadDecisionTurnAsync(
             "run-rehydrate", "input-rehydrate"))!;
         Assert.Equal(DecisionTurnState.Materialized, repaired.State);
+    }
+
+    /// <summary>
+    /// Turn-progress durability, asserted where it is load-bearing rather than by timing.
+    ///
+    /// "Pending &amp;&amp; !WriteStarted" is the sole authorization to submit a fresh turn, so a process killed
+    /// between RequestWriteStarted and the next advance — the instant at which AgentSession has just handed
+    /// prompt bytes to the provider — must leave WriteStarted durable, and recovery driven from that state
+    /// must refuse to submit again. The test reads the persisted row from an independent store handle at
+    /// exactly that program point (the kill), then drives a real recovery from what it found.
+    ///
+    /// It also pins the whole advance sequence: the store must see the compare-and-swaps in program order
+    /// with a gapless RowVersion chain, so a mechanism that reorders or drops an advance fails here.
+    /// </summary>
+    [Fact]
+    public async Task Run_KilledBetweenTurnProgressAdvances_RecoverySeesTheLastDurableStateAndRefusesToResubmit()
+    {
+        string root = Directory.CreateTempSubdirectory("looprelay-decision-progress-").FullName;
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = root };
+        var artifactStore = new MemoryArtifactStore();
+        var artifacts = CanonicalTestStores.CreateLoopArtifacts(artifactStore, repo);
+        var runtime = new FakeAgentRuntime(artifactStore);
+        var sqlite = new SqliteRecoveryStore(repo);
+        // A real SQLite write finishes inline, so "durable on return" and "still in flight" are
+        // indistinguishable from the next statement. Slowing the write restores the distinction: an advance
+        // that is durable on return still is; one that was handed off is demonstrably not yet persisted.
+        var recoveryStore = new RecordingRecoveryStore(sqlite) { WriteLatency = TimeSpan.FromMilliseconds(250) };
+        SessionContinuityProfile profile = TestContinuityProfile();
+        DateTimeOffset now = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
+        ProductRecord epic = ScopeProduct(ProductIdentity.PreparedEpic, WorkflowIdentity.TraditionalRoadmap, 'a');
+        ProductRecord plan = ScopeProduct(ProductIdentity.ExecutablePlan, WorkflowIdentity.Plan, 'b');
+        DecisionSessionScope scope = DecisionSessionScopeResolver.Resolve(
+            "0123456789abcdef0123456789abcdef", [epic, plan]);
+        var scopeRecord = new DecisionSessionScopeRecord(
+            scope.ScopeId.Value, scope.WorkspaceId, epic.CausalIdentity, plan.CausalIdentity,
+            "Decision", scope.ContractVersion, "Active", now, null);
+        var lineage = new DecisionSessionLineageNode(
+            "lineage-progress", scope.ScopeId.Value, "codex", "thread-progress", null,
+            "lineage-progress", "Fresh", RecoveryCompleteness.Full, null, profile.Digest, null,
+            now, now, null, "Authoritative");
+        var active = new DecisionSessionActiveState(
+            scope.ScopeId.Value, lineage.LineageId,
+            new DecisionSessionAccounting(0, 0, 0, 0, 0, 250_000, 0, null, 0),
+            "policy", null, 0, now);
+        await sqlite.CreateScopeAndActivateAsync(scopeRecord, lineage, active, profile);
+        await artifactStore.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        await artifactStore.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
+
+        DecisionSessionTurnRecord? atTheKillPoint = null;
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+        {
+            // Raised exactly where AgentSession raises it: the line before the prompt bytes reach the provider.
+            AgentTurnProgress.Notify(observer => observer.RequestWriteStarted());
+            // The kill. This is what a process that dies on the very next instruction leaves for recovery.
+            atTheKillPoint = sqlite.ReadDecisionTurnAsync("run-progress", "input-progress")
+                .GetAwaiter().GetResult();
+            AgentTurnProgress.Notify(observer => observer.RequestSubmitted());
+            AgentTurnProgress.Notify(observer => observer.RequestAccepted());
+            AgentTurnProgress.Notify(observer => observer.ProviderTurnIdentified("provider-turn-progress"));
+            AgentTurnProgress.Notify(observer => observer.Terminal());
+            return Turns.Completed("DECISIONS-TEXT");
+        }));
+
+        WorkflowTransitionDefinition definition = CanonicalWorkflowCatalog.CreateAll()
+            .Single(workflow => workflow.Identity == WorkflowIdentity.Execute)
+            .Transitions.Single(transition => transition.Identity == new WorkflowTransitionIdentity("GenerateDecision"));
+        var promptRequest = new PromptExecutionRequest(
+            "run-progress", WorkflowIdentity.Execute, new WorkflowStageIdentity("Implementation Planning"),
+            definition.Identity,
+            definition,
+            new RenderedPrompt(
+                new PromptTemplateIdentity(definition.PromptIdentity),
+                new PromptPolicyProfileIdentity("prompt_policy_test"),
+                "prompt",
+                "prompt.md"),
+            "input-progress", new WorkflowInvocation(InvocationModeKind.BoundedExecute),
+            new Dictionary<string, string>());
+        var decision = new DecisionSession(
+            runtime, new DecisionSessionRouter(), artifacts, new RecordingLoopConsole(), repo,
+            TestAgentConfiguration.Brain,
+            _recoveryStore: recoveryStore,
+            _continuityProfile: profile,
+            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcher);
+
+        await decision.RunAsync(new DecisionExecutionContext(scope, promptRequest), CancellationToken.None);
+
+        // The marker that authorizes recovery to refuse is durable the instant the observer returns.
+        Assert.NotNull(atTheKillPoint);
+        Assert.True(atTheKillPoint!.WriteStarted);
+        Assert.Equal(DecisionTurnState.WriteStarted, atTheKillPoint.State);
+
+        // Nothing reordered, nothing dropped: the store saw every advance once, in program order, over a
+        // gapless compare-and-swap chain. ProviderTurnIdentified carries the state forward unchanged.
+        Assert.Equal(
+            new[]
+            {
+                DecisionTurnState.WriteStarted, DecisionTurnState.Submitted, DecisionTurnState.Accepted,
+                DecisionTurnState.Accepted, DecisionTurnState.Terminal,
+            },
+            recoveryStore.DecisionTurnWrites.Select(write => write.Updated.State).ToArray());
+        Assert.Equal(
+            new long[] { 0, 1, 2, 3, 4 },
+            recoveryStore.DecisionTurnWrites.Select(write => write.Expected.RowVersion).ToArray());
+
+        // Every deferred advance is durable before RunAsync returns — CompositionPromptExecutionOwner reads
+        // provider-turn-id straight off this row once RunAsync has returned.
+        DecisionSessionTurnRecord persisted = (await sqlite.ReadDecisionTurnAsync(
+            "run-progress", "input-progress"))!;
+        Assert.Equal(DecisionTurnState.Materialized, persisted.State);
+        Assert.Equal("provider-turn-progress", persisted.ProviderTurnId);
+        Assert.True(persisted.Accepted);
+        Assert.True(persisted.Terminal);
+
+        // Recovery, driven from exactly the state the kill point left behind: it must refuse rather than
+        // re-send a turn the provider has already received.
+        var killedPending = new DecisionSessionTurnRecord(
+            "turn-killed", scope.ScopeId.Value, lineage.LineageId, "run-killed", "input-killed",
+            lineage.ProviderSessionId, null, null, DecisionTurnState.Pending,
+            false, false, false, false, null, null, null, null, false, null, 0, now, now);
+        await sqlite.BeginDecisionTurnAsync(killedPending);
+        DecisionSessionTurnRecord killed = killedPending with
+        {
+            State = atTheKillPoint.State,
+            WriteStarted = atTheKillPoint.WriteStarted,
+            RowVersion = 1,
+        };
+        Assert.True((await sqlite.CompareAndSwapDecisionTurnAsync(killedPending, killed)).Succeeded);
+
+        var recoveredRuntime = new FakeAgentRuntime(artifactStore);
+        var recovered = new DecisionSession(
+            recoveredRuntime, new DecisionSessionRouter(), artifacts, new RecordingLoopConsole(), repo,
+            TestAgentConfiguration.Brain,
+            _recoveryStore: sqlite,
+            _continuityProfile: profile,
+            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcher);
+        LoopStepException refusal = await Assert.ThrowsAsync<LoopStepException>(
+            () => recovered.RunAsync(
+                new DecisionExecutionContext(
+                    scope,
+                    promptRequest with { RunId = "run-killed", InputSnapshotHash = "input-killed" }),
+                CancellationToken.None));
+
+        Assert.Contains("must be reconciled", refusal.Message, StringComparison.Ordinal);
+        Assert.Empty(recoveredRuntime.SessionCalls);
+        Assert.Empty(recoveredRuntime.OpenedSpecs);
     }
 
     [Fact]

@@ -144,12 +144,45 @@ internal sealed class DecisionSession(
         _console.Phase("Decision: Propose");
         var proposalRenderer = new ConsoleTurnRenderer(_console);
         DurableTurnProgressObserver? durableTurn = await BeginDurableTurnAsync(cancellationToken);
+        try
+        {
+            await RunProposalTurnAsync(session, proposal, proposalRenderer, durableTurn, cancellationToken);
+        }
+        finally
+        {
+            // Backstop for the deferred advances: no exit path may leave one un-persisted. The success path
+            // has already drained (before the commit's compare-and-swap); this covers every throw and
+            // cancellation inside the deferral window. A fault is reported rather than rethrown because a
+            // throw from here would replace the exception already unwinding — and the state it leaves behind
+            // is at worst an older one (WriteStarted or Submitted), which recovery refuses to resubmit from
+            // exactly as it refuses from Accepted or Terminal.
+            if (durableTurn is not null)
+            {
+                try
+                {
+                    await durableTurn.DrainAsync();
+                }
+                catch (Exception exception)
+                {
+                    _console.Warn($"Decision turn progress was not fully persisted: {exception.Message}");
+                }
+            }
+        }
+    }
+
+    private async Task RunProposalTurnAsync(
+        IAgentSession targetSession,
+        ProposalPrompt proposal,
+        ConsoleTurnRenderer proposalRenderer,
+        DurableTurnProgressObserver? durableTurn,
+        CancellationToken cancellationToken)
+    {
         DecisionPromptTurnResult proposedTurn;
         try
         {
             using IDisposable progressScope = AgentTurnProgress.Use(durableTurn);
             proposedTurn = await DispatchPromptAsync(
-                session,
+                targetSession,
                 proposal.PromptIdentity,
                 proposal.TemplateSourceHash,
                 proposal.Prompt,
@@ -189,7 +222,7 @@ internal sealed class DecisionSession(
         _console.Phase("Decision: Recommend execution configuration");
         var recommendationRenderer = new ConsoleTurnRenderer(_console);
         DecisionPromptTurnResult recommendedTurn = await DispatchPromptAsync(
-            session,
+            targetSession,
             "ExecutionRecommendation",
             templateSourceHash: null,
             ExecutionRecommendationContract.RenderPrompt(proposed.Output),
@@ -221,6 +254,12 @@ internal sealed class DecisionSession(
         if (durableTurn is not null)
         {
             durableTurn.RecordTerminalResult(proposed);
+            // The drain. Everything deferred during the turn — RequestAccepted, ProviderTurnIdentified,
+            // Terminal — must be durable before the commit compare-and-swaps against durableTurn.Record,
+            // and before RunAsync returns to CompositionPromptExecutionOwner, which reads provider-turn-id
+            // straight off this row. A failed progress write surfaces here and stops the turn before the
+            // commit, exactly as it did when every advance blocked.
+            await durableTurn.DrainAsync();
             await CommitDurableDecisionOutputAsync(
                 durableTurn.Record,
                 proposed.Output,
@@ -1128,23 +1167,64 @@ internal sealed class DecisionSession(
         IReadOnlyList<string> RequiredOutputs,
         string? ChangedGuard);
 
+    /// <summary>
+    /// Persists each decision-turn advance through ONE ordered write chain.
+    ///
+    /// Two advances are durable-on-return and must stay that way. RequestWriteStarted is raised on the line
+    /// before AgentSession hands the prompt bytes to the provider (AgentSession.RunTurnAsync), and on the
+    /// Codex app-server path both it and RequestSubmitted are raised mid-send. "Pending &amp;&amp; !WriteStarted"
+    /// is the SOLE authorization to submit a fresh turn (TryRehydrateCommittedDecisionAsync and
+    /// BeginDurableTurnAsync), so a process that dies between the marker and the wire must find WriteStarted
+    /// already true — otherwise recovery re-submits a turn the provider has already received and billed.
+    /// MarkUnknown is durable for the same reason: it is written on the way out of a failing turn, one line
+    /// before the exception escapes to a caller that may not survive.
+    ///
+    /// The other three — RequestAccepted, ProviderTurnIdentified, Terminal — are deferred. Nothing between
+    /// where they are raised and the drain in RunProposalTurnAsync reads the persisted row, and every state
+    /// they can leave behind (WriteStarted, Submitted, Accepted) is one that recovery already refuses to
+    /// resubmit from, so a crash inside the deferral window reaches the same decision either way.
+    ///
+    /// Ordering: every advance appends to the chain and each link awaits its predecessor, so the RowVersion
+    /// N -> N+1 compare-and-swap sequence can be neither reordered nor interleaved — including between the
+    /// deferred and the blocking advances, because a blocking advance appends and then awaits the WHOLE
+    /// chain. Record is updated synchronously under the same lock, so the next advance always chains off the
+    /// state its predecessor produced.
+    ///
+    /// Faults and capacity: the chain is a continuation chain, not a buffer — it has no capacity, so there
+    /// is nothing to overflow and no advance to silently drop. If a link faults, every later link rethrows
+    /// that fault WITHOUT attempting its own compare-and-swap, so the first failure is the one reported and
+    /// no advance is ever applied out of order behind a failed one. The fault surfaces at the next blocking
+    /// advance or at DrainAsync, and RunAsync drains on every exit path.
+    ///
+    /// Contention: a deferred write runs on the pool against the shared workspace database, so it can
+    /// overlap a write the main flow makes inside the deferral window (projection invalidation, the
+    /// recommendation turn's dispatch evidence). SQLite serialises writers and every connection carries
+    /// PRAGMA busy_timeout = 10000, so the loser waits rather than failing; only one deferred write is ever
+    /// in flight, because the chain is serial.
+    /// </summary>
     private sealed class DurableTurnProgressObserver(
         IRecoveryStore _store,
         DecisionSessionTurnRecord initial) : ICriticalAgentTurnProgressObserver
     {
+        private readonly object _gate = new();
+        private Task _writes = Task.CompletedTask;
+
         public DecisionSessionTurnRecord Record { get; private set; } = initial;
 
         public void RequestWriteStarted() => Advance(
             DecisionTurnState.WriteStarted,
+            durable: true,
             writeStarted: true);
 
         public void RequestSubmitted() => Advance(
             DecisionTurnState.Submitted,
+            durable: true,
             writeStarted: true,
             submitted: true);
 
         public void RequestAccepted() => Advance(
             DecisionTurnState.Accepted,
+            durable: false,
             writeStarted: true,
             submitted: true,
             accepted: true);
@@ -1155,6 +1235,7 @@ internal sealed class DecisionSession(
 
         public void ProviderTurnIdentified(string providerTurnId) => Advance(
             Record.State,
+            durable: false,
             Record.WriteStarted,
             Record.Submitted,
             Record.Accepted,
@@ -1167,6 +1248,7 @@ internal sealed class DecisionSession(
             {
                 Advance(
                     DecisionTurnState.Terminal,
+                    durable: false,
                     Record.WriteStarted,
                     Record.Submitted,
                     Record.Accepted,
@@ -1186,6 +1268,7 @@ internal sealed class DecisionSession(
 
             Advance(
                 DecisionTurnState.Unknown,
+                durable: true,
                 Record.WriteStarted,
                 Record.Submitted,
                 Record.Accepted,
@@ -1204,33 +1287,74 @@ internal sealed class DecisionSession(
             Terminal();
         }
 
+        /// <summary>
+        /// Completes when every advance appended so far is durable; rethrows the first write that failed.
+        /// </summary>
+        public Task DrainAsync()
+        {
+            lock (_gate)
+            {
+                return _writes;
+            }
+        }
+
         private void Advance(
             DecisionTurnState state,
+            bool durable,
             bool writeStarted = false,
             bool submitted = false,
             bool accepted = false,
             bool terminal = false,
             string? providerTurnId = null)
         {
-            DecisionSessionTurnRecord updated = Record with
+            Task write;
+            lock (_gate)
             {
-                State = state,
-                WriteStarted = writeStarted,
-                Submitted = submitted,
-                Accepted = accepted,
-                Terminal = terminal,
-                ProviderTurnId = providerTurnId ?? Record.ProviderTurnId,
-                RowVersion = Record.RowVersion + 1,
-                UpdatedAt = DateTimeOffset.UtcNow,
-            };
-            RecoveryStoreWriteResult write = _store.CompareAndSwapDecisionTurnAsync(Record, updated)
-                .GetAwaiter().GetResult();
+                DecisionSessionTurnRecord expected = Record;
+                DecisionSessionTurnRecord updated = expected with
+                {
+                    State = state,
+                    WriteStarted = writeStarted,
+                    Submitted = submitted,
+                    Accepted = accepted,
+                    Terminal = terminal,
+                    ProviderTurnId = providerTurnId ?? expected.ProviderTurnId,
+                    RowVersion = expected.RowVersion + 1,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                };
+                Task previous = _writes;
+                // Microsoft.Data.Sqlite has no true async I/O: a compare-and-swap runs end to end on
+                // whichever thread starts it. A deferred advance therefore has to be handed to the pool to
+                // be deferred at all — awaiting it in place would block the caller exactly as before.
+                // A blocking advance starts inline: it is about to be waited on anyway, so a hop would only
+                // add latency to the path that must not have any.
+                write = durable
+                    ? AppendAsync(previous, expected, updated)
+                    : Task.Run(() => AppendAsync(previous, expected, updated));
+                _writes = write;
+                Record = updated;
+            }
+
+            if (durable)
+            {
+                write.GetAwaiter().GetResult();
+            }
+        }
+
+        private async Task AppendAsync(
+            Task previous,
+            DecisionSessionTurnRecord expected,
+            DecisionSessionTurnRecord updated)
+        {
+            // A faulted predecessor rethrows here, so this advance is never applied behind a failed one.
+            await previous.ConfigureAwait(false);
+            RecoveryStoreWriteResult write = await _store
+                .CompareAndSwapDecisionTurnAsync(expected, updated)
+                .ConfigureAwait(false);
             if (!write.Succeeded)
             {
                 throw new InvalidOperationException($"Decision turn progress persistence failed: {write.Diagnostic}");
             }
-
-            Record = updated;
         }
     }
 
