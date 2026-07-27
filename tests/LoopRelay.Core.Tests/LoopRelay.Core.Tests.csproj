@@ -28,8 +28,4 @@
     <Compile Include="..\TestSupport\Services\MemoryArtifactStore.cs" Link="Services\TestSupport\MemoryArtifactStore.cs" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
 </Project>
