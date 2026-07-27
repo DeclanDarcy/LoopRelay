@@ -251,27 +251,6 @@ public abstract class UnifiedCliRunnerTestBase
         await WriteAsync(repository.Path, ".agents/milestones/m1.md", "# Milestone\n\n- [ ] Implement capability.");
     }
 
-    protected static async Task SeedCompletionArchiveAsync(Repository repository)
-    {
-        await WriteAsync(repository.Path, ".agents/archive/epics/1.md", "# Completed Epic\n\nSynthesized closure.");
-        await WriteAsync(repository.Path, ".agents/archive/epics/1/archive-metadata.json", """{"SchemaVersion":"completed-epic-archive.v1"}""");
-        await WriteAsync(repository.Path, ".agents/archive/epics/1/plan.md", "# Archived Plan");
-        await WriteAsync(repository.Path, ".agents/archive/epics/1/milestones/m1.md", "# Archived Milestone");
-    }
-
-    protected static int CountOccurrences(string text, string value)
-    {
-        int count = 0;
-        int index = 0;
-        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
-        {
-            count++;
-            index += value.Length;
-        }
-
-        return count;
-    }
-
     protected static async Task ExecuteAsync(SqliteConnection connection, string commandText)
     {
         await using SqliteCommand command = connection.CreateCommand();
