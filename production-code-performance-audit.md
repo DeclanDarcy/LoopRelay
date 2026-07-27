@@ -1107,6 +1107,198 @@ Collect from real epic workspaces (the repo dogfoods itself — `.LoopRelay/` an
 
 ---
 
+## 12a. Recorded results (M1–M4, M6)
+
+Produced by `tests/LoopRelay.Orchestration.Primitives.Tests/Measurement/WorkspaceMagnitudeHarness.cs`,
+an opt-in harness that generates fixture workspaces by **replaying attempt writes through the
+production stores** (no bulk inserts) and then measures against them. Re-run it to re-baseline after
+a fix lands:
+
+```
+LOOPRELAY_MEASUREMENT_OUTPUT=<dir> LOOPRELAY_MEASUREMENT_N=100,1000,10000 \
+LOOPRELAY_MEASUREMENT_HOST_REPO=<checkout> \
+dotnet test tests/LoopRelay.Orchestration.Primitives.Tests/LoopRelay.Orchestration.Tests.csproj \
+  --filter "FullyQualifiedName~WorkspaceMagnitudeHarness"
+```
+
+**Conditions.** One machine, Windows 11, .NET 10.0.301, Debug, warm single-threaded process, local SSD
+temp directory. Production SQLite settings: rollback journal (no WAL), `Pooling = false`, no
+`busy_timeout`. Fixtures are fresh `git init` directories with no working-tree files. First attempt
+and one warm-up iteration discarded per loop. **Run-to-run variance is roughly ±30%: the results are
+the ratios and orders of magnitude, not any individual millisecond.**
+
+**Route (a) was attempted first and is unavailable.** The only LoopRelay workspace database on the
+machine (`LoopRelay-2/.tmp/readme-smoke-20260713/`) holds **zero rows** — 1,134,592 bytes of empty
+schema. No aged workspace exists to observe, which closes §15 Q3 as unanswerable by observation and
+makes the scripted replay the only route.
+
+### M6 — workspace growth magnitudes *(measured)*
+
+Empty-schema floor, before any row exists: **1,003,520 bytes** (245 pages × 4,096), **79 tables, 148
+indexes**.
+
+| Target N | Evidence rows | Attempts | DB bytes | `agent_turns` | `canonical_transition_runs` | effect intents / lifecycle / receipts | `document_json` bytes | share of DB | share of growth above floor |
+|---|---|---|---|---|---|---|---|---|---|
+| 10² | 105 | 15 | 1,536,000 | 45 | 15 | 30 / 60 / 30 | 292,430 | 19.0% | 54.9% |
+| 10³ | 1,001 | 143 | 6,361,088 | 429 | 143 | 286 / 572 / 286 | 2,787,833 | 43.8% | 52.0% |
+| 10⁴ | 10,003 | 1,429 | 54,435,840 | 4,287 | 1,429 | 2,858 / 5,716 / 2,858 | 27,859,009 | **51.2%** | **52.1%** |
+
+Also at every scale: `attempts` and `agent_sessions` equal the attempt count, `canonical_product_records`
+is 1, and 18 of 79 tables are populated. Generation took 16.5 s / 149.9 s / 1,531.0 s — **linear in
+attempts**.
+
+`document_json` composition is **stable across all three scales**: **`RawPromptOutputCaptured` is
+81.6%** of it, `TransitionBoundaryObserved` 11.4%, `OutputInterpreted` and `ProductsValidated` 3.5%
+each, `EffectPlanSettled` 0.01%. Raw-output document size is a generator parameter (15,719 bytes,
+calibrated to the 15,718-byte mean of this checkout's 33 `.agents/**/*.md` files); the per-event
+breakdown is published so the conclusion can be rescaled rather than trusted.
+
+**Evidence-tree and telemetry magnitudes** cannot be produced by a ledger replay and are taken from
+the real checkout instead: `.agents/` **35 files / 523,650 bytes** (33 markdown / 518,724 bytes);
+telemetry JSONL **0 files** — the feature is not exercised in this checkout.
+
+**Steering answer — does `document_json` dominate DB size? Yes.** It is **52.0 ± 1.5% of everything
+the workspace adds** at every scale measured (54.9% / 52.0% / 52.1%), and **81.6% of that is captured
+raw provider output**, also stable at every scale. Its share of *total* size rises with N (19.0% →
+43.8% → 51.2%) purely because the 1 MB empty-schema floor stops mattering. **But absolute sizes are
+modest — a 10,000-evidence-row workspace is 54 MB — so this argues for read-scoping, not for
+retention/archival on storage grounds.** The specific read: `ReadTransitionEvidenceAsync`
+(`CanonicalWorkflowPersistenceStore.cs:1683-1688`) selects `document_json` for every row with **no
+`WHERE` clause**, and is reached by `ProjectAsync` → `RepositoryObserver.ObserveAsync`, twice per
+kernel cycle. **PERF-05 / AR-3 read-scoping is confirmed as the priority; PERF-29 retention is not
+justified by size at these magnitudes** and should remain the deliberate semantic decision §13 step 11
+describes.
+
+### M1 — persistence cost per attempt *(partly measured; statement count not measured)*
+
+| Target N | First attempt (discarded) | Steady-state mean | median | min / max | store ops per attempt | derived per store op |
+|---|---|---|---|---|---|---|
+| 10² | 1,279.9 ms | **1,089.1 ms** (n=14) | 1,055.3 | 911.7 / 1,871.6 | 18 | ~60.5 ms |
+| 10³ | 976.0 ms | **1,049.1 ms** (n=142) | 1,025.3 | 546.7 / 1,732.6 | 18 | ~58.3 ms |
+| 10⁴ | 1,744.2 ms | **1,070.9 ms** (n=1,428) | 1,056.0 | 209.9 / 2,095.9 | 18 | ~59.5 ms |
+
+**Attempt cost is flat across a 100× change in workspace size.** Within the 10⁴ run the first decile
+averaged 1,047.3 ms and the last decile 1,033.4 ms — after 1,286 intervening attempts and 53 MB of
+accumulated ledger, an attempt costs the same. **Persistence cost per attempt does not grow with
+workspace history.**
+
+Schema-ensure cost, measured with a SQLite authorizer on a connection opened exactly as
+`CanonicalWorkflowPersistenceStore.OpenAsync` opens its own:
+
+| | SELECT statements compiled | wall |
+|---|---|---|
+| First `EnsureSchemaAsync` in the process (creates schema) | 264 | 478.0 ms |
+| Second, fresh connection, same file | **12** | 3.6 ms |
+| Warm steady state (mean of 20 opens) | — | **0.948 ms** |
+
+`ShapeRequirementProbes` rises by **exactly 182 per database created and 0 per subsequent open**
+(182 → 364 → 546 → 728 across four databases that performed 22, 270, 2,574 and 25,722 opens
+respectively). `RepairTransactionsOpened` stayed **0** throughout; `FullVerificationRuns` rose by
+exactly 1 per database.
+
+> **M1's decision threshold is not met on a warm process.** Ensure contributes ~0.95 ms of a ~58 ms
+> store operation — **~1.6% of wall time, not >30%** — and its shape probes are already memoized per
+> database rather than per open. The ~58 ms is durability: one synchronous journal flush per write
+> transaction. **This redirects the highest-leverage persistence item from PERF-01 to PERF-10 (WAL +
+> `busy_timeout` + pooling), and answers the "M1 residual" gate §13 step 7 was waiting on.** Caveats:
+> single machine, warm process, and because per-operation statement counts are unmeasurable (below),
+> the 1.6% is a ratio of wall times, not of statements. The once-per-process first open (478 ms, 264
+> statements) is real and PERF-01 would still shrink it.
+
+**Statements per attempt: not measured.** `CanonicalWorkflowPersistenceStore.OpenAsync` (`:1538`)
+opens its own unpooled connection and exposes no observer, and SQLitePCLRaw's only statement-level
+hook — the authorizer — is per connection, so no test-side seam can reach the handle a write ran on.
+This is the same constraint documented on `CanonicalEffectWorkStore.ConnectionObserverForTesting`
+(`CanonicalEffectWorkStore.cs:22-35`). Closing it requires adding
+`ConnectionObserverForTesting?.Invoke(connection);` to that method, mirroring
+`CanonicalEffectWorkStore.cs:457` — a production change, deliberately not made here.
+
+### M2 — `PersistStateAsync` / `ProjectAsync` cost vs. history size *(measured; rows read not measured)*
+
+| Target N | Evidence rows | `PersistStateAsync` | `ProjectAsync` | `LoadSnapshotAsync` |
+|---|---|---|---|---|
+| 10² | 105 | 51.2 ms | 4.23 ms | 1.58 ms |
+| 10³ | 1,001 | 91.2 ms | 9.04 ms | 11.03 ms |
+| 10⁴ | 10,003 | **49.6 ms** | **95.59 ms** | **74.69 ms** |
+| growth 10²→10⁴ | 95× | **1.0× (flat)** | **22.6×** | **47.3×** |
+
+> **M2's hypothesis is confirmed exactly as stated: "linear growth in N; keyed read flat."**
+> `PersistStateAsync` is **flat** across a 95× change in history (51.2 → 91.2 → 49.6 ms — the middle
+> value is noise, not a trend), because its read is already keyed via `ReadTransitionRunAsync`.
+> `ProjectAsync` grows **linearly** — 10.6× for the 10× step from 10³ to 10⁴ — and
+> `LoadSnapshotAsync` with it. **The remediation target is the projection/snapshot read, not the
+> persist path.** This sizes AR-3/PERF-05 and confirms PERF-02's keyed read is already effective.
+
+Rows read per call is **not measured** — same missing connection seam as M1; row counts above are
+rows *present*, not rows *read*.
+
+### M3 — observation census and cost *(phase split measured; per-cycle count by census)*
+
+Phase split of `RepositoryObserver.ObserveAsync`, timed by decorating the two collaborators its
+constructor already accepts (`RepositoryObserver.cs:14-16`) — no production change required:
+
+Verification and projection are timed **inside the call** by decorators, so those two are exact. Git
+and hashing have no seam and fall into a remainder; a standalone run of the identical `git status`
+subprocess is given alongside as a reference for how much of that remainder git accounts for.
+
+| Target N | Total | verification (in-call) | projection (in-call) | remainder (git + hashing + assembly) | standalone `git status` (reference) |
+|---|---|---|---|---|---|
+| 10² | 53.0 ms | 3.6 ms (7%) | 4.2 ms (8%) | **45.2 ms (85%)** | 38.1 ms |
+| 10³ | 76.8 ms | 7.2 ms (9%) | 9.7 ms (13%) | **59.9 ms (78%)** | 60.0 ms |
+| 10⁴ | 163.7 ms | **48.3 ms (29%)** | **77.7 ms (47%)** | 37.8 ms (23%) | 58.7 ms |
+
+Measured 1.0 storage verifications and 1.0 projections per observation at every scale, confirming
+`RepositoryObserver.cs:54` and `:68-70` run once each per call.
+
+> **The dominant phase changes with workspace size, and only the largest fixture reveals it.** On
+> small workspaces the `git status` subprocess dominates (the remainder tracks the standalone git
+> figure closely at 10² and 10³). By 10⁴, **verification + projection are 77% of the observation
+> (126.0 ms of 163.7 ms) and still growing**, while git does not grow with ledger size. **M3's
+> expectation that verification is the dominant, growing share is confirmed — but only at scale, and
+> it grows with *ledger* size rather than with tree size.** This supports PERF-04's verification
+> tiering, and — because projection is the single largest phase at 10⁴ — reinforces PERF-05
+> read-scoping as the higher-leverage of the two.
+
+Caveats: the fixture is an **empty** git repository, so a real working tree makes `git status`
+slower, not faster. The fixture has **no `.agents/` tree**, so `HashExistingFiles` does essentially
+nothing and hashing is effectively absent from the remainder — PERF-04's "grows with tree size"
+claim is untested here. At 10⁴ the standalone git figure (58.7 ms) exceeds the whole remainder
+(37.8 ms), so treat the remainder as the real ceiling for git+hashing and the standalone figure as an
+overestimate of git's in-call cost.
+
+**Observations per kernel cycle: 2 — unchanged — established by call-site census, not by a driven
+run.** `OrchestrationKernel.cs:122` (once per completed cycle) + `CompositionKernelOwners.cs:115`
+(the freshness validator's own observation). Add +1 per workflow-boundary crossing
+(`WorkflowChaining.cs:516`, sanctioned) and +1 on Execute decision transitions
+(`DecisionSessionScopeResolver.cs:48`). Startup adds `UnifiedCliRunner.cs:365` and conditionally
+`:382`. **Not measured** because a multi-cycle `run` cannot be driven from the harness's assembly:
+the kernel's collaborators and the fake agent runtime live in `LoopRelay.Cli`/`LoopRelay.Cli.Tests`
+while the harness must live in `LoopRelay.Orchestration.Tests` to reach the `internal` effect-store
+seams M4 needs; the `run` verb exposes no cycle bound; and no existing test drives more than one
+cycle.
+
+### M4 — effect settlement access count *(measured)*
+
+One Execute transition, 10 evidence candidates, counted through the effect store's existing
+`ConnectionObserverForTesting` / `CommandObserverForTesting` seams with a SQLite authorizer per
+connection:
+
+| Target N | Connection opens | per effect | SELECT compiled | per effect | Commands | Settlement wall |
+|---|---|---|---|---|---|---|
+| 10² | 11 | **1.1** | 32 | 3.2 | 21 | 527.5 ms |
+| 10³ | 11 | **1.1** | 32 | 3.2 | 21 | 912.0 ms |
+| 10⁴ | 11 | **1.1** | 32 | 3.2 | 21 | 609.7 ms |
+
+> **PERF-06's access-count target is already met.** The audit expected 4–6 opens per effect and set a
+> target of ≤2; measured is **1.1** (≤1.2 including the one unobservable open in
+> `CanonicalEffectPlanSettlementStore.TrySettleAsync`, `CanonicalEffectWorkStore.cs:742`, which has no
+> observer). **Access counts are byte-identical at all three scales — 11 opens, 32 statements, 21
+> commands — so settlement cost does not grow with workspace history at all.** What has **not**
+> improved is wall time, which is fsync-bound and varies with machine noise rather than with N.
+> PERF-06's remaining value is in transaction shape, not in reducing opens or hydrations.
+
+---
+
 ## 13. Prioritized Remediation Sequence
 
 Ordered by dependency and leverage, not by finding ID. Steps 1–3 are independent of each other and can proceed in parallel.
