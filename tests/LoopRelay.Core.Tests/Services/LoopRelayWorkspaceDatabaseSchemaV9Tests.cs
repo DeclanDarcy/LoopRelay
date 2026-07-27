@@ -78,10 +78,8 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "history_evidence_items",
             "compatibility_import_operations",
             "compatibility_import_events",
-            "canonical_projection_effects",
             "transition_recovery_plans",
             "canonical_effect_intents",
-            "persistence_projection_checkpoints",
             "workspace_schema_migrations",
             "workspace_schema_convergences",
             "workspace_identity_metadata",
@@ -90,6 +88,92 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             Assert.True(await TableExistsAsync(connection, table), $"Expected v9 table `{table}` to exist.");
         }
     }
+
+    /// <summary>
+    /// The tables in <see cref="TablesNoProductionCodeTouches"/> were created by the schema and never
+    /// read or written by anything outside it. Asserting against a real fresh database - rather than
+    /// against the requirement lists - is what makes this a proof: a `CREATE TABLE` that carries no
+    /// <c>ShapeRequirement</c> (none of these did, beyond the two in the Merge4-v9 name list) would
+    /// otherwise be re-added without a single declaration changing.
+    /// <para>
+    /// <see cref="TablesStillDeclaredDespiteHavingNoWriter"/> is the boundary of that claim. Each of
+    /// those five is also written by nothing, but each is still *read*: the schema-v10 and -v11
+    /// migrations select from <c>canonical_effect_records</c> and <c>transition_recovery_plans</c>,
+    /// <c>SqliteCompletedEpicArchiveMaterializer</c> selects from <c>roadmap_state</c> and
+    /// <c>transition_journal</c>, and <c>artifact_lifecycle</c> is the third table of the same
+    /// pre-unification trio a resolver test seeds. Write-dead is not the same as dead.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task EnsureSchemaAsync_FreshDatabase_DoesNotCreateTablesNoProductionCodeTouches()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        foreach (string table in TablesNoProductionCodeTouches)
+        {
+            Assert.False(
+                await TableExistsAsync(connection, table),
+                $"Expected table `{table}` not to be created - nothing reads or writes it.");
+        }
+
+        foreach (string table in TablesStillDeclaredDespiteHavingNoWriter)
+        {
+            Assert.True(
+                await TableExistsAsync(connection, table),
+                $"Expected table `{table}` to exist - it has no writer but it still has a reader.");
+        }
+
+        Assert.True(await TableExistsAsync(connection, "canonical_recovery_markers"));
+        Assert.True(await TableExistsAsync(connection, "agent_sessions"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_FreshDatabase_DoesNotCreateIndexesOverDeletedTables()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        foreach (string index in (string[])["idx_projection_effects_status", "idx_split_family_children_child_path"])
+        {
+            Assert.Null(await ScalarStringAsync(
+                connection,
+                $"SELECT name FROM sqlite_master WHERE type = 'index' AND name = '{index}';"));
+        }
+    }
+
+    private static readonly string[] TablesNoProductionCodeTouches =
+    [
+        "canonical_projection_effects",
+        "persistence_projection_checkpoints",
+        "sync_markers",
+        "decision_ledger",
+        "split_families",
+        "split_family_children",
+        "split_family_dependency_order",
+        "execution_preparation_manifest",
+        "selection_provenance_manifest",
+        "projection_manifest_entries",
+        "completed_epic_archives",
+        "completed_epic_records",
+    ];
+
+    private static readonly string[] TablesStillDeclaredDespiteHavingNoWriter =
+    [
+        "canonical_effect_records",
+        "transition_recovery_plans",
+        "roadmap_state",
+        "transition_journal",
+        "artifact_lifecycle",
+    ];
 
     [Fact]
     public async Task InspectSchemaAsync_ClassifiesBranchLocalContinuityV3WithoutTrustingItsVersionNumber()
@@ -1185,7 +1269,6 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
                      "idx_history_evidence_provider",
                      "idx_history_evidence_recovery",
                      "idx_compatibility_import_events_operation",
-                     "idx_projection_effects_status",
                      "idx_transition_recovery_plans_run",
                      "idx_canonical_effect_intents_status",
                      "idx_prompt_dispatch_events_dispatch",
@@ -1221,13 +1304,11 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
                      "history_evidence_items",
                      "compatibility_import_operations",
                      "compatibility_import_events",
-                     "canonical_projection_effects",
                      "transition_recovery_plans",
                      "canonical_effect_intents",
                      "execution_recommendation_evidence",
                      "runtime_profile_evaluations",
                      "prompt_dispatch_events",
-                     "persistence_projection_checkpoints",
                  })
         {
             await ExecuteAsync(connection, $"DROP TABLE IF EXISTS {table};");

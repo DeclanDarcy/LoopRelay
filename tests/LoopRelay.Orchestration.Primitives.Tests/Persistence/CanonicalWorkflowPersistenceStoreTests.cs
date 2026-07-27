@@ -1061,8 +1061,6 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         "history_evidence_items",
         "compatibility_import_operations",
         "compatibility_import_events",
-        "canonical_projection_effects",
-        "persistence_projection_checkpoints",
         "workspace_schema_migrations",
         "workspace_schema_convergences",
         "workspace_identity_metadata",

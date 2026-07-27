@@ -43,7 +43,6 @@ public sealed class LedgerLoopHistoryStoreTests
             "SELECT status FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Decisions';"));
         Assert.Equal(WorkspaceEffectExecutorKeys.FilesystemWrite.Value, await ScalarStringAsync(connection,
             "SELECT executor_key FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Decisions';"));
-        Assert.Equal(0L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM canonical_projection_effects;"));
     }
 
     [Fact]

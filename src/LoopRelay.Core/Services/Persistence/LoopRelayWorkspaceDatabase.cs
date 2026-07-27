@@ -1722,13 +1722,11 @@ public static class LoopRelayWorkspaceDatabase
         "history_evidence_items",
         "compatibility_import_operations",
         "compatibility_import_events",
-        "canonical_projection_effects",
         "transition_recovery_plans",
         "canonical_effect_intents",
         "execution_recommendation_evidence",
         "runtime_profile_evaluations",
         "prompt_dispatch_events",
-        "persistence_projection_checkpoints",
     ];
 
     private static readonly string[] Merge4V9IndexNames =
@@ -1738,7 +1736,6 @@ public static class LoopRelayWorkspaceDatabase
         "idx_history_evidence_provider",
         "idx_history_evidence_recovery",
         "idx_compatibility_import_events_operation",
-        "idx_projection_effects_status",
         "idx_transition_recovery_plans_run",
         "idx_canonical_effect_intents_status",
         "idx_prompt_dispatch_events_dispatch",
@@ -2379,19 +2376,6 @@ public static class LoopRelayWorkspaceDatabase
             foreign key(import_id) references compatibility_import_operations(import_id)
         );
 
-        CREATE TABLE IF NOT EXISTS canonical_projection_effects(
-            effect_id text primary key,
-            history_id text not null,
-            target_path text not null,
-            content_hash text not null,
-            status text not null,
-            idempotency_key text not null unique,
-            planned_at text not null,
-            started_at text,
-            completed_at text,
-            failure text
-        );
-
         CREATE TABLE IF NOT EXISTS transition_recovery_plans(
             recovery_id text primary key,
             transition_run_id text not null,
@@ -2470,13 +2454,6 @@ public static class LoopRelayWorkspaceDatabase
             evidence_json text not null
         );
 
-        CREATE TABLE IF NOT EXISTS persistence_projection_checkpoints(
-            projection_identity text primary key,
-            ledger_sequence integer not null,
-            projected_at text not null,
-            model_hash text not null
-        );
-
         CREATE TABLE IF NOT EXISTS canonical_runtime_prerequisites(
             prerequisite_check_id text primary key,
             run_id text,
@@ -2515,8 +2492,6 @@ public static class LoopRelayWorkspaceDatabase
             ON history_evidence_items(recovery_attempt_id);
         CREATE INDEX IF NOT EXISTS idx_compatibility_import_events_operation
             ON compatibility_import_events(import_id, recorded_at);
-        CREATE INDEX IF NOT EXISTS idx_projection_effects_status
-            ON canonical_projection_effects(status, planned_at);
         CREATE INDEX IF NOT EXISTS idx_transition_recovery_plans_run
             ON transition_recovery_plans(transition_run_id, planned_at);
         CREATE INDEX IF NOT EXISTS idx_canonical_effect_intents_status
@@ -3022,28 +2997,6 @@ public static class LoopRelayWorkspaceDatabase
             value text not null
         );
 
-        CREATE TABLE IF NOT EXISTS sync_markers(
-            domain text primary key,
-            canonical_hash text not null,
-            export_hash text,
-            generation integer not null,
-            updated_at text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS decision_ledger(
-            decision_id text primary key,
-            timestamp text not null,
-            state text not null,
-            transition text not null,
-            prompt text not null,
-            projection_path text not null,
-            input_paths_json text not null,
-            output_paths_json text not null,
-            decision text not null,
-            confidence text not null,
-            rationale_excerpt text not null
-        );
-
         CREATE TABLE IF NOT EXISTS roadmap_state(
             id integer primary key check (id = 1),
             document_json text not null,
@@ -3056,47 +3009,6 @@ public static class LoopRelayWorkspaceDatabase
             state text not null,
             updated_at text not null,
             notes text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS split_families(
-            family_id text primary key,
-            proposal text not null,
-            selected_child text not null,
-            selected_child_rationale text not null,
-            created_at text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS split_family_children(
-            family_id text not null,
-            ordinal integer not null,
-            child_path text not null,
-            primary key(family_id, ordinal),
-            unique(family_id, child_path)
-        );
-
-        CREATE TABLE IF NOT EXISTS split_family_dependency_order(
-            family_id text not null,
-            ordinal integer not null,
-            child_path text not null,
-            primary key(family_id, ordinal)
-        );
-
-        CREATE TABLE IF NOT EXISTS execution_preparation_manifest(
-            id integer primary key check (id = 1),
-            document_json text not null,
-            updated_at text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS selection_provenance_manifest(
-            id integer primary key check (id = 1),
-            document_json text not null,
-            updated_at text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS projection_manifest_entries(
-            runtime_prompt text primary key,
-            document_json text not null,
-            updated_at text not null
         );
 
         CREATE TABLE IF NOT EXISTS transition_journal(
@@ -3143,23 +3055,6 @@ public static class LoopRelayWorkspaceDatabase
             writer text,
             metadata_json text not null,
             unique(stem, sequence)
-        );
-
-        CREATE TABLE IF NOT EXISTS completed_epic_archives(
-            archive_index integer primary key,
-            archive_directory text not null unique,
-            synthesis_path text not null unique,
-            created_at text not null,
-            metadata_json text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS completed_epic_records(
-            archive_index integer not null,
-            domain text not null,
-            logical_path text not null,
-            export_path text not null,
-            content_hash text not null,
-            primary key(archive_index, domain, logical_path)
         );
 
         CREATE TABLE IF NOT EXISTS workflow_transactions(
@@ -3318,7 +3213,6 @@ public static class LoopRelayWorkspaceDatabase
         );
 
         CREATE INDEX IF NOT EXISTS idx_artifact_lifecycle_path_key ON artifact_lifecycle(path_key);
-        CREATE INDEX IF NOT EXISTS idx_split_family_children_child_path ON split_family_children(child_path);
         CREATE INDEX IF NOT EXISTS idx_transition_journal_correlation_id ON transition_journal(correlation_id);
         CREATE INDEX IF NOT EXISTS idx_loop_history_kind_sequence_desc ON loop_history(kind, sequence desc);
         CREATE INDEX IF NOT EXISTS idx_execution_evidence_stem_sequence_desc ON execution_evidence(stem, sequence desc);
