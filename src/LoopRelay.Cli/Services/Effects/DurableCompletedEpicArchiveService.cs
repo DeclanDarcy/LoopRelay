@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using LoopRelay.Completion.Abstractions;
@@ -50,7 +50,7 @@ internal sealed class DurableCompletedEpicArchiveService(
         var reconciler = new CompletionArchiveEffectReconciler(_repository, _store);
         var worker = new EffectWorker(
             $"completion-archive-{Environment.ProcessId}", workStore,
-            new EffectExecutorRegistry([executor]), reconciler, TimeSpan.FromMinutes(5));
+            new EffectExecutorRegistry([executor]), reconciler);
         for (int pass = 0; pass < 3; pass++)
         {
             await worker.RunOnceAsync(

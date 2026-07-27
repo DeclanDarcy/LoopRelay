@@ -10,7 +10,7 @@ namespace LoopRelay.Orchestration.Tests.Persistence;
 public sealed class CanonicalEffectWorkStoreTests
 {
     [Fact]
-    public async Task PlanLeaseLifecycleAndReceiptRoundTripAcrossStoreRestart()
+    public async Task PlanLifecycleAndReceiptRoundTripAcrossStoreRestart()
     {
         Repository repository = CreateRepository();
         EffectIntent intent = Intent();
@@ -19,24 +19,18 @@ public sealed class CanonicalEffectWorkStoreTests
 
         EffectScanRow planned = Assert.Single(await firstStore.ScanUnsettledAsync(10, DateTimeOffset.UtcNow, CancellationToken.None));
         Assert.Equal(EffectLifecycle.Planned, planned.State);
-        EffectLease lease = Assert.IsType<EffectLease>(await firstStore.TryLeaseAsync(
-            intent.Identity, planned.RowVersion, "worker-a", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1), CancellationToken.None));
-        Assert.Null(await firstStore.TryLeaseAsync(
-            intent.Identity, planned.RowVersion, "worker-b", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1), CancellationToken.None));
-
-        EffectWorkItem started = await firstStore.AppendLifecycleAsync(
-            intent.Identity, lease.RowVersion, EffectLifecycle.Started, "worker-a", "started", [], DateTimeOffset.UtcNow, CancellationToken.None);
         var receipt = new EffectReceipt(
             EffectReceiptIdentity.New(), intent.Identity, intent.Executor, intent.ExecutorVersion,
             intent.Target.Identity, "before", "after", true, "commit:abc", ["git-observation"], DateTimeOffset.UtcNow);
         await firstStore.RecordReceiptAsync(
-            intent.Identity, started.RowVersion, receipt, "worker-a", CancellationToken.None);
+            intent.Identity, planned.RowVersion, receipt, "worker-a", CancellationToken.None);
 
         var restarted = new CanonicalEffectWorkStore(repository);
         EffectWorkItem settled = Assert.IsType<EffectWorkItem>(await restarted.ReadAsync(intent.Identity, CancellationToken.None));
         Assert.Equal(EffectLifecycle.Succeeded, settled.State);
         Assert.Equal(receipt.Identity, settled.Receipt!.Identity);
-        Assert.Equal([EffectLifecycle.Planned, EffectLifecycle.Leased, EffectLifecycle.Started, EffectLifecycle.Succeeded],
+        // One durable write per settled effect: the plan append, then the terminal receipt.
+        Assert.Equal([EffectLifecycle.Planned, EffectLifecycle.Succeeded],
             settled.Events.Select(item => item.State));
         Assert.Empty(await restarted.ScanUnsettledAsync(10, DateTimeOffset.UtcNow, CancellationToken.None));
     }
@@ -80,28 +74,6 @@ public sealed class CanonicalEffectWorkStoreTests
     }
 
     [Fact]
-    public async Task ExpiredLeaseIsDiscoverableAndPreservesPreviousStateForRecovery()
-    {
-        Repository repository = CreateRepository();
-        EffectIntent intent = Intent();
-        var store = new CanonicalEffectWorkStore(repository);
-        await store.AppendPlanAsync([intent], CancellationToken.None);
-        EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        EffectLease first = (await store.TryLeaseAsync(
-            intent.Identity, planned.RowVersion, "dead-worker", now, TimeSpan.FromMilliseconds(1), CancellationToken.None))!;
-        EffectWorkItem leased = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
-
-        IReadOnlyList<EffectScanRow> discovered = await store.ScanUnsettledAsync(10, now.AddSeconds(1), CancellationToken.None);
-        Assert.Single(discovered);
-        EffectLease replacement = (await store.TryLeaseAsync(
-            intent.Identity, leased.RowVersion, "restart-worker", now.AddSeconds(1), TimeSpan.FromMinutes(1), CancellationToken.None))!;
-
-        Assert.Equal(EffectLifecycle.Planned, replacement.PreviousState);
-        Assert.True(replacement.RowVersion > first.RowVersion);
-    }
-
-    [Fact]
     public async Task RestartedWorkerReconcilesUnknownSQLiteWorkWithoutRedispatch()
     {
         Repository repository = CreateRepository();
@@ -111,14 +83,14 @@ public sealed class CanonicalEffectWorkStoreTests
         var executor = new ThrowAfterMutationExecutor();
         var reconciler = new SucceededReconciler();
 
-        await new EffectWorker("worker-before-crash", store, new EffectExecutorRegistry([executor]), reconciler,
-            TimeSpan.FromMinutes(1)).RunOnceAsync();
+        await new EffectWorker("worker-before-crash", store, new EffectExecutorRegistry([executor]), reconciler)
+            .RunOnceAsync();
         Assert.Equal(EffectLifecycle.Unknown, (await store.ReadAsync(intent.Identity, CancellationToken.None))!.State);
 
         var restartedStore = new CanonicalEffectWorkStore(repository);
         EffectWorkerResult restarted = await new EffectWorker(
-            "worker-after-restart", restartedStore, new EffectExecutorRegistry([executor]), reconciler,
-            TimeSpan.FromMinutes(1)).RunOnceAsync();
+            "worker-after-restart", restartedStore, new EffectExecutorRegistry([executor]), reconciler)
+            .RunOnceAsync();
 
         Assert.Equal(1, executor.Calls);
         Assert.Equal(1, reconciler.Calls);
@@ -190,7 +162,8 @@ public sealed class CanonicalEffectWorkStoreTests
 
         EffectScanRow scanned = Assert.Single(
             await store.ScanUnsettledAsync(10, DateTimeOffset.UtcNow, CancellationToken.None));
-        Assert.Equal(EffectLifecycle.Started, scanned.State);
+        // 'Started' is a retired token: still discovered, and read back as the Planned it meant.
+        Assert.Equal(EffectLifecycle.Planned, scanned.State);
     }
 
     /// <summary>
@@ -226,7 +199,7 @@ public sealed class CanonicalEffectWorkStoreTests
     /// Every durable gate now reads settlement off <c>status</c>: the dependency gate, the sibling
     /// barrier and the readiness count all compare the status column rather than the terminal
     /// receipt pointer. <c>AppendLifecycleAsync</c> writes <c>status</c> and never writes a receipt,
-    /// and the lifecycle policy on its own permits <c>Started -&gt; Succeeded</c>, so without a guard
+    /// and the lifecycle policy on its own permits <c>Planned -&gt; Succeeded</c>, so without a guard
     /// a caller can mint a row those gates read as settled while it carries no receipt at all. That
     /// invariant used to be held only by what today's callers happen to pass; this holds it by
     /// construction, and pins that the real settle path stays open.
@@ -239,18 +212,12 @@ public sealed class CanonicalEffectWorkStoreTests
         EffectIntent intent = Intent();
         await store.AppendPlanAsync([intent], CancellationToken.None);
         EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
-        EffectLease lease = (await store.TryLeaseAsync(
-            intent.Identity, planned.RowVersion, "worker", DateTimeOffset.UtcNow,
-            TimeSpan.FromMinutes(1), CancellationToken.None))!;
-        EffectWorkItem started = await store.AppendLifecycleAsync(
-            intent.Identity, lease.RowVersion, EffectLifecycle.Started, "worker", "started", [],
-            DateTimeOffset.UtcNow, CancellationToken.None);
         // The state machine alone does not stop this, which is exactly why the append path must.
-        Assert.True(EffectLifecyclePolicy.CanTransition(EffectLifecycle.Started, EffectLifecycle.Succeeded));
+        Assert.True(EffectLifecyclePolicy.CanTransition(EffectLifecycle.Planned, EffectLifecycle.Succeeded));
 
         InvalidOperationException refusal = await Assert.ThrowsAsync<InvalidOperationException>(
             () => store.AppendLifecycleAsync(
-                intent.Identity, started.RowVersion, EffectLifecycle.Succeeded, "worker",
+                intent.Identity, planned.RowVersion, EffectLifecycle.Succeeded, "worker",
                 "settled without a receipt", [], DateTimeOffset.UtcNow, CancellationToken.None));
         Assert.Equal(
             "Effect success is recorded by receipt: use RecordReceiptAsync, not a lifecycle append.",
@@ -265,10 +232,10 @@ public sealed class CanonicalEffectWorkStoreTests
 
         // The refusal leaves the row exactly as it was, and the receipt path still settles it.
         EffectWorkItem afterRefusal = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
-        Assert.Equal(EffectLifecycle.Started, afterRefusal.State);
-        Assert.Equal(started.RowVersion, afterRefusal.RowVersion);
+        Assert.Equal(EffectLifecycle.Planned, afterRefusal.State);
+        Assert.Equal(planned.RowVersion, afterRefusal.RowVersion);
         EffectWorkItem settled = await store.RecordReceiptAsync(
-            intent.Identity, started.RowVersion, Receipt(intent), "worker", CancellationToken.None);
+            intent.Identity, planned.RowVersion, Receipt(intent), "worker", CancellationToken.None);
         Assert.Equal(EffectLifecycle.Succeeded, settled.State);
         Assert.Equal(1L, await CountAsync(
             repository,
@@ -279,17 +246,44 @@ public sealed class CanonicalEffectWorkStoreTests
             ("$intent", intent.Identity.Value)));
     }
 
+    /// <summary>
+    /// A workspace written before the lease and the start marker were retired can still hold either
+    /// token on an unsettled row. Both meant "discovered, not settled", so both must still be
+    /// discovered by the scan and carried to settlement rather than throwing out of the worker and
+    /// wedging every later effect behind them.
+    /// </summary>
+    [Theory]
+    [InlineData("Started")]
+    [InlineData("Leased")]
+    public async Task RowLeftOnARetiredStatusTokenByAHardKillIsReexecutedRatherThanWedgingTheWorkspace(
+        string retiredToken)
+    {
+        Repository repository = CreateRepository();
+        EffectIntent intent = Intent();
+        var store = new CanonicalEffectWorkStore(repository);
+        await store.AppendPlanAsync([intent], CancellationToken.None);
+        await ExecuteAsync(
+            repository,
+            $"UPDATE canonical_effect_intents SET status = '{retiredToken}' WHERE effect_intent_id = $intent;",
+            ("$intent", intent.Identity.Value));
+
+        var executor = new SucceededExecutor();
+        EffectWorkerResult result = await new EffectWorker(
+            "retired-token-worker", store, new EffectExecutorRegistry([executor]),
+            new SucceededReconciler()).RunOnceAsync();
+
+        Assert.Equal(1, result.Discovered);
+        Assert.Equal(1, result.Succeeded);
+        EffectWorkItem settled = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
+        Assert.Equal(EffectLifecycle.Succeeded, settled.State);
+        Assert.NotNull(settled.Receipt);
+    }
+
     private static async Task<EffectWorkItem> SettleAsync(CanonicalEffectWorkStore store, EffectIntent intent)
     {
         EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
-        EffectLease lease = (await store.TryLeaseAsync(
-            intent.Identity, planned.RowVersion, "worker", DateTimeOffset.UtcNow,
-            TimeSpan.FromMinutes(1), CancellationToken.None))!;
-        EffectWorkItem started = await store.AppendLifecycleAsync(
-            intent.Identity, lease.RowVersion, EffectLifecycle.Started, "worker", "started", [],
-            DateTimeOffset.UtcNow, CancellationToken.None);
         return await store.RecordReceiptAsync(
-            intent.Identity, started.RowVersion, Receipt(intent), "worker", CancellationToken.None);
+            intent.Identity, planned.RowVersion, Receipt(intent), "worker", CancellationToken.None);
     }
 
     private static EffectReceipt Receipt(EffectIntent intent) => new(
@@ -372,6 +366,19 @@ public sealed class CanonicalEffectWorkStoreTests
     {
         string path = Directory.CreateTempSubdirectory("looprelay-effect-store-").FullName;
         return new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(path), Path = path };
+    }
+
+    private sealed class SucceededExecutor : IEffectExecutor
+    {
+        public EffectExecutorKey Key => new("git-commit");
+        public string Version => "1";
+        public int Calls { get; private set; }
+        public Task<EffectExecutionObservation> ExecuteAsync(EffectIntent intent, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(new EffectExecutionObservation(
+                EffectLifecycle.Succeeded, "Committed.", ["git:commit:abc"], "tree:before", "tree:after", true));
+        }
     }
 
     private sealed class ThrowAfterMutationExecutor : IEffectExecutor

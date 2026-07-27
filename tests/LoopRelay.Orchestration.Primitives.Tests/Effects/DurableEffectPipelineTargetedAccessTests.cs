@@ -1,4 +1,4 @@
-using LoopRelay.Core.Models.Identity;
+﻿using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Persistence;
@@ -136,7 +136,6 @@ public sealed class DurableEffectPipelineTargetedAccessTests
         store,
         new EffectExecutorRegistry([executor]),
         new UnusedReconciler(),
-        TimeSpan.FromMinutes(1),
         ScanLimit);
 
     private static CanonicalCausalContext Causality() => new(

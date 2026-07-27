@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Agents.Models.Process;
@@ -701,8 +701,7 @@ public sealed class TransitionRecoveryRunner(ICertificationFailureDiagnoser? fai
             "certification-m4",
             workStore,
             new LoopRelay.Orchestration.Effects.EffectExecutorRegistry(typedExecutors),
-            new TransitionalFeatureEffectReconciler(workStore),
-            TimeSpan.FromMinutes(1));
+            new TransitionalFeatureEffectReconciler(workStore));
         TransitionEffectCoordinationResult result = await new TransitionEffectCoordinator(
                 workStore,
                 worker,

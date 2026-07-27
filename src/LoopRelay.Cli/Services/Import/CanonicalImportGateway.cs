@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using LoopRelay.Core.Models.Identity;
@@ -214,7 +214,7 @@ internal sealed class CanonicalImportGateway(Repository _repository) : IImportGa
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         var worker = new EffectWorker($"import-{Environment.ProcessId}", effectStore,
             new EffectExecutorRegistry([new ImportAuthorityPromotionEffectExecutor(_repository)]),
-            new ImportAuthorityPromotionEffectReconciler(_repository), TimeSpan.FromMinutes(2));
+            new ImportAuthorityPromotionEffectReconciler(_repository));
         _ = await worker.RunOnceAsync(cancellationToken, only: new HashSet<EffectIntentIdentity> { intent.Identity });
         EffectWorkItem settled = await effectStore.ReadAsync(intent.Identity, cancellationToken)
             ?? throw new InvalidOperationException("Import promotion effect disappeared.");

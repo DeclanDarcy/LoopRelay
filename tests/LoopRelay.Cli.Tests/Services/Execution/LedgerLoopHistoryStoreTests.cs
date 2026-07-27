@@ -1,4 +1,4 @@
-using LoopRelay.Cli.Abstractions.Persistence;
+﻿using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;
@@ -61,8 +61,7 @@ public sealed class LedgerLoopHistoryStoreTests
             "history-projection-test",
             workStore,
             new EffectExecutorRegistry([executor]),
-            new FilesystemWriteEffectReconciler(harness.Repository),
-            TimeSpan.FromMinutes(1));
+            new FilesystemWriteEffectReconciler(harness.Repository));
         EffectWorkerResult result = await worker.RunOnceAsync();
 
         Assert.Equal(1, result.Succeeded);

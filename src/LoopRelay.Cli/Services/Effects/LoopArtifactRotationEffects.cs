@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using LoopRelay.Cli.Abstractions.Persistence;
@@ -135,8 +135,7 @@ internal sealed class DurableLoopArtifactEffectCoordinator(
                     [rotationExecutor.Key] = rotationReconciler,
                     [WorkspaceEffectExecutorKeys.FilesystemWrite] = filesystemReconciler,
                 },
-                rotationReconciler),
-            TimeSpan.FromMinutes(2));
+                rotationReconciler));
         await worker.RunOnceAsync(cancellationToken, only: new HashSet<EffectIntentIdentity> { intent.Identity });
         EffectWorkItem rotation = await store.ReadAsync(intent.Identity, cancellationToken)
             ?? throw new InvalidOperationException("Loop-artifact rotation intent disappeared.");

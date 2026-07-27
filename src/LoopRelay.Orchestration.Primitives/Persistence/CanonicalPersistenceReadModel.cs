@@ -92,6 +92,7 @@ public sealed class CanonicalPersistenceProjection : ICanonicalPersistenceProjec
                 if (Convert.ToInt64(await exists.ExecuteScalarAsync(cancellationToken)) != 1) return [];
             }
             await using SqliteCommand command = connection.CreateCommand();
+            // 'Started' and 'Leased' are retired tokens kept only so pre-cut rows are still found.
             command.CommandText = """
                 SELECT definition_json,status FROM canonical_effect_intents
                 WHERE status IN ('Planned','Pending','Started','Unknown','Reconciling','RetryAuthorized','Leased')

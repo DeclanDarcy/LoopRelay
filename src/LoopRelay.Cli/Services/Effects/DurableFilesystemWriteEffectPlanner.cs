@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using LoopRelay.Core.Models.Identity;
@@ -92,8 +92,7 @@ internal sealed class DurableFilesystemWriteEffectPlanner(Repository _repository
             $"candidate-filesystem-{Environment.ProcessId}",
             store,
             new EffectExecutorRegistry([executor]),
-            new FilesystemWriteEffectReconciler(_repository),
-            TimeSpan.FromMinutes(2));
+            new FilesystemWriteEffectReconciler(_repository));
         await worker.RunOnceAsync(
             cancellationToken,
             includePending: true,

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using LoopRelay.Completion.Abstractions;
@@ -100,8 +100,7 @@ internal sealed class DurableCompletionContextMaterializer(
             $"completion-context-{Environment.ProcessId}",
             workStore,
             new EffectExecutorRegistry([executor]),
-            new FilesystemWriteEffectReconciler(_repository),
-            TimeSpan.FromMinutes(5));
+            new FilesystemWriteEffectReconciler(_repository));
         var selected = new HashSet<EffectIntentIdentity> { context.Identity, evidence.Identity };
         for (int pass = 0; pass < 3; pass++)
             await worker.RunOnceAsync(cancellationToken, includePending: true, only: selected);

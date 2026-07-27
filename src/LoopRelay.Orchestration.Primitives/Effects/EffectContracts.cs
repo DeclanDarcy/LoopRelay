@@ -48,8 +48,6 @@ public enum EffectRequiredness
 public enum EffectLifecycle
 {
     Planned,
-    Leased,
-    Started,
     Pending,
     Succeeded,
     Failed,
@@ -71,19 +69,26 @@ public enum EffectReconciliationVerdict
 
 public static class EffectLifecyclePolicy
 {
+    /// <summary>
+    /// Three arms, one per writer that exists. A discovered row runs its executor and writes exactly
+    /// one outcome; an in-process fault leaves it uncertain and the reconciler is the only reader of
+    /// that state. There is no lease and no start marker, because with one writer and idempotent
+    /// executors "did the outward call already happen?" has the same answer either way: re-run.
+    /// <para>
+    /// <c>Cancelled</c> has no arm: nothing in <c>src/</c> writes or reads it.
+    /// <c>(Failed or Stalled) -> RetryAuthorized</c> is likewise absent, because the only writer of
+    /// <c>RetryAuthorized</c> is <c>EffectWorker.ReconcileAsync</c>, whose source state is always
+    /// <c>Reconciling</c>.
+    /// </para>
+    /// </summary>
     public static bool CanTransition(EffectLifecycle current, EffectLifecycle next) => (current, next) switch
     {
-        (EffectLifecycle.Planned, EffectLifecycle.Leased) => true,
-        (EffectLifecycle.Leased, EffectLifecycle.Started or EffectLifecycle.Planned or EffectLifecycle.Unknown or EffectLifecycle.Reconciling) => true,
-        (EffectLifecycle.Started, EffectLifecycle.Pending or EffectLifecycle.Succeeded or EffectLifecycle.Failed or
-            EffectLifecycle.Stalled or EffectLifecycle.Cancelled or EffectLifecycle.Unknown) => true,
-        (EffectLifecycle.Pending, EffectLifecycle.Leased or EffectLifecycle.Succeeded or EffectLifecycle.Failed or
-            EffectLifecycle.Stalled or EffectLifecycle.Cancelled or EffectLifecycle.Unknown) => true,
-        (EffectLifecycle.Unknown, EffectLifecycle.Leased or EffectLifecycle.Reconciling) => true,
+        (EffectLifecycle.Planned or EffectLifecycle.Pending or EffectLifecycle.RetryAuthorized,
+            EffectLifecycle.Succeeded or EffectLifecycle.Failed or EffectLifecycle.Stalled or
+            EffectLifecycle.Pending or EffectLifecycle.Unknown or EffectLifecycle.HumanActionRequired) => true,
+        (EffectLifecycle.Unknown or EffectLifecycle.Reconciling, EffectLifecycle.Reconciling) => true,
         (EffectLifecycle.Reconciling, EffectLifecycle.Succeeded or EffectLifecycle.Failed or EffectLifecycle.Stalled or
             EffectLifecycle.RetryAuthorized or EffectLifecycle.HumanActionRequired or EffectLifecycle.Unknown) => true,
-        (EffectLifecycle.Failed or EffectLifecycle.Stalled, EffectLifecycle.RetryAuthorized) => true,
-        (EffectLifecycle.RetryAuthorized, EffectLifecycle.Leased) => true,
         _ => false,
     };
 
@@ -104,7 +109,7 @@ public static class EffectLifecyclePolicy
     /// <c>IEffectWorkStore.RecordReceiptAsync</c>, which writes the status and the terminal receipt
     /// pointer in one transaction.
     /// <para>
-    /// The transition table alone does not carry this: it permits <c>Started</c>, <c>Pending</c> and
+    /// The transition table alone does not carry this: it permits <c>Planned</c>, <c>Pending</c> and
     /// <c>Reconciling</c> to reach <see cref="EffectLifecycle.Succeeded"/>, because the receipt path
     /// needs exactly those transitions. This separates "the state machine allows it" from "the append
     /// path may write it", so the invariant is held by construction rather than by caller discipline.
@@ -338,13 +343,6 @@ public sealed record EffectScanRow(
     EffectLifecycle State,
     long RowVersion);
 
-public sealed record EffectLease(
-    EffectIntent Intent,
-    long RowVersion,
-    string Worker,
-    DateTimeOffset ExpiresAt,
-    EffectLifecycle PreviousState);
-
 public sealed record EffectExecutionObservation(
     EffectLifecycle State,
     string Explanation,
@@ -386,7 +384,6 @@ public interface IEffectWorkStore
     /// </para>
     /// </summary>
     Task<bool> DependencySatisfiedAsync(EffectIntent candidate, EffectIntentIdentity dependency, CancellationToken cancellationToken);
-    Task<EffectLease?> TryLeaseAsync(EffectIntentIdentity identity, long expectedRowVersion, string worker, DateTimeOffset now, TimeSpan duration, CancellationToken cancellationToken);
     /// <summary>
     /// Appends a non-terminal lifecycle observation. <see cref="EffectLifecycle.Succeeded"/> is not
     /// accepted here — implementations MUST refuse it via

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using LoopRelay.Cli.Services.Cli;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
@@ -127,8 +127,7 @@ public sealed class CanonicalFeatureEffectExecutorProductsReadTests
                     TransitionalFeatureEffectExecutorKeys.For(effect.Identity.Value),
                     effect.Identity),
             ]),
-            new TransitionalFeatureEffectReconciler(effectWorkStore),
-            TimeSpan.FromMinutes(5));
+            new TransitionalFeatureEffectReconciler(effectWorkStore));
 
         EffectWorkerResult result = await worker.RunOnceAsync(CancellationToken.None);
         Assert.Equal(1, result.Succeeded);

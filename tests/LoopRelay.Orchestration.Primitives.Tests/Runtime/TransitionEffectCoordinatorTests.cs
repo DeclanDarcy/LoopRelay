@@ -1,4 +1,4 @@
-using LoopRelay.Core.Models.Identity;
+﻿using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Effects;
@@ -127,7 +127,7 @@ public sealed class TransitionEffectCoordinatorTests
         IEffectReconciler reconciler,
         IEffectPlanSettlementStore settlement) =>
         new(store, new EffectWorker("coordinator-test", store, new EffectExecutorRegistry([executor]),
-            reconciler, TimeSpan.FromMinutes(1)), settlement);
+            reconciler), settlement);
 
     private static EffectIntent Intent(
         int order,

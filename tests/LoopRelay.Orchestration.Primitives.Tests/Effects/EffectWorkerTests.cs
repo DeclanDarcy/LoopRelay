@@ -114,29 +114,41 @@ public sealed class EffectWorkerTests
         Assert.Null(store.Items.Single().Receipt);
     }
 
-    [Fact]
-    public async Task CompareAndSetLeaseAllowsOnlyOneWorker()
+    /// <summary>
+    /// A hard kill mid-effect leaves the row in whatever state the last durable write put it in.
+    /// The next pass must carry that row to settlement rather than throwing, because a throw out of
+    /// <c>RunOnceAsync</c> wedges every later effect in the workspace behind it -- permanently, once
+    /// nothing can move the row on.
+    /// </summary>
+    /// <para>
+    /// The pre-cut <c>Started</c> row is the third case and cannot be written here any more -- the
+    /// value is gone from the enum. It survives as a durable status token, covered by
+    /// <c>CanonicalEffectWorkStoreTests.RowLeftOnARetiredStatusTokenByAHardKillIsReexecutedRatherThanWedgingTheWorkspace</c>.
+    /// </para>
+    [Theory]
+    [InlineData(EffectLifecycle.Unknown)]
+    [InlineData(EffectLifecycle.Reconciling)]
+    public async Task HardKillMidEffectIsRecoveredRatherThanWedgingTheWorkspace(EffectLifecycle killedIn)
     {
         var store = new MemoryEffectWorkStore(Intent(order: 0));
         EffectWorkItem snapshot = store.Items.Single();
+        store.ForceStateForTesting(snapshot.Intent.Identity, killedIn);
+        var executor = new ScriptedExecutor();
+        var worker = Worker(store, executor, new ScriptedReconciler(EffectReconciliationVerdict.Succeeded));
 
-        EffectLease? first = await store.TryLeaseAsync(
-            snapshot.Intent.Identity, snapshot.RowVersion, "worker-a", DateTimeOffset.UtcNow,
-            TimeSpan.FromMinutes(1), CancellationToken.None);
-        EffectLease? duplicate = await store.TryLeaseAsync(
-            snapshot.Intent.Identity, snapshot.RowVersion, "worker-b", DateTimeOffset.UtcNow,
-            TimeSpan.FromMinutes(1), CancellationToken.None);
+        EffectWorkerResult result = await worker.RunOnceAsync();
 
-        Assert.NotNull(first);
-        Assert.Null(duplicate);
+        Assert.Equal(1, result.Discovered);
+        EffectWorkItem settled = (await store.ReadAsync(snapshot.Intent.Identity, CancellationToken.None))!;
+        Assert.Equal(EffectLifecycle.Succeeded, settled.State);
     }
 
     [Theory]
     [InlineData(EffectLifecycle.Unknown, EffectLifecycle.Planned)]
-    [InlineData(EffectLifecycle.Failed, EffectLifecycle.Leased)]
-    [InlineData(EffectLifecycle.Stalled, EffectLifecycle.Leased)]
-    [InlineData(EffectLifecycle.Cancelled, EffectLifecycle.Leased)]
-    [InlineData(EffectLifecycle.Succeeded, EffectLifecycle.Leased)]
+    [InlineData(EffectLifecycle.Failed, EffectLifecycle.Succeeded)]
+    [InlineData(EffectLifecycle.Stalled, EffectLifecycle.Succeeded)]
+    [InlineData(EffectLifecycle.Cancelled, EffectLifecycle.Succeeded)]
+    [InlineData(EffectLifecycle.Succeeded, EffectLifecycle.Succeeded)]
     public void UncertainOrTerminalWorkCannotBeBlindlyReexecuted(
         EffectLifecycle current,
         EffectLifecycle next)
@@ -190,7 +202,7 @@ public sealed class EffectWorkerTests
         IEffectReconciler reconciler,
         ICanonicalRecoveryCaseRecorder? recovery = null) =>
         new("worker-test", store, new EffectExecutorRegistry([executor]), reconciler,
-            TimeSpan.FromMinutes(1), _recoveryCases: recovery);
+            _recoveryCases: recovery);
 
     private sealed class RecordingRecoveryCases : ICanonicalRecoveryCaseRecorder
     {
@@ -284,6 +296,15 @@ public sealed class EffectWorkerTests
             lock (_gate) _items.Add(intent.Identity, new MutableItem(intent));
         }
 
+        /// <summary>
+        /// Puts a row into the state a hard kill would have left it in, without going through a
+        /// transition. A crash is exactly the thing that does not respect the state machine.
+        /// </summary>
+        public void ForceStateForTesting(EffectIntentIdentity identity, EffectLifecycle state)
+        {
+            lock (_gate) _items[identity].State = state;
+        }
+
         public Task<IReadOnlyList<EffectScanRow>> ScanUnsettledAsync(
             int limit, DateTimeOffset now, CancellationToken cancellationToken,
             IReadOnlySet<EffectIntentIdentity>? only = null)
@@ -292,7 +313,6 @@ public sealed class EffectWorkerTests
             {
                 IReadOnlyList<EffectScanRow> result = _items.Values
                     .Where(item => item.State != EffectLifecycle.Succeeded)
-                    .Where(item => item.LeaseExpiresAt is null || item.LeaseExpiresAt <= now || item.LeaseOwner is null)
                     .Where(item => only is null || only.Contains(item.Intent.Identity))
                     .OrderBy(item => item.Intent.Order)
                     .Take(limit)
@@ -356,36 +376,6 @@ public sealed class EffectWorkerTests
             }
         }
 
-        public Task<EffectLease?> TryLeaseAsync(
-            EffectIntentIdentity identity,
-            long expectedRowVersion,
-            string worker,
-            DateTimeOffset now,
-            TimeSpan duration,
-            CancellationToken cancellationToken)
-        {
-            lock (_gate)
-            {
-                MutableItem item = _items[identity];
-                if (item.RowVersion != expectedRowVersion ||
-                    (item.LeaseOwner is not null && item.LeaseExpiresAt > now))
-                {
-                    return Task.FromResult<EffectLease?>(null);
-                }
-
-                EffectLifecycle previous = item.State;
-                EffectLifecyclePolicy.RequireTransition(previous, EffectLifecycle.Leased);
-                item.State = EffectLifecycle.Leased;
-                item.LeaseOwner = worker;
-                item.LeaseExpiresAt = now + duration;
-                item.RowVersion++;
-                item.AttemptCount++;
-                item.Events.Add(Event(item, worker, "Lease acquired.", []));
-                return Task.FromResult<EffectLease?>(new EffectLease(
-                    item.Intent, item.RowVersion, worker, item.LeaseExpiresAt.Value, previous));
-            }
-        }
-
         public Task<EffectWorkItem> AppendLifecycleAsync(
             EffectIntentIdentity identity,
             long expectedRowVersion,
@@ -402,11 +392,6 @@ public sealed class EffectWorkerTests
                 EffectLifecyclePolicy.RequireTransition(item.State, state);
                 item.State = state;
                 item.RowVersion++;
-                if (state is not (EffectLifecycle.Leased or EffectLifecycle.Started or EffectLifecycle.Reconciling))
-                {
-                    item.LeaseOwner = null;
-                    item.LeaseExpiresAt = null;
-                }
                 item.Events.Add(Event(item, worker, explanation, evidence));
                 return Task.FromResult(item.Snapshot());
             }
@@ -446,8 +431,8 @@ public sealed class EffectWorkerTests
             lock (_gate)
             {
                 MutableItem item = RequireVersion(identity, expectedRowVersion);
-                if (item.State != EffectLifecycle.Reconciling || item.LeaseOwner != worker)
-                    throw new InvalidOperationException("Reconciliation lease mismatch.");
+                if (item.State != EffectLifecycle.Reconciling)
+                    throw new InvalidOperationException("Reconciliation observation lost its effect row version.");
                 return Task.CompletedTask;
             }
         }

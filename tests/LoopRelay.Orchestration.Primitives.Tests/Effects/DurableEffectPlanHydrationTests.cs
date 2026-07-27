@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
@@ -240,7 +240,7 @@ public sealed class DurableEffectPlanHydrationTests
         for (int pass = 0; pass < 16; pass++)
         {
             EffectWorkerResult result = await worker.RunOnceAsync(CancellationToken.None);
-            if (result.Leased == 0) return;
+            if (result.Dispatched == 0) return;
         }
         throw new InvalidOperationException("The effect worker did not reach quiescence.");
     }
@@ -262,7 +262,6 @@ public sealed class DurableEffectPlanHydrationTests
         store,
         new EffectExecutorRegistry(executors),
         new UnusedReconciler(),
-        TimeSpan.FromMinutes(1),
         ScanLimit);
 
     private static CanonicalCausalContext Causality() => new(

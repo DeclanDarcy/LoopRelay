@@ -14,55 +14,23 @@ namespace LoopRelay.Orchestration.Tests.Effects;
 public sealed class DurableEffectSettlementReturnTests
 {
     [Fact]
-    public async Task Lease_retaining_lifecycle_append_returns_what_an_independent_read_observes()
-    {
-        Repository repository = CreateRepository();
-        var store = new CanonicalEffectWorkStore(repository);
-        EffectIntent intent = Intent(Causality(), order: 0, key: "started");
-        await store.AppendPlanAsync([intent], CancellationToken.None);
-        EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
-        EffectLease lease = (await store.TryLeaseAsync(
-            intent.Identity, planned.RowVersion, "worker-a", DateTimeOffset.UtcNow,
-            TimeSpan.FromMinutes(1), CancellationToken.None))!;
-
-        EffectWorkItem returned = await store.AppendLifecycleAsync(
-            intent.Identity, lease.RowVersion, EffectLifecycle.Started, "worker-a",
-            "Outward effect execution started.", ["dispatch:1"], DateTimeOffset.UtcNow, CancellationToken.None);
-
-        EffectWorkItem observed = (await new CanonicalEffectWorkStore(repository)
-            .ReadAsync(intent.Identity, CancellationToken.None))!;
-        Assert.Equal(EffectLifecycle.Started, returned.State);
-        Assert.Equal(lease.RowVersion + 1, returned.RowVersion);
-        // A lease-retaining transition must not clear the lease in the projection either, or the
-        // next compare-and-set sees an owner the database does not hold.
-        Assert.Equal("worker-a", returned.LeaseOwner);
-        AssertMatches(observed, returned);
-    }
-
-    [Fact]
-    public async Task Lease_clearing_lifecycle_append_returns_what_an_independent_read_observes()
+    public async Task Lifecycle_append_returns_what_an_independent_read_observes()
     {
         Repository repository = CreateRepository();
         var store = new CanonicalEffectWorkStore(repository);
         EffectIntent intent = Intent(Causality(), order: 0, key: "unknown");
         await store.AppendPlanAsync([intent], CancellationToken.None);
         EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
-        EffectLease lease = (await store.TryLeaseAsync(
-            intent.Identity, planned.RowVersion, "worker-a", DateTimeOffset.UtcNow,
-            TimeSpan.FromMinutes(1), CancellationToken.None))!;
-        EffectWorkItem started = await store.AppendLifecycleAsync(
-            intent.Identity, lease.RowVersion, EffectLifecycle.Started, "worker-a", "started",
-            [], DateTimeOffset.UtcNow, CancellationToken.None);
 
         EffectWorkItem returned = await store.AppendLifecycleAsync(
-            intent.Identity, started.RowVersion, EffectLifecycle.Unknown, "worker-a",
+            intent.Identity, planned.RowVersion, EffectLifecycle.Unknown, "worker-a",
             "Effect execution ended without a trustworthy observation.", ["IOException", "socket closed"],
             DateTimeOffset.UtcNow, CancellationToken.None);
 
         EffectWorkItem observed = (await new CanonicalEffectWorkStore(repository)
             .ReadAsync(intent.Identity, CancellationToken.None))!;
         Assert.Equal(EffectLifecycle.Unknown, returned.State);
-        Assert.Equal(started.RowVersion + 1, returned.RowVersion);
+        Assert.Equal(planned.RowVersion + 1, returned.RowVersion);
         Assert.Null(returned.LeaseOwner);
         Assert.Null(returned.LeaseExpiresAt);
         AssertMatches(observed, returned);
@@ -76,24 +44,18 @@ public sealed class DurableEffectSettlementReturnTests
         EffectIntent intent = Intent(Causality(), order: 0, key: "settled");
         await store.AppendPlanAsync([intent], CancellationToken.None);
         EffectWorkItem planned = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
-        EffectLease lease = (await store.TryLeaseAsync(
-            intent.Identity, planned.RowVersion, "worker-a", DateTimeOffset.UtcNow,
-            TimeSpan.FromMinutes(1), CancellationToken.None))!;
-        EffectWorkItem started = await store.AppendLifecycleAsync(
-            intent.Identity, lease.RowVersion, EffectLifecycle.Started, "worker-a", "started",
-            [], DateTimeOffset.UtcNow, CancellationToken.None);
         var receipt = new EffectReceipt(
             EffectReceiptIdentity.New(), intent.Identity, intent.Executor, intent.ExecutorVersion,
             intent.Target.Identity, "absent", "present", true, "sha256:abc", ["file:written"],
             DateTimeOffset.UtcNow);
 
         EffectWorkItem returned = await store.RecordReceiptAsync(
-            intent.Identity, started.RowVersion, receipt, "worker-a", CancellationToken.None);
+            intent.Identity, planned.RowVersion, receipt, "worker-a", CancellationToken.None);
 
         EffectWorkItem observed = (await new CanonicalEffectWorkStore(repository)
             .ReadAsync(intent.Identity, CancellationToken.None))!;
         Assert.Equal(EffectLifecycle.Succeeded, returned.State);
-        Assert.Equal(started.RowVersion + 1, returned.RowVersion);
+        Assert.Equal(planned.RowVersion + 1, returned.RowVersion);
         Assert.Null(returned.LeaseOwner);
         Assert.Null(returned.LeaseExpiresAt);
         Assert.Equal(receipt.Identity, returned.Receipt!.Identity);
@@ -115,10 +77,9 @@ public sealed class DurableEffectSettlementReturnTests
 
         Assert.Equal(2, result.Succeeded);
         Assert.Equal([first.Identity, second.Identity], executor.Executed);
-        EffectLifecycle[] expected =
-        [
-            EffectLifecycle.Planned, EffectLifecycle.Leased, EffectLifecycle.Started, EffectLifecycle.Succeeded,
-        ];
+        // One durable write per settled effect: the plan append, then the terminal receipt. No
+        // lease event, no start event.
+        EffectLifecycle[] expected = [EffectLifecycle.Planned, EffectLifecycle.Succeeded];
         foreach (EffectIntent intent in new[] { first, second })
         {
             EffectWorkItem settled = (await store.ReadAsync(intent.Identity, CancellationToken.None))!;
@@ -130,7 +91,7 @@ public sealed class DurableEffectSettlementReturnTests
     }
 
     [Fact]
-    public async Task Settling_an_effect_stays_within_the_three_connection_open_budget()
+    public async Task Settling_an_effect_costs_one_connection_open_beyond_the_shared_scan()
     {
         Repository repository = CreateRepository();
         CanonicalCausalContext causality = Causality();
@@ -145,12 +106,12 @@ public sealed class DurableEffectSettlementReturnTests
         EffectWorkerResult result = await Worker(counting, new RecordingExecutor()).RunOnceAsync(CancellationToken.None);
 
         Assert.Equal(10, result.Succeeded);
-        // Ten independent effects in one pass. Directly measured call shape: one scan, then lease +
-        // start + receipt per effect, and no plan read because nothing has a dependency.
+        // Ten INDEPENDENT effects in one pass. Directly measured call shape: one shared scan, then
+        // one receipt write per effect. No plan read, because nothing here has a dependency; a
+        // dependent effect would additionally pay one DependencyGate open per dependency.
         Assert.Equal(1, counting.Scans);
         Assert.Equal(0, counting.Reads);
-        Assert.Equal(10, counting.Leases);
-        Assert.Equal(10, counting.LifecycleAppends);
+        Assert.Equal(0, counting.LifecycleAppends);
         Assert.Equal(10, counting.ReceiptRecords);
         Assert.Equal(0, counting.PlanReads);
         // Counted, not modelled: the store reports every connection it opens, attributed to the
@@ -158,14 +119,13 @@ public sealed class DurableEffectSettlementReturnTests
         // open inside any settlement write raises the tally without anyone editing this file.
         Assert.Equal(0, counting.UnattributedOpens);
         // Total INCLUDING the one shared scan open.
-        Assert.Equal(31, counting.ConnectionOpens);
+        Assert.Equal(11, counting.ConnectionOpens);
         // Per settled independent effect, EXCLUDING the shared scan open.
-        Assert.Equal(3, (counting.ConnectionOpens - counting.ScanOpens) / result.Succeeded);
-        // The three, decomposed by the step that opened them.
+        Assert.Equal(1, (counting.ConnectionOpens - counting.ScanOpens) / result.Succeeded);
+        // The one, decomposed by the step that opened it.
         Assert.Equal(1, counting.ScanOpens);
-        Assert.Equal(10, counting.LeaseOpens);
         Assert.Equal(0, counting.ReadOpens);
-        Assert.Equal(10, counting.LifecycleAppendOpens);
+        Assert.Equal(0, counting.LifecycleAppendOpens);
         Assert.Equal(10, counting.ReceiptRecordOpens);
         Assert.Equal(0, counting.PlanReadOpens);
         Assert.Equal(0, counting.DependencyGateOpens);
@@ -236,8 +196,7 @@ public sealed class DurableEffectSettlementReturnTests
         "settlement-return-worker",
         store,
         new EffectExecutorRegistry([executor]),
-        new UnusedReconciler(),
-        TimeSpan.FromMinutes(1));
+        new UnusedReconciler());
 
     private static CanonicalCausalContext Causality() => new(
         WorkspaceIdentity.New(), RunIdentity.New(), WorkflowInstanceIdentity.New(),
@@ -299,14 +258,13 @@ public sealed class DurableEffectSettlementReturnTests
 
         private enum StoreCall
         {
-            None, Scan, Read, PlanRead, DependencyGate, Lease, LifecycleAppend, ReceiptRecord, Reconciliation,
+            None, Scan, Read, PlanRead, DependencyGate, LifecycleAppend, ReceiptRecord, Reconciliation,
         }
 
         public int Scans { get; private set; }
         public int Reads { get; private set; }
         public int PlanReads { get; private set; }
         public int DependencyGates { get; private set; }
-        public int Leases { get; private set; }
         public int LifecycleAppends { get; private set; }
         public int ReceiptRecords { get; private set; }
         public int Reconciliations { get; private set; }
@@ -317,7 +275,6 @@ public sealed class DurableEffectSettlementReturnTests
         public int ReadOpens => _opens[(int)StoreCall.Read];
         public int PlanReadOpens => _opens[(int)StoreCall.PlanRead];
         public int DependencyGateOpens => _opens[(int)StoreCall.DependencyGate];
-        public int LeaseOpens => _opens[(int)StoreCall.Lease];
         public int LifecycleAppendOpens => _opens[(int)StoreCall.LifecycleAppend];
         public int ReceiptRecordOpens => _opens[(int)StoreCall.ReceiptRecord];
         public int ReconciliationOpens => _opens[(int)StoreCall.Reconciliation];
@@ -354,16 +311,6 @@ public sealed class DurableEffectSettlementReturnTests
             return AttributeAsync(
                 StoreCall.DependencyGate,
                 () => _inner.DependencySatisfiedAsync(candidate, dependency, cancellationToken));
-        }
-
-        public Task<EffectLease?> TryLeaseAsync(
-            EffectIntentIdentity identity, long expectedRowVersion, string worker, DateTimeOffset now,
-            TimeSpan duration, CancellationToken cancellationToken)
-        {
-            Leases++;
-            return AttributeAsync(
-                StoreCall.Lease,
-                () => _inner.TryLeaseAsync(identity, expectedRowVersion, worker, now, duration, cancellationToken));
         }
 
         public Task<EffectWorkItem> AppendLifecycleAsync(

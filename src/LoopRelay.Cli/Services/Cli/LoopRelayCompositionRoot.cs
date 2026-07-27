@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -548,7 +548,6 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
                  liveHandoffRotationExecutor, liveDecisionRetirementExecutor,
                  operationalDeltaRotationExecutor]),
             effectReconciler,
-            TimeSpan.FromMinutes(2),
             _recoveryCases: recoveryCases);
         var effectCoordinator = new TransitionEffectCoordinator(
             effectWorkStore,

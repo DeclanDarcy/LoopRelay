@@ -1,4 +1,4 @@
-using LoopRelay.Core.Models.Identity;
+﻿using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Effects;
@@ -159,15 +159,9 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         var settlement = new CanonicalEffectPlanSettlementStore(repository);
         Assert.False(await settlement.TrySettleAsync(causality.TransitionRun, CancellationToken.None));
         var effectStore = new CanonicalEffectWorkStore(repository);
-        EffectLease lease = (await effectStore.TryLeaseAsync(
-            work.Intent.Identity, work.RowVersion, "test-worker", DateTimeOffset.UtcNow,
-            TimeSpan.FromMinutes(1), CancellationToken.None))!;
-        EffectWorkItem started = await effectStore.AppendLifecycleAsync(
-            work.Intent.Identity, lease.RowVersion, EffectLifecycle.Started, "test-worker",
-            "started", [], DateTimeOffset.UtcNow, CancellationToken.None);
         await effectStore.RecordReceiptAsync(
             work.Intent.Identity,
-            started.RowVersion,
+            work.RowVersion,
             new EffectReceipt(
                 EffectReceiptIdentity.New(), work.Intent.Identity, work.Intent.Executor,
                 work.Intent.ExecutorVersion, work.Intent.Target.Identity, "before", "after",

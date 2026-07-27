@@ -4,7 +4,7 @@ namespace LoopRelay.Orchestration.Effects;
 
 public sealed record EffectWorkerResult(
     int Discovered,
-    int Leased,
+    int Dispatched,
     int Succeeded,
     int Pending,
     int RecoveryRequired,
@@ -19,7 +19,6 @@ public sealed class EffectWorker(
     IEffectWorkStore _store,
     IEffectExecutorRegistry _executors,
     IEffectReconciler _reconciler,
-    TimeSpan _leaseDuration,
     int _scanLimit = 128,
     ICanonicalRecoveryCaseRecorder? _recoveryCases = null)
 {
@@ -32,7 +31,7 @@ public sealed class EffectWorker(
         IReadOnlyList<EffectScanRow> discovered = await _store.ScanUnsettledAsync(_scanLimit, now, cancellationToken, only);
         var settled = new HashSet<EffectIntentIdentity>();
         var unsettled = new List<EffectIntentIdentity>();
-        int leased = 0;
+        int dispatched = 0;
         int succeeded = 0;
         int pending = 0;
         int recovery = 0;
@@ -58,25 +57,9 @@ public sealed class EffectWorker(
                 continue;
             }
 
-            EffectLease? lease = await _store.TryLeaseAsync(
-                item.Intent.Identity,
-                item.RowVersion,
-                _workerIdentity,
-                now,
-                _leaseDuration,
-                cancellationToken);
-            if (lease is null)
+            if (item.State is EffectLifecycle.Unknown or EffectLifecycle.Reconciling)
             {
-                continue;
-            }
-
-            leased++;
-            // The lease already carries the intent and the row version its own guarded UPDATE
-            // produced, so nothing below re-reads the row it just wrote.
-            EffectLifecycle previous = lease.PreviousState;
-            if (previous is EffectLifecycle.Started or EffectLifecycle.Unknown or EffectLifecycle.Reconciling)
-            {
-                EffectWorkItem reconciled = await ReconcileAsync(lease.Intent, lease.RowVersion, cancellationToken);
+                EffectWorkItem reconciled = await ReconcileAsync(item.Intent, item.RowVersion, cancellationToken);
                 if (reconciled.State == EffectLifecycle.Succeeded)
                 {
                     settled.Add(reconciled.Intent.Identity);
@@ -94,22 +77,17 @@ public sealed class EffectWorker(
                 continue;
             }
 
-            if (previous is not (EffectLifecycle.Planned or EffectLifecycle.Pending or EffectLifecycle.RetryAuthorized or EffectLifecycle.Leased))
+            if (item.State is not (EffectLifecycle.Planned or EffectLifecycle.Pending or EffectLifecycle.RetryAuthorized))
             {
-                unsettled.Add(lease.Intent.Identity);
+                unsettled.Add(item.Intent.Identity);
                 recovery++;
                 continue;
             }
 
-            EffectWorkItem current = await _store.AppendLifecycleAsync(
-                lease.Intent.Identity,
-                lease.RowVersion,
-                EffectLifecycle.Started,
-                _workerIdentity,
-                "Outward effect execution started.",
-                [],
-                DateTimeOffset.UtcNow,
-                CancellationToken.None);
+            // No claim and no start marker. Every executor is idempotent, so a crash between here
+            // and the terminal write leaves a row that is simply re-executed on the next pass.
+            dispatched++;
+            EffectWorkItem current = new(item.Intent, item.State, item.RowVersion, null, null, 0, null, []);
             try
             {
                 IEffectExecutor executor = _executors.Resolve(current.Intent.Executor, current.Intent.ExecutorVersion);
@@ -167,7 +145,7 @@ public sealed class EffectWorker(
             }
         }
 
-        return new EffectWorkerResult(discovered.Count, leased, succeeded, pending, recovery, unsettled);
+        return new EffectWorkerResult(discovered.Count, dispatched, succeeded, pending, recovery, unsettled);
     }
 
     private async Task RecordRecoveryAsync(
