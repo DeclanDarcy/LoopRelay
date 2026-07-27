@@ -64,7 +64,7 @@ namespace LoopRelay.Cli.Tests.Services.Cli;
 //      4.9s Execute_implementation_rejects_provider_completion_without_implementation_progress
 //      3.4s Plan_adversarial_review_context_starts_read_only_prompt_with_plan_and_projection_products
 //      2.0s EvalRoadmap_milestone_deep_dive_stops_on_empty_active_epic_context
-//      0.0s (x12) all remaining zero-duration guard/retirement/policy checks -- free to place
+//      0.0s (x13 methods / 16 cases) all remaining zero-duration guard/retirement/policy checks -- free to place
 //           anywhere; grouped here because this class is already guard/invariant-themed:
 //           Execute_entry_rejects_milestone_cardinality_that_conflicts_with_strategic_context,
 //           Composition_exposes_one_resolved_versioned_policy_for_the_invocation,
