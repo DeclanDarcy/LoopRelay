@@ -12,9 +12,11 @@
 
 - Anchor evidence: the audit under `test-audit/` at revision `9285dc8c`. **Line numbers, per-family test lists, and call-site counts quoted there must be re-derived before editing — never trusted** (they drift, and agent-recorded counts have a known failure rate in this repo).
 - No CI exists and none is added. All validation is local `dotnet test`. No new tracking artifacts, dashboards, or governance files — measurement outputs go to git-ignored `.tmp/test-perf/`.
-- Test moves must be behavior-identical: total executed cases stay **1,535**; only outcome changes allowed are the canary repair (Task 1) and Skip reporting (Task 13).
+- **Deleting tests that add no value is wanted, not merely tolerated** (owner decision, 2026-07-27). Where a task finds an assertion that is compile-enforced, duplicated by a stricter owner elsewhere, or otherwise buys nothing, delete it and name the deletion in the commit message. Do not preserve a case count for its own sake.
+- The one place case count *is* load-bearing is the **mechanical splits (Tasks 4 and 5)**: those move tests verbatim between classes, so a count change there means a test was accidentally dropped in the move, not a judgment call. Check parity there and diff the method lists if it moves.
+- The suite total of **1,535** quoted throughout this plan is an unverified claim. Task 1 records the real observed number; compare against that, not against 1,535.
 - Timing has ±25–30% run-to-run variance: every before/after comparison uses the **median of 3 runs**, same machine, no other heavy processes.
-- Do not change production durability semantics (WAL/pooling — deferred to ORCH-3; likely superseded by the event-sourced storage direction). Do not attempt the runner-vs-composition coverage consolidation (audit rank 9) in this plan — deferred until post-split data shows it still pays.
+- Do not change production durability semantics (WAL/pooling — deferred to ORCH-3). Note: event-sourced storage is a **potential future spike, not scheduled work** (owner, 2026-07-27), so nothing in this plan may be deferred on the grounds that it supersedes them. Do not attempt the runner-vs-composition coverage consolidation (audit rank 9) in this plan — deferred until post-split data shows it still pays.
 - Commit style per repo history: `test(<area>): …`, `fix(<area>): …`, `perf(<area>): …`.
 - Measurement command used throughout ("**timed run**"):
 
@@ -495,7 +497,7 @@ Apply to every env-gated early return in the two files (re-derive the full set b
 
 ## Phase 4 (optional, production-scoped) — Narrow the Deep verification default
 
-Only start after Phase 2's measurement, and skip entirely if the event-sourced storage migration is scheduled — it may moot this. Finding: [deep-verification-default-on-routine-observations.md](test-audit/findings/deep-verification-default-on-routine-observations.md); target set by the repo's own M3 analysis.
+**Gate resolved: this phase is IN SCOPE** (owner, 2026-07-27 — event-sourced storage is a potential future spike, not scheduled, so it moots nothing). Still start only after Phase 2's measurement. This is the only task in the plan that touches production code. Finding: [deep-verification-default-on-routine-observations.md](test-audit/findings/deep-verification-default-on-routine-observations.md); target set by the repo's own M3 analysis.
 
 ### Task 16: Route routine observations through the stamped/light tier
 
