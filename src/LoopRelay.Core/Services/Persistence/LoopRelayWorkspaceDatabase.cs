@@ -304,6 +304,23 @@ public static class LoopRelayWorkspaceDatabase
             [
                 ShapeRequirement.Column("canonical_recovery_action_events", "scope_id", "text"),
                 ShapeRequirement.Index("idx_recovery_action_events_scope"),
+                // The loop-history convergence backstop. Registered for exactly the reason its
+                // sibling `idx_loop_history_history_id` is registered (in `Merge4V9IndexNames`,
+                // which flows into this chain): an index that exists only in `SchemaV9Sql` and in
+                // no `ShapeRequirement` list is invisible to the shape contract, so a database
+                // already stamped complete keeps classifying complete, takes the zero-transaction
+                // structurally-complete branch, never re-runs `SchemaV9Sql`, and stays physically
+                // without the constraint while reporting itself healthy. Registration is what makes
+                // the backstop reachable rather than merely declared.
+                //
+                // Registered at v16 rather than beside its sibling in `Merge4V9IndexNames` even
+                // though both are created by the same `SchemaV9Sql` block: the index was introduced
+                // long after v9, so declaring it a v9-era requirement would retroactively classify
+                // every genuine v9..v15 database - none of which can have it - as corrupt and block
+                // the very migration that creates it. Declaring it at v16 leaves each earlier
+                // contract satisfiable, and `SchemaV9Sql` runs unconditionally inside the migration
+                // transaction, so the index lands on every path that reaches v16.
+                ShapeRequirement.Index("idx_loop_history_kind_content_hash"),
             ])
             .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
             .ToArray();
