@@ -10,6 +10,7 @@ public interface ITransitionEffectIntentExecutor
     Task<EffectExecutionRecord> ExecuteAsync(
         CanonicalCausalContext causality,
         EffectIdentity effect,
+        EffectParent? parent,
         CancellationToken cancellationToken);
 }
 
@@ -47,6 +48,7 @@ public sealed class TransitionEffectExecutorAdapter : LoopRelay.Orchestration.Ef
         EffectExecutionRecord result = await _executor.ExecuteAsync(
             intent.Causality,
             new EffectIdentity(intent.Target.Identity),
+            new EffectParent(intent.Identity, intent.Order),
             cancellationToken);
         EffectLifecycle state = result.Status switch
         {

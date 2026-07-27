@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Services;
@@ -614,8 +615,9 @@ public interface IProductValidator
 }
 
 // Identity context for effect execution: effects that append history facts (for example loop
-// history rotation) carry the causal spine ids of the transition that ran them.
-public sealed record EffectExecutionContext(CanonicalCausalContext Causality);
+// history rotation) carry the causal spine ids of the transition that ran them, and the effect
+// intent that is running, so nested planners order and depend on it without a database lookup.
+public sealed record EffectExecutionContext(CanonicalCausalContext Causality, EffectParent? Parent = null);
 
 public interface IEffectExecutor
 {

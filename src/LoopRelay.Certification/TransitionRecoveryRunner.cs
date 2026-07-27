@@ -11,6 +11,7 @@ using LoopRelay.Agents.Services.Usage;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Chaining;
+using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Recovery;
 using LoopRelay.Orchestration.Resolution;
@@ -639,6 +640,7 @@ public sealed class TransitionRecoveryRunner(ICertificationFailureDiagnoser? fai
         public async Task<EffectExecutionRecord> ExecuteAsync(
             CanonicalCausalContext causality,
             EffectIdentity effect,
+            EffectParent? parent,
             CancellationToken token)
         {
             Calls++;

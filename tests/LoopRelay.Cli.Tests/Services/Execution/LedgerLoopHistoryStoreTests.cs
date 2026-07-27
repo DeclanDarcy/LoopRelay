@@ -75,6 +75,52 @@ public sealed class LedgerLoopHistoryStoreTests
             await File.ReadAllTextAsync(Path.Combine(harness.Root, ".agents", "handoffs", "handoff.0001.md")));
     }
 
+    /// <summary>
+    /// The history-projection child is ordered after, and made to depend on, the effect that is
+    /// actually executing the append. That effect is handed in on the request; the store no longer
+    /// rediscovers it by asking which row is <c>Started</c>. The parent row here is deliberately left
+    /// <c>Planned</c>, so a store that went back to the database would link nothing.
+    /// </summary>
+    [Fact]
+    public async Task History_projection_depends_on_the_executing_effect_passed_on_the_request()
+    {
+        Harness harness = await NewAsync();
+        var workStore = new CanonicalEffectWorkStore(harness.Repository);
+        EffectIntent rotation = RotationIntent(harness.Causality, order: 3);
+        await workStore.AppendPlanAsync([rotation], CancellationToken.None);
+
+        await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Handoff,
+            "handoff",
+            harness.Causality,
+            parent: new EffectParent(rotation.Identity, rotation.Order)));
+
+        IReadOnlyList<EffectWorkItem> plan = await workStore.ReadPlanAsync(
+            harness.Causality.TransitionRun, CancellationToken.None);
+        EffectWorkItem projection = Assert.Single(
+            plan, item => item.Intent.SemanticOperationKey == "history:materialize:Handoff");
+        Assert.Equal([rotation.Identity], projection.Intent.Dependencies);
+        Assert.Equal(4, projection.Intent.Order);
+    }
+
+    private static EffectIntent RotationIntent(CanonicalCausalContext causality, int order) => new(
+        EffectIntentIdentity.New(),
+        causality,
+        "loop-artifact:RotateLiveHandoff",
+        WorkspaceEffectExecutorKeys.RotateLiveHandoff,
+        "1",
+        new EffectTargetDescriptor("LoopArtifact", ".agents/handoff.md", "{}"),
+        "{}",
+        new string('b', 64),
+        order,
+        [],
+        EffectRequiredness.BlockingLocal,
+        new EffectCondition("none", "{}"),
+        new EffectCondition("none", "{}"),
+        "loop-history-and-source-observation",
+        $"loop-artifact:RotateLiveHandoff:{causality.TransitionRun.Value}",
+        DateTimeOffset.UtcNow);
+
     [Fact]
     public async Task Read_latest_roundtrips_canonical_causality_and_typed_evidence()
     {

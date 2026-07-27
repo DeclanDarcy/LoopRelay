@@ -281,6 +281,18 @@ public sealed record EffectLifecycleEvent(
     IReadOnlyList<string> Evidence,
     DateTimeOffset RecordedAt);
 
+/// <summary>
+/// The effect whose outward call is running right now, handed to nested planners so a child intent
+/// can be ordered after it and made to depend on it. This was previously rediscovered by querying
+/// for the row whose status is <c>Started</c>; the identity was already in hand at every one of
+/// those call sites, and round-tripping it through the database was the marker's last remaining job.
+/// <para>
+/// <c>null</c> means no effect is executing -- the planner is being driven directly rather than from
+/// inside an executor -- which is a legitimate state for loop-artifact rotation and history append.
+/// </para>
+/// </summary>
+public sealed record EffectParent(EffectIntentIdentity Identity, int Order);
+
 public sealed record EffectWorkItem(
     EffectIntent Intent,
     EffectLifecycle State,

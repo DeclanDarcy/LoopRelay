@@ -95,7 +95,7 @@ public sealed class CanonicalFeatureEffectExecutorProductsReadTests
     }
 
     /// <summary>
-    /// Drives <see cref="CanonicalFeatureEffectExecutor.ExecuteAsync(CanonicalCausalContext, EffectIdentity, CancellationToken)"/>
+    /// Drives <see cref="CanonicalFeatureEffectExecutor.ExecuteAsync(CanonicalCausalContext, EffectIdentity, EffectParent?, CancellationToken)"/>
     /// through the real durable effect ledger, the same way production code reaches it: a
     /// "canonical-transition-effect:{effect}" work item is planned and the standard
     /// <see cref="EffectWorker"/> leases, starts, and executes it. Returns the content of the

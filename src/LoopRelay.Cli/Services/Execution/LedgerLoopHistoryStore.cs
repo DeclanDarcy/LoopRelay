@@ -390,8 +390,7 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
         DateTimeOffset plannedAt,
         CancellationToken cancellationToken)
     {
-        (EffectIntentIdentity Identity, int Order)? parent = await FindStartedParentAsync(
-            connection, transaction, request.Causality, cancellationToken);
+        EffectParent? parent = request.Parent;
         var payload = new FilesystemWriteEffectPayload(relativePath, request.Content);
         string payloadJson = JsonSerializer.Serialize(payload, Json);
         var intent = new EffectIntent(
@@ -407,7 +406,7 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
             payloadJson,
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson))),
             parent?.Order + 1 ?? 0,
-            parent is null ? [] : [parent.Value.Identity],
+            parent is null ? [] : [parent.Identity],
             EffectRequiredness.BlockingLocal,
             new EffectCondition("history-fact-durable", JsonSerializer.Serialize(new { historyId = historyIdentity.Value }, Json)),
             new EffectCondition("content-hash", JsonSerializer.Serialize(new { relativePath, contentHash }, Json)),
@@ -465,28 +464,6 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
             ("$postcondition", JsonSerializer.Serialize(intent.Postcondition, Json)),
             ("$reconciliation", intent.ReconciliationPolicy),
             ("$evidence", JsonSerializer.Serialize(new[] { historyIdentity.Value, relativePath }, Json)));
-    }
-
-    private static async Task<(EffectIntentIdentity Identity, int Order)?> FindStartedParentAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        CanonicalCausalContext causality,
-        CancellationToken cancellationToken)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = """
-            SELECT effect_intent_id, effect_order
-            FROM canonical_effect_intents
-            WHERE transition_run_id = $transition AND attempt_id = $attempt AND status = 'Started'
-            ORDER BY effect_order DESC LIMIT 1;
-            """;
-        command.Parameters.AddWithValue("$transition", causality.TransitionRun.Value);
-        command.Parameters.AddWithValue("$attempt", causality.Attempt.Value);
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken)
-            ? (new EffectIntentIdentity(reader.GetString(0)), reader.GetInt32(1))
-            : null;
     }
 
     private static async Task<HistoryEvidenceAttachments> ReadEvidenceAsync(

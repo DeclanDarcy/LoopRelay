@@ -15,23 +15,15 @@ internal sealed class DurableFilesystemWriteEffectPlanner(Repository _repository
 
     public async Task ScheduleAsync(
         CanonicalCausalContext causality,
+        EffectParent parent,
         string relativePath,
         string content,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(parent);
         var store = new CanonicalEffectWorkStore(_repository);
-        IReadOnlyList<EffectWorkItem> plan = await store.ReadPlanAsync(
-            causality.TransitionRun, cancellationToken);
-        EffectWorkItem parent = plan
-            .Where(item => item.State == EffectLifecycle.Started &&
-                item.Intent.Causality.Attempt == causality.Attempt &&
-                item.Intent.Executor.Value.StartsWith("canonical-transition-effect:", StringComparison.Ordinal))
-            .OrderByDescending(item => item.Intent.Order)
-            .FirstOrDefault()
-            ?? throw new InvalidOperationException(
-                "Filesystem writes may only be scheduled by a started canonical feature effect.");
         var payload = new FilesystemWriteEffectPayload(relativePath, content);
         string payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
         string payloadHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson)));
@@ -45,13 +37,13 @@ internal sealed class DurableFilesystemWriteEffectPlanner(Repository _repository
                 JsonSerializer.Serialize(new { relativePath }, JsonOptions)),
             payloadJson,
             payloadHash,
-            parent.Intent.Order + 1,
-            [parent.Intent.Identity],
+            parent.Order + 1,
+            [parent.Identity],
             EffectRequiredness.BlockingLocal,
             new EffectCondition("workspace-contained", "{}"),
             new EffectCondition("content-hash", JsonSerializer.Serialize(new { payloadHash }, JsonOptions)),
             "independent-content-hash",
-            $"filesystem-write:{parent.Intent.Identity.Value}:{relativePath}:{payloadHash}",
+            $"filesystem-write:{parent.Identity.Value}:{relativePath}:{payloadHash}",
             DateTimeOffset.UtcNow);
         await store.AppendPlanAsync([intent], cancellationToken);
     }
