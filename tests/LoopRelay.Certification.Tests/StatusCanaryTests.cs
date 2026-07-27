@@ -141,8 +141,10 @@ public sealed class StatusCanaryTests
 
         Assert.Contains(ledger.Obligations, item => item.Dimension == "workflow" && item.Identity == "Execute");
         Assert.Contains(ledger.Obligations, item => item.Dimension == "transition" && item.Identity.Contains("Execute/ExecuteImplementationSlice", StringComparison.Ordinal));
-        Assert.Contains(ledger.Obligations, item => item.Dimension == "known-risk");
-        Assert.NotEmpty(ledger.Uncovered);
+        Assert.Contains(ledger.Obligations, item =>
+            item.Dimension == "persistence-schema" && item.Identity == "LoopRelayWorkspaceDatabase");
+        Assert.Contains(ledger.Uncovered, item =>
+            item.Dimension == "oracle" && item.Identity == "status-exact-structural-invariant");
     }
 
     private static string FindWorkspaceRoot()
