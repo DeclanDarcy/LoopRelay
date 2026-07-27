@@ -60,7 +60,7 @@ internal sealed class DurableCompletedEpicArchiveService(
                 ?? throw new InvalidOperationException("Completion archive intent disappeared.");
             if (intent.State == EffectLifecycle.Succeeded) break;
         }
-        if (intent.State != EffectLifecycle.Succeeded || intent.Receipt is not { PostconditionSatisfied: true })
+        if (intent.State != EffectLifecycle.Succeeded)
             throw new InvalidOperationException(
                 $"Completion archive did not produce a verified receipt; current state is {intent.State}.");
         if (executor.Result is not null) return executor.Result;

@@ -32,7 +32,7 @@ public sealed class EffectWorkerTests
     }
 
     [Fact]
-    public async Task DependencyOrderPreventsDependentOutwardWorkUntilReceiptExists()
+    public async Task DependencyOrderPreventsDependentOutwardWorkUntilDependencySucceeds()
     {
         EffectIntent first = Intent(order: 0);
         EffectIntent second = Intent(order: 1, dependencies: [first.Identity]);

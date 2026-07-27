@@ -166,8 +166,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         command.CommandText = $"""
             SELECT definition_json, status, row_version
             FROM canonical_effect_intents
-            WHERE terminal_receipt_id IS NULL
-              AND status IN ('Planned', 'Pending', 'Started', 'Unknown', 'Reconciling', 'RetryAuthorized', 'Leased')
+            WHERE status IN ('Planned', 'Pending', 'Started', 'Unknown', 'Reconciling', 'RetryAuthorized', 'Leased')
               AND (lease_owner IS NULL OR lease_expires_at IS NULL OR lease_expires_at <= $now){restriction}
             ORDER BY effect_order, planned_at, effect_intent_id
             LIMIT $limit;
@@ -247,8 +246,8 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
     /// Answers one dependency's gate from columns alone. <c>definition_json</c> is never selected:
     /// it is the serialised intent, and for filesystem-write effects that document embeds the file
     /// content being written, so a yes/no question must not pay for it. Every value the gate needs
-    /// — lifecycle status, terminal receipt, effect order, planned time, dependency list, owning
-    /// transition run — is a first-class column written identically by both writers into
+    /// — lifecycle status, effect order, planned time, dependency list, owning transition run — is
+    /// a first-class column written identically by both writers into
     /// <c>canonical_effect_intents</c> (this store's <c>AppendPlanAsync</c> and
     /// <c>CanonicalWorkflowPersistenceStore.CommitTransitionAsync</c>).
     /// <para>
@@ -268,13 +267,8 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         {
             settled.CommandText = """
                 SELECT dependency.transition_run_id,
-                       CASE WHEN dependency.status = 'Succeeded'
-                                  AND receipt.receipt_id IS NOT NULL
-                                  AND receipt.postcondition_satisfied = 1
-                            THEN 1 ELSE 0 END
+                       CASE WHEN dependency.status = 'Succeeded' THEN 1 ELSE 0 END
                 FROM canonical_effect_intents AS dependency
-                LEFT JOIN canonical_effect_receipts AS receipt
-                  ON receipt.receipt_id = dependency.terminal_receipt_id
                 WHERE dependency.effect_intent_id = $dependency;
                 """;
             settled.Parameters.AddWithValue("$dependency", dependency.Value);
@@ -286,7 +280,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
 
         // The durable barrier, as `EffectWorker.DependenciesSettledAsync` describes it: a sibling
         // ordered at or before the candidate, planned after it, sharing this dependency and not yet
-        // settled, holds the candidate back even though the dependency's own receipt is present.
+        // settled, holds the candidate back even though the dependency itself has succeeded.
         // This must stay a question asked of the database. Answering it from anything already in
         // memory — a plan read earlier in the pass, a previous dependency's answer — is what lets a
         // pre-planned publication effect overtake the child mutation it is meant to publish.
@@ -294,17 +288,13 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         barrier.CommandText = """
             SELECT sibling.planned_at
             FROM canonical_effect_intents AS sibling
-            LEFT JOIN canonical_effect_receipts AS receipt
-              ON receipt.receipt_id = sibling.terminal_receipt_id
             WHERE sibling.transition_run_id = $transition
               AND sibling.effect_intent_id <> $candidate
               AND sibling.effect_order <= $order
               AND EXISTS (
                   SELECT 1 FROM json_each(sibling.dependencies_json) AS element
                   WHERE json_extract(element.value, '$.value') = $dependency)
-              AND NOT (sibling.status = 'Succeeded'
-                       AND receipt.receipt_id IS NOT NULL
-                       AND receipt.postcondition_satisfied = 1);
+              AND sibling.status <> 'Succeeded';
             """;
         Add(barrier, ("$transition", transitionRun), ("$candidate", candidate.Identity.Value),
             ("$order", candidate.Order), ("$dependency", dependency.Value));
@@ -376,7 +366,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
             SET status = 'Leased', lease_owner = $worker, lease_expires_at = $expires,
                 row_version = row_version + 1, attempt_count = attempt_count + 1
             WHERE effect_intent_id = $intent AND row_version = $version
-              AND terminal_receipt_id IS NULL
+              AND status <> 'Succeeded'
               AND (lease_owner IS NULL OR lease_expires_at IS NULL OR lease_expires_at <= $now);
             """;
         Add(update, ("$worker", worker), ("$expires", Format(expires)), ("$intent", identity.Value),
@@ -482,7 +472,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
                 UPDATE canonical_effect_intents
                 SET status = 'Succeeded', terminal_receipt_id = $receipt, row_version = row_version + 1,
                     lease_owner = NULL, lease_expires_at = NULL, completed_at = $recorded
-                WHERE effect_intent_id = $intent AND row_version = $version AND terminal_receipt_id IS NULL;
+                WHERE effect_intent_id = $intent AND row_version = $version AND status <> 'Succeeded';
                 """;
             Add(update, ("$receipt", receipt.Identity.Value), ("$recorded", Format(receipt.RecordedAt)),
                 ("$intent", identity.Value), ("$version", expectedRowVersion));
@@ -856,13 +846,8 @@ public sealed class CanonicalEffectPlanSettlementStore(
         readiness.Transaction = transaction;
         readiness.CommandText = """
             SELECT COUNT(*),
-                   SUM(CASE WHEN intent.status = 'Succeeded'
-                                  AND receipt.receipt_id IS NOT NULL
-                                  AND receipt.postcondition_satisfied = 1
-                            THEN 0 ELSE 1 END)
+                   SUM(CASE WHEN intent.status = 'Succeeded' THEN 0 ELSE 1 END)
             FROM canonical_effect_intents AS intent
-            LEFT JOIN canonical_effect_receipts AS receipt
-              ON receipt.receipt_id = intent.terminal_receipt_id
             WHERE intent.transition_run_id = $transition;
             """;
         readiness.Parameters.AddWithValue("$transition", transitionRun.Value);

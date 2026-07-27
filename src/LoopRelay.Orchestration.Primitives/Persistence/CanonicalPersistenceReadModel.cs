@@ -94,8 +94,7 @@ public sealed class CanonicalPersistenceProjection : ICanonicalPersistenceProjec
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText = """
                 SELECT definition_json,status FROM canonical_effect_intents
-                WHERE terminal_receipt_id IS NULL
-                  AND status IN ('Planned','Pending','Started','Unknown','Reconciling','RetryAuthorized','Leased')
+                WHERE status IN ('Planned','Pending','Started','Unknown','Reconciling','RetryAuthorized','Leased')
                 ORDER BY effect_order,planned_at,effect_intent_id LIMIT 1024;
                 """;
             var result = new List<(EffectIntent, string)>();

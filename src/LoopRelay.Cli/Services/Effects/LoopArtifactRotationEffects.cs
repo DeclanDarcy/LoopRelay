@@ -146,7 +146,7 @@ internal sealed class DurableLoopArtifactEffectCoordinator(
         await worker.RunOnceAsync(cancellationToken, only: new HashSet<EffectIntentIdentity> { intent.Identity });
         EffectWorkItem rotation = await store.ReadAsync(intent.Identity, cancellationToken)
             ?? throw new InvalidOperationException("Loop-artifact rotation intent disappeared.");
-        if (rotation.State != EffectLifecycle.Succeeded || rotation.Receipt is not { PostconditionSatisfied: true })
+        if (rotation.State != EffectLifecycle.Succeeded)
         {
             throw new InvalidOperationException(
                 $"Operational-delta rotation did not produce a verified receipt; current state is {rotation.State}.");
