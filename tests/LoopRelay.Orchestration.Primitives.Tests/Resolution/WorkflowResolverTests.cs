@@ -1017,9 +1017,6 @@ public sealed class WorkflowResolverTests
             INSERT INTO roadmap_state (id, document_json, updated_at)
             VALUES (1, '{"SchemaVersion":"roadmap-state.v1"}', '2026-07-10T12:00:00.0000000Z');
 
-            INSERT INTO artifact_lifecycle (path_key, path, state, updated_at, notes)
-            VALUES ('agents-epic', '.agents/epic.md', 'Ready', '2026-07-10T12:00:00.0000000Z', 'legacy');
-
             INSERT INTO transition_journal (
                 correlation_id, event_name, recorded_at, from_state, to_state, transition,
                 projection_path, prompt_contract, input_hashes_json, output_paths_json,
@@ -1043,10 +1040,6 @@ public sealed class WorkflowResolverTests
             observation,
             "PreUnificationTransitionJournal:Sqlite",
             ".LoopRelay/persistence/looprelay.sqlite3:transition_journal");
-        AssertLifecycleRow(
-            observation,
-            "PreUnificationArtifactLifecycle:Sqlite",
-            ".LoopRelay/persistence/looprelay.sqlite3:artifact_lifecycle");
         Assert.Equal(before, after);
     }
 

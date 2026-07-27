@@ -3003,14 +3003,6 @@ public static class LoopRelayWorkspaceDatabase
             updated_at text not null
         );
 
-        CREATE TABLE IF NOT EXISTS artifact_lifecycle(
-            path_key text primary key,
-            path text not null,
-            state text not null,
-            updated_at text not null,
-            notes text not null
-        );
-
         CREATE TABLE IF NOT EXISTS transition_journal(
             event_order integer primary key autoincrement,
             correlation_id text not null,
@@ -3212,7 +3204,6 @@ public static class LoopRelayWorkspaceDatabase
             content_hash text not null
         );
 
-        CREATE INDEX IF NOT EXISTS idx_artifact_lifecycle_path_key ON artifact_lifecycle(path_key);
         CREATE INDEX IF NOT EXISTS idx_transition_journal_correlation_id ON transition_journal(correlation_id);
         CREATE INDEX IF NOT EXISTS idx_loop_history_kind_sequence_desc ON loop_history(kind, sequence desc);
         CREATE INDEX IF NOT EXISTS idx_execution_evidence_stem_sequence_desc ON execution_evidence(stem, sequence desc);

@@ -94,14 +94,16 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
     /// read or written by anything outside it. Asserting against a real fresh database - rather than
     /// against the requirement lists - is what makes this a proof: a `CREATE TABLE` that carries no
     /// <c>ShapeRequirement</c> (none of these did, beyond the two in the Merge4-v9 name list) would
-    /// otherwise be re-added without a single declaration changing.
+    /// otherwise be re-added without a single declaration changing. <c>artifact_lifecycle</c> belongs
+    /// here too: it was the third table of a pre-unification trio a resolver test seeds, but unlike
+    /// its two siblings nothing in <c>src/</c> ever reads it, so the test was trimmed to seed only the
+    /// two tables that still have a reader.
     /// <para>
     /// <see cref="TablesStillDeclaredDespiteHavingNoWriter"/> is the boundary of that claim. Each of
-    /// those five is also written by nothing, but each is still *read*: the schema-v10 and -v11
+    /// those four is also written by nothing, but each is still *read*: the schema-v10 and -v11
     /// migrations select from <c>canonical_effect_records</c> and <c>transition_recovery_plans</c>,
-    /// <c>SqliteCompletedEpicArchiveMaterializer</c> selects from <c>roadmap_state</c> and
-    /// <c>transition_journal</c>, and <c>artifact_lifecycle</c> is the third table of the same
-    /// pre-unification trio a resolver test seeds. Write-dead is not the same as dead.
+    /// and <c>SqliteCompletedEpicArchiveMaterializer</c> selects from <c>roadmap_state</c> and
+    /// <c>transition_journal</c>. Write-dead is not the same as dead.
     /// </para>
     /// </summary>
     [Fact]
@@ -142,7 +144,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        foreach (string index in (string[])["idx_projection_effects_status", "idx_split_family_children_child_path"])
+        foreach (string index in (string[])["idx_projection_effects_status", "idx_split_family_children_child_path", "idx_artifact_lifecycle_path_key"])
         {
             Assert.Null(await ScalarStringAsync(
                 connection,
@@ -164,6 +166,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         "projection_manifest_entries",
         "completed_epic_archives",
         "completed_epic_records",
+        "artifact_lifecycle",
     ];
 
     private static readonly string[] TablesStillDeclaredDespiteHavingNoWriter =
@@ -172,7 +175,6 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         "transition_recovery_plans",
         "roadmap_state",
         "transition_journal",
-        "artifact_lifecycle",
     ];
 
     [Fact]
