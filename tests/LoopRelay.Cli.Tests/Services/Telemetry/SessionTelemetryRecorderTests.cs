@@ -12,6 +12,7 @@ using Xunit;
 
 namespace LoopRelay.Cli.Tests.Services.Telemetry;
 
+[Xunit.Collection("CliProcessEnvironment")]
 public class SessionTelemetryRecorderTests : IDisposable
 {
     private readonly List<string> temporaryDirectories = new();
