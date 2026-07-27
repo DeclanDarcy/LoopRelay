@@ -64,7 +64,24 @@ public sealed class GitObservationTests
         }
 
         using Process process = Process.Start(start) ?? throw new InvalidOperationException("git did not start");
-        process.WaitForExit();
+
+        // Bounded: a wedged git (credential prompt, locked index, hung filter) must fail this test rather
+        // than hang the whole run forever. Two minutes is far above any legitimate fixture git command.
+        if (!process.WaitForExit(120_000))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (Exception)
+            {
+                // It exited on its own between the timeout and the kill; the timeout is still the failure.
+            }
+
+            throw new InvalidOperationException(
+                $"git {string.Join(' ', arguments)} did not exit within 120 seconds.");
+        }
+
         if (process.ExitCode != 0)
         {
             throw new InvalidOperationException(process.StandardError.ReadToEnd());

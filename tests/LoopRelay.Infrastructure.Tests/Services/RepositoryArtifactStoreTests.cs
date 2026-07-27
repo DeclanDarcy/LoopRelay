@@ -152,7 +152,14 @@ public sealed class RepositoryArtifactStoreTests
 
             string stdout = process.StandardOutput.ReadToEnd();
             string stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+
+            // Bounded: a wedged mklink must surface as a reported failure (the caller turns it into
+            // Assert.Fail) rather than hanging the run on an untimed wait.
+            if (!process.WaitForExit(120_000))
+            {
+                failureReason = "mklink did not exit within 120 seconds.";
+                return false;
+            }
 
             if (process.ExitCode != 0 || !Directory.Exists(linkPath))
             {

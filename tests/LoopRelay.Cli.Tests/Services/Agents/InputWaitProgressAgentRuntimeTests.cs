@@ -89,12 +89,14 @@ public class InputWaitProgressAgentRuntimeTests
         var renderer = new RecordingInputWaitProgressRenderer(TimeSpan.FromMilliseconds(1));
         var inner = new ScriptedRuntime(async onChunk =>
         {
+            // Wait for a real waiting tick rather than sleeping around one: this proves the progress loop
+            // is live before the tool chunk lands, so "no waiting after first-output" cannot pass vacuously.
+            await renderer.FirstWaiting.WaitAsync(TimeSpan.FromSeconds(60));
             await onChunk(new AgentStreamChunk(
                 1,
                 AgentProcessOutputStream.StandardOutput,
                 "$ dotnet build",
                 AgentStreamChunkKind.ToolCall));
-            await Task.Delay(25);
             return new AgentTurnResult(1, AgentTurnState.Completed, string.Empty, AgentTokenUsage.Zero);
         });
         var runtime = new InputWaitProgressAgentRuntime(
@@ -102,8 +104,11 @@ public class InputWaitProgressAgentRuntimeTests
             new DeterministicAgentTokenEstimator(),
             renderer);
 
+        // Turn completion joins the render loop before returning, so every render event this turn can
+        // produce is already recorded by the time these run — no settling delay is needed.
         await runtime.RunOneShotAsync(Spec(), "prompt");
 
+        Assert.Contains("waiting", renderer.Events);
         Assert.Contains("first-output", renderer.Events);
         Assert.DoesNotContain("completed-without-output", renderer.Events);
         Assert.DoesNotContain(
@@ -117,15 +122,44 @@ public class InputWaitProgressAgentRuntimeTests
         var renderer = new BlockingWaitingInputWaitProgressRenderer();
         var inner = new ScriptedRuntime(async onChunk =>
         {
-            await renderer.WaitingEntered.WaitAsync(TimeSpan.FromSeconds(5));
-            Task chunkTask = Task.Run(() => onChunk(new AgentStreamChunk(
-                1,
-                AgentProcessOutputStream.StandardOutput,
-                "hello",
-                AgentStreamChunkKind.AgentMessage)));
-            await Task.Delay(25);
+            await renderer.WaitingEntered.WaitAsync(TimeSpan.FromSeconds(60));
+
+            // Deliver the chunk on a dedicated thread and release the suspended waiting render only once
+            // that thread is provably parked on the tracker's lock, which the render loop holds while it
+            // sits inside Waiting. Waiting for that observable state forces the contention a fixed delay
+            // could only hope to hit; if the chunk never blocks, the thread simply ends and the spin exits
+            // at once, so the ordering below is decided by the production lock, never by scheduling luck.
+            Exception? chunkFailure = null;
+            var chunkThread = new Thread(() =>
+            {
+                try
+                {
+                    onChunk(new AgentStreamChunk(
+                        1,
+                        AgentProcessOutputStream.StandardOutput,
+                        "hello",
+                        AgentStreamChunkKind.AgentMessage)).GetAwaiter().GetResult();
+                }
+                catch (Exception exception)
+                {
+                    chunkFailure = exception;
+                }
+            }) { IsBackground = true };
+            chunkThread.Start();
+            Assert.True(
+                SpinWait.SpinUntil(
+                    () => !chunkThread.IsAlive
+                        || (chunkThread.ThreadState & System.Threading.ThreadState.WaitSleepJoin) != 0,
+                    TimeSpan.FromSeconds(60)),
+                "the chunk delivery thread neither blocked nor finished");
+
             renderer.ReleaseWaiting();
-            await chunkTask;
+            Assert.True(chunkThread.Join(TimeSpan.FromSeconds(60)), "the chunk delivery never completed");
+            if (chunkFailure is not null)
+            {
+                throw chunkFailure;
+            }
+
             return new AgentTurnResult(1, AgentTurnState.Completed, "hello", AgentTokenUsage.Zero);
         });
         var runtime = new InputWaitProgressAgentRuntime(
@@ -221,14 +255,24 @@ public class InputWaitProgressAgentRuntimeTests
     private sealed class RecordingInputWaitProgressRenderer(TimeSpan refreshInterval) : IInputWaitProgressRenderer
     {
         private readonly ConcurrentQueue<string> events = new();
+        private readonly TaskCompletionSource firstWaiting =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TimeSpan RefreshInterval => refreshInterval;
+
+        /// <summary>Completes on the first waiting tick, so a test can sequence against a live progress
+        /// loop instead of sleeping long enough to assume one.</summary>
+        public Task FirstWaiting => firstWaiting.Task;
 
         public IReadOnlyList<string> Events => events.ToArray();
 
         public void Started(InputWaitProgressSnapshot snapshot) => events.Enqueue("started");
 
-        public void Waiting(InputWaitProgressSnapshot snapshot) => events.Enqueue("waiting");
+        public void Waiting(InputWaitProgressSnapshot snapshot)
+        {
+            events.Enqueue("waiting");
+            firstWaiting.TrySetResult();
+        }
 
         public void FirstOutput(InputWaitProgressSnapshot snapshot) => events.Enqueue("first-output");
 

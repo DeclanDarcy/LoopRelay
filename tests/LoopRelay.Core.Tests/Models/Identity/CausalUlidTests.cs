@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LoopRelay.Core.Models.Identity;
 
 namespace LoopRelay.Core.Tests.Models.Identity;
@@ -38,13 +39,21 @@ public sealed class CausalUlidTests
     }
 
     [Fact]
-    public async Task NewUlid_TimestampPrefixOrdersAcrossMillisecondBoundaries()
+    public void NewUlid_TimestampPrefixOrdersAcrossMillisecondBoundaries()
     {
+        // CausalUlid.NewUlid reads DateTimeOffset.UtcNow directly and accepts no timestamp source, so the
+        // boundary is crossed by minting until the encoded millisecond actually changes rather than by
+        // sleeping past one. The deadline is a hang guard; the loop normally exits within a millisecond.
         string earlier = CausalUlid.NewUlid();
-        await Task.Delay(50);
-        string later = CausalUlid.NewUlid();
+        string later = earlier;
+        var deadline = Stopwatch.StartNew();
+        while (earlier[..10] == later[..10] && deadline.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            later = CausalUlid.NewUlid();
+        }
 
-        Assert.True(string.CompareOrdinal(earlier[..10], later[..10]) <= 0);
+        Assert.NotEqual(earlier[..10], later[..10]);
+        Assert.True(string.CompareOrdinal(earlier[..10], later[..10]) < 0);
     }
 
     [Fact]
