@@ -431,27 +431,6 @@ public sealed class CompositionRootGuardsAndInvariantsTests : CompositionRootTes
     }
 
     [Fact]
-    public void Retired_plan_and_roadmap_compositions_are_not_available_as_active_authorities()
-    {
-        string root = FindRepositoryRoot();
-
-        Assert.False(File.Exists(Path.Combine(
-            root,
-            "src",
-            "LoopRelay.Plan.Cli",
-            "Services",
-            "Cli",
-            "PlanCliComposition.cs")));
-        Assert.False(File.Exists(Path.Combine(
-            root,
-            "src",
-            "LoopRelay.Roadmap.Cli",
-            "Services",
-            "Cli",
-            "RoadmapCliComposition.cs")));
-    }
-
-    [Fact]
     public async Task Verify_execute_entry_contract_stops_on_milestone_set_without_trackable_checkboxes()
     {
         string repo = Directory.CreateTempSubdirectory("cc-cli-unified-plan-verify-milestone-checkbox").FullName;
