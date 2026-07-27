@@ -1114,6 +1114,55 @@ public sealed class LoopRelayCompositionRootTests
     }
 
     [Fact]
+    public async Task GenerateDecision_resolves_scope_from_the_composed_repository_observer_not_a_default_one()
+    {
+        // The decision-session scope resolver used to construct its own bare RepositoryObserver
+        // (defaulting to FileSystemStorageVerifier) instead of consulting the composition's own
+        // observer whenever the caller omitted one - which every production call site did. A
+        // composition-supplied CountingStorageVerifier only sees calls that flow through the
+        // composition's RepositoryObserver, so an under-count after GenerateDecision proves the
+        // resolver bypassed it in favor of a freshly constructed default.
+        (string repo, Repository repository, FakeAgentRuntime runtime, FakeProcessRunner process) =
+            await PrepareExecuteContinuityCaseAsync("cc-cli-unified-decision-scope-observer");
+        LoopRelayCompositionRoot first = LoopRelayCompositionRoot.CreateForTests(repository, runtime, process);
+        await RunPlanAsync(first, "Workflow Completion", "VerifyExecuteEntryContract");
+        await RunExecuteAsync(first, "Execution Readiness", "VerifyExecutionReadiness");
+        await first.DisposeAsync();
+
+        var verifier = new CountingStorageVerifier();
+        runtime.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "# Decisions\n\nDo the thing.", AgentTokenUsage.Zero)));
+        await using LoopRelayCompositionRoot restarted =
+            LoopRelayCompositionRoot.CreateForTests(repository, runtime, process, verifier);
+
+        TransitionRuntimeResult decision = await RunExecuteAsync(
+            restarted, "Implementation Planning", "GenerateDecision");
+
+        Assert.Equal(RuntimeOutcomeKind.Completed, decision.Outcome);
+        // Empirically: a single GenerateDecision attempt against a fresh composition verifies
+        // storage twice for transition eligibility/gating and once more for decision-session
+        // scope resolution. Before the fix, the third verification bypassed this spy (it ran
+        // through the resolver's own default RepositoryObserver instead), so this count was 2.
+        Assert.Equal(3, verifier.Verifications);
+    }
+
+    private sealed class CountingStorageVerifier : IStorageVerifier
+    {
+        private readonly FileSystemStorageVerifier inner = new();
+        private int verifications;
+
+        public int Verifications => verifications;
+
+        public Task<StorageVerificationResult> VerifyAsync(
+            string repositoryPath,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref verifications);
+            return inner.VerifyAsync(repositoryPath, cancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task Execute_implementation_rejects_and_rolls_back_milestone_file_set_changes()
     {
         (string repo, Repository repository, FakeAgentRuntime runtime, FakeProcessRunner process) =

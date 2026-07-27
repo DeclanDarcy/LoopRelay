@@ -38,13 +38,13 @@ internal sealed record PromptExecutionRequest(
     WorkflowInvocation RootInvocation,
     IReadOnlyDictionary<string, string> Metadata);
 
-internal sealed class DecisionSessionScopeResolver(Repository _repository, RepositoryObserver? _observer = null)
+internal sealed class DecisionSessionScopeResolver(Repository _repository, RepositoryObserver _observer)
 {
     public const string ScopeContractVersion = "decision-session-scope.v1";
 
     public async Task<DecisionSessionScope> ResolveAsync(CancellationToken cancellationToken = default)
     {
-        RepositoryObservation observation = await (_observer ?? new RepositoryObserver())
+        RepositoryObservation observation = await _observer
             .ObserveAsync(_repository.Path, cancellationToken);
         if (observation.StorageVerification.IsUnusable)
         {

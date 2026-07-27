@@ -108,6 +108,7 @@ internal sealed partial class LoopRelayCompositionRoot
         PromptPolicyProfileIdentity _promptPolicyProfile,
         IReadOnlyList<WorkflowDefinition> _workflowDefinitions,
         ICanonicalRecoveryCaseRecorder _recoveryCases,
+        RepositoryObserver _repositoryObserver,
         bool _productionRuntime = false) : IProviderPromptTransport, IAsyncDisposable
     {
         private sealed class PromptContextBlockedException(
@@ -1108,7 +1109,7 @@ internal sealed partial class LoopRelayCompositionRoot
                         _promptDispatcher: CreateDecisionPromptDispatcher(),
                         _artifactEffects: new DurableLoopArtifactEffectCoordinator(_repository, decisionArtifacts));
                 }
-                DecisionSessionScope scope = await new DecisionSessionScopeResolver(_repository)
+                DecisionSessionScope scope = await new DecisionSessionScopeResolver(_repository, _repositoryObserver)
                     .ResolveAsync(cancellationToken);
                 await executeDecisionSession.RunAsync(
                     new DecisionExecutionContext(

@@ -375,6 +375,19 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
         CreateCore(repository, agentRuntime, processRunner,
             RequireBrain(CliSettingsLoader.Load()), provider: null, policy: policy);
 
+    /// <param name="storageVerifier">Replaces the verifier the repository observer runs, so a
+    /// test can count how many times a run verifies workspace storage - one verification is one
+    /// repository observation. Null keeps the composition's own choice.</param>
+    internal static LoopRelayCompositionRoot CreateForTests(
+        Repository repository,
+        IAgentRuntime agentRuntime,
+        IProcessRunner processRunner,
+        IStorageVerifier? storageVerifier,
+        ResolvedOperationalPolicy? policy = null) =>
+        CreateCore(repository, agentRuntime, processRunner,
+            RequireBrain(CliSettingsLoader.Load()), provider: null, policy: policy,
+            storageVerifier: storageVerifier);
+
     private static BrainConfiguration RequireBrain(CliSettingsLoadResult settings)
     {
         ConfiguredBrainFacts configured = settings.Runtime.Brain;
@@ -458,6 +471,7 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
             promptPolicyProfile,
             workflowDefinitions,
             recoveryCases,
+            repositoryObserver,
             productionRuntime);
         var transitionEvidenceStore = new CanonicalTransitionEvidenceStore(persistence);
         var transitionBoundaryJournal = new CanonicalTransitionBoundaryJournal(persistence);
