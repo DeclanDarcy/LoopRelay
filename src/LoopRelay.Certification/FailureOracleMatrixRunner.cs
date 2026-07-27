@@ -15,7 +15,7 @@ public sealed class FailureOracleMatrixRunner
     private static readonly FailureSpec[] MaintainedFailures =
     [
         Recover("repaired-context", "authority", "safe-retry", "tests/LoopRelay.Projections.Tests/Services/ProjectContextLoaderTests.cs"),
-        Recover("corrected-malformed-output", "prompt-output", "safe-retry", "tests/LoopRelay.Cli.Tests/Services/Cli/LoopRelayCompositionRootTests.cs"),
+        Recover("corrected-malformed-output", "prompt-output", "safe-retry", "tests/LoopRelay.Cli.Tests/Services/Cli/CompositionRootTraditionalRoadmapAndSpineTests.cs"),
         Recover("canonical-artifact-restoration", "artifact", "operator-unblock", "tests/LoopRelay.Orchestration.Primitives.Tests/Runtime/TransitionRuntimeTests.cs"),
         Recover("projection-regeneration", "projection", "deterministic-regeneration", "tests/LoopRelay.Projections.Tests/Services/ProjectionServiceTests.cs"),
         Recover("scoped-rollback", "artifact", "scoped-rollback", "src/LoopRelay.Certification/PlanWorkflowRunner.cs"),
