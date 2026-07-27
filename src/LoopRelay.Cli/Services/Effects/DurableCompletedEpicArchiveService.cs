@@ -25,7 +25,7 @@ internal sealed class DurableCompletedEpicArchiveService(
         CancellationToken cancellationToken = default)
     {
         var artifacts = new CompletionArtifacts(_store, _repository);
-        int index = (await artifacts.ListDirectoriesAsync(request.ArchiveRoot)).Count + 1;
+        int index = request.ArchiveIndex ?? (await artifacts.ListDirectoriesAsync(request.ArchiveRoot)).Count + 1;
         string archiveDirectory = $"{request.ArchiveRoot}/{index}";
         string synthesisPath = $"{request.ArchiveRoot}/{index}.md";
         var payload = new CompletionArchiveEffectPayload(
@@ -84,7 +84,12 @@ internal sealed class CompletionArchiveEffectExecutor(
         CancellationToken cancellationToken)
     {
         CompletionArchiveEffectPayload payload = Parse(intent);
-        Result = await _inner.ArchiveAndSynthesizeAsync(_request, cancellationToken);
+        // The durable payload owns the archive index, not the inner service's directory count.
+        // Without this the inner service re-derives the index on a repeat execution, lands on a
+        // fresh directory, sails past its own collision guards and re-invokes the synthesis prompt.
+        Result = await _inner.ArchiveAndSynthesizeAsync(
+            _request with { ArchiveIndex = payload.Index },
+            cancellationToken);
         bool satisfied = Result.Index == payload.Index &&
             Result.ArchiveDirectory == payload.ArchiveDirectory &&
             Result.SynthesisPath == payload.SynthesisPath &&

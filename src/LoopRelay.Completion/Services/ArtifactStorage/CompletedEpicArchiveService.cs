@@ -22,9 +22,22 @@ public sealed class CompletedEpicArchiveService(
         cancellationToken.ThrowIfCancellationRequested();
 
         var artifacts = new CompletionArtifacts(_store, request.Repository);
-        int index = await ComputeArchiveIndexAsync(artifacts, request.ArchiveRoot);
+        int index = request.ArchiveIndex ?? await ComputeArchiveIndexAsync(artifacts, request.ArchiveRoot);
         string archiveDirectory = $"{request.ArchiveRoot}/{index}";
         string synthesisPath = $"{request.ArchiveRoot}/{index}.md";
+
+        // Convergence. A caller that owns the index (a durable effect payload) may re-execute this
+        // archival after an uncertain outcome. When the index it names is already fully archived,
+        // observe it and return; do not allocate a second archive and do not re-invoke the synthesis
+        // prompt, which is the one non-retractable outward effect here. The predicate deliberately
+        // matches CompletionArchiveEffectReconciler.ReconcileAsync so that a state which reconciles
+        // as satisfied is exactly a state this converges on. A partially materialized archive is not
+        // satisfied, so it still falls through to the collision guards below.
+        if (request.ArchiveIndex is not null &&
+            await ObserveCompletedArchiveAsync(artifacts, index, archiveDirectory, synthesisPath) is { } completed)
+        {
+            return completed;
+        }
 
         if (await artifacts.ExistsAsync(archiveDirectory) ||
             (await artifacts.ListAsync(archiveDirectory, "*")).Count > 0)
@@ -70,6 +83,19 @@ public sealed class CompletedEpicArchiveService(
         }
 
         return new CompletedEpicArchiveResult(index, archiveDirectory, synthesisPath, synthesis);
+    }
+
+    private static async Task<CompletedEpicArchiveResult?> ObserveCompletedArchiveAsync(
+        CompletionArtifacts artifacts,
+        int index,
+        string archiveDirectory,
+        string synthesisPath)
+    {
+        string? epic = await artifacts.ReadAsync($"{archiveDirectory}/epic.md");
+        string? synthesis = await artifacts.ReadAsync(synthesisPath);
+        return string.IsNullOrWhiteSpace(epic) || string.IsNullOrWhiteSpace(synthesis)
+            ? null
+            : new CompletedEpicArchiveResult(index, archiveDirectory, synthesisPath, synthesis);
     }
 
     private static async Task<int> ComputeArchiveIndexAsync(CompletionArtifacts artifacts, string archiveRoot)
