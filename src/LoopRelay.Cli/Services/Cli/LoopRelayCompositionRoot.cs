@@ -229,9 +229,7 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
         var settings = CliSettingsLoader.Load();
         ResolvedOperationalPolicy policy = OperationalPolicyResolver.Resolve(
             settings.PolicyInputs,
-            settings.IsDefaultTemplate
-                ? $"settings:{settings.Path} (default template)"
-                : $"settings:{settings.Path}",
+            DescribePolicySource(settings.Path, settings.IsDefaultTemplate),
             CombineInvocationOverrides(policyOverrides),
             settings.PermissionInputs);
         var services = new ServiceCollection();
@@ -287,6 +285,29 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
     {
         Converters = { new JsonStringEnumConverter() },
     };
+
+    // The descriptor of the settings file that supplied the workspace policy layer. It is the
+    // sole workspace-layer origin string, and it reaches durable authority rows four ways:
+    // `canonical_policy_resolutions.source_description` and `.provenance_json` (as every
+    // workspace-layer `PolicyFieldProvenance.Origin` and every `workspace:...` override-chain
+    // entry), and `canonical_agent_role_policies.provenance` and `.document_json` (via
+    // `resolved-policy:{SourceDescription}`).
+    // Only the file name is recorded. The settings file is resolved from AppContext.BaseDirectory
+    // or LOOPRELAY_SETTINGS_PATH, so it sits outside the repository and has no workspace-relative
+    // form; its directory is a property of the installation, not of the workspace, and storing it
+    // pins the row to one machine and leaks the user's home directory. The file name still
+    // separates the consumer settings file from the development fallback template, which -
+    // together with the marker below - is the whole of what this descriptor is evidence for.
+    internal static string DescribePolicySource(string settingsPath, bool isDefaultTemplate)
+    {
+        // Both separators are handled explicitly rather than via Path.GetFileName, which does not
+        // treat '\' as a separator on Unix: the descriptor must not depend on which platform is
+        // reading it back.
+        string fileName = settingsPath[(settingsPath.LastIndexOfAny(['/', '\\']) + 1)..];
+        return isDefaultTemplate
+            ? $"settings:{fileName} (default template)"
+            : $"settings:{fileName}";
+    }
 
     // Recognized environment variables are ambient invocation-layer inputs; explicit --policy
     // flags beat them for the same key. The decision-resume kill switch stays functional

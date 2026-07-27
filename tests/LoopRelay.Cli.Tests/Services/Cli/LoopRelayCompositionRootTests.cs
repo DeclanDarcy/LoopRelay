@@ -156,6 +156,34 @@ public sealed class LoopRelayCompositionRootTests
                 PermissionPolicyFactory.Minimum);
     }
 
+    // The policy source descriptor is durable authority evidence: it lands in
+    // `canonical_policy_resolutions.source_description` and `.provenance_json`, and in
+    // `canonical_agent_role_policies.provenance` and `.document_json`. The settings file is
+    // resolved from `AppContext.BaseDirectory` (or LOOPRELAY_SETTINGS_PATH), so it lives
+    // outside the repository entirely — there is no workspace-relative form of it. Recording
+    // the directory therefore pins a row to one machine's filesystem layout and leaks the
+    // user's home directory into state that is otherwise a portable fact. The file name is
+    // the whole of the information any reader could act on.
+    [Theory]
+    [InlineData(@"C:\Users\someone\AppData\Local\Temp\authority\settings.json", false, "settings:settings.json")]
+    [InlineData(@"C:\Users\someone\AppData\Local\Temp\authority\settings.json", true, "settings:settings.json (default template)")]
+    [InlineData("/home/someone/.local/share/looprelay/looprelay.settings.json", false, "settings:looprelay.settings.json")]
+    [InlineData("settings.json", false, "settings:settings.json")]
+    public void Policy_source_descriptor_names_the_settings_file_without_its_directory(
+        string settingsPath,
+        bool isDefaultTemplate,
+        string expected)
+    {
+        // Both separators are asserted from one platform on purpose: a descriptor written on
+        // Windows must read back the same way anywhere.
+        string descriptor = LoopRelayCompositionRoot.DescribePolicySource(settingsPath, isDefaultTemplate);
+
+        Assert.Equal(expected, descriptor);
+        Assert.DoesNotContain(@"\", descriptor, StringComparison.Ordinal);
+        Assert.DoesNotContain("/", descriptor, StringComparison.Ordinal);
+        Assert.DoesNotContain("someone", descriptor, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Session_log_environment_variable_flows_through_the_invocation_layer()
     {
