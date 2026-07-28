@@ -250,6 +250,13 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
         Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, receipt);
     }
 
+    private static readonly string[] BlockedVocabularyHistoryTables =
+    [
+        "canonical_workflow_states",
+        "canonical_stage_states",
+        "canonical_transition_runs",
+    ];
+
     [Fact]
     public async Task EnsureSchema_MemoizedFastPath_SkipsBlockedVocabularyScanWhenReceiptIsFresh()
     {
@@ -264,50 +271,65 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
             await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
         }
 
-        int freshReceiptStatements;
+        var freshReceiptCounter = new PreparedStatementCounter();
         await using (SqliteConnection withReceipt = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
         {
             await withReceipt.OpenAsync();
-            var counter = new PreparedStatementCounter();
-            counter.Watch(withReceipt);
+            freshReceiptCounter.Watch(withReceipt);
             // Same process, memo still warm from the migration above: this is unambiguously the
             // memoized fast path (RunStructurallyCompleteBranchAsync via EnsureSchemaAsync's
             // line-372 call site), with the blocked-vocabulary receipt already fresh.
             await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(withReceipt);
-            freshReceiptStatements = counter.Statements;
+        }
+
+        // The plan's acceptance criterion is exact: on a healthy admitted store with a fresh
+        // receipt, EnsureSchemaAsync must not read any of the three history tables the legacy
+        // 'Blocked' vocabulary repair targets - not "fewer statements than some other run" (a
+        // differential a partial regression could still satisfy), but zero reads of each table by
+        // name, attributed via SQLITE_READ (whose first authorizer argument is the table name,
+        // unlike SQLITE_SELECT's, which is always NULL).
+        foreach (string table in BlockedVocabularyHistoryTables)
+        {
+            Assert.True(
+                freshReceiptCounter.ReadsOfTable(table) == 0,
+                $"Expected zero reads of `{table}` on the fresh-receipt memoized fast path, but " +
+                $"observed {freshReceiptCounter.ReadsOfTable(table)}.");
         }
 
         // Delete the receipt directly - simulating a stale/absent receipt without touching the
         // physical shape, the stamped schema_shape fingerprint, or the in-process memo - then
-        // measure the very same memoized fast path again.
+        // measure the very same memoized fast path again. This is a control: it proves the
+        // zero-reads assertion above is not vacuous by confirming the same counter mechanism does
+        // observe reads of all three tables once the receipt can no longer skip the repair.
         await using (SqliteConnection tamper = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
         {
             await tamper.OpenAsync();
             await ExecuteAsync(tamper, "DELETE FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';");
         }
 
-        int staleReceiptStatements;
+        var staleReceiptCounter = new PreparedStatementCounter();
         await using (SqliteConnection withoutReceipt = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
         {
             await withoutReceipt.OpenAsync();
-            var counter = new PreparedStatementCounter();
-            counter.Watch(withoutReceipt);
+            staleReceiptCounter.Watch(withoutReceipt);
             await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(withoutReceipt);
-            staleReceiptStatements = counter.Statements;
         }
 
-        // The three history tables (canonical_workflow_states, canonical_stage_states,
-        // canonical_transition_runs) are scanned by a single SELECT EXISTS(... UNION ALL ...). With
-        // the receipt fresh, EnsureSchemaAsync must skip that scan entirely, so the fresh-receipt
-        // call must compile strictly fewer SELECTs than the stale-receipt call that has to run it.
-        // Measured with PreparedStatementCounter: 5 statements fresh, 13 stale (the 8-statement gap
-        // is the UNION ALL scan's compiled SELECT actions) - not asserted as exact values here since
-        // the authorizer's per-branch counting of a compound SELECT is an implementation detail of
-        // this SQLite/Microsoft.Data.Sqlite version, not a contract this test should pin.
-        Assert.True(
-            freshReceiptStatements < staleReceiptStatements,
-            $"Expected the fresh-receipt fast path ({freshReceiptStatements} statements) to skip " +
-            $"the blocked-vocabulary scan the stale-receipt fast path pays for ({staleReceiptStatements} statements).");
+        foreach (string table in BlockedVocabularyHistoryTables)
+        {
+            Assert.True(
+                staleReceiptCounter.ReadsOfTable(table) > 0,
+                $"Expected the stale-receipt fast path to read `{table}` while repairing/certifying " +
+                "it (control case), but the counter observed zero reads.");
+        }
+
+        // Deliberately not also asserting fresh < stale on Statements (compiled SELECTs): once the
+        // dead legacy-vocabulary probe is removed from the stale-receipt branch (it used to add an
+        // extra SELECT EXISTS scan whose result nobody read), the remaining repair work is plain
+        // UPDATE/INSERT statements that do not register as SQLITE_SELECT at all, so the two paths
+        // can compile the *same* SELECT count while still doing very different table-level work.
+        // That is exactly why the per-table SQLITE_READ assertions above - not a statement-count
+        // differential - are the acceptance criterion here.
     }
 
     [Fact]

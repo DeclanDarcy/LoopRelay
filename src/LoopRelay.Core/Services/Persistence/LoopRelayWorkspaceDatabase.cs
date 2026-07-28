@@ -509,11 +509,12 @@ public static class LoopRelayWorkspaceDatabase
     ///
     /// <para>
     /// <b>Refinement (supersedes the Task 1 "always open the transaction" reading):</b> the write
-    /// transaction is now opened only when <see cref="HasRepairableLegacyBlockedVocabularyAsync"/>
-    /// finds an actual stray <c>'Blocked'</c> row/table to repair, or when a legacy resume import
-    /// is pending. Task 1 measured the transaction as a no-op by <c>PRAGMA data_version</c> (a
-    /// page-dirtying signal) and treated that as sufficient; Task 2 enabling WAL exposed a
-    /// different, page-independent cost — opening a write transaction under WAL perturbs the
+    /// transaction is now opened whenever a legacy resume import is pending, or whenever the
+    /// blocked-vocabulary receipt is stale or absent (see the Task 2.2 paragraph below: that
+    /// condition no longer depends on first probing for an actual stray <c>'Blocked'</c> row).
+    /// Task 1 measured the transaction as a no-op by <c>PRAGMA data_version</c> (a page-dirtying
+    /// signal) and treated that as sufficient; Task 2 enabling WAL exposed a different,
+    /// page-independent cost — opening a write transaction under WAL perturbs the
     /// <c>-wal</c>/<c>-shm</c> side files even when it dirties zero pages, which broke
     /// byte/tree-stability tests that don't tolerate any side-file churn on a healthy read.
     /// </para>
@@ -547,12 +548,12 @@ public static class LoopRelayWorkspaceDatabase
         bool blockedVocabularyReceiptStaleOrAbsent = !string.Equals(
             blockedVocabularyReceipt, CanonicalV16ShapeFingerprint, StringComparison.Ordinal);
 
-        bool hasLegacyBlockedVocabulary = blockedVocabularyReceiptStaleOrAbsent &&
-            await HasRepairableLegacyBlockedVocabularyAsync(connection, cancellationToken);
-
-        bool needsRepair = legacyResume is not null ||
-            hasLegacyBlockedVocabulary ||
-            blockedVocabularyReceiptStaleOrAbsent;
+        // Deliberately not consulting HasRepairableLegacyBlockedVocabularyAsync here: a stale or
+        // absent receipt already forces needsRepair to true below regardless of what that probe
+        // would answer, and CanonicalDataRepairSql (idempotent either way) then runs unconditionally
+        // on that path and re-certifies the receipt. Calling the probe first would only pay for the
+        // three-table scan a second time without anyone reading its result.
+        bool needsRepair = legacyResume is not null || blockedVocabularyReceiptStaleOrAbsent;
         if (!needsRepair)
         {
             // The literal read-only fast path: nothing to import, the blocked-vocabulary receipt

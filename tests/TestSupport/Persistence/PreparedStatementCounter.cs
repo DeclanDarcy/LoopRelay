@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Data.Sqlite;
 using SQLitePCL;
 using Xunit;
@@ -26,6 +27,15 @@ namespace LoopRelay.Core.Services.Persistence;
 /// <c>tests/TestSupport</c> folder, rather than promoted to its own project - this repo has no
 /// shared test project, and a linked file is the smallest move that avoids a second copy.
 /// </para>
+/// <para>
+/// <b>Additive read-attribution channel:</b> <see cref="Statements"/> only ever observes
+/// <c>SQLITE_SELECT</c>, whose authorizer arguments are always NULL, so it cannot say which
+/// table a compiled SELECT touched. <c>SQLITE_READ</c> fires once per column reference during
+/// preparation and carries the table name as its first callback argument, so
+/// <see cref="ReadsOfTable"/> tallies those separately, per table. This channel is purely
+/// additive: it does not change what <see cref="Statements"/> counts or when it increments, so
+/// existing exact-count assertions against <see cref="Statements"/> keep the same value.
+/// </para>
 /// </summary>
 public sealed class PreparedStatementCounter
 {
@@ -33,10 +43,19 @@ public sealed class PreparedStatementCounter
     // connection lives, so it must not be collected once `Watch` returns.
     private readonly delegate_authorizer _authorizer;
     private int _statements;
+    private readonly ConcurrentDictionary<string, int> _tableReads = new(StringComparer.Ordinal);
 
     public PreparedStatementCounter() => _authorizer = Authorize;
 
     public int Statements => Volatile.Read(ref _statements);
+
+    /// <summary>
+    /// How many <c>SQLITE_READ</c> authorizer callbacks named <paramref name="table"/> as the
+    /// table being read, across every statement this counter has observed since construction.
+    /// Zero if the table was never read.
+    /// </summary>
+    public int ReadsOfTable(string table) =>
+        _tableReads.TryGetValue(table, out int count) ? count : 0;
 
     public void Watch(SqliteConnection connection) => Assert.Equal(
         raw.SQLITE_OK, raw.sqlite3_set_authorizer(connection.Handle, _authorizer, null));
@@ -45,6 +64,15 @@ public sealed class PreparedStatementCounter
         object userData, int action, utf8z first, utf8z second, utf8z database, utf8z trigger)
     {
         if (action == raw.SQLITE_SELECT) Interlocked.Increment(ref _statements);
+        if (action == raw.SQLITE_READ)
+        {
+            string? table = first.utf8_to_string();
+            if (!string.IsNullOrEmpty(table))
+            {
+                _tableReads.AddOrUpdate(table, 1, static (_, count) => count + 1);
+            }
+        }
+
         return raw.SQLITE_OK;
     }
 }
