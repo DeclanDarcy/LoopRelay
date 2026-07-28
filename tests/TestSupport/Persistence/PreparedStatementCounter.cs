@@ -36,6 +36,20 @@ namespace LoopRelay.Core.Services.Persistence;
 /// additive: it does not change what <see cref="Statements"/> counts or when it increments, so
 /// existing exact-count assertions against <see cref="Statements"/> keep the same value.
 /// </para>
+/// <para>
+/// <b>Additive column-attribution channel (fix pass 1, finding 1):</b> the same
+/// <c>SQLITE_READ</c> callback also carries the column name as its second argument, which
+/// <see cref="ReadsOfTable"/> discards. <see cref="ReadsOfColumn"/> tallies
+/// <c>(table, column)</c> pairs from that same argument instead, so a test can assert a specific
+/// column was never authorized for read while a statement compiled - e.g. that a per-row document
+/// column never gets selected by a path that is only supposed to read row locations, even if a
+/// future regression selects the column without mapping it into the result type (which a
+/// type-level or returned-data assertion cannot catch, since the column would compile into the
+/// statement but never reach any field). Like <see cref="ReadsOfTable"/>, this is purely additive:
+/// it reads the same callback invocations <see cref="Statements"/> and <see cref="ReadsOfTable"/>
+/// already observe, adds a second tally alongside theirs, and changes neither what nor when they
+/// count.
+/// </para>
 /// </summary>
 public sealed class PreparedStatementCounter
 {
@@ -44,6 +58,7 @@ public sealed class PreparedStatementCounter
     private readonly delegate_authorizer _authorizer;
     private int _statements;
     private readonly ConcurrentDictionary<string, int> _tableReads = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, int> _columnReads = new(StringComparer.Ordinal);
 
     public PreparedStatementCounter() => _authorizer = Authorize;
 
@@ -56,6 +71,16 @@ public sealed class PreparedStatementCounter
     /// </summary>
     public int ReadsOfTable(string table) =>
         _tableReads.TryGetValue(table, out int count) ? count : 0;
+
+    /// <summary>
+    /// How many <c>SQLITE_READ</c> authorizer callbacks named <paramref name="column"/> on
+    /// <paramref name="table"/> as the column being read, across every statement this counter has
+    /// observed since construction. Zero if that column was never read - the direct signal for
+    /// "this statement never authorized reading this column at all", independent of whether the
+    /// column would have been mapped into any result.
+    /// </summary>
+    public int ReadsOfColumn(string table, string column) =>
+        _columnReads.TryGetValue(ColumnKey(table, column), out int count) ? count : 0;
 
     public void Watch(SqliteConnection connection) => Assert.Equal(
         raw.SQLITE_OK, raw.sqlite3_set_authorizer(connection.Handle, _authorizer, null));
@@ -70,9 +95,17 @@ public sealed class PreparedStatementCounter
             if (!string.IsNullOrEmpty(table))
             {
                 _tableReads.AddOrUpdate(table, 1, static (_, count) => count + 1);
+
+                string? column = second.utf8_to_string();
+                if (!string.IsNullOrEmpty(column))
+                {
+                    _columnReads.AddOrUpdate(ColumnKey(table, column), 1, static (_, count) => count + 1);
+                }
             }
         }
 
         return raw.SQLITE_OK;
     }
+
+    private static string ColumnKey(string table, string column) => table + "." + column;
 }

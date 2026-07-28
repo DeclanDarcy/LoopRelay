@@ -1015,6 +1015,10 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         await store.AppendTransitionEvidenceAsync(new CanonicalTransitionEvidenceRecord(
             0, runId, transition, "RawPromptOutputCaptured", now.AddSeconds(20), TransitionDurableState.PromptCompleted,
             "raw output captured", ["raw-output"], new string('d', 200_000) + "-document-marker"));
+        // Fix pass 1, finding 2: canonical_effect_records has no production writer, so without this
+        // seed it is the one table never populated by this test, making the count comparison below
+        // an unconditional 0 == 0 that cannot detect a dropped table.
+        await SeedEffectRecordAsync(repository, runId, "effect-obs-001", now.AddSeconds(25));
         await store.UpsertProductAsync(new ProductRecord(
             ProductIdentity.ExecutablePlan, workflow, transition, [WorkflowIdentity.Execute],
             "repository-owned", "canonical", [".agents/plan.md"], "causal-hash",
@@ -1053,6 +1057,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Equal(legacy.GateEvaluations.Count, actual.GateEvaluations.Count);
         Assert.Equal(legacy.GateEvaluations[0].Evidence, actual.GateEvaluations[0].Evidence);
         Assert.Equal(legacy.EffectRecords.Count, actual.EffectRecords.Count);
+        Assert.Equal(legacy.EffectRecords[0].Evidence, actual.EffectRecords[0].Evidence);
         Assert.Equal(legacy.Warnings.Count, actual.Warnings.Count);
         Assert.Equal(legacy.Warnings[0].Evidence, actual.Warnings[0].Evidence);
         Assert.Equal(legacy.RecoveryMarkers.Count, actual.RecoveryMarkers.Count);
@@ -1082,14 +1087,19 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
     /// the routine observation path's snapshot loader - must never materialize evidence document
     /// bodies, however large. A statement-count assertion cannot show this (the locations-only SELECT
     /// and the pre-existing full-document SELECT each still compile as exactly one statement); this
-    /// asserts two direct signals instead of an inferred one: (1) the full-document
+    /// asserts three direct signals instead of an inferred one: (1) the full-document
     /// <see cref="CanonicalWorkflowPersistenceStore.ReadTransitionEvidenceAsync"/> path this task
     /// leaves untouched for <see cref="CanonicalWorkflowPersistenceStore.LoadSnapshotAsync"/> never
-    /// runs when the observation path is used, and (2) a large, distinctive marker seeded into
-    /// evidence's <c>document_json</c> never appears anywhere in the returned
-    /// <see cref="CanonicalWorkflowObservationSnapshot"/> - which structurally has no field capable
-    /// of carrying it, but this proves the absence at the data level rather than only at the type
-    /// level.
+    /// runs when the observation path is used, (2) SQLite's own authorizer, via
+    /// <see cref="PreparedStatementCounter.ReadsOfColumn"/>, never authorizes a read of
+    /// <c>document_json</c> on <c>canonical_transition_evidence</c> while this path's statement
+    /// compiles - the actual byte invariant, and the one that still catches a regression that
+    /// re-adds the column to the SELECT but leaves it unmapped, which signal (3) below cannot, and
+    /// (3) a large, distinctive marker seeded into evidence's <c>document_json</c> never appears
+    /// anywhere in the returned <see cref="CanonicalWorkflowObservationSnapshot"/> - which
+    /// structurally has no field capable of carrying it, but this proves the absence at the data
+    /// level rather than only at the type level for the case where a document does get
+    /// concatenated onto a mapped field.
     /// </summary>
     [Fact]
     public async Task LoadObservationSnapshotAsync_never_materializes_evidence_document_bodies()
@@ -1116,6 +1126,8 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
 
         bool fullDocumentReadInvoked = false;
         store.ReadTransitionEvidenceAsyncInvokedForTesting = () => fullDocumentReadInvoked = true;
+        var counter = new PreparedStatementCounter();
+        store.ConnectionObserverForTesting = counter.Watch;
         CanonicalWorkflowObservationSnapshot observation;
         try
         {
@@ -1124,11 +1136,19 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         finally
         {
             store.ReadTransitionEvidenceAsyncInvokedForTesting = null;
+            store.ConnectionObserverForTesting = null;
         }
 
         Assert.False(
             fullDocumentReadInvoked,
             "LoadObservationSnapshotAsync must never fall back to the full-document ReadTransitionEvidenceAsync path.");
+
+        // Fix pass 1, finding 1: the actual byte invariant. Unlike the marker-absence assertions
+        // below - which only fail if something concatenates the document onto a mapped field,
+        // since CanonicalTransitionEvidenceLocationRecord has no field to carry it otherwise - this
+        // fails the moment `document_json` is re-added to the evidence SELECT at all, mapped or
+        // not, because SQLite's authorizer never gets asked to authorize that column's read.
+        Assert.Equal(0, counter.ReadsOfColumn("canonical_transition_evidence", "document_json"));
 
         Assert.Equal(5, observation.TransitionEvidence.Count);
         foreach (CanonicalTransitionEvidenceLocationRecord evidence in observation.TransitionEvidence)
@@ -1414,6 +1434,38 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
             Name = Path.GetFileName(path),
             Path = path,
         };
+    }
+
+    /// <summary>
+    /// Fix pass 1, finding 2: seeds one <c>canonical_effect_records</c> row directly. The store has
+    /// no production writer for this table (tracked separately, out of scope here), so a test that
+    /// wants a non-empty, discriminating row has no store method to call and inserts it the same way
+    /// the pre-v6/pre-v7/pre-v9 characterization tests above seed rows the store itself never
+    /// writes: directly against the workspace database, via a connection this call opens and
+    /// disposes of on its own.
+    /// </summary>
+    private static async Task SeedEffectRecordAsync(
+        Repository repository, string runId, string effectIdentity, DateTimeOffset recordedAt)
+    {
+        await using SqliteConnection connection =
+            LoopRelayWorkspaceDatabase.OpenReadWriteCreate(LoopRelayWorkspaceDatabase.Resolve(repository));
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO canonical_effect_records (
+                run_id, effect_identity, category, status, recorded_at, explanation, evidence_json
+            ) VALUES (
+                $run_id, $effect_identity, $category, $status, $recorded_at, $explanation, $evidence_json
+            );
+            """;
+        command.Parameters.AddWithValue("$run_id", runId);
+        command.Parameters.AddWithValue("$effect_identity", effectIdentity);
+        command.Parameters.AddWithValue("$category", nameof(EffectCategory.Evidence));
+        command.Parameters.AddWithValue("$status", nameof(EffectExecutionStatus.Succeeded));
+        command.Parameters.AddWithValue("$recorded_at", recordedAt.ToString("O", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$explanation", "effect recorded for observation-snapshot parity check");
+        command.Parameters.AddWithValue("$evidence_json", """["effect.md"]""");
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string table)
