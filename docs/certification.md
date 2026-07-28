@@ -52,7 +52,7 @@ The command names describe the behavior under certification. Historical certific
 | `traditional-roadmap` | Live | CLI, Codex, auth | Runs the TraditionalRoadmap segment to its bounded Plan-entry products. | `traditional-roadmap.latest.json` |
 | `eval-roadmap` | Live | CLI, Codex, auth | Runs the EvalRoadmap segment to the same bounded Plan-entry contract. | `eval-roadmap.latest.json` |
 | `completion-closure` | Live | CLI, Codex, auth | Certifies completion certification, archive closure, roadmap updates, continuity retirement, and idempotent rerun. | `completion-closure.latest.json` |
-| `failure-oracle-matrix` | Deterministic audit | workspace | Audits maintained failure classes, transition recovery coverage, oracle controls, exclusions, and governance. | `failure-oracle-matrix.latest.json` |
+| `failure-oracle-matrix` | Deterministic audit | workspace | Audits maintained failure classes, transition recovery coverage, oracle controls, and exclusions. | `failure-oracle-matrix.latest.json` |
 | `traditional-full-chain` | Live full chain | CLI, Codex, auth | Runs TraditionalRoadmap → Plan → Execute, publication, completion, and rerun checks. | `traditional-full-chain.latest.json` |
 | `eval-full-chain` | Live full chain | CLI, Codex, auth | Runs EvalRoadmap → Plan → Execute, publication, completion, and rerun checks. | `eval-full-chain.latest.json` |
 | `diagnose-attempt` | Retained live diagnosis | Codex, auth, attempt path | Repeats diagnosis over retained evidence without rerunning the certification fixture. | updates the named attempt record |

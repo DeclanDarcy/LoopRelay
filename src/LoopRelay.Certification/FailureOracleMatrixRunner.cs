@@ -90,7 +90,6 @@ public sealed class FailureOracleMatrixRunner
             .ThenBy(item => item.Transition, StringComparer.Ordinal)
             .ToArray();
         OracleControlCaseResult[] oracles = CreateOracleControls();
-        CertificationGovernanceResult governance = Governance();
 
         bool everyTransition = transitions.Length > 0 && transitions.All(item => item.Passed);
         bool noDuplicates = transitions.All(item =>
@@ -122,7 +121,6 @@ public sealed class FailureOracleMatrixRunner
             exclusions,
             transitions,
             oracles,
-            governance,
             everyTransition,
             noDuplicates,
             unsupportedVisible,
@@ -246,26 +244,6 @@ public sealed class FailureOracleMatrixRunner
         bool rejects = !evaluate(negative);
         return new OracleControlCaseResult(identity, accepts, rejects, accepts && rejects,
             ["positive-control", "deliberate-negative-control"]);
-    }
-
-    private static CertificationGovernanceResult Governance()
-    {
-        var retention = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["success"] = "normalized-summary-and-required-artifacts",
-            ["failure"] = "full-scrubbed-boundary-and-oracle-evidence",
-            ["flake"] = "all-attempts-plus-variance-classification",
-            ["block"] = "durable-operator-action-and-authority-snapshot",
-            ["incompatibility"] = "exact-profile-identity-and-missing-capability",
-            ["privacy-sensitive"] = "redacted-summary-only-with-local-retention-pointer",
-        };
-        return new CertificationGovernanceResult(
-            3,
-            0.05,
-            "Rerun identical behavior identity; classify variance before product blame; never erase the first failure.",
-            true,
-            true,
-            retention);
     }
 
     private static FailureSpec Recover(
