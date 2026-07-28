@@ -639,8 +639,6 @@ public sealed record ReleaseGateResult(
     string PlatformClaim,
     bool CrossPlatformContractAgreement,
     bool ClassificationRoutingDistinct,
-    bool DriftInvalidationEnabled,
-    bool EvidenceRetirementReturnsToUncovered,
     bool NoCriticalDimensionAtZero,
     bool BudgetsPassed,
     IReadOnlyList<FailureCoverageCaseResult> FutureTopologyObligations,

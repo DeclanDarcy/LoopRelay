@@ -149,8 +149,6 @@ public sealed class ReleaseGateRunner
             platformClaim,
             crossPlatform,
             routesDistinct,
-            true,
-            true,
             noCriticalZero,
             budgets,
             future,

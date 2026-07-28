@@ -24,10 +24,9 @@ public sealed class LiveRunnerDiagnosisIntegrationTests
     }
 
     [Fact]
-    public void Diagnosis_policy_is_an_explicit_quota_only_allowlist()
+    public void Bypass_reason_is_an_explicit_quota_only_allowlist()
     {
         CertificationFailureContext context = Context();
-        Assert.True(CertificationDiagnosisPolicy.RequiresSessionInspection(context));
         Assert.Equal("confirmed-quota-exhaustion", CertificationDiagnosisPolicy.BypassReason(context with
         {
             Classification = CertificationClassification.ProviderRegression,
@@ -35,18 +34,20 @@ public sealed class LiveRunnerDiagnosisIntegrationTests
             DeterministicEvidence = ["used-percent:100", "last-agent-message:null"],
             ActionableNextStep = "Wait for the quota window to reset.",
         }));
-        Assert.True(CertificationDiagnosisPolicy.RequiresSessionInspection(context with
+        // Missing an actionable next step must not grant the bypass, even with quota confirmed.
+        Assert.Null(CertificationDiagnosisPolicy.BypassReason(context with
         {
             Classification = CertificationClassification.ProviderRegression,
             QuotaExhaustionConfirmed = true,
             DeterministicEvidence = ["used-percent:100"],
             ActionableNextStep = null,
         }));
-        Assert.True(CertificationDiagnosisPolicy.RequiresSessionInspection(context with
+        // A plain provider regression with no quota signal must not bypass either.
+        Assert.Null(CertificationDiagnosisPolicy.BypassReason(context with
         {
             Classification = CertificationClassification.ProviderRegression,
         }));
-        Assert.False(CertificationDiagnosisPolicy.RequiresSessionInspection(context with
+        Assert.Equal("successful-certification", CertificationDiagnosisPolicy.BypassReason(context with
         {
             Classification = CertificationClassification.Passed,
         }));

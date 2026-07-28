@@ -411,20 +411,6 @@ public sealed class CertificationFailureDiagnosisTests : IDisposable
         Assert.Equal(original, await File.ReadAllTextAsync(Path.Combine(first.AttemptRecord, "failure.json")));
     }
 
-    [Theory]
-    [InlineData(CertificationDiagnosisDisposition.NotNeeded, false)]
-    [InlineData(CertificationDiagnosisDisposition.Completed, true)]
-    [InlineData(CertificationDiagnosisDisposition.Inconclusive, true)]
-    [InlineData(CertificationDiagnosisDisposition.Unavailable, true)]
-    public void Repeat_guard_requires_a_terminal_diagnostic_attempt(
-        CertificationDiagnosisDisposition disposition,
-        bool expected)
-    {
-        var status = new CertificationDiagnosisStatus(disposition, "id", null, DateTimeOffset.UtcNow);
-        Assert.Equal(expected, CertificationRepeatGuard.MayAutomaticallyAdvance(
-            new CertificationDiagnosisOutcome(status, root)));
-    }
-
     private string Fixture()
     {
         string fixture = Path.Combine(root, "fixture-" + Guid.NewGuid().ToString("N"));

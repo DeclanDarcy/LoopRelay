@@ -1665,21 +1665,8 @@ public sealed class CertificationAttemptRediagnoser
     }
 }
 
-public static class CertificationRepeatGuard
-{
-    public static bool MayAutomaticallyAdvance(CertificationDiagnosisOutcome? outcome) =>
-        outcome?.Status.Disposition is CertificationDiagnosisDisposition.Completed
-            or CertificationDiagnosisDisposition.Inconclusive
-            or CertificationDiagnosisDisposition.Unavailable;
-}
-
 public static class CertificationDiagnosisPolicy
 {
-    public static bool RequiresSessionInspection(CertificationFailureContext context) =>
-        context.Classification != CertificationClassification.Passed
-        && (context.ExplicitRequest
-            || context.LiveProviderInvoked && BypassReason(context) is null);
-
     public static string? BypassReason(CertificationFailureContext context)
     {
         if (context.Classification == CertificationClassification.Passed) return "successful-certification";
