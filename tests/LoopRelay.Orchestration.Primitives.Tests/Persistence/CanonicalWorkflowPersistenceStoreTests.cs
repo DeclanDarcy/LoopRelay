@@ -700,48 +700,6 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Equal(3, third);
     }
 
-    [Fact]
-    public async Task RenderedPromptExistsAsync_returns_false_when_no_database_file_exists_yet()
-    {
-        Repository repository = CreateRepository();
-        var store = new CanonicalWorkflowPersistenceStore(repository);
-
-        Assert.False(await store.RenderedPromptExistsAsync("rp_missing"));
-    }
-
-    [Fact]
-    public async Task RenderedPromptExistsAsync_distinguishes_an_inserted_id_from_an_unrelated_one()
-    {
-        Repository repository = CreateRepository();
-        var store = new CanonicalWorkflowPersistenceStore(repository);
-        DateTimeOffset now = new(2026, 7, 11, 10, 0, 0, TimeSpan.Zero);
-        await store.AppendRenderedPromptAsync(MinimalRenderedPromptRecord("rp_present", now));
-
-        Assert.True(await store.RenderedPromptExistsAsync("rp_present"));
-        Assert.False(await store.RenderedPromptExistsAsync("rp_absent"));
-    }
-
-    [Fact]
-    public async Task RenderedPromptExistsAsync_reports_false_once_the_row_is_removed_out_of_band()
-    {
-        // Simulates the "not readable after append" failure mode: the row was inserted, but by
-        // the time the existence check runs it is gone (e.g. external corruption or interference).
-        Repository repository = CreateRepository();
-        var store = new CanonicalWorkflowPersistenceStore(repository);
-        DateTimeOffset now = new(2026, 7, 11, 10, 0, 0, TimeSpan.Zero);
-        await store.AppendRenderedPromptAsync(MinimalRenderedPromptRecord("rp_vanishing", now));
-        Assert.True(await store.RenderedPromptExistsAsync("rp_vanishing"));
-
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
-        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
-        {
-            await connection.OpenAsync();
-            await ExecuteAsync(connection, "DELETE FROM canonical_rendered_prompts WHERE rendered_prompt_id = 'rp_vanishing';");
-        }
-
-        Assert.False(await store.RenderedPromptExistsAsync("rp_vanishing"));
-    }
-
     private static CanonicalRenderedPromptRecord MinimalRenderedPromptRecord(string id, DateTimeOffset renderedAt) =>
         new(
             id,

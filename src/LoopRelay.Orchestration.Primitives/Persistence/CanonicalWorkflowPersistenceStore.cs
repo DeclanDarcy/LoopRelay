@@ -757,33 +757,6 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         return Convert.ToInt64(await countCommand.ExecuteScalarAsync(cancellationToken));
     }
 
-    /// <summary>
-    /// Checks whether a rendered-prompt row is present by id without loading or materialising any
-    /// row bodies. Used by <see cref="CanonicalRenderedPromptFactStore.AppendAsync"/> to confirm
-    /// the just-appended row is readable back, replacing a full-table read of
-    /// <see cref="ReadRenderedPromptsAsync"/> that only needed a presence check.
-    /// </summary>
-    public async Task<bool> RenderedPromptExistsAsync(
-        string renderedPromptId,
-        CancellationToken cancellationToken = default)
-    {
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
-        if (!File.Exists(databasePath))
-        {
-            return false;
-        }
-
-        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
-        await connection.OpenAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT 1 FROM canonical_rendered_prompts WHERE rendered_prompt_id = $renderedPromptId LIMIT 1;
-            """;
-        command.Parameters.AddWithValue("$renderedPromptId", renderedPromptId);
-        object? result = await command.ExecuteScalarAsync(cancellationToken);
-        return result is not null;
-    }
-
     public async Task<IReadOnlyList<CanonicalRenderedPromptRecord>> ReadRenderedPromptsAsync(
         CancellationToken cancellationToken = default)
     {

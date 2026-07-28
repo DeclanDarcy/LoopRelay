@@ -501,21 +501,6 @@ public sealed class CanonicalTransitionPersistenceStoresTests
     }
 
     [Fact]
-    public void EnsureReadableAfterAppend_throws_the_documented_message_when_the_row_was_not_found()
-    {
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => CanonicalRenderedPromptFactStore.EnsureReadableAfterAppend(readableAfterAppend: false));
-
-        Assert.Equal("Rendered prompt fact was not readable after append.", exception.Message);
-    }
-
-    [Fact]
-    public void EnsureReadableAfterAppend_does_not_throw_when_the_row_was_found()
-    {
-        CanonicalRenderedPromptFactStore.EnsureReadableAfterAppend(readableAfterAppend: true);
-    }
-
-    [Fact]
     public async Task ReadTransitionRunAsync_matches_full_snapshot_lookup_for_existing_and_missing_runs()
     {
         Repository repository = CreateRepository();

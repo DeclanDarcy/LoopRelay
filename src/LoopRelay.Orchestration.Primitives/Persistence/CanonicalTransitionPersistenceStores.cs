@@ -467,8 +467,6 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
             ConsumedInputManifestId: fact.ConsumedInputManifestIdentity.Value,
             RenderedEncoding: fact.RenderedEncoding);
         long ledgerSequence = await _store.AppendRenderedPromptAsync(record, cancellationToken);
-        bool readableAfterAppend = await _store.RenderedPromptExistsAsync(fact.Identity.Value, cancellationToken);
-        EnsureReadableAfterAppend(readableAfterAppend);
 
         var persisted = new PersistedRenderedPromptFact(
             fact,
@@ -477,19 +475,6 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
             DateTimeOffset.UtcNow);
         appended[fact.Identity] = persisted;
         return persisted;
-    }
-
-    /// <summary>
-    /// Guards the "not readable after append" invariant. Extracted so the trigger condition and
-    /// message can be pinned by a direct test without needing to force a real read-back failure
-    /// through the sealed, connection-per-call persistence store.
-    /// </summary>
-    internal static void EnsureReadableAfterAppend(bool readableAfterAppend)
-    {
-        if (!readableAfterAppend)
-        {
-            throw new InvalidOperationException("Rendered prompt fact was not readable after append.");
-        }
     }
 
     public async Task<PersistedRenderedPromptFact?> ReadAsync(
