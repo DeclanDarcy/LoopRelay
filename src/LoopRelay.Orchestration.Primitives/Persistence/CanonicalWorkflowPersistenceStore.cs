@@ -45,6 +45,16 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     /// </summary>
     internal Action? ReadRenderedPromptsAsyncInvokedForTesting { get; set; }
 
+    /// <summary>
+    /// Test-only observability, mirroring <see cref="ReadRenderedPromptsAsyncInvokedForTesting"/>
+    /// (Task 3.2): fires whenever the unkeyed, full-hydration <see cref="ReadWorkflowInstancesAsync"/>
+    /// path actually runs, so a test can assert directly that the keyed
+    /// <see cref="ReadActiveWorkflowInstancesAsync"/> path
+    /// <c>CanonicalWorkflowInstanceRecorder.BeginInstanceAsync</c> now uses (Task 3.3) never fell
+    /// back to it. Instance-scoped, like <see cref="ConnectionObserverForTesting"/>.
+    /// </summary>
+    internal Action? ReadWorkflowInstancesAsyncInvokedForTesting { get; set; }
+
     public async Task UpsertWorkflowStateAsync(
         CanonicalWorkflowStateRecord state,
         CancellationToken cancellationToken = default)
@@ -1353,6 +1363,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     public async Task<IReadOnlyList<WorkflowInstanceRecord>> ReadWorkflowInstancesAsync(
         CancellationToken cancellationToken = default)
     {
+        ReadWorkflowInstancesAsyncInvokedForTesting?.Invoke();
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
         if (!File.Exists(databasePath))
         {
@@ -1372,6 +1383,63 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                        started_at, completed_at, outcome, catalog_identity
                 FROM workflow_instances ORDER BY started_at, workflow_instance_id;
                 """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new WorkflowInstanceRecord(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    new WorkflowIdentity(reader.GetString(2)),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    ParseDate(reader.GetString(5)),
+                    reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.GetString(8)));
+            }
+
+            return rows;
+        });
+    }
+
+    /// <summary>
+    /// Reads only the workflow instances for one run and workflow that are currently
+    /// <c>Active</c>, without hydrating every workflow instance in the workspace (Task 3.3). Used
+    /// by <see cref="LoopRelay.Orchestration.Persistence.CanonicalWorkflowInstanceRecorder.BeginInstanceAsync"/>
+    /// to decide whether a new instance may begin - it used to call
+    /// <see cref="ReadWorkflowInstancesAsync"/> and filter every instance in the workspace down to
+    /// this run and workflow in memory. The <c>'Active'</c> literal matches the one
+    /// <c>BeginInstanceAsync</c> itself writes when it starts a new instance, and the one
+    /// <see cref="InterruptLingeringActiveRunsAsync"/>'s own SQL filters on for this same
+    /// <c>workflow_instances</c> table.
+    /// </summary>
+    public async Task<IReadOnlyList<WorkflowInstanceRecord>> ReadActiveWorkflowInstancesAsync(
+        string runId,
+        string workflowIdentity,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+            ConnectionObserverForTesting?.Invoke(connection);
+
+            var rows = new List<WorkflowInstanceRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT workflow_instance_id, run_id, workflow_identity, catalog_version, status,
+                       started_at, completed_at, outcome, catalog_identity
+                FROM workflow_instances
+                WHERE run_id = $run_id AND workflow_identity = $workflow_identity AND status = 'Active';
+                """;
+            command.Parameters.AddWithValue("$run_id", runId);
+            command.Parameters.AddWithValue("$workflow_identity", workflowIdentity);
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {

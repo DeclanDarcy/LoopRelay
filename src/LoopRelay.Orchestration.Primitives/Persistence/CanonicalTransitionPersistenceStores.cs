@@ -370,13 +370,12 @@ public sealed class CanonicalWorkflowInstanceRecorder(
         WorkflowIdentity workflow,
         CancellationToken cancellationToken)
     {
-        WorkflowInstanceRecord[] active = (await _store.ReadWorkflowInstancesAsync(cancellationToken))
-            .Where(item => item.RunId == run.Value && item.Workflow == workflow && item.Status == "Active")
-            .ToArray();
-        if (active.Length > 1)
+        IReadOnlyList<WorkflowInstanceRecord> active = await _store.ReadActiveWorkflowInstancesAsync(
+            run.Value, workflow.Value, cancellationToken);
+        if (active.Count > 1)
             throw new InvalidOperationException(
                 $"Multiple active workflow instances exist for root '{run}' and workflow '{workflow}'.");
-        if (active.Length == 1)
+        if (active.Count == 1)
             return new WorkflowInstanceIdentity(active[0].WorkflowInstanceId);
         WorkflowInstanceIdentity workflowInstance = WorkflowInstanceIdentity.New();
         await _store.UpsertWorkflowInstanceAsync(

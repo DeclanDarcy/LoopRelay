@@ -1434,6 +1434,220 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         Assert.Equal(expected.Evidence, actual.Evidence);
     }
 
+    /// <summary>
+    /// Characterization test for Task 3.3: <c>CanonicalWorkflowInstanceRecorder.BeginInstanceAsync</c>
+    /// used to call <see cref="CanonicalWorkflowPersistenceStore.ReadWorkflowInstancesAsync"/> - every
+    /// workflow instance in the workspace, across every run - and filter down to this run and
+    /// workflow's active instance in memory. It now issues one keyed
+    /// <see cref="CanonicalWorkflowPersistenceStore.ReadActiveWorkflowInstancesAsync"/> read instead.
+    /// Two runs are seeded, each with its own active instance under the same workflow, specifically to
+    /// catch the risk keyed SQL introduces that in-memory filtering could not have: a
+    /// <c>WHERE run_id = $run</c> clause that is wrong, or missing, silently returns the wrong run's
+    /// active instance (or every run's) instead of raising - a single-run fixture cannot discriminate
+    /// that from a working implementation.
+    /// <para>
+    /// The baseline is <see cref="LegacyActiveWorkflowInstancesAsync"/>, the pre-Task-3.3 lookup this
+    /// task replaced (verified identical via <c>git diff</c> against the pre-change file) - the LINQ
+    /// filter that used to run directly inside <c>BeginInstanceAsync</c>, extracted here since the
+    /// method's other half (creating a new instance) is an untouched side effect this characterization
+    /// must not re-trigger a second time. Comparing its real output to the keyed implementation's real
+    /// output - rather than reasoning about the diff - is what makes this a characterization test.
+    /// </para>
+    /// <para>
+    /// The test also covers both directions the brief requires unchanged: begin-allowed (no active
+    /// instance yet, so a new one must be created) for both runs, then begin-rejected (an active
+    /// instance already exists, so the same one must be returned rather than a duplicate) for both
+    /// runs. A keyed query that failed to see an existing active instance would allow a duplicate
+    /// concurrent instance - the correctness failure this task must not introduce.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task BeginInstanceAsync_matches_the_pre_keyed_lookup_and_does_not_cross_contaminate_runs()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var recorder = new CanonicalWorkflowInstanceRecorder(persistence);
+
+        var runA = new RunIdentity("run_a_" + Guid.NewGuid().ToString("N"));
+        var runB = new RunIdentity("run_b_" + Guid.NewGuid().ToString("N"));
+
+        // Fix-pass idiom from Task 3.2: the invariant this guard polices is "the unkeyed,
+        // full-hydration ReadWorkflowInstancesAsync path did not run during BeginInstanceAsync" -
+        // not an exact statement-count total, which would also move if unrelated work in the same
+        // call changed. A direct signal expresses the actual invariant regardless of that. See
+        // ReadActiveWorkflowInstancesAsync_compiles_exactly_one_statement_regardless_of_history_size
+        // below for a numeric bound scoped to just the keyed read. The hook wraps
+        // recorder.BeginInstanceAsync itself - the production entry point that could fall back -
+        // not the store's keyed method directly, since the keyed method could never invoke it.
+        bool hydrationPathInvoked = false;
+        persistence.ReadWorkflowInstancesAsyncInvokedForTesting = () => hydrationPathInvoked = true;
+        WorkflowInstanceIdentity firstA;
+        WorkflowInstanceIdentity firstB;
+        WorkflowInstanceIdentity secondA;
+        WorkflowInstanceIdentity secondB;
+        try
+        {
+            // Begin-allowed: neither run has an active instance yet, so both calls must create one.
+            firstA = await recorder.BeginInstanceAsync(runA, WorkflowIdentity.Plan, CancellationToken.None);
+            firstB = await recorder.BeginInstanceAsync(runB, WorkflowIdentity.Plan, CancellationToken.None);
+
+            // Begin-rejected: an active instance already exists for each run, so a second call must
+            // return the same instance rather than creating a duplicate - the correctness property
+            // this task must not regress (a keyed query that fails to see an existing active
+            // instance would allow a duplicate concurrent instance).
+            secondA = await recorder.BeginInstanceAsync(runA, WorkflowIdentity.Plan, CancellationToken.None);
+            secondB = await recorder.BeginInstanceAsync(runB, WorkflowIdentity.Plan, CancellationToken.None);
+        }
+        finally
+        {
+            persistence.ReadWorkflowInstancesAsyncInvokedForTesting = null;
+        }
+
+        // The keyed path BeginInstanceAsync now uses must never fall back to the full-table
+        // hydration it replaced - the actual regression this task exists to prevent, expressed
+        // directly instead of inferred from an arithmetic total.
+        Assert.False(
+            hydrationPathInvoked,
+            "BeginInstanceAsync must not fall back to the unkeyed, full-hydration ReadWorkflowInstancesAsync.");
+
+        Assert.NotEqual(firstA, firstB);
+        Assert.Equal(firstA, secondA);
+        Assert.Equal(firstB, secondB);
+
+        // Baseline, captured by executing the pre-Task-3.3 lookup for real before trusting the keyed
+        // replacement - not by reasoning about what it ought to return.
+        WorkflowInstanceRecord expectedA = Assert.Single(await LegacyActiveWorkflowInstancesAsync(
+            persistence, runA.Value, WorkflowIdentity.Plan, CancellationToken.None));
+        WorkflowInstanceRecord expectedB = Assert.Single(await LegacyActiveWorkflowInstancesAsync(
+            persistence, runB.Value, WorkflowIdentity.Plan, CancellationToken.None));
+
+        WorkflowInstanceRecord actualA = Assert.Single(await persistence.ReadActiveWorkflowInstancesAsync(
+            runA.Value, WorkflowIdentity.Plan.Value, CancellationToken.None));
+        WorkflowInstanceRecord actualB = Assert.Single(await persistence.ReadActiveWorkflowInstancesAsync(
+            runB.Value, WorkflowIdentity.Plan.Value, CancellationToken.None));
+        AssertSameWorkflowInstance(expectedA, actualA);
+        AssertSameWorkflowInstance(expectedB, actualB);
+
+        // Discriminating assertions: AssertSameWorkflowInstance above only proves run A's keyed result
+        // matches run A's *own* legacy result, which a bug that fed both calls the same wrong row would
+        // not catch. These fail if run A's instance leaked into run B's result, or vice versa - which
+        // is the entire point of seeding two runs.
+        Assert.Equal(firstA.Value, actualA.WorkflowInstanceId);
+        Assert.Equal(firstB.Value, actualB.WorkflowInstanceId);
+        Assert.NotEqual(actualA.WorkflowInstanceId, actualB.WorkflowInstanceId);
+    }
+
+    /// <summary>
+    /// Byte-for-byte reproduction of the pre-Task-3.3 lookup that used to run directly inside
+    /// <c>CanonicalWorkflowInstanceRecorder.BeginInstanceAsync</c>: hydrate every workflow instance in
+    /// the workspace via the store method this task left untouched, then filter to this run, workflow,
+    /// and 'Active' status in memory. Kept as the characterization baseline. The method's other half
+    /// (creating a new instance) is untouched by this task and is deliberately not reproduced here,
+    /// since exercising it for real would create a second, contaminating instance alongside the one
+    /// production already created through the real recorder.
+    /// </summary>
+    private static async Task<IReadOnlyList<WorkflowInstanceRecord>> LegacyActiveWorkflowInstancesAsync(
+        CanonicalWorkflowPersistenceStore store,
+        string runId,
+        WorkflowIdentity workflow,
+        CancellationToken cancellationToken)
+    {
+        return (await store.ReadWorkflowInstancesAsync(cancellationToken))
+            .Where(item => item.RunId == runId && item.Workflow == workflow && item.Status == "Active")
+            .ToArray();
+    }
+
+    private static void AssertSameWorkflowInstance(WorkflowInstanceRecord expected, WorkflowInstanceRecord actual)
+    {
+        Assert.Equal(expected.WorkflowInstanceId, actual.WorkflowInstanceId);
+        Assert.Equal(expected.RunId, actual.RunId);
+        Assert.Equal(expected.Workflow, actual.Workflow);
+        Assert.Equal(expected.CatalogVersion, actual.CatalogVersion);
+        Assert.Equal(expected.Status, actual.Status);
+        Assert.Equal(expected.StartedAt, actual.StartedAt);
+        Assert.Equal(expected.CompletedAt, actual.CompletedAt);
+        Assert.Equal(expected.Outcome, actual.Outcome);
+        Assert.Equal(expected.CatalogIdentity, actual.CatalogIdentity);
+    }
+
+    /// <summary>
+    /// Numeric bound scoped to just the keyed active-instance read itself - deliberately excluding
+    /// <c>BeginInstanceAsync</c>'s own create-new-instance write, which is untouched by this task and
+    /// would otherwise make an exact total fragile to unrelated changes (the same complaint Task 3.2
+    /// raised against an unscoped total). A single
+    /// <c>WHERE run_id = ... AND workflow_identity = ... AND status = 'Active'</c> lookup must compile
+    /// as exactly one statement, no matter how many unrelated instances exist in the workspace.
+    /// </summary>
+    [Fact]
+    public async Task ReadActiveWorkflowInstancesAsync_compiles_exactly_one_statement_regardless_of_history_size()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var recorder = new CanonicalWorkflowInstanceRecorder(persistence);
+
+        // Unrelated history the keyed read must not scan.
+        for (int i = 0; i < 5; i++)
+        {
+            await recorder.BeginInstanceAsync(
+                new RunIdentity($"run_history_{i}"), WorkflowIdentity.Plan, CancellationToken.None);
+        }
+        var run = new RunIdentity("run_target");
+        await recorder.BeginInstanceAsync(run, WorkflowIdentity.Plan, CancellationToken.None);
+
+        var counter = new PreparedStatementCounter();
+        persistence.ConnectionObserverForTesting = counter.Watch;
+        IReadOnlyList<WorkflowInstanceRecord> active;
+        try
+        {
+            active = await persistence.ReadActiveWorkflowInstancesAsync(
+                run.Value, WorkflowIdentity.Plan.Value, CancellationToken.None);
+        }
+        finally
+        {
+            persistence.ConnectionObserverForTesting = null;
+        }
+
+        Assert.Single(active);
+        Assert.Equal(1, counter.Statements);
+    }
+
+    /// <summary>
+    /// <see cref="CanonicalWorkflowPersistenceStore.ReadWorkflowInstancesAsync"/> - the unkeyed method
+    /// this task replaced - tolerated a pre-v3 workspace database (lacking every spine table,
+    /// including <c>workflow_instances</c>) by reporting no instances rather than throwing, via
+    /// <c>ReadSpineRowsOrEmptyAsync</c>. The keyed replacement must preserve that:
+    /// <c>BeginInstanceAsync</c> against such a database must still begin a new instance (there being
+    /// no way, yet, for one to be active), not throw a raw <see cref="SqliteException"/> out of the
+    /// read.
+    /// </summary>
+    [Fact]
+    public async Task BeginInstanceAsync_begins_a_new_instance_rather_than_throwing_when_the_workspace_database_lacks_spine_tables()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await connection.OpenAsync();
+            // A valid, initialized SQLite file with zero tables - standing in for a pre-v3 workspace
+            // database, which lacks workflow_instances (and every other spine table).
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "PRAGMA user_version = 1;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var recorder = new CanonicalWorkflowInstanceRecorder(persistence);
+
+        WorkflowInstanceIdentity instance = await recorder.BeginInstanceAsync(
+            new RunIdentity("run_pre_v3"), WorkflowIdentity.Plan, CancellationToken.None);
+
+        Assert.StartsWith("wfi_", instance.Value, StringComparison.Ordinal);
+        WorkflowInstanceRecord stored = Assert.Single(await persistence.ReadWorkflowInstancesAsync());
+        Assert.Equal(instance.Value, stored.WorkflowInstanceId);
+        Assert.Equal("Active", stored.Status);
+    }
+
     private static async Task<CanonicalCausalContext> SeedCausalityAsync(
         CanonicalWorkflowPersistenceStore persistence)
     {
