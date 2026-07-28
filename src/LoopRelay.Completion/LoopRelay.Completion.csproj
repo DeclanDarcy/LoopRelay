@@ -20,4 +20,8 @@
     <ProjectReference Include="..\LoopRelay.Projections\LoopRelay.Projections.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="LoopRelay.Completion.Tests" />
+  </ItemGroup>
+
 </Project>

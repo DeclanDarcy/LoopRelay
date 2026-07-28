@@ -23,22 +23,18 @@ public sealed class CompletionAuthorityProjection(CanonicalCompletionAuthoritySt
     public async Task<CompletionAuthorityProjectionSnapshot> ProjectAsync(
         CancellationToken cancellationToken = default)
     {
-        CanonicalCompletionSnapshot snapshot = await _store.ReadSnapshotAsync(cancellationToken);
-        CompletionDecision? decision = snapshot.Decisions.LastOrDefault();
-        CompletionCertificate? certificate = decision is null ? null : snapshot.Certificates
-            .LastOrDefault(item => item.Decision == decision.Identity);
-        CompletionClosurePlan? plan = certificate is null ? null : snapshot.ClosurePlans
-            .LastOrDefault(item => item.Certificate == certificate.Identity);
-        CompletionSettlement? settlement = plan is null ? null : snapshot.Settlements
-            .LastOrDefault(item => item.Plan == plan.Identity);
-        CertifiedTerminalFact? terminal = decision is null ? null : snapshot.TerminalFacts
-            .LastOrDefault(item => item.RootRun == decision.RootRun);
+        // Task 3.4: per-chain `ORDER BY ... DESC LIMIT 1` reads plus a `COUNT(*)` per table, on a
+        // read-only connection, instead of hydrating every historical row across every table on a
+        // write connection and discarding almost all of it here via `LastOrDefault`.
+        CompletionAuthorityHeadsAndCounts heads = await _store.ReadHeadsAndCountsAsync(cancellationToken);
         string watermark = string.Join(':',
-            snapshot.Decisions.Count, snapshot.Certificates.Count, snapshot.ClosurePlans.Count,
-            snapshot.Settlements.Count, snapshot.TerminalFacts.Count,
-            settlement?.Identity.Value ?? plan?.Identity.Value ?? decision?.Identity.Value ?? "empty");
-        return new(decision, certificate, plan, settlement, terminal,
-            settlement?.PendingOperations ?? plan?.Operations.Select(item => item.Identity).ToArray() ?? [],
+            heads.DecisionCount, heads.CertificateCount, heads.ClosurePlanCount,
+            heads.SettlementCount, heads.TerminalFactCount,
+            heads.Settlement?.Identity.Value ?? heads.ClosurePlan?.Identity.Value
+                ?? heads.LatestDecision?.Identity.Value ?? "empty");
+        return new(heads.LatestDecision, heads.Certificate, heads.ClosurePlan, heads.Settlement, heads.TerminalFact,
+            heads.Settlement?.PendingOperations
+                ?? heads.ClosurePlan?.Operations.Select(item => item.Identity).ToArray() ?? [],
             watermark);
     }
 }
