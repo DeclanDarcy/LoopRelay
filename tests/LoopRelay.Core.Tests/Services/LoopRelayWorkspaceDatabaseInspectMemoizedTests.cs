@@ -26,16 +26,25 @@ public sealed class LoopRelayWorkspaceDatabaseInspectMemoizedTests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        int fullVerificationBaseline = LoopRelayWorkspaceDatabase.FullVerificationRuns;
-        WorkspaceSchemaInspection full = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        int baseline = LoopRelayWorkspaceDatabase.ShapeRequirementProbes;
         WorkspaceSchemaInspection? memoized = await LoopRelayWorkspaceDatabase.InspectMemoizedAsync(connection);
 
         Assert.NotNull(memoized);
+        // The memo answers without issuing any of the ~190 individual shape-requirement probes a
+        // from-scratch classification costs - mirroring the guard InspectStampedTests uses for the
+        // same reason (FullVerificationRuns cannot discriminate this: it is only ever incremented
+        // by EnsureSchemaAsync's slow path, which neither this call nor InspectSchemaAsync below
+        // goes through, so it would hold unchanged no matter what InspectMemoizedAsync did).
+        Assert.Equal(baseline, LoopRelayWorkspaceDatabase.ShapeRequirementProbes);
+
+        // Guards against a vacuous pass: if the counter never moved for anything, the assertion
+        // above would hold no matter what InspectMemoizedAsync did. Full classification on the same
+        // connection must move it, proving the counter observes the probes the memo path skipped.
+        WorkspaceSchemaInspection full = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        Assert.True(
+            LoopRelayWorkspaceDatabase.ShapeRequirementProbes > baseline,
+            "InspectSchemaAsync must issue shape-requirement probes for the counter to be meaningful.");
         Assert.Equal(full, memoized);
-        // The memo answers without running EnsureSchemaAsync's full verification pipeline again -
-        // the explicit InspectSchemaAsync call just above is what a from-scratch classification
-        // costs, and InspectMemoizedAsync must not trigger a second one of those.
-        Assert.Equal(fullVerificationBaseline, LoopRelayWorkspaceDatabase.FullVerificationRuns);
     }
 
     [Fact]

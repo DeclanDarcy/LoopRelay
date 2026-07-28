@@ -129,13 +129,16 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
         // Bound to the schema-admission memo instead of re-proving structure on every read: once
         // this process has admitted the database once (EnsureSchemaAsync, on any connection to the
         // same file), InspectMemoizedAsync answers from that memo plus a cheap live stamp re-check
-        // (2 SELECTs) instead of the ~190-probe InspectSchemaAsync inspection. It returns null - and
-        // InspectStampedAsync (itself falling back to full classification) takes over - whenever the
-        // memo is cold or the live stamp no longer matches it, so a tampered or not-yet-admitted
-        // database is still classified in full and still fails closed exactly as before.
+        // (2 SELECTs) instead of the ~190-probe InspectSchemaAsync inspection. It returns null -
+        // and full InspectSchemaAsync classification takes over - whenever the memo is cold or the
+        // live stamp no longer matches it, so a tampered or not-yet-admitted database is still
+        // classified in full and still fails closed exactly as before. InspectStampedAsync is
+        // deliberately not used as this fallback: by its own documented trade-off it trusts the
+        // on-disk stamp over physical shape, so a store whose stamp is intact but whose physical
+        // structure has been corrupted out-of-band would pass here instead of being rejected.
         WorkspaceSchemaInspection inspection =
             await LoopRelayWorkspaceDatabase.InspectMemoizedAsync(connection, cancellationToken)
-            ?? await LoopRelayWorkspaceDatabase.InspectStampedAsync(connection, cancellationToken);
+            ?? await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection, cancellationToken);
         if (inspection.Family != WorkspaceSchemaFamily.CanonicalWorkspace ||
             inspection.Version != LoopRelayWorkspaceDatabase.CurrentSchemaVersion)
         {
