@@ -50,23 +50,30 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
                 "History fact causality belongs to a different workspace identity.");
         }
 
-        // Rotation is a convergence, not an accumulation. A crash between this append committing and
-        // the rotation executor deleting its live source leaves both, so the re-executed effect reads
-        // byte-identical content and appends again. Converging here - before the transaction opens -
-        // is what makes that retry idempotent: answering with the already-committed fact mints no
-        // second identity, writes no second evidence set, and plans no second projection effect.
+        // Rotation is a convergence, not an accumulation - but only against the LATEST fact.
+        // A crash between this append committing and the rotation executor deleting its live
+        // source leaves both, so the re-executed effect reads byte-identical content and appends
+        // again; because that retry happens before any newer same-kind fact can be produced, the
+        // already-committed fact is still the latest and the retry converges on it, minting no
+        // second identity, evidence set, or projection effect. Content that legitimately recurs
+        // AFTER an intervening fact must append fresh: converging across history would silently
+        // resurface an old fact while the caller deletes the live file, making "latest" lie.
+        // The check runs inside the write transaction (IMMEDIATE by default in
+        // Microsoft.Data.Sqlite), so two racing writers serialize; no unique-index backstop is
+        // needed - or possible, since "unique against latest" is not expressible as an index.
         string contentHash = LoopHistoryRecord.ComputeContentHash(request.Content);
-        LoopHistoryRecord? converged = await ReadByContentHashAsync(
-            connection, spec, request.Kind, contentHash, cancellationToken);
-        if (converged is not null)
-        {
-            return converged;
-        }
-
         await using SqliteTransaction transaction =
             (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
 
-        long sequence = await NextSequenceAsync(connection, transaction, spec, cancellationToken);
+        LatestRow? latest = await ReadLatestRowAsync(connection, transaction, spec, cancellationToken);
+        if (latest is { HistoryId: not null } converged &&
+            string.Equals(converged.ContentHash, contentHash, StringComparison.Ordinal))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return await MaterializeRecordAsync(connection, converged, request.Kind, cancellationToken);
+        }
+
+        long sequence = (latest?.Sequence ?? 0) + 1;
         HistoryFactIdentity historyIdentity = HistoryFactIdentity.New();
         string relativePath = spec.HistoricalPath(checked((int)sequence));
         DateTimeOffset recordedAt = DateTimeOffset.UtcNow;
@@ -200,68 +207,99 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
     }
 
     /// <summary>
-    /// Returns the committed fact for a (kind, content hash) pair, or null. This is the read that
-    /// makes <see cref="AppendAsync"/> idempotent under re-execution; see the comment at its call
-    /// site. Rows without a canonical <c>history_id</c> are legacy and are deliberately not matched:
-    /// they carry no canonical causality to answer with, so they fall through to a fresh append
-    /// exactly as they do today rather than failing the caller.
+    /// Latest row of a kind, canonical or legacy, read inside the write transaction. Legacy rows
+    /// (null history_id) never converge - they carry no canonical causality to answer with - but
+    /// still participate in sequence derivation exactly as the old MAX(sequence) query did.
     /// </summary>
-    private static async Task<LoopHistoryRecord?> ReadByContentHashAsync(
+    private static async Task<LatestRow?> ReadLatestRowAsync(
         SqliteConnection connection,
+        SqliteTransaction transaction,
         LoopHistorySpec spec,
-        LoopHistoryKind kind,
-        string contentHash,
         CancellationToken cancellationToken)
     {
         await using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = """
             SELECT history_id, sequence, logical_path, body, content_hash, created_at,
                    workspace_id, run_id, workflow_instance_id, transition_run_id, attempt_id,
                    session_id, turn_id, supersedes_id
             FROM loop_history
-            WHERE kind = $kind AND content_hash = $content_hash AND history_id IS NOT NULL
-            ORDER BY sequence
+            WHERE kind = $kind
+            ORDER BY sequence DESC
             LIMIT 1;
             """;
         command.Parameters.AddWithValue("$kind", spec.KindToken);
-        command.Parameters.AddWithValue("$content_hash", contentHash);
-        HistoryFactIdentity identity;
-        long sequence;
-        string relativePath;
-        string content;
-        DateTimeOffset recordedAt;
-        CanonicalCausalContext causality;
-        HistoryFactIdentity? supersedes;
-        await using (SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken))
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
         {
-            if (!await reader.ReadAsync(cancellationToken))
-            {
-                return null;
-            }
-
-            identity = new HistoryFactIdentity(reader.GetString(0));
-            sequence = reader.GetInt64(1);
-            relativePath = reader.GetString(2);
-            content = reader.GetString(3);
-            recordedAt = DateTimeOffset.Parse(
-                reader.GetString(5), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-            causality = new CanonicalCausalContext(
-                new WorkspaceIdentity(reader.GetString(6)),
-                new RunIdentity(reader.GetString(7)),
-                new WorkflowInstanceIdentity(reader.GetString(8)),
-                new TransitionRunIdentity(reader.GetString(9)),
-                new AttemptIdentity(reader.GetString(10)),
-                reader.IsDBNull(11) ? null : new AgentSessionIdentity(reader.GetString(11)),
-                reader.IsDBNull(12) ? null : new TurnIdentity(reader.GetString(12)));
-            supersedes = reader.IsDBNull(13) ? null : new HistoryFactIdentity(reader.GetString(13));
+            return null;
         }
 
-        // The reader is closed first: ReadEvidenceAsync creates its own command on this connection.
+        return new LatestRow(
+            reader.IsDBNull(0) ? null : reader.GetString(0),
+            reader.GetInt64(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetString(4),
+            reader.GetString(5),
+            reader.IsDBNull(6) ? null : reader.GetString(6),
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            reader.IsDBNull(8) ? null : reader.GetString(8),
+            reader.IsDBNull(9) ? null : reader.GetString(9),
+            reader.IsDBNull(10) ? null : reader.GetString(10),
+            reader.IsDBNull(11) ? null : reader.GetString(11),
+            reader.IsDBNull(12) ? null : reader.GetString(12),
+            reader.IsDBNull(13) ? null : reader.GetString(13));
+    }
+
+    /// <summary>
+    /// Builds the converged record. Evidence is read after the transaction has been rolled back
+    /// (a read-only transaction rolls back harmlessly) because <see cref="ReadEvidenceAsync"/>
+    /// creates its own commands on this connection.
+    /// </summary>
+    private static async Task<LoopHistoryRecord> MaterializeRecordAsync(
+        SqliteConnection connection,
+        LatestRow row,
+        LoopHistoryKind kind,
+        CancellationToken cancellationToken)
+    {
+        HistoryFactIdentity identity = new(row.HistoryId!);
         HistoryEvidenceAttachments evidence = await ReadEvidenceAsync(connection, identity, cancellationToken);
         return new LoopHistoryRecord(
-            identity, kind, sequence, recordedAt, content, contentHash,
-            causality, evidence, supersedes, relativePath);
+            identity,
+            kind,
+            row.Sequence,
+            DateTimeOffset.Parse(row.CreatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+            row.Body,
+            row.ContentHash,
+            new CanonicalCausalContext(
+                new WorkspaceIdentity(row.WorkspaceId!),
+                new RunIdentity(row.RunId!),
+                new WorkflowInstanceIdentity(row.WorkflowInstanceId!),
+                new TransitionRunIdentity(row.TransitionRunId!),
+                new AttemptIdentity(row.AttemptId!),
+                row.SessionId is null ? null : new AgentSessionIdentity(row.SessionId),
+                row.TurnId is null ? null : new TurnIdentity(row.TurnId)),
+            evidence,
+            row.SupersedesId is null ? null : new HistoryFactIdentity(row.SupersedesId),
+            row.LogicalPath);
     }
+
+    private sealed record LatestRow(
+        string? HistoryId,
+        long Sequence,
+        string LogicalPath,
+        string Body,
+        string ContentHash,
+        string CreatedAt,
+        string? WorkspaceId,
+        string? RunId,
+        string? WorkflowInstanceId,
+        string? TransitionRunId,
+        string? AttemptId,
+        string? SessionId,
+        string? TurnId,
+        string? SupersedesId);
 
     private static async Task InsertFactAsync(
         SqliteConnection connection,
@@ -559,20 +597,6 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
         }
 
         return evidence;
-    }
-
-    private static async Task<long> NextSequenceAsync(
-        SqliteConnection connection,
-        SqliteTransaction transaction,
-        LoopHistorySpec spec,
-        CancellationToken cancellationToken)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = "SELECT COALESCE(MAX(sequence), 0) + 1 FROM loop_history WHERE kind = $kind;";
-        command.Parameters.AddWithValue("$kind", spec.KindToken);
-        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
-        return Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
     }
 
     private static async Task ExecuteAsync(
