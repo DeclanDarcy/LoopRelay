@@ -1,9 +1,9 @@
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Agents;
-using LoopRelay.Cli.Services.Execution;
 using LoopRelay.Cli.Tests.Services.Support;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Artifacts;
+using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Infrastructure.Services.Artifacts;
 using LoopRelay.Orchestration.Services;
 using Microsoft.Data.Sqlite;
@@ -384,7 +384,7 @@ public class AgentsSubmodulePublisherTests
 
     private static async Task InitializeWorkspaceDatabaseAsync(Repository repository)
     {
-        string databasePath = LoopWorkspaceDatabase.Resolve(repository);
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
         await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
@@ -446,7 +446,7 @@ public class AgentsSubmodulePublisherTests
     {
         await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
-            DataSource = LoopWorkspaceDatabase.Resolve(repository),
+            DataSource = LoopRelayWorkspaceDatabase.Resolve(repository),
             Mode = SqliteOpenMode.ReadWrite,
             Pooling = false,
         }.ToString());

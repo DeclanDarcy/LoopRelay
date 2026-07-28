@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Workflows;
 
-namespace LoopRelay.Certification;
+namespace LoopRelay.Certification.Tests;
 
 public sealed record ArchitectureMetric(
     string Name,
