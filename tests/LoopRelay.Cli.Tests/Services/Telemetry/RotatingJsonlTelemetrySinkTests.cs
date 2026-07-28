@@ -80,6 +80,7 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
         Assert.True(File.Exists(Path.Combine(dir, "sessions.2026-07-02.0000.jsonl")));
     }
 
+#if DEBUG
     /// <summary>
     /// Load-bearing assertion for PERF task w2-t4: the O(files) candidate scan must run once per
     /// sink lifetime (until rollover or external deletion forces a re-scan), not once per append.
@@ -98,7 +99,9 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
 
         Assert.Equal(1, sink.RescanCount);
     }
+#endif
 
+#if DEBUG
     [Fact]
     public void Append_WhenActiveFileExceedsSizeCap_RescansExactlyOncePerRollover()
     {
@@ -112,6 +115,7 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
         // cap crossing) resolves sequence 0001 on the second append.
         Assert.Equal(2, sink.RescanCount);
     }
+#endif
 
     /// <summary>
     /// External deletion must be detected: if the active JSONL file is deleted out from under the

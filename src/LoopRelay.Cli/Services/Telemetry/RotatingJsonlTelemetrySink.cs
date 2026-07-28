@@ -39,10 +39,12 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
     private string? _cachedDate;
     private string? _cachedFile;
 
+#if DEBUG
     /// <summary>Test-only observability: how many times this instance has run the O(files)
     /// candidate scan. The load-bearing assertion for this task is that two same-day appends
     /// (with no rollover) leave this at 1, not 2.</summary>
     internal int RescanCount { get; private set; }
+#endif
 
     public RotatingJsonlTelemetrySink(string directory, IClock clock, long maxBytes = DefaultMaxBytes)
     {
@@ -126,7 +128,9 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
             // re-scans for - fall through.
         }
 
+#if DEBUG
         RescanCount++;
+#endif
         Directory.CreateDirectory(_directory);
         string resolved = ScanForActiveFile(date);
         _cachedDate = date;
