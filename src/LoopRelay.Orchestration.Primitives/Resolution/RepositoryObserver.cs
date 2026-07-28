@@ -788,12 +788,30 @@ public sealed class RepositoryObserver(
             return null;
         }
 
-        return Directory
+        // CompletionArchiveCandidate recursively walks an archive directory, so evaluating it
+        // for every archived epic just to keep the single latest one would enumerate every
+        // archive on disk. Sort by the (cheap) parsed synthesis-file name first, and only call
+        // it - starting from the highest index - until a candidate with a matching archive
+        // directory is found. In the ordinary case this touches exactly one directory; the
+        // fallback to the next-highest index only runs if the top one turns out to have no
+        // retained archive directory, which preserves the pre-change full-enumeration result.
+        IEnumerable<string> descendingSynthesisPaths = Directory
             .EnumerateFiles(archiveRoot, "*.md", SearchOption.TopDirectoryOnly)
-            .Select(path => CompletionArchiveCandidate(root, path))
-            .Where(candidate => candidate is not null)
-            .OrderByDescending(candidate => candidate!.Index)
-            .FirstOrDefault();
+            .Select(path => (SynthesisPath: path, ParsedIndex: int.TryParse(Path.GetFileNameWithoutExtension(path), out int index) ? (int?)index : null))
+            .Where(file => file.ParsedIndex.HasValue)
+            .OrderByDescending(file => file.ParsedIndex!.Value)
+            .Select(file => file.SynthesisPath);
+
+        foreach (string synthesisPath in descendingSynthesisPaths)
+        {
+            CompletionArchiveRecord? candidate = CompletionArchiveCandidate(root, synthesisPath);
+            if (candidate is not null)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private static CompletionArchiveRecord? CompletionArchiveCandidate(string root, string synthesisPath)
