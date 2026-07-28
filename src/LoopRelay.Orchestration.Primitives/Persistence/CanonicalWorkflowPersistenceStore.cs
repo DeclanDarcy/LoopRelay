@@ -1166,6 +1166,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+        ConnectionObserverForTesting?.Invoke(connection);
 
         return new CanonicalWorkflowPersistenceSnapshot(
             await ReadWorkflowStatesAsync(connection, cancellationToken),
@@ -1192,6 +1193,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
+            ConnectionObserverForTesting?.Invoke(connection);
 
             var rows = new List<RunRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -1234,6 +1236,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
+            ConnectionObserverForTesting?.Invoke(connection);
 
             var rows = new List<WorkflowInstanceRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -1274,6 +1277,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
+            ConnectionObserverForTesting?.Invoke(connection);
 
             // Pre-v7 databases opened read-only have no policy_id column; those attempts read
             // back with a null policy identity without migrating the database.
@@ -1744,9 +1748,12 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     /// <see cref="AttemptRecord.RunId"/> feed the recovered causal context), and both columns are
     /// version-gated on databases opened read-only (see <see cref="ReadAttemptsAsync"/>) — skipping
     /// them here avoids the extra <c>pragma_table_info</c> probe per column that reading them would
-    /// require, keeping this a single statement. They read back <see langword="null"/>.
+    /// require, keeping this a single statement. They read back <see langword="null"/>. Kept
+    /// <see langword="internal"/> rather than public so this incompleteness cannot surprise a
+    /// caller outside the recovery path that expects a fully populated <see cref="AttemptRecord"/>;
+    /// use <see cref="ReadAttemptsAsync"/> if you need <c>policy_id</c> / <c>agent_role_policy_id</c>.
     /// </summary>
-    public async Task<AttemptRecord?> ReadLatestAttemptByTransitionRunAsync(
+    internal async Task<AttemptRecord?> ReadLatestAttemptByTransitionRunAsync(
         string transitionRunId,
         CancellationToken cancellationToken = default)
     {
