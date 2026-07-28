@@ -16,6 +16,7 @@ namespace LoopRelay.Core.Tests.Services;
 [Collection("WorkspaceDatabaseCounters")]
 public sealed class LoopRelayWorkspaceDatabaseInspectMemoizedTests
 {
+#if DEBUG
     [Fact]
     public async Task InspectMemoized_OnAdmittedStore_MatchesFullClassificationWithoutFullVerification()
     {
@@ -46,6 +47,7 @@ public sealed class LoopRelayWorkspaceDatabaseInspectMemoizedTests
             "InspectSchemaAsync must issue shape-requirement probes for the counter to be meaningful.");
         Assert.Equal(full, memoized);
     }
+#endif
 
     [Fact]
     public async Task InspectMemoized_OnNeverAdmittedDatabase_ReturnsNull()

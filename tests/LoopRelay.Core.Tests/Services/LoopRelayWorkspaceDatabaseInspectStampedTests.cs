@@ -14,6 +14,7 @@ namespace LoopRelay.Core.Tests.Services;
 [Collection("WorkspaceDatabaseCounters")]
 public sealed class LoopRelayWorkspaceDatabaseInspectStampedTests
 {
+#if DEBUG
     [Fact]
     public async Task InspectStamped_OnStampedDb_IssuesNoTableProbes()
     {
@@ -39,6 +40,7 @@ public sealed class LoopRelayWorkspaceDatabaseInspectStampedTests
             LoopRelayWorkspaceDatabase.ShapeRequirementProbes > baseline,
             "InspectSchemaAsync must issue shape-requirement probes for the counter to be meaningful.");
     }
+#endif
 
     [Fact]
     public async Task InspectStamped_OnStampedDb_MatchesFullClassificationFieldForField()

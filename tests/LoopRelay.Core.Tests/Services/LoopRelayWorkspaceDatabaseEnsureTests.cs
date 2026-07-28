@@ -14,6 +14,7 @@ namespace LoopRelay.Core.Tests.Services;
 [Collection("WorkspaceDatabaseCounters")]
 public sealed class LoopRelayWorkspaceDatabaseEnsureTests
 {
+#if DEBUG
     [Fact]
     public async Task EnsureSchema_OnHealthyDb_SecondCallSkipsFullVerification()
     {
@@ -48,6 +49,7 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
 
         Assert.Equal(baseline + 1, LoopRelayWorkspaceDatabase.FullVerificationRuns);
     }
+#endif
 
     [Fact]
     public async Task EnsureSchema_OnHealthyDb_PerformsNoWrite()
@@ -78,6 +80,7 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
         Assert.Equal(before, after);
     }
 
+#if DEBUG
     [Fact]
     public async Task EnsureSchema_StampMismatch_RerunsFullVerification()
     {
@@ -103,6 +106,7 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
 
         Assert.Equal(baseline + 1, LoopRelayWorkspaceDatabase.FullVerificationRuns);
     }
+#endif
 
     [Fact]
     public async Task Database_UsesBusyTimeout()
@@ -137,6 +141,7 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
         }
     }
 
+#if DEBUG
     [Fact]
     public async Task EnsureSchema_OnHealthyDb_MemoizedFastPath_OpensNoWriteTransaction()
     {
@@ -194,6 +199,7 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
         Assert.Equal(walLengthBefore, walLengthAfter);
         Assert.Equal(shmLengthBefore, shmLengthAfter);
     }
+#endif
 
     [Fact]
     public async Task EnsureSchema_MemoizedFastPath_RepairsReintroducedBlockedVocabularyAndRewritesReceipt()

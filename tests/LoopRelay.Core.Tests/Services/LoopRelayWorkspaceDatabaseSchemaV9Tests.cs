@@ -692,6 +692,9 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "SELECT value FROM schema_metadata WHERE key = 'schema_shape';"));
     }
 
+    // Depends on ResetSchemaVerificationCacheForTesting: without the memo reset the tampering below
+    // is skipped by the memoized fast path and never reaches the full verification pipeline.
+#if DEBUG
     [Fact]
     public async Task EnsureSchemaAsync_RejectsStampedCanonicalV16WhenItsPhysicalShapeIsCorrupt()
     {
@@ -714,6 +717,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));
     }
+#endif
 
     [Fact]
     public async Task EnsureSchemaAsync_RollsBackAllConvergenceWorkWhenFinalShapeStampFails()

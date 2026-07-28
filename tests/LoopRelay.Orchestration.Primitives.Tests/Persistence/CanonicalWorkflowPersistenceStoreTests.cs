@@ -1101,6 +1101,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
     /// level rather than only at the type level for the case where a document does get
     /// concatenated onto a mapped field.
     /// </summary>
+#if DEBUG
     [Fact]
     public async Task LoadObservationSnapshotAsync_never_materializes_evidence_document_bodies()
     {
@@ -1198,6 +1199,7 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
 
         Assert.Equal(legacyCounter.Statements, observationCounter.Statements);
     }
+#endif
 
     private static readonly string[] ExpectedTables =
     [

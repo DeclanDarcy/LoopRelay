@@ -19,6 +19,7 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         Converters = { new JsonStringEnumConverter() },
     };
 
+#if DEBUG
     /// <summary>
     /// Test-only observability: every connection this store opens is offered here once it is open
     /// and schema-verified, immediately before the calling read or write issues its own statements.
@@ -41,12 +42,15 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
     /// connection observer cannot see it.
     /// </summary>
     internal Action<SqliteCommand>? CommandObserverForTesting { get; set; }
+#endif
 
     private SqliteCommand CreateCommand(SqliteConnection connection, SqliteTransaction? transaction = null)
     {
         SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
+#if DEBUG
         CommandObserverForTesting?.Invoke(command);
+#endif
         return command;
     }
 
@@ -454,7 +458,9 @@ public sealed class CanonicalEffectWorkStore(Repository _repository) : IEffectWo
         SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
         await connection.OpenAsync(cancellationToken);
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
         return connection;
     }
 

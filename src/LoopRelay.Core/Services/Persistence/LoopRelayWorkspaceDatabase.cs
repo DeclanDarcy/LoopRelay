@@ -123,6 +123,7 @@ public static class LoopRelayWorkspaceDatabase
     /// </summary>
     private static readonly ConcurrentDictionary<string, (long Version, string ShapeFingerprint)> VerifiedSchemas = new();
 
+#if DEBUG
     /// <summary>Test-only observability: how many times the full verification pipeline ran.</summary>
     internal static int FullVerificationRuns;
 
@@ -156,6 +157,7 @@ public static class LoopRelayWorkspaceDatabase
         Interlocked.Exchange(ref RepairTransactionsOpened, 0);
         Interlocked.Exchange(ref FullVerificationRuns, 0);
     }
+#endif
 
     static LoopRelayWorkspaceDatabase()
     {
@@ -376,7 +378,9 @@ public static class LoopRelayWorkspaceDatabase
             return;
         }
 
+#if DEBUG
         Interlocked.Increment(ref FullVerificationRuns);
+#endif
 
         WorkspaceSchemaInspection inspection = await InspectSchemaAsync(connection, cancellationToken);
         if (inspection.Family == WorkspaceSchemaFamily.LegacyContinuity)
@@ -557,7 +561,9 @@ public static class LoopRelayWorkspaceDatabase
             return;
         }
 
+#if DEBUG
         Interlocked.Increment(ref RepairTransactionsOpened);
+#endif
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         try
         {
@@ -1933,7 +1939,9 @@ public static class LoopRelayWorkspaceDatabase
         ShapeRequirement requirement,
         CancellationToken cancellationToken)
     {
+#if DEBUG
         Interlocked.Increment(ref ShapeRequirementProbes);
+#endif
         switch (requirement.Kind)
         {
             case ShapeRequirementKind.Table:

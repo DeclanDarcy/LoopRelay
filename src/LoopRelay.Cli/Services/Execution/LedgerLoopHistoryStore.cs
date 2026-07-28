@@ -20,6 +20,7 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+#if DEBUG
     /// <summary>
     /// Test-only observability: the read-only connection <see cref="ReadLatestAsync"/> opens is
     /// offered here immediately after it is opened, before any schema check or data read issues a
@@ -31,6 +32,7 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
     /// read ran on.
     /// </summary>
     internal Action<SqliteConnection>? ConnectionObserverForTesting { get; set; }
+#endif
 
     public async Task<LoopHistoryRecord> AppendAsync(
         LoopHistoryAppendRequest request,
@@ -132,7 +134,9 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
         LoopHistorySpec spec = GetSpec(kind);
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
         // Bound to the schema-admission memo instead of re-proving structure on every read: once
         // this process has admitted the database once (EnsureSchemaAsync, on any connection to the
         // same file), InspectMemoizedAsync answers from that memo plus a cheap live stamp re-check

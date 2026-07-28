@@ -36,6 +36,10 @@ namespace LoopRelay.Orchestration.Tests.Measurement;
 /// list to override the default 100 / 1000 / 10000 scales.
 /// </para>
 /// </summary>
+// Whole-file guard: the reported connection/statement figures come from the stores' debug-only
+// observer seams, so in a configuration without them this harness would report zeros as if they
+// were measurements.
+#if DEBUG
 public sealed class WorkspaceMagnitudeHarness
 {
     private const string OutputVariable = "LOOPRELAY_MEASUREMENT_OUTPUT";
@@ -1228,3 +1232,4 @@ public sealed class WorkspaceMagnitudeHarness
             throw new InvalidOperationException("Reconciliation is not expected in the magnitude harness.");
     }
 }
+#endif

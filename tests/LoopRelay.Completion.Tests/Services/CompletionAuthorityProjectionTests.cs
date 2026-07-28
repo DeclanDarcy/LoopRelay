@@ -17,6 +17,7 @@ namespace LoopRelay.Completion.Tests.Services;
 /// </summary>
 public sealed class CompletionAuthorityProjectionTests
 {
+#if DEBUG
     /// <summary>
     /// Characterization plus cross-epic discrimination in one test. Two root runs ("epics") are
     /// seeded so their table-order and their decision-order disagree: run B's full certified chain
@@ -202,6 +203,7 @@ public sealed class CompletionAuthorityProjectionTests
         Assert.NotNull(rejected);
         Assert.Contains("readonly", rejected!.Message, StringComparison.OrdinalIgnoreCase);
     }
+#endif
 
     /// <summary>
     /// Fail-closed guard: a database this process already admitted (and memoized) is then tampered

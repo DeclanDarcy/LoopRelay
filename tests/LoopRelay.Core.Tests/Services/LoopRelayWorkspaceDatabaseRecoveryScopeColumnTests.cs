@@ -19,6 +19,9 @@ namespace LoopRelay.Core.Tests.Services;
 [Collection("WorkspaceDatabaseCounters")]
 public sealed class LoopRelayWorkspaceDatabaseRecoveryScopeColumnTests
 {
+    // Depends on ResetSchemaVerificationCacheForTesting: without the memo reset this would observe
+    // the memoized fast path instead of the pre-v16 classification it exists to pin.
+#if DEBUG
     [Fact]
     public async Task EnsureSchemaAsync_backfills_recovery_scope_id_on_an_existing_pre_v16_database()
     {
@@ -75,6 +78,7 @@ public sealed class LoopRelayWorkspaceDatabaseRecoveryScopeColumnTests
         Assert.Equal(1, (await TableColumnsAsync(connection, "canonical_recovery_action_events"))
             .Count(column => string.Equals(column, "scope_id", StringComparison.Ordinal)));
     }
+#endif
 
     /// <summary>
     /// Physically returns a freshly converged database to the pre-change v15 shape: drops the new

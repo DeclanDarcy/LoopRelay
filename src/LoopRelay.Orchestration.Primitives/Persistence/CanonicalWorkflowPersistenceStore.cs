@@ -23,6 +23,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         Converters = { new JsonStringEnumConverter() },
     };
 
+#if DEBUG
     /// <summary>
     /// Test-only observability: every read-only connection the keyed recovery-lookup methods below
     /// open is offered here immediately after it opens, before the calling read issues its own
@@ -63,6 +64,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     /// <see cref="ConnectionObserverForTesting"/>.
     /// </summary>
     internal Action? ReadTransitionEvidenceAsyncInvokedForTesting { get; set; }
+#endif
 
     public async Task UpsertWorkflowStateAsync(
         CanonicalWorkflowStateRecord state,
@@ -801,7 +803,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     public async Task<IReadOnlyList<CanonicalRenderedPromptRecord>> ReadRenderedPromptsAsync(
         CancellationToken cancellationToken = default)
     {
+#if DEBUG
         ReadRenderedPromptsAsyncInvokedForTesting?.Invoke();
+#endif
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
         if (!File.Exists(databasePath))
         {
@@ -812,7 +816,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
-            ConnectionObserverForTesting?.Invoke(connection);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
 
             var rows = new List<CanonicalRenderedPromptRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -897,7 +905,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
-            ConnectionObserverForTesting?.Invoke(connection);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText = ReadRenderedPromptSql;
             command.Parameters.AddWithValue("$rendered_prompt_id", renderedPromptId);
@@ -937,7 +949,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
-            ConnectionObserverForTesting?.Invoke(connection);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
             await using SqliteCommand command = connection.CreateCommand();
             command.CommandText = RenderedPromptLedgerPositionSql;
             command.Parameters.AddWithValue("$rowid", rowId);
@@ -1312,7 +1328,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
 
         return new CanonicalWorkflowPersistenceSnapshot(
             await ReadWorkflowStatesAsync(connection, cancellationToken),
@@ -1349,7 +1367,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
 
         return new CanonicalWorkflowObservationSnapshot(
             await ReadWorkflowStatesAsync(connection, cancellationToken),
@@ -1376,7 +1396,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
-            ConnectionObserverForTesting?.Invoke(connection);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
 
             var rows = new List<RunRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -1409,7 +1433,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     public async Task<IReadOnlyList<WorkflowInstanceRecord>> ReadWorkflowInstancesAsync(
         CancellationToken cancellationToken = default)
     {
+#if DEBUG
         ReadWorkflowInstancesAsyncInvokedForTesting?.Invoke();
+#endif
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
         if (!File.Exists(databasePath))
         {
@@ -1420,7 +1446,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
-            ConnectionObserverForTesting?.Invoke(connection);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
 
             var rows = new List<WorkflowInstanceRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -1474,7 +1504,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
-            ConnectionObserverForTesting?.Invoke(connection);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
 
             var rows = new List<WorkflowInstanceRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -1518,7 +1552,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
-            ConnectionObserverForTesting?.Invoke(connection);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
 
             // Pre-v7 databases opened read-only have no policy_id column; those attempts read
             // back with a null policy identity without migrating the database.
@@ -1880,7 +1918,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = $"""
             SELECT {TransitionRunColumns}
@@ -1911,7 +1951,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
         var rows = new List<CanonicalTransitionEvidenceRecord>();
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
@@ -1955,7 +1997,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
         var rows = new List<CanonicalEffectRecord>();
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
@@ -2006,7 +2050,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
             SELECT attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
@@ -2049,7 +2095,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
             SELECT workflow_instance_id, run_id, workflow_identity, catalog_version, status,
@@ -2092,7 +2140,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
             SELECT run_id, workspace_id, chain_identity, invocation_mode, status,
@@ -2138,7 +2188,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
+#if DEBUG
         ReadTransitionEvidenceAsyncInvokedForTesting?.Invoke();
+#endif
         var rows = new List<CanonicalTransitionEvidenceRecord>();
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """

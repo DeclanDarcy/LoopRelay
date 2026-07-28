@@ -120,6 +120,7 @@ public sealed class DurableEffectPlanHydrationTests
             recorder.Executed);
     }
 
+#if DEBUG
     /// <summary>
     /// Plan hydration costs a fixed number of statements regardless of plan size, counted from the
     /// statements <c>ReadPlanAsync</c> really compiles rather than from a model of them: one per
@@ -163,6 +164,7 @@ public sealed class DurableEffectPlanHydrationTests
         // Counted, not modelled: one statement per table, and no term in the plan's size.
         Assert.Equal(3, counter.Statements);
     }
+#endif
 
     [Fact]
     public async Task Set_based_hydration_observes_what_an_item_at_a_time_hydration_observes()

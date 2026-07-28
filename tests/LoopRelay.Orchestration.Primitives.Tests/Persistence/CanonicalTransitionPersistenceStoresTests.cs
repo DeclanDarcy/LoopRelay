@@ -527,6 +527,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
     /// or missing, silently returns the wrong row (or every row) instead of raising.
     /// </para>
     /// </summary>
+#if DEBUG
     [Fact]
     public async Task ReadAsync_matches_the_pre_keyed_implementation_and_does_not_cross_contaminate_prompts()
     {
@@ -615,6 +616,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         Assert.Equal(causalityA.WorkflowInstance, actualA.Fact.Causality.WorkflowInstance);
         Assert.Equal(causalityB.WorkflowInstance, actualB.Fact.Causality.WorkflowInstance);
     }
+#endif
 
     /// <summary>
     /// Non-negotiable per Task 3.2: a keyed read must still return null for an id that does not
@@ -724,6 +726,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
     /// rather than going through <c>ReadAsync</c>. A future change to the attempt lookup cannot move
     /// this number.
     /// </summary>
+#if DEBUG
     [Fact]
     public async Task ReadRenderedPromptAsync_and_ReadRenderedPromptLedgerPositionAsync_together_compile_exactly_two_statements()
     {
@@ -750,6 +753,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
 
         Assert.Equal(2, counter.Statements);
     }
+#endif
 
     /// <summary>
     /// Fix pass 1, finding 1: <see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptAsync"/>
@@ -1123,6 +1127,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
     /// rather than reasoning about the diff - is what makes this a characterization test.
     /// </para>
     /// </summary>
+#if DEBUG
     [Fact]
     public async Task LoadRecoveryAsync_matches_the_pre_keyed_implementation_and_does_not_cross_contaminate_runs()
     {
@@ -1186,6 +1191,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         Assert.All(actualB.Effects, effect => Assert.All(
             effect.Evidence, item => Assert.StartsWith("effect-b-", item, StringComparison.Ordinal)));
     }
+#endif
 
     /// <summary>
     /// Byte-for-byte reproduction of the pre-Task-3.1 <c>CanonicalTransitionRunStore.LoadRecoveryAsync</c>
@@ -1461,6 +1467,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
     /// concurrent instance - the correctness failure this task must not introduce.
     /// </para>
     /// </summary>
+#if DEBUG
     [Fact]
     public async Task BeginInstanceAsync_matches_the_pre_keyed_lookup_and_does_not_cross_contaminate_runs()
     {
@@ -1610,6 +1617,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         Assert.Single(active);
         Assert.Equal(1, counter.Statements);
     }
+#endif
 
     /// <summary>
     /// <see cref="CanonicalWorkflowPersistenceStore.ReadWorkflowInstancesAsync"/> - the unkeyed method

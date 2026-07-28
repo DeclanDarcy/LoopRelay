@@ -138,6 +138,7 @@ public sealed class LedgerLoopHistoryStoreTests
         Assert.Equal("recovery-1", latest.Evidence.Recovery!.RecoveryAttempt.Value);
     }
 
+#if DEBUG
     /// <summary>
     /// PERF: on a store this process has already admitted (schema verified once, memoized by
     /// <see cref="LoopRelayWorkspaceDatabase.EnsureSchemaAsync"/>), a subsequent
@@ -177,6 +178,7 @@ public sealed class LedgerLoopHistoryStoreTests
         // cold or non-memoized store still pays for.
         Assert.Equal(4, counter.Statements);
     }
+#endif
 
     /// <summary>
     /// Fail-closed guard for the memo binding above: this process has already admitted (and

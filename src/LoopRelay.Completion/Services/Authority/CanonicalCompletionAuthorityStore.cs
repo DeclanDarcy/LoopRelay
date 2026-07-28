@@ -37,6 +37,7 @@ public sealed record CompletionAuthorityHeadsAndCounts(
 
 public sealed class CanonicalCompletionAuthorityStore(Repository _repository)
 {
+#if DEBUG
     /// <summary>
     /// Test-only observability: the read-only connection <see cref="ReadHeadsAndCountsAsync"/> opens
     /// is offered here immediately after it is opened, before any schema check or data read issues a
@@ -56,6 +57,7 @@ public sealed class CanonicalCompletionAuthorityStore(Repository _repository)
     /// Instance-scoped, like <see cref="ConnectionObserverForTesting"/>.
     /// </summary>
     internal Action? ReadSnapshotAsyncInvokedForTesting { get; set; }
+#endif
 
     public async Task AppendDecisionAsync(CompletionDecision decision,
         CancellationToken cancellationToken = default)
@@ -181,7 +183,9 @@ public sealed class CanonicalCompletionAuthorityStore(Repository _repository)
         RunIdentity? rootRun,
         CancellationToken cancellationToken)
     {
+#if DEBUG
         ReadSnapshotAsyncInvokedForTesting?.Invoke();
+#endif
         // Only `canonical_completion_decisions` and `canonical_certified_terminal_facts` carry a run
         // column. Certificates, closure plans, and settlements are narrowed by reachability from this
         // run's decisions (`decision_id`, and `plan_id` for settlements) instead.
@@ -290,7 +294,9 @@ public sealed class CanonicalCompletionAuthorityStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(database);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
         ConnectionObserverForTesting?.Invoke(connection);
+#endif
         WorkspaceSchemaInspection inspection =
             await LoopRelayWorkspaceDatabase.InspectMemoizedAsync(connection, cancellationToken)
             ?? await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection, cancellationToken);

@@ -106,6 +106,7 @@ public sealed class DurableEffectSettlementReturnTests
         }
     }
 
+#if DEBUG
     [Fact]
     public async Task Settling_an_effect_costs_one_connection_open_beyond_the_shared_scan()
     {
@@ -187,6 +188,7 @@ public sealed class DurableEffectSettlementReturnTests
         // Constant in the row count: the per-row hydration this replaced cost 2N+1.
         Assert.Equal(1, statements);
     }
+#endif
 
     private static void AssertMatches(EffectWorkItem observed, EffectWorkItem returned)
     {
@@ -241,6 +243,7 @@ public sealed class DurableEffectSettlementReturnTests
         return new Repository { Id = Guid.NewGuid(), Name = Path.GetFileName(path), Path = path };
     }
 
+#if DEBUG
     /// <summary>
     /// Counts the work-store calls a run makes, and counts the connections the store really opens
     /// while each of those calls is running.
@@ -363,6 +366,7 @@ public sealed class DurableEffectSettlementReturnTests
             }
         }
     }
+#endif
 
     private sealed class RecordingExecutor : IEffectExecutor
     {
