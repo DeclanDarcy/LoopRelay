@@ -57,10 +57,12 @@ internal sealed class SqliteSessionTelemetrySink(Repository repository) : ISessi
     /// </summary>
     private bool schemaEnsured;
 
+#if DEBUG
     /// <summary>Test-only observability: how many times this instance has run the full
     /// directory-create/gitignore/schema-ensure block. The load-bearing assertion for this task is
     /// that two appends leave this at 1, not 2.</summary>
     internal int InitializationCount { get; private set; }
+#endif
 
     private string RuntimeDirectoryPath => Path.Combine(repository.Path, ".LoopRelay");
 
@@ -90,7 +92,9 @@ internal sealed class SqliteSessionTelemetrySink(Repository repository) : ISessi
                     // side effect for this first connection.
                     LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection).GetAwaiter().GetResult();
                     schemaEnsured = true;
+#if DEBUG
                     InitializationCount++;
+#endif
                 }
                 else
                 {

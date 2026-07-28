@@ -57,6 +57,7 @@ public sealed class SqliteSessionTelemetrySinkTests : IDisposable
         Assert.Equal([2, 3], rows.Select(row => row.TurnIndex).ToArray());
     }
 
+#if DEBUG
     /// <summary>
     /// Load-bearing assertion for PERF task w2-t4: directory create, gitignore probe, and schema
     /// ensure must run exactly once per sink lifetime, not once per append. Before the fix, this
@@ -73,6 +74,7 @@ public sealed class SqliteSessionTelemetrySinkTests : IDisposable
 
         Assert.Equal(1, sink.InitializationCount);
     }
+#endif
 
     /// <summary>
     /// Propagation + retryability: a first-append init failure (here, forced by occupying the
@@ -90,7 +92,9 @@ public sealed class SqliteSessionTelemetrySinkTests : IDisposable
         var sink = new SqliteSessionTelemetrySink(Repository);
 
         Assert.Throws<IOException>(() => sink.Append(Record("repo", turnIndex: 1)));
+#if DEBUG
         Assert.Equal(0, sink.InitializationCount);
+#endif
 
         File.Delete(runtimeDirectoryPath);
         Exception? secondAppendFailure = Xunit.Record.Exception(() => sink.Append(Record("repo", turnIndex: 2)));
@@ -99,7 +103,9 @@ public sealed class SqliteSessionTelemetrySinkTests : IDisposable
         TelemetryRow[] rows = await ReadRowsAsync();
         TelemetryRow row = Assert.Single(rows);
         Assert.Equal(2, row.TurnIndex);
+#if DEBUG
         Assert.Equal(1, sink.InitializationCount);
+#endif
     }
 
     /// <summary>Concurrency guard: concurrent appends from multiple threads must all land, and
@@ -122,7 +128,9 @@ public sealed class SqliteSessionTelemetrySinkTests : IDisposable
 
         TelemetryRow[] rows = await ReadRowsAsync();
         Assert.Equal(threads * perThread, rows.Length);
+#if DEBUG
         Assert.Equal(1, sink.InitializationCount);
+#endif
     }
 
     /// <summary>
@@ -144,7 +152,9 @@ public sealed class SqliteSessionTelemetrySinkTests : IDisposable
 
         Directory.Delete(DatabasePath);
         sink.Append(Record("repo", turnIndex: 3)); // cached state was reset: full re-init succeeds
+#if DEBUG
         Assert.Equal(2, sink.InitializationCount);
+#endif
     }
 
     private static SessionTelemetryRecord Record(string repo, int turnIndex) =>
