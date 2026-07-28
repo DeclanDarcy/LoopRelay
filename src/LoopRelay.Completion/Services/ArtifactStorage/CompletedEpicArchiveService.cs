@@ -34,7 +34,8 @@ public sealed class CompletedEpicArchiveService(
         // as satisfied is exactly a state this converges on. A partially materialized archive is not
         // satisfied, so it still falls through to the collision guards below.
         if (request.ArchiveIndex is not null &&
-            await ObserveCompletedArchiveAsync(artifacts, index, archiveDirectory, synthesisPath) is { } completed)
+            await ObserveCompletedArchiveAsync(
+                artifacts, request.ActiveEpicPath, index, archiveDirectory, synthesisPath) is { } completed)
         {
             return completed;
         }
@@ -87,15 +88,28 @@ public sealed class CompletedEpicArchiveService(
 
     private static async Task<CompletedEpicArchiveResult?> ObserveCompletedArchiveAsync(
         CompletionArtifacts artifacts,
+        string activeEpicPath,
         int index,
         string archiveDirectory,
         string synthesisPath)
     {
-        string? epic = await artifacts.ReadAsync($"{archiveDirectory}/epic.md");
         string? synthesis = await artifacts.ReadAsync(synthesisPath);
-        return string.IsNullOrWhiteSpace(epic) || string.IsNullOrWhiteSpace(synthesis)
-            ? null
-            : new CompletedEpicArchiveResult(index, archiveDirectory, synthesisPath, synthesis);
+        if (string.IsNullOrWhiteSpace(synthesis))
+        {
+            return null;
+        }
+
+        // The synthesis is written strictly after the archive plan executes, so its presence
+        // witnesses a completed archive phase. epic.md then exists exactly when there was a live
+        // epic to copy - the plan copies it and never deletes it - so demand it only while the
+        // live epic is present. An epicless archive converges on its synthesis alone.
+        string? epic = await artifacts.ReadAsync($"{archiveDirectory}/epic.md");
+        if (string.IsNullOrWhiteSpace(epic) && await artifacts.ExistsAsync(activeEpicPath))
+        {
+            return null;
+        }
+
+        return new CompletedEpicArchiveResult(index, archiveDirectory, synthesisPath, synthesis);
     }
 
     /// <summary>

@@ -133,7 +133,12 @@ internal sealed class CompletionArchiveEffectReconciler(
         string? epic = await artifacts.ReadAsync($"{payload.ArchiveDirectory}/epic.md");
         string? synthesis = await artifacts.ReadAsync(payload.SynthesisPath);
         bool archiveStarted = await artifacts.ExistsAsync(payload.ArchiveDirectory) || epic is not null;
-        if (!string.IsNullOrWhiteSpace(epic) && !string.IsNullOrWhiteSpace(synthesis))
+        // Kept identical to CompletedEpicArchiveService.ObserveCompletedArchiveAsync: a state that
+        // reconciles as satisfied is exactly a state the service converges on. Epicless archives
+        // carry no epic.md; demand it only while the live epic is present.
+        bool epicSatisfied = !string.IsNullOrWhiteSpace(epic) ||
+            !await artifacts.ExistsAsync(payload.ActiveEpicPath);
+        if (epicSatisfied && !string.IsNullOrWhiteSpace(synthesis))
         {
             return new EffectReconciliationObservation(
                 EffectReconciliationVerdict.Succeeded,

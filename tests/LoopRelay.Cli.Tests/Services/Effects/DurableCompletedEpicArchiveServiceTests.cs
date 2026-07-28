@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using LoopRelay.Cli.Services.Effects;
 using LoopRelay.Completion.Abstractions;
 using LoopRelay.Completion.Models.Archive;
@@ -6,6 +9,7 @@ using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Orchestration.Effects;
 using Xunit;
 
 namespace LoopRelay.Cli.Tests.Services.Effects;
@@ -43,6 +47,70 @@ public sealed class DurableCompletedEpicArchiveServiceTests
         Assert.Equal($"{root}/4.md", result.SynthesisPath);
         // The survivor was not converged on or overwritten.
         Assert.Equal("# synthesis three", await artifacts.ReadAsync($"{root}/3.md"));
+    }
+
+    [Fact]
+    public async Task Reconciler_accepts_a_materialized_epicless_archive()
+    {
+        Repository repository = CreateRepository();
+        var store = new MemoryArtifactStore();
+        var artifacts = new CompletionArtifacts(store, repository);
+        string root = CompletionArtifactPaths.CompletedEpicsDirectory;
+        // Fully materialized epicless archive: sources archived, synthesis written, and no
+        // epic.md anywhere because the workspace never had a live epic.
+        await artifacts.WriteAsync($"{root}/1/details.md", "DETAILS");
+        await artifacts.WriteAsync($"{root}/1.md", "# Synthesis");
+        var reconciler = new CompletionArchiveEffectReconciler(repository, store);
+
+        EffectReconciliationObservation observation = await reconciler.ReconcileAsync(
+            ArchiveIntent(Payload(root)), CancellationToken.None);
+
+        Assert.Equal(EffectReconciliationVerdict.Succeeded, observation.Verdict);
+    }
+
+    [Fact]
+    public async Task Reconciler_still_refuses_an_archive_missing_the_epic_it_should_have_copied()
+    {
+        Repository repository = CreateRepository();
+        var store = new MemoryArtifactStore();
+        var artifacts = new CompletionArtifacts(store, repository);
+        string root = CompletionArtifactPaths.CompletedEpicsDirectory;
+        // The live epic exists, so a completed archive must carry its copy; this one does not.
+        await artifacts.WriteAsync(CompletionArtifactPaths.ActiveEpic, "# Epic\n\nIntent.");
+        await artifacts.WriteAsync($"{root}/1/details.md", "DETAILS");
+        await artifacts.WriteAsync($"{root}/1.md", "# Synthesis");
+        var reconciler = new CompletionArchiveEffectReconciler(repository, store);
+
+        EffectReconciliationObservation observation = await reconciler.ReconcileAsync(
+            ArchiveIntent(Payload(root)), CancellationToken.None);
+
+        // Succeeded is the only verdict the epicless relaxation could wrongly produce here. Which
+        // refusal it lands on is decided by whether the store models the archive directory as an
+        // existing entity, which this in-memory store does not; that is not what this pins.
+        Assert.NotEqual(EffectReconciliationVerdict.Succeeded, observation.Verdict);
+    }
+
+    private static CompletionArchiveEffectPayload Payload(string root) => new(
+        CompletionArtifactPaths.ActiveEpic, root, 1, $"{root}/1", $"{root}/1.md");
+
+    // Mirrors the intent the durable wrapper plans (anchor: `new EffectIntent(` in
+    // DurableCompletedEpicArchiveService.cs); only the payload matters to the reconciler.
+    private static EffectIntent ArchiveIntent(CompletionArchiveEffectPayload payload)
+    {
+        string payloadJson = JsonSerializer.Serialize(
+            payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        string payloadHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson)));
+        CanonicalCausalContext causality = NewCausality();
+        return new EffectIntent(
+            EffectIntentIdentity.New(), causality, "completion:archive-and-synthesize",
+            WorkspaceEffectExecutorKeys.CompletionArchive, "1",
+            new EffectTargetDescriptor("CompletedEpicArchive", payload.ArchiveDirectory, payloadJson),
+            payloadJson, payloadHash, 0, [], EffectRequiredness.BlockingLocal,
+            new EffectCondition("archive-targets-absent", payloadJson),
+            new EffectCondition("archive-and-synthesis-present", payloadJson),
+            "archive-structure-and-synthesis-observation",
+            $"completion-archive:{causality.TransitionRun.Value}:{payload.Index}:{payloadHash}",
+            DateTimeOffset.UtcNow);
     }
 
     private static Repository CreateRepository()

@@ -140,6 +140,24 @@ public sealed class CompletedEpicArchiveConvergenceTests
         Assert.Equal($"{ArchiveRoot}/4", result.ArchiveDirectory);
     }
 
+    [Fact]
+    public async Task Re_executing_an_epicless_archival_converges_without_demanding_an_epic()
+    {
+        var harness = ArchiveHarness.Create();
+        await harness.SeedExecutionWorkspaceAsync(includeEpic: false);
+        harness.Prompts.Handler = _ => Task.FromResult("# Completed Epic\n\nSynthesis.");
+        var request = new CompletedEpicArchiveRequest(harness.Repository, ArchiveIndex: 1);
+
+        CompletedEpicArchiveResult first = await harness.Archive.ArchiveAndSynthesizeAsync(request);
+        CompletedEpicArchiveResult replayed = await harness.Archive.ArchiveAndSynthesizeAsync(request);
+
+        Assert.Single(harness.Prompts.Invocations);
+        Assert.Equal(first.Index, replayed.Index);
+        Assert.Equal(first.SynthesisContent, replayed.SynthesisContent);
+        Assert.Single(await harness.ListDirectoriesAsync(ArchiveRoot));
+        Assert.Single(await harness.SynthesisFilesAsync());
+    }
+
     private sealed class ArchiveHarness(
         MemoryArtifactStore store,
         Repository repository,
@@ -160,9 +178,13 @@ public sealed class CompletedEpicArchiveConvergenceTests
             return new ArchiveHarness(store, repository, prompts, new CompletedEpicArchiveService(store, prompts));
         }
 
-        public async Task SeedExecutionWorkspaceAsync()
+        public async Task SeedExecutionWorkspaceAsync(bool includeEpic = true)
         {
-            await WriteAsync(CompletionArtifactPaths.ActiveEpic, "# Epic\n\nIntent.");
+            if (includeEpic)
+            {
+                await WriteAsync(CompletionArtifactPaths.ActiveEpic, "# Epic\n\nIntent.");
+            }
+
             await WriteAsync(CompletionArtifactPaths.RoadmapCompletionContext, "# Roadmap Completion Context\n\nCurrent.");
             await WriteAsync(CompletionArtifactPaths.ExecutionPlan, "PLAN");
             await WriteAsync(CompletionArtifactPaths.Details, "DETAILS");
