@@ -753,7 +753,7 @@ public sealed class WorkspaceMagnitudeHarness
             ["verificationsPerObservation"] = verifier.Calls / (double)Iterations,
             ["projectionsPerObservation"] = projection.Calls / (double)Iterations,
             ["gitMeasurement"] =
-                "the same `git status --porcelain=v1 --branch --untracked-files=normal` subprocess "
+                "the same `git status --porcelain=v1 --branch --untracked-files=no` subprocess "
                 + "RepositoryObserver.ObserveGit issues, run in the fixture root",
             ["gitFiredDuringObservation"] = gitFired,
             ["observationsPerCycle"] = "not measured",
@@ -779,7 +779,7 @@ public sealed class WorkspaceMagnitudeHarness
         startInfo.ArgumentList.Add("status");
         startInfo.ArgumentList.Add("--porcelain=v1");
         startInfo.ArgumentList.Add("--branch");
-        startInfo.ArgumentList.Add("--untracked-files=normal");
+        startInfo.ArgumentList.Add("--untracked-files=no");
 
         var samples = new List<double>();
         for (int index = 0; index < 4; index++)

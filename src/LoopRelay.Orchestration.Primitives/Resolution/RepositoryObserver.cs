@@ -873,7 +873,11 @@ public sealed class RepositoryObserver(
             startInfo.ArgumentList.Add("status");
             startInfo.ArgumentList.Add("--porcelain=v1");
             startInfo.ArgumentList.Add("--branch");
-            startInfo.ArgumentList.Add("--untracked-files=normal");
+            // Bounded to tracked changes (Task 3.7): routine observation does not need untracked-file
+            // detail, and `=normal` walks the whole working tree to produce it. No consumer of
+            // GitFacts.HasWorkingTreeChanges reads it in production (see task-3.7-report.md); this
+            // flag only changes whether untracked-only changes are reported as dirty.
+            startInfo.ArgumentList.Add("--untracked-files=no");
             using Process? process = Process.Start(startInfo);
             if (process is null)
             {
