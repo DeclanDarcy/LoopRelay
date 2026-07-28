@@ -531,27 +531,6 @@ public sealed record TransitionEvidenceEvent(
     string Explanation,
     IReadOnlyList<string> Evidence);
 
-public sealed record TransitionWarningCapture(
-    CanonicalCausalContext Causality,
-    DateTimeOffset RecordedAt,
-    TransitionRuntimeRequest Request,
-    WorkflowTransitionIdentity Transition,
-    WarningCategory Category,
-    string Concern,
-    string Remediation,
-    IReadOnlyList<string> Evidence);
-
-public sealed record TransitionRecoveryMarkerCapture(
-    CanonicalCausalContext Causality,
-    DateTimeOffset RecordedAt,
-    TransitionRuntimeRequest Request,
-    WorkflowTransitionIdentity Transition,
-    TransitionDurableState DurableState,
-    RuntimeOutcomeKind Outcome,
-    RecoveryDefinition Recovery,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
-
 public sealed record TransitionGateEvaluationCapture(
     CanonicalCausalContext Causality,
     DateTimeOffset EvaluatedAt,
@@ -559,17 +538,6 @@ public sealed record TransitionGateEvaluationCapture(
     WorkflowTransitionIdentity Transition,
     GateDefinition Gate,
     GateResult Result);
-
-public sealed record TransitionEffectRecordCapture(
-    CanonicalCausalContext Causality,
-    DateTimeOffset RecordedAt,
-    TransitionRuntimeRequest Request,
-    WorkflowTransitionIdentity Transition,
-    EffectIdentity Effect,
-    EffectCategory Category,
-    EffectExecutionStatus Status,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
 
 public interface ITransitionDefinitionResolver
 {
@@ -728,20 +696,6 @@ public interface ITransitionEvidenceStore
         CanonicalCausalContext causality,
         WorkflowTransitionIdentity transition,
         string failure,
-        CancellationToken cancellationToken);
-}
-
-public interface ITransitionWarningStore
-{
-    Task RecordWarningAsync(
-        TransitionWarningCapture warning,
-        CancellationToken cancellationToken);
-}
-
-public interface ITransitionRecoveryStore
-{
-    Task RecordRecoveryMarkerAsync(
-        TransitionRecoveryMarkerCapture marker,
         CancellationToken cancellationToken);
 }
 

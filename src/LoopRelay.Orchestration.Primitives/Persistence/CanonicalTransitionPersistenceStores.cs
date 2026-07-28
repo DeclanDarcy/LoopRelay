@@ -287,44 +287,6 @@ public sealed class CanonicalTransitionEvidenceStore(CanonicalWorkflowPersistenc
             cancellationToken);
 }
 
-public sealed class CanonicalTransitionWarningStore(CanonicalWorkflowPersistenceStore _store) : ITransitionWarningStore
-{
-    public Task RecordWarningAsync(
-        TransitionWarningCapture warning,
-        CancellationToken cancellationToken) =>
-        _store.AppendWarningAsync(
-            new CanonicalWarningRecord(
-                CausalUlid.NewId("warn"),
-                warning.Request.Workflow,
-                warning.Request.Stage,
-                warning.Transition,
-                warning.Category,
-                warning.Concern,
-                "canonical transition runtime",
-                warning.Remediation,
-                warning.Evidence,
-                warning.RecordedAt,
-                warning.Causality.TransitionRun.Value),
-            cancellationToken);
-}
-
-public sealed class CanonicalTransitionRecoveryStore(CanonicalWorkflowPersistenceStore _store) : ITransitionRecoveryStore
-{
-    public Task RecordRecoveryMarkerAsync(
-        TransitionRecoveryMarkerCapture marker,
-        CancellationToken cancellationToken) =>
-        _store.UpsertRecoveryMarkerAsync(
-            new CanonicalRecoveryMarkerRecord(
-                $"{marker.Causality.TransitionRun.Value}:{marker.Transition.Value}:{marker.DurableState}",
-                marker.Request.Workflow,
-                marker.Request.Stage,
-                marker.Transition,
-                marker.Recovery,
-                marker.Evidence,
-                marker.RecordedAt),
-            cancellationToken);
-}
-
 public sealed class CanonicalTransitionGateEvaluationStore(CanonicalWorkflowPersistenceStore _store) : ITransitionGateEvaluationStore
 {
     public Task RecordGateEvaluationAsync(

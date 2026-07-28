@@ -160,11 +160,3 @@ public interface IWorkspaceStorageOperationStore
     Task PersistReceiptAsync(StorageOperationReceipt receipt, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StorageOperationPlan>> ReadInterruptedAsync(CancellationToken cancellationToken = default);
 }
-
-public interface IWorkspaceStorageAuthority
-{
-    Task<StorageOperationResult> InitializeAsync(StorageInitRequest request, CancellationToken cancellationToken = default);
-    Task<StorageOperationResult> MigrateAsync(StorageMigrateRequest request, CancellationToken cancellationToken = default);
-    Task<StorageOperationResult> ExportAsync(StorageExportRequest request, CancellationToken cancellationToken = default);
-    Task<StorageOperationResult> SyncAsync(StorageSyncRequest request, CancellationToken cancellationToken = default);
-}
