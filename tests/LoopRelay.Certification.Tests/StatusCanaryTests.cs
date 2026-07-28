@@ -132,4 +132,35 @@ public sealed class StatusCanaryTests
         Assert.Contains(expected, findings);
     }
 
+    /// <summary>
+    /// The only direct test of <see cref="CoverageLedgerBuilder"/>, which remains load-bearing as
+    /// the production-digest evidence source in <c>FailureOracleMatrixRunner</c>. Every assertion
+    /// here is file-free by construction: the <c>workflow</c> and <c>transition</c> obligations and
+    /// the uncovered set all derive from the in-memory canonical workflow catalog, not from
+    /// anything on disk. Do not add assertions on a document-derived dimension
+    /// (<c>known-risk</c>, <c>prompt-asset</c>, <c>persistence-schema</c>) - tests must not assume
+    /// a permanent shape for the repository's files.
+    /// </summary>
+    [Fact]
+    public void CoverageLedgerIsProductionDerivedAndKeepsUncoveredSetVisible()
+    {
+        string workspace = FindWorkspaceRoot();
+
+        CoverageLedger ledger = CoverageLedgerBuilder.Build(workspace);
+
+        Assert.Contains(ledger.Obligations, item => item.Dimension == "workflow" && item.Identity == "Execute");
+        Assert.Contains(ledger.Obligations, item => item.Dimension == "transition" && item.Identity.Contains("Execute/ExecuteImplementationSlice", StringComparison.Ordinal));
+        Assert.NotEmpty(ledger.Uncovered);
+    }
+
+    private static string FindWorkspaceRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "LoopRelay.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName ?? throw new DirectoryNotFoundException("Workspace root not found.");
+    }
 }
