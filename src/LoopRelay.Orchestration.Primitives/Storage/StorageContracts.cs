@@ -100,20 +100,6 @@ public sealed record StorageInspection(
 public sealed record StorageVerifyRequest(
     string RepositoryPath,
     StorageVerificationDepth Depth = StorageVerificationDepth.Deep);
-public sealed record StorageInitRequest(
-    string RepositoryPath,
-    WorkspaceIdentity IntendedWorkspace,
-    CanonicalCausalContext Causality);
-public sealed record StorageMigrateRequest(
-    string RepositoryPath,
-    CanonicalCausalContext Causality);
-public sealed record StorageExportRequest(
-    string RepositoryPath,
-    string TargetRelativePath,
-    CanonicalCausalContext Causality);
-public sealed record StorageSyncRequest(
-    string RepositoryPath,
-    CanonicalCausalContext Causality);
 
 public sealed record StorageOperationPlan(
     StorageOperationIdentity Identity,
