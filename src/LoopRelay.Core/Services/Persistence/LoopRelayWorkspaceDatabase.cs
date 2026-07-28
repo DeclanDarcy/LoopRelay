@@ -105,6 +105,17 @@ public static class LoopRelayWorkspaceDatabase
     public static readonly string CanonicalV16ShapeFingerprint;
 
     /// <summary>
+    /// Version-neutral aliases for the current canonical shape. External assertions (certification
+    /// runners, storage staging and health) reference these rather than the V16-named members so
+    /// that a schema cut moves every consumer at once instead of leaving a stale pin that fails at
+    /// runtime - the failure class the stale schema-v15 certification assertion exhibited.
+    /// </summary>
+    public const WorkspaceSchemaShape CurrentCompleteShape = WorkspaceSchemaShape.CanonicalV16Complete;
+
+    /// <inheritdoc cref="CurrentCompleteShape"/>
+    public static string CurrentShapeFingerprint => CanonicalV16ShapeFingerprint;
+
+    /// <summary>
     /// Per-process memo of schemas already verified complete, keyed by the full path of the
     /// database file (<c>connection.DataSource</c>). Populated only after a successful full
     /// verification pass; consulted by <see cref="EnsureSchemaAsync"/> to skip re-running the

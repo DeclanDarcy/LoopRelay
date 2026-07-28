@@ -138,7 +138,7 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
             health = StorageHealth.Unsupported;
             actions.Add($"Use a LoopRelay version supporting schema v{schema.Version}.");
         }
-        else if (schema.Shape == WorkspaceSchemaShape.CanonicalV16Complete &&
+        else if (schema.Shape == LoopRelayWorkspaceDatabase.CurrentCompleteShape &&
                  unresolved.Count == 0 && interrupted.Length == 0)
         {
             health = StorageHealth.Healthy;
