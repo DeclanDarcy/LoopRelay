@@ -4,9 +4,6 @@
     "brain": {
       "model": "gpt-5.6-sol",
       "effort": "xhigh"
-    },
-    "providers": {
-      "supportedCodexProfiles": []
     }
   },
   "policy": {
