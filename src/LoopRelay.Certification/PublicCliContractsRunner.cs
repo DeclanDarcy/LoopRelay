@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using LoopRelay.Core.Services.Persistence;
 
 namespace LoopRelay.Certification;
 
@@ -48,7 +49,8 @@ public sealed class PublicCliContractsRunner
             results.Add(await RunCase("storage-export-initialized", ["storage", "export"], 0, true, Seed.InitializedStorage,
                 ["Storage operation: Export", "Lifecycle: Completed", "Storage health: Healthy"]));
             results.Add(await RunCase("storage-verify-initialized", ["storage", "verify"], 0, false, Seed.InitializedStorage,
-                ["Storage health: Healthy", "Authority exists: True", "Schema version: 15"]));
+                ["Storage health: Healthy", "Authority exists: True",
+                    $"Schema version: {LoopRelayWorkspaceDatabase.CurrentSchemaVersion}"]));
             results.Add(await RunCase("unblock-retired", ["unblock"], 2, false, Seed.Empty,
                 [], expectedError: "Unknown or invalid command: unblock"));
             results.Add(await RunCase("invalid-option", ["--invalid-certification-option"], 2, false, Seed.Empty,
