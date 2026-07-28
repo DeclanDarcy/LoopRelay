@@ -120,6 +120,26 @@ public sealed class CompletedEpicArchiveConvergenceTests
         Assert.Equal(2, harness.Prompts.Invocations.Count);
     }
 
+    [Fact]
+    public async Task A_gap_in_archive_indices_never_collides_with_a_surviving_archive()
+    {
+        var harness = ArchiveHarness.Create();
+        await harness.SeedExecutionWorkspaceAsync();
+        harness.Prompts.Handler = _ => Task.FromResult("# Completed Epic\n\nSynthesis.");
+        // Archives 1 and 3 survive; archive 2 was deleted, leaving a gap. Count+1 would
+        // allocate index 3 and collide with the survivor.
+        await harness.WriteAsync($"{ArchiveRoot}/1/epic.md", "# epic one");
+        await harness.WriteAsync($"{ArchiveRoot}/1.md", "# synthesis one");
+        await harness.WriteAsync($"{ArchiveRoot}/3/epic.md", "# epic three");
+        await harness.WriteAsync($"{ArchiveRoot}/3.md", "# synthesis three");
+
+        var request = new CompletedEpicArchiveRequest(harness.Repository);
+        CompletedEpicArchiveResult result = await harness.Archive.ArchiveAndSynthesizeAsync(request);
+
+        Assert.Equal(4, result.Index);
+        Assert.Equal($"{ArchiveRoot}/4", result.ArchiveDirectory);
+    }
+
     private sealed class ArchiveHarness(
         MemoryArtifactStore store,
         Repository repository,

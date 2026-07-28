@@ -98,10 +98,43 @@ public sealed class CompletedEpicArchiveService(
             : new CompletedEpicArchiveResult(index, archiveDirectory, synthesisPath, synthesis);
     }
 
+    /// <summary>
+    /// Next index is one past the highest surviving index, never a directory count: deleting an old
+    /// archive leaves a gap, and count+1 would re-allocate a surviving index and trip the collision
+    /// guard. Dangling synthesis files ({n}.md without a directory) also hold their index. Only
+    /// direct children of the archive root are index allocations - ListAsync is prefix-based and
+    /// also returns artifacts nested inside an archive, whose names never were. Non-numeric entries
+    /// are ignored for the same reason.
+    /// </summary>
     private static async Task<int> ComputeArchiveIndexAsync(CompletionArtifacts artifacts, string archiveRoot)
     {
         IReadOnlyList<string> directories = await artifacts.ListDirectoriesAsync(archiveRoot);
-        return directories.Count + 1;
+        IReadOnlyList<string> syntheses = await artifacts.ListAsync(archiveRoot, "*.md");
+        string root = Normalize(archiveRoot).TrimEnd('/');
+        int highest = 0;
+        foreach (string entry in directories.Concat(syntheses))
+        {
+            string name = Normalize(entry).TrimEnd('/');
+            if (!name.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // A nested artifact keeps a '/' here and so never parses as an index.
+            name = name[(root.Length + 1)..];
+            if (name.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+            {
+                name = name[..^3];
+            }
+
+            if (int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out int value) &&
+                value > highest)
+            {
+                highest = value;
+            }
+        }
+
+        return highest + 1;
     }
 
     private static async Task<IReadOnlyList<ArchiveFileOperation>> BuildRetainedArchivePlanAsync(
