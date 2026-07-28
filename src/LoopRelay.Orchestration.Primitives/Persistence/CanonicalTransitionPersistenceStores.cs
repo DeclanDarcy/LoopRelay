@@ -75,44 +75,38 @@ public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStor
         TransitionRunIdentity transitionRun,
         CancellationToken cancellationToken)
     {
-        CanonicalWorkflowPersistenceSnapshot snapshot = await _store.LoadSnapshotAsync(cancellationToken);
         string runId = transitionRun.Value;
-        CanonicalTransitionRunRecord? run = snapshot.TransitionRuns.SingleOrDefault(item => item.RunId == runId);
+        CanonicalTransitionRunRecord? run = await _store.ReadTransitionRunAsync(runId, cancellationToken);
         if (run is null)
         {
             return null;
         }
 
-        PromptExecutionResult? rawOutput = snapshot.TransitionEvidence
-            .Where(item => item.RunId == runId && item.EventName == "RawPromptOutputCaptured")
+        IReadOnlyList<CanonicalTransitionEvidenceRecord> evidence =
+            await _store.ReadTransitionEvidenceByRunAsync(runId, cancellationToken);
+        PromptExecutionResult? rawOutput = evidence
+            .Where(item => item.EventName == "RawPromptOutputCaptured")
             .OrderByDescending(item => item.EvidenceId)
             .Select(item => Deserialize<PromptExecutionResult>(item.DocumentJson))
             .FirstOrDefault(item => item is not null);
-        TransitionBoundaryObservation[] boundaries = snapshot.TransitionEvidence
-            .Where(item => item.RunId == runId && item.EventName == "TransitionBoundaryObserved")
+        TransitionBoundaryObservation[] boundaries = evidence
+            .Where(item => item.EventName == "TransitionBoundaryObserved")
             .OrderBy(item => item.EvidenceId)
             .Select(item => Deserialize<TransitionBoundaryObservation>(item.DocumentJson))
             .Where(item => item is not null)
             .Cast<TransitionBoundaryObservation>()
             .ToArray();
-        EffectExecutionRecord[] effects = snapshot.EffectRecords
-            .Where(item => item.RunId == runId)
+        EffectExecutionRecord[] effects = (await _store.ReadEffectRecordsByRunAsync(runId, cancellationToken))
             .OrderBy(item => item.RecordId)
             .Select(item => new EffectExecutionRecord(item.Effect, item.Status, item.Explanation, item.Evidence))
             .ToArray();
-        IReadOnlyList<AttemptRecord> attempts = await _store.ReadAttemptsAsync(cancellationToken);
-        IReadOnlyList<WorkflowInstanceRecord> instances = await _store.ReadWorkflowInstancesAsync(cancellationToken);
-        IReadOnlyList<RunRecord> rootRuns = await _store.ReadRunsAsync(cancellationToken);
-        AttemptRecord? attempt = attempts
-            .Where(item => item.TransitionRunId == runId)
-            .OrderByDescending(item => item.AttemptIndex)
-            .FirstOrDefault();
+        AttemptRecord? attempt = await _store.ReadLatestAttemptByTransitionRunAsync(runId, cancellationToken);
         WorkflowInstanceRecord? instance = attempt is null
             ? null
-            : instances.SingleOrDefault(item => item.WorkflowInstanceId == attempt.WorkflowInstanceId);
+            : await _store.ReadWorkflowInstanceAsync(attempt.WorkflowInstanceId, cancellationToken);
         RunRecord? rootRun = attempt is null
             ? null
-            : rootRuns.SingleOrDefault(item => item.RunId == attempt.RunId);
+            : await _store.ReadRunAsync(attempt.RunId, cancellationToken);
         if (attempt is null || instance is null || rootRun is null)
         {
             return null;
