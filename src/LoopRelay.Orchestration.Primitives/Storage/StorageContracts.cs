@@ -62,11 +62,18 @@ public enum StorageVerificationDepth
     Deep,
 
     /// <summary>
-    /// Per-observation health. Enumerates the persistence tree by name only, hashes the database
-    /// file once, answers the schema from <see cref="LoopRelayWorkspaceDatabase.InspectStampedAsync"/>,
-    /// and still reads interrupted journal artifacts and interrupted rows. Skips the deep checks:
-    /// no digest for the other persistence files, no <c>PRAGMA foreign_key_check</c>, and no
-    /// ~190-probe structural classification while the stamp is well-formed.
+    /// Per-observation health. Enumerates the persistence tree by name only, answers the schema
+    /// from <see cref="LoopRelayWorkspaceDatabase.InspectStampedAsync"/>, and still reads
+    /// interrupted journal artifacts and interrupted rows. Skips the deep checks: no digest for
+    /// the database file or any other persistence file, no <c>PRAGMA foreign_key_check</c>, and
+    /// no ~190-probe structural classification while the stamp is well-formed.
+    ///
+    /// <para>
+    /// Task 3.9: this tier used to hash the database file once per call (the single largest
+    /// unbounded read on the routine observation path). Tracing every consumer of the resulting
+    /// `bytes-sha256:` evidence line found none that ever read it back to compare or gate a
+    /// decision, so the hash - and the line - were removed from this tier rather than replaced.
+    /// </para>
     /// </summary>
     Light,
 }

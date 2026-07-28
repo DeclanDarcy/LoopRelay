@@ -16,9 +16,10 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
     /// <see cref="WorkspaceStorageVerifierAdapter"/> / <c>RepositoryObserver</c>'s
     /// <c>FileSystemStorageVerifier</c> - cannot pollute a count under assertion elsewhere. Used
     /// to prove that <see cref="VerifyAsync"/> reuses the inventory's hash for the database file
-    /// instead of hashing it a second time (PERF: hash workspace database once per verification),
-    /// and - since the tier split - that a <see cref="StorageVerificationDepth.Light"/> verification
-    /// digests the database file and nothing else, however many files the persistence tree holds.
+    /// instead of hashing it a second time on the deep tier (PERF: hash workspace database once per
+    /// verification), and - since Task 3.9 deleted the light tier's full-file hash entirely - that a
+    /// <see cref="StorageVerificationDepth.Light"/> verification digests nothing at all, however many
+    /// files the persistence tree holds.
     ///
     /// <para>
     /// Exposed as a get-only property backed by <see cref="fileHashInvocations"/> (rather than a
@@ -68,16 +69,27 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
         // Directory.GetFiles in InventoryAsync, which need not match the constant casing of
         // LoopRelayWorkspaceDatabase.RelativeDatabasePath baked into databaseRelativePath (e.g.
         // case-insensitive filesystems, or a file renamed only in case). Comparing ordinally
-        // here would silently miss the inventory entry and force the redundant rehash below on
-        // every verification, defeating the single-hash optimization without failing anything.
+        // here would silently miss the inventory entry and force a redundant rehash on the deep
+        // tier, defeating the single-hash optimization without failing anything.
         //
-        // The light tier's inventory carries no digests at all, so the coalesce below is also what
-        // buys it its one - and only one - hash. The database's digest is not optional at either
-        // depth: it is the `bytes-sha256:` evidence line, and that line reaches durable state
-        // through OrchestrationKernel.Snapshot.
-        string byteHash = inventory.FirstOrDefault(entry =>
-                string.Equals(entry.RelativePath, databaseRelativePath, StringComparison.OrdinalIgnoreCase))
-            ?.Sha256 ?? await HashFileAsync(database, cancellationToken);
+        // Task 3.9: the database digest is deep-tier only now. It used to be computed
+        // unconditionally - including on the light tier, which routine observation pays for on
+        // every kernel cycle - solely to feed a `bytes-sha256:` evidence line. That line does
+        // reach durable state (OrchestrationKernel.Snapshot hashes it into
+        // canonical_kernel_decisions.snapshot_identity, and it is rendered in CLI/JSON evidence
+        // output), but tracing every consumer of it found none that ever reads it back to
+        // compare, detect drift, or gate a decision: it was write-only provenance. So the light
+        // tier no longer computes it at all - byteHash is null unless deep, and the evidence line
+        // below is omitted whenever it is. Deep tier is untouched: the `storage` commands and
+        // certification still hash the database (and every other persistence file) because that
+        // is a real, explicit verification surface with a real consumer
+        // (WorkspaceStorageApplicationService.MigrateAsync's source-fingerprint fallback, among
+        // others).
+        string? byteHash = deep
+            ? inventory.FirstOrDefault(entry =>
+                    string.Equals(entry.RelativePath, databaseRelativePath, StringComparison.OrdinalIgnoreCase))
+                ?.Sha256 ?? await HashFileAsync(database, cancellationToken)
+            : null;
         WorkspaceSchemaInspection schema;
         IReadOnlyList<string> unresolved;
         try
@@ -150,12 +162,22 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
         if (unresolved.Count > 0) actions.Add("Resolve canonical foreign-key references before mutation.");
         if (interrupted.Length > 0) actions.Add("Recover the interrupted storage operation before starting another.");
 
+        // `bytes-sha256:` only appears when a digest was actually computed - i.e. on the deep
+        // tier. The light tier's evidence is therefore one line shorter than the deep tier's for
+        // the same authority; see the Task 3.9 note above VerifyAsync's byteHash computation for
+        // why that evidence-contract change is safe.
+        var evidence = new List<string>
+        {
+            $"schema:{schema.SchemaIdentity ?? "unknown"}",
+            $"family:{schema.Family}",
+            $"version:{schema.Version?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}",
+            $"shape:{schema.Shape}",
+            $"shape-fingerprint:{schema.ShapeFingerprint ?? "unknown"}",
+        };
+        if (byteHash is not null) evidence.Add($"bytes-sha256:{byteHash}");
+
         return new StorageInspection(
-            health, true, length, byteHash, schema, inventory, unresolved, interrupted, actions,
-            [$"schema:{schema.SchemaIdentity ?? "unknown"}", $"family:{schema.Family}",
-             $"version:{schema.Version?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}",
-             $"shape:{schema.Shape}", $"shape-fingerprint:{schema.ShapeFingerprint ?? "unknown"}",
-             $"bytes-sha256:{byteHash}"]);
+            health, true, length, byteHash, schema, inventory, unresolved, interrupted, actions, evidence);
     }
 
     /// <summary>

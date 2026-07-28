@@ -74,15 +74,18 @@ public sealed class WorkspaceStorageVerificationTierTests
 
         // The stamp is no longer well-formed for the current canonical contract, so the light tier
         // must fall back to the full classification rather than answering from the stamp - and it
-        // must reach exactly the same non-healthy verdict the deep tier reaches.
+        // must reach exactly the same non-healthy verdict the deep tier reaches. Evidence agrees
+        // except for `bytes-sha256:`, which (Task 3.9) the light tier no longer computes or emits.
         Assert.NotEqual(StorageHealth.Healthy, light.Health);
         Assert.Equal(deep.Health, light.Health);
         Assert.Equal(deep.Schema, light.Schema);
-        Assert.Equal(deep.Evidence, light.Evidence);
+        Assert.Equal(deep.Evidence.Where(line => !line.StartsWith("bytes-sha256:", StringComparison.Ordinal)),
+            light.Evidence);
+        Assert.DoesNotContain(light.Evidence, line => line.StartsWith("bytes-sha256:", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task Light_verification_hashes_only_the_database_file()
+    public async Task Light_verification_hashes_nothing()
     {
         Repository repository = CreateRepository();
         await CreateCanonicalAsync(repository);
@@ -92,13 +95,17 @@ public sealed class WorkspaceStorageVerificationTierTests
         StorageInspection light = await inspector.VerifyAsync(
             new(repository.Path, StorageVerificationDepth.Light));
 
-        // Three files live under the persistence directory; the light tier owes the observation
-        // path only the database's own digest (it feeds the bit-identical `bytes-sha256:` evidence
-        // line), and a name listing for journal-artifact detection. Reverting the tier split makes
-        // this three.
+        // Three files live under the persistence directory; the light tier (Task 3.9) owes the
+        // observation path only a name listing for journal-artifact detection - no digest of the
+        // database or anything else. The database's SHA-256 used to be computed here to feed the
+        // `bytes-sha256:` evidence line, but no consumer ever read that line back to compare or
+        // gate a decision, so it was deleted rather than replaced. Reverting the tier split, or
+        // reintroducing the byte hash on this tier, makes FileHashInvocations nonzero again.
         Assert.Equal(3, light.PersistenceTree.Count);
-        Assert.Equal(1, inspector.FileHashInvocations);
+        Assert.Equal(0, inspector.FileHashInvocations);
         Assert.All(light.PersistenceTree, entry => Assert.Null(entry.Sha256));
+        Assert.Null(light.ByteSha256);
+        Assert.DoesNotContain(light.Evidence, line => line.StartsWith("bytes-sha256:", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -139,7 +146,7 @@ public sealed class WorkspaceStorageVerificationTierTests
     }
 
     [Fact]
-    public async Task Light_and_deep_agree_on_evidence_for_a_healthy_authority()
+    public async Task Light_and_deep_agree_on_evidence_for_a_healthy_authority_except_the_byte_digest()
     {
         Repository repository = CreateRepository();
         await CreateCanonicalAsync(repository);
@@ -150,14 +157,22 @@ public sealed class WorkspaceStorageVerificationTierTests
         StorageInspection deep = await new WorkspaceStorageInspector().VerifyAsync(
             new(repository.Path, StorageVerificationDepth.Deep));
 
-        // Evidence bit-identity is binding: the observation's StorageAuthoritySnapshot.Evidence is
-        // serialized into OrchestrationKernel.Snapshot and hashed into the durable
-        // canonical_kernel_decisions.snapshot_identity column. The light tier must therefore keep
-        // producing the same six lines, `bytes-sha256:` included.
-        Assert.Equal(deep.Evidence, light.Evidence);
+        // Task 3.9: the observation's StorageAuthoritySnapshot.Evidence is serialized into
+        // OrchestrationKernel.Snapshot and hashed into the durable
+        // canonical_kernel_decisions.snapshot_identity column, and rendered into CLI/JSON evidence
+        // output - but nothing ever reads that column, or the rendered line, back to compare. So
+        // the light tier is deliberately one evidence line short of the deep tier now: it omits
+        // `bytes-sha256:`, the one line that required reading the whole database file, while
+        // still agreeing on everything else (health, schema, required/interrupted actions, and
+        // the cheap file length).
+        Assert.Equal(deep.Evidence.Where(line => !line.StartsWith("bytes-sha256:", StringComparison.Ordinal)),
+            light.Evidence);
+        Assert.Contains(deep.Evidence, line => line.StartsWith("bytes-sha256:", StringComparison.Ordinal));
+        Assert.DoesNotContain(light.Evidence, line => line.StartsWith("bytes-sha256:", StringComparison.Ordinal));
         Assert.Equal(deep.Health, light.Health);
         Assert.Equal(deep.Schema, light.Schema);
-        Assert.Equal(deep.ByteSha256, light.ByteSha256);
+        Assert.NotNull(deep.ByteSha256);
+        Assert.Null(light.ByteSha256);
         Assert.Equal(deep.ByteLength, light.ByteLength);
         Assert.Equal(deep.RequiredActions, light.RequiredActions);
         Assert.Equal(deep.InterruptedOperations, light.InterruptedOperations);
@@ -210,7 +225,9 @@ public sealed class WorkspaceStorageVerificationTierTests
         Assert.Equal(StorageHealth.Corrupt, deep.Health);
         Assert.Equal(StorageHealth.Corrupt, light.Health);
         Assert.Equal(expectedHash, deep.ByteSha256);
-        Assert.Equal(expectedHash, light.ByteSha256);
+        // Task 3.9: the light tier never hashes the database file, corrupt or not - ByteSha256 is
+        // unconditionally null on that tier now, not just omitted from Evidence.
+        Assert.Null(light.ByteSha256);
         Assert.Equal([nameof(SqliteException), "SQLite authority is unreadable."], deep.Evidence);
         Assert.Equal(deep.Evidence, light.Evidence);
         Assert.Equal(deep.RequiredActions, light.RequiredActions);
@@ -280,9 +297,11 @@ public sealed class WorkspaceStorageVerificationTierTests
             .VerifyAsync(repository.Path, CancellationToken.None);
 
         // The adapter is the only thing between the inspector and RepositoryObserver, so this is
-        // the wiring assertion for "routine observation pays the light tier". Restoring the deep
-        // request here makes the count three.
-        Assert.Equal(1, inspector.FileHashInvocations);
+        // the wiring assertion for "routine observation pays the light tier [and, since Task 3.9,
+        // hashes nothing]". Restoring the deep request here makes the count three; reintroducing
+        // the deleted light-tier byte hash makes it one.
+        Assert.Equal(0, inspector.FileHashInvocations);
+        Assert.DoesNotContain(verification.Evidence, line => line.StartsWith("bytes-sha256:", StringComparison.Ordinal));
         Assert.Equal(StorageAuthorityKind.CanonicalSqlite, verification.Authority);
         Assert.True(verification.UsableAuthority);
     }
