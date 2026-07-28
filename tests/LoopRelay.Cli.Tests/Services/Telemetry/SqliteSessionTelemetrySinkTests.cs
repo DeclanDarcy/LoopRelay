@@ -75,21 +75,21 @@ public sealed class SqliteSessionTelemetrySinkTests : IDisposable
     }
 
     /// <summary>
-    /// Fail-open + retryability: a first-append init failure (here, forced by occupying the
+    /// Propagation + retryability: a first-append init failure (here, forced by occupying the
     /// runtime directory's path with a plain file so <c>Directory.CreateDirectory</c> throws)
-    /// must not throw out of <c>Append</c>, and must not permanently poison the sink - once the
-    /// obstruction is removed, a later append must retry init and succeed.
+    /// propagates out of <c>Append</c> so <c>SessionTelemetryRecorder</c> can warn, and must not
+    /// permanently poison the sink - once the obstruction is removed, a later append must retry
+    /// init and succeed.
     /// </summary>
     [Fact]
-    public async Task Append_WhenFirstInitFails_DoesNotThrow_AndRetriesOnNextAppend()
+    public async Task Append_WhenFirstInitFails_Propagates_AndRetriesOnNextAppend()
     {
         Directory.CreateDirectory(root);
         string runtimeDirectoryPath = Path.Combine(root, ".LoopRelay");
         File.WriteAllText(runtimeDirectoryPath, "blocking file occupies the runtime directory path");
         var sink = new SqliteSessionTelemetrySink(Repository);
 
-        Exception? firstAppendFailure = Xunit.Record.Exception(() => sink.Append(Record("repo", turnIndex: 1)));
-        Assert.Null(firstAppendFailure);
+        Assert.Throws<IOException>(() => sink.Append(Record("repo", turnIndex: 1)));
         Assert.Equal(0, sink.InitializationCount);
 
         File.Delete(runtimeDirectoryPath);
@@ -123,6 +123,28 @@ public sealed class SqliteSessionTelemetrySinkTests : IDisposable
         TelemetryRow[] rows = await ReadRowsAsync();
         Assert.Equal(threads * perThread, rows.Length);
         Assert.Equal(1, sink.InitializationCount);
+    }
+
+    /// <summary>
+    /// A persistently broken telemetry store must not be invisible. The failure propagates so
+    /// <c>SessionTelemetryRecorder</c> - the fail-open boundary - can emit its "Session telemetry
+    /// not recorded" warning, and the cached "ready" state is still reset, so the append after the
+    /// store is repaired re-initializes from scratch instead of staying poisoned.
+    /// </summary>
+    [Fact]
+    public void Append_WhenTheDatabaseBreaks_PropagatesTheFailure_ThenSelfHealsOnTheNextAppend()
+    {
+        var sink = new SqliteSessionTelemetrySink(Repository);
+        sink.Append(Record("repo", turnIndex: 1)); // healthy append caches the ensured state
+        SqliteConnection.ClearAllPools();
+        File.Delete(DatabasePath);
+        Directory.CreateDirectory(DatabasePath); // a directory where the database file must be
+
+        Assert.Throws<SqliteException>(() => sink.Append(Record("repo", turnIndex: 2)));
+
+        Directory.Delete(DatabasePath);
+        sink.Append(Record("repo", turnIndex: 3)); // cached state was reset: full re-init succeeds
+        Assert.Equal(2, sink.InitializationCount);
     }
 
     private static SessionTelemetryRecord Record(string repo, int turnIndex) =>

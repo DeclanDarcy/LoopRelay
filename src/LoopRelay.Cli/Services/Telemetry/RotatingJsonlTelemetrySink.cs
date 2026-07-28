@@ -19,6 +19,13 @@ namespace LoopRelay.Cli.Services.Telemetry;
 /// cache no longer holds (day changed, file missing, or file full) does a full re-scan run,
 /// exactly reproducing the original per-append algorithm so rotation thresholds are unchanged.
 /// </para>
+///
+/// <para>
+/// <b>Failure handling:</b> an append fails open exactly once - a stale cache is discarded and the
+/// write retried against a full rescan - and then propagates. Telemetry stays fail-open overall
+/// because <c>SessionTelemetryRecorder</c> catches and warns; swallowing here instead would make a
+/// persistently broken sink indistinguishable from a working one.
+/// </para>
 /// </summary>
 internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
 {
@@ -51,10 +58,11 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
         {
             if (!TryAppendLocked(line, forceRescan: false))
             {
-                // Fail open: the cached file/size didn't work out (IO error, e.g. the directory
-                // itself vanished). Forget the cache and retry exactly once with a full rescan.
-                // If that also fails, swallow it - telemetry must never throw out of an append.
-                TryAppendLocked(line, forceRescan: true);
+                // Fail open once: the cached file/size didn't work out (IO error, e.g. the
+                // directory itself vanished). Forget the cache and retry exactly once with a
+                // full rescan. A failure of the retry propagates so the recorder can warn -
+                // a persistently broken sink must not stay invisible.
+                AppendLocked(line, forceRescan: true);
             }
         }
     }
@@ -63,20 +71,36 @@ internal sealed class RotatingJsonlTelemetrySink : ISessionTelemetrySink
     {
         try
         {
-            string date = _clock.UtcNow.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            string activeFile = ResolveActiveFileLocked(date, forceRescan);
-            File.AppendAllText(activeFile, line + "\n");
+            AppendLocked(line, forceRescan);
             return true;
         }
         catch (IOException)
         {
-            InvalidateCacheLocked();
             return false;
         }
         catch (UnauthorizedAccessException)
         {
-            InvalidateCacheLocked();
             return false;
+        }
+    }
+
+    private void AppendLocked(string line, bool forceRescan)
+    {
+        try
+        {
+            string date = _clock.UtcNow.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string activeFile = ResolveActiveFileLocked(date, forceRescan);
+            File.AppendAllText(activeFile, line + "\n");
+        }
+        catch (IOException)
+        {
+            InvalidateCacheLocked();
+            throw;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            InvalidateCacheLocked();
+            throw;
         }
     }
 

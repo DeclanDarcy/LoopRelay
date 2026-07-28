@@ -33,8 +33,10 @@ namespace LoopRelay.Cli.Services.Telemetry;
 /// a cheap concession to the unresolved multi-process question. <see cref="schemaEnsured"/> skips
 /// even that cheap re-read for appends 2..N of this sink - once true, this sink calls
 /// <see cref="ApplyRequiredPragmas"/> instead of <c>EnsureSchemaAsync</c> and never asks Core to
-/// re-check the stamp again. That is an accepted risk (telemetry is fail-open; worst case is one
-/// lost row), but only because the broad <c>catch (SqliteException)</c> in <see cref="Append"/> is
+/// re-check the stamp again. That is an accepted risk (telemetry is fail-open at the
+/// <c>SessionTelemetryRecorder</c> boundary, which catches and warns; the sink itself rethrows, so
+/// a persistently broken store is reported rather than silently losing rows), but only because the
+/// broad <c>catch (SqliteException)</c> in <see cref="Append"/> is
 /// this sink's sole remaining self-healing path: it is what resets <see cref="schemaEnsured"/> so
 /// the next append re-verifies from scratch if the schema ever drifted out from under the cached
 /// flag. Narrowing that catch to exclude insert-level errors would remove that recovery path
@@ -99,13 +101,17 @@ internal sealed class SqliteSessionTelemetrySink(Repository repository) : ISessi
             }
             catch (IOException)
             {
-                // Fail open: forget the cached "ready" state so the next append retries full
-                // init from scratch, instead of staying poisoned by one transient failure.
+                // Reset the cached "ready" state so the next append retries full init from
+                // scratch, then propagate: SessionTelemetryRecorder owns the "Session telemetry
+                // not recorded" warning, and CompositeSessionTelemetrySink runs every other sink
+                // before rethrowing, so a broken store is visible without starving its sibling.
                 schemaEnsured = false;
+                throw;
             }
             catch (UnauthorizedAccessException)
             {
                 schemaEnsured = false;
+                throw;
             }
             catch (SqliteException)
             {
@@ -115,6 +121,7 @@ internal sealed class SqliteSessionTelemetrySink(Repository repository) : ISessi
                 // this to a schema-specific SQLite error code; doing so would leave a drifted or
                 // corrupted schema permanently cached as "ensured" until the process restarts.
                 schemaEnsured = false;
+                throw;
             }
         }
     }
@@ -131,11 +138,10 @@ internal sealed class SqliteSessionTelemetrySink(Repository repository) : ISessi
     /// <para>
     /// <b><see cref="LoopRelayWorkspaceDatabase"/> is the source of truth for this pragma set</b>
     /// (currently <c>PRAGMA foreign_keys</c> and <c>PRAGMA busy_timeout</c>, applied at the top of
-    /// <c>EnsureSchemaAsync</c> in <c>src/LoopRelay.Core/Services/Persistence/LoopRelayWorkspaceDatabase.cs</c>,
-    /// lines 327-331 as of this writing). Nothing enforces that this hand-copy stays in sync - if
-    /// Core's per-connection pragma set ever changes (e.g. a pragma added to enable WAL), this
-    /// method must be re-checked and updated to match, and the cited line numbers re-located
-    /// before being cited again.
+    /// <c>EnsureSchemaAsync</c> in <c>src/LoopRelay.Core/Services/Persistence/LoopRelayWorkspaceDatabase.cs</c>).
+    /// Nothing enforces that this hand-copy stays in sync - if Core's per-connection pragma set
+    /// ever changes (e.g. a pragma added to enable WAL), this method must be re-checked and
+    /// updated to match.
     /// </para>
     /// </summary>
     private static void ApplyRequiredPragmas(SqliteConnection connection)

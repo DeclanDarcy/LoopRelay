@@ -15,6 +15,24 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
 
     public void Dispose() { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
 
+    /// <summary>
+    /// One fail-open retry, then propagate. The retry exists for a transient loss of the cached
+    /// file; a directory path permanently occupied by a file is not transient, and swallowing it
+    /// would leave a persistently broken sink silent. <c>SessionTelemetryRecorder</c> is the
+    /// warn-and-continue boundary that keeps telemetry fail-open overall.
+    /// </summary>
+    [Fact]
+    public void Append_WhenTheDirectoryPathIsAFile_PropagatesInsteadOfSwallowing()
+    {
+        File.WriteAllText(dir, "not a directory"); // occupies the sink's directory path
+        var clock = new FakeClock { UtcNow = new DateTimeOffset(2026, 7, 1, 8, 0, 0, TimeSpan.Zero) };
+        var sink = new RotatingJsonlTelemetrySink(dir, clock);
+
+        Assert.Throws<IOException>(() => sink.Append(Rec("a")));
+
+        File.Delete(dir);
+    }
+
     [Fact]
     public void Append_WritesOneJsonLineToTodaysZeroSequenceFile_CreatingTheDirectory()
     {
@@ -122,13 +140,15 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
     }
 
     /// <summary>
-    /// Fail-open: an IO error while resolving/writing the active file (here, forced by occupying
-    /// the sink's directory path with a plain file, so <c>Directory.CreateDirectory</c> can never
-    /// succeed) must not throw out of <c>Append</c> - not on the first append, and not after a
-    /// cache miss forces a fallback rescan.
+    /// An IO error that the one fail-open retry cannot clear (here, forced by occupying the sink's
+    /// directory path with a plain file, so <c>Directory.CreateDirectory</c> can never succeed)
+    /// propagates out of <c>Append</c> - on the first append and on every append after it, since
+    /// nothing about the obstruction is transient. Telemetry remains fail-open at the
+    /// <c>SessionTelemetryRecorder</c> boundary, which is where the warning belongs; swallowing
+    /// here would make a permanently broken sink look identical to a working one.
     /// </summary>
     [Fact]
-    public void Append_WhenDirectoryCanNeverBeCreated_DoesNotThrow()
+    public void Append_WhenDirectoryCanNeverBeCreated_PropagatesOnEveryAppend()
     {
         string blockingFile = Path.Combine(Path.GetTempPath(), "cc-tel-blocker-" + Guid.NewGuid().ToString("N"));
         File.WriteAllText(blockingFile, "occupies the path a directory needs");
@@ -138,11 +158,8 @@ public class RotatingJsonlTelemetrySinkTests : IDisposable
             var clock = new FakeClock { UtcNow = new DateTimeOffset(2026, 7, 1, 8, 0, 0, TimeSpan.Zero) };
             var sink = new RotatingJsonlTelemetrySink(invalidDirectory, clock);
 
-            Exception? firstFailure = Record.Exception(() => sink.Append(Rec("first")));
-            Exception? secondFailure = Record.Exception(() => sink.Append(Rec("second")));
-
-            Assert.Null(firstFailure);
-            Assert.Null(secondFailure);
+            Assert.Throws<IOException>(() => sink.Append(Rec("first")));
+            Assert.Throws<IOException>(() => sink.Append(Rec("second")));
         }
         finally
         {
