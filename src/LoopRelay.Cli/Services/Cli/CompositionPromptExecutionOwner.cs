@@ -1972,17 +1972,51 @@ internal sealed partial class LoopRelayCompositionRoot
                 completionRecoveryEvidencePaths = checkpoint.RecoveryEvidencePaths;
             }
 
+            CompletionCertificationRoute? route = completionCertificationResult.Route;
+            if (route is not null)
+            {
+                await RecordCompletionRouteDecisionAsync(route, cancellationToken);
+            }
+
             return $"""
                 # Completion Route
 
                 | Field | Value |
                 |---|---|
                 | Outcome | {completionCertificationResult.Outcome} |
-                | Should Close Epic | {completionCertificationResult.Route?.ShouldCloseEpic} |
+                | Route | {(route is null ? "Unavailable" : route.ShouldCloseEpic ? "Close epic" : "Continue execution")} |
                 | Message | {completionCertificationResult.Message} |
                 | Evidence | {string.Join(", ", completionCertificationResult.EvidencePaths)} |
                 | Recovery Phase Evidence | {string.Join(", ", completionRecoveryEvidencePaths)} |
                 """;
+        }
+
+        /// <summary>
+        /// Persists the close/continue outcome as a typed fact against this transition run, at the
+        /// point the router's decision is in hand. Stage routing reads this at settlement; the
+        /// table above is what a human reads, and is no longer a machine contract. Nothing is
+        /// written when the certification carries no route, so routing fails closed rather than
+        /// settling on a decision nobody made.
+        /// </summary>
+        private async Task RecordCompletionRouteDecisionAsync(
+            CompletionCertificationRoute route,
+            CancellationToken cancellationToken)
+        {
+            CanonicalCausalContext causality = await ResolveCausalityAsync(cancellationToken);
+            await new CanonicalWorkflowPersistenceStore(_repository).AppendTransitionEvidenceAsync(
+                new CanonicalTransitionEvidenceRecord(
+                    0,
+                    causality.TransitionRun.Value,
+                    new WorkflowTransitionIdentity("InterpretCompletionRoute"),
+                    CompletionRouteDecision.EventName,
+                    DateTimeOffset.UtcNow,
+                    TransitionDurableState.PromptCompleted,
+                    route.ShouldCloseEpic
+                        ? "Completion certification routed this epic to closure."
+                        : "Completion certification routed this epic back to execution.",
+                    ["completion-route-decision"],
+                    new CompletionRouteDecision(route.ShouldCloseEpic).ToDocumentJson()),
+                cancellationToken);
         }
 
         private static string RenderCompletionCertificationResult(

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Persistence;
@@ -366,6 +367,54 @@ public sealed record PromptExecutionResult(
     TimeSpan Duration,
     IReadOnlyDictionary<string, string> Metadata,
     string? FailureMessage = null);
+
+/// <summary>
+/// The close/continue outcome of completion certification, as a typed fact rather than a shape
+/// recovered from prose. The certification router decides this; <c>InterpretCompletionRoute</c>
+/// persists it under <see cref="EventName"/> against its own transition run; stage routing at
+/// settlement reads it back and picks the successor stage from it.
+/// <para>
+/// It is a distinct record from the rendered transition output on purpose. Routing used to recover
+/// this boolean by string-matching a row out of the agent-authored markdown the transition emits,
+/// which made a decision the system already held typed depend on the layout of a table. The
+/// rendered output remains what a human reads; this record is what the machine routes on, and the
+/// two can no longer disagree.
+/// </para>
+/// <para>
+/// Serialization lives here, on the contract, so the writer and the reader cannot drift into
+/// different property casings - the precise failure this fact exists to remove.
+/// </para>
+/// </summary>
+public sealed record CompletionRouteDecision(bool ShouldCloseEpic)
+{
+    /// <summary>
+    /// The <c>canonical_transition_evidence.event_name</c> this fact is durable under. Scoped by
+    /// run id, and never retired, so settlement can always find the decision its own run recorded.
+    /// </summary>
+    public const string EventName = "CompletionRouteDecided";
+
+    private static readonly JsonSerializerOptions DocumentOptions = new(JsonSerializerDefaults.Web);
+
+    public string ToDocumentJson() => JsonSerializer.Serialize(this, DocumentOptions);
+
+    /// <summary>
+    /// Reads the fact back, answering null for both "no row" and "a row that does not carry this
+    /// shape". Callers are expected to fail closed on null: an absent decision is never a licence
+    /// to guess a route.
+    /// </summary>
+    public static CompletionRouteDecision? FromDocumentJson(string? documentJson)
+    {
+        if (string.IsNullOrWhiteSpace(documentJson)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<CompletionRouteDecision>(documentJson, DocumentOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+}
 
 public sealed record InterpretedTransitionOutput(
     OutputInterpretationStatus Status,

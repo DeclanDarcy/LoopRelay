@@ -684,11 +684,6 @@ public sealed class CanonicalEffectPlanSettlementStore(
     Repository _repository,
     IReadOnlyList<WorkflowDefinition>? _definitions = null) : IEffectPlanSettlementStore
 {
-    private static readonly JsonSerializerOptions SettlementJsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter() },
-    };
-
     public async Task RecordOutcomeAsync(
         TransitionRunIdentity transitionRun,
         RuntimeOutcomeKind outcome,
@@ -900,31 +895,27 @@ public sealed class CanonicalEffectPlanSettlementStore(
             return stage.AllowedSuccessors[0];
         }
 
+        // Routed from the typed fact `InterpretCompletionRoute` recorded, not from the prose it
+        // rendered. The decision is the certification router's, and it reaches here as a decision;
+        // recovering it by matching a row out of agent-authored markdown made routing depend on
+        // that text's layout, which is neither the system's own fact nor stable.
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
             SELECT document_json FROM canonical_transition_evidence
-            WHERE run_id = $transition AND event_name = 'RawPromptOutputCaptured'
+            WHERE run_id = $transition AND event_name = $event
             ORDER BY evidence_id DESC LIMIT 1;
             """;
         command.Parameters.AddWithValue("$transition", transitionRun.Value);
+        command.Parameters.AddWithValue("$event", CompletionRouteDecision.EventName);
         string? json = Convert.ToString(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
-        PromptExecutionResult? output = string.IsNullOrWhiteSpace(json)
-            ? null
-            : JsonSerializer.Deserialize<PromptExecutionResult>(json, SettlementJsonOptions);
-        string? raw = output?.RawOutput
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Split('\n')
-            .Select(line => line.Trim())
-            .Where(line => line.StartsWith("| Should Close Epic |", StringComparison.OrdinalIgnoreCase))
-            .Select(line => line.Trim('|').Split('|')[1].Trim())
-            .SingleOrDefault();
-        if (!bool.TryParse(raw, out bool shouldClose))
-        {
-            throw new InvalidOperationException(
-                "Canonical completion-route output does not contain an unambiguous `Should Close Epic` boolean.");
-        }
-        string successor = shouldClose ? "Workflow Completion" : "Execution Readiness";
+        // Fail closed. An absent decision is not a licence to guess a successor, and it is never a
+        // reason to fall back to reading the rendered output.
+        CompletionRouteDecision decision = CompletionRouteDecision.FromDocumentJson(json)
+            ?? throw new InvalidOperationException(
+                $"Transition run '{transitionRun}' carries no durable CompletionRoute decision " +
+                $"('{CompletionRouteDecision.EventName}'), so the completion route cannot be resolved.");
+        string successor = decision.ShouldCloseEpic ? "Workflow Completion" : "Execution Readiness";
         WorkflowStageIdentity selected = stage.AllowedSuccessors.SingleOrDefault(item => item.Value == successor);
         return selected.IsEmpty
             ? throw new InvalidOperationException($"Completion route selected undeclared successor '{successor}'.")

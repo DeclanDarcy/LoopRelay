@@ -182,6 +182,189 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         Assert.Equal(RuntimeOutcomeKind.Waiting, settledWorkflow.Outcome);
     }
 
+    /// <summary>
+    /// Stage routing out of `InterpretCompletionRoute` follows the typed `CompletionRouteDecided`
+    /// fact the transition recorded, and nothing else. The raw prompt output seeded here is
+    /// deliberately prose with no decision row in it, so a router that had gone back to reading the
+    /// rendered text could not pass by accident - it would find nothing to read.
+    /// </summary>
+    [Theory]
+    [InlineData(true, "Workflow Completion")]
+    [InlineData(false, "Execution Readiness")]
+    public async Task Completion_routing_follows_the_typed_decision_fact_not_the_rendered_output(
+        bool shouldCloseEpic,
+        string expectedStage)
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        CanonicalCausalContext causality = await SeedCompletionRouteRunAsync(persistence);
+        await RecordRenderedOutputAsync(persistence, causality);
+        await RecordRouteDecisionAsync(persistence, causality, shouldCloseEpic);
+
+        Assert.True(await SettleCompletionRouteAsync(repository, causality));
+
+        CanonicalWorkflowStateRecord workflow = Assert.Single(
+            (await persistence.LoadSnapshotAsync()).WorkflowStates);
+        Assert.Equal(expectedStage, workflow.CurrentStage?.Value);
+        Assert.Equal(WorkflowResolutionState.Resumable, workflow.State);
+    }
+
+    /// <summary>
+    /// Fail-closed: with no typed decision recorded, settlement refuses to route rather than
+    /// guessing a successor, and says which fact is missing. A rendered output that plainly states
+    /// the epic should close is present precisely so that a parsing fallback would be visible here
+    /// as a pass.
+    /// </summary>
+    [Fact]
+    public async Task Completion_routing_fails_closed_when_the_typed_decision_fact_is_absent()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        CanonicalCausalContext causality = await SeedCompletionRouteRunAsync(persistence);
+        await RecordRenderedOutputAsync(
+            persistence, causality, "The epic is complete and should close. Should Close Epic: true.");
+
+        InvalidOperationException failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => SettleCompletionRouteAsync(repository, causality));
+
+        // Names the fact that is missing, and the run it is missing from, so the stop is actionable.
+        Assert.Contains(CompletionRouteDecision.EventName, failure.Message, StringComparison.Ordinal);
+        Assert.Contains(causality.TransitionRun.Value, failure.Message, StringComparison.Ordinal);
+        // The run stays unsettled: a refused route must not half-advance the workflow.
+        Assert.Equal(
+            TransitionDurableState.EffectsPending,
+            Assert.Single((await persistence.LoadSnapshotAsync()).TransitionRuns).State);
+    }
+
+    /// <summary>Puts the run at the last transition of Execute's Completion stage, which is the
+    /// only position from which stage routing consults the completion route.</summary>
+    private static async Task<CanonicalCausalContext> SeedCompletionRouteRunAsync(
+        CanonicalWorkflowPersistenceStore persistence)
+    {
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        TransitionRuntimeRequest request = CompletionRouteRequest(causality);
+        WorkflowTransitionDefinition definition = CompletionRouteDefinition();
+        PersistedRenderedPromptFact prompt = await new CanonicalRenderedPromptFactStore(persistence)
+            .AppendAsync(PromptFact(causality), CancellationToken.None);
+        await new CanonicalTransitionRunStore(persistence).PersistStartedAsync(
+            new TransitionRunStarted(
+                causality,
+                DateTimeOffset.UtcNow,
+                request,
+                definition,
+                new TransitionInputSnapshot("snapshot", [], new Dictionary<string, string>(), []),
+                prompt),
+            CancellationToken.None);
+        await new CanonicalTransitionCommitStore(persistence).CommitAsync(
+            new TransitionCommitCapture(
+                causality,
+                request,
+                definition,
+                new ProductValidationResult(
+                    ProductValidationStatus.Valid, [CompletionRouteProduct(causality)], [], [], [], [],
+                    "valid", ["validator"]),
+                new GateResult(GateStatus.Satisfied, [], "satisfied", ["gate"]),
+                [],
+                DateTimeOffset.UtcNow),
+            CancellationToken.None);
+        return causality;
+    }
+
+    private static Task RecordRenderedOutputAsync(
+        CanonicalWorkflowPersistenceStore persistence,
+        CanonicalCausalContext causality,
+        string rawOutput = "# Completion Route\n\nCertification finished. See the route fact.") =>
+        new CanonicalTransitionEvidenceStore(persistence).RecordRawOutputAsync(
+            causality,
+            new WorkflowTransitionIdentity("InterpretCompletionRoute"),
+            new PromptExecutionResult(
+                PromptExecutionStatus.Completed, rawOutput, TimeSpan.FromSeconds(1),
+                new Dictionary<string, string>()),
+            CancellationToken.None);
+
+    private static Task RecordRouteDecisionAsync(
+        CanonicalWorkflowPersistenceStore persistence,
+        CanonicalCausalContext causality,
+        bool shouldCloseEpic) =>
+        persistence.AppendTransitionEvidenceAsync(
+            new CanonicalTransitionEvidenceRecord(
+                0,
+                causality.TransitionRun.Value,
+                new WorkflowTransitionIdentity("InterpretCompletionRoute"),
+                CompletionRouteDecision.EventName,
+                DateTimeOffset.UtcNow,
+                TransitionDurableState.PromptCompleted,
+                "Completion certification decided the epic route.",
+                ["completion-route-decision"],
+                new CompletionRouteDecision(shouldCloseEpic).ToDocumentJson()));
+
+    /// <summary>Settles the run's one effect so routing runs, against the real catalog.</summary>
+    private static async Task<bool> SettleCompletionRouteAsync(
+        Repository repository,
+        CanonicalCausalContext causality)
+    {
+        var effects = new CanonicalEffectWorkStore(repository);
+        EffectScanRow work = Assert.Single(
+            await effects.ScanUnsettledAsync(10, DateTimeOffset.UtcNow, CancellationToken.None));
+        await effects.RecordReceiptAsync(
+            work.Intent.Identity,
+            new EffectReceipt(
+                EffectReceiptIdentity.New(), work.Intent.Identity, work.Intent.Executor,
+                work.Intent.ExecutorVersion, work.Intent.Target.Identity, "before", "after",
+                true, "test:effect", ["independent-observation"], DateTimeOffset.UtcNow),
+            "test-worker",
+            CancellationToken.None);
+        return await new CanonicalEffectPlanSettlementStore(repository)
+            .TrySettleAsync(causality.TransitionRun, CancellationToken.None);
+    }
+
+    private static TransitionRuntimeRequest CompletionRouteRequest(CanonicalCausalContext causality)
+    {
+        var execution = new CanonicalTransitionExecutionContext(
+            new WorkflowInvocation(InvocationModeKind.BoundedPlan),
+            causality.Workspace,
+            causality.Run,
+            causality.WorkflowInstance,
+            new PolicyIdentity("policy_test"),
+            new RuntimeProfileIdentity("runtime_test"),
+            new PromptPolicyProfileIdentity("prompt_policy_test"));
+        return new TransitionRuntimeRequest(
+            WorkflowIdentity.Execute,
+            new WorkflowStageIdentity("Completion"),
+            new WorkflowTransitionIdentity("InterpretCompletionRoute"),
+            execution,
+            FreshAttemptAuthorization.Instance);
+    }
+
+    private static WorkflowTransitionDefinition CompletionRouteDefinition() => new(
+        new WorkflowTransitionIdentity("InterpretCompletionRoute"),
+        "interpret completion route",
+        [],
+        new GateDefinition(new GateIdentity("input"), "input", [], "test", "fail"),
+        "InterpretCompletionRoute",
+        ExecutionPosture.OneShotAgentPrompt,
+        [],
+        new GateDefinition(new GateIdentity("output"), "output", [], "test", "fail"),
+        [],
+        [new EffectDefinition(new EffectIdentity("persist"), EffectCategory.ProductPersistence,
+            "validated", [], [], 1, "retry")],
+        [], [],
+        new RecoveryDefinition("recovery", "recover", ["retry"], []));
+
+    private static ProductRecord CompletionRouteProduct(CanonicalCausalContext causality) => new(
+        ProductIdentity.CompletionRoute,
+        WorkflowIdentity.Execute,
+        new WorkflowTransitionIdentity("InterpretCompletionRoute"),
+        [WorkflowIdentity.Execute],
+        "repository",
+        "test",
+        [".agents/completion-route.json"],
+        causality.Attempt.Value,
+        ProductFreshness.Fresh,
+        ProductValidationState.Valid,
+        ProductLifecycle.Active,
+        [".agents/completion-route.json"]);
+
     [Fact]
     public async Task Recovery_coordinator_persists_canonical_cancelled_retry_plan_without_executing_work()
     {
