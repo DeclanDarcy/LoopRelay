@@ -554,7 +554,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -598,7 +597,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -727,7 +725,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -766,7 +763,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory(); // distinct root (genuinely separate from the repo)
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -838,7 +834,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -885,7 +880,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -961,7 +955,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,

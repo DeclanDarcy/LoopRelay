@@ -2,12 +2,8 @@ using LoopRelay.Agents.Abstractions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Execution;
-using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Repositories;
-using LoopRelay.Core.Services.Artifacts;
-using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Infrastructure.Models.Git;
-using Microsoft.Data.Sqlite;
 
 namespace LoopRelay.Cli.Services.Agents;
 
@@ -19,72 +15,6 @@ internal interface IAgentsSubmodulePublishPreflight
 internal sealed class NullAgentsSubmodulePublishPreflight : IAgentsSubmodulePublishPreflight
 {
     public Task EnsureFreshExportAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-}
-
-internal sealed class SqliteAgentsSubmodulePublishPreflight(
-    IArtifactStore _store,
-    Repository _repository) : IAgentsSubmodulePublishPreflight
-{
-    public async Task EnsureFreshExportAsync(CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
-        if (!File.Exists(databasePath))
-        {
-            return;
-        }
-
-        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
-        await connection.OpenAsync(cancellationToken);
-        await ExportTableAsync(
-            connection,
-            """
-            SELECT logical_path, body
-            FROM loop_history
-            ORDER BY kind, sequence;
-            """,
-            cancellationToken);
-
-        if (await TableExistsAsync(connection, "execution_evidence", cancellationToken))
-        {
-            await ExportTableAsync(
-                connection,
-                """
-                SELECT logical_path, body
-                FROM execution_evidence
-                ORDER BY stem, sequence;
-                """,
-                cancellationToken);
-        }
-    }
-
-    private async Task ExportTableAsync(
-        SqliteConnection connection,
-        string commandText,
-        CancellationToken cancellationToken)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = commandText;
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            string relativePath = reader.GetString(0);
-            string body = reader.GetString(1);
-            await _store.WriteAsync(ArtifactPath.ResolveRepositoryPath(_repository, relativePath), body);
-        }
-    }
-
-    private static async Task<bool> TableExistsAsync(
-        SqliteConnection connection,
-        string tableName,
-        CancellationToken cancellationToken)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name;";
-        command.Parameters.AddWithValue("$name", tableName);
-        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
-        return Convert.ToInt64(scalar) == 1;
-    }
 }
 
 internal sealed class AgentsSubmodulePublisher
