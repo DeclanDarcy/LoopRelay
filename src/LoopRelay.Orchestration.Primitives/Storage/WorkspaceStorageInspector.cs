@@ -8,6 +8,7 @@ namespace LoopRelay.Orchestration.Storage;
 
 public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
 {
+#if DEBUG
     /// <summary>
     /// Test-only observability: how many times <see cref="HashFileAsync"/> has computed a
     /// SHA-256 digest, across every file and every call, on this instance. Instance-scoped
@@ -37,6 +38,7 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
     internal int FileHashInvocations => fileHashInvocations;
 
     private int fileHashInvocations;
+#endif
 
     public async Task<StorageInspection> VerifyAsync(
         StorageVerifyRequest request,
@@ -297,7 +299,9 @@ public sealed class WorkspaceStorageInspector : IWorkspaceStorageInspector
 
     private async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
     {
+#if DEBUG
         Interlocked.Increment(ref fileHashInvocations);
+#endif
         await using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
             64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));

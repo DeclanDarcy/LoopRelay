@@ -102,7 +102,9 @@ public sealed class WorkspaceStorageVerificationTierTests
         // gate a decision, so it was deleted rather than replaced. Reverting the tier split, or
         // reintroducing the byte hash on this tier, makes FileHashInvocations nonzero again.
         Assert.Equal(3, light.PersistenceTree.Count);
+#if DEBUG
         Assert.Equal(0, inspector.FileHashInvocations);
+#endif
         Assert.All(light.PersistenceTree, entry => Assert.Null(entry.Sha256));
         Assert.Null(light.ByteSha256);
         Assert.DoesNotContain(light.Evidence, line => line.StartsWith("bytes-sha256:", StringComparison.Ordinal));
@@ -120,7 +122,9 @@ public sealed class WorkspaceStorageVerificationTierTests
             new(repository.Path, StorageVerificationDepth.Deep));
 
         Assert.Equal(3, deep.PersistenceTree.Count);
+#if DEBUG
         Assert.Equal(deep.PersistenceTree.Count, inspector.FileHashInvocations);
+#endif
         Assert.All(deep.PersistenceTree, entry => Assert.NotNull(entry.Sha256));
     }
 
@@ -142,7 +146,9 @@ public sealed class WorkspaceStorageVerificationTierTests
         // two companion files. Without this, an empty inventory would satisfy the equality below as
         // 0 == 0 and the assertion would certify nothing.
         Assert.Equal(3, unqualified.PersistenceTree.Count);
+#if DEBUG
         Assert.Equal(unqualified.PersistenceTree.Count, inspector.FileHashInvocations);
+#endif
     }
 
     [Fact]
@@ -300,7 +306,9 @@ public sealed class WorkspaceStorageVerificationTierTests
         // the wiring assertion for "routine observation pays the light tier [and, since Task 3.9,
         // hashes nothing]". Restoring the deep request here makes the count three; reintroducing
         // the deleted light-tier byte hash makes it one.
+#if DEBUG
         Assert.Equal(0, inspector.FileHashInvocations);
+#endif
         Assert.DoesNotContain(verification.Evidence, line => line.StartsWith("bytes-sha256:", StringComparison.Ordinal));
         Assert.Equal(StorageAuthorityKind.CanonicalSqlite, verification.Authority);
         Assert.True(verification.UsableAuthority);

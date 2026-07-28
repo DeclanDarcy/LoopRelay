@@ -74,7 +74,9 @@ public sealed class WorkspaceStorageAuthorityTests
         // not one more. FileHashInvocations is instance-scoped (not static) specifically so this
         // count can never be polluted by other tests/classes running concurrently against their
         // own WorkspaceStorageInspector instances.
+#if DEBUG
         Assert.Equal(result.PersistenceTree.Count, inspector.FileHashInvocations);
+#endif
     }
 
     [Fact]
