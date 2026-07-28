@@ -34,6 +34,17 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     /// </summary>
     internal Action<SqliteConnection>? ConnectionObserverForTesting { get; set; }
 
+    /// <summary>
+    /// Test-only observability (fix pass 1, finding 2): fires whenever the unkeyed, full-hydration
+    /// <see cref="ReadRenderedPromptsAsync"/> path actually runs, so a test can assert directly that
+    /// the keyed <c>CanonicalRenderedPromptFactStore.ReadAsync</c> path never fell back to it. This
+    /// is a direct signal for "the full-hydration path did not run" - deliberately not an exact
+    /// statement-count total, since the unrelated, unkeyed attempt lookup that same method also
+    /// depends on contributes to any such total and would silently invalidate it if that lookup were
+    /// ever keyed on its own. Instance-scoped, like <see cref="ConnectionObserverForTesting"/>.
+    /// </summary>
+    internal Action? ReadRenderedPromptsAsyncInvokedForTesting { get; set; }
+
     public async Task UpsertWorkflowStateAsync(
         CanonicalWorkflowStateRecord state,
         CancellationToken cancellationToken = default)
@@ -771,6 +782,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     public async Task<IReadOnlyList<CanonicalRenderedPromptRecord>> ReadRenderedPromptsAsync(
         CancellationToken cancellationToken = default)
     {
+        ReadRenderedPromptsAsyncInvokedForTesting?.Invoke();
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
         if (!File.Exists(databasePath))
         {
@@ -804,13 +816,15 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     }
 
     /// <summary>
-    /// The keyed rendered-prompt lookup, verbatim as executed (Task 3.2). Reading one rendered
-    /// prompt used to call <see cref="ReadRenderedPromptsAsync"/> - every row in the table, in
-    /// insertion order, including every other prompt's full <c>rendered_text</c> - and find the
-    /// wanted one with <c>FindIndex</c>. <c>rendered_text</c> can be arbitrarily large, so that was
-    /// a row-size problem as much as a row-count one. This SELECT is scoped by the table's primary
-    /// key instead: the column list is identical to <see cref="ReadRenderedPromptsAsync"/>'s so
-    /// <see cref="MapRenderedPrompt"/> can serve both.
+    /// The keyed rendered-prompt lookup (Task 3.2; revised in fix pass 1, finding 3, to also select
+    /// <c>rowid</c>). Reading one rendered prompt used to call <see cref="ReadRenderedPromptsAsync"/>
+    /// - every row in the table, in insertion order, including every other prompt's full
+    /// <c>rendered_text</c> - and find the wanted one with <c>FindIndex</c>. <c>rendered_text</c> can
+    /// be arbitrarily large, so that was a row-size problem as much as a row-count one. This SELECT
+    /// is scoped by the table's primary key instead: its first 16 columns are identical to
+    /// <see cref="ReadRenderedPromptsAsync"/>'s so <see cref="MapRenderedPrompt"/> can serve both; the
+    /// trailing <c>rowid</c> lets the caller hand it straight to
+    /// <see cref="RenderedPromptLedgerPositionSql"/> without a second, independent id lookup.
     /// <para>
     /// Exposed to the test assembly so the index-backing assertion can <c>EXPLAIN QUERY PLAN</c> the
     /// real statement rather than a copy of it.
@@ -820,57 +834,78 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         SELECT rendered_prompt_id, transition_run_id, attempt_id, session_id, turn_id,
                prompt_identity, template_source_hash, rendered_sha256, rendered_text,
                consumed_inputs_json, policy_id, rendered_at, persistence_id,
-               prompt_policy_profile_id, consumed_input_manifest_id, rendered_encoding
+               prompt_policy_profile_id, consumed_input_manifest_id, rendered_encoding, rowid
         FROM canonical_rendered_prompts WHERE rendered_prompt_id = $rendered_prompt_id;
         """;
 
     /// <summary>
-    /// The counted ledger-position lookup, verbatim as executed (Task 3.2). This table is
-    /// append-only - rows are never deleted (see <see cref="AppendRenderedPromptAsync"/>) - so the
-    /// count of rows at-or-before a row's own <c>rowid</c> is exactly the 1-based insertion-order
-    /// position the old <c>FindIndex(...) + 1</c> over the full <c>ORDER BY rowid</c> list produced,
-    /// without loading any row's content to compute it. Exposed to the test assembly for the same
-    /// reason as <see cref="ReadRenderedPromptSql"/>.
+    /// The counted ledger-position lookup, by the row's own <c>rowid</c> (fix pass 1, finding 3 -
+    /// previously re-looked-up the row by id via a nested subquery, billing two <c>SELECT</c>
+    /// statements for one position read). This table is append-only - rows are never deleted (see
+    /// <see cref="AppendRenderedPromptAsync"/>) - so the count of rows at-or-before a given
+    /// <c>rowid</c> is exactly the 1-based insertion-order position the old <c>FindIndex(...) + 1</c>
+    /// over the full <c>ORDER BY rowid</c> list produced, without loading any row's content to
+    /// compute it. Exposed to the test assembly for the same reason as
+    /// <see cref="ReadRenderedPromptSql"/>.
     /// </summary>
     internal const string RenderedPromptLedgerPositionSql = """
-        SELECT COUNT(*) FROM canonical_rendered_prompts
-        WHERE rowid <= (SELECT rowid FROM canonical_rendered_prompts WHERE rendered_prompt_id = $rendered_prompt_id);
+        SELECT COUNT(*) FROM canonical_rendered_prompts WHERE rowid <= $rowid;
         """;
 
     /// <summary>
-    /// Reads a single rendered-prompt row by id without loading every rendered prompt in the
-    /// workspace (see <see cref="ReadRenderedPromptSql"/>). Used by
-    /// <see cref="CanonicalRenderedPromptFactStore.ReadAsync"/>.
+    /// Reads a single rendered-prompt row by id, and its <c>rowid</c>, without loading every
+    /// rendered prompt in the workspace (see <see cref="ReadRenderedPromptSql"/>). Used by
+    /// <see cref="CanonicalRenderedPromptFactStore.ReadAsync"/>, which passes the returned
+    /// <c>RowId</c> straight to <see cref="ReadRenderedPromptLedgerPositionAsync"/>.
+    /// <para>
+    /// Routed through <see cref="ReadSpineRowOrEmptyAsync{TResult}"/> (fix pass 1, finding 1): a
+    /// pre-v3 workspace database has no <c>canonical_rendered_prompts</c> table at all, and this
+    /// keyed read must fail closed the same way every other spine read already does - reporting "no
+    /// row" instead of throwing - rather than invent a third behavior.
+    /// </para>
     /// </summary>
-    public async Task<CanonicalRenderedPromptRecord?> ReadRenderedPromptAsync(
+    public async Task<(CanonicalRenderedPromptRecord? Record, long RowId)> ReadRenderedPromptAsync(
         string renderedPromptId,
         CancellationToken cancellationToken = default)
     {
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
         if (!File.Exists(databasePath))
         {
-            return null;
+            return (null, 0);
         }
 
-        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
-        await connection.OpenAsync(cancellationToken);
-        ConnectionObserverForTesting?.Invoke(connection);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = ReadRenderedPromptSql;
-        command.Parameters.AddWithValue("$rendered_prompt_id", renderedPromptId);
-        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken) ? MapRenderedPrompt(reader) : null;
+        return await ReadSpineRowOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+            ConnectionObserverForTesting?.Invoke(connection);
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = ReadRenderedPromptSql;
+            command.Parameters.AddWithValue("$rendered_prompt_id", renderedPromptId);
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return (null, 0L);
+            }
+
+            return (MapRenderedPrompt(reader), reader.GetInt64(16));
+        }, (null, 0L));
     }
 
     /// <summary>
-    /// Reads the 1-based ledger position of a single rendered-prompt row by id - the same value the
-    /// old full-table <c>FindIndex(...) + 1</c> produced - without loading every row (see
-    /// <see cref="RenderedPromptLedgerPositionSql"/>). Returns 0 if no row with this id exists;
-    /// callers only call this once <see cref="ReadRenderedPromptAsync"/> has confirmed the row
-    /// exists, so that case never surfaces as a real position.
+    /// Reads the 1-based ledger position of a single rendered-prompt row by its <c>rowid</c> - the
+    /// same value the old full-table <c>FindIndex(...) + 1</c> produced - without loading every row
+    /// (see <see cref="RenderedPromptLedgerPositionSql"/>). Returns 0 if no row exists at that
+    /// <c>rowid</c>; callers only call this with the <c>RowId</c>
+    /// <see cref="ReadRenderedPromptAsync"/> already confirmed exists, so that case never surfaces as
+    /// a real position.
+    /// <para>
+    /// Routed through <see cref="ReadSpineRowOrEmptyAsync{TResult}"/> for the same fail-closed reason
+    /// as <see cref="ReadRenderedPromptAsync"/> (fix pass 1, finding 1).
+    /// </para>
     /// </summary>
     public async Task<long> ReadRenderedPromptLedgerPositionAsync(
-        string renderedPromptId,
+        long rowId,
         CancellationToken cancellationToken = default)
     {
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
@@ -879,13 +914,16 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             return 0;
         }
 
-        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
-        await connection.OpenAsync(cancellationToken);
-        ConnectionObserverForTesting?.Invoke(connection);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = RenderedPromptLedgerPositionSql;
-        command.Parameters.AddWithValue("$rendered_prompt_id", renderedPromptId);
-        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        return await ReadSpineRowOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+            ConnectionObserverForTesting?.Invoke(connection);
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = RenderedPromptLedgerPositionSql;
+            command.Parameters.AddWithValue("$rowid", rowId);
+            return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }, 0L);
     }
 
     private static CanonicalRenderedPromptRecord MapRenderedPrompt(SqliteDataReader reader) =>
@@ -2309,6 +2347,27 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             // Pre-v3 databases lack the spine tables; spine reads report empty evidence instead of failing.
             return [];
+        }
+    }
+
+    /// <summary>
+    /// Single-value sibling of <see cref="ReadSpineRowsOrEmptyAsync{TRow}"/> (fix pass 1, finding 1),
+    /// for keyed reads that return one row (or a computed scalar) rather than a list. Same
+    /// "no such table" tolerance, same reason: a pre-v3 workspace database lacking the spine tables
+    /// must report the caller's own documented empty value (<see langword="null"/> for a missing
+    /// record, <c>0</c> for a missing position) instead of throwing.
+    /// </summary>
+    private static async Task<TResult> ReadSpineRowOrEmptyAsync<TResult>(
+        Func<Task<TResult>> readRow,
+        TResult emptyValue)
+    {
+        try
+        {
+            return await readRow();
+        }
+        catch (SqliteException exception) when (exception.Message.Contains("no such table"))
+        {
+            return emptyValue;
         }
     }
 

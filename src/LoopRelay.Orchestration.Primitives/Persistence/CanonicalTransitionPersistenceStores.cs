@@ -477,13 +477,13 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
     /// prompt in the workspace, including every other prompt's full <c>RenderedText</c> - and find
     /// the wanted one with <c>FindIndex</c>, computing the ledger position from that same index
     /// (Task 3.2). It now reads the row by key
-    /// (<see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptAsync"/>) and the ledger
-    /// position by a separate counted query
-    /// (<see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptLedgerPositionAsync"/>),
-    /// neither of which loads any other row's <c>RenderedText</c>. The attempt lookup below still
-    /// hydrates every attempt in the workspace - out of scope for this task, since it carries no
-    /// large field and the brief's SQL shape contract does not cover it; noted as a tangle, not
-    /// fixed here.
+    /// (<see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptAsync"/>) and passes that
+    /// read's own <c>rowid</c> straight into the ledger position read
+    /// (<see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptLedgerPositionAsync"/>, fix
+    /// pass 1, finding 3), neither of which loads any other row's <c>RenderedText</c>. The attempt
+    /// lookup below still hydrates every attempt in the workspace - out of scope for this task, since
+    /// it carries no large field and the brief's SQL shape contract does not cover it; noted as a
+    /// tangle, not fixed here.
     /// </summary>
     public async Task<PersistedRenderedPromptFact?> ReadAsync(
         RenderedPromptFactIdentity prompt,
@@ -494,7 +494,7 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
             return persisted;
         }
 
-        CanonicalRenderedPromptRecord? record =
+        (CanonicalRenderedPromptRecord? record, long rowId) =
             await _store.ReadRenderedPromptAsync(prompt.Value, cancellationToken);
         if (record is null)
         {
@@ -515,7 +515,7 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
         }
 
         long ledgerPosition =
-            await _store.ReadRenderedPromptLedgerPositionAsync(prompt.Value, cancellationToken);
+            await _store.ReadRenderedPromptLedgerPositionAsync(rowId, cancellationToken);
 
         var causality = new CanonicalCausalContext(
             new WorkspaceIdentity(await _store.ReadWorkspaceIdentityAsync(cancellationToken)),

@@ -565,8 +565,16 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         // `promptStore`, which would short-circuit ReadAsync before it ever touches the database.
         var freshPromptStore = new CanonicalRenderedPromptFactStore(persistence);
 
-        var counter = new PreparedStatementCounter();
-        persistence.ConnectionObserverForTesting = counter.Watch;
+        // Fix pass 1, finding 2: the invariant this test polices is "the unkeyed, full-hydration
+        // ReadRenderedPromptsAsync path did not run" - not an exact statement-count total. The old
+        // `Assert.Equal(6, counter.Statements)` here could not tell a reintroduced full-hydration
+        // regression apart from a future, unrelated change to the attempt lookup's own statement
+        // count (e.g. keying it): both move the total away from 6. A direct signal expresses the
+        // actual invariant regardless of what the attempt lookup does. See
+        // ReadRenderedPromptAsync_and_ReadRenderedPromptLedgerPositionAsync_together_compile_exactly_two_statements
+        // below for a numeric bound scoped to just the prompt reads.
+        bool hydrationPathInvoked = false;
+        persistence.ReadRenderedPromptsAsyncInvokedForTesting = () => hydrationPathInvoked = true;
         PersistedRenderedPromptFact? actualB;
         try
         {
@@ -574,7 +582,7 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         }
         finally
         {
-            persistence.ConnectionObserverForTesting = null;
+            persistence.ReadRenderedPromptsAsyncInvokedForTesting = null;
         }
         PersistedRenderedPromptFact? actualA =
             await freshPromptStore.ReadAsync(factA.Identity, CancellationToken.None);
@@ -584,16 +592,12 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         AssertSamePersistedFact(expectedA!, actualA!);
         AssertSamePersistedFact(expectedB!, actualB!);
 
-        // Counted, not modelled: 1 (keyed record, ReadRenderedPromptSql) + 2 (the counted-position
-        // statement compiles as two SELECTs - the outer COUNT(*) and its inner rowid subquery - per
-        // the brief's own shape, which looks the id up again independently rather than reusing the
-        // rowid the first statement already read) + 3 (the pre-existing, unkeyed attempt lookup
-        // ReadAsync still depends on - out of this task's scope, see the doc comment on the
-        // production method - which itself compiles a data SELECT plus two back-compat
-        // pragma_table_info probes, ColumnExistsAsync for policy_id / agent_role_policy_id).
-        // Verified via a throwaway diagnostic that isolated each of the three calls before this
-        // number was written here, not guessed.
-        Assert.Equal(6, counter.Statements);
+        // The keyed path must never fall back to the full-table hydration it replaced - the actual
+        // regression Task 3.2 exists to prevent, expressed directly instead of inferred from an
+        // arithmetic total.
+        Assert.False(
+            hydrationPathInvoked,
+            "ReadAsync must not fall back to the unkeyed, full-hydration ReadRenderedPromptsAsync.");
 
         // Discriminating assertions: AssertSamePersistedFact above only proves prompt B's keyed
         // result matches prompt B's *own* legacy result, which a bug that fed both calls the same
@@ -707,6 +711,85 @@ public sealed class CanonicalTransitionPersistenceStoresTests
             plan, step => step.Contains("SEARCH canonical_rendered_prompts", StringComparison.Ordinal));
         Assert.DoesNotContain(
             plan, step => step.Contains("SCAN canonical_rendered_prompts", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Fix pass 1, finding 3: after adding <c>rowid</c> to
+    /// <see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptSql"/> and threading it
+    /// straight into <see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptLedgerPositionAsync"/>,
+    /// the record read and the position read compile as exactly one statement each. This is a bound
+    /// scoped to just the prompt reads themselves - deliberately excluding the unrelated attempt
+    /// lookup that <c>CanonicalRenderedPromptFactStore.ReadAsync</c> also depends on (see finding 2's
+    /// complaint about the old, unscoped total) - by exercising the store's keyed methods directly
+    /// rather than going through <c>ReadAsync</c>. A future change to the attempt lookup cannot move
+    /// this number.
+    /// </summary>
+    [Fact]
+    public async Task ReadRenderedPromptAsync_and_ReadRenderedPromptLedgerPositionAsync_together_compile_exactly_two_statements()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var promptStore = new CanonicalRenderedPromptFactStore(persistence);
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        RenderedPromptFact fact = PromptFact(causality);
+        await promptStore.AppendAsync(fact, CancellationToken.None);
+
+        var counter = new PreparedStatementCounter();
+        persistence.ConnectionObserverForTesting = counter.Watch;
+        (CanonicalRenderedPromptRecord? Record, long RowId) actual;
+        try
+        {
+            actual = await persistence.ReadRenderedPromptAsync(fact.Identity.Value, CancellationToken.None);
+            Assert.NotNull(actual.Record);
+            _ = await persistence.ReadRenderedPromptLedgerPositionAsync(actual.RowId, CancellationToken.None);
+        }
+        finally
+        {
+            persistence.ConnectionObserverForTesting = null;
+        }
+
+        Assert.Equal(2, counter.Statements);
+    }
+
+    /// <summary>
+    /// Fix pass 1, finding 1: <see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptAsync"/>
+    /// and <see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptLedgerPositionAsync"/> used
+    /// to issue their SQL directly, bypassing the same "no such table" tolerance every other spine
+    /// read gets from the store's internal <c>ReadSpineRowsOrEmptyAsync</c>/<c>ReadSpineRowOrEmptyAsync</c>
+    /// wrappers. On a pre-v3 workspace database - no <c>canonical_rendered_prompts</c> table at all -
+    /// the old, full-hydration <c>CanonicalRenderedPromptFactStore.ReadAsync</c> returned
+    /// <see langword="null"/>, while the keyed replacement threw a raw <see cref="SqliteException"/>.
+    /// This pins the fail-closed behavior: <c>ReadAsync</c> must still return <see langword="null"/>,
+    /// not throw, against such a database, and the ledger-position read must still report <c>0</c>.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_returns_null_rather_than_throwing_when_the_workspace_database_lacks_spine_tables()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await connection.OpenAsync();
+            // A valid, initialized SQLite file with zero tables - standing in for a pre-v3 workspace
+            // database, which lacks canonical_rendered_prompts (and every other spine table).
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "PRAGMA user_version = 1;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var promptStore = new CanonicalRenderedPromptFactStore(persistence);
+
+        PersistedRenderedPromptFact? result = await promptStore.ReadAsync(
+            new RenderedPromptFactIdentity("does-not-matter"), CancellationToken.None);
+
+        Assert.Null(result);
+
+        // Directly pins the other new read too: a rowid looked up against a table-less database must
+        // also read back as "no position" (0), not throw.
+        long position = await persistence.ReadRenderedPromptLedgerPositionAsync(1, CancellationToken.None);
+        Assert.Equal(0, position);
     }
 
     private static async Task<IReadOnlyList<string>> ExplainRenderedPromptLookupAsync(
