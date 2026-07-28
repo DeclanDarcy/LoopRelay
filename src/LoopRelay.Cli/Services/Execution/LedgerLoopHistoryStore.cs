@@ -20,6 +20,18 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// Test-only observability: the read-only connection <see cref="ReadLatestAsync"/> opens is
+    /// offered here immediately after it is opened, before any schema check or data read issues a
+    /// statement on it. A test installs a SQLite authorizer on it (see
+    /// <c>PreparedStatementCounter</c>) and counts the statements the read path really compiles,
+    /// mirroring the seam <c>CanonicalEffectWorkStore.ConnectionObserverForTesting</c> already uses
+    /// for the same reason: Microsoft.Data.Sqlite exposes no statement hook, and this store opens
+    /// its own connections with pooling disabled, so a test cannot otherwise reach the handle a
+    /// read ran on.
+    /// </summary>
+    internal Action<SqliteConnection>? ConnectionObserverForTesting { get; set; }
+
     public async Task<LoopHistoryRecord> AppendAsync(
         LoopHistoryAppendRequest request,
         CancellationToken cancellationToken = default)
@@ -113,7 +125,17 @@ internal sealed class LedgerLoopHistoryStore(Repository _repository) : ILoopHist
         LoopHistorySpec spec = GetSpec(kind);
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
-        WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection, cancellationToken);
+        ConnectionObserverForTesting?.Invoke(connection);
+        // Bound to the schema-admission memo instead of re-proving structure on every read: once
+        // this process has admitted the database once (EnsureSchemaAsync, on any connection to the
+        // same file), InspectMemoizedAsync answers from that memo plus a cheap live stamp re-check
+        // (2 SELECTs) instead of the ~190-probe InspectSchemaAsync inspection. It returns null - and
+        // InspectStampedAsync (itself falling back to full classification) takes over - whenever the
+        // memo is cold or the live stamp no longer matches it, so a tampered or not-yet-admitted
+        // database is still classified in full and still fails closed exactly as before.
+        WorkspaceSchemaInspection inspection =
+            await LoopRelayWorkspaceDatabase.InspectMemoizedAsync(connection, cancellationToken)
+            ?? await LoopRelayWorkspaceDatabase.InspectStampedAsync(connection, cancellationToken);
         if (inspection.Family != WorkspaceSchemaFamily.CanonicalWorkspace ||
             inspection.Version != LoopRelayWorkspaceDatabase.CurrentSchemaVersion)
         {

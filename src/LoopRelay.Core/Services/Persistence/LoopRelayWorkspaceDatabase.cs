@@ -881,6 +881,46 @@ public static class LoopRelayWorkspaceDatabase
         }
     }
 
+    /// <summary>
+    /// Read-side companion to the in-process admission memo (PERF-2x): answers directly from
+    /// <see cref="VerifiedSchemas"/> plus the same 2-SELECT live stamp re-read
+    /// <see cref="MatchesCachedStampAsync"/> already performs for <see cref="EnsureSchemaAsync"/>'s
+    /// own fast path - without <see cref="EnsureSchemaAsync"/>'s legacy-repair tail
+    /// (<see cref="RunStructurallyCompleteBranchAsync"/>) or its capacity to open a migration
+    /// transaction, both of which are wrong for a caller holding a read-only connection that must
+    /// never attempt a write.
+    /// <para>
+    /// Returns <see langword="null"/> when this process has not yet admitted this database at all
+    /// (nothing memoized for it) or the live stamp no longer matches what was memoized - including
+    /// the tampered/rolled-back-version case, since the re-read compares the live
+    /// <c>schema_version</c>/<c>schema_shape</c> against the memoized values rather than trusting
+    /// the memo blindly. Callers fall back to <see cref="InspectStampedAsync"/> (itself falling
+    /// back further to full <see cref="InspectSchemaAsync"/> classification) in that case, so no
+    /// admission path is bypassed - this only short-circuits the common case where some earlier
+    /// call in this process already paid for full verification of the same database file.
+    /// </para>
+    /// </summary>
+    public static async Task<WorkspaceSchemaInspection?> InspectMemoizedAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        string cacheKey = Path.GetFullPath(connection.DataSource);
+        if (!VerifiedSchemas.TryGetValue(cacheKey, out (long Version, string ShapeFingerprint) cached) ||
+            !await MatchesCachedStampAsync(connection, cached, cancellationToken))
+        {
+            return null;
+        }
+
+        return new WorkspaceSchemaInspection(
+            SchemaIdentity,
+            WorkspaceSchemaFamily.CanonicalWorkspace,
+            CurrentSchemaVersion,
+            true,
+            WorkspaceSchemaShape.CanonicalV16Complete,
+            CanonicalV16ShapeFingerprint,
+            "Canonical workspace v16 lineage and complete physical-shape fingerprint verified.");
+    }
+
     private static async Task<WorkspaceSchemaInspection> ClassifyV9ShapeAsync(
         SqliteConnection connection,
         string? schemaIdentity,

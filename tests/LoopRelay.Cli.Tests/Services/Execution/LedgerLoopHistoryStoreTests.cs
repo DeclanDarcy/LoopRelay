@@ -138,6 +138,76 @@ public sealed class LedgerLoopHistoryStoreTests
         Assert.Equal("recovery-1", latest.Evidence.Recovery!.RecoveryAttempt.Value);
     }
 
+    /// <summary>
+    /// PERF: on a store this process has already admitted (schema verified once, memoized by
+    /// <see cref="LoopRelayWorkspaceDatabase.EnsureSchemaAsync"/>), a subsequent
+    /// <see cref="LedgerLoopHistoryStore.ReadLatestAsync"/> must not re-run the ~190-statement
+    /// structural inspection <see cref="LoopRelayWorkspaceDatabase.InspectSchemaAsync"/> performs.
+    /// It should answer from the admission memo instead: a 2-SELECT live-stamp re-check
+    /// (<see cref="LoopRelayWorkspaceDatabase.InspectMemoizedAsync"/>), the read's own
+    /// <c>LIMIT 1</c> fact query, and the one evidence-set/items join query every returned record
+    /// carries - four statements total, counted from what the connection really compiles rather
+    /// than modelled. (The task brief that seeded this test estimated "at most 3" from the stamp
+    /// check plus the fact read alone; it did not account for the evidence read this method always
+    /// performs when it returns a record, which is the fourth and is not optional here.)
+    /// </summary>
+    [Fact]
+    public async Task ReadLatest_on_admitted_store_performs_no_structural_inspection()
+    {
+        Harness harness = await NewAsync();
+        await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Decisions, "admitted before measurement", harness.Causality));
+
+        var counter = new PreparedStatementCounter();
+        harness.Store.ConnectionObserverForTesting = counter.Watch;
+        LoopHistoryRecord? latest;
+        try
+        {
+            latest = await harness.Store.ReadLatestAsync(LoopHistoryKind.Decisions);
+        }
+        finally
+        {
+            harness.Store.ConnectionObserverForTesting = null;
+        }
+
+        Assert.NotNull(latest);
+        Assert.Equal("admitted before measurement", latest.Content);
+        // Counted, not modelled: 2 (stamp re-check) + 1 (fact LIMIT 1) + 1 (evidence join) - fixed
+        // regardless of plan/content size, and nowhere near the ~190-probe structural inspection a
+        // cold or non-memoized store still pays for.
+        Assert.Equal(4, counter.Statements);
+    }
+
+    /// <summary>
+    /// Fail-closed guard for the memo binding above: this process has already admitted (and
+    /// memoized) this exact database, but the persisted stamp is then tampered with directly -
+    /// simulating out-of-band corruption or a downgrade - after admission. The memo's live
+    /// stamp re-check (<see cref="LoopRelayWorkspaceDatabase.InspectMemoizedAsync"/>) must still
+    /// detect the mismatch and decline to answer from the cache, falling through to
+    /// <see cref="LoopRelayWorkspaceDatabase.InspectStampedAsync"/> and then full classification,
+    /// so <see cref="ReadLatestAsync"/> still rejects the store with the same typed exception it
+    /// always has - never a silent pass and never a different, untyped failure.
+    /// </summary>
+    [Fact]
+    public async Task ReadLatest_rejects_a_tampered_schema_version_stamp_even_after_admission()
+    {
+        Harness harness = await NewAsync();
+        await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Decisions, "before tamper", harness.Causality));
+
+        await using (SqliteConnection connection = await OpenAsync(harness.Repository, readOnly: false))
+        {
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "UPDATE schema_metadata SET value = '999' WHERE key = 'schema_version';";
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+
+        WorkspaceCompatibilityImportRequiredException exception =
+            await Assert.ThrowsAsync<WorkspaceCompatibilityImportRequiredException>(
+                () => harness.Store.ReadLatestAsync(LoopHistoryKind.Decisions));
+        Assert.Equal(999, exception.Inspection.Version);
+    }
+
     [Fact]
     public async Task Append_rejects_a_causal_tree_from_another_workspace()
     {

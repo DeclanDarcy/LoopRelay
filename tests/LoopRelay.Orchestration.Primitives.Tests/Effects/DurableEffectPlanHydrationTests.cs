@@ -5,7 +5,6 @@ using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Persistence;
 using Microsoft.Data.Sqlite;
-using SQLitePCL;
 
 namespace LoopRelay.Orchestration.Tests.Effects;
 
@@ -353,40 +352,5 @@ public sealed class DurableEffectPlanHydrationTests
             EffectIntent intent,
             CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Reconciliation is not expected in a plan-hydration test.");
-    }
-
-    /// <summary>
-    /// Counts the SQL statements a store connection actually compiles, by installing a SQLite
-    /// authorizer on it. SQLite consults the authorizer while preparing a statement and raises
-    /// <c>SQLITE_SELECT</c> exactly once for each SELECT it compiles, so the tally is the read
-    /// path's real statement count — nothing here models what the implementation ought to cost, and
-    /// a per-row implementation reports its per-row tally.
-    /// <para>
-    /// The authorizer is the only statement-level hook SQLitePCLRaw exposes and it is per
-    /// connection, which is why the store hands its connections to
-    /// <see cref="CanonicalEffectWorkStore.ConnectionObserverForTesting"/>: it opens them itself,
-    /// with pooling off, so a test cannot otherwise reach the handle a read ran on.
-    /// </para>
-    /// </summary>
-    private sealed class PreparedStatementCounter
-    {
-        // Held for the lifetime of the counter: SQLite keeps calling this for as long as the
-        // connection lives, so it must not be collected once `Watch` returns.
-        private readonly delegate_authorizer _authorizer;
-        private int _statements;
-
-        public PreparedStatementCounter() => _authorizer = Authorize;
-
-        public int Statements => Volatile.Read(ref _statements);
-
-        public void Watch(SqliteConnection connection) => Assert.Equal(
-            raw.SQLITE_OK, raw.sqlite3_set_authorizer(connection.Handle, _authorizer, null));
-
-        private int Authorize(
-            object userData, int action, utf8z first, utf8z second, utf8z database, utf8z trigger)
-        {
-            if (action == raw.SQLITE_SELECT) Interlocked.Increment(ref _statements);
-            return raw.SQLITE_OK;
-        }
     }
 }

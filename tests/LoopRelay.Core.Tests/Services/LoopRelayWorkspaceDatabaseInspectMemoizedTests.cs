@@ -1,0 +1,111 @@
+using LoopRelay.Core.Models.Repositories;
+using LoopRelay.Core.Services.Persistence;
+using Microsoft.Data.Sqlite;
+
+namespace LoopRelay.Core.Tests.Services;
+
+/// <summary>
+/// Covers the read-side admission memo <see cref="LoopRelayWorkspaceDatabase.InspectMemoizedAsync"/>
+/// added for Task 2.1 (routing <c>LedgerLoopHistoryStore</c> reads through the schema-admission
+/// memo instead of <see cref="LoopRelayWorkspaceDatabase.InspectSchemaAsync"/>'s ~190-probe
+/// inspection). It must answer straight from <c>VerifiedSchemas</c> plus a 2-SELECT live-stamp
+/// re-check when this process has already admitted the database, return <see langword="null"/>
+/// whenever the memo is cold or stale, and never itself attempt a write - it exists specifically
+/// for callers holding a read-only connection.
+/// </summary>
+[Collection("WorkspaceDatabaseCounters")]
+public sealed class LoopRelayWorkspaceDatabaseInspectMemoizedTests
+{
+    [Fact]
+    public async Task InspectMemoized_OnAdmittedStore_MatchesFullClassificationWithoutFullVerification()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        int fullVerificationBaseline = LoopRelayWorkspaceDatabase.FullVerificationRuns;
+        WorkspaceSchemaInspection full = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
+        WorkspaceSchemaInspection? memoized = await LoopRelayWorkspaceDatabase.InspectMemoizedAsync(connection);
+
+        Assert.NotNull(memoized);
+        Assert.Equal(full, memoized);
+        // The memo answers without running EnsureSchemaAsync's full verification pipeline again -
+        // the explicit InspectSchemaAsync call just above is what a from-scratch classification
+        // costs, and InspectMemoizedAsync must not trigger a second one of those.
+        Assert.Equal(fullVerificationBaseline, LoopRelayWorkspaceDatabase.FullVerificationRuns);
+    }
+
+    [Fact]
+    public async Task InspectMemoized_OnNeverAdmittedDatabase_ReturnsNull()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        // A brand-new temp path is guaranteed not to be a key in the process-wide memo yet, so this
+        // exercises the cold-memo path without needing to reset any shared state. The file still
+        // has to exist for SQLite to open it read-only, so materialize an empty one first - the
+        // memo is process-static, not file-static, so creating the file this way never admits it.
+        await using (SqliteConnection create = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await create.OpenAsync();
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync();
+
+        WorkspaceSchemaInspection? memoized = await LoopRelayWorkspaceDatabase.InspectMemoizedAsync(connection);
+
+        Assert.Null(memoized);
+    }
+
+    /// <summary>
+    /// The fail-closed case this method exists to preserve: a database this process already
+    /// admitted (and therefore memoized) has its persisted stamp altered afterward. The live
+    /// 2-SELECT re-check inside <see cref="LoopRelayWorkspaceDatabase.InspectMemoizedAsync"/> must
+    /// notice the mismatch and refuse to answer from the cache, rather than trusting a memo that no
+    /// longer describes the file on disk.
+    /// </summary>
+    [Fact]
+    public async Task InspectMemoized_OnTamperedVersionStamp_ReturnsNull()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        await ExecuteAsync(connection, "UPDATE schema_metadata SET value = '999' WHERE key = 'schema_version';");
+
+        WorkspaceSchemaInspection? memoized = await LoopRelayWorkspaceDatabase.InspectMemoizedAsync(connection);
+
+        Assert.Null(memoized);
+    }
+
+    private static Repository CreateRepository()
+    {
+        string path = Directory.CreateTempSubdirectory("looprelay-inspect-memoized-").FullName;
+        return new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = Path.GetFileName(path),
+            Path = path,
+        };
+    }
+
+    private static string CreateDatabasePath(Repository repository)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(repository);
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+        return databasePath;
+    }
+
+    private static async Task ExecuteAsync(SqliteConnection connection, string commandText)
+    {
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = commandText;
+        await command.ExecuteNonQueryAsync();
+    }
+}

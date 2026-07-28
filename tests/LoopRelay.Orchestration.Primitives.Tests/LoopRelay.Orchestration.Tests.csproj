@@ -23,4 +23,8 @@
     <ProjectReference Include="..\..\src\LoopRelay.Orchestration.Primitives\LoopRelay.Orchestration.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\TestSupport\Persistence\PreparedStatementCounter.cs" Link="Persistence\TestSupport\PreparedStatementCounter.cs" />
+  </ItemGroup>
+
 </Project>

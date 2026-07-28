@@ -31,6 +31,7 @@
 
   <ItemGroup>
     <Compile Include="..\TestSupport\Services\MemoryArtifactStore.cs" Link="Services\TestSupport\MemoryArtifactStore.cs" />
+    <Compile Include="..\TestSupport\Persistence\PreparedStatementCounter.cs" Link="Persistence\TestSupport\PreparedStatementCounter.cs" />
   </ItemGroup>
 
 </Project>
