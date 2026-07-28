@@ -25,7 +25,8 @@ internal sealed class DurableCompletedEpicArchiveService(
         CancellationToken cancellationToken = default)
     {
         var artifacts = new CompletionArtifacts(_store, _repository);
-        int index = request.ArchiveIndex ?? (await artifacts.ListDirectoriesAsync(request.ArchiveRoot)).Count + 1;
+        int index = request.ArchiveIndex
+            ?? await CompletedEpicArchiveService.ComputeArchiveIndexAsync(artifacts, request.ArchiveRoot);
         string archiveDirectory = $"{request.ArchiveRoot}/{index}";
         string synthesisPath = $"{request.ArchiveRoot}/{index}.md";
         var payload = new CompletionArchiveEffectPayload(

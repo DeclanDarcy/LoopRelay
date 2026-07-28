@@ -104,9 +104,10 @@ public sealed class CompletedEpicArchiveService(
     /// guard. Dangling synthesis files ({n}.md without a directory) also hold their index. Only
     /// direct children of the archive root are index allocations - ListAsync is prefix-based and
     /// also returns artifacts nested inside an archive, whose names never were. Non-numeric entries
-    /// are ignored for the same reason.
+    /// are ignored for the same reason. Public because the durable CLI wrapper must plan with the
+    /// same derivation it forces back into this service.
     /// </summary>
-    private static async Task<int> ComputeArchiveIndexAsync(CompletionArtifacts artifacts, string archiveRoot)
+    public static async Task<int> ComputeArchiveIndexAsync(CompletionArtifacts artifacts, string archiveRoot)
     {
         IReadOnlyList<string> directories = await artifacts.ListDirectoriesAsync(archiveRoot);
         IReadOnlyList<string> syntheses = await artifacts.ListAsync(archiveRoot, "*.md");
