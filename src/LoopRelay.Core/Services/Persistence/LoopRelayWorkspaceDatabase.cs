@@ -118,7 +118,7 @@ public static class LoopRelayWorkspaceDatabase
     /// <summary>
     /// Test-only observability: how many times <see cref="RunStructurallyCompleteBranchAsync"/>
     /// actually opened a write transaction (as opposed to taking the zero-transaction path because
-    /// <see cref="HasRepairableLegacyBlockedVocabularyAsync"/> found nothing to repair and no
+    /// the blocked-vocabulary receipt was already fresh for the current shape fingerprint and no
     /// legacy resume was pending). This is the direct, unambiguous signal for "did this call
     /// perturb anything write-shaped," which - per empirical measurement - a physical proxy like
     /// <c>PRAGMA data_version</c> or <c>-wal</c> file length cannot reliably distinguish for a
@@ -548,11 +548,11 @@ public static class LoopRelayWorkspaceDatabase
         bool blockedVocabularyReceiptStaleOrAbsent = !string.Equals(
             blockedVocabularyReceipt, CanonicalV16ShapeFingerprint, StringComparison.Ordinal);
 
-        // Deliberately not consulting HasRepairableLegacyBlockedVocabularyAsync here: a stale or
-        // absent receipt already forces needsRepair to true below regardless of what that probe
-        // would answer, and CanonicalDataRepairSql (idempotent either way) then runs unconditionally
-        // on that path and re-certifies the receipt. Calling the probe first would only pay for the
-        // three-table scan a second time without anyone reading its result.
+        // A stale or absent receipt forces needsRepair to true unconditionally, regardless of
+        // whether stray legacy vocabulary actually remains: a receipt only ever certifies proof
+        // already done, and must never itself suppress a repair that could still be needed.
+        // CanonicalDataRepairSql (idempotent either way) then runs on that path and re-certifies
+        // the receipt.
         bool needsRepair = legacyResume is not null || blockedVocabularyReceiptStaleOrAbsent;
         if (!needsRepair)
         {
@@ -615,37 +615,6 @@ public static class LoopRelayWorkspaceDatabase
             cancellationToken,
             ("$key", BlockedVocabularyRepairedMetadataKey),
             ("$value", CanonicalV16ShapeFingerprint));
-    }
-
-    /// <summary>
-    /// Cheap, read-only existence probe for exactly the legacy <c>'Blocked'</c> vocabulary
-    /// <see cref="CanonicalDataRepairSql"/> targets: any row with <c>state = 'Blocked'</c> or
-    /// <c>outcome = 'Blocked'</c> in <c>canonical_workflow_states</c>; any row with
-    /// <c>state = 'Blocked'</c> in <c>canonical_stage_states</c>; any row with
-    /// <c>state = 'Blocked'</c> or <c>outcome = 'Blocked'</c> in <c>canonical_transition_runs</c>;
-    /// or the (legacy, should-be-dropped) <c>canonical_blockers</c> table still existing. A single
-    /// <c>SELECT EXISTS(... UNION ALL ...)</c> so SQLite can short-circuit on the first hit rather
-    /// than running four independent round trips. This is a plain <c>SELECT</c> outside any
-    /// transaction - it takes no write lock and cannot itself perturb the WAL side files.
-    /// </summary>
-    private static async Task<bool> HasRepairableLegacyBlockedVocabularyAsync(
-        SqliteConnection connection,
-        CancellationToken cancellationToken)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT EXISTS(
-                SELECT 1 FROM canonical_workflow_states WHERE state = 'Blocked' OR outcome = 'Blocked'
-                UNION ALL
-                SELECT 1 FROM canonical_stage_states WHERE state = 'Blocked'
-                UNION ALL
-                SELECT 1 FROM canonical_transition_runs WHERE state = 'Blocked' OR outcome = 'Blocked'
-                UNION ALL
-                SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'canonical_blockers'
-            );
-            """;
-        object? scalar = await command.ExecuteScalarAsync(cancellationToken);
-        return Convert.ToInt64(scalar, CultureInfo.InvariantCulture) == 1;
     }
 
     /// <summary>
