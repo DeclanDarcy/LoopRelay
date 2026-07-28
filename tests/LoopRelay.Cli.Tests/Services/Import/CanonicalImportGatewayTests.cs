@@ -56,6 +56,15 @@ public sealed class CanonicalImportGatewayTests
                 await using SqliteCommand count = canonical.CreateCommand();
                 count.CommandText = "SELECT COUNT(*) FROM decision_session_scopes WHERE scope_id='scope_legacyfixture';";
                 Assert.Equal(1L, Convert.ToInt64(await count.ExecuteScalarAsync()));
+
+                // Import completion must have deleted the blocked-vocabulary repair receipt on the
+                // newly-promoted authority (LoopRelayWorkspaceDatabase.DeleteBlockedVocabularyReceiptAsync),
+                // even though the shadow build that produced it already ran its own migration/receipt
+                // pass - forcing the very next EnsureSchemaAsync admission to re-scan rather than
+                // trusting whatever receipt happened to travel with the promoted bytes.
+                await using SqliteCommand receipt = canonical.CreateCommand();
+                receipt.CommandText = "SELECT value FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';";
+                Assert.Null(await receipt.ExecuteScalarAsync());
             }
             SqliteConnection.ClearAllPools();
         }

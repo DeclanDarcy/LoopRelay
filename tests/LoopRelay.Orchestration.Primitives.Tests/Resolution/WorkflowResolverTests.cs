@@ -1113,9 +1113,16 @@ public sealed class WorkflowResolverTests
 
             INSERT INTO canonical_stage_states (workflow_identity, stage_identity, state, updated_at, evidence_json)
             VALUES ('Plan', 'Planning', 'Blocked', '2026-07-10T12:00:00.0000000Z', '["legacy-blocked-stage.md"]');
+
+            DELETE FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';
             """);
 
-        // The next invocation's schema pass migrates the legacy labels; no unblock command exists or is needed.
+        // The next invocation's schema pass migrates the legacy labels; no unblock command exists or
+        // is needed. LoopRelayWorkspaceDatabase now receipts a clean blocked-vocabulary scan
+        // (schema_metadata['blocked_vocabulary_repaired']) so it isn't repeated on every admission;
+        // the DELETE above is what a real reintroduction path (legacy-import completion) does to
+        // force this next admission to re-scan and re-repair, exactly like this out-of-band insert
+        // does here.
         await CreateSqliteDatabaseAsync(repo);
 
         Assert.Equal("Resumable", await ScalarStringAsync(repo, "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));

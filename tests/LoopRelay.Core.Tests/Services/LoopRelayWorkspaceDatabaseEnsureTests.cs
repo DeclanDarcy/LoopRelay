@@ -196,7 +196,7 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
     }
 
     [Fact]
-    public async Task EnsureSchema_MemoizedFastPath_StillRepairsStrayLegacyBlockedVocabulary()
+    public async Task EnsureSchema_MemoizedFastPath_RepairsReintroducedBlockedVocabularyAndRewritesReceipt()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -207,8 +207,12 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
             await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
         }
 
-        // Insert a stray legacy 'Blocked' row directly, bypassing EnsureSchemaAsync entirely, the
-        // same way an out-of-band writer (or a pre-migration artifact) could leave one behind.
+        // Reintroduce a stray legacy 'Blocked' row the way a real import completion can: an
+        // out-of-band writer inserts it, and - per the receipted design - the receipt is deleted
+        // at the same time (CanonicalImportGateway.ExecuteAsync does this on every import
+        // completion). A bare stray row with the receipt left untouched is deliberately *not*
+        // covered by the memoized fast path any more (that unconditional rescan is exactly what
+        // this task's receipt removes); this test simulates the real invalidation trigger instead.
         // This must be visible to - and repaired by - the very next EnsureSchemaAsync call, even
         // though the in-process memo for this path is already populated and that next call is
         // therefore the memoized fast path, not a full verification pass.
@@ -218,6 +222,7 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
             await ExecuteAsync(
                 tamper,
                 """
+                DELETE FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';
                 INSERT INTO canonical_workflow_states
                     (workflow_identity, state, current_stage, outcome, updated_at, evidence_json)
                 VALUES
@@ -238,6 +243,134 @@ public sealed class LoopRelayWorkspaceDatabaseEnsureTests
             "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'wf-stray-blocked';");
 
         Assert.Equal("Resumable", repairedState);
+
+        string? receipt = await ScalarStringAsync(
+            verify,
+            "SELECT value FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';");
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, receipt);
+    }
+
+    [Fact]
+    public async Task EnsureSchema_MemoizedFastPath_SkipsBlockedVocabularyScanWhenReceiptIsFresh()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await connection.OpenAsync();
+            // The migration transaction below both repairs and receipts blocked vocabulary in the
+            // same pass, so by the time this returns the receipt is already fresh.
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        }
+
+        int freshReceiptStatements;
+        await using (SqliteConnection withReceipt = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
+        {
+            await withReceipt.OpenAsync();
+            var counter = new PreparedStatementCounter();
+            counter.Watch(withReceipt);
+            // Same process, memo still warm from the migration above: this is unambiguously the
+            // memoized fast path (RunStructurallyCompleteBranchAsync via EnsureSchemaAsync's
+            // line-372 call site), with the blocked-vocabulary receipt already fresh.
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(withReceipt);
+            freshReceiptStatements = counter.Statements;
+        }
+
+        // Delete the receipt directly - simulating a stale/absent receipt without touching the
+        // physical shape, the stamped schema_shape fingerprint, or the in-process memo - then
+        // measure the very same memoized fast path again.
+        await using (SqliteConnection tamper = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
+        {
+            await tamper.OpenAsync();
+            await ExecuteAsync(tamper, "DELETE FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';");
+        }
+
+        int staleReceiptStatements;
+        await using (SqliteConnection withoutReceipt = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
+        {
+            await withoutReceipt.OpenAsync();
+            var counter = new PreparedStatementCounter();
+            counter.Watch(withoutReceipt);
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(withoutReceipt);
+            staleReceiptStatements = counter.Statements;
+        }
+
+        // The three history tables (canonical_workflow_states, canonical_stage_states,
+        // canonical_transition_runs) are scanned by a single SELECT EXISTS(... UNION ALL ...). With
+        // the receipt fresh, EnsureSchemaAsync must skip that scan entirely, so the fresh-receipt
+        // call must compile strictly fewer SELECTs than the stale-receipt call that has to run it.
+        // Measured with PreparedStatementCounter: 5 statements fresh, 13 stale (the 8-statement gap
+        // is the UNION ALL scan's compiled SELECT actions) - not asserted as exact values here since
+        // the authorizer's per-branch counting of a compound SELECT is an implementation detail of
+        // this SQLite/Microsoft.Data.Sqlite version, not a contract this test should pin.
+        Assert.True(
+            freshReceiptStatements < staleReceiptStatements,
+            $"Expected the fresh-receipt fast path ({freshReceiptStatements} statements) to skip " +
+            $"the blocked-vocabulary scan the stale-receipt fast path pays for ({staleReceiptStatements} statements).");
+    }
+
+    [Fact]
+    public async Task EnsureSchema_ReceiptNotPersisted_WhenRepairTransactionFails()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using (SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath))
+        {
+            await connection.OpenAsync();
+            await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        }
+
+        // Force the repair transaction to fail partway through CanonicalDataRepairSql: delete the
+        // receipt and seed a stray 'Blocked' row (so the scan finds work and a transaction opens),
+        // then install a trigger that aborts specifically the canonical_transition_runs UPDATE the
+        // repair SQL issues - after the two canonical_workflow_states UPDATEs and the
+        // canonical_stage_states UPDATE have already run (uncommitted) inside the same transaction.
+        // If the receipt were ever written outside that transaction, it would survive this failure;
+        // this proves it does not.
+        await using (SqliteConnection tamper = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
+        {
+            await tamper.OpenAsync();
+            await ExecuteAsync(
+                tamper,
+                """
+                DELETE FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';
+                INSERT INTO canonical_transition_runs
+                    (run_id, workflow_identity, stage_identity, transition_identity, state, outcome,
+                     started_at, explanation, evidence_json)
+                VALUES
+                    ('tr-stray-blocked', 'wf-x', 'stage-x', 'transition-x', 'Blocked', 'Blocked',
+                     '2026-01-01T00:00:00Z', 'test fixture', '{}');
+                CREATE TRIGGER trg_force_repair_failure
+                    BEFORE UPDATE OF state ON canonical_transition_runs
+                    WHEN NEW.state = 'InputUnsatisfied'
+                BEGIN
+                    SELECT RAISE(ABORT, 'test-forced-repair-failure');
+                END;
+                """);
+        }
+
+        await using (SqliteConnection third = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath))
+        {
+            await third.OpenAsync();
+            await Assert.ThrowsAsync<SqliteException>(
+                () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(third));
+        }
+
+        await using SqliteConnection verify = LoopRelayWorkspaceDatabase.OpenReadWrite(databasePath);
+        await verify.OpenAsync();
+
+        string? receipt = await ScalarStringAsync(
+            verify, "SELECT value FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';");
+        Assert.Null(receipt);
+
+        // The failed repair must not have partially applied either: rollback undoes both the
+        // receipt write attempt and the data fix together.
+        string? strayState = await ScalarStringAsync(
+            verify,
+            "SELECT state FROM canonical_transition_runs WHERE run_id = 'tr-stray-blocked';");
+        Assert.Equal("Blocked", strayState);
     }
 
     [Fact]

@@ -268,10 +268,16 @@ public sealed class UnifiedCliRunnerBoundedEvalSelectionAndPlanTests : UnifiedCl
                 """
                 INSERT INTO canonical_workflow_states (workflow_identity, state, current_stage, outcome, updated_at, evidence_json)
                 VALUES ('Plan', 'Blocked', 'Planning', 'Blocked', '2026-07-10T12:00:00.0000000Z', '["legacy-blocked.md"]');
+
+                DELETE FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';
                 """);
         }
 
-        // The next store write runs the schema pass, which migrates the legacy label without any unblock step.
+        // The next store write runs the schema pass, which migrates the legacy label without any
+        // unblock step. LoopRelayWorkspaceDatabase now receipts a clean blocked-vocabulary scan so
+        // it isn't repeated on every admission; the DELETE above is what a real reintroduction path
+        // (legacy-import completion) does to force this next admission to re-scan and re-repair,
+        // exactly like this out-of-band insert does here.
         await store.UpsertStageStateAsync(new CanonicalStageStateRecord(
             WorkflowIdentity.Plan,
             stage,

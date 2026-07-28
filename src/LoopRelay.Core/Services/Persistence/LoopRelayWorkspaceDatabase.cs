@@ -71,6 +71,15 @@ public static class LoopRelayWorkspaceDatabase
     public const string SchemaIdentity = "looprelay.workspace-state";
     public const string SchemaFamily = "CanonicalWorkspace";
     public const string SchemaShapeMetadataKey = "schema_shape";
+
+    /// <summary>
+    /// <c>schema_metadata</c> key for the blocked-vocabulary repair receipt: its value is the
+    /// shape fingerprint (<see cref="CanonicalV16ShapeFingerprint"/>) that was current when the
+    /// legacy <c>'Blocked'</c> vocabulary scan last ran clean or was successfully repaired. See
+    /// <see cref="RunStructurallyCompleteBranchAsync"/> for how it gates the scan, and
+    /// <see cref="DeleteBlockedVocabularyReceiptAsync"/> for who invalidates it.
+    /// </summary>
+    public const string BlockedVocabularyRepairedMetadataKey = "blocked_vocabulary_repaired";
     public const int CurrentSchemaVersion = 16;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
@@ -430,6 +439,7 @@ public static class LoopRelayWorkspaceDatabase
                 await ImportLegacyResumeAsync(connection, migrationTransaction, legacyResume, cancellationToken);
             }
             await ExecuteAsync(connection, migrationTransaction, CanonicalDataRepairSql, cancellationToken);
+            await WriteBlockedVocabularyReceiptAsync(connection, migrationTransaction, cancellationToken);
             string workspaceId = await EnsureImmutableWorkspaceIdentityAsync(
                 connection,
                 migrationTransaction,
@@ -456,6 +466,34 @@ public static class LoopRelayWorkspaceDatabase
     }
 
     /// <summary>
+    /// Deletes the blocked-vocabulary repair receipt (<see cref="BlockedVocabularyRepairedMetadataKey"/>)
+    /// so the very next <see cref="EnsureSchemaAsync"/> admission re-scans <c>canonical_workflow_states</c>,
+    /// <c>canonical_stage_states</c>, and <c>canonical_transition_runs</c> for legacy <c>'Blocked'</c>
+    /// vocabulary rather than trusting whatever receipt happened to travel with newly-promoted bytes.
+    /// Callers that complete a legacy/compatibility import - most notably
+    /// <c>CanonicalImportGateway.ExecuteAsync</c> - must call this on the freshly-promoted workspace
+    /// database, unconditionally and regardless of which import source kind produced it: at least one
+    /// source (a canonical export package rehydration) writes historical domain rows directly,
+    /// bypassing <see cref="CanonicalDataRepairSql"/> entirely, so it cannot be trusted to have left a
+    /// valid receipt behind on its own.
+    /// </summary>
+    public static async Task DeleteBlockedVocabularyReceiptAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await TableExistsAsync(connection, "schema_metadata", cancellationToken))
+        {
+            return;
+        }
+
+        await ExecuteAsync(
+            connection,
+            "DELETE FROM schema_metadata WHERE key = $key;",
+            cancellationToken,
+            ("$key", BlockedVocabularyRepairedMetadataKey));
+    }
+
+    /// <summary>
     /// The structurally-complete branch: reached either directly from the memoized fast path
     /// (stamp matched, so this is known to be CanonicalV16Complete without re-inspecting), or
     /// from a full verification pass that just confirmed the same thing.
@@ -463,8 +501,7 @@ public static class LoopRelayWorkspaceDatabase
     /// <para>
     /// This still imports a legacy resume document when present, and still self-heals stray
     /// legacy <c>'Blocked'</c> vocabulary via <see cref="CanonicalDataRepairSql"/> when there is
-    /// any to heal — on every call, including the fast path, with no separate "unblock" command
-    /// available. A downstream consumer (LoopRelay.Orchestration.Primitives'
+    /// any to heal. A downstream consumer (LoopRelay.Orchestration.Primitives'
     /// <c>WorkflowResolverTests.Previously_latched_blocked_workflow_resolves_on_its_real_gate_condition_after_migration</c>)
     /// depends on this: dropping it entirely regressed that test (see the Task 1 decision log
     /// entry in <c>performance-remediation-plan.md</c>).
@@ -478,12 +515,24 @@ public static class LoopRelayWorkspaceDatabase
     /// page-dirtying signal) and treated that as sufficient; Task 2 enabling WAL exposed a
     /// different, page-independent cost — opening a write transaction under WAL perturbs the
     /// <c>-wal</c>/<c>-shm</c> side files even when it dirties zero pages, which broke
-    /// byte/tree-stability tests that don't tolerate any side-file churn on a healthy read. The
-    /// probe below is a single read-only <c>SELECT EXISTS</c> (no transaction, so it cannot itself
-    /// perturb anything) that costs the same full-table-scan the old unconditional
-    /// <c>UPDATE ... WHERE</c> already paid (none of the relevant columns are indexed), so this
-    /// costs nothing extra on the "needs repair" path while making the far more common "healthy"
-    /// path a genuine zero-transaction read.
+    /// byte/tree-stability tests that don't tolerate any side-file churn on a healthy read.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Task 2.2 (receipted one-time repair):</b> the probe itself — a full-table scan of all
+    /// three history tables via <c>SELECT EXISTS(... UNION ALL ...)</c> — used to run
+    /// unconditionally on every call, including this method's hot/memoized-fast-path entry point,
+    /// even though (verified by grepping every write path for the literal <c>'Blocked'</c>/
+    /// <c>"Blocked"</c> token) only legacy-import/rehydration paths can ever introduce it, and
+    /// those all funnel through <see cref="EnsureSchemaAsync"/>'s migration branch (which already
+    /// writes the receipt below) or delete the receipt on completion (see
+    /// <see cref="DeleteBlockedVocabularyReceiptAsync"/>). The scan is now gated behind a receipt
+    /// in <c>schema_metadata</c> (<see cref="BlockedVocabularyRepairedMetadataKey"/>) whose value
+    /// is the shape fingerprint current when it was written: absent or mismatched means "scan",
+    /// matching means "already proven clean as of this shape, skip". The receipt is written in the
+    /// same transaction as the scan/repair it certifies (never outside it), so a repair that
+    /// throws partway through leaves no receipt behind — an ambiguous or missing receipt always
+    /// falls back to scanning, never to skipping.
     /// </para>
     /// </summary>
     private static async Task RunStructurallyCompleteBranchAsync(
@@ -492,13 +541,23 @@ public static class LoopRelayWorkspaceDatabase
         CancellationToken cancellationToken)
     {
         LegacyResumeImport? legacyResume = await ReadLegacyResumeAsync(connection, cancellationToken);
-        bool needsRepair = legacyResume is not null ||
+
+        string? blockedVocabularyReceipt = await ReadMetadataValueAsync(
+            connection, BlockedVocabularyRepairedMetadataKey, cancellationToken);
+        bool blockedVocabularyReceiptStaleOrAbsent = !string.Equals(
+            blockedVocabularyReceipt, CanonicalV16ShapeFingerprint, StringComparison.Ordinal);
+
+        bool hasLegacyBlockedVocabulary = blockedVocabularyReceiptStaleOrAbsent &&
             await HasRepairableLegacyBlockedVocabularyAsync(connection, cancellationToken);
+
+        bool needsRepair = legacyResume is not null ||
+            hasLegacyBlockedVocabulary ||
+            blockedVocabularyReceiptStaleOrAbsent;
         if (!needsRepair)
         {
-            // The literal read-only fast path: nothing to import, nothing to repair, so no write
-            // transaction is opened at all - this connection never touches the -wal/-shm side
-            // files next to the database.
+            // The literal read-only fast path: nothing to import, the blocked-vocabulary receipt
+            // is already fresh, so no write transaction is opened at all - this connection never
+            // touches the -wal/-shm side files next to the database.
             VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV16ShapeFingerprint);
             return;
         }
@@ -513,6 +572,15 @@ public static class LoopRelayWorkspaceDatabase
             }
 
             await ExecuteAsync(connection, transaction, CanonicalDataRepairSql, cancellationToken);
+            if (blockedVocabularyReceiptStaleOrAbsent)
+            {
+                // The scan just ran (clean or dirty, CanonicalDataRepairSql above makes either
+                // outcome converge to "no Blocked tokens remain"): certify that in the same
+                // transaction, so a throw anywhere above this line - or in the write itself -
+                // rolls back the receipt along with everything else.
+                await WriteBlockedVocabularyReceiptAsync(connection, transaction, cancellationToken);
+            }
+
             await transaction.CommitAsync(cancellationToken);
         }
         catch
@@ -522,6 +590,30 @@ public static class LoopRelayWorkspaceDatabase
         }
 
         VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV16ShapeFingerprint);
+    }
+
+    /// <summary>
+    /// Writes/refreshes the blocked-vocabulary repair receipt to the current canonical v16 shape
+    /// fingerprint. Must only be called from inside a transaction that also just ran (or confirmed
+    /// unnecessary) <see cref="CanonicalDataRepairSql"/>, so the receipt and the state it certifies
+    /// commit - or roll back - together.
+    /// </summary>
+    private static async Task WriteBlockedVocabularyReceiptAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await ExecuteAsync(
+            connection,
+            transaction,
+            """
+            INSERT INTO schema_metadata (key, value)
+            VALUES ($key, $value)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+            """,
+            cancellationToken,
+            ("$key", BlockedVocabularyRepairedMetadataKey),
+            ("$value", CanonicalV16ShapeFingerprint));
     }
 
     /// <summary>

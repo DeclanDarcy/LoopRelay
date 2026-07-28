@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
@@ -253,6 +254,18 @@ internal sealed class CanonicalImportGateway(Repository _repository) : IImportGa
             preview.Mappings.Select(mapping => $"{mapping.SourceIdentity}->{mapping.TargetIdentity}")
                 .Concat([effectReceipt.Identity.Value]).ToArray(), DateTimeOffset.UtcNow);
         await targetStore.CompleteAsync(operation, preview, verification, receipt, CancellationToken.None);
+        // Import completion just replaced `target`'s bytes wholesale (the promotion above).
+        // Regardless of which import-source branch produced the promoted authority - and in
+        // particular because the CanonicalExportPackage branch (CanonicalStorageExportCodec.
+        // RehydrateFreshAsync) rehydrates historical domain rows directly, bypassing
+        // CanonicalDataRepairSql entirely - force the very next EnsureSchemaAsync admission to
+        // re-scan for legacy 'Blocked' vocabulary rather than trusting whatever receipt happened to
+        // travel with the newly-promoted bytes.
+        await using (SqliteConnection promoted = LoopRelayWorkspaceDatabase.OpenReadWrite(target))
+        {
+            await promoted.OpenAsync(CancellationToken.None);
+            await LoopRelayWorkspaceDatabase.DeleteBlockedVocabularyReceiptAsync(promoted, CancellationToken.None);
+        }
         return new ImportResult(ImportLifecycle.Completed, preview.Detection, preview, operation, receipt,
             "Import completed after semantic verification; canonical-only authority is monotonic.",
             receipt.Evidence.Concat([$"canonical-only:{receipt.Identity.Value}"]).ToArray());
