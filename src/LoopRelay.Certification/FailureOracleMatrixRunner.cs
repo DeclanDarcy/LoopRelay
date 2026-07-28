@@ -12,48 +12,61 @@ public sealed class FailureOracleMatrixRunner
         WriteIndented = true,
     };
 
+    // Declared taxonomy of the failure modes the product claims to handle, with the disposition
+    // each one is expected to take. Supported rows are documentation: nothing here verifies them,
+    // and nothing here should pretend to. Unsupported rows additionally carry the exclusion review
+    // (owner plus recertification condition) that RunAsync does check and that keeps every
+    // uncovered profile capability release-visible.
     private static readonly FailureSpec[] MaintainedFailures =
     [
-        Recover("repaired-context", "authority", "safe-retry", "tests/LoopRelay.Projections.Tests/Services/ProjectContextLoaderTests.cs"),
-        Recover("corrected-malformed-output", "prompt-output", "safe-retry", "tests/LoopRelay.Cli.Tests/Services/Cli/LoopRelayCompositionRootTests.cs"),
-        Recover("canonical-artifact-restoration", "artifact", "operator-unblock", "tests/LoopRelay.Orchestration.Primitives.Tests/Runtime/TransitionRuntimeTests.cs"),
-        Recover("projection-regeneration", "projection", "deterministic-regeneration", "tests/LoopRelay.Projections.Tests/Services/ProjectionServiceTests.cs"),
-        Recover("scoped-rollback", "artifact", "scoped-rollback", "src/LoopRelay.Certification/PlanWorkflowRunner.cs"),
-        Recover("incomplete-split-or-promotion", "artifact", "resume-or-fail-closed", "tests/LoopRelay.Orchestration.Primitives.Tests/Resolution/WorkflowResolverTests.cs"),
-        Recover("stranded-publication", "git", "operator-unblock", "src/LoopRelay.Certification/GitPublicationRunner.cs", EvidenceLevel.LiveTransition),
-        Recover("missing-parent-pointer", "recovery", "operator-unblock", "tests/LoopRelay.Orchestration.Primitives.Tests/Recovery/NativeForkRecoveryMechanismTests.cs"),
-        Recover("changed-implementation-without-handoff", "completion", "continue-execution", "tests/LoopRelay.Completion.Tests/Services/CompletionCertificationServiceTests.cs"),
-        Recover("handoff-without-publication", "completion", "continue-execution", "tests/LoopRelay.Completion.Tests/Services/CompletionCertificationServiceTests.cs"),
-        Recover("committed-decision-without-artifact", "recovery", "materialize-committed-output", "tests/LoopRelay.Cli.Tests/Services/Decisions/RecoveryEnvelopeTests.cs"),
-        Recover("pointer-conflict", "persistence", "compare-and-swap-fail-closed", "tests/LoopRelay.Orchestration.Primitives.Tests/Recovery/SqliteRecoveryStoreTests.cs"),
-        Recover("partial-archive-or-context-update", "archive", "resume-singular-closure", "tests/LoopRelay.Completion.Tests/Services/CompletionCertificationServiceTests.cs"),
-        Recover("cancelled-output", "provider", "boundary-classification", "tests/LoopRelay.Orchestration.Primitives.Tests/Runtime/TransitionRecoveryClassifierTests.cs"),
-        Recover("corrected-stall", "workflow", "explicit-rerun", "tests/LoopRelay.Orchestration.Primitives.Tests/Chaining/WorkflowChainRunnerTests.cs"),
-        Recover("usage-limit-after-failure", "provider", "bounded-wait-retry", "tests/LoopRelay.Cli.Tests/Services/Agents/GatedAgentRuntimeTests.cs"),
-        FailClosed("unsupported-schema-or-profile", "configuration", "src/LoopRelay.Certification/ProviderProfileRunner.cs"),
-        FailClosed("untrusted-corrupt-authority", "persistence", "src/LoopRelay.Certification/PersistenceLifecycleRunner.cs", EvidenceLevel.LiveTransition),
-        FailClosed("ambiguous-provider-side-effect", "provider", "src/LoopRelay.Certification/TransitionRecoveryRunner.cs", EvidenceLevel.LiveChainRecovery),
-        FailClosed("multiple-fork-children", "recovery", "tests/LoopRelay.Orchestration.Primitives.Tests/Recovery/NativeForkRecoveryMechanismTests.cs"),
-        FailClosed("causal-mismatch", "recovery", "tests/LoopRelay.Orchestration.Primitives.Tests/Recovery/RecoveryPlannerTests.cs"),
-        FailClosed("recovery-marker-mismatch", "persistence", "tests/LoopRelay.Orchestration.Primitives.Tests/Persistence/CanonicalTransitionPersistenceStoresTests.cs"),
-        FailClosed("hard-deny-violation", "permission", "src/LoopRelay.Certification/ProviderProfileRunner.cs", EvidenceLevel.LiveTransition),
-        FailClosed("unresolved-dual-authority", "authority", "tests/LoopRelay.Orchestration.Primitives.Tests/Resolution/WorkflowResolverTests.cs"),
-        FailClosed("closed-evidence-contradicted-by-repository", "completion", "tests/LoopRelay.Completion.Tests/Services/CompletionCertificationServiceTests.cs"),
-        Recover("process-death-before-request", "interruption", "safe-retry", "src/LoopRelay.Certification/TransitionRecoveryRunner.cs", EvidenceLevel.LiveChainRecovery),
-        Recover("process-death-after-write", "interruption", "safe-retry-before-submission", "src/LoopRelay.Certification/TransitionRecoveryRunner.cs", EvidenceLevel.LiveChainRecovery),
-        Recover("process-death-after-acceptance", "interruption", "reconcile-provider", "src/LoopRelay.Certification/TransitionRecoveryRunner.cs", EvidenceLevel.LiveChainRecovery),
-        Recover("process-death-during-output", "interruption", "reconcile-or-materialize", "src/LoopRelay.Certification/TransitionRecoveryRunner.cs", EvidenceLevel.LiveChainRecovery),
-        Recover("process-death-after-terminal", "interruption", "materialize-committed-output", "src/LoopRelay.Certification/TransitionRecoveryRunner.cs", EvidenceLevel.LiveChainRecovery),
-        Recover("process-death-at-ordered-effect", "interruption", "fail-closed-unknown-side-effect", "src/LoopRelay.Certification/TransitionRecoveryRunner.cs", EvidenceLevel.LiveChainRecovery),
-        Recover("provider-outage", "provider", "no-blind-retry", "tests/LoopRelay.Cli.Tests/Services/Agents/GatedAgentRuntimeTests.cs"),
-        Recover("retry-exhaustion", "provider", "bounded-terminal-failure", "tests/LoopRelay.Cli.Tests/Services/Agents/GatedAgentRuntimeTests.cs"),
-        FailClosed("git-publication-failure", "git", "src/LoopRelay.Certification/GitPublicationRunner.cs", EvidenceLevel.LiveTransition),
-        FailClosed("evaluator-failure", "oracle", "tests/LoopRelay.Completion.Tests/Services/CompletionCertificationServiceTests.cs"),
-        Recover("archive-recovery", "archive", "resume-singular-closure", "src/LoopRelay.Certification/CompletionClosureRunner.cs", EvidenceLevel.LiveChainRecovery),
-        Unsupported("provider-session-reconstruction-live", "provider", "profile-gated", "provider-compatibility", "Recertify when an exact profile exposes a reconstructable provider history contract."),
-        Unsupported("native-fork-reconciliation-live", "provider", "profile-gated", "provider-compatibility", "Recertify when exact parent-child enumeration is live-certified."),
-        Unsupported("provider-capacity-signal-live", "provider", "profile-gated", "provider-compatibility", "Recertify when the provider exposes a certified capacity signal."),
-        Unsupported("ambiguous-provider-effect-reconciliation-live", "provider", "operator-unblock", "provider-compatibility", "Recertify when accepted-turn reconciliation is deterministic for the exact profile."),
+        Recover("repaired-context", "authority", "safe-retry"),
+        Recover("corrected-malformed-output", "prompt-output", "safe-retry"),
+        Recover("canonical-artifact-restoration", "artifact", "operator-unblock"),
+        Recover("projection-regeneration", "projection", "deterministic-regeneration"),
+        Recover("scoped-rollback", "artifact", "scoped-rollback"),
+        Recover("incomplete-split-or-promotion", "artifact", "resume-or-fail-closed"),
+        Recover("stranded-publication", "git", "operator-unblock", EvidenceLevel.LiveTransition),
+        Recover("missing-parent-pointer", "recovery", "operator-unblock"),
+        Recover("changed-implementation-without-handoff", "completion", "continue-execution"),
+        Recover("handoff-without-publication", "completion", "continue-execution"),
+        Recover("committed-decision-without-artifact", "recovery", "materialize-committed-output"),
+        Recover("pointer-conflict", "persistence", "compare-and-swap-fail-closed"),
+        Recover("partial-archive-or-context-update", "archive", "resume-singular-closure"),
+        Recover("cancelled-output", "provider", "boundary-classification"),
+        Recover("corrected-stall", "workflow", "explicit-rerun"),
+        Recover("usage-limit-after-failure", "provider", "bounded-wait-retry"),
+        FailClosed("unsupported-schema-or-profile", "configuration"),
+        FailClosed("untrusted-corrupt-authority", "persistence", EvidenceLevel.LiveTransition),
+        FailClosed("ambiguous-provider-side-effect", "provider", EvidenceLevel.LiveChainRecovery),
+        FailClosed("multiple-fork-children", "recovery"),
+        FailClosed("causal-mismatch", "recovery"),
+        FailClosed("recovery-marker-mismatch", "persistence"),
+        FailClosed("hard-deny-violation", "permission", EvidenceLevel.LiveTransition),
+        FailClosed("unresolved-dual-authority", "authority"),
+        FailClosed("closed-evidence-contradicted-by-repository", "completion"),
+        Recover("process-death-before-request", "interruption", "safe-retry", EvidenceLevel.LiveChainRecovery),
+        Recover("process-death-after-write", "interruption", "safe-retry-before-submission", EvidenceLevel.LiveChainRecovery),
+        Recover("process-death-after-acceptance", "interruption", "reconcile-provider", EvidenceLevel.LiveChainRecovery),
+        Recover("process-death-during-output", "interruption", "reconcile-or-materialize", EvidenceLevel.LiveChainRecovery),
+        Recover("process-death-after-terminal", "interruption", "materialize-committed-output", EvidenceLevel.LiveChainRecovery),
+        Recover("process-death-at-ordered-effect", "interruption", "fail-closed-unknown-side-effect", EvidenceLevel.LiveChainRecovery),
+        Recover("provider-outage", "provider", "no-blind-retry"),
+        Recover("retry-exhaustion", "provider", "bounded-terminal-failure"),
+        FailClosed("git-publication-failure", "git", EvidenceLevel.LiveTransition),
+        FailClosed("evaluator-failure", "oracle"),
+        Recover("archive-recovery", "archive", "resume-singular-closure", EvidenceLevel.LiveChainRecovery),
+    ];
+
+    // Profile capabilities the product does not support. Unlike the taxonomy above, these are
+    // evaluated: each row must carry a completed review - the reviewed flag, an owning function,
+    // and the condition that would put it back on the certification hook. A row added without one
+    // fails the matrix, which is what keeps an exclusion from being quietly buried in the table.
+    private static readonly ExclusionSpec[] ReviewedExclusions =
+    [
+        Unsupported("provider-session-reconstruction-live", "provider", "profile-gated", reviewed: true, "provider-compatibility", "Recertify when an exact profile exposes a reconstructable provider history contract."),
+        Unsupported("native-fork-reconciliation-live", "provider", "profile-gated", reviewed: true, "provider-compatibility", "Recertify when exact parent-child enumeration is live-certified."),
+        Unsupported("provider-capacity-signal-live", "provider", "profile-gated", reviewed: true, "provider-compatibility", "Recertify when the provider exposes a certified capacity signal."),
+        Unsupported("ambiguous-provider-effect-reconciliation-live", "provider", "operator-unblock", reviewed: true, "provider-compatibility", "Recertify when accepted-turn reconciliation is deterministic for the exact profile."),
     ];
 
     public async Task<FailureOracleMatrixCertificationResult> RunAsync(
@@ -61,33 +74,41 @@ public sealed class FailureOracleMatrixRunner
         string authorityRoot,
         CancellationToken cancellationToken = default)
     {
-        var failures = MaintainedFailures.Select(spec => EvaluateFailure(workspaceRoot, spec)).ToArray();
+        FailureCoverageCaseResult[] exclusions = ReviewedExclusions
+            .Select(spec => FailureCoverageCaseResult.ForReviewedExclusion(
+                spec.Identity,
+                spec.Domain,
+                spec.Disposition,
+                spec.Reviewed,
+                spec.Owner,
+                spec.RecertificationCondition,
+                ["release-visible:unsupported-profile-capability"]))
+            .ToArray();
         TransitionRecoveryCoverageResult[] transitions = CanonicalWorkflowCatalog.Current.Workflows
             .SelectMany(workflow => workflow.Transitions.Select(transition => EvaluateTransition(workflow, transition)))
             .OrderBy(item => item.Workflow, StringComparer.Ordinal)
             .ThenBy(item => item.Transition, StringComparer.Ordinal)
             .ToArray();
         OracleControlCaseResult[] oracles = CreateOracleControls();
-        CertificationGovernanceResult governance = Governance();
 
-        bool everyFailure = failures.All(item => item.Passed);
         bool everyTransition = transitions.Length > 0 && transitions.All(item => item.Passed);
         bool noDuplicates = transitions.All(item =>
             item.DuplicateProviderTurnPrevented && item.DuplicateOrderedEffectPrevented);
-        bool unsupportedVisible = failures.Where(item => !item.Supported).Any() &&
-            failures.Where(item => !item.Supported).All(item =>
-                item.ReviewedExclusion && !string.IsNullOrWhiteSpace(item.Owner) &&
-                !string.IsNullOrWhiteSpace(item.RecertificationCondition));
-        bool passed = everyFailure && everyTransition && noDuplicates && unsupportedVisible &&
-            oracles.All(item => item.Passed) && governance.Passed;
+        bool unsupportedVisible = exclusions.Length > 0 && exclusions.All(item => item.Passed);
+        bool passed = everyTransition && noDuplicates && unsupportedVisible &&
+            oracles.All(item => item.Passed);
         string[] evidence =
         [
-            $"maintained-failure-denominator:{failures.Length}",
+            $"declared-failure-taxonomy:{MaintainedFailures.Length}",
+            $"declared-taxonomy-levels:{string.Join(',', MaintainedFailures
+                .GroupBy(item => item.Level)
+                .OrderBy(group => group.Key)
+                .Select(group => $"{group.Key}={group.Count()}"))}",
             $"canonical-transition-denominator:{transitions.Length}",
             $"prompt-postures:{string.Join(',', transitions.Select(item => item.Posture).Distinct().Order())}",
             $"effect-categories:{string.Join(',', transitions.SelectMany(item => item.EffectCategories).Distinct().Order())}",
             $"oracle-classes:{oracles.Length}",
-            $"reviewed-unsupported:{failures.Count(item => !item.Supported)}",
+            $"reviewed-unsupported:{exclusions.Length}",
             $"production-digest:{CoverageLedgerBuilder.Build(workspaceRoot).ProductionDigest}",
         ];
         IReadOnlyList<string> privacy = PrivacyScanner.Scan(string.Join('\n', evidence), authorityRoot);
@@ -97,11 +118,9 @@ public sealed class FailureOracleMatrixRunner
         var result = new FailureOracleMatrixCertificationResult(
             CertificationEvidenceSchema.Version,
             classification,
-            failures,
+            exclusions,
             transitions,
             oracles,
-            governance,
-            everyFailure,
             everyTransition,
             noDuplicates,
             unsupportedVisible,
@@ -112,27 +131,6 @@ public sealed class FailureOracleMatrixRunner
         await using FileStream stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, result, JsonOptions, cancellationToken);
         return result;
-    }
-
-    private static FailureCoverageCaseResult EvaluateFailure(string workspaceRoot, FailureSpec spec)
-    {
-        bool evidenceExists = !spec.Supported || File.Exists(Path.Combine(
-            workspaceRoot,
-            spec.EvidencePath!.Replace('/', Path.DirectorySeparatorChar)));
-        bool exclusionValid = spec.Supported ||
-            (spec.ReviewedExclusion && !string.IsNullOrWhiteSpace(spec.Owner) &&
-             !string.IsNullOrWhiteSpace(spec.RecertificationCondition));
-        return new FailureCoverageCaseResult(
-            spec.Identity,
-            spec.Domain,
-            spec.Disposition,
-            spec.Level,
-            spec.Supported,
-            spec.ReviewedExclusion,
-            spec.Owner,
-            spec.RecertificationCondition,
-            evidenceExists && exclusionValid,
-            spec.Supported ? [$"source:{spec.EvidencePath}"] : ["release-visible:unsupported-profile-capability"]);
     }
 
     private static TransitionRecoveryCoverageResult EvaluateTransition(
@@ -248,58 +246,41 @@ public sealed class FailureOracleMatrixRunner
             ["positive-control", "deliberate-negative-control"]);
     }
 
-    private static CertificationGovernanceResult Governance()
-    {
-        var retention = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["success"] = "normalized-summary-and-required-artifacts",
-            ["failure"] = "full-scrubbed-boundary-and-oracle-evidence",
-            ["flake"] = "all-attempts-plus-variance-classification",
-            ["block"] = "durable-operator-action-and-authority-snapshot",
-            ["incompatibility"] = "exact-profile-identity-and-missing-capability",
-            ["privacy-sensitive"] = "redacted-summary-only-with-local-retention-pointer",
-        };
-        return new CertificationGovernanceResult(
-            3,
-            0.05,
-            "Rerun identical behavior identity; classify variance before product blame; never erase the first failure.",
-            true,
-            true,
-            retention,
-            retention.Count == 6);
-    }
-
     private static FailureSpec Recover(
         string identity,
         string domain,
         string disposition,
-        string evidence,
         EvidenceLevel level = EvidenceLevel.DeterministicComponent) =>
-        new(identity, domain, disposition, level, true, false, evidence, null, null);
+        new(identity, domain, disposition, level);
 
     private static FailureSpec FailClosed(
         string identity,
         string domain,
-        string evidence,
         EvidenceLevel level = EvidenceLevel.DeterministicComponent) =>
-        Recover(identity, domain, "fail-closed", evidence, level);
+        Recover(identity, domain, "fail-closed", level);
 
-    private static FailureSpec Unsupported(
+    private static ExclusionSpec Unsupported(
         string identity,
         string domain,
         string disposition,
+        bool reviewed,
         string owner,
         string recertification) =>
-        new(identity, domain, disposition, EvidenceLevel.Uncovered, false, true, null, owner, recertification);
+        new(identity, domain, disposition, reviewed, owner, recertification);
 
+    /// <summary>A declared failure mode and the disposition it is expected to take. Documentation.</summary>
     private sealed record FailureSpec(
         string Identity,
         string Domain,
         string Disposition,
-        EvidenceLevel Level,
-        bool Supported,
-        bool ReviewedExclusion,
-        string? EvidencePath,
-        string? Owner,
-        string? RecertificationCondition);
+        EvidenceLevel Level);
+
+    /// <summary>A deliberately unsupported capability and the review that keeps it release-visible.</summary>
+    private sealed record ExclusionSpec(
+        string Identity,
+        string Domain,
+        string Disposition,
+        bool Reviewed,
+        string Owner,
+        string RecertificationCondition);
 }

@@ -24,8 +24,4 @@
     <ProjectReference Include="..\..\src\LoopRelay.Permissions\LoopRelay.Permissions.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
 </Project>

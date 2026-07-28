@@ -37,10 +37,10 @@ public sealed partial class CompletionArtifacts(
     public async Task<IReadOnlyList<string>> ListAsync(string relativeDirectory, string searchPattern)
     {
         if (IsExecutionEvidenceDirectory(relativeDirectory) &&
-            _executionEvidenceStore is SqliteExecutionEvidenceStore)
+            _executionEvidenceStore is SqliteExecutionEvidenceStore sqliteExecutionEvidenceStore)
         {
-            return (await _executionEvidenceStore.ListAsync(searchPattern))
-                .Select(record => record.RelativePath)
+            return (await sqliteExecutionEvidenceStore.ListPathsAsync(searchPattern))
+                .Select(path => path.RelativePath)
                 .ToArray();
         }
 

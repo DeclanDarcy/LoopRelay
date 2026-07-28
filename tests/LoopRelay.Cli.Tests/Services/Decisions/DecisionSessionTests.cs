@@ -56,30 +56,6 @@ public class DecisionSessionTests
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
 
-    private static (DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
-        RecordingLoopConsole Con, FakeDecisionSessionResumeStore Resume)
-        NewWithResume(
-            DecisionSessionRouterOptions? routerOptions = null,
-            DecisionSessionResumeState? state = null,
-            bool resumeEnabled = true)
-    {
-        var store = new MemoryArtifactStore();
-        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
-        var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
-        var con = new RecordingLoopConsole();
-        var rt = new FakeAgentRuntime(store);
-        var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
-        var resume = new FakeDecisionSessionResumeStore { State = state };
-        var session = new DecisionSession(
-            rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
-            _resumeStore: resume, _resumeEnabled: resumeEnabled,
-            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcher);
-        return (session, rt, store, repo, con, resume);
-    }
-
-    private static DecisionSessionResumeState ResumeState(string threadId = "thread-old") =>
-        new(threadId, 100, 5d, 2, 3d, 2d, 300_000d, 1, 500, 1);
-
     private static SessionContinuityProfile TestContinuityProfile() => new(
         "codex", "test", "0.142.5", "codex", "v2", "schema",
         new Dictionary<string, bool> { ["experimentalApi"] = true },
@@ -103,11 +79,8 @@ public class DecisionSessionTests
         [$".agents/{identity.Value}.md"]);
 
     private static (DecisionSession Session, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo,
-        RecordingLoopConsole Con, FakeDecisionSessionResumeStore Resume, FakeProjectionService Projection)
-        NewWithProjection(
-            DecisionSessionRouterOptions? routerOptions = null,
-            DecisionSessionResumeState? state = null,
-            ProjectionFreshness? freshness = null)
+        RecordingLoopConsole Con, FakeProjectionService Projection)
+        NewWithProjection(DecisionSessionRouterOptions? routerOptions = null)
     {
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
@@ -115,12 +88,7 @@ public class DecisionSessionTests
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
-        var resume = new FakeDecisionSessionResumeStore { State = state };
         var projection = new FakeProjectionService("DECISION SESSION PROJECTION");
-        if (freshness is not null)
-        {
-            projection.Freshness = freshness;
-        }
 
         var session = new DecisionSession(
             rt,
@@ -130,10 +98,9 @@ public class DecisionSessionTests
             repo,
             TestAgentConfiguration.Brain,
             _costModel: null,
-            _resumeStore: resume,
             _projectionService: projection,
             _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcher);
-        return (session, rt, store, repo, con, resume, projection);
+        return (session, rt, store, repo, con, projection);
     }
 
     private const string ScopedContext = OrchestrationArtifactPaths.OperationalContext;
@@ -233,7 +200,7 @@ public class DecisionSessionTests
     [Fact]
     public async Task Run_FreshProcess_IncludesDecisionProjection()
     {
-        var (session, rt, store, repo, _, _, projection) = NewWithProjection();
+        var (session, rt, store, repo, _, projection) = NewWithProjection();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
@@ -254,7 +221,7 @@ public class DecisionSessionTests
     [Fact]
     public async Task Run_WarmProcess_DoesNotResendDecisionProjection()
     {
-        var (session, rt, store, repo, _, _, projection) = NewWithProjection();
+        var (session, rt, store, repo, _, projection) = NewWithProjection();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
@@ -554,7 +521,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -598,7 +564,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -627,6 +592,48 @@ public class DecisionSessionTests
         Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
         Assert.Equal("OPCTX-1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
+    }
+
+    [Fact]
+    public async Task Run_Transfer_WritesTheOperationalDeltaToTheRepoExactlyOnce()
+    {
+        // TransferAsync writes delta.Output to OperationalDelta so the evolution step below can read it
+        // back; EvolveOperationalContextAsync used to write the same identical content to the same path
+        // again before that read. Assert the write count directly so a reintroduced duplicate write fails
+        // this test even though the content (and every other observable) would look identical either way.
+        var store = new CountingStore(new MemoryArtifactStore());
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        var session = new DecisionSession(
+            rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
+            _promptDispatcher: CanonicalTestStores.DecisionPromptDispatcher);
+
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        // Round 1: propose (occupancy 20 -> round 2 crosses the guard).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        // Round 2: Transfer (delta + update + optimize + propose; no reseed turn).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
+        {
+            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));     // OptimizeOperationalDocuments
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose
+        await session.RunAsync(CancellationToken.None);
+
+        // Exactly one write to the delta path across the whole transfer — the evolution turn's read-back
+        // still sees "DELTA-TEXT" because TransferAsync's single write precedes it.
+        Assert.Equal(1, store.WritesTo(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
     }
 
     [Fact]
@@ -685,7 +692,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -714,17 +720,18 @@ public class DecisionSessionTests
     }
 
     [Fact]
-    public async Task Run_Transfer_OptimizesDocumentsInOwnSandbox_AndCopiesThemBack()
+    public async Task Run_Transfer_OptimizesDocuments_AndCopiesThemBack()
     {
-        // The optimization one-shot runs immediately after the context evolution, in its OWN sandbox seeded with
-        // plan.md + details.md + the JUST-EVOLVED operational_context.md (not the pre-transfer revision), and every
-        // optimized document is copied back into the repo.
+        // The optimization one-shot runs immediately after the context evolution and is seeded with plan.md +
+        // details.md + the JUST-EVOLVED operational_context.md (not the pre-transfer revision) — there is no
+        // separate sandbox directory (Task 4.4 removed the ISandboxWorkspace abstraction: it had zero production
+        // implementations), so this is verifying ordering/content, not isolation. Every optimized document the
+        // turn writes back is copied into the repo as the new canonical content.
         var store = new MemoryArtifactStore();
         var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory(); // distinct root (genuinely separate from the repo)
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -768,7 +775,7 @@ public class DecisionSessionTests
         }));
         await session.RunAsync(CancellationToken.None);
 
-        // The optimization sandbox was seeded with the plan, the details, and the just-evolved context.
+        // The optimization turn was seeded with the plan, the details, and the just-evolved context.
         Assert.Equal("PLAN-0", seededPlan);
         Assert.Equal("DETAILS-0", seededDetails);
         Assert.Equal("OPCTX-1", seededContext);
@@ -796,7 +803,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -843,7 +849,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -919,7 +924,6 @@ public class DecisionSessionTests
         var art = CanonicalTestStores.CreateLoopArtifacts(store, repo);
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
-        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         var session = new DecisionSession(
             rt, router, art, con, repo, TestAgentConfiguration.Brain, _costModel: null,
@@ -991,77 +995,6 @@ public class DecisionSessionTests
         // 2026-07-02: the agent read both seeded files and replied with the merged doc, never touching the file).
         Assert.Contains("overwriting `.agents/operational_context.md`", UpdateOperationalContext.Text);
         Assert.DoesNotContain("The output should be the complete replacement document", UpdateOperationalContext.Text);
-    }
-
-    [Fact]
-    public async Task Run_FirstEntry_WithPersistedState_ResumesWarm_NoContextResend_AndRestoresAccounting()
-    {
-        var (session, rt, store, repo, con, resume) = NewWithResume(state: ResumeState());
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
-        {
-            // A successfully resumed thread already holds the operational context — the proposal is the
-            // warm handoff-only delta, exactly as if the process had never restarted.
-            Assert.DoesNotContain("OPCTX", prompt);
-            Assert.Contains("HANDOFF", prompt);
-            return Turns.Completed("D-RESUMED");
-        }));
-
-        await session.RunAsync(CancellationToken.None);
-
-        Assert.Equal("thread-old", rt.OpenedSpecs.Single().ResumeThreadId);
-        Assert.Contains(con.Events, e => e.Kind == "info" && e.Text.Contains("Resumed decision session"));
-        // The restored accounting flowed through the post-turn persist: reuseCycles 2 -> 3, reuseCost intact,
-        // transfer calibration intact.
-        DecisionSessionResumeState written = Assert.Single(resume.Written);
-        Assert.Equal("thread-old", written.ThreadId);
-        Assert.Equal(3, written.ReuseCycles);
-        Assert.Equal(7d, written.ReuseCost);
-        Assert.Equal(300_000d, written.TransferCost);
-        Assert.Equal(1, written.TransferCount);
-    }
-
-    [Fact]
-    public async Task Run_FirstEntry_WithStaleDecisionProjection_ClearsResumeAndStartsFresh()
-    {
-        var (session, rt, store, repo, con, resume, projection) = NewWithProjection(
-            state: ResumeState(),
-            freshness: ProjectionFreshness.Stale(ProjectionStaleReason.ProjectContextDrift));
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
-        {
-            Assert.Contains("DECISION SESSION PROJECTION", prompt);
-            Assert.Contains("OPCTX", prompt);
-            Assert.Contains("HANDOFF", prompt);
-            return Turns.Completed("D-FRESH");
-        }));
-
-        await session.RunAsync(CancellationToken.None);
-
-        Assert.Equal(1, projection.EvaluateFreshnessCalls);
-        Assert.Equal(1, resume.ClearCalls);
-        Assert.Null(rt.OpenedSpecs.Single().ResumeThreadId);
-        Assert.Contains(con.Events, e => e.Kind == "warn" && e.Text.Contains("projection is stale or missing"));
-    }
-
-    [Fact]
-    public async Task Run_FirstEntry_DeterministicResumeFailure_PreservesStateAndStartsNoReplacement()
-    {
-        var (session, rt, store, repo, con, resume) = NewWithResume(state: ResumeState());
-        rt.FailResume = true;
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
-        LoopStepException exception = await Assert.ThrowsAsync<LoopStepException>(
-            () => session.RunAsync(CancellationToken.None));
-
-        Assert.Single(rt.OpenedSpecs);
-        Assert.Equal("thread-old", rt.OpenedSpecs[0].ResumeThreadId);
-        Assert.Contains("no replacement was started", exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(con.Events, e => e.Kind == "warn" && e.Text.Contains("protocol repair"));
-        Assert.Equal(0, resume.ClearCalls);
-        Assert.Empty(resume.Written);
     }
 
     [Fact]
@@ -1142,57 +1075,9 @@ public class DecisionSessionTests
     }
 
     [Fact]
-    public async Task Run_NoPersistedState_OpensFresh_AndPersistsAfterTheSuccessfulProposal()
-    {
-        var (session, rt, store, repo, _, resume) = NewWithResume();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
-            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
-
-        await session.RunAsync(CancellationToken.None);
-
-        Assert.Null(rt.OpenedSpecs.Single().ResumeThreadId);
-        DecisionSessionResumeState written = Assert.Single(resume.Written);
-        Assert.Equal("thread-1", written.ThreadId);
-        Assert.Equal(1, written.ReuseCycles);
-        Assert.Equal(22, written.OccupancyTokens);
-    }
-
-    [Fact]
-    public async Task Run_TransferRecycle_ClearsTheState_ReopensWithoutResume_ThenPersistsTheNewThread()
-    {
-        var (session, rt, store, repo, _, resume) = NewWithResume(
-            new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-
-        // Round 1: propose (occupancy 20 -> round 2 crosses the guard and Transfers).
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
-            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
-        await session.RunAsync(CancellationToken.None);
-
-        // Round 2: Transfer (delta + update + optimize + propose on the recycled process).
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
-        {
-            s.WriteAsync(Resolve(repo, ScopedContext), "OPCTX-1").Wait();
-            return Turns.Completed("updated");
-        }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("optimized")));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));
-        await session.RunAsync(CancellationToken.None);
-
-        Assert.Equal(1, resume.ClearCalls);                    // the transfer close deleted the dead thread's state
-        Assert.Null(rt.OpenedSpecs[1].ResumeThreadId);         // the recycle opened FRESH — resume is first-open-only
-        Assert.Equal(2, resume.Written.Count);
-        Assert.Equal("thread-4", resume.Written[^1].ThreadId); // the post-transfer thread re-persisted
-    }
-
-    [Fact]
     public async Task Run_TransferRecycle_ReinjectsDecisionProjectionOnFreshProcess()
     {
-        var (session, rt, store, repo, _, _, projection) = NewWithProjection(
+        var (session, rt, store, repo, _, projection) = NewWithProjection(
             new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
@@ -1221,54 +1106,6 @@ public class DecisionSessionTests
         await session.RunAsync(CancellationToken.None);
 
         Assert.Equal(2, projection.EnsureFreshCalls);
-    }
-
-    [Fact]
-    public async Task Run_FailedProposal_ClearsThePersistedState()
-    {
-        var (session, rt, store, repo, _, resume) = NewWithResume();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
-
-        await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
-
-        Assert.Equal(1, resume.ClearCalls);
-        Assert.Empty(resume.Written);
-    }
-
-    [Fact]
-    public async Task Dispose_KeepsThePersistedState_ItIsTheNextRunsResumePayload()
-    {
-        var (session, rt, store, repo, _, resume) = NewWithResume();
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D1")));
-
-        await session.RunAsync(CancellationToken.None);
-        await session.DisposeAsync();
-
-        Assert.Equal(0, resume.ClearCalls);
-        Assert.NotNull(resume.State);
-        Assert.Equal(1, rt.ClosedSessions);   // the process still dies with the run — only the STATE survives
-    }
-
-    [Fact]
-    public async Task Run_WhenResumeDisabled_OpensFresh_ButStillPersists()
-    {
-        var (session, rt, store, repo, _, resume) = NewWithResume(state: ResumeState(), resumeEnabled: false);
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
-        {
-            Assert.Contains("OPCTX", prompt);   // no resume attempt -> fresh priming
-            return Turns.Completed("D1");
-        }));
-
-        await session.RunAsync(CancellationToken.None);
-
-        Assert.Null(rt.OpenedSpecs.Single().ResumeThreadId);   // the kill switch skips ONLY the resume attempt
-        Assert.NotEmpty(resume.Written);                        // persist/clear behavior is unchanged
     }
 
     private sealed class TempFileRepo : IDisposable

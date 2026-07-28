@@ -132,6 +132,15 @@ public sealed class StatusCanaryTests
         Assert.Contains(expected, findings);
     }
 
+    /// <summary>
+    /// The only direct test of <see cref="CoverageLedgerBuilder"/>, which remains load-bearing as
+    /// the production-digest evidence source in <c>FailureOracleMatrixRunner</c>. Every assertion
+    /// here is file-free by construction: the <c>workflow</c> and <c>transition</c> obligations and
+    /// the uncovered set all derive from the in-memory canonical workflow catalog, not from
+    /// anything on disk. Do not add assertions on a document-derived dimension
+    /// (<c>known-risk</c>, <c>prompt-asset</c>, <c>persistence-schema</c>) - tests must not assume
+    /// a permanent shape for the repository's files.
+    /// </summary>
     [Fact]
     public void CoverageLedgerIsProductionDerivedAndKeepsUncoveredSetVisible()
     {
@@ -141,7 +150,6 @@ public sealed class StatusCanaryTests
 
         Assert.Contains(ledger.Obligations, item => item.Dimension == "workflow" && item.Identity == "Execute");
         Assert.Contains(ledger.Obligations, item => item.Dimension == "transition" && item.Identity.Contains("Execute/ExecuteImplementationSlice", StringComparison.Ordinal));
-        Assert.Contains(ledger.Obligations, item => item.Dimension == "known-risk");
         Assert.NotEmpty(ledger.Uncovered);
     }
 

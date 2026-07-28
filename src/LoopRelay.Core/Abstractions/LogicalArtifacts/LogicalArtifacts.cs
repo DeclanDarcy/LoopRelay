@@ -46,12 +46,6 @@ public sealed record LogicalArtifactDescriptor(
 
 public sealed record LogicalArtifactContent(string Text);
 
-public sealed record LogicalArtifactPathPattern(
-    string Directory,
-    string SearchPattern,
-    LogicalArtifactDomain Domain,
-    string IdentityPrefix = "");
-
 public sealed record LogicalArtifactResolutionResult(
     LogicalArtifactDescriptor Descriptor,
     LogicalArtifactResolutionStatus Status,
@@ -70,11 +64,6 @@ public sealed record LogicalArtifactResolutionResult(
         new(descriptor, status, null, message);
 }
 
-public sealed record CanonicalArtifactHash(
-    LogicalArtifactDescriptor Descriptor,
-    string Algorithm,
-    string Value);
-
 public interface ILogicalArtifactProvider
 {
     bool CanResolve(string relativePath);
@@ -87,17 +76,6 @@ public interface ILogicalArtifactProvider
 public interface ILogicalArtifactResolver
 {
     Task<LogicalArtifactResolutionResult> ResolveAsync(
-        string relativePath,
-        CancellationToken cancellationToken = default);
-}
-
-public interface ICanonicalArtifactHasher
-{
-    Task<CanonicalArtifactHash?> HashIfPresentAsync(
-        string relativePath,
-        CancellationToken cancellationToken = default);
-
-    Task<CanonicalArtifactHash> RequireHashAsync(
         string relativePath,
         CancellationToken cancellationToken = default);
 }

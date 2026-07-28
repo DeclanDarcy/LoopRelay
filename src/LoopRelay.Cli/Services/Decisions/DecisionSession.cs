@@ -57,7 +57,6 @@ internal sealed class DecisionSession(
     Repository _repository,
     BrainConfiguration _brainConfiguration,
     IDecisionCostModel? _costModel = null,
-    IDecisionSessionResumeStore? _resumeStore = null,
     IProjectContextProjectionService? _projectionService = null,
     bool _resumeEnabled = true,
     string? _promptPolicy = null,
@@ -338,11 +337,12 @@ internal sealed class DecisionSession(
     }
 
     /// <summary>
-    /// The FIRST open of this CLI process attempts to resume the persisted decision session (if any); every
-    /// later open — the post-Transfer recycle, the reopen after a failed turn — starts fresh, because the
-    /// persisted state describes a thread this process has already moved past. Restored accounting is applied
-    /// only HERE, at a successful resume: the router's route evaluation runs before the open, so the first
-    /// route of a run always sees pre-restore (zeroed) inputs and the existing !seeded downgrade guards it.
+    /// The FIRST open of this CLI process may resume a durably-active session (if a recovery store and an
+    /// active execution context are both present); every other open — no recovery store configured, the
+    /// post-Transfer recycle, the reopen after a failed turn — starts a fresh provider session. (Task 4.4: the
+    /// legacy <c>IDecisionSessionResumeStore</c>-based codex-native continuity resume this superseded was
+    /// removed — production always constructed this class with no resume store, so that path could only ever
+    /// open fresh anyway.)
     /// </summary>
     private async Task<IAgentSession> OpenOrResumeSessionAsync(CancellationToken cancellationToken)
     {
@@ -354,66 +354,9 @@ internal sealed class DecisionSession(
             return await OpenOrResumeDurableSessionAsync(firstOpen, cancellationToken);
         }
 
-        DecisionSessionResumeState? state = firstOpen && _resumeEnabled
-            ? await (_resumeStore ?? new NullDecisionSessionResumeStore()).ReadAsync(cancellationToken)
-            : null;
-        if (state is not null && _projectionService is not null)
-        {
-            ProjectionFreshness freshness = await EvaluateDecisionProjectionFreshnessAsync(cancellationToken);
-            if (!freshness.IsFresh)
-            {
-                _console.Warn(
-                    "Decision session projection is stale or missing; clearing persisted decision session and starting fresh.");
-                await (_resumeStore ?? new NullDecisionSessionResumeStore()).ClearAsync(cancellationToken);
-                state = null;
-            }
-        }
-
-        if (state is null)
-        {
-            return await _runtime.OpenSessionAsync(
-                AgentSpecs.Decision(_repository, _brainConfiguration),
-                cancellationToken);
-        }
-
-        IAgentSessionContinuityRuntime continuityRuntime = _continuityRuntime
-            ?? _runtime as IAgentSessionContinuityRuntime
-            ?? throw new LoopStepException(
-                "Decision-session continuity is not available; the active thread was preserved and no replacement was started.");
-        SessionContinuityProfile profile = _continuityProfile
-            ?? (await continuityRuntime.NegotiateAsync(
-                ProductionNegotiationRequest(), cancellationToken)).Profile;
-
-        SessionResumeResult resume = await continuityRuntime.ResumeSessionAsync(
-            new SessionResumeRequest(
-                AgentSpecs.Decision(_repository, _brainConfiguration, state.ThreadId),
-                new ProviderSessionReference("codex", state.ThreadId),
-                profile),
+        return await _runtime.OpenSessionAsync(
+            AgentSpecs.Decision(_repository, _brainConfiguration),
             cancellationToken);
-        if (resume.Outcome == SessionResumeOutcome.SuccessfulResume && resume.Session is { } resumed)
-        {
-            // The resumed thread already holds the operational context (its first proposal primed it), and
-            // the router accounting it accrued — restore both so priming and transfer economics continue
-            // where the previous run left off.
-            seeded = true;
-            occupancyTokens = state.OccupancyTokens;
-            reuseCost = state.ReuseCost;
-            reuseCycles = state.ReuseCycles;
-            lastCycleCost = state.LastCycleCost;
-            prevCycleCost = state.PrevCycleCost;
-            transferCost = state.TransferCost;
-            transferCount = state.TransferCount;
-            previousOperationalContextSize = state.PreviousOperationalContextSize;
-            operationalContextGrowthStreak = state.OperationalContextGrowthStreak;
-            _console.Info($"Resumed decision session (thread {state.ThreadId}).");
-            return resumed;
-        }
-
-        string failure = resume.Outcome == SessionResumeOutcome.DeterministicProtocolFailure
-            ? "Decision-session resume requires a protocol repair"
-            : $"Decision-session resume stopped with {resume.Outcome}";
-        _console.Warn($"{failure} (thread {state.ThreadId}); the active thread was preserved and no replacement was started.");
-        throw new LoopStepException($"{failure}. The active thread was preserved; no replacement was started.");
     }
 
     private async Task<IAgentSession> OpenOrResumeDurableSessionAsync(
@@ -756,8 +699,8 @@ internal sealed class DecisionSession(
     }
 
     /// <summary>
-    /// The state is only ever written after a SUCCESSFUL proposal turn, so its existence implies the thread is
-    /// primed (no seeded field in the schema). One small SQLite upsert per decision step; the store is fail-open.
+    /// Only ever called after a SUCCESSFUL proposal turn. No-ops when no recovery store is configured (there is
+    /// nothing durable to persist to) — see <see cref="OpenOrResumeSessionAsync"/>.
     /// </summary>
     private async Task PersistResumeStateAsync(CancellationToken cancellationToken)
     {
@@ -769,13 +712,7 @@ internal sealed class DecisionSession(
         if (_recoveryStore is not null && decisionExecutionContext is not null)
         {
             await PersistDurableActiveStateAsync(threadId, cancellationToken);
-            return;
         }
-
-        await (_resumeStore ?? new NullDecisionSessionResumeStore()).WriteAsync(new DecisionSessionResumeState(
-            threadId, occupancyTokens, reuseCost, reuseCycles, lastCycleCost, prevCycleCost,
-            transferCost, transferCount, previousOperationalContextSize, operationalContextGrowthStreak),
-            cancellationToken);
     }
 
     private async Task PersistDurableActiveStateAsync(string threadId, CancellationToken cancellationToken)
@@ -911,7 +848,7 @@ internal sealed class DecisionSession(
         await CloseAsync();
 
         _console.Phase("Decision: Transfer/UpdateOperationalContext");
-        AgentTurnResult update = await EvolveOperationalContextAsync(delta.Output, cancellationToken);
+        AgentTurnResult update = await EvolveOperationalContextAsync(cancellationToken);
 
         _console.Phase("Decision: Transfer/OptimizeOperationalDocuments");
         AgentTurnResult optimize = await OptimizeOperationalDocumentsAsync(cancellationToken);
@@ -950,11 +887,10 @@ internal sealed class DecisionSession(
 
     // Evolves the operational context through a fresh app-server session scoped to the context and delta artifacts.
     // Direct repository writes are wrapped in a rollback transaction so a failed turn/gate preserves inputs.
-    private async Task<AgentTurnResult> EvolveOperationalContextAsync(
-        string deltaOutput, CancellationToken cancellationToken)
+    private async Task<AgentTurnResult> EvolveOperationalContextAsync(CancellationToken cancellationToken)
     {
-        await _artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, deltaOutput);
-
+        // OperationalDelta was already written by TransferAsync before this method was called; the
+        // evolution operation reads it back below via its AllowedReads, so no re-write is needed here.
         var operation = new DecisionArtifactOperation(
             Label: "operational-context-evolution",
             PromptIdentity: "UpdateOperationalContext",
@@ -1285,20 +1221,6 @@ internal sealed class DecisionSession(
         }
     }
 
-    private async Task<ProjectionFreshness> EvaluateDecisionProjectionFreshnessAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await _projectionService!.EvaluateFreshnessAsync(
-                ProjectionRuntimePromptNames.DecisionSession,
-                cancellationToken);
-        }
-        catch (ProjectionException ex)
-        {
-            throw new LoopStepException(ex.Message, ex);
-        }
-    }
-
     // The router's unit-blind signals (mirrors RepositoryOrchestrator.SnapshotRouterInputs). Before any cycle is
     // observed (n == 0), occupancy is 0 so only the capacity guard could fire (it won't on a fresh process).
     private RouterInputs BuildRouterInputs()
@@ -1357,11 +1279,7 @@ internal sealed class DecisionSession(
         _ => $"Decision continuity {result.Outcome} (thread {threadId}).",
     };
 
-    // clearResumeState: a Transfer recycle or a failed turn ends the thread's useful life — the persisted
-    // resume state must die with it (the recycled process re-persists after its first successful turn).
-    // Disposal (loop exit) KEEPS the state: it is precisely the next run's resume payload, and no turn can
-    // mutate the thread between the last persist and disposal.
-    private async Task CloseAsync(bool clearResumeState = true)
+    private async Task CloseAsync()
     {
         if (session is not null)
         {
@@ -1374,13 +1292,8 @@ internal sealed class DecisionSession(
             reuseCycles = 0;
             lastCycleCost = 0d;
             prevCycleCost = 0d;
-
-            if (clearResumeState && _recoveryStore is null)
-            {
-                await (_resumeStore ?? new NullDecisionSessionResumeStore()).ClearAsync(CancellationToken.None);
-            }
         }
     }
 
-    public async ValueTask DisposeAsync() => await CloseAsync(clearResumeState: false);
+    public async ValueTask DisposeAsync() => await CloseAsync();
 }

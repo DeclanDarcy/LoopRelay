@@ -335,6 +335,59 @@ public sealed class WorkflowResolver
                 ambiguities.Count > 0 ? "Ambiguity requires explicit resolution." : "Resolution stops until the remediation in the warnings is complete."));
 }
 
+/// <summary>
+/// A <see cref="WorkflowResolutionResult"/> bound to the exact
+/// <c>(invocation, observation, definitions)</c> triple it was computed from, so a cycle can resolve
+/// once and hand the result to downstream consumers instead of each of them resolving again.
+/// </summary>
+/// <remarks>
+/// The constructor is private and <see cref="Resolve"/> is the only way to obtain an instance, so a
+/// resolution can never be paired with inputs it did not come from. Consumers still confirm the
+/// pairing describes their own inputs with <see cref="Matches"/> before reusing it.
+/// </remarks>
+public sealed class WorkflowCycleResolution
+{
+    private WorkflowCycleResolution(
+        WorkflowInvocation invocation,
+        RepositoryObservation observation,
+        IReadOnlyList<WorkflowDefinition> definitions,
+        WorkflowResolutionResult resolution)
+    {
+        Invocation = invocation;
+        Observation = observation;
+        Definitions = definitions;
+        Resolution = resolution;
+    }
+
+    public WorkflowInvocation Invocation { get; }
+
+    public RepositoryObservation Observation { get; }
+
+    public IReadOnlyList<WorkflowDefinition> Definitions { get; }
+
+    public WorkflowResolutionResult Resolution { get; }
+
+    public static WorkflowCycleResolution Resolve(
+        WorkflowResolver resolver,
+        WorkflowInvocation invocation,
+        RepositoryObservation observation,
+        IReadOnlyList<WorkflowDefinition> definitions) =>
+        new(invocation, observation, definitions, resolver.Resolve(invocation, observation, definitions));
+
+    /// <summary>
+    /// True when this resolution was computed from exactly the supplied inputs. Reference equality
+    /// is deliberate for the observation and the definitions: a distinct instance carrying equal
+    /// data is a different observed cycle, and resolving again is always the safe answer.
+    /// </summary>
+    public bool Matches(
+        WorkflowInvocation invocation,
+        RepositoryObservation observation,
+        IReadOnlyList<WorkflowDefinition> definitions) =>
+        Invocation == invocation &&
+        ReferenceEquals(Observation, observation) &&
+        ReferenceEquals(Definitions, definitions);
+}
+
 public static class InvocationModeResolver
 {
     public static WorkflowSelectionResult Resolve(

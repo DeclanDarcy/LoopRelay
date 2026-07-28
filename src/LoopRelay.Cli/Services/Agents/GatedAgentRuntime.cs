@@ -46,6 +46,8 @@ internal sealed class GatedAgentRuntime(
         // still mutate their only candidate output, so only the caller can decide whether a rerun is safe.
         DateTimeOffset openedAt = _clock.UtcNow;
         AgentTurnResult result = await _inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
+        // Nothing to cache across: a one-shot is a whole session's single turn, and the next one gets its own
+        // spec and its own rollout. Session-scoped reuse lives in GatedAgentSession, where turns share a session.
         await _recorder.RecordTurnAsync(
             repoName, spec.WorkingDirectory ?? string.Empty, spec.SessionId, spec.Role, openedAt,
             cachedLogPath: null, result,

@@ -23,6 +23,49 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         Converters = { new JsonStringEnumConverter() },
     };
 
+#if DEBUG
+    /// <summary>
+    /// Test-only observability: every read-only connection the keyed recovery-lookup methods below
+    /// open is offered here immediately after it opens, before the calling read issues its own
+    /// statement. A test installs a SQLite authorizer on it and counts the statements a path really
+    /// compiles, mirroring the seam <c>CanonicalEffectWorkStore.ConnectionObserverForTesting</c>
+    /// already uses. This store opens its connections itself with pooling disabled, so a test has no
+    /// other way to reach the handle a read actually ran on. Instance-scoped, so a test observes only
+    /// its own store.
+    /// </summary>
+    internal Action<SqliteConnection>? ConnectionObserverForTesting { get; set; }
+
+    /// <summary>
+    /// Test-only observability (fix pass 1, finding 2): fires whenever the unkeyed, full-hydration
+    /// <see cref="ReadRenderedPromptsAsync"/> path actually runs, so a test can assert directly that
+    /// the keyed <c>CanonicalRenderedPromptFactStore.ReadAsync</c> path never fell back to it. This
+    /// is a direct signal for "the full-hydration path did not run" - deliberately not an exact
+    /// statement-count total, since the unrelated, unkeyed attempt lookup that same method also
+    /// depends on contributes to any such total and would silently invalidate it if that lookup were
+    /// ever keyed on its own. Instance-scoped, like <see cref="ConnectionObserverForTesting"/>.
+    /// </summary>
+    internal Action? ReadRenderedPromptsAsyncInvokedForTesting { get; set; }
+
+    /// <summary>
+    /// Test-only observability, mirroring <see cref="ReadRenderedPromptsAsyncInvokedForTesting"/>
+    /// (Task 3.2): fires whenever the unkeyed, full-hydration <see cref="ReadWorkflowInstancesAsync"/>
+    /// path actually runs, so a test can assert directly that the keyed
+    /// <see cref="ReadActiveWorkflowInstancesAsync"/> path
+    /// <c>CanonicalWorkflowInstanceRecorder.BeginInstanceAsync</c> now uses (Task 3.3) never fell
+    /// back to it. Instance-scoped, like <see cref="ConnectionObserverForTesting"/>.
+    /// </summary>
+    internal Action? ReadWorkflowInstancesAsyncInvokedForTesting { get; set; }
+
+    /// <summary>
+    /// Test-only observability (Task 3.5): fires whenever the full-document
+    /// <see cref="ReadTransitionEvidenceAsync"/> path actually runs (inside <see cref="LoadSnapshotAsync"/>),
+    /// so a test can assert directly that the documents-free routine-observation path
+    /// (<see cref="LoadObservationSnapshotAsync"/>) never falls back to it. Instance-scoped, like
+    /// <see cref="ConnectionObserverForTesting"/>.
+    /// </summary>
+    internal Action? ReadTransitionEvidenceAsyncInvokedForTesting { get; set; }
+#endif
+
     public async Task UpsertWorkflowStateAsync(
         CanonicalWorkflowStateRecord state,
         CancellationToken cancellationToken = default)
@@ -265,12 +308,12 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                         workspace_id, run_id, workflow_instance_id, semantic_operation_key,
                         executor_key, executor_version, target_json, payload_json, payload_hash,
                         requiredness, dependencies_json, precondition_json, postcondition_json,
-                        reconciliation_policy, row_version, attempt_count
+                        reconciliation_policy
                     ) VALUES ($intent, $run, $attempt, $effect, $category, $order, $key,
                               'Planned', $definition, $at, $workspace, $root_run, $workflow_instance,
                               $semantic, $executor, $executor_version, $target, $payload, $payload_hash,
                               $requiredness, $dependencies, $precondition, $postcondition,
-                              $reconciliation, 0, 0)
+                              $reconciliation)
                     ON CONFLICT(idempotency_key) DO NOTHING;
                     INSERT INTO canonical_effect_lifecycle_events (
                         effect_intent_id, lifecycle, worker_id, explanation, evidence_json, recorded_at
@@ -706,7 +749,14 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         });
     }
 
-    public async Task AppendRenderedPromptAsync(
+    /// <summary>
+    /// Inserts a rendered-prompt fact and returns its 1-based ledger position (the row count of
+    /// <c>canonical_rendered_prompts</c> immediately after the insert, taken from the same
+    /// connection so no second round trip -- and no full-table materialisation -- is needed).
+    /// Rows are never deleted from this append-only table, so the count is equivalent to the
+    /// row's insertion-order position.
+    /// </summary>
+    public async Task<long> AppendRenderedPromptAsync(
         CanonicalRenderedPromptRecord renderedPrompt,
         CancellationToken cancellationToken = default)
     {
@@ -744,11 +794,18 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             ("$prompt_policy_profile_id", renderedPrompt.PromptPolicyProfileId),
             ("$consumed_input_manifest_id", renderedPrompt.ConsumedInputManifestId),
             ("$rendered_encoding", renderedPrompt.RenderedEncoding));
+
+        await using SqliteCommand countCommand = connection.CreateCommand();
+        countCommand.CommandText = "SELECT COUNT(*) FROM canonical_rendered_prompts;";
+        return Convert.ToInt64(await countCommand.ExecuteScalarAsync(cancellationToken));
     }
 
     public async Task<IReadOnlyList<CanonicalRenderedPromptRecord>> ReadRenderedPromptsAsync(
         CancellationToken cancellationToken = default)
     {
+#if DEBUG
+        ReadRenderedPromptsAsyncInvokedForTesting?.Invoke();
+#endif
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
         if (!File.Exists(databasePath))
         {
@@ -759,6 +816,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
 
             var rows = new List<CanonicalRenderedPromptRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -773,28 +835,150 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                rows.Add(new CanonicalRenderedPromptRecord(
-                    reader.GetString(0),
-                    reader.GetString(1),
-                    reader.IsDBNull(2) ? null : reader.GetString(2),
-                    reader.GetString(5),
-                    reader.IsDBNull(6) ? null : reader.GetString(6),
-                    reader.GetString(7),
-                    reader.GetString(8),
-                    ReadJson<List<CanonicalReadReceiptFile>>(reader.GetString(9)),
-                    reader.IsDBNull(10) ? null : reader.GetString(10),
-                    ParseDate(reader.GetString(11)),
-                    reader.IsDBNull(3) ? null : reader.GetString(3),
-                    reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.IsDBNull(12) ? null : reader.GetString(12),
-                    reader.IsDBNull(13) ? null : reader.GetString(13),
-                    reader.IsDBNull(14) ? null : reader.GetString(14),
-                    reader.IsDBNull(15) ? "utf-8" : reader.GetString(15)));
+                rows.Add(MapRenderedPrompt(reader));
             }
 
             return rows;
         });
     }
+
+    /// <summary>
+    /// The keyed rendered-prompt lookup (Task 3.2; revised in fix pass 1, finding 3, to also select
+    /// <c>rowid</c>). Reading one rendered prompt used to call <see cref="ReadRenderedPromptsAsync"/>
+    /// - every row in the table, in insertion order, including every other prompt's full
+    /// <c>rendered_text</c> - and find the wanted one with <c>FindIndex</c>. <c>rendered_text</c> can
+    /// be arbitrarily large, so that was a row-size problem as much as a row-count one. This SELECT
+    /// is scoped by the table's primary key instead: its first 16 columns are identical to
+    /// <see cref="ReadRenderedPromptsAsync"/>'s so <see cref="MapRenderedPrompt"/> can serve both; the
+    /// trailing <c>rowid</c> lets the caller hand it straight to
+    /// <see cref="RenderedPromptLedgerPositionSql"/> without a second, independent id lookup.
+    /// <para>
+    /// Exposed to the test assembly so the index-backing assertion can <c>EXPLAIN QUERY PLAN</c> the
+    /// real statement rather than a copy of it.
+    /// </para>
+    /// </summary>
+    internal const string ReadRenderedPromptSql = """
+        SELECT rendered_prompt_id, transition_run_id, attempt_id, session_id, turn_id,
+               prompt_identity, template_source_hash, rendered_sha256, rendered_text,
+               consumed_inputs_json, policy_id, rendered_at, persistence_id,
+               prompt_policy_profile_id, consumed_input_manifest_id, rendered_encoding, rowid
+        FROM canonical_rendered_prompts WHERE rendered_prompt_id = $rendered_prompt_id;
+        """;
+
+    /// <summary>
+    /// The counted ledger-position lookup, by the row's own <c>rowid</c> (fix pass 1, finding 3 -
+    /// previously re-looked-up the row by id via a nested subquery, billing two <c>SELECT</c>
+    /// statements for one position read). This table is append-only - rows are never deleted (see
+    /// <see cref="AppendRenderedPromptAsync"/>) - so the count of rows at-or-before a given
+    /// <c>rowid</c> is exactly the 1-based insertion-order position the old <c>FindIndex(...) + 1</c>
+    /// over the full <c>ORDER BY rowid</c> list produced, without loading any row's content to
+    /// compute it. Exposed to the test assembly for the same reason as
+    /// <see cref="ReadRenderedPromptSql"/>.
+    /// </summary>
+    internal const string RenderedPromptLedgerPositionSql = """
+        SELECT COUNT(*) FROM canonical_rendered_prompts WHERE rowid <= $rowid;
+        """;
+
+    /// <summary>
+    /// Reads a single rendered-prompt row by id, and its <c>rowid</c>, without loading every
+    /// rendered prompt in the workspace (see <see cref="ReadRenderedPromptSql"/>). Used by
+    /// <see cref="CanonicalRenderedPromptFactStore.ReadAsync"/>, which passes the returned
+    /// <c>RowId</c> straight to <see cref="ReadRenderedPromptLedgerPositionAsync"/>.
+    /// <para>
+    /// Routed through <see cref="ReadSpineRowOrEmptyAsync{TResult}"/> (fix pass 1, finding 1): a
+    /// pre-v3 workspace database has no <c>canonical_rendered_prompts</c> table at all, and this
+    /// keyed read must fail closed the same way every other spine read already does - reporting "no
+    /// row" instead of throwing - rather than invent a third behavior.
+    /// </para>
+    /// </summary>
+    public async Task<(CanonicalRenderedPromptRecord? Record, long RowId)> ReadRenderedPromptAsync(
+        string renderedPromptId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return (null, 0);
+        }
+
+        return await ReadSpineRowOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = ReadRenderedPromptSql;
+            command.Parameters.AddWithValue("$rendered_prompt_id", renderedPromptId);
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return (null, 0L);
+            }
+
+            return (MapRenderedPrompt(reader), reader.GetInt64(16));
+        }, (null, 0L));
+    }
+
+    /// <summary>
+    /// Reads the 1-based ledger position of a single rendered-prompt row by its <c>rowid</c> - the
+    /// same value the old full-table <c>FindIndex(...) + 1</c> produced - without loading every row
+    /// (see <see cref="RenderedPromptLedgerPositionSql"/>). Returns 0 if no row exists at that
+    /// <c>rowid</c>; callers only call this with the <c>RowId</c>
+    /// <see cref="ReadRenderedPromptAsync"/> already confirmed exists, so that case never surfaces as
+    /// a real position.
+    /// <para>
+    /// Routed through <see cref="ReadSpineRowOrEmptyAsync{TResult}"/> for the same fail-closed reason
+    /// as <see cref="ReadRenderedPromptAsync"/> (fix pass 1, finding 1).
+    /// </para>
+    /// </summary>
+    public async Task<long> ReadRenderedPromptLedgerPositionAsync(
+        long rowId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return 0;
+        }
+
+        return await ReadSpineRowOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = RenderedPromptLedgerPositionSql;
+            command.Parameters.AddWithValue("$rowid", rowId);
+            return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }, 0L);
+    }
+
+    private static CanonicalRenderedPromptRecord MapRenderedPrompt(SqliteDataReader reader) =>
+        new(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.GetString(5),
+            reader.IsDBNull(6) ? null : reader.GetString(6),
+            reader.GetString(7),
+            reader.GetString(8),
+            ReadJson<List<CanonicalReadReceiptFile>>(reader.GetString(9)),
+            reader.IsDBNull(10) ? null : reader.GetString(10),
+            ParseDate(reader.GetString(11)),
+            reader.IsDBNull(3) ? null : reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.IsDBNull(12) ? null : reader.GetString(12),
+            reader.IsDBNull(13) ? null : reader.GetString(13),
+            reader.IsDBNull(14) ? null : reader.GetString(14),
+            reader.IsDBNull(15) ? "utf-8" : reader.GetString(15));
 
     public async Task UpsertRunAsync(
         RunRecord run,
@@ -1144,12 +1328,54 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
 
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
         await connection.OpenAsync(cancellationToken);
+#if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
 
         return new CanonicalWorkflowPersistenceSnapshot(
             await ReadWorkflowStatesAsync(connection, cancellationToken),
             await ReadStageStatesAsync(connection, cancellationToken),
             await ReadTransitionRunsAsync(connection, cancellationToken),
             await ReadTransitionEvidenceAsync(connection, cancellationToken),
+            await ReadProductsAsync(connection, cancellationToken),
+            await ReadGateEvaluationsAsync(connection, cancellationToken),
+            await ReadEffectRecordsAsync(connection, cancellationToken),
+            await ReadWarningsAsync(connection, cancellationToken),
+            await ReadRecoveryMarkersAsync(connection, cancellationToken));
+    }
+
+    /// <summary>
+    /// Task 3.5: the routine observation path's snapshot loader. Identical to
+    /// <see cref="LoadSnapshotAsync"/> in every respect except the evidence table read, which selects
+    /// identity/location columns only (<see cref="ReadTransitionEvidenceLocationsAsync"/>) and never
+    /// <c>document_json</c>. Backs <see cref="LoopRelay.Orchestration.Persistence.CanonicalPersistenceProjection.ProjectAsync"/>,
+    /// which feeds <c>RepositoryObserver.ObserveAsync</c> - the routine observation path, which only
+    /// ever reads evidence locations, never document bodies. Any consumer that needs the document
+    /// body (recovery's keyed read, certification's session-continuity readers, the CLI's own direct
+    /// snapshot load) must keep using <see cref="LoadSnapshotAsync"/>; this method exists so the
+    /// routine path can stop paying for documents it never reads, without changing what those other
+    /// callers get.
+    /// </summary>
+    public async Task<CanonicalWorkflowObservationSnapshot> LoadObservationSnapshotAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return new CanonicalWorkflowObservationSnapshot([], [], [], [], [], [], [], [], []);
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+#if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+
+        return new CanonicalWorkflowObservationSnapshot(
+            await ReadWorkflowStatesAsync(connection, cancellationToken),
+            await ReadStageStatesAsync(connection, cancellationToken),
+            await ReadTransitionRunsAsync(connection, cancellationToken),
+            await ReadTransitionEvidenceLocationsAsync(connection, cancellationToken),
             await ReadProductsAsync(connection, cancellationToken),
             await ReadGateEvaluationsAsync(connection, cancellationToken),
             await ReadEffectRecordsAsync(connection, cancellationToken),
@@ -1170,6 +1396,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
 
             var rows = new List<RunRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -1202,6 +1433,9 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     public async Task<IReadOnlyList<WorkflowInstanceRecord>> ReadWorkflowInstancesAsync(
         CancellationToken cancellationToken = default)
     {
+#if DEBUG
+        ReadWorkflowInstancesAsyncInvokedForTesting?.Invoke();
+#endif
         string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
         if (!File.Exists(databasePath))
         {
@@ -1212,6 +1446,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
 
             var rows = new List<WorkflowInstanceRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -1220,6 +1459,67 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                        started_at, completed_at, outcome, catalog_identity
                 FROM workflow_instances ORDER BY started_at, workflow_instance_id;
                 """;
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new WorkflowInstanceRecord(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    new WorkflowIdentity(reader.GetString(2)),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    ParseDate(reader.GetString(5)),
+                    reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.GetString(8)));
+            }
+
+            return rows;
+        });
+    }
+
+    /// <summary>
+    /// Reads only the workflow instances for one run and workflow that are currently
+    /// <c>Active</c>, without hydrating every workflow instance in the workspace (Task 3.3). Used
+    /// by <see cref="LoopRelay.Orchestration.Persistence.CanonicalWorkflowInstanceRecorder.BeginInstanceAsync"/>
+    /// to decide whether a new instance may begin - it used to call
+    /// <see cref="ReadWorkflowInstancesAsync"/> and filter every instance in the workspace down to
+    /// this run and workflow in memory. The <c>'Active'</c> literal matches the one
+    /// <c>BeginInstanceAsync</c> itself writes when it starts a new instance, and the one
+    /// <see cref="InterruptLingeringActiveRunsAsync"/>'s own SQL filters on for this same
+    /// <c>workflow_instances</c> table.
+    /// </summary>
+    public async Task<IReadOnlyList<WorkflowInstanceRecord>> ReadActiveWorkflowInstancesAsync(
+        string runId,
+        string workflowIdentity,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        return await ReadSpineRowsOrEmptyAsync(async () =>
+        {
+            await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+            await connection.OpenAsync(cancellationToken);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
+
+            var rows = new List<WorkflowInstanceRecord>();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT workflow_instance_id, run_id, workflow_identity, catalog_version, status,
+                       started_at, completed_at, outcome, catalog_identity
+                FROM workflow_instances
+                WHERE run_id = $run_id AND workflow_identity = $workflow_identity AND status = 'Active';
+                """;
+            command.Parameters.AddWithValue("$run_id", runId);
+            command.Parameters.AddWithValue("$workflow_identity", workflowIdentity);
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -1252,6 +1552,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
+#if DEBUG
+    #if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+#endif
 
             // Pre-v7 databases opened read-only have no policy_id column; those attempts read
             // back with a null policy identity without migrating the database.
@@ -1504,12 +1809,19 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
         await connection.OpenAsync(cancellationToken);
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection, cancellationToken);
+        // Every open of this store asserts the workspace is canonical, but on all but the first
+        // open the row already reads 'canonical'. The WHERE guard keeps the 'imported' ->
+        // 'canonical' transition (and the first insert) while making the overwhelmingly common
+        // rewrite-with-the-same-value case dirty no page and take no write lock. Nothing consumes
+        // this statement's changed-row count - ExecuteAsync discards it - and no trigger observes
+        // workspace_metadata, so dropping to zero rows changed on the no-op path is unobservable.
         await ExecuteAsync(
             connection,
             """
             INSERT INTO workspace_metadata (key, value)
             VALUES ('persistence_state', 'canonical')
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            WHERE workspace_metadata.value <> excluded.value;
             """,
             cancellationToken);
         return connection;
@@ -1564,41 +1876,321 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         return rows;
     }
 
+    private const string TransitionRunColumns = """
+        run_id, workflow_identity, stage_identity, transition_identity, state, outcome,
+        started_at, completed_at, input_snapshot_hash, explanation, evidence_json
+        """;
+
     private static async Task<IReadOnlyList<CanonicalTransitionRunRecord>> ReadTransitionRunsAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
         var rows = new List<CanonicalTransitionRunRecord>();
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT run_id, workflow_identity, stage_identity, transition_identity, state, outcome,
-                   started_at, completed_at, input_snapshot_hash, explanation, evidence_json
+        command.CommandText = $"""
+            SELECT {TransitionRunColumns}
             FROM canonical_transition_runs ORDER BY started_at, run_id;
             """;
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            rows.Add(new CanonicalTransitionRunRecord(
-                reader.GetString(0),
-                new WorkflowIdentity(reader.GetString(1)),
-                new WorkflowStageIdentity(reader.GetString(2)),
-                new WorkflowTransitionIdentity(reader.GetString(3)),
-                ParseEnum<TransitionDurableState>(reader.GetString(4)),
-                ParseEnum<RuntimeOutcomeKind>(reader.GetString(5)),
-                ParseDate(reader.GetString(6)),
-                reader.IsDBNull(7) ? null : ParseDate(reader.GetString(7)),
-                reader.IsDBNull(8) ? null : reader.GetString(8),
-                reader.GetString(9),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(10))));
+            rows.Add(MapTransitionRun(reader));
         }
 
         return rows;
     }
 
-    private static async Task<IReadOnlyList<CanonicalTransitionEvidenceRecord>> ReadTransitionEvidenceAsync(
+    /// <summary>
+    /// Reads a single transition run row by id without loading the full nine-table
+    /// persistence snapshot. Used by <see cref="CanonicalTransitionRunStore"/> to find the
+    /// prior run record for a state update or completion without scanning the whole
+    /// <c>canonical_transition_runs</c> history.
+    /// </summary>
+    public async Task<CanonicalTransitionRunRecord?> ReadTransitionRunAsync(
+        string runId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return null;
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+#if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT {TransitionRunColumns}
+            FROM canonical_transition_runs WHERE run_id = $runId;
+            """;
+        command.Parameters.AddWithValue("$runId", runId);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? MapTransitionRun(reader) : null;
+    }
+
+    /// <summary>
+    /// Reads the <c>canonical_transition_evidence</c> rows for a single run without loading the full
+    /// nine-table persistence snapshot. Used by <see cref="CanonicalTransitionRunStore.LoadRecoveryAsync"/>
+    /// to hydrate recovery state for one transition run instead of scanning the whole evidence table
+    /// and filtering by run id in memory. Event-name filtering, ordering, and JSON deserialization stay
+    /// the caller's job — this returns the same row shape <see cref="CanonicalWorkflowPersistenceSnapshot.TransitionEvidence"/>
+    /// carries, just scoped to one run.
+    /// </summary>
+    public async Task<IReadOnlyList<CanonicalTransitionEvidenceRecord>> ReadTransitionEvidenceByRunAsync(
+        string runId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+#if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+        var rows = new List<CanonicalTransitionEvidenceRecord>();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT evidence_id, run_id, transition_identity, event_name, recorded_at,
+                   state, explanation, evidence_json, document_json
+            FROM canonical_transition_evidence WHERE run_id = $run_id ORDER BY evidence_id;
+            """;
+        command.Parameters.AddWithValue("$run_id", runId);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CanonicalTransitionEvidenceRecord(
+                reader.GetInt64(0),
+                reader.GetString(1),
+                new WorkflowTransitionIdentity(reader.GetString(2)),
+                reader.GetString(3),
+                ParseDate(reader.GetString(4)),
+                ParseEnum<TransitionDurableState>(reader.GetString(5)),
+                reader.GetString(6),
+                ReadJson<IReadOnlyList<string>>(reader.GetString(7)),
+                reader.GetString(8)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Reads the <c>canonical_effect_records</c> rows for a single run without loading the full
+    /// nine-table persistence snapshot. Used by <see cref="CanonicalTransitionRunStore.LoadRecoveryAsync"/>
+    /// alongside <see cref="ReadTransitionEvidenceByRunAsync"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<CanonicalEffectRecord>> ReadEffectRecordsByRunAsync(
+        string runId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+#if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+        var rows = new List<CanonicalEffectRecord>();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT record_id, run_id, effect_identity, category, status, recorded_at, explanation, evidence_json
+            FROM canonical_effect_records WHERE run_id = $run_id ORDER BY record_id;
+            """;
+        command.Parameters.AddWithValue("$run_id", runId);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CanonicalEffectRecord(
+                reader.GetInt64(0),
+                reader.GetString(1),
+                new EffectIdentity(reader.GetString(2)),
+                ParseEnum<EffectCategory>(reader.GetString(3)),
+                ParseEnum<EffectExecutionStatus>(reader.GetString(4)),
+                ParseDate(reader.GetString(5)),
+                reader.GetString(6),
+                ReadJson<IReadOnlyList<string>>(reader.GetString(7))));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Reads the single highest-<c>attempt_index</c> attempt for a transition run — the same row
+    /// <see cref="CanonicalTransitionRunStore.LoadRecoveryAsync"/> used to find by loading every
+    /// attempt in the workspace and filtering/ordering in memory. <c>policy_id</c> and
+    /// <c>agent_role_policy_id</c> are deliberately not selected: recovery never reads them (only
+    /// <see cref="AttemptRecord.AttemptId"/>, <see cref="AttemptRecord.WorkflowInstanceId"/> and
+    /// <see cref="AttemptRecord.RunId"/> feed the recovered causal context), and both columns are
+    /// version-gated on databases opened read-only (see <see cref="ReadAttemptsAsync"/>) — skipping
+    /// them here avoids the extra <c>pragma_table_info</c> probe per column that reading them would
+    /// require, keeping this a single statement. They read back <see langword="null"/>. Kept
+    /// <see langword="internal"/> rather than public so this incompleteness cannot surprise a
+    /// caller outside the recovery path that expects a fully populated <see cref="AttemptRecord"/>;
+    /// use <see cref="ReadAttemptsAsync"/> if you need <c>policy_id</c> / <c>agent_role_policy_id</c>.
+    /// </summary>
+    internal async Task<AttemptRecord?> ReadLatestAttemptByTransitionRunAsync(
+        string transitionRunId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return null;
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+#if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT attempt_id, transition_run_id, workflow_instance_id, run_id, attempt_index,
+                   started_at, completed_at, outcome
+            FROM attempts WHERE transition_run_id = $transition_run_id
+            ORDER BY attempt_index DESC LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$transition_run_id", transitionRunId);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new AttemptRecord(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetInt32(4),
+            ParseDate(reader.GetString(5)),
+            reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
+            reader.IsDBNull(7) ? null : reader.GetString(7));
+    }
+
+    /// <summary>
+    /// Reads a single workflow instance row by id without loading every workflow instance in the
+    /// workspace. Used by <see cref="CanonicalTransitionRunStore.LoadRecoveryAsync"/> to resolve the
+    /// instance a recovered attempt belongs to.
+    /// </summary>
+    public async Task<WorkflowInstanceRecord?> ReadWorkflowInstanceAsync(
+        string workflowInstanceId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return null;
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+#if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT workflow_instance_id, run_id, workflow_identity, catalog_version, status,
+                   started_at, completed_at, outcome, catalog_identity
+            FROM workflow_instances WHERE workflow_instance_id = $workflow_instance_id;
+            """;
+        command.Parameters.AddWithValue("$workflow_instance_id", workflowInstanceId);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new WorkflowInstanceRecord(
+            reader.GetString(0),
+            reader.GetString(1),
+            new WorkflowIdentity(reader.GetString(2)),
+            reader.GetString(3),
+            reader.GetString(4),
+            ParseDate(reader.GetString(5)),
+            reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            reader.GetString(8));
+    }
+
+    /// <summary>
+    /// Reads a single root run row by id without loading every run in the workspace. Used by
+    /// <see cref="CanonicalTransitionRunStore.LoadRecoveryAsync"/> to resolve the root run a recovered
+    /// attempt belongs to.
+    /// </summary>
+    public async Task<RunRecord?> ReadRunAsync(
+        string runId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return null;
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+#if DEBUG
+        ConnectionObserverForTesting?.Invoke(connection);
+#endif
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT run_id, workspace_id, chain_identity, invocation_mode, status,
+                   started_at, completed_at, stop_reason, explanation, catalog_identity, catalog_version
+            FROM runs WHERE run_id = $run_id;
+            """;
+        command.Parameters.AddWithValue("$run_id", runId);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new RunRecord(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetString(4),
+            ParseDate(reader.GetString(5)),
+            reader.IsDBNull(6) ? null : ParseDate(reader.GetString(6)),
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            reader.GetString(8),
+            reader.GetString(9),
+            reader.GetString(10));
+    }
+
+    private static CanonicalTransitionRunRecord MapTransitionRun(SqliteDataReader reader) =>
+        new(
+            reader.GetString(0),
+            new WorkflowIdentity(reader.GetString(1)),
+            new WorkflowStageIdentity(reader.GetString(2)),
+            new WorkflowTransitionIdentity(reader.GetString(3)),
+            ParseEnum<TransitionDurableState>(reader.GetString(4)),
+            ParseEnum<RuntimeOutcomeKind>(reader.GetString(5)),
+            ParseDate(reader.GetString(6)),
+            reader.IsDBNull(7) ? null : ParseDate(reader.GetString(7)),
+            reader.IsDBNull(8) ? null : reader.GetString(8),
+            reader.GetString(9),
+            ReadJson<IReadOnlyList<string>>(reader.GetString(10)));
+
+    private async Task<IReadOnlyList<CanonicalTransitionEvidenceRecord>> ReadTransitionEvidenceAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
+#if DEBUG
+        ReadTransitionEvidenceAsyncInvokedForTesting?.Invoke();
+#endif
         var rows = new List<CanonicalTransitionEvidenceRecord>();
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
@@ -1624,6 +2216,48 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         return rows;
     }
 
+    /// <summary>
+    /// Task 3.5: the routine observation path's evidence read, backing
+    /// <see cref="LoadObservationSnapshotAsync"/>. Identical to <see cref="ReadTransitionEvidenceAsync"/>
+    /// above except the SELECT omits <c>document_json</c> entirely and the mapped row type
+    /// (<see cref="CanonicalTransitionEvidenceLocationRecord"/>) has no field to carry it - so a
+    /// future edit cannot silently start threading the document through this path again without a
+    /// compile error.
+    /// </summary>
+    private static async Task<IReadOnlyList<CanonicalTransitionEvidenceLocationRecord>> ReadTransitionEvidenceLocationsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var rows = new List<CanonicalTransitionEvidenceLocationRecord>();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT evidence_id, run_id, transition_identity, event_name, recorded_at,
+                   state, explanation, evidence_json
+            FROM canonical_transition_evidence ORDER BY evidence_id;
+            """;
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CanonicalTransitionEvidenceLocationRecord(
+                reader.GetInt64(0),
+                reader.GetString(1),
+                new WorkflowTransitionIdentity(reader.GetString(2)),
+                reader.GetString(3),
+                ParseDate(reader.GetString(4)),
+                ParseEnum<TransitionDurableState>(reader.GetString(5)),
+                reader.GetString(6),
+                ReadJson<IReadOnlyList<string>>(reader.GetString(7))));
+        }
+
+        return rows;
+    }
+
+    private const string ProductColumns = """
+        product_identity, producer_workflow, producer_transition, intended_consumers_json,
+        repository_ownership, authority, storage_representations_json, causal_identity,
+        freshness, validation_state, lifecycle, evidence_locations_json
+        """;
+
     private static async Task<IReadOnlyList<ProductRecord>> ReadProductsAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
@@ -1638,39 +2272,103 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         var rows = new List<ProductRecord>();
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = hasSchemaVersion
-            ? """
-              SELECT product_identity, producer_workflow, producer_transition, intended_consumers_json,
-                     repository_ownership, authority, storage_representations_json, causal_identity,
-                     freshness, validation_state, lifecycle, evidence_locations_json, schema_version
+            ? $"""
+              SELECT {ProductColumns}, schema_version
               FROM canonical_product_records ORDER BY product_identity;
               """
-            : """
-              SELECT product_identity, producer_workflow, producer_transition, intended_consumers_json,
-                     repository_ownership, authority, storage_representations_json, causal_identity,
-                     freshness, validation_state, lifecycle, evidence_locations_json
+            : $"""
+              SELECT {ProductColumns}
               FROM canonical_product_records ORDER BY product_identity;
               """;
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            rows.Add(new ProductRecord(
-                new ProductIdentity(reader.GetString(0)),
-                new WorkflowIdentity(reader.GetString(1)),
-                new WorkflowTransitionIdentity(reader.GetString(2)),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(3)).Select(value => new WorkflowIdentity(value)).ToArray(),
-                reader.GetString(4),
-                reader.GetString(5),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(6)),
-                reader.GetString(7),
-                ParseEnum<ProductFreshness>(reader.GetString(8)),
-                ParseEnum<ProductValidationState>(reader.GetString(9)),
-                ParseEnum<ProductLifecycle>(reader.GetString(10)),
-                ReadJson<IReadOnlyList<string>>(reader.GetString(11)),
-                hasSchemaVersion ? reader.GetString(12) : "1"));
+            rows.Add(MapProduct(reader, hasSchemaVersion));
         }
 
         return rows;
     }
+
+    /// <summary>
+    /// Reads committed product rows filtered to a specific set of product identities, without
+    /// loading the full nine-table persistence snapshot. Used by
+    /// <c>LoopRelay.Cli.Services.Cli.CanonicalFeatureEffectExecutor</c> to re-observe just the
+    /// products a transition produces at effect-execution time, instead of loading and then
+    /// in-memory filtering every canonical product (and every other snapshot table) on each
+    /// effect execution.
+    /// </summary>
+    public async Task<IReadOnlyList<ProductRecord>> ReadProductsByIdentitiesAsync(
+        IReadOnlyCollection<ProductIdentity> identities,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(identities);
+        if (identities.Count == 0)
+        {
+            return [];
+        }
+
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return [];
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+
+        // The schema_version column arrived with schema v5; snapshots open read-only without
+        // migrating, so a pre-v5 database is read with the column defaulted rather than crashing.
+        bool hasSchemaVersion = await ColumnExistsAsync(
+            connection,
+            "canonical_product_records",
+            "schema_version",
+            cancellationToken);
+        var rows = new List<ProductRecord>();
+        await using SqliteCommand command = connection.CreateCommand();
+        string[] parameterNames = identities.Select((_, index) => $"$id{index}").ToArray();
+        string placeholders = string.Join(", ", parameterNames);
+        command.CommandText = hasSchemaVersion
+            ? $"""
+              SELECT {ProductColumns}, schema_version
+              FROM canonical_product_records WHERE product_identity IN ({placeholders})
+              ORDER BY product_identity;
+              """
+            : $"""
+              SELECT {ProductColumns}
+              FROM canonical_product_records WHERE product_identity IN ({placeholders})
+              ORDER BY product_identity;
+              """;
+        int parameterIndex = 0;
+        foreach (ProductIdentity identity in identities)
+        {
+            command.Parameters.AddWithValue(parameterNames[parameterIndex], identity.Value);
+            parameterIndex++;
+        }
+
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(MapProduct(reader, hasSchemaVersion));
+        }
+
+        return rows;
+    }
+
+    private static ProductRecord MapProduct(SqliteDataReader reader, bool hasSchemaVersion) =>
+        new(
+            new ProductIdentity(reader.GetString(0)),
+            new WorkflowIdentity(reader.GetString(1)),
+            new WorkflowTransitionIdentity(reader.GetString(2)),
+            ReadJson<IReadOnlyList<string>>(reader.GetString(3)).Select(value => new WorkflowIdentity(value)).ToArray(),
+            reader.GetString(4),
+            reader.GetString(5),
+            ReadJson<IReadOnlyList<string>>(reader.GetString(6)),
+            reader.GetString(7),
+            ParseEnum<ProductFreshness>(reader.GetString(8)),
+            ParseEnum<ProductValidationState>(reader.GetString(9)),
+            ParseEnum<ProductLifecycle>(reader.GetString(10)),
+            ReadJson<IReadOnlyList<string>>(reader.GetString(11)),
+            hasSchemaVersion ? reader.GetString(12) : "1");
 
     private static async Task<bool> ColumnExistsAsync(
         SqliteConnection connection,
@@ -1852,6 +2550,27 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             // Pre-v3 databases lack the spine tables; spine reads report empty evidence instead of failing.
             return [];
+        }
+    }
+
+    /// <summary>
+    /// Single-value sibling of <see cref="ReadSpineRowsOrEmptyAsync{TRow}"/> (fix pass 1, finding 1),
+    /// for keyed reads that return one row (or a computed scalar) rather than a list. Same
+    /// "no such table" tolerance, same reason: a pre-v3 workspace database lacking the spine tables
+    /// must report the caller's own documented empty value (<see langword="null"/> for a missing
+    /// record, <c>0</c> for a missing position) instead of throwing.
+    /// </summary>
+    private static async Task<TResult> ReadSpineRowOrEmptyAsync<TResult>(
+        Func<Task<TResult>> readRow,
+        TResult emptyValue)
+    {
+        try
+        {
+            return await readRow();
+        }
+        catch (SqliteException exception) when (exception.Message.Contains("no such table"))
+        {
+            return emptyValue;
         }
     }
 

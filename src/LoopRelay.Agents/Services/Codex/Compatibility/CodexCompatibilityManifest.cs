@@ -61,7 +61,21 @@ public sealed class CodexCompatibilityManifest
                 string.Equals(entry.ServerVersion, serverVersion, StringComparison.Ordinal)
                 && string.Equals(entry.SchemaDigest, schemaDigest, StringComparison.OrdinalIgnoreCase));
 
-    public static CodexCompatibilityManifest LoadEmbedded()
+    private static readonly Lazy<CodexCompatibilityManifest> CachedEmbedded = new(LoadEmbeddedUncached);
+
+    /// <summary>
+    /// Returns the process-wide cached parse of the embedded manifest. The manifest is immutable per
+    /// binary, so every caller shares one instance instead of re-parsing the embedded resource stream,
+    /// re-validating entries, and re-checking for duplicates on every call.
+    /// </summary>
+    public static CodexCompatibilityManifest LoadEmbedded() => CachedEmbedded.Value;
+
+    /// <summary>
+    /// Performs a fresh parse of the embedded manifest every call, bypassing the <see cref="LoadEmbedded"/>
+    /// cache. Exists so tests that assert parse/validation-failure behavior keep exercising the real
+    /// parse pipeline rather than a memoized instance.
+    /// </summary>
+    internal static CodexCompatibilityManifest LoadEmbeddedUncached()
     {
         using Stream stream = typeof(CodexCompatibilityManifest).Assembly.GetManifestResourceStream(EmbeddedResourceName)
             ?? throw new InvalidOperationException($"Embedded Codex compatibility manifest '{EmbeddedResourceName}' was not found.");

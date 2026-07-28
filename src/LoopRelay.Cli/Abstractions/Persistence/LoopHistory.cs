@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Effects;
 
 namespace LoopRelay.Cli.Abstractions.Persistence;
 
@@ -127,7 +128,8 @@ internal sealed record LoopHistoryAppendRequest
         string content,
         CanonicalCausalContext causality,
         HistoryEvidenceAttachments? evidence = null,
-        HistoryFactIdentity? supersedes = null)
+        HistoryFactIdentity? supersedes = null,
+        EffectParent? parent = null)
     {
         if (string.IsNullOrEmpty(content))
         {
@@ -140,6 +142,7 @@ internal sealed record LoopHistoryAppendRequest
         Causality = causality;
         Evidence = evidence ?? HistoryEvidenceAttachments.Empty;
         Supersedes = supersedes;
+        Parent = parent;
     }
 
     public LoopHistoryKind Kind { get; }
@@ -151,6 +154,12 @@ internal sealed record LoopHistoryAppendRequest
     public HistoryEvidenceAttachments Evidence { get; }
 
     public HistoryFactIdentity? Supersedes { get; }
+
+    /// <summary>
+    /// The effect executing this append, when one is. The history-projection child intent is ordered
+    /// after it and depends on it. <c>null</c> where the append runs outside any executor.
+    /// </summary>
+    public EffectParent? Parent { get; }
 }
 
 internal sealed record LoopHistoryRecord

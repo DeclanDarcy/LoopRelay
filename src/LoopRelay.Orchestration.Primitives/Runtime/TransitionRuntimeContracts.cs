@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using LoopRelay.Core.Models.Identity;
+using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Persistence;
 using LoopRelay.Orchestration.Resolution;
 using LoopRelay.Orchestration.Services;
@@ -123,29 +125,11 @@ public sealed record CanonicalTransitionExecutionContext : TransitionExecutionCo
         new(Workspace, Run, WorkflowInstance, transitionRun, attempt);
 }
 
-/// <summary>
-/// Explicit compatibility boundary for callers that do not yet possess the canonical spine.
-/// A translator must replace this context before canonical runtime execution begins.
-/// </summary>
-public sealed record LegacyTransitionExecutionContext : TransitionExecutionContext
-{
-    public LegacyTransitionExecutionContext(
-        WorkflowInvocation rootInvocation,
-        string compatibilitySource)
-        : base(rootInvocation)
-    {
-        ArgumentNullException.ThrowIfNull(rootInvocation);
-        if (string.IsNullOrWhiteSpace(compatibilitySource))
-        {
-            throw new ArgumentException("Compatibility source must not be empty.", nameof(compatibilitySource));
-        }
-
-        CompatibilitySource = compatibilitySource.Trim();
-    }
-
-    public string CompatibilitySource { get; }
-}
-
+/// <param name="Observation">
+/// The observation the kernel cycle already owns, handed down so attempt-start product
+/// resolution does not rebuild a global one. Null means the caller owns no cycle observation
+/// and attempt-start resolution takes its own.
+/// </param>
 public sealed record TransitionRuntimeRequest(
     WorkflowIdentity Workflow,
     WorkflowStageIdentity Stage,
@@ -153,7 +137,8 @@ public sealed record TransitionRuntimeRequest(
     TransitionExecutionContext ExecutionContext,
     AttemptAuthorization Authorization,
     IReadOnlyDictionary<string, string>? Metadata = null,
-    bool Interactive = false);
+    bool Interactive = false,
+    RepositoryObservation? Observation = null);
 
 public sealed record InputGateEvaluationContext(
     TransitionRuntimeRequest Request,
@@ -360,6 +345,66 @@ public sealed record PromptExecutionResult(
     IReadOnlyDictionary<string, string> Metadata,
     string? FailureMessage = null);
 
+/// <summary>
+/// The close/continue outcome of completion certification, as a typed fact rather than a shape
+/// recovered from prose. The certification router decides this; <c>InterpretCompletionRoute</c>
+/// persists it under <see cref="EventName"/> against its own transition run; stage routing at
+/// settlement reads it back and picks the successor stage from it.
+/// <para>
+/// It is a distinct record from the rendered transition output on purpose. Routing used to recover
+/// this boolean by string-matching a row out of the agent-authored markdown the transition emits,
+/// which made a decision the system already held typed depend on the layout of a table. The
+/// rendered output remains what a human reads; this record is what the machine routes on, and the
+/// two can no longer disagree.
+/// </para>
+/// <para>
+/// Serialization lives here, on the contract, so the writer and the reader cannot drift into
+/// different property casings - the precise failure this fact exists to remove.
+/// </para>
+/// </summary>
+public sealed record CompletionRouteDecision(bool ShouldCloseEpic)
+{
+    /// <summary>
+    /// The <c>canonical_transition_evidence.event_name</c> this fact is durable under. Scoped by
+    /// run id, and never retired, so settlement can always find the decision its own run recorded.
+    /// </summary>
+    public const string EventName = "CompletionRouteDecided";
+
+    private static readonly JsonSerializerOptions DocumentOptions = new(JsonSerializerDefaults.Web);
+
+    public string ToDocumentJson() => JsonSerializer.Serialize(this, DocumentOptions);
+
+    /// <summary>
+    /// Reads the fact back, answering null for both "no row" and "a row that does not carry this
+    /// shape". Callers are expected to fail closed on null: an absent decision is never a licence
+    /// to guess a route.
+    /// </summary>
+    public static CompletionRouteDecision? FromDocumentJson(string? documentJson)
+    {
+        if (string.IsNullOrWhiteSpace(documentJson)) return null;
+        try
+        {
+            DocumentShape? shape = JsonSerializer.Deserialize<DocumentShape>(documentJson, DocumentOptions);
+            return shape?.ShouldCloseEpic is { } shouldCloseEpic
+                ? new CompletionRouteDecision(shouldCloseEpic)
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Deserialization-only shape. <see cref="ShouldCloseEpic"/> is nullable here so that a document
+    /// missing the property - well-formed JSON that simply does not carry this shape - can be told
+    /// apart from one that sets it. The public record's non-nullable <c>bool</c> cannot make that
+    /// distinction: System.Text.Json fills an unmatched constructor parameter with <c>default(T)</c>
+    /// rather than failing, which is exactly the false "no row" positive this shape exists to catch.
+    /// </summary>
+    private sealed record DocumentShape(bool? ShouldCloseEpic);
+}
+
 public sealed record InterpretedTransitionOutput(
     OutputInterpretationStatus Status,
     IReadOnlyList<ProductRecord> CandidateProducts,
@@ -463,27 +508,6 @@ public sealed record TransitionEvidenceEvent(
     string Explanation,
     IReadOnlyList<string> Evidence);
 
-public sealed record TransitionWarningCapture(
-    CanonicalCausalContext Causality,
-    DateTimeOffset RecordedAt,
-    TransitionRuntimeRequest Request,
-    WorkflowTransitionIdentity Transition,
-    WarningCategory Category,
-    string Concern,
-    string Remediation,
-    IReadOnlyList<string> Evidence);
-
-public sealed record TransitionRecoveryMarkerCapture(
-    CanonicalCausalContext Causality,
-    DateTimeOffset RecordedAt,
-    TransitionRuntimeRequest Request,
-    WorkflowTransitionIdentity Transition,
-    TransitionDurableState DurableState,
-    RuntimeOutcomeKind Outcome,
-    RecoveryDefinition Recovery,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
-
 public sealed record TransitionGateEvaluationCapture(
     CanonicalCausalContext Causality,
     DateTimeOffset EvaluatedAt,
@@ -491,17 +515,6 @@ public sealed record TransitionGateEvaluationCapture(
     WorkflowTransitionIdentity Transition,
     GateDefinition Gate,
     GateResult Result);
-
-public sealed record TransitionEffectRecordCapture(
-    CanonicalCausalContext Causality,
-    DateTimeOffset RecordedAt,
-    TransitionRuntimeRequest Request,
-    WorkflowTransitionIdentity Transition,
-    EffectIdentity Effect,
-    EffectCategory Category,
-    EffectExecutionStatus Status,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
 
 public interface ITransitionDefinitionResolver
 {
@@ -520,9 +533,32 @@ public interface ITransitionRuntime
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Answers "which required input products are usable" from a repository observation. The two
+/// members differ only in who owns the observation, and that difference is load-bearing:
+/// <see cref="SnapshotInputFreshnessValidator"/> depends on <see cref="ResolveAsync"/> taking its
+/// own observation at promotion time, while <see cref="TransitionRuntime"/>'s attempt-start
+/// resolution reuses the observation the kernel cycle already owns. A single injected instance
+/// serves both callers, so neither semantic may be folded into the other.
+/// </summary>
 public interface IProductResolver
 {
+    /// <summary>
+    /// Resolves against an observation this resolver takes itself, at call time. Promotion-time
+    /// freshness validation requires exactly this: reusing an older observation there would
+    /// narrow the concurrent-change detection window.
+    /// </summary>
     Task<ProductResolutionResult> ResolveAsync(
+        IReadOnlyList<ProductRequirement> requirements,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resolves against an observation the caller already owns, taking none of its own. Implement
+    /// it as the same projection <see cref="ResolveAsync"/> applies to its own observation —
+    /// never as a silent fall-through to a fresh observation, which would defeat the point.
+    /// </summary>
+    Task<ProductResolutionResult> ResolveFromObservationAsync(
+        RepositoryObservation observation,
         IReadOnlyList<ProductRequirement> requirements,
         CancellationToken cancellationToken);
 }
@@ -585,8 +621,9 @@ public interface IProductValidator
 }
 
 // Identity context for effect execution: effects that append history facts (for example loop
-// history rotation) carry the causal spine ids of the transition that ran them.
-public sealed record EffectExecutionContext(CanonicalCausalContext Causality);
+// history rotation) carry the causal spine ids of the transition that ran them, and the effect
+// intent that is running, so nested planners order and depend on it without a database lookup.
+public sealed record EffectExecutionContext(CanonicalCausalContext Causality, EffectParent? Parent = null);
 
 public interface IEffectExecutor
 {
@@ -636,20 +673,6 @@ public interface ITransitionEvidenceStore
         CanonicalCausalContext causality,
         WorkflowTransitionIdentity transition,
         string failure,
-        CancellationToken cancellationToken);
-}
-
-public interface ITransitionWarningStore
-{
-    Task RecordWarningAsync(
-        TransitionWarningCapture warning,
-        CancellationToken cancellationToken);
-}
-
-public interface ITransitionRecoveryStore
-{
-    Task RecordRecoveryMarkerAsync(
-        TransitionRecoveryMarkerCapture marker,
         CancellationToken cancellationToken);
 }
 

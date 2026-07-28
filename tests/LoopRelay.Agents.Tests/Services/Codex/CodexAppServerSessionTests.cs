@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using LoopRelay.Agents.Models.Process;
 using LoopRelay.Agents.Models.Sessions;
 using LoopRelay.Agents.Models.Streams;
@@ -253,6 +255,118 @@ public sealed class CodexAppServerSessionTests
             process,
             new DeterministicAgentTokenEstimator(),
             new ThrowingPermissionGateway());
+
+        AgentTurnResult result = await session.RunTurnAsync("hello");
+        await process.ApprovalDeclined.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.Contains(process.Writes, write => write.Contains("\"decline\""));
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
+    // PERF-27c — the read pump already parses each approval frame once (CodexAppServerMessage.Parse), and
+    // EnrichFileChangeApproval only ever sees that parsed CodexAppServerMessage (it has no rawLine parameter
+    // to fall back on), so a re-parse of the raw frame text is structurally impossible here, not just tested.
+    // These two tests pin today's exact enrichment output (full-payload round-trip parity), so a later change
+    // to how the parsed representation is threaded through can be proven behavior-identical.
+    // ---------------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task FileChangeApprovalEnrichmentPayloadCarriesTheCorrelatedTargetPathAndIsUnchangedOtherwise()
+    {
+        // Round-trip parity: the enriched frame handed to the permission adapter must be identical to the
+        // raw frame in every respect except the correlated targetPath — asserted by comparing the FULL
+        // serialized payload structurally (JsonNode.DeepEquals), not just a handful of selected fields.
+        var process = new ScriptedAppServerProcess
+        {
+            EmitApprovalRequest = true,
+            EmitFileChangeApproval = true,
+            FileChangePathOnlyInItemStarted = true,
+            ApprovalTargetPath = ".agents/details.md",
+        };
+        var gateway = new RecordingPermissionGateway();
+        await using var session = new CodexAppServerSession(
+            Spec(requiresApproval: true), process, new DeterministicAgentTokenEstimator(), gateway);
+
+        AgentTurnResult result = await session.RunTurnAsync("hello");
+        await process.ApprovalAccepted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AgentTurnState.Completed, result.State);
+        Assert.NotNull(gateway.LastPayload);
+        JsonNode? actual = JsonNode.Parse(gateway.LastPayload!);
+        JsonNode? expected = JsonNode.Parse("""
+            {
+              "id": "appr-1",
+              "method": "item/fileChange/requestApproval",
+              "params": {
+                "itemId": "i1",
+                "operation": "write",
+                "targetPath": ".agents/details.md",
+                "grantRoot": null
+              }
+            }
+            """);
+        Assert.True(
+            JsonNode.DeepEquals(actual, expected),
+            $"Expected the full enriched payload to match exactly.{Environment.NewLine}" +
+            $"Expected: {expected!.ToJsonString()}{Environment.NewLine}" +
+            $"Actual:   {actual!.ToJsonString()}");
+    }
+
+    [Fact]
+    public async Task FileChangeApprovalEnrichmentCarriesMultipleCorrelatedTargetPathsWhenSeveralFilesChanged()
+    {
+        // Round-trip parity for the multi-target branch (targetPaths array rather than a single targetPath),
+        // again asserted against the FULL serialized payload rather than one plucked-out field.
+        var process = new ScriptedAppServerProcess
+        {
+            EmitApprovalRequest = true,
+            EmitFileChangeApproval = true,
+            FileChangePathOnlyInItemStarted = true,
+            ApprovalTargetPaths = [".agents/plan.md", ".agents/milestones/m1.md"],
+        };
+        var gateway = new RecordingPermissionGateway();
+        await using var session = new CodexAppServerSession(
+            Spec(requiresApproval: true), process, new DeterministicAgentTokenEstimator(), gateway);
+
+        await session.RunTurnAsync("hello");
+        await process.ApprovalAccepted.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.NotNull(gateway.LastPayload);
+        JsonNode? actual = JsonNode.Parse(gateway.LastPayload!);
+        JsonNode? expected = JsonNode.Parse("""
+            {
+              "id": "appr-1",
+              "method": "item/fileChange/requestApproval",
+              "params": {
+                "itemId": "i1",
+                "operation": "write",
+                "targetPath": null,
+                "grantRoot": null,
+                "targetPaths": [".agents/plan.md", ".agents/milestones/m1.md"]
+              }
+            }
+            """);
+        Assert.True(
+            JsonNode.DeepEquals(actual, expected),
+            $"Expected the full enriched payload to match exactly.{Environment.NewLine}" +
+            $"Expected: {expected!.ToJsonString()}{Environment.NewLine}" +
+            $"Actual:   {actual!.ToJsonString()}");
+    }
+
+    [Fact]
+    public async Task UnknownApprovalMethodIsDeclinedByTheRealPermissionAdapterAtTheSameStageAsAnyOtherEvaluationFailure()
+    {
+        // Deny-on-exception, exercised against the REAL CodexPermissionAdapter (not a throwing fake): an
+        // approval method the adapter doesn't recognize must still be declined via the same
+        // EnqueueApprovalResponse catch that handles every other evaluation failure — same outcome, same stage.
+        var process = new ScriptedAppServerProcess
+        {
+            EmitApprovalRequest = true,
+            ApprovalMethodOverride = "item/bogus/requestApproval",
+        };
+        await using var session = new CodexAppServerSession(
+            Spec(requiresApproval: true), process, new DeterministicAgentTokenEstimator(), PermissionGateway());
 
         AgentTurnResult result = await session.RunTurnAsync("hello");
         await process.ApprovalDeclined.WaitAsync(TimeSpan.FromSeconds(5));
@@ -517,6 +631,19 @@ public sealed class CodexAppServerSessionTests
     {
         public byte[] Evaluate(ReadOnlySpan<byte> payload, string repoIdentity, string workingDirectory) =>
             throw new InvalidOperationException("permission engine failed");
+    }
+
+    // PERF-27c: captures the exact bytes CodexAppServerSession hands to the permission gateway, so a test
+    // can assert on the enriched frame's fields without reaching into CodexAppServerSession's private state.
+    private sealed class RecordingPermissionGateway : IPermissionGateway
+    {
+        public string? LastPayload { get; private set; }
+
+        public byte[] Evaluate(ReadOnlySpan<byte> payload, string repoIdentity, string workingDirectory)
+        {
+            LastPayload = Encoding.UTF8.GetString(payload);
+            return Encoding.UTF8.GetBytes("{\"id\":\"appr-1\",\"result\":{\"decision\":\"accept\"}}\n");
+        }
     }
 
     private static AgentSessionSpec ResumeSpec(string threadId) => new(

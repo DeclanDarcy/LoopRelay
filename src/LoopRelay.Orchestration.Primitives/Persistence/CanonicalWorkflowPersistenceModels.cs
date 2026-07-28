@@ -43,6 +43,24 @@ public sealed record CanonicalTransitionEvidenceRecord(
     IReadOnlyList<string> Evidence,
     string DocumentJson);
 
+// Task 3.5: the routine observation snapshot's evidence shape. Identical to
+// CanonicalTransitionEvidenceRecord above except it omits DocumentJson entirely - the routine
+// observation path (RepositoryObserver.ObserveAsync, via CanonicalPersistenceReadModel.ProjectAsync)
+// only ever reads evidence locations (Evidence) and EventName, never the document body. Consumers
+// that need the document - CanonicalTransitionRunStore.LoadRecoveryAsync (keyed recovery, Task 3.1)
+// and LoopRelay.Certification's session-continuity readers (ExecuteWorkflowRunner,
+// PlanWorkflowRunner) - keep using CanonicalTransitionEvidenceRecord /
+// CanonicalWorkflowPersistenceSnapshot, which this type does not touch or replace.
+public sealed record CanonicalTransitionEvidenceLocationRecord(
+    long EvidenceId,
+    string RunId,
+    WorkflowTransitionIdentity Transition,
+    string EventName,
+    DateTimeOffset RecordedAt,
+    TransitionDurableState State,
+    string Explanation,
+    IReadOnlyList<string> Evidence);
+
 public sealed record CanonicalGateEvaluationRecord(
     long EvaluationId,
     WorkflowIdentity Workflow,
@@ -292,6 +310,25 @@ public sealed record CanonicalWorkflowPersistenceSnapshot(
     IReadOnlyList<CanonicalStageStateRecord> StageStates,
     IReadOnlyList<CanonicalTransitionRunRecord> TransitionRuns,
     IReadOnlyList<CanonicalTransitionEvidenceRecord> TransitionEvidence,
+    IReadOnlyList<ProductRecord> Products,
+    IReadOnlyList<CanonicalGateEvaluationRecord> GateEvaluations,
+    IReadOnlyList<CanonicalEffectRecord> EffectRecords,
+    IReadOnlyList<CanonicalWarningRecord> Warnings,
+    IReadOnlyList<CanonicalRecoveryMarkerRecord> RecoveryMarkers);
+
+// Task 3.5: the routine observation path's own snapshot shape. Identical to
+// CanonicalWorkflowPersistenceSnapshot above in every field except TransitionEvidence, which carries
+// CanonicalTransitionEvidenceLocationRecord (no document body) instead of
+// CanonicalTransitionEvidenceRecord. Produced only by
+// CanonicalWorkflowPersistenceStore.LoadObservationSnapshotAsync and consumed only by
+// CanonicalPersistenceReadModel/RepositoryObserver; CanonicalWorkflowPersistenceSnapshot and
+// LoadSnapshotAsync are untouched and remain the type/method every other caller (recovery,
+// certification, the CLI status composer) keeps using.
+public sealed record CanonicalWorkflowObservationSnapshot(
+    IReadOnlyList<CanonicalWorkflowStateRecord> WorkflowStates,
+    IReadOnlyList<CanonicalStageStateRecord> StageStates,
+    IReadOnlyList<CanonicalTransitionRunRecord> TransitionRuns,
+    IReadOnlyList<CanonicalTransitionEvidenceLocationRecord> TransitionEvidence,
     IReadOnlyList<ProductRecord> Products,
     IReadOnlyList<CanonicalGateEvaluationRecord> GateEvaluations,
     IReadOnlyList<CanonicalEffectRecord> EffectRecords,

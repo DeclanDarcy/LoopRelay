@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using LoopRelay.Cli.Models;
 using LoopRelay.Cli.Services.Telemetry;
 using LoopRelay.Cli.Tests.Services.Agents;
@@ -110,11 +109,15 @@ public class CodexUsageProbeTests
         var probe = new CodexUsageProbe(
             runner, new FakeExecutableResolver(), Repo(), scrapeTimeout: TimeSpan.FromMilliseconds(100));
 
-        var sw = Stopwatch.StartNew();
-        CodexUsageStatus? status = await probe.QueryAsync(CancellationToken.None);
-        sw.Stop();
+        // The fake never emits the id:2 response and parks forever, so the probe's own scrape timeout is
+        // the only thing that can end this read: returning at all IS the timeout evidence. WaitAsync is a
+        // deadlock guard set far above any plausible scheduling delay — deliberately not a promptness
+        // threshold, which is an environment property and was what made the old 5 s assertion load-sensitive.
+        CodexUsageStatus? status = await probe.QueryAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(60));
 
         Assert.Null(status);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), $"read should have timed out quickly, took {sw.Elapsed}");
+        Assert.Equal(1, process.LinesEmitted);  // it timed out parked in the read, not before the handshake
+        Assert.True(process.Disposed);          // and the timed-out session was torn down
     }
 }

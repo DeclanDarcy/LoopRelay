@@ -20,6 +20,9 @@ public sealed class FailureOracleMatrixTests
             Assert.Equal(CertificationClassification.Passed, result.Classification);
             Assert.Equal(expectedTransitions, result.TransitionClasses.Count);
             Assert.All(result.TransitionClasses, item => Assert.True(item.Passed, item.Transition));
+            // FailureCases carries only reviewed exclusions, so Assert.All would pass vacuously on
+            // an empty list; the exclusion review is the one per-case verdict that can fail.
+            Assert.NotEmpty(result.FailureCases);
             Assert.All(result.FailureCases, item => Assert.True(item.Passed, item.Identity));
             Assert.All(result.OracleControls, item =>
             {

@@ -4,7 +4,7 @@ namespace LoopRelay.Orchestration.Effects;
 
 public sealed record EffectWorkerResult(
     int Discovered,
-    int Leased,
+    int Dispatched,
     int Succeeded,
     int Pending,
     int RecoveryRequired,
@@ -19,7 +19,6 @@ public sealed class EffectWorker(
     IEffectWorkStore _store,
     IEffectExecutorRegistry _executors,
     IEffectReconciler _reconciler,
-    TimeSpan _leaseDuration,
     int _scanLimit = 128,
     ICanonicalRecoveryCaseRecorder? _recoveryCases = null)
 {
@@ -29,15 +28,17 @@ public sealed class EffectWorker(
         IReadOnlySet<EffectIntentIdentity>? only = null)
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        IReadOnlyList<EffectWorkItem> discovered = await _store.ScanUnsettledAsync(_scanLimit, now, cancellationToken);
+        IReadOnlyList<EffectScanRow> discovered = await _store.ScanUnsettledAsync(_scanLimit, now, cancellationToken, only);
         var settled = new HashSet<EffectIntentIdentity>();
         var unsettled = new List<EffectIntentIdentity>();
-        int leased = 0;
+        int dispatched = 0;
         int succeeded = 0;
         int pending = 0;
         int recovery = 0;
 
-        foreach (EffectWorkItem item in discovered
+        // The store applies `only` as a SQL predicate; this repeats it because IEffectWorkStore's
+        // filter parameter is optional and an implementation is free to ignore it.
+        foreach (EffectScanRow item in discovered
             .Where(item => only is null || only.Contains(item.Intent.Identity))
             .OrderBy(value => value.Intent.Order)
             .ThenBy(value => value.Intent.PlannedAt))
@@ -56,57 +57,37 @@ public sealed class EffectWorker(
                 continue;
             }
 
-            EffectLease? lease = await _store.TryLeaseAsync(
-                item.Intent.Identity,
-                item.RowVersion,
-                _workerIdentity,
-                now,
-                _leaseDuration,
-                cancellationToken);
-            if (lease is null)
+            if (item.State is EffectLifecycle.Unknown or EffectLifecycle.Reconciling)
             {
-                continue;
-            }
-
-            leased++;
-            EffectLifecycle previous = lease.PreviousState;
-            EffectWorkItem current = (await _store.ReadAsync(item.Intent.Identity, cancellationToken))!;
-            if (previous is EffectLifecycle.Started or EffectLifecycle.Unknown or EffectLifecycle.Reconciling)
-            {
-                current = await ReconcileAsync(current, cancellationToken);
-                if (current.State == EffectLifecycle.Succeeded)
+                EffectWorkItem reconciled = await ReconcileAsync(item.Intent, cancellationToken);
+                if (reconciled.State == EffectLifecycle.Succeeded)
                 {
-                    settled.Add(current.Intent.Identity);
+                    settled.Add(reconciled.Intent.Identity);
                     succeeded++;
                 }
                 else
                 {
-                    unsettled.Add(current.Intent.Identity);
+                    unsettled.Add(reconciled.Intent.Identity);
                     recovery++;
                     await RecordRecoveryAsync(
-                        current.Intent,
-                        ["effect-reconciliation-unsettled", $"state:{current.State}"],
-                        evidenceComplete: current.State != EffectLifecycle.Unknown);
+                        reconciled.Intent,
+                        ["effect-reconciliation-unsettled", $"state:{reconciled.State}"],
+                        evidenceComplete: reconciled.State != EffectLifecycle.Unknown);
                 }
                 continue;
             }
 
-            if (previous is not (EffectLifecycle.Planned or EffectLifecycle.Pending or EffectLifecycle.RetryAuthorized or EffectLifecycle.Leased))
+            if (item.State is not (EffectLifecycle.Planned or EffectLifecycle.Pending or EffectLifecycle.RetryAuthorized))
             {
-                unsettled.Add(current.Intent.Identity);
+                unsettled.Add(item.Intent.Identity);
                 recovery++;
                 continue;
             }
 
-            current = await _store.AppendLifecycleAsync(
-                current.Intent.Identity,
-                current.RowVersion,
-                EffectLifecycle.Started,
-                _workerIdentity,
-                "Outward effect execution started.",
-                [],
-                DateTimeOffset.UtcNow,
-                CancellationToken.None);
+            // No claim and no start marker. Every executor is idempotent, so a crash between here
+            // and the terminal write leaves a row that is simply re-executed on the next pass.
+            dispatched++;
+            EffectWorkItem current = new(item.Intent, item.State, null, []);
             try
             {
                 IEffectExecutor executor = _executors.Resolve(current.Intent.Executor, current.Intent.ExecutorVersion);
@@ -115,7 +96,6 @@ public sealed class EffectWorker(
                 {
                     current = await _store.RecordReceiptAsync(
                         current.Intent.Identity,
-                        current.RowVersion,
                         Receipt(current.Intent, observation),
                         _workerIdentity,
                         CancellationToken.None);
@@ -129,7 +109,6 @@ public sealed class EffectWorker(
                         : observation.State;
                     current = await _store.AppendLifecycleAsync(
                         current.Intent.Identity,
-                        current.RowVersion,
                         state,
                         _workerIdentity,
                         observation.Explanation,
@@ -148,7 +127,6 @@ public sealed class EffectWorker(
             {
                 await _store.AppendLifecycleAsync(
                     current.Intent.Identity,
-                    current.RowVersion,
                     EffectLifecycle.Unknown,
                     _workerIdentity,
                     "Effect execution ended without a trustworthy observation.",
@@ -164,7 +142,7 @@ public sealed class EffectWorker(
             }
         }
 
-        return new EffectWorkerResult(discovered.Count, leased, succeeded, pending, recovery, unsettled);
+        return new EffectWorkerResult(discovered.Count, dispatched, succeeded, pending, recovery, unsettled);
     }
 
     private async Task RecordRecoveryAsync(
@@ -191,11 +169,12 @@ public sealed class EffectWorker(
             CancellationToken.None);
     }
 
-    private async Task<EffectWorkItem> ReconcileAsync(EffectWorkItem current, CancellationToken cancellationToken)
+    private async Task<EffectWorkItem> ReconcileAsync(
+        EffectIntent intent,
+        CancellationToken cancellationToken)
     {
-        current = await _store.AppendLifecycleAsync(
-            current.Intent.Identity,
-            current.RowVersion,
+        EffectWorkItem current = await _store.AppendLifecycleAsync(
+            intent.Identity,
             EffectLifecycle.Reconciling,
             _workerIdentity,
             "Independent postcondition reconciliation started.",
@@ -203,13 +182,6 @@ public sealed class EffectWorker(
             DateTimeOffset.UtcNow,
             CancellationToken.None);
         EffectReconciliationObservation observation = await _reconciler.ReconcileAsync(current.Intent, cancellationToken);
-        await _store.RecordReconciliationAsync(
-            current.Intent.Identity,
-            current.RowVersion,
-            observation,
-            _workerIdentity,
-            DateTimeOffset.UtcNow,
-            CancellationToken.None);
         if (observation.Verdict == EffectReconciliationVerdict.Succeeded)
         {
             var execution = new EffectExecutionObservation(
@@ -222,7 +194,6 @@ public sealed class EffectWorker(
                 observation.ExternalCorrelation);
             return await _store.RecordReceiptAsync(
                 current.Intent.Identity,
-                current.RowVersion,
                 Receipt(current.Intent, execution),
                 _workerIdentity,
                 CancellationToken.None);
@@ -236,7 +207,6 @@ public sealed class EffectWorker(
         };
         return await _store.AppendLifecycleAsync(
             current.Intent.Identity,
-            current.RowVersion,
             state,
             _workerIdentity,
             observation.Explanation,
@@ -252,27 +222,16 @@ public sealed class EffectWorker(
     {
         foreach (EffectIntentIdentity dependency in intent.Dependencies)
         {
-            EffectWorkItem? item = await _store.ReadAsync(dependency, cancellationToken);
-            if (item?.State != EffectLifecycle.Succeeded || item.Receipt is null || !item.Receipt.PostconditionSatisfied)
-            {
-                return false;
-            }
-
             // A feature executor may append ordered child effects while this worker is processing
             // an earlier scan snapshot. Those children are a durable barrier even though the
             // feature's own receipt is already present; otherwise a pre-planned publication effect
             // can run before the newly planned filesystem mutation it is meant to publish.
-            IReadOnlyList<EffectWorkItem> plan = await _store.ReadPlanAsync(
-                item.Intent.Causality.TransitionRun, cancellationToken);
-            bool childPending = plan.Any(candidate =>
-                candidate.Intent.Identity != intent.Identity &&
-                candidate.Intent.Order <= intent.Order &&
-                candidate.Intent.PlannedAt > intent.PlannedAt &&
-                candidate.Intent.Dependencies.Contains(dependency) &&
-                (candidate.State != EffectLifecycle.Succeeded ||
-                 candidate.Receipt is null ||
-                 !candidate.Receipt.PostconditionSatisfied));
-            if (childPending) return false;
+            //
+            // Each dependency therefore gets its own fresh durable observation. `settledThisRun` is
+            // deliberately not consulted: this run's memory of a settled dependency says nothing
+            // about a child planned since, and the same reason forbids carrying one dependency's
+            // answer over to the next.
+            if (!await _store.DependencySatisfiedAsync(intent, dependency, cancellationToken)) return false;
         }
         return true;
     }

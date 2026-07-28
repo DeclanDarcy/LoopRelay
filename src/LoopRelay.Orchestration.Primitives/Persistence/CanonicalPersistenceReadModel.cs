@@ -16,7 +16,7 @@ public sealed record CanonicalUnsettledEffectProjection(
 
 public sealed record CanonicalPersistenceReadModel(
     string ProjectionIdentity,
-    CanonicalWorkflowPersistenceSnapshot Workflow,
+    CanonicalWorkflowObservationSnapshot Workflow,
     IReadOnlyList<CanonicalChainBoundaryEventRecord> ChainBoundaries,
     IReadOnlyList<string> CertifiedTerminalAttempts,
     IReadOnlyList<string> UnsettledRequiredEffectAttempts,
@@ -24,7 +24,7 @@ public sealed record CanonicalPersistenceReadModel(
 {
     public static CanonicalPersistenceReadModel Empty { get; } = new(
         "canonical-persistence-read-model.v1",
-        new CanonicalWorkflowPersistenceSnapshot([], [], [], [], [], [], [], [], []),
+        new CanonicalWorkflowObservationSnapshot([], [], [], [], [], [], [], [], []),
         [], [], [], []);
 }
 
@@ -63,7 +63,7 @@ public sealed class CanonicalPersistenceProjection : ICanonicalPersistenceProjec
             .ToArray();
         return new CanonicalPersistenceReadModel(
             "canonical-persistence-read-model.v1",
-            await store.LoadSnapshotAsync(cancellationToken),
+            await store.LoadObservationSnapshotAsync(cancellationToken),
             await store.ReadChainBoundaryEventsAsync(cancellationToken),
             await store.ReadCertifiedTerminalAttemptIdentitiesAsync(cancellationToken),
             unsettledRequiredAttempts,
@@ -92,10 +92,10 @@ public sealed class CanonicalPersistenceProjection : ICanonicalPersistenceProjec
                 if (Convert.ToInt64(await exists.ExecuteScalarAsync(cancellationToken)) != 1) return [];
             }
             await using SqliteCommand command = connection.CreateCommand();
+            // 'Started' and 'Leased' are retired tokens kept only so pre-cut rows are still found.
             command.CommandText = """
                 SELECT definition_json,status FROM canonical_effect_intents
-                WHERE terminal_receipt_id IS NULL
-                  AND status IN ('Planned','Pending','Started','Unknown','Reconciling','RetryAuthorized','Leased')
+                WHERE status IN ('Planned','Pending','Started','Unknown','Reconciling','RetryAuthorized','Leased')
                 ORDER BY effect_order,planned_at,effect_intent_id LIMIT 1024;
                 """;
             var result = new List<(EffectIntent, string)>();

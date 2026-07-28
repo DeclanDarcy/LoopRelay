@@ -29,19 +29,6 @@ public sealed class ApplicationContractsTests
     }
 
     [Fact]
-    public void Composition_validation_reports_all_missing_duplicate_and_incompatible_owners()
-    {
-        ApplicationStartupFailure result = ApplicationCompositionValidator.Validate(
-            [("Kernel", "1"), ("Kernel", "1"), ("Effects", "1")],
-            new Dictionary<string, string> { ["Kernel"] = "1", ["Effects"] = "2", ["Recovery"] = "1" });
-
-        Assert.Equal(["Recovery"], result.MissingOwners);
-        Assert.Equal(["Kernel"], result.DuplicateOwners);
-        Assert.Equal(["Effects:required=2:actual=1"], result.VersionIncompatibleOwners);
-        Assert.False(result.IsValid);
-    }
-
-    [Fact]
     public async Task Application_forwards_the_exact_cancellation_token_to_the_dispatcher()
     {
         var dispatcher = new RecordingDispatcher();

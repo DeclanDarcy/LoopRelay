@@ -352,17 +352,47 @@ public sealed record CompletionClosureCertificationResult(
     string? AttemptRecord = null,
     CertificationDiagnosisOutcome? Diagnosis = null);
 
+/// <summary>
+/// A capability that is deliberately not supported, carried in release evidence so the exclusion
+/// stays visible. Every case is by definition uncovered; the only verdict is whether the exclusion
+/// review behind it is complete.
+/// </summary>
 public sealed record FailureCoverageCaseResult(
     string Identity,
     string Domain,
     string ExpectedDisposition,
     EvidenceLevel EvidenceLevel,
-    bool Supported,
     bool ReviewedExclusion,
     string? Owner,
     string? RecertificationCondition,
     bool Passed,
-    IReadOnlyList<string> Evidence);
+    IReadOnlyList<string> Evidence)
+{
+    /// <summary>
+    /// The only way to build a case. <see cref="Passed"/> is derived here and nowhere else, so no
+    /// caller can hand itself a verdict it did not earn: a row authored without a review flag, an
+    /// owner, or a recertification condition fails, and fails the gate that aggregates it.
+    /// </summary>
+    public static FailureCoverageCaseResult ForReviewedExclusion(
+        string identity,
+        string domain,
+        string expectedDisposition,
+        bool reviewedExclusion,
+        string? owner,
+        string? recertificationCondition,
+        IReadOnlyList<string> evidence) =>
+        new(identity,
+            domain,
+            expectedDisposition,
+            EvidenceLevel.Uncovered,
+            reviewedExclusion,
+            owner,
+            recertificationCondition,
+            reviewedExclusion &&
+                !string.IsNullOrWhiteSpace(owner) &&
+                !string.IsNullOrWhiteSpace(recertificationCondition),
+            evidence);
+}
 
 public sealed record TransitionRecoveryCoverageResult(
     string Workflow,
@@ -385,23 +415,12 @@ public sealed record OracleControlCaseResult(
     bool Passed,
     IReadOnlyList<string> Evidence);
 
-public sealed record CertificationGovernanceResult(
-    int MinimumRepeatedRuns,
-    double FlakeThreshold,
-    string RerunRule,
-    bool QuarantinesRequireOwner,
-    bool QuarantinesRequireExpiryOrRecertification,
-    IReadOnlyDictionary<string, string> EvidenceRetention,
-    bool Passed);
-
 public sealed record FailureOracleMatrixCertificationResult(
     string SchemaVersion,
     CertificationClassification Classification,
     IReadOnlyList<FailureCoverageCaseResult> FailureCases,
     IReadOnlyList<TransitionRecoveryCoverageResult> TransitionClasses,
     IReadOnlyList<OracleControlCaseResult> OracleControls,
-    CertificationGovernanceResult Governance,
-    bool EveryFailureClassCovered,
     bool EveryPromptEffectClassCovered,
     bool NoDuplicateSemanticProgress,
     bool UnsupportedCapabilitiesReleaseVisible,
@@ -604,8 +623,6 @@ public sealed record ReleaseGateResult(
     string PlatformClaim,
     bool CrossPlatformContractAgreement,
     bool ClassificationRoutingDistinct,
-    bool DriftInvalidationEnabled,
-    bool EvidenceRetirementReturnsToUncovered,
     bool NoCriticalDimensionAtZero,
     bool BudgetsPassed,
     IReadOnlyList<FailureCoverageCaseResult> FutureTopologyObligations,

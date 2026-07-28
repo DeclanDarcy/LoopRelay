@@ -153,10 +153,7 @@ public static class CliSettingsLoader
         new(
             new ConfiguredBrainFacts(
                 ParseOptionalModel("runtime.brain.model", document?.Brain?.Model),
-                ParseOptionalEffort("runtime.brain.effort", document?.Brain?.Effort)),
-            NormalizeDistinctStrings(
-                "runtime.providers.supportedCodexProfiles",
-                document?.Providers?.SupportedCodexProfiles));
+                ParseOptionalEffort("runtime.brain.effort", document?.Brain?.Effort)));
 
     private static ConfiguredRuntimeFacts TranslateLegacyRuntimeFacts(
         SettingsDocument document,
@@ -169,10 +166,7 @@ public static class CliSettingsLoader
         return new ConfiguredRuntimeFacts(
             new ConfiguredBrainFacts(
                 ParseOptionalModel("brainModel", document.BrainModel),
-                ParseOptionalEffort("brainEffort", document.BrainEffort)),
-            NormalizeDistinctStrings(
-                "continuity.supportedCodexProfiles",
-                document.Continuity?.SupportedCodexProfiles));
+                ParseOptionalEffort("brainEffort", document.BrainEffort)));
     }
 
     private static CliPolicyDocument TranslatePolicyInputs(
@@ -237,29 +231,6 @@ public static class CliSettingsLoader
     private static string? NormalizeOptional(string? value) =>
         value is null ? null : RequiredScalar("policy.recovery.strategy", value);
 
-    private static IReadOnlyList<string> NormalizeDistinctStrings(string path, string[]? values)
-    {
-        if (values is null)
-        {
-            return [];
-        }
-
-        var distinct = new HashSet<string>(StringComparer.Ordinal);
-        var normalized = new List<string>(values.Length);
-        for (int index = 0; index < values.Length; index++)
-        {
-            string value = RequiredScalar($"{path}[{index}]", values[index]);
-            if (!distinct.Add(value))
-            {
-                throw new ArgumentException($"{path} contains duplicate value '{value}'.", path);
-            }
-
-            normalized.Add(value);
-        }
-
-        return normalized;
-    }
-
     private static string RequiredScalar(string path, string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -299,8 +270,6 @@ public static class CliSettingsLoader
     private sealed class RuntimeDocument
     {
         public RuntimeBrainDocument? Brain { get; set; }
-
-        public RuntimeProvidersDocument? Providers { get; set; }
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -309,12 +278,6 @@ public static class CliSettingsLoader
         public string? Model { get; set; }
 
         public string? Effort { get; set; }
-    }
-
-    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-    private sealed class RuntimeProvidersDocument
-    {
-        public string[]? SupportedCodexProfiles { get; set; }
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -359,8 +322,6 @@ public static class CliSettingsLoader
         public bool? DecisionResume { get; set; }
 
         public string? RecoveryPolicy { get; set; }
-
-        public string[]? SupportedCodexProfiles { get; set; }
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

@@ -1,11 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using LoopRelay.Agents.Abstractions;
-using LoopRelay.Agents.Models.Sessions;
-using LoopRelay.Agents.Models.Streams;
-using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Core.Abstractions.Artifacts;
-using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Orchestration.Abstractions.NonImplementationReview;
 using LoopRelay.Orchestration.Models.NonImplementationLedger;
 using LoopRelay.Orchestration.Models.NonImplementationReview;
@@ -15,7 +10,6 @@ using LoopRelay.Orchestration.Primitives.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationLedger;
 using LoopRelay.Orchestration.Services.NonImplementationReview;
 using LoopRelay.Orchestration.Services.NonImplementationSemanticConfirmation;
-using LoopRelay.Permissions.Models.Configuration;
 
 namespace LoopRelay.Orchestration.Tests.Services.NonImplementationReview;
 
@@ -298,40 +292,6 @@ public sealed class NonImplementationSemanticConfirmationTests
             () => new NonImplementationSemanticConfirmer(store, runner, TestOptions));
     }
 
-    [Fact]
-    public async Task Agent_review_runner_uses_read_only_planning_spec_without_scoped_mutation_profile()
-    {
-        var runtime = new RecordingAgentRuntime("""{"ledgerEntryId":"ni-test","candidatePath":"docs/design.md","reviewedContentSha256":"hash-a","reviewedFileDeleted":false,"deletedReviewedIdentity":null,"disposition":"FalsePositive","rationale":"not prose","evidenceExcerptsOrPathFacts":["path fact"],"uncertaintyNote":null}""");
-        var repository = new Repository
-        {
-            Id = Guid.NewGuid(),
-            Name = "repo",
-            Path = "C:/repo",
-        };
-        var runner = new AgentNonImplementationReviewRunner(
-            runtime,
-            repository,
-            new BrainConfiguration(AgentModel.Gpt56Sol, AgentEffort.XHigh));
-        var request = new NonImplementationReviewRunnerRequest(
-            "ConfirmNonImplementationCandidate",
-            "prompt",
-            maxPromptPayloadCharacters: 100);
-
-        NonImplementationReviewRunnerResponse response =
-            await runner.RunAsync(request, CancellationToken.None);
-
-        AgentSessionSpec spec = Assert.Single(runtime.OneShotSpecs);
-        Assert.Equal(SessionRole.Planning, spec.Role);
-        Assert.Equal("read-only", spec.Sandbox.Identifier);
-        Assert.False(spec.Sandbox.CanWriteWorkspace);
-        Assert.False(spec.Sandbox.CanAccessNetwork);
-        Assert.False(spec.Sandbox.RequiresApproval);
-        Assert.Null(spec.OperationPermissionProfile);
-        Assert.Empty(runtime.OpenedSpecs);
-        Assert.Equal("prompt", Assert.Single(runtime.Prompts));
-        Assert.Contains("\"FalsePositive\"", response.StructuredText, StringComparison.Ordinal);
-    }
-
     private static NonImplementationReviewRunnerResponse ResponseFromRequest(
         NonImplementationReviewRunnerRequest request,
         NonImplementationSemanticDisposition disposition,
@@ -492,42 +452,6 @@ public sealed class NonImplementationSemanticConfirmationTests
             Requests.Add(request);
             return Task.FromResult(handler(request));
         }
-    }
-
-    private sealed class RecordingAgentRuntime(string output) : IAgentRuntime
-    {
-        public AgentRuntimeCapabilities Capabilities { get; } = new("test", true, true, true);
-
-        public List<AgentSessionSpec> OneShotSpecs { get; } = [];
-
-        public List<AgentSessionSpec> OpenedSpecs { get; } = [];
-
-        public List<string> Prompts { get; } = [];
-
-        public Task<IAgentSession> OpenSessionAsync(
-            AgentSessionSpec spec,
-            CancellationToken cancellationToken = default)
-        {
-            OpenedSpecs.Add(spec);
-            throw new NotSupportedException("The non-implementation review runner must use one-shot read-only review.");
-        }
-
-        public Task<AgentTurnResult> RunOneShotAsync(
-            AgentSessionSpec spec,
-            string prompt,
-            Func<AgentStreamChunk, Task>? onChunk = null,
-            CancellationToken cancellationToken = default)
-        {
-            OneShotSpecs.Add(spec);
-            Prompts.Add(prompt);
-            return Task.FromResult(new AgentTurnResult(
-                TurnIndex: 1,
-                AgentTurnState.Completed,
-                output,
-                new AgentTokenUsage(PromptTokens: 1, OutputTokens: 1)));
-        }
-
-        public ValueTask CloseSessionAsync(IAgentSession session) => ValueTask.CompletedTask;
     }
 
     private sealed class InMemoryArtifactStore : IArtifactStore

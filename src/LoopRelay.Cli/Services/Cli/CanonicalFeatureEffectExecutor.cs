@@ -84,6 +84,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
     public async Task<EffectExecutionRecord> ExecuteAsync(
         CanonicalCausalContext causality,
         EffectIdentity effect,
+        EffectParent? parent,
         CancellationToken cancellationToken)
     {
         WorkflowTransitionDefinition definition = _definitions
@@ -93,9 +94,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
         HashSet<ProductIdentity> produced = definition.ProducedProducts
             .Select(product => product.Identity)
             .ToHashSet();
-        CanonicalWorkflowPersistenceSnapshot snapshot = await _store.LoadSnapshotAsync(cancellationToken);
-        ProductRecord[] products = snapshot.Products
-            .Where(product => produced.Contains(product.Identity))
+        ProductRecord[] products = (await _store.ReadProductsByIdentitiesAsync(produced, cancellationToken))
             .ToArray();
         var validation = new ProductValidationResult(
             ProductValidationStatus.Valid,
@@ -109,7 +108,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
         EffectExecutionResult result = await ExecuteAsync(
             definition,
             validation,
-            new EffectExecutionContext(causality),
+            new EffectExecutionContext(causality, parent),
             cancellationToken);
         return result.Effects.FirstOrDefault(record => record.Effect == effect)
             ?? new EffectExecutionRecord(effect, result.Status, result.Explanation, result.Evidence);
@@ -278,12 +277,12 @@ internal sealed class CanonicalFeatureEffectExecutor(
             definition,
             validation,
             effectEvidence,
-            context.Causality,
+            context,
             cancellationToken);
         if (PlanWarmSessionTransitions.Supports(definition))
         {
             await MaterializePlanWarmSessionEvidenceAsync(
-                workflow, definition, validation, effectEvidence, context.Causality, cancellationToken);
+                workflow, definition, validation, effectEvidence, context, cancellationToken);
         }
         else if (PlanProjectionTransitions.Supports(definition))
         {
@@ -294,7 +293,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
                 effectEvidence,
                 PlanProjectionTransitions.Evidence(definition),
                 "Plan Projection Evidence",
-                context.Causality,
+                context,
                 cancellationToken);
         }
         else if (EvalPromptTransitions.Supports(definition))
@@ -306,7 +305,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
                 effectEvidence,
                 EvalPromptTransitions.Evidence(definition),
                 "Eval Prompt Evidence",
-                context.Causality,
+                context,
                 cancellationToken);
         }
         else if (TraditionalRoadmapPromptTransitions.Supports(definition))
@@ -318,7 +317,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
                 effectEvidence,
                 TraditionalRoadmapPromptTransitions.Evidence(definition),
                 "Traditional Roadmap Prompt Evidence",
-                context.Causality,
+                context,
                 cancellationToken);
         }
         else if (MilestoneDeepDiveTransitions.Supports(definition))
@@ -330,7 +329,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
                 effectEvidence,
                 MilestoneDeepDiveTransitions.Evidence(definition),
                 "Milestone Deep-Dive Evidence",
-                context.Causality,
+                context,
                 cancellationToken);
         }
         else if (PlanReadOnlyReviewTransitions.Supports(definition))
@@ -342,13 +341,13 @@ internal sealed class CanonicalFeatureEffectExecutor(
                 effectEvidence,
                 PlanReadOnlyReviewTransitions.Evidence(definition),
                 "Plan Read-Only Review Evidence",
-                context.Causality,
+                context,
                 cancellationToken);
         }
         else if (PlanScopedArtifactTransitions.Supports(definition))
         {
             await MaterializePlanScopedArtifactEvidenceAsync(
-                workflow, definition, validation, effectEvidence, context.Causality, cancellationToken);
+                workflow, definition, validation, effectEvidence, context, cancellationToken);
         }
         else if (ExecuteDecisionSessionTransitions.Supports(definition) ||
             ExecuteImplementationTransitions.Supports(definition) ||
@@ -360,7 +359,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
         else
         {
             await MaterializeLocalVerificationEvidenceAsync(
-                workflow, definition, validation, effectEvidence, context.Causality, cancellationToken);
+                workflow, definition, validation, effectEvidence, context, cancellationToken);
         }
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -469,7 +468,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
         WorkflowTransitionDefinition definition,
         ProductValidationResult validation,
         IReadOnlyList<string> evidence,
-        CanonicalCausalContext causality,
+        EffectExecutionContext context,
         CancellationToken cancellationToken)
     {
         if (workflow.Identity != WorkflowIdentity.TraditionalRoadmap)
@@ -483,7 +482,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
             ", ",
             validation.Products.SelectMany(product => product.StorageRepresentations).Distinct(StringComparer.Ordinal));
         await ScheduleWriteAsync(
-            causality,
+            context,
             relativePath,
             $"""
             # TraditionalRoadmap Canonical Runtime Evidence
@@ -560,7 +559,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
         try
         {
             await MaterializeLocalArtifactEffectsAsync(
-                definition, validation, evidence, context.Causality, cancellationToken);
+                definition, validation, evidence, context, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -606,13 +605,13 @@ internal sealed class CanonicalFeatureEffectExecutor(
         WorkflowTransitionDefinition definition,
         ProductValidationResult validation,
         IReadOnlyList<string> evidence,
-        CanonicalCausalContext causality,
+        EffectExecutionContext context,
         CancellationToken cancellationToken)
     {
         foreach (string relativePath in LocalVerificationTransitions.Evidence(definition))
         {
             await ScheduleWriteAsync(
-                causality,
+                context,
                 relativePath,
                 $"""
                 # Local Verification Evidence
@@ -633,13 +632,13 @@ internal sealed class CanonicalFeatureEffectExecutor(
         WorkflowTransitionDefinition definition,
         ProductValidationResult validation,
         IReadOnlyList<string> evidence,
-        CanonicalCausalContext causality,
+        EffectExecutionContext context,
         CancellationToken cancellationToken)
     {
         foreach (string relativePath in PlanWarmSessionTransitions.Evidence(definition))
         {
             await ScheduleWriteAsync(
-                causality,
+                context,
                 relativePath,
                 $"""
                 # Plan Warm Session Evidence
@@ -663,13 +662,13 @@ internal sealed class CanonicalFeatureEffectExecutor(
         IReadOnlyList<string> evidence,
         IReadOnlyList<string> evidencePaths,
         string title,
-        CanonicalCausalContext causality,
+        EffectExecutionContext context,
         CancellationToken cancellationToken)
     {
         foreach (string relativePath in evidencePaths)
         {
             await ScheduleWriteAsync(
-                causality,
+                context,
                 relativePath,
                 $"""
                 # {title}
@@ -691,13 +690,13 @@ internal sealed class CanonicalFeatureEffectExecutor(
         WorkflowTransitionDefinition definition,
         ProductValidationResult validation,
         IReadOnlyList<string> evidence,
-        CanonicalCausalContext causality,
+        EffectExecutionContext context,
         CancellationToken cancellationToken)
     {
         foreach (string relativePath in PlanScopedArtifactTransitions.Evidence(definition))
         {
             await ScheduleWriteAsync(
-                causality,
+                context,
                 relativePath,
                 $"""
                 # Plan Scoped Artifact Evidence
@@ -727,7 +726,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
         foreach (string relativePath in ExecuteEvidence(definition))
         {
             await ScheduleWriteAsync(
-                context.Causality,
+                context,
                 relativePath,
                 $"""
                 # Execute Transition Evidence
@@ -757,7 +756,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
             _repository,
             new LedgerLoopHistoryStore(_repository),
             new CanonicalExecutionRecommendationEvidenceStore(_store));
-        var artifactEffects = new DurableLoopArtifactEffectCoordinator(_repository, artifacts);
+        var artifactEffects = new DurableLoopArtifactEffectCoordinator(_repository, artifacts, context.Parent);
         CanonicalCausalContext causality = context.Causality;
         return definition.Identity.Value switch
         {
@@ -812,7 +811,7 @@ internal sealed class CanonicalFeatureEffectExecutor(
         WorkflowTransitionDefinition definition,
         ProductValidationResult validation,
         IReadOnlyList<string> evidence,
-        CanonicalCausalContext causality,
+        EffectExecutionContext context,
         CancellationToken cancellationToken)
     {
         if (definition.Identity.Value != "GenerateOperationalContext")
@@ -833,11 +832,11 @@ internal sealed class CanonicalFeatureEffectExecutor(
         }
 
         await ScheduleWriteAsync(
-            causality, OrchestrationArtifactPaths.OperationalContext, plan, cancellationToken);
+            context, OrchestrationArtifactPaths.OperationalContext, plan, cancellationToken);
 
         WorkflowDefinition workflow = WorkflowFor(definition);
         await MaterializeLocalArtifactEvidenceAsync(
-            workflow, definition, validation, evidence, causality, cancellationToken);
+            workflow, definition, validation, evidence, context, cancellationToken);
     }
 
     private async Task MaterializeLocalArtifactEvidenceAsync(
@@ -845,13 +844,13 @@ internal sealed class CanonicalFeatureEffectExecutor(
         WorkflowTransitionDefinition definition,
         ProductValidationResult validation,
         IReadOnlyList<string> evidence,
-        CanonicalCausalContext causality,
+        EffectExecutionContext context,
         CancellationToken cancellationToken)
     {
         foreach (string relativePath in LocalArtifactTransitions.Evidence(definition))
         {
             await ScheduleWriteAsync(
-                causality,
+                context,
                 relativePath,
                 $"""
                 # Local Artifact Evidence
@@ -868,12 +867,18 @@ internal sealed class CanonicalFeatureEffectExecutor(
     }
 
     private Task ScheduleWriteAsync(
-        CanonicalCausalContext causality,
+        EffectExecutionContext context,
         string relativePath,
         string content,
         CancellationToken cancellationToken) =>
         new DurableFilesystemWriteEffectPlanner(_repository)
-            .ScheduleAsync(causality, relativePath, content, cancellationToken);
+            .ScheduleAsync(
+                context.Causality,
+                context.Parent ?? throw new InvalidOperationException(
+                    "Filesystem writes may only be scheduled by an executing canonical feature effect."),
+                relativePath,
+                content,
+                cancellationToken);
 
     private string ResolveRepositoryPath(string relativePath)
     {

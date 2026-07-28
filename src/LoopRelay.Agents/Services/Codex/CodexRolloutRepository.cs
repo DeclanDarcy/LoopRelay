@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using LoopRelay.Agents.Models.Sessions;
 
 namespace LoopRelay.Agents.Services.Codex;
@@ -27,6 +28,16 @@ public sealed record CodexRolloutReadResult(
 
 public sealed class CodexRolloutRepository
 {
+    // Codex rollout filenames follow `rollout-<yyyy-MM-ddTHH-mm-ss>-<session id>.jsonl` — verified against
+    // this machine's real ~/.codex/sessions and ~/.codex/archived_sessions directories, where the trailing
+    // segment matched the file's own `session_meta.id` in every sample. Files that don't conform to this
+    // shape (arbitrary/legacy names) fall back to the first-line probe instead of being assumed absent.
+    private static readonly Regex RolloutFilenamePattern = new(
+        @"^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(?<id>.+)\.jsonl$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly string[] RolloutDirectoryNames = ["sessions", "archived_sessions", "archived"];
+
     public async Task<CodexRolloutReadResult> ReadExactAsync(
         string codexHome,
         string threadId,
@@ -36,22 +47,13 @@ public sealed class CodexRolloutRepository
         var matches = new List<CodexRolloutReadResult>();
         try
         {
-            foreach (string directoryName in new[] { "sessions", "archived_sessions", "archived" })
+            foreach (string path in EnumerateRolloutFiles(root))
             {
-                string directory = Path.Combine(root, directoryName);
-                if (!Directory.Exists(directory))
+                cancellationToken.ThrowIfCancellationRequested();
+                CodexRolloutReadResult parsed = await ParseAsync(path, threadId, cancellationToken);
+                if (parsed.Status != CodexRolloutReadStatus.Absent)
                 {
-                    continue;
-                }
-
-                foreach (string path in Directory.EnumerateFiles(directory, "*.jsonl", SearchOption.AllDirectories))
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    CodexRolloutReadResult parsed = await ParseAsync(path, threadId, cancellationToken);
-                    if (parsed.Status != CodexRolloutReadStatus.Absent)
-                    {
-                        matches.Add(parsed);
-                    }
+                    matches.Add(parsed);
                 }
             }
         }
@@ -75,6 +77,169 @@ public sealed class CodexRolloutRepository
         }
 
         return matches[0];
+    }
+
+    /// <summary>
+    /// Resolves only the path of the rollout file for <paramref name="providerThreadId"/> — no content is
+    /// parsed, hashed, or materialized. Filename matches (the common case) never open the file at all;
+    /// only filenames that don't conform to the rollout naming convention are ever candidates for a
+    /// first-line probe, and even then only when they could possibly outrank the newest filename match
+    /// already found (see <see cref="PickNewest"/> below).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Deliberately diverges from <see cref="ReadExactAsync"/> on duplicate thread ids.</b>
+    /// <see cref="ReadExactAsync"/> returns <see cref="CodexRolloutReadStatus.Ambiguous"/> and refuses to
+    /// pick when a thread id resolves to more than one rollout file, because it serves diagnosis — guessing
+    /// there would be worse than admitting uncertainty. <see cref="LocateAsync"/> instead confidently
+    /// returns the newest match by file time. It serves the fail-open telemetry path, where a best-effort
+    /// location hint beats no hint at all, and staleness (not correctness) is the acceptable risk. This
+    /// divergence is intentional and ratified; do not "fix" one method to match the other.
+    /// </para>
+    /// </remarks>
+    public async Task<string?> LocateAsync(
+        string codexHome,
+        string providerThreadId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            string root = Path.GetFullPath(codexHome);
+            var filenameMatches = new List<string>();
+            var unresolvedByName = new List<string>();
+
+            foreach (string path in EnumerateRolloutFiles(root))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string? embeddedId = ExtractThreadIdFromFilename(path);
+                if (embeddedId is not null)
+                {
+                    if (string.Equals(embeddedId, providerThreadId, StringComparison.Ordinal))
+                    {
+                        filenameMatches.Add(path);
+                    }
+
+                    // Convention resolved this file definitively (match or not) — never open it.
+                    continue;
+                }
+
+                unresolvedByName.Add(path);
+            }
+
+            // Non-conforming filenames must always be considered, even when a filename match already
+            // exists: a duplicate under a legacy/renamed filename could be the genuinely newest file, and
+            // the newest-match contract has to hold regardless of which naming convention won the race.
+            var candidates = new List<string>(filenameMatches);
+            if (unresolvedByName.Count > 0)
+            {
+                // When a filename match already exists, an unresolved file can only change the outcome by
+                // being strictly newer than the best filename match so far — anything older or tied loses
+                // to it in PickNewest's tie-break regardless of content, so skip probing those for free.
+                // With no filename match yet, every unresolved file is still a live candidate for the
+                // (possibly sole) answer, so none can be skipped.
+                DateTime? notOlderThan = filenameMatches.Count == 0
+                    ? null
+                    : filenameMatches.Max(File.GetLastWriteTimeUtc);
+
+                foreach (string path in unresolvedByName)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (notOlderThan is DateTime bound && File.GetLastWriteTimeUtc(path) <= bound)
+                    {
+                        continue;
+                    }
+
+                    if (await FirstLineMatchesThreadIdAsync(path, providerThreadId, cancellationToken))
+                    {
+                        candidates.Add(path);
+                    }
+                }
+            }
+
+            return candidates.Count == 0 ? null : PickNewest(candidates);
+        }
+        catch (OperationCanceledException)
+        {
+            throw; // cancellation is caller-directed; propagate it instead of reporting a false "not found".
+        }
+        catch
+        {
+            return null; // telemetry lookups are fail-open: never break a turn over a location hint.
+        }
+    }
+
+    private static IEnumerable<string> EnumerateRolloutFiles(string root)
+    {
+        foreach (string directoryName in RolloutDirectoryNames)
+        {
+            string directory = Path.Combine(root, directoryName);
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
+
+            foreach (string path in Directory.EnumerateFiles(directory, "*.jsonl", SearchOption.AllDirectories))
+            {
+                yield return path;
+            }
+        }
+    }
+
+    private static string? ExtractThreadIdFromFilename(string path)
+    {
+        Match match = RolloutFilenamePattern.Match(Path.GetFileName(path));
+        return match.Success ? match.Groups["id"].Value : null;
+    }
+
+    private static async Task<bool> FirstLineMatchesThreadIdAsync(
+        string path,
+        string expectedThreadId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var stream = new FileStream(
+                path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            string? firstLine = await reader.ReadLineAsync(cancellationToken);
+            if (string.IsNullOrEmpty(firstLine))
+            {
+                return false;
+            }
+
+            using JsonDocument document = JsonDocument.Parse(firstLine);
+            return ReadSessionId(document.RootElement) == expectedThreadId;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false; // tolerate concurrent codex activity: file rotated/removed mid-scan.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static string PickNewest(IReadOnlyList<string> paths)
+    {
+        string best = paths[0];
+        DateTime bestTime = File.GetLastWriteTimeUtc(best);
+        for (int index = 1; index < paths.Count; index++)
+        {
+            DateTime candidateTime = File.GetLastWriteTimeUtc(paths[index]);
+            if (candidateTime > bestTime)
+            {
+                best = paths[index];
+                bestTime = candidateTime;
+            }
+        }
+
+        return best;
     }
 
     private static async Task<CodexRolloutReadResult> ParseAsync(

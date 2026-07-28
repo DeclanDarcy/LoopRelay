@@ -1,11 +1,15 @@
 using LoopRelay.Cli.Abstractions.Persistence;
 using LoopRelay.Cli.Services.Execution;
+using LoopRelay.Core.Abstractions.Artifacts;
+using LoopRelay.Core.Artifacts;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
 using LoopRelay.Infrastructure.Services.Effects;
 using LoopRelay.Orchestration.Effects;
+using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Persistence;
+using LoopRelay.Orchestration.Services;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -39,7 +43,6 @@ public sealed class LedgerLoopHistoryStoreTests
             "SELECT status FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Decisions';"));
         Assert.Equal(WorkspaceEffectExecutorKeys.FilesystemWrite.Value, await ScalarStringAsync(connection,
             "SELECT executor_key FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Decisions';"));
-        Assert.Equal(0L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM canonical_projection_effects;"));
     }
 
     [Fact]
@@ -57,8 +60,7 @@ public sealed class LedgerLoopHistoryStoreTests
             "history-projection-test",
             workStore,
             new EffectExecutorRegistry([executor]),
-            new FilesystemWriteEffectReconciler(harness.Repository),
-            TimeSpan.FromMinutes(1));
+            new FilesystemWriteEffectReconciler(harness.Repository));
         EffectWorkerResult result = await worker.RunOnceAsync();
 
         Assert.Equal(1, result.Succeeded);
@@ -70,6 +72,52 @@ public sealed class LedgerLoopHistoryStoreTests
             "handoff",
             await File.ReadAllTextAsync(Path.Combine(harness.Root, ".agents", "handoffs", "handoff.0001.md")));
     }
+
+    /// <summary>
+    /// The history-projection child is ordered after, and made to depend on, the effect that is
+    /// actually executing the append. That effect is handed in on the request; the store no longer
+    /// rediscovers it by asking which row is <c>Started</c>. The parent row here is deliberately left
+    /// <c>Planned</c>, so a store that went back to the database would link nothing.
+    /// </summary>
+    [Fact]
+    public async Task History_projection_depends_on_the_executing_effect_passed_on_the_request()
+    {
+        Harness harness = await NewAsync();
+        var workStore = new CanonicalEffectWorkStore(harness.Repository);
+        EffectIntent rotation = RotationIntent(harness.Causality, order: 3);
+        await workStore.AppendPlanAsync([rotation], CancellationToken.None);
+
+        await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Handoff,
+            "handoff",
+            harness.Causality,
+            parent: new EffectParent(rotation.Identity, rotation.Order)));
+
+        IReadOnlyList<EffectWorkItem> plan = await workStore.ReadPlanAsync(
+            harness.Causality.TransitionRun, CancellationToken.None);
+        EffectWorkItem projection = Assert.Single(
+            plan, item => item.Intent.SemanticOperationKey == "history:materialize:Handoff");
+        Assert.Equal([rotation.Identity], projection.Intent.Dependencies);
+        Assert.Equal(4, projection.Intent.Order);
+    }
+
+    private static EffectIntent RotationIntent(CanonicalCausalContext causality, int order) => new(
+        EffectIntentIdentity.New(),
+        causality,
+        "loop-artifact:RotateLiveHandoff",
+        WorkspaceEffectExecutorKeys.RotateLiveHandoff,
+        "1",
+        new EffectTargetDescriptor("LoopArtifact", ".agents/handoff.md", "{}"),
+        "{}",
+        new string('b', 64),
+        order,
+        [],
+        EffectRequiredness.BlockingLocal,
+        new EffectCondition("none", "{}"),
+        new EffectCondition("none", "{}"),
+        "loop-history-and-source-observation",
+        $"loop-artifact:RotateLiveHandoff:{causality.TransitionRun.Value}",
+        DateTimeOffset.UtcNow);
 
     [Fact]
     public async Task Read_latest_roundtrips_canonical_causality_and_typed_evidence()
@@ -88,6 +136,78 @@ public sealed class LedgerLoopHistoryStoreTests
         Assert.NotNull(latest);
         Assert.Equal(harness.Causality, latest.Causality);
         Assert.Equal("recovery-1", latest.Evidence.Recovery!.RecoveryAttempt.Value);
+    }
+
+#if DEBUG
+    /// <summary>
+    /// PERF: on a store this process has already admitted (schema verified once, memoized by
+    /// <see cref="LoopRelayWorkspaceDatabase.EnsureSchemaAsync"/>), a subsequent
+    /// <see cref="LedgerLoopHistoryStore.ReadLatestAsync"/> must not re-run the ~190-statement
+    /// structural inspection <see cref="LoopRelayWorkspaceDatabase.InspectSchemaAsync"/> performs.
+    /// It should answer from the admission memo instead: a 2-SELECT live-stamp re-check
+    /// (<see cref="LoopRelayWorkspaceDatabase.InspectMemoizedAsync"/>), the read's own
+    /// <c>LIMIT 1</c> fact query, and the one evidence-set/items join query every returned record
+    /// carries - four statements total, counted from what the connection really compiles rather
+    /// than modelled. (The task brief that seeded this test estimated "at most 3" from the stamp
+    /// check plus the fact read alone; it did not account for the evidence read this method always
+    /// performs when it returns a record, which is the fourth and is not optional here.)
+    /// </summary>
+    [Fact]
+    public async Task ReadLatest_on_admitted_store_performs_no_structural_inspection()
+    {
+        Harness harness = await NewAsync();
+        await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Decisions, "admitted before measurement", harness.Causality));
+
+        var counter = new PreparedStatementCounter();
+        harness.Store.ConnectionObserverForTesting = counter.Watch;
+        LoopHistoryRecord? latest;
+        try
+        {
+            latest = await harness.Store.ReadLatestAsync(LoopHistoryKind.Decisions);
+        }
+        finally
+        {
+            harness.Store.ConnectionObserverForTesting = null;
+        }
+
+        Assert.NotNull(latest);
+        Assert.Equal("admitted before measurement", latest.Content);
+        // Counted, not modelled: 2 (stamp re-check) + 1 (fact LIMIT 1) + 1 (evidence join) - fixed
+        // regardless of plan/content size, and nowhere near the ~190-probe structural inspection a
+        // cold or non-memoized store still pays for.
+        Assert.Equal(4, counter.Statements);
+    }
+#endif
+
+    /// <summary>
+    /// Fail-closed guard for the memo binding above: this process has already admitted (and
+    /// memoized) this exact database, but the persisted stamp is then tampered with directly -
+    /// simulating out-of-band corruption or a downgrade - after admission. The memo's live
+    /// stamp re-check (<see cref="LoopRelayWorkspaceDatabase.InspectMemoizedAsync"/>) must still
+    /// detect the mismatch and decline to answer from the cache, falling through to
+    /// <see cref="LoopRelayWorkspaceDatabase.InspectStampedAsync"/> and then full classification,
+    /// so <see cref="ReadLatestAsync"/> still rejects the store with the same typed exception it
+    /// always has - never a silent pass and never a different, untyped failure.
+    /// </summary>
+    [Fact]
+    public async Task ReadLatest_rejects_a_tampered_schema_version_stamp_even_after_admission()
+    {
+        Harness harness = await NewAsync();
+        await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Decisions, "before tamper", harness.Causality));
+
+        await using (SqliteConnection connection = await OpenAsync(harness.Repository, readOnly: false))
+        {
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "UPDATE schema_metadata SET value = '999' WHERE key = 'schema_version';";
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+
+        WorkspaceCompatibilityImportRequiredException exception =
+            await Assert.ThrowsAsync<WorkspaceCompatibilityImportRequiredException>(
+                () => harness.Store.ReadLatestAsync(LoopHistoryKind.Decisions));
+        Assert.Equal(999, exception.Inspection.Version);
     }
 
     [Fact]
@@ -109,6 +229,89 @@ public sealed class LedgerLoopHistoryStoreTests
         Assert.Null(await harness.Store.ReadLatestAsync(LoopHistoryKind.OperationalDelta));
         await using SqliteConnection connection = await OpenAsync(harness.Repository, readOnly: true);
         Assert.Equal(0L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM loop_history;"));
+    }
+
+    [Fact]
+    public async Task Appending_the_same_content_twice_for_one_kind_converges_on_one_fact()
+    {
+        Harness harness = await NewAsync();
+        var request = new LoopHistoryAppendRequest(
+            LoopHistoryKind.Handoff, "handoff body pinned for duplicate detection", harness.Causality);
+
+        LoopHistoryRecord first = await harness.Store.AppendAsync(request);
+        // Reproduce the crash window: the fact committed, the live file was never deleted, so the
+        // rotation executor reads the same bytes again and appends again.
+        LoopHistoryRecord second = await harness.Store.AppendAsync(request);
+
+        Assert.Equal(first.Identity, second.Identity);
+        Assert.Equal(first.Sequence, second.Sequence);
+        Assert.Equal(first.MaterializedRelativePath, second.MaterializedRelativePath);
+        await using SqliteConnection connection = await OpenAsync(harness.Repository, readOnly: true);
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM loop_history;"));
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM history_evidence_sets;"));
+        Assert.Equal(1L, await ScalarLongAsync(
+            connection,
+            "SELECT COUNT(*) FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Handoff';"));
+    }
+
+    /// <summary>
+    /// Convergence is against the LATEST fact only, never across history. Content that legitimately
+    /// recurs after an intervening fact must append fresh: converging globally would answer with the
+    /// old fact while the caller goes on to delete the live source, so a later
+    /// <see cref="LedgerLoopHistoryStore.ReadLatestAsync"/> would report the intervening fact as
+    /// latest and the recurring body would be lost.
+    /// </summary>
+    [Fact]
+    public async Task Recurring_content_after_an_intervening_fact_appends_a_new_latest_fact()
+    {
+        Harness harness = await NewAsync();
+        LoopHistoryRecord first = await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Decisions, "recurring body", harness.Causality));
+        await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Decisions, "different body", harness.Causality));
+
+        LoopHistoryRecord third = await harness.Store.AppendAsync(new LoopHistoryAppendRequest(
+            LoopHistoryKind.Decisions, "recurring body", harness.Causality));
+
+        Assert.NotEqual(first.Identity, third.Identity);
+        Assert.Equal(3, third.Sequence);
+        LoopHistoryRecord? latest = await harness.Store.ReadLatestAsync(LoopHistoryKind.Decisions);
+        Assert.Equal(third.Identity, latest!.Identity);
+        Assert.Equal("recurring body", latest.Content);
+    }
+
+    /// <summary>
+    /// The crash this task exists for, driven through the real rotation path rather than through two
+    /// bare store calls: <see cref="LoopArtifacts.RotateLiveHandoffAsync"/> commits the history fact
+    /// and only then deletes the live source. Killing the process in that window leaves both, and the
+    /// re-executed effect re-reads byte-identical source and rotates a second time.
+    /// </summary>
+    [Fact]
+    public async Task Rotation_interrupted_before_its_source_delete_converges_when_it_re_executes()
+    {
+        Harness harness = await NewAsync();
+        var files = new CrashOnDeleteArtifactStore(new MemoryArtifactStore());
+        var artifacts = new LoopArtifacts(
+            files, harness.Repository, harness.Store, new NoRecommendationStore());
+        await artifacts.WriteAsync(OrchestrationArtifactPaths.LiveHandoff, "handoff awaiting rotation");
+
+        files.FailNextDelete = true;
+        await Assert.ThrowsAsync<IOException>(() => artifacts.RotateLiveHandoffAsync(harness.Causality));
+        Assert.Equal(
+            "handoff awaiting rotation",
+            await artifacts.ReadAsync(OrchestrationArtifactPaths.LiveHandoff));
+
+        Assert.Equal(
+            "handoff awaiting rotation",
+            await artifacts.RotateLiveHandoffAsync(harness.Causality));
+
+        Assert.False(await artifacts.ExistsAsync(OrchestrationArtifactPaths.LiveHandoff));
+        await using SqliteConnection connection = await OpenAsync(harness.Repository, readOnly: true);
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM loop_history;"));
+        Assert.Equal(1L, await ScalarLongAsync(connection, "SELECT COUNT(*) FROM history_evidence_sets;"));
+        Assert.Equal(1L, await ScalarLongAsync(
+            connection,
+            "SELECT COUNT(*) FROM canonical_effect_intents WHERE semantic_operation_key = 'history:materialize:Handoff';"));
     }
 
     private static async Task<Harness> NewAsync()
@@ -177,4 +380,45 @@ public sealed class LedgerLoopHistoryStoreTests
         Repository Repository,
         LedgerLoopHistoryStore Store,
         CanonicalCausalContext Causality);
+
+    /// <summary>
+    /// Stands in for the process dying between the authoritative history commit and the deletion of
+    /// the live source: one delete is lost, everything the append already committed survives.
+    /// </summary>
+    private sealed class CrashOnDeleteArtifactStore(IArtifactStore _inner) : IArtifactStore
+    {
+        public bool FailNextDelete { get; set; }
+
+        public Task<bool> ExistsAsync(string path) => _inner.ExistsAsync(path);
+        public Task<string?> ReadAsync(string path) => _inner.ReadAsync(path);
+        public Task WriteAsync(string path, string content) => _inner.WriteAsync(path, content);
+        public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern) =>
+            _inner.ListAsync(path, searchPattern);
+        public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path) =>
+            _inner.ListDirectoriesAsync(path);
+
+        public Task DeleteAsync(string path)
+        {
+            if (!FailNextDelete) return _inner.DeleteAsync(path);
+            FailNextDelete = false;
+            throw new IOException("process died before the live source was deleted");
+        }
+    }
+
+    private sealed class NoRecommendationStore : IExecutionRecommendationEvidenceStore
+    {
+        public Task AppendAsync(
+            ExecutionRecommendationEvidence evidence,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<ExecutionRecommendationEvidence?> ReadAsync(
+            ExecutionRecommendationIdentity identity,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<ExecutionRecommendationEvidence?>(null);
+
+        public Task<ExecutionRecommendationEvidence?> ReadForDecisionAsync(
+            DecisionProductVersionIdentity decisionProduct,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<ExecutionRecommendationEvidence?>(null);
+    }
 }

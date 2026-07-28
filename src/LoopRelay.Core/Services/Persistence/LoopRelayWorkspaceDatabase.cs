@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using Microsoft.Data.Sqlite;
@@ -31,6 +33,7 @@ public enum WorkspaceSchemaShape
     CanonicalV13Complete,
     CanonicalV14Complete,
     CanonicalV15Complete,
+    CanonicalV16Complete,
     UnknownV9Shape,
     CorruptCanonicalV9,
     CorruptCanonicalV10,
@@ -39,6 +42,7 @@ public enum WorkspaceSchemaShape
     CorruptCanonicalV13,
     CorruptCanonicalV14,
     CorruptCanonicalV15,
+    CorruptCanonicalV16,
     Unknown,
 }
 
@@ -67,29 +71,272 @@ public static class LoopRelayWorkspaceDatabase
     public const string SchemaIdentity = "looprelay.workspace-state";
     public const string SchemaFamily = "CanonicalWorkspace";
     public const string SchemaShapeMetadataKey = "schema_shape";
-    public const int CurrentSchemaVersion = 15;
+
+    /// <summary>
+    /// <c>schema_metadata</c> key for the blocked-vocabulary repair receipt: its value is the
+    /// shape fingerprint (<see cref="CanonicalV16ShapeFingerprint"/>) that was current when the
+    /// legacy <c>'Blocked'</c> vocabulary scan last ran clean or was successfully repaired. See
+    /// <see cref="RunStructurallyCompleteBranchAsync"/> for how it gates the scan, and
+    /// <see cref="DeleteBlockedVocabularyReceiptAsync"/> for who invalidates it.
+    /// </summary>
+    public const string BlockedVocabularyRepairedMetadataKey = "blocked_vocabulary_repaired";
+    public const int CurrentSchemaVersion = 16;
     public const string RelativeDatabasePath = ".LoopRelay/persistence/looprelay.sqlite3";
 
-    public static string CanonicalV9ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV9Requirements.Select(requirement => requirement.Token));
+    /// <summary>
+    /// `PRAGMA busy_timeout` value (milliseconds) applied to every connection. This is
+    /// per-connection state (not persisted in the database file), so it must be re-applied on
+    /// every open, alongside `PRAGMA foreign_keys = ON`. 10000ms matches the value already used
+    /// ad hoc for concurrent-writer contention in
+    /// <c>LoopRelay.Certification.PersistenceLifecycleRunner</c>.
+    /// </summary>
+    public const int BusyTimeoutMilliseconds = 10000;
 
-    public static string CanonicalV10ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV10Requirements.Select(requirement => requirement.Token));
+    // These were `=>` LINQ-chain computed properties that rebuilt the ~190-element requirement
+    // lists (below) and re-hashed the fingerprint on every access. They are now built once, in
+    // dependency order, by the static constructor and cached as plain fields.
+    public static readonly string CanonicalV9ShapeFingerprint;
+    public static readonly string CanonicalV10ShapeFingerprint;
+    public static readonly string CanonicalV11ShapeFingerprint;
+    public static readonly string CanonicalV12ShapeFingerprint;
+    public static readonly string CanonicalV13ShapeFingerprint;
+    public static readonly string CanonicalV14ShapeFingerprint;
+    public static readonly string CanonicalV15ShapeFingerprint;
+    public static readonly string CanonicalV16ShapeFingerprint;
 
-    public static string CanonicalV11ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV11Requirements.Select(requirement => requirement.Token));
+    /// <summary>
+    /// Version-neutral aliases for the current canonical shape. External assertions (certification
+    /// runners, storage staging and health) reference these rather than the V16-named members so
+    /// that a schema cut moves every consumer at once instead of leaving a stale pin that fails at
+    /// runtime - the failure class the stale schema-v15 certification assertion exhibited.
+    /// </summary>
+    public const WorkspaceSchemaShape CurrentCompleteShape = WorkspaceSchemaShape.CanonicalV16Complete;
 
-    public static string CanonicalV12ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV12Requirements.Select(requirement => requirement.Token));
+    /// <inheritdoc cref="CurrentCompleteShape"/>
+    public static string CurrentShapeFingerprint => CanonicalV16ShapeFingerprint;
 
-    public static string CanonicalV13ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV13Requirements.Select(requirement => requirement.Token));
+    /// <summary>
+    /// Per-process memo of schemas already verified complete, keyed by the full path of the
+    /// database file (<c>connection.DataSource</c>). Populated only after a successful full
+    /// verification pass; consulted by <see cref="EnsureSchemaAsync"/> to skip re-running the
+    /// full inspection/identity-validation pipeline when the on-disk stamp has not moved.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, (long Version, string ShapeFingerprint)> VerifiedSchemas = new();
 
-    public static string CanonicalV14ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV14Requirements.Select(requirement => requirement.Token));
+#if DEBUG
+    /// <summary>Test-only observability: how many times the full verification pipeline ran.</summary>
+    internal static int FullVerificationRuns;
 
-    public static string CanonicalV15ShapeFingerprint =>
-        ComputeShapeFingerprint(CanonicalV15Requirements.Select(requirement => requirement.Token));
+    /// <summary>
+    /// Test-only observability: how many times <see cref="RunStructurallyCompleteBranchAsync"/>
+    /// actually opened a write transaction (as opposed to taking the zero-transaction path because
+    /// the blocked-vocabulary receipt was already fresh for the current shape fingerprint and no
+    /// legacy resume was pending). This is the direct, unambiguous signal for "did this call
+    /// perturb anything write-shaped," which - per empirical measurement - a physical proxy like
+    /// <c>PRAGMA data_version</c> or <c>-wal</c> file length cannot reliably distinguish for a
+    /// transaction that dirties zero pages: such a transaction changes neither on real
+    /// Microsoft.Data.Sqlite/SQLite behavior observed in this codebase.
+    /// </summary>
+    internal static int RepairTransactionsOpened;
+
+    /// <summary>
+    /// Test-only observability: how many individual shape-requirement probes have been issued
+    /// (one per table/column/index/foreign-key check). <see cref="InspectSchemaAsync"/> issues
+    /// ~190 of these per call on a canonical-v16 database; <see cref="InspectStampedAsync"/> must
+    /// issue none when it can answer from the stamp.
+    /// </summary>
+    internal static int ShapeRequirementProbes;
+
+    /// <summary>
+    /// Test-only: clears the per-process memo and resets <see cref="FullVerificationRuns"/> and
+    /// <see cref="RepairTransactionsOpened"/>.
+    /// </summary>
+    internal static void ResetSchemaVerificationCacheForTesting()
+    {
+        VerifiedSchemas.Clear();
+        Interlocked.Exchange(ref RepairTransactionsOpened, 0);
+        Interlocked.Exchange(ref FullVerificationRuns, 0);
+    }
+#endif
+
+    static LoopRelayWorkspaceDatabase()
+    {
+        CoreCanonicalSignatureRequirements =
+        [
+            ShapeRequirement.Table("workspace_identity"),
+            ShapeRequirement.Table("runs"),
+            ShapeRequirement.Table("workflow_instances"),
+            ShapeRequirement.Table("attempts"),
+            ShapeRequirement.Table("agent_sessions"),
+            ShapeRequirement.Table("agent_turns"),
+            ShapeRequirement.Table("canonical_rendered_prompts"),
+        ];
+
+        Merge4V9Requirements = Merge4V9TableNames.Select(ShapeRequirement.Table)
+            .Concat(V9CausalColumns.Select(item => ShapeRequirement.Column(item.Table, item.Column, "text")))
+            .Concat(Merge4V9IndexNames.Select(ShapeRequirement.Index))
+            .Concat(
+            [
+                ShapeRequirement.ForeignKey("decision_session_lineage", "scope_id", "decision_session_scopes", "scope_id"),
+                ShapeRequirement.ForeignKey("decision_session_lineage", "parent_lineage_id", "decision_session_lineage", "lineage_id"),
+                ShapeRequirement.ForeignKey("session_recovery_attempts", "scope_id", "decision_session_scopes", "scope_id"),
+                ShapeRequirement.ForeignKey("decision_session_turns", "scope_id", "decision_session_scopes", "scope_id"),
+                ShapeRequirement.ForeignKey("history_evidence_items", "evidence_set_id", "history_evidence_sets", "evidence_set_id"),
+            ])
+            .ToArray();
+
+        ArchitectureConvergenceV9Requirements = V9TurnEvidenceColumns
+            .Select(item => ShapeRequirement.Column("agent_turns", item.Column, item.Type))
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_runtime_prerequisites"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "prerequisite_check_id", "text"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "run_id", "text"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "checked_at", "text"),
+                ShapeRequirement.Column("canonical_runtime_prerequisites", "diagnostics_json", "text"),
+                ShapeRequirement.Index("idx_canonical_runtime_prerequisites_run"),
+            ])
+            .ToArray();
+
+        ConvergenceReceiptRequirements =
+        [
+            ShapeRequirement.Table("workspace_schema_convergences"),
+            ShapeRequirement.Column("workspace_schema_convergences", "convergence_id", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "source_shape", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "source_fingerprint", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "source_version", "integer"),
+            ShapeRequirement.Column("workspace_schema_convergences", "target_fingerprint", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "workspace_id", "text"),
+            ShapeRequirement.Column("workspace_schema_convergences", "completed_at", "text"),
+        ];
+
+        CanonicalV9Requirements = CanonicalCoreTableNames.Select(ShapeRequirement.Table)
+            .Concat(Merge4V9Requirements)
+            .Concat(ArchitectureConvergenceV9Requirements)
+            .Concat(ConvergenceReceiptRequirements)
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV10Requirements = CanonicalV9Requirements
+            .Concat(V10EffectIntentColumns.Select(item => ShapeRequirement.Column(
+                "canonical_effect_intents",
+                item.Column,
+                item.Declaration.StartsWith("integer", StringComparison.Ordinal) ? "integer" : "text")))
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_effect_lifecycle_events"),
+                ShapeRequirement.Table("canonical_effect_receipts"),
+                ShapeRequirement.Index("idx_effect_intents_unsettled"),
+                ShapeRequirement.Index("idx_effect_intents_transition_attempt"),
+                ShapeRequirement.Index("idx_effect_intents_semantic_operation"),
+                ShapeRequirement.Index("idx_effect_receipts_intent"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV11Requirements = CanonicalV10Requirements
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_recovery_cases"),
+                ShapeRequirement.Table("canonical_recovery_classifications"),
+                ShapeRequirement.Table("canonical_recovery_source_links"),
+                ShapeRequirement.Table("canonical_recovery_plans"),
+                ShapeRequirement.Table("canonical_recovery_action_events"),
+                ShapeRequirement.Column("canonical_recovery_cases", "scope_identity", "text"),
+                ShapeRequirement.Column("canonical_recovery_plans", "compatibility_document_json", "text"),
+                ShapeRequirement.Column("canonical_recovery_action_events", "document_json", "text"),
+                ShapeRequirement.Index("idx_recovery_cases_subject"),
+                ShapeRequirement.Index("idx_recovery_classifications_case"),
+                ShapeRequirement.Index("idx_recovery_source_links_classification"),
+                ShapeRequirement.Index("idx_recovery_plans_case"),
+                ShapeRequirement.Index("idx_recovery_action_events_plan"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV12Requirements = CanonicalV11Requirements
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_interaction_requests"),
+                ShapeRequirement.Table("canonical_interaction_policy_evaluations"),
+                ShapeRequirement.Table("canonical_interaction_responses"),
+                ShapeRequirement.Table("canonical_interaction_lifecycle_events"),
+                ShapeRequirement.Index("idx_interaction_requests_state"),
+                ShapeRequirement.Index("idx_interaction_requests_causality"),
+                ShapeRequirement.Index("idx_interaction_events_request"),
+                ShapeRequirement.Index("idx_interaction_responses_semantic"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV13Requirements = CanonicalV12Requirements
+            .Concat(
+            [
+                ShapeRequirement.Table("canonical_storage_operation_plans"),
+                ShapeRequirement.Table("canonical_storage_operation_events"),
+                ShapeRequirement.Table("canonical_storage_operation_receipts"),
+                ShapeRequirement.Index("idx_storage_operation_events_operation"),
+                ShapeRequirement.Index("idx_storage_operation_plans_lifecycle"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV14Requirements = CanonicalV13Requirements.Concat(
+            [
+                ShapeRequirement.Table("canonical_import_detections"),
+                ShapeRequirement.Table("canonical_import_previews"),
+                ShapeRequirement.Table("canonical_import_mappings"),
+                ShapeRequirement.Table("canonical_import_verifications"),
+                ShapeRequirement.Table("canonical_import_receipts"),
+                ShapeRequirement.Table("canonical_source_authority"),
+                ShapeRequirement.Table("canonical_import_adapter_exhaustion"),
+                ShapeRequirement.Table("canonical_kernel_decisions"),
+                ShapeRequirement.Column("canonical_import_previews", "import_id", "text"),
+                ShapeRequirement.Column("runs", "catalog_identity", "text"),
+                ShapeRequirement.Column("runs", "catalog_version", "text"),
+                ShapeRequirement.Column("workflow_instances", "catalog_identity", "text"),
+                ShapeRequirement.Column("attempts", "agent_role_policy_id", "text"),
+                ShapeRequirement.Table("canonical_agent_role_policies"),
+                ShapeRequirement.Index("idx_import_previews_fingerprint"),
+                ShapeRequirement.Index("idx_import_mappings_preview"),
+                ShapeRequirement.Index("idx_import_receipts_fingerprint"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV15Requirements = CanonicalV14Requirements.Concat(
+            [
+                ShapeRequirement.Table("canonical_completion_decisions"),
+                ShapeRequirement.Table("canonical_completion_certificates"),
+                ShapeRequirement.Table("canonical_completion_closure_plans"),
+                ShapeRequirement.Table("canonical_completion_settlements"),
+                ShapeRequirement.Table("canonical_certified_terminal_facts"),
+                ShapeRequirement.Index("idx_completion_decisions_root"),
+                ShapeRequirement.Index("idx_completion_settlements_plan"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        // v16 denormalises `scopeId` out of `canonical_recovery_action_events.document_json` into a
+        // real, indexed column so the warm-session recovery lookup stops joining on
+        // `json_extract(...)`, which no index can serve (PERF-20).
+        CanonicalV16Requirements = CanonicalV15Requirements.Concat(
+            [
+                ShapeRequirement.Column("canonical_recovery_action_events", "scope_id", "text"),
+                ShapeRequirement.Index("idx_recovery_action_events_scope"),
+            ])
+            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
+            .ToArray();
+
+        CanonicalV9ShapeFingerprint = ComputeShapeFingerprint(CanonicalV9Requirements.Select(requirement => requirement.Token));
+        CanonicalV10ShapeFingerprint = ComputeShapeFingerprint(CanonicalV10Requirements.Select(requirement => requirement.Token));
+        CanonicalV11ShapeFingerprint = ComputeShapeFingerprint(CanonicalV11Requirements.Select(requirement => requirement.Token));
+        CanonicalV12ShapeFingerprint = ComputeShapeFingerprint(CanonicalV12Requirements.Select(requirement => requirement.Token));
+        CanonicalV13ShapeFingerprint = ComputeShapeFingerprint(CanonicalV13Requirements.Select(requirement => requirement.Token));
+        CanonicalV14ShapeFingerprint = ComputeShapeFingerprint(CanonicalV14Requirements.Select(requirement => requirement.Token));
+        CanonicalV15ShapeFingerprint = ComputeShapeFingerprint(CanonicalV15Requirements.Select(requirement => requirement.Token));
+        CanonicalV16ShapeFingerprint = ComputeShapeFingerprint(CanonicalV16Requirements.Select(requirement => requirement.Token));
+    }
 
     public static string Resolve(Repository repository)
     {
@@ -110,7 +357,31 @@ public static class LoopRelayWorkspaceDatabase
         SqliteConnection connection,
         CancellationToken cancellationToken = default)
     {
+        // PRAGMA state is per-connection (not persisted in the database file), so this must run
+        // on every call regardless of whether the fast path below applies.
         await ExecuteAsync(connection, "PRAGMA foreign_keys = ON;", cancellationToken);
+        await ExecuteAsync(
+            connection,
+            $"PRAGMA busy_timeout = {BusyTimeoutMilliseconds};",
+            cancellationToken);
+
+        string cacheKey = Path.GetFullPath(connection.DataSource);
+        if (VerifiedSchemas.TryGetValue(cacheKey, out (long Version, string ShapeFingerprint) cached) &&
+            await MatchesCachedStampAsync(connection, cached, cancellationToken))
+        {
+            // Multi-process stance is unresolved by design: trust the in-memory memo only as far
+            // as this cheap re-read of the stamp confirms nothing else has moved it since. The
+            // memo only ever holds a CanonicalV16Complete stamp, so this is exactly the
+            // structurally-complete branch below, without paying for the ~190-probe inspection or
+            // identity re-validation.
+            await RunStructurallyCompleteBranchAsync(connection, cacheKey, cancellationToken);
+            return;
+        }
+
+#if DEBUG
+        Interlocked.Increment(ref FullVerificationRuns);
+#endif
+
         WorkspaceSchemaInspection inspection = await InspectSchemaAsync(connection, cancellationToken);
         if (inspection.Family == WorkspaceSchemaFamily.LegacyContinuity)
         {
@@ -131,65 +402,251 @@ public static class LoopRelayWorkspaceDatabase
         string? preservedWorkspaceId = await ValidateExistingWorkspaceIdentityAsync(
             connection,
             cancellationToken);
-        bool structurallyComplete = inspection.Shape == WorkspaceSchemaShape.CanonicalV15Complete;
+        bool structurallyComplete = inspection.Shape == WorkspaceSchemaShape.CanonicalV16Complete;
         if (structurallyComplete && preservedWorkspaceId is null)
         {
             throw new InvalidOperationException(
-                "Canonical v15 is stamped complete but has no immutable workspace identity.");
+                "Canonical v16 is stamped complete but has no immutable workspace identity.");
+        }
+
+        if (structurallyComplete)
+        {
+            await RunStructurallyCompleteBranchAsync(connection, cacheKey, cancellationToken);
+            return;
         }
 
         LegacyResumeImport? legacyResume = await ReadLegacyResumeAsync(connection, cancellationToken);
+        await using SqliteTransaction migrationTransaction = connection.BeginTransaction(deferred: false);
+        try
+        {
+            await EnsureCanonicalV8ShapeAsync(connection, migrationTransaction, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV9Sql, cancellationToken);
+            await EnsureV9ColumnsAsync(connection, migrationTransaction, cancellationToken);
+            await EnsureV10ColumnsAsync(connection, migrationTransaction, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV10Sql, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV11Sql, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV12Sql, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV13Sql, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV14Sql, cancellationToken);
+            await EnsureV14ColumnsAsync(connection, migrationTransaction, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV15Sql, cancellationToken);
+            await EnsureV16ColumnsAsync(connection, migrationTransaction, cancellationToken);
+            await ExecuteAsync(connection, migrationTransaction, SchemaV16Sql, cancellationToken);
+            if (legacyResume is not null)
+            {
+                await ImportLegacyResumeAsync(connection, migrationTransaction, legacyResume, cancellationToken);
+            }
+            await ExecuteAsync(connection, migrationTransaction, CanonicalDataRepairSql, cancellationToken);
+            await WriteBlockedVocabularyReceiptAsync(connection, migrationTransaction, cancellationToken);
+            string workspaceId = await EnsureImmutableWorkspaceIdentityAsync(
+                connection,
+                migrationTransaction,
+                inspection,
+                preservedWorkspaceId,
+                cancellationToken);
+            await VerifyCanonicalV16ShapeAsync(connection, migrationTransaction, cancellationToken);
+            await RecordSchemaConvergenceAsync(
+                connection,
+                migrationTransaction,
+                inspection,
+                workspaceId,
+                cancellationToken);
+            await StampCanonicalSchemaAsync(connection, migrationTransaction, cancellationToken);
+            await migrationTransaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await migrationTransaction.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+
+        VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV16ShapeFingerprint);
+    }
+
+    /// <summary>
+    /// Deletes the blocked-vocabulary repair receipt (<see cref="BlockedVocabularyRepairedMetadataKey"/>)
+    /// so the very next <see cref="EnsureSchemaAsync"/> admission re-scans <c>canonical_workflow_states</c>,
+    /// <c>canonical_stage_states</c>, and <c>canonical_transition_runs</c> for legacy <c>'Blocked'</c>
+    /// vocabulary rather than trusting whatever receipt happened to travel with newly-promoted bytes.
+    /// Callers that complete a legacy/compatibility import - most notably
+    /// <c>CanonicalImportGateway.ExecuteAsync</c> - must call this on the freshly-promoted workspace
+    /// database, unconditionally and regardless of which import source kind produced it: at least one
+    /// source (a canonical export package rehydration) writes historical domain rows directly,
+    /// bypassing <see cref="CanonicalDataRepairSql"/> entirely, so it cannot be trusted to have left a
+    /// valid receipt behind on its own.
+    /// </summary>
+    public static async Task DeleteBlockedVocabularyReceiptAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await TableExistsAsync(connection, "schema_metadata", cancellationToken))
+        {
+            return;
+        }
+
+        await ExecuteAsync(
+            connection,
+            "DELETE FROM schema_metadata WHERE key = $key;",
+            cancellationToken,
+            ("$key", BlockedVocabularyRepairedMetadataKey));
+    }
+
+    /// <summary>
+    /// The structurally-complete branch: reached either directly from the memoized fast path
+    /// (stamp matched, so this is known to be CanonicalV16Complete without re-inspecting), or
+    /// from a full verification pass that just confirmed the same thing.
+    ///
+    /// <para>
+    /// This still imports a legacy resume document when present, and still self-heals stray
+    /// legacy <c>'Blocked'</c> vocabulary via <see cref="CanonicalDataRepairSql"/> when there is
+    /// any to heal. A downstream consumer (LoopRelay.Orchestration.Primitives'
+    /// <c>WorkflowResolverTests.Previously_latched_blocked_workflow_resolves_on_its_real_gate_condition_after_migration</c>)
+    /// depends on this: dropping it entirely regressed that test (see the Task 1 decision log
+    /// entry in <c>performance-remediation-plan.md</c>).
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Refinement (supersedes the Task 1 "always open the transaction" reading):</b> the write
+    /// transaction is now opened whenever a legacy resume import is pending, or whenever the
+    /// blocked-vocabulary receipt is stale or absent (see the Task 2.2 paragraph below: that
+    /// condition no longer depends on first probing for an actual stray <c>'Blocked'</c> row).
+    /// Task 1 measured the transaction as a no-op by <c>PRAGMA data_version</c> (a page-dirtying
+    /// signal) and treated that as sufficient; Task 2 enabling WAL exposed a different,
+    /// page-independent cost — opening a write transaction under WAL perturbs the
+    /// <c>-wal</c>/<c>-shm</c> side files even when it dirties zero pages, which broke
+    /// byte/tree-stability tests that don't tolerate any side-file churn on a healthy read.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Task 2.2 (receipted one-time repair):</b> the probe itself — a full-table scan of all
+    /// three history tables via <c>SELECT EXISTS(... UNION ALL ...)</c> — used to run
+    /// unconditionally on every call, including this method's hot/memoized-fast-path entry point,
+    /// even though (verified by grepping every write path for the literal <c>'Blocked'</c>/
+    /// <c>"Blocked"</c> token) only legacy-import/rehydration paths can ever introduce it, and
+    /// those all funnel through <see cref="EnsureSchemaAsync"/>'s migration branch (which already
+    /// writes the receipt below) or delete the receipt on completion (see
+    /// <see cref="DeleteBlockedVocabularyReceiptAsync"/>). The scan is now gated behind a receipt
+    /// in <c>schema_metadata</c> (<see cref="BlockedVocabularyRepairedMetadataKey"/>) whose value
+    /// is the shape fingerprint current when it was written: absent or mismatched means "scan",
+    /// matching means "already proven clean as of this shape, skip". The receipt is written in the
+    /// same transaction as the scan/repair it certifies (never outside it), so a repair that
+    /// throws partway through leaves no receipt behind — an ambiguous or missing receipt always
+    /// falls back to scanning, never to skipping.
+    /// </para>
+    /// </summary>
+    private static async Task RunStructurallyCompleteBranchAsync(
+        SqliteConnection connection,
+        string cacheKey,
+        CancellationToken cancellationToken)
+    {
+        LegacyResumeImport? legacyResume = await ReadLegacyResumeAsync(connection, cancellationToken);
+
+        string? blockedVocabularyReceipt = await ReadMetadataValueAsync(
+            connection, BlockedVocabularyRepairedMetadataKey, cancellationToken);
+        bool blockedVocabularyReceiptStaleOrAbsent = !string.Equals(
+            blockedVocabularyReceipt, CanonicalV16ShapeFingerprint, StringComparison.Ordinal);
+
+        // A stale or absent receipt forces needsRepair to true unconditionally, regardless of
+        // whether stray legacy vocabulary actually remains: a receipt only ever certifies proof
+        // already done, and must never itself suppress a repair that could still be needed.
+        // CanonicalDataRepairSql (idempotent either way) then runs on that path and re-certifies
+        // the receipt.
+        bool needsRepair = legacyResume is not null || blockedVocabularyReceiptStaleOrAbsent;
+        if (!needsRepair)
+        {
+            // The literal read-only fast path: nothing to import, the blocked-vocabulary receipt
+            // is already fresh, so no write transaction is opened at all - this connection never
+            // touches the -wal/-shm side files next to the database.
+            VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV16ShapeFingerprint);
+            return;
+        }
+
+#if DEBUG
+        Interlocked.Increment(ref RepairTransactionsOpened);
+#endif
         await using SqliteTransaction transaction = connection.BeginTransaction(deferred: false);
         try
         {
-            if (structurallyComplete)
-            {
-                if (legacyResume is not null)
-                {
-                    await ImportLegacyResumeAsync(connection, transaction, legacyResume, cancellationToken);
-                }
-
-                await ExecuteAsync(connection, transaction, CanonicalDataRepairSql, cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return;
-            }
-
-            await EnsureCanonicalV8ShapeAsync(connection, transaction, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV9Sql, cancellationToken);
-            await EnsureV9ColumnsAsync(connection, transaction, cancellationToken);
-            await EnsureV10ColumnsAsync(connection, transaction, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV10Sql, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV11Sql, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV12Sql, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV13Sql, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV14Sql, cancellationToken);
-            await EnsureV14ColumnsAsync(connection, transaction, cancellationToken);
-            await ExecuteAsync(connection, transaction, SchemaV15Sql, cancellationToken);
             if (legacyResume is not null)
             {
                 await ImportLegacyResumeAsync(connection, transaction, legacyResume, cancellationToken);
             }
+
             await ExecuteAsync(connection, transaction, CanonicalDataRepairSql, cancellationToken);
-            string workspaceId = await EnsureImmutableWorkspaceIdentityAsync(
-                connection,
-                transaction,
-                inspection,
-                preservedWorkspaceId,
-                cancellationToken);
-            await VerifyCanonicalV15ShapeAsync(connection, transaction, cancellationToken);
-            await RecordSchemaConvergenceAsync(
-                connection,
-                transaction,
-                inspection,
-                workspaceId,
-                cancellationToken);
-            await StampCanonicalSchemaAsync(connection, transaction, cancellationToken);
+            if (blockedVocabularyReceiptStaleOrAbsent)
+            {
+                // The scan just ran (clean or dirty, CanonicalDataRepairSql above makes either
+                // outcome converge to "no Blocked tokens remain"): certify that in the same
+                // transaction, so a throw anywhere above this line - or in the write itself -
+                // rolls back the receipt along with everything else.
+                await WriteBlockedVocabularyReceiptAsync(connection, transaction, cancellationToken);
+            }
+
             await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None);
             throw;
+        }
+
+        VerifiedSchemas[cacheKey] = (CurrentSchemaVersion, CanonicalV16ShapeFingerprint);
+    }
+
+    /// <summary>
+    /// Writes/refreshes the blocked-vocabulary repair receipt to the current canonical v16 shape
+    /// fingerprint. Must only be called from inside a transaction that also just ran (or confirmed
+    /// unnecessary) <see cref="CanonicalDataRepairSql"/>, so the receipt and the state it certifies
+    /// commit - or roll back - together.
+    /// </summary>
+    private static async Task WriteBlockedVocabularyReceiptAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await ExecuteAsync(
+            connection,
+            transaction,
+            """
+            INSERT INTO schema_metadata (key, value)
+            VALUES ($key, $value)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+            """,
+            cancellationToken,
+            ("$key", BlockedVocabularyRepairedMetadataKey),
+            ("$value", CanonicalV16ShapeFingerprint));
+    }
+
+    /// <summary>
+    /// Cheap re-read (2 small SELECTs) of the stamped <c>schema_version</c>/<c>schema_shape</c>
+    /// to confirm the memoized verification result for this path is still valid. Deliberately
+    /// does not re-run any of the ~190 structural probes; a false positive here (stamp unchanged
+    /// but physical shape corrupted by something other than this contract) is an accepted
+    /// trade-off of the memoization, not one this re-read attempts to catch.
+    /// </summary>
+    private static async Task<bool> MatchesCachedStampAsync(
+        SqliteConnection connection,
+        (long Version, string ShapeFingerprint) cached,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? versionText = await ReadMetadataValueAsync(connection, "schema_version", cancellationToken);
+            if (versionText is null ||
+                !long.TryParse(versionText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long version) ||
+                version != cached.Version)
+            {
+                return false;
+            }
+
+            string? shape = await ReadMetadataValueAsync(connection, SchemaShapeMetadataKey, cancellationToken);
+            return string.Equals(shape, cached.ShapeFingerprint, StringComparison.Ordinal);
+        }
+        catch (SqliteException)
+        {
+            // schema_metadata (or the database file) no longer looks like what we last verified;
+            // fall through to the full pipeline instead of trusting the memo.
+            return false;
         }
     }
 
@@ -232,12 +689,18 @@ public static class LoopRelayWorkspaceDatabase
 
             if (version == CurrentSchemaVersion)
             {
-                return await ClassifyV15ShapeAsync(
+                return await ClassifyV16ShapeAsync(
                     connection,
                     identity,
                     hasExplicitLineage: true,
                     stampedShape,
                     cancellationToken);
+            }
+
+            if (version == 15)
+            {
+                return await ClassifyV15ShapeAsync(
+                    connection, identity, hasExplicitLineage: true, stampedShape, cancellationToken);
             }
 
             if (version == 14)
@@ -331,12 +794,18 @@ public static class LoopRelayWorkspaceDatabase
 
         if (version == CurrentSchemaVersion)
         {
-            return await ClassifyV15ShapeAsync(
+            return await ClassifyV16ShapeAsync(
                 connection,
                 schemaIdentity: null,
                 hasExplicitLineage: false,
                 stampedShape,
                 cancellationToken);
+        }
+
+        if (version == 15)
+        {
+            return await ClassifyV15ShapeAsync(
+                connection, schemaIdentity: null, hasExplicitLineage: false, stampedShape, cancellationToken);
         }
 
         if (version == 14)
@@ -403,6 +872,115 @@ public static class LoopRelayWorkspaceDatabase
                 WorkspaceSchemaShape.Unknown,
                 null,
                 $"Schema version {version?.ToString(CultureInfo.InvariantCulture) ?? "(missing)"} has an unknown structural fingerprint.");
+    }
+
+    /// <summary>
+    /// Stamped fast path for read-side schema inspection (PERF-15). Answers from
+    /// <c>schema_metadata</c> alone - four small SELECTs - when the stamp is well-formed for the
+    /// current canonical contract, instead of the ~190 structural probes
+    /// <see cref="InspectSchemaAsync"/> issues. Falls back to the full classification, unchanged,
+    /// whenever the stamp is absent, malformed, or internally inconsistent.
+    ///
+    /// <para>
+    /// The returned <see cref="WorkspaceSchemaInspection"/> is field-for-field identical to what
+    /// <see cref="InspectSchemaAsync"/> returns for the same database. That equivalence holds by
+    /// construction rather than coincidence: the full path only reports
+    /// <see cref="WorkspaceSchemaShape.CanonicalV16Complete"/> when every
+    /// <c>CanonicalV16Requirements</c> token is satisfied, and in exactly that case its observed
+    /// fingerprint is the hash of that same complete token set - which is
+    /// <see cref="CanonicalV16ShapeFingerprint"/>.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>The trade-off, stated explicitly:</b> this trusts the stamp over the physical shape. A
+    /// database whose stamp still claims a complete v15 shape while a required table has been
+    /// dropped out-of-band is reported healthy here and corrupt by
+    /// <see cref="InspectSchemaAsync"/>. Callers that are the authority on whether mutation may
+    /// proceed against an untrusted file must keep using the full classification;
+    /// <see cref="EnsureSchemaAsync"/> does exactly that on first contact per process.
+    /// </para>
+    /// </summary>
+    public static async Task<WorkspaceSchemaInspection> InspectStampedAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!await TableExistsAsync(connection, "schema_metadata", cancellationToken))
+            {
+                return await InspectSchemaAsync(connection, cancellationToken);
+            }
+
+            string? identity = await ReadMetadataValueAsync(connection, "schema_identity", cancellationToken);
+            string? family = await ReadMetadataValueAsync(connection, "schema_family", cancellationToken);
+            string? stampedShape = await ReadMetadataValueAsync(connection, SchemaShapeMetadataKey, cancellationToken);
+            int? version = await ReadExistingSchemaVersionAsync(connection, cancellationToken);
+
+            bool wellFormedStamp =
+                string.Equals(identity, SchemaIdentity, StringComparison.Ordinal) &&
+                string.Equals(family, SchemaFamily, StringComparison.Ordinal) &&
+                version == CurrentSchemaVersion &&
+                string.Equals(stampedShape, CanonicalV16ShapeFingerprint, StringComparison.Ordinal);
+            if (!wellFormedStamp)
+            {
+                return await InspectSchemaAsync(connection, cancellationToken);
+            }
+
+            return new WorkspaceSchemaInspection(
+                SchemaIdentity,
+                WorkspaceSchemaFamily.CanonicalWorkspace,
+                CurrentSchemaVersion,
+                true,
+                WorkspaceSchemaShape.CanonicalV16Complete,
+                CanonicalV16ShapeFingerprint,
+                "Canonical workspace v16 lineage and complete physical-shape fingerprint verified.");
+        }
+        catch (SqliteException)
+        {
+            // The metadata reads themselves failed, so nothing about this file is trustworthy
+            // enough to short-circuit on. Let the full classification produce the diagnostic.
+            return await InspectSchemaAsync(connection, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Read-side companion to the in-process admission memo (PERF-2x): answers directly from
+    /// <see cref="VerifiedSchemas"/> plus the same 2-SELECT live stamp re-read
+    /// <see cref="MatchesCachedStampAsync"/> already performs for <see cref="EnsureSchemaAsync"/>'s
+    /// own fast path - without <see cref="EnsureSchemaAsync"/>'s legacy-repair tail
+    /// (<see cref="RunStructurallyCompleteBranchAsync"/>) or its capacity to open a migration
+    /// transaction, both of which are wrong for a caller holding a read-only connection that must
+    /// never attempt a write.
+    /// <para>
+    /// Returns <see langword="null"/> when this process has not yet admitted this database at all
+    /// (nothing memoized for it) or the live stamp no longer matches what was memoized - including
+    /// the tampered/rolled-back-version case, since the re-read compares the live
+    /// <c>schema_version</c>/<c>schema_shape</c> against the memoized values rather than trusting
+    /// the memo blindly. Callers fall back to <see cref="InspectStampedAsync"/> (itself falling
+    /// back further to full <see cref="InspectSchemaAsync"/> classification) in that case, so no
+    /// admission path is bypassed - this only short-circuits the common case where some earlier
+    /// call in this process already paid for full verification of the same database file.
+    /// </para>
+    /// </summary>
+    public static async Task<WorkspaceSchemaInspection?> InspectMemoizedAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        string cacheKey = Path.GetFullPath(connection.DataSource);
+        if (!VerifiedSchemas.TryGetValue(cacheKey, out (long Version, string ShapeFingerprint) cached) ||
+            !await MatchesCachedStampAsync(connection, cached, cancellationToken))
+        {
+            return null;
+        }
+
+        return new WorkspaceSchemaInspection(
+            SchemaIdentity,
+            WorkspaceSchemaFamily.CanonicalWorkspace,
+            CurrentSchemaVersion,
+            true,
+            WorkspaceSchemaShape.CanonicalV16Complete,
+            CanonicalV16ShapeFingerprint,
+            "Canonical workspace v16 lineage and complete physical-shape fingerprint verified.");
     }
 
     private static async Task<WorkspaceSchemaInspection> ClassifyV9ShapeAsync(
@@ -671,6 +1249,25 @@ public static class LoopRelayWorkspaceDatabase
             "Canonical workspace v15 lineage and complete physical-shape fingerprint verified.");
     }
 
+    private static async Task<WorkspaceSchemaInspection> ClassifyV16ShapeAsync(
+        SqliteConnection connection, string? schemaIdentity, bool hasExplicitLineage,
+        string? stampedShape, CancellationToken cancellationToken)
+    {
+        HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
+            connection, CanonicalV16Requirements, transaction: null, cancellationToken);
+        string observedFingerprint = ComputeShapeFingerprint(satisfied);
+        bool validStamp = hasExplicitLineage &&
+            string.Equals(stampedShape, CanonicalV16ShapeFingerprint, StringComparison.Ordinal) &&
+            HasAll(satisfied, CanonicalV16Requirements);
+        if (!validStamp)
+            return new WorkspaceSchemaInspection(schemaIdentity, WorkspaceSchemaFamily.Unknown, 16,
+                hasExplicitLineage, WorkspaceSchemaShape.CorruptCanonicalV16, observedFingerprint,
+                "Canonical-v16 shape stamp is missing its declared recovery-scope contract or lineage; mutation is blocked.");
+        return new WorkspaceSchemaInspection(SchemaIdentity, WorkspaceSchemaFamily.CanonicalWorkspace, 16, true,
+            WorkspaceSchemaShape.CanonicalV16Complete, observedFingerprint,
+            "Canonical workspace v16 lineage and complete physical-shape fingerprint verified.");
+    }
+
     private static async Task<string?> ValidateExistingWorkspaceIdentityAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
@@ -718,17 +1315,17 @@ public static class LoopRelayWorkspaceDatabase
         return scalar is null or DBNull ? null : Convert.ToString(scalar, CultureInfo.InvariantCulture);
     }
 
-    private static async Task VerifyCanonicalV15ShapeAsync(
+    private static async Task VerifyCanonicalV16ShapeAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         CancellationToken cancellationToken)
     {
         HashSet<string> satisfied = await ReadSatisfiedRequirementsAsync(
             connection,
-            CanonicalV15Requirements,
+            CanonicalV16Requirements,
             transaction,
             cancellationToken);
-        string[] missing = CanonicalV15Requirements
+        string[] missing = CanonicalV16Requirements
             .Where(requirement => !satisfied.Contains(requirement.Token))
             .Select(requirement => requirement.Token)
             .Distinct(StringComparer.Ordinal)
@@ -737,16 +1334,16 @@ public static class LoopRelayWorkspaceDatabase
         if (missing.Length > 0)
         {
             throw new InvalidOperationException(
-                "Canonical-v15 migration verification failed. Missing contract requirements: " +
+                "Canonical-v16 migration verification failed. Missing contract requirements: " +
                 string.Join(", ", missing.Take(12)) +
                 (missing.Length > 12 ? $" (+{missing.Length - 12} more)." : "."));
         }
 
         string fingerprint = ComputeShapeFingerprint(satisfied);
-        if (!string.Equals(fingerprint, CanonicalV15ShapeFingerprint, StringComparison.Ordinal))
+        if (!string.Equals(fingerprint, CanonicalV16ShapeFingerprint, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Canonical-v15 migration produced fingerprint '{fingerprint}', expected '{CanonicalV15ShapeFingerprint}'.");
+                $"Canonical-v16 migration produced fingerprint '{fingerprint}', expected '{CanonicalV16ShapeFingerprint}'.");
         }
     }
 
@@ -896,7 +1493,7 @@ public static class LoopRelayWorkspaceDatabase
             new("schema_identity", SchemaIdentity),
             new("schema_family", SchemaFamily),
             new("schema_version", CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture)),
-            new(SchemaShapeMetadataKey, CanonicalV15ShapeFingerprint),
+            new(SchemaShapeMetadataKey, CanonicalV16ShapeFingerprint),
         ])
         {
             await ExecuteAsync(
@@ -973,11 +1570,11 @@ public static class LoopRelayWorkspaceDatabase
             ON CONFLICT(convergence_id) DO NOTHING;
             """,
             cancellationToken,
-            ("$convergence_id", $"canonical-v15:{workspaceId}:{inspection.Shape}:{sourceFingerprint}"),
+            ("$convergence_id", $"canonical-v16:{workspaceId}:{inspection.Shape}:{sourceFingerprint}"),
             ("$source_shape", inspection.Shape.ToString()),
             ("$source_fingerprint", sourceFingerprint),
             ("$source_version", inspection.Version),
-            ("$target_fingerprint", CanonicalV15ShapeFingerprint),
+            ("$target_fingerprint", CanonicalV16ShapeFingerprint),
             ("$workspace_id", workspaceId),
             ("$completed_at", completedAt));
     }
@@ -1014,6 +1611,20 @@ public static class LoopRelayWorkspaceDatabase
         await AddColumnIfMissingAsync(connection, transaction, "attempts", "agent_role_policy_id",
             "text", cancellationToken);
     }
+
+    /// <summary>
+    /// v16 adds the denormalised warm-session scope key to the recovery action ledger. The column
+    /// is deliberately <b>nullable</b>: <c>canonical_recovery_action_events.document_json</c> is
+    /// itself nullable (the plain action-journal writer never populates it), and a document that
+    /// carries no <c>scopeId</c> member extracts to NULL. A <c>NOT NULL</c> declaration would fail
+    /// the migration on the first such row in a real workspace.
+    /// </summary>
+    private static async Task EnsureV16ColumnsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken) =>
+        await AddColumnIfMissingAsync(connection, transaction, "canonical_recovery_action_events",
+            "scope_id", "text", cancellationToken);
 
     public static async Task<string> ReadWorkspaceIdentityAsync(
         SqliteConnection connection,
@@ -1166,10 +1777,6 @@ public static class LoopRelayWorkspaceDatabase
         ("precondition_json", "text"),
         ("postcondition_json", "text"),
         ("reconciliation_policy", "text"),
-        ("row_version", "integer not null default 0"),
-        ("lease_owner", "text"),
-        ("lease_expires_at", "text"),
-        ("attempt_count", "integer not null default 0"),
         ("terminal_receipt_id", "text"),
     ];
 
@@ -1217,13 +1824,11 @@ public static class LoopRelayWorkspaceDatabase
         "history_evidence_items",
         "compatibility_import_operations",
         "compatibility_import_events",
-        "canonical_projection_effects",
         "transition_recovery_plans",
         "canonical_effect_intents",
         "execution_recommendation_evidence",
         "runtime_profile_evaluations",
         "prompt_dispatch_events",
-        "persistence_projection_checkpoints",
     ];
 
     private static readonly string[] Merge4V9IndexNames =
@@ -1233,7 +1838,6 @@ public static class LoopRelayWorkspaceDatabase
         "idx_history_evidence_provider",
         "idx_history_evidence_recovery",
         "idx_compatibility_import_events_operation",
-        "idx_projection_effects_status",
         "idx_transition_recovery_plans_run",
         "idx_canonical_effect_intents_status",
         "idx_prompt_dispatch_events_dispatch",
@@ -1247,172 +1851,21 @@ public static class LoopRelayWorkspaceDatabase
         "idx_decision_turn_transition",
     ];
 
-    private static IReadOnlyList<ShapeRequirement> CoreCanonicalSignatureRequirements =>
-    [
-        ShapeRequirement.Table("workspace_identity"),
-        ShapeRequirement.Table("runs"),
-        ShapeRequirement.Table("workflow_instances"),
-        ShapeRequirement.Table("attempts"),
-        ShapeRequirement.Table("agent_sessions"),
-        ShapeRequirement.Table("agent_turns"),
-        ShapeRequirement.Table("canonical_rendered_prompts"),
-    ];
-
-    private static IReadOnlyList<ShapeRequirement> Merge4V9Requirements =>
-        Merge4V9TableNames.Select(ShapeRequirement.Table)
-            .Concat(V9CausalColumns.Select(item => ShapeRequirement.Column(item.Table, item.Column, "text")))
-            .Concat(Merge4V9IndexNames.Select(ShapeRequirement.Index))
-            .Concat(
-            [
-                ShapeRequirement.ForeignKey("decision_session_lineage", "scope_id", "decision_session_scopes", "scope_id"),
-                ShapeRequirement.ForeignKey("decision_session_lineage", "parent_lineage_id", "decision_session_lineage", "lineage_id"),
-                ShapeRequirement.ForeignKey("session_recovery_attempts", "scope_id", "decision_session_scopes", "scope_id"),
-                ShapeRequirement.ForeignKey("decision_session_turns", "scope_id", "decision_session_scopes", "scope_id"),
-                ShapeRequirement.ForeignKey("history_evidence_items", "evidence_set_id", "history_evidence_sets", "evidence_set_id"),
-            ])
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> ArchitectureConvergenceV9Requirements =>
-        V9TurnEvidenceColumns
-            .Select(item => ShapeRequirement.Column("agent_turns", item.Column, item.Type))
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_runtime_prerequisites"),
-                ShapeRequirement.Column("canonical_runtime_prerequisites", "prerequisite_check_id", "text"),
-                ShapeRequirement.Column("canonical_runtime_prerequisites", "run_id", "text"),
-                ShapeRequirement.Column("canonical_runtime_prerequisites", "checked_at", "text"),
-                ShapeRequirement.Column("canonical_runtime_prerequisites", "diagnostics_json", "text"),
-                ShapeRequirement.Index("idx_canonical_runtime_prerequisites_run"),
-            ])
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> ConvergenceReceiptRequirements =>
-    [
-        ShapeRequirement.Table("workspace_schema_convergences"),
-        ShapeRequirement.Column("workspace_schema_convergences", "convergence_id", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "source_shape", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "source_fingerprint", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "source_version", "integer"),
-        ShapeRequirement.Column("workspace_schema_convergences", "target_fingerprint", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "workspace_id", "text"),
-        ShapeRequirement.Column("workspace_schema_convergences", "completed_at", "text"),
-    ];
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV9Requirements =>
-        CanonicalCoreTableNames.Select(ShapeRequirement.Table)
-            .Concat(Merge4V9Requirements)
-            .Concat(ArchitectureConvergenceV9Requirements)
-            .Concat(ConvergenceReceiptRequirements)
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV10Requirements =>
-        CanonicalV9Requirements
-            .Concat(V10EffectIntentColumns.Select(item => ShapeRequirement.Column(
-                "canonical_effect_intents",
-                item.Column,
-                item.Declaration.StartsWith("integer", StringComparison.Ordinal) ? "integer" : "text")))
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_effect_lifecycle_events"),
-                ShapeRequirement.Table("canonical_effect_receipts"),
-                ShapeRequirement.Table("canonical_effect_reconciliation_attempts"),
-                ShapeRequirement.Index("idx_effect_intents_unsettled"),
-                ShapeRequirement.Index("idx_effect_intents_lease"),
-                ShapeRequirement.Index("idx_effect_intents_transition_attempt"),
-                ShapeRequirement.Index("idx_effect_intents_semantic_operation"),
-                ShapeRequirement.Index("idx_effect_receipts_intent"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV11Requirements =>
-        CanonicalV10Requirements
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_recovery_cases"),
-                ShapeRequirement.Table("canonical_recovery_classifications"),
-                ShapeRequirement.Table("canonical_recovery_source_links"),
-                ShapeRequirement.Table("canonical_recovery_plans"),
-                ShapeRequirement.Table("canonical_recovery_action_events"),
-                ShapeRequirement.Column("canonical_recovery_cases", "scope_identity", "text"),
-                ShapeRequirement.Column("canonical_recovery_plans", "compatibility_document_json", "text"),
-                ShapeRequirement.Column("canonical_recovery_action_events", "document_json", "text"),
-                ShapeRequirement.Index("idx_recovery_cases_subject"),
-                ShapeRequirement.Index("idx_recovery_classifications_case"),
-                ShapeRequirement.Index("idx_recovery_source_links_classification"),
-                ShapeRequirement.Index("idx_recovery_plans_case"),
-                ShapeRequirement.Index("idx_recovery_action_events_plan"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV12Requirements =>
-        CanonicalV11Requirements
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_interaction_requests"),
-                ShapeRequirement.Table("canonical_interaction_policy_evaluations"),
-                ShapeRequirement.Table("canonical_interaction_responses"),
-                ShapeRequirement.Table("canonical_interaction_lifecycle_events"),
-                ShapeRequirement.Index("idx_interaction_requests_state"),
-                ShapeRequirement.Index("idx_interaction_requests_causality"),
-                ShapeRequirement.Index("idx_interaction_events_request"),
-                ShapeRequirement.Index("idx_interaction_responses_semantic"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV13Requirements =>
-        CanonicalV12Requirements
-            .Concat(
-            [
-                ShapeRequirement.Table("canonical_storage_operation_plans"),
-                ShapeRequirement.Table("canonical_storage_operation_events"),
-                ShapeRequirement.Table("canonical_storage_operation_receipts"),
-                ShapeRequirement.Index("idx_storage_operation_events_operation"),
-                ShapeRequirement.Index("idx_storage_operation_plans_lifecycle"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV14Requirements =>
-        CanonicalV13Requirements.Concat(
-            [
-                ShapeRequirement.Table("canonical_import_detections"),
-                ShapeRequirement.Table("canonical_import_previews"),
-                ShapeRequirement.Table("canonical_import_mappings"),
-                ShapeRequirement.Table("canonical_import_verifications"),
-                ShapeRequirement.Table("canonical_import_receipts"),
-                ShapeRequirement.Table("canonical_source_authority"),
-                ShapeRequirement.Table("canonical_import_adapter_exhaustion"),
-                ShapeRequirement.Table("canonical_kernel_decisions"),
-                ShapeRequirement.Column("canonical_import_previews", "import_id", "text"),
-                ShapeRequirement.Column("runs", "catalog_identity", "text"),
-                ShapeRequirement.Column("runs", "catalog_version", "text"),
-                ShapeRequirement.Column("workflow_instances", "catalog_identity", "text"),
-                ShapeRequirement.Column("attempts", "agent_role_policy_id", "text"),
-                ShapeRequirement.Table("canonical_agent_role_policies"),
-                ShapeRequirement.Index("idx_import_previews_fingerprint"),
-                ShapeRequirement.Index("idx_import_mappings_preview"),
-                ShapeRequirement.Index("idx_import_receipts_fingerprint"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
-
-    private static IReadOnlyList<ShapeRequirement> CanonicalV15Requirements =>
-        CanonicalV14Requirements.Concat(
-            [
-                ShapeRequirement.Table("canonical_completion_decisions"),
-                ShapeRequirement.Table("canonical_completion_certificates"),
-                ShapeRequirement.Table("canonical_completion_closure_plans"),
-                ShapeRequirement.Table("canonical_completion_settlements"),
-                ShapeRequirement.Table("canonical_certified_terminal_facts"),
-                ShapeRequirement.Index("idx_completion_decisions_root"),
-                ShapeRequirement.Index("idx_completion_settlements_plan"),
-            ])
-            .DistinctBy(requirement => requirement.Token, StringComparer.Ordinal)
-            .ToArray();
+    // These were `=>` LINQ-chain computed properties, rebuilding their lists (and, for the
+    // Canonical*Requirements chain, every earlier version's list transitively) on every access.
+    // They are now built once by the static constructor above and cached as plain fields.
+    private static readonly IReadOnlyList<ShapeRequirement> CoreCanonicalSignatureRequirements;
+    private static readonly IReadOnlyList<ShapeRequirement> Merge4V9Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> ArchitectureConvergenceV9Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> ConvergenceReceiptRequirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV9Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV10Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV11Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV12Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV13Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV14Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV15Requirements;
+    private static readonly IReadOnlyList<ShapeRequirement> CanonicalV16Requirements;
 
     private enum ShapeRequirementKind
     {
@@ -1486,6 +1939,9 @@ public static class LoopRelayWorkspaceDatabase
         ShapeRequirement requirement,
         CancellationToken cancellationToken)
     {
+#if DEBUG
+        Interlocked.Increment(ref ShapeRequirementProbes);
+#endif
         switch (requirement.Kind)
         {
             case ShapeRequirementKind.Table:
@@ -2024,19 +2480,6 @@ public static class LoopRelayWorkspaceDatabase
             foreign key(import_id) references compatibility_import_operations(import_id)
         );
 
-        CREATE TABLE IF NOT EXISTS canonical_projection_effects(
-            effect_id text primary key,
-            history_id text not null,
-            target_path text not null,
-            content_hash text not null,
-            status text not null,
-            idempotency_key text not null unique,
-            planned_at text not null,
-            started_at text,
-            completed_at text,
-            failure text
-        );
-
         CREATE TABLE IF NOT EXISTS transition_recovery_plans(
             recovery_id text primary key,
             transition_run_id text not null,
@@ -2115,13 +2558,6 @@ public static class LoopRelayWorkspaceDatabase
             evidence_json text not null
         );
 
-        CREATE TABLE IF NOT EXISTS persistence_projection_checkpoints(
-            projection_identity text primary key,
-            ledger_sequence integer not null,
-            projected_at text not null,
-            model_hash text not null
-        );
-
         CREATE TABLE IF NOT EXISTS canonical_runtime_prerequisites(
             prerequisite_check_id text primary key,
             run_id text,
@@ -2139,8 +2575,6 @@ public static class LoopRelayWorkspaceDatabase
             ON history_evidence_items(recovery_attempt_id);
         CREATE INDEX IF NOT EXISTS idx_compatibility_import_events_operation
             ON compatibility_import_events(import_id, recorded_at);
-        CREATE INDEX IF NOT EXISTS idx_projection_effects_status
-            ON canonical_projection_effects(status, planned_at);
         CREATE INDEX IF NOT EXISTS idx_transition_recovery_plans_run
             ON transition_recovery_plans(transition_run_id, planned_at);
         CREATE INDEX IF NOT EXISTS idx_canonical_effect_intents_status
@@ -2192,22 +2626,8 @@ public static class LoopRelayWorkspaceDatabase
             recorded_at text not null
         );
 
-        CREATE TABLE IF NOT EXISTS canonical_effect_reconciliation_attempts(
-            reconciliation_id text primary key,
-            effect_intent_id text not null,
-            worker_id text not null,
-            verdict text not null,
-            before_facts_json text not null,
-            after_facts_json text not null,
-            external_correlation text,
-            evidence_json text not null,
-            recorded_at text not null
-        );
-
         CREATE INDEX IF NOT EXISTS idx_effect_intents_unsettled
             ON canonical_effect_intents(status, requiredness, effect_order, planned_at);
-        CREATE INDEX IF NOT EXISTS idx_effect_intents_lease
-            ON canonical_effect_intents(lease_expires_at, row_version);
         CREATE INDEX IF NOT EXISTS idx_effect_intents_transition_attempt
             ON canonical_effect_intents(transition_run_id, attempt_id, effect_order);
         CREATE INDEX IF NOT EXISTS idx_effect_intents_semantic_operation
@@ -2216,8 +2636,6 @@ public static class LoopRelayWorkspaceDatabase
             ON canonical_effect_receipts(effect_intent_id, recorded_at);
         CREATE INDEX IF NOT EXISTS idx_effect_lifecycle_intent
             ON canonical_effect_lifecycle_events(effect_intent_id, event_id);
-        CREATE INDEX IF NOT EXISTS idx_effect_reconciliation_intent
-            ON canonical_effect_reconciliation_attempts(effect_intent_id, recorded_at);
 
         INSERT INTO canonical_effect_lifecycle_events (
             effect_intent_id, lifecycle, worker_id, explanation, evidence_json, recorded_at
@@ -2264,10 +2682,7 @@ public static class LoopRelayWorkspaceDatabase
             precondition_json = COALESCE(precondition_json, '{"kind":"legacy-unknown"}'),
             postcondition_json = COALESCE(postcondition_json, '{"kind":"legacy-unknown"}'),
             reconciliation_policy = COALESCE(reconciliation_policy, 'human-decision-required'),
-            status = CASE WHEN executor_key IS NULL THEN 'HumanActionRequired' ELSE status END,
-            row_version = CASE WHEN executor_key IS NULL THEN row_version + 1 ELSE row_version END,
-            lease_owner = NULL,
-            lease_expires_at = NULL;
+            status = CASE WHEN executor_key IS NULL THEN 'HumanActionRequired' ELSE status END;
         """;
 
     private const string SchemaV11Sql = """
@@ -2628,6 +3043,32 @@ public static class LoopRelayWorkspaceDatabase
             ON canonical_completion_settlements(plan_id, settled_at);
         """;
 
+    /// <summary>
+    /// v16 backfill + index for the denormalised warm-session recovery scope (PERF-20). Runs after
+    /// <c>EnsureV16ColumnsAsync</c> has added the column, inside the same migration transaction.
+    ///
+    /// <para>
+    /// <c>document_json</c> stays the source of truth for the attempt itself - the read path still
+    /// deserializes it. <c>scope_id</c> is purely a derived lookup key, so the backfill copies out
+    /// of the document and never the other way round. Rows with no document, or a document with no
+    /// <c>scopeId</c> member, extract to NULL and stay NULL: they are exactly the rows the lookup
+    /// already excluded via <c>document_json IS NOT NULL</c>.
+    /// </para>
+    ///
+    /// <para>
+    /// The <c>WHERE scope_id IS NULL</c> guard keeps re-running the convergence a no-op over rows
+    /// an earlier pass already populated, so this never rewrites a fact row twice.
+    /// </para>
+    /// </summary>
+    private const string SchemaV16Sql = """
+        UPDATE canonical_recovery_action_events
+        SET scope_id = json_extract(document_json, '$.scopeId')
+        WHERE scope_id IS NULL AND document_json IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_recovery_action_events_scope
+            ON canonical_recovery_action_events(scope_id, event_id);
+        """;
+
     private const string SchemaSql = """
         CREATE TABLE IF NOT EXISTS schema_metadata(
             key text primary key,
@@ -2639,79 +3080,8 @@ public static class LoopRelayWorkspaceDatabase
             value text not null
         );
 
-        CREATE TABLE IF NOT EXISTS sync_markers(
-            domain text primary key,
-            canonical_hash text not null,
-            export_hash text,
-            generation integer not null,
-            updated_at text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS decision_ledger(
-            decision_id text primary key,
-            timestamp text not null,
-            state text not null,
-            transition text not null,
-            prompt text not null,
-            projection_path text not null,
-            input_paths_json text not null,
-            output_paths_json text not null,
-            decision text not null,
-            confidence text not null,
-            rationale_excerpt text not null
-        );
-
         CREATE TABLE IF NOT EXISTS roadmap_state(
             id integer primary key check (id = 1),
-            document_json text not null,
-            updated_at text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS artifact_lifecycle(
-            path_key text primary key,
-            path text not null,
-            state text not null,
-            updated_at text not null,
-            notes text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS split_families(
-            family_id text primary key,
-            proposal text not null,
-            selected_child text not null,
-            selected_child_rationale text not null,
-            created_at text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS split_family_children(
-            family_id text not null,
-            ordinal integer not null,
-            child_path text not null,
-            primary key(family_id, ordinal),
-            unique(family_id, child_path)
-        );
-
-        CREATE TABLE IF NOT EXISTS split_family_dependency_order(
-            family_id text not null,
-            ordinal integer not null,
-            child_path text not null,
-            primary key(family_id, ordinal)
-        );
-
-        CREATE TABLE IF NOT EXISTS execution_preparation_manifest(
-            id integer primary key check (id = 1),
-            document_json text not null,
-            updated_at text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS selection_provenance_manifest(
-            id integer primary key check (id = 1),
-            document_json text not null,
-            updated_at text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS projection_manifest_entries(
-            runtime_prompt text primary key,
             document_json text not null,
             updated_at text not null
         );
@@ -2760,23 +3130,6 @@ public static class LoopRelayWorkspaceDatabase
             writer text,
             metadata_json text not null,
             unique(stem, sequence)
-        );
-
-        CREATE TABLE IF NOT EXISTS completed_epic_archives(
-            archive_index integer primary key,
-            archive_directory text not null unique,
-            synthesis_path text not null unique,
-            created_at text not null,
-            metadata_json text not null
-        );
-
-        CREATE TABLE IF NOT EXISTS completed_epic_records(
-            archive_index integer not null,
-            domain text not null,
-            logical_path text not null,
-            export_path text not null,
-            content_hash text not null,
-            primary key(archive_index, domain, logical_path)
         );
 
         CREATE TABLE IF NOT EXISTS workflow_transactions(
@@ -2934,8 +3287,6 @@ public static class LoopRelayWorkspaceDatabase
             content_hash text not null
         );
 
-        CREATE INDEX IF NOT EXISTS idx_artifact_lifecycle_path_key ON artifact_lifecycle(path_key);
-        CREATE INDEX IF NOT EXISTS idx_split_family_children_child_path ON split_family_children(child_path);
         CREATE INDEX IF NOT EXISTS idx_transition_journal_correlation_id ON transition_journal(correlation_id);
         CREATE INDEX IF NOT EXISTS idx_loop_history_kind_sequence_desc ON loop_history(kind, sequence desc);
         CREATE INDEX IF NOT EXISTS idx_execution_evidence_stem_sequence_desc ON execution_evidence(stem, sequence desc);

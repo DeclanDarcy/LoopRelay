@@ -206,13 +206,19 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
     /// environment — the default reads the real environment and filesystem.</summary>
     internal RuntimePrerequisiteDoctor RuntimePrerequisiteDoctor { get; set; } = new();
 
-    internal static LoopRelayCompositionRoot CreateForTests(Repository repository) =>
+    /// <param name="storageVerifier">Replaces the verifier the repository observer runs, so a
+    /// test can count how many times a run verifies workspace storage - one verification is one
+    /// repository observation. Null keeps the composition's own choice.</param>
+    internal static LoopRelayCompositionRoot CreateForTests(
+        Repository repository,
+        IStorageVerifier? storageVerifier = null) =>
         CreateCore(
             repository,
             agentRuntime: null,
             processRunner: new ProcessRunner(),
             RequireBrain(CliSettingsLoader.Load()),
-            provider: null);
+            provider: null,
+            storageVerifier: storageVerifier);
 
     public static LoopRelayCompositionRoot CreateProduction(
         Repository repository,
@@ -223,9 +229,7 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
         var settings = CliSettingsLoader.Load();
         ResolvedOperationalPolicy policy = OperationalPolicyResolver.Resolve(
             settings.PolicyInputs,
-            settings.IsDefaultTemplate
-                ? $"settings:{settings.Path} (default template)"
-                : $"settings:{settings.Path}",
+            DescribePolicySource(settings.Path, settings.IsDefaultTemplate),
             CombineInvocationOverrides(policyOverrides),
             settings.PermissionInputs);
         var services = new ServiceCollection();
@@ -281,6 +285,29 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
     {
         Converters = { new JsonStringEnumConverter() },
     };
+
+    // The descriptor of the settings file that supplied the workspace policy layer. It is the
+    // sole workspace-layer origin string, and it reaches durable authority rows four ways:
+    // `canonical_policy_resolutions.source_description` and `.provenance_json` (as every
+    // workspace-layer `PolicyFieldProvenance.Origin` and every `workspace:...` override-chain
+    // entry), and `canonical_agent_role_policies.provenance` and `.document_json` (via
+    // `resolved-policy:{SourceDescription}`).
+    // Only the file name is recorded. The settings file is resolved from AppContext.BaseDirectory
+    // or LOOPRELAY_SETTINGS_PATH, so it sits outside the repository and has no workspace-relative
+    // form; its directory is a property of the installation, not of the workspace, and storing it
+    // pins the row to one machine and leaks the user's home directory. The file name still
+    // separates the consumer settings file from the development fallback template, which -
+    // together with the marker below - is the whole of what this descriptor is evidence for.
+    internal static string DescribePolicySource(string settingsPath, bool isDefaultTemplate)
+    {
+        // Both separators are handled explicitly rather than via Path.GetFileName, which does not
+        // treat '\' as a separator on Unix: the descriptor must not depend on which platform is
+        // reading it back.
+        string fileName = settingsPath[(settingsPath.LastIndexOfAny(['/', '\\']) + 1)..];
+        return isDefaultTemplate
+            ? $"settings:{fileName} (default template)"
+            : $"settings:{fileName}";
+    }
 
     // Recognized environment variables are ambient invocation-layer inputs; explicit --policy
     // flags beat them for the same key. The decision-resume kill switch stays functional
@@ -348,6 +375,19 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
         CreateCore(repository, agentRuntime, processRunner,
             RequireBrain(CliSettingsLoader.Load()), provider: null, policy: policy);
 
+    /// <param name="storageVerifier">Replaces the verifier the repository observer runs, so a
+    /// test can count how many times a run verifies workspace storage - one verification is one
+    /// repository observation. Null keeps the composition's own choice.</param>
+    internal static LoopRelayCompositionRoot CreateForTests(
+        Repository repository,
+        IAgentRuntime agentRuntime,
+        IProcessRunner processRunner,
+        IStorageVerifier? storageVerifier,
+        ResolvedOperationalPolicy? policy = null) =>
+        CreateCore(repository, agentRuntime, processRunner,
+            RequireBrain(CliSettingsLoader.Load()), provider: null, policy: policy,
+            storageVerifier: storageVerifier);
+
     private static BrainConfiguration RequireBrain(CliSettingsLoadResult settings)
     {
         ConfiguredBrainFacts configured = settings.Runtime.Brain;
@@ -370,7 +410,8 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
         TextWriter? error = null,
         IAgentSessionContinuityRuntime? continuityRuntime = null,
         ResolvedOperationalPolicy? policy = null,
-        bool productionRuntime = false)
+        bool productionRuntime = false,
+        IStorageVerifier? storageVerifier = null)
     {
         // Non-production compositions execute under the built-in defaults so every attempt
         // still records one resolved policy identity.
@@ -379,7 +420,7 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
             "built-in",
             [],
             PermissionPolicyFactory.Minimum);
-        IStorageVerifier storageVerifier = productionRuntime
+        storageVerifier ??= productionRuntime
             ? new WorkspaceStorageVerifierAdapter()
             : new FileSystemStorageVerifier();
         var repositoryObserver = new RepositoryObserver(storageVerifier);
@@ -430,6 +471,7 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
             promptPolicyProfile,
             workflowDefinitions,
             recoveryCases,
+            repositoryObserver,
             productionRuntime);
         var transitionEvidenceStore = new CanonicalTransitionEvidenceStore(persistence);
         var transitionBoundaryJournal = new CanonicalTransitionBoundaryJournal(persistence);
@@ -541,7 +583,6 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
                  liveHandoffRotationExecutor, liveDecisionRetirementExecutor,
                  operationalDeltaRotationExecutor]),
             effectReconciler,
-            TimeSpan.FromMinutes(2),
             _recoveryCases: recoveryCases);
         var effectCoordinator = new TransitionEffectCoordinator(
             effectWorkStore,
@@ -550,8 +591,7 @@ internal sealed partial class LoopRelayCompositionRoot : IAsyncDisposable
         var workflowController = new WorkflowController(
             workflowResolver,
             transitionRuntime,
-            effectCoordinator,
-            observationSource);
+            effectCoordinator);
         var boundaryEvidenceWriter = new WorkflowBoundaryEvidenceWriter(
             new CanonicalChainBoundaryEvidenceStore(persistence));
         var workflowChainRunner = new WorkflowChainRunner(

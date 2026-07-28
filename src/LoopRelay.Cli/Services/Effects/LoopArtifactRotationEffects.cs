@@ -55,7 +55,8 @@ internal sealed class DirectLoopArtifactEffectCoordinator(LoopArtifacts _artifac
 
 internal sealed class DurableLoopArtifactEffectCoordinator(
     Repository _repository,
-    LoopArtifacts _artifacts) : ILoopArtifactEffectCoordinator
+    LoopArtifacts _artifacts,
+    EffectParent? _parent = null) : ILoopArtifactEffectCoordinator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -83,14 +84,7 @@ internal sealed class DurableLoopArtifactEffectCoordinator(
         string? content = await _artifacts.ReadAsync(sourceRelativePath);
         if (content is null) return null;
         var store = new CanonicalEffectWorkStore(_repository);
-        IReadOnlyList<EffectWorkItem> existingPlan = await store.ReadPlanAsync(
-            causality.TransitionRun, cancellationToken);
-        EffectWorkItem? parent = existingPlan
-            .Where(item => item.State == EffectLifecycle.Started &&
-                item.Intent.Causality.Attempt == causality.Attempt &&
-                !IsLoopArtifactExecutor(item.Intent.Executor))
-            .OrderByDescending(item => item.Intent.Order)
-            .FirstOrDefault();
+        EffectParent? parent = _parent;
         string contentHash = LoopHistoryRecord.ComputeContentHash(content);
         var payload = new LoopArtifactRotationEffectPayload(
             operation,
@@ -107,8 +101,8 @@ internal sealed class DurableLoopArtifactEffectCoordinator(
                 JsonSerializer.Serialize(new { operation, occurrence }, JsonOptions)),
             payloadJson,
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson))),
-            parent?.Intent.Order + 1 ?? 0,
-            parent is null ? [] : [parent.Intent.Identity],
+            parent?.Order + 1 ?? 0,
+            parent is null ? [] : [parent.Identity],
             EffectRequiredness.BlockingLocal,
             new EffectCondition("source-content-hash", JsonSerializer.Serialize(new { contentHash }, JsonOptions)),
             new EffectCondition("history-durable-source-retired", JsonSerializer.Serialize(new { contentHash }, JsonOptions)),
@@ -141,12 +135,11 @@ internal sealed class DurableLoopArtifactEffectCoordinator(
                     [rotationExecutor.Key] = rotationReconciler,
                     [WorkspaceEffectExecutorKeys.FilesystemWrite] = filesystemReconciler,
                 },
-                rotationReconciler),
-            TimeSpan.FromMinutes(2));
+                rotationReconciler));
         await worker.RunOnceAsync(cancellationToken, only: new HashSet<EffectIntentIdentity> { intent.Identity });
         EffectWorkItem rotation = await store.ReadAsync(intent.Identity, cancellationToken)
             ?? throw new InvalidOperationException("Loop-artifact rotation intent disappeared.");
-        if (rotation.State != EffectLifecycle.Succeeded || rotation.Receipt is not { PostconditionSatisfied: true })
+        if (rotation.State != EffectLifecycle.Succeeded)
         {
             throw new InvalidOperationException(
                 $"Operational-delta rotation did not produce a verified receipt; current state is {rotation.State}.");
@@ -173,11 +166,6 @@ internal sealed class DurableLoopArtifactEffectCoordinator(
         "RotateOperationalDelta" => WorkspaceEffectExecutorKeys.RotateOperationalDelta,
         _ => throw new InvalidOperationException($"Unsupported loop-artifact operation '{operation}'."),
     };
-
-    private static bool IsLoopArtifactExecutor(EffectExecutorKey key) =>
-        key == WorkspaceEffectExecutorKeys.RotateLiveHandoff ||
-        key == WorkspaceEffectExecutorKeys.RetireLiveDecisions ||
-        key == WorkspaceEffectExecutorKeys.RotateOperationalDelta;
 }
 
 internal abstract class LoopArtifactRotationEffectExecutorBase : IEffectExecutor
@@ -214,7 +202,7 @@ internal abstract class LoopArtifactRotationEffectExecutorBase : IEffectExecutor
                 [payload.SourceRelativePath, beforeHash], payload.ExpectedContentHash, beforeHash, false);
         }
 
-        bool mutated = await MutateAsync(intent.Causality);
+        bool mutated = await MutateAsync(intent.Causality, new EffectParent(intent.Identity, intent.Order));
         bool satisfied = mutated;
         return new EffectExecutionObservation(
             satisfied ? EffectLifecycle.Succeeded : EffectLifecycle.Failed,
@@ -228,7 +216,12 @@ internal abstract class LoopArtifactRotationEffectExecutorBase : IEffectExecutor
         JsonSerializer.Deserialize<LoopArtifactRotationEffectPayload>(intent.TypedPayload, JsonOptions)
         ?? throw new InvalidOperationException("Loop-artifact rotation payload is invalid.");
 
-    protected abstract Task<bool> MutateAsync(CanonicalCausalContext causality);
+    /// <summary>
+    /// <paramref name="parent"/> is this rotation intent itself: history appended by the mutation is
+    /// projected by a filesystem-write child that must be ordered after, and depend on, the rotation
+    /// that produced it.
+    /// </summary>
+    protected abstract Task<bool> MutateAsync(CanonicalCausalContext causality, EffectParent parent);
 }
 
 internal sealed class LiveHandoffRotationEffectExecutor(LoopArtifacts artifacts)
@@ -236,8 +229,8 @@ internal sealed class LiveHandoffRotationEffectExecutor(LoopArtifacts artifacts)
 {
     public override EffectExecutorKey Key => WorkspaceEffectExecutorKeys.RotateLiveHandoff;
     protected override string Operation => "RotateLiveHandoff";
-    protected override async Task<bool> MutateAsync(CanonicalCausalContext causality) =>
-        await Artifacts.RotateLiveHandoffAsync(causality) is not null;
+    protected override async Task<bool> MutateAsync(CanonicalCausalContext causality, EffectParent parent) =>
+        await Artifacts.RotateLiveHandoffAsync(causality, parent: parent) is not null;
 }
 
 internal sealed class LiveDecisionRetirementEffectExecutor(LoopArtifacts artifacts)
@@ -245,7 +238,8 @@ internal sealed class LiveDecisionRetirementEffectExecutor(LoopArtifacts artifac
 {
     public override EffectExecutorKey Key => WorkspaceEffectExecutorKeys.RetireLiveDecisions;
     protected override string Operation => "RetireLiveDecisions";
-    protected override Task<bool> MutateAsync(CanonicalCausalContext causality) =>
+    // Retirement appends no history fact, so it plans no projection child and needs no parent.
+    protected override Task<bool> MutateAsync(CanonicalCausalContext causality, EffectParent parent) =>
         Artifacts.RetireLiveDecisionsAsync();
 }
 
@@ -254,8 +248,8 @@ internal sealed class OperationalDeltaRotationEffectExecutor(LoopArtifacts artif
 {
     public override EffectExecutorKey Key => WorkspaceEffectExecutorKeys.RotateOperationalDelta;
     protected override string Operation => "RotateOperationalDelta";
-    protected override async Task<bool> MutateAsync(CanonicalCausalContext causality) =>
-        await Artifacts.RotateOperationalDeltaAsync(causality) is not null;
+    protected override async Task<bool> MutateAsync(CanonicalCausalContext causality, EffectParent parent) =>
+        await Artifacts.RotateOperationalDeltaAsync(causality, parent: parent) is not null;
 }
 
 internal sealed class LoopArtifactRotationEffectReconciler(

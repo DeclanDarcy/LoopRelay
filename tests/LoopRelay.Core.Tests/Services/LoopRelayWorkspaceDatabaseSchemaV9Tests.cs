@@ -17,7 +17,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
     ];
 
     [Fact]
-    public async Task EnsureSchemaAsync_FreshDatabase_StampsVersionFifteenAndCreatesSpineTables()
+    public async Task EnsureSchemaAsync_FreshDatabase_StampsVersionSixteenAndCreatesSpineTables()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -26,17 +26,26 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal(15, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
-        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal(16, LoopRelayWorkspaceDatabase.CurrentSchemaVersion);
+        Assert.Equal("16", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.Equal(LoopRelayWorkspaceDatabase.SchemaIdentity, await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_identity';"));
         Assert.Equal(LoopRelayWorkspaceDatabase.SchemaFamily, await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_family';"));
         Assert.Equal(
-            LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint,
+            LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint,
             await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_shape';"));
         WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
         Assert.Equal(WorkspaceSchemaFamily.CanonicalWorkspace, inspection.Family);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, inspection.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, inspection.ShapeFingerprint);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV16Complete, inspection.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, inspection.ShapeFingerprint);
+
+        // The fingerprints are computed at static init from each version's requirement token set,
+        // not hardcoded, so this is a live check that v16 actually requires something v15 did not.
+        // Adding a column or index to the schema SQL but forgetting to register it in
+        // CanonicalV16Requirements collapses the two token sets onto the same fingerprint; the
+        // per-(path, stamp) verification memo would then accept a non-conforming database.
+        Assert.NotEqual(
+            LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint,
+            LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint);
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist.");
@@ -78,10 +87,8 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "history_evidence_items",
             "compatibility_import_operations",
             "compatibility_import_events",
-            "canonical_projection_effects",
             "transition_recovery_plans",
             "canonical_effect_intents",
-            "persistence_projection_checkpoints",
             "workspace_schema_migrations",
             "workspace_schema_convergences",
             "workspace_identity_metadata",
@@ -90,6 +97,94 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             Assert.True(await TableExistsAsync(connection, table), $"Expected v9 table `{table}` to exist.");
         }
     }
+
+    /// <summary>
+    /// The tables in <see cref="TablesNoProductionCodeTouches"/> were created by the schema and never
+    /// read or written by anything outside it. Asserting against a real fresh database - rather than
+    /// against the requirement lists - is what makes this a proof: a `CREATE TABLE` that carries no
+    /// <c>ShapeRequirement</c> (none of these did, beyond the two in the Merge4-v9 name list) would
+    /// otherwise be re-added without a single declaration changing. <c>artifact_lifecycle</c> belongs
+    /// here too: it was the third table of a pre-unification trio a resolver test seeds, but unlike
+    /// its two siblings nothing in <c>src/</c> ever reads it, so the test was trimmed to seed only the
+    /// two tables that still have a reader.
+    /// <para>
+    /// <see cref="TablesStillDeclaredDespiteHavingNoWriter"/> is the boundary of that claim. Each of
+    /// those four is also written by nothing, but each is still *read*: the schema-v10 and -v11
+    /// migrations select from <c>canonical_effect_records</c> and <c>transition_recovery_plans</c>,
+    /// and <c>SqliteCompletedEpicArchiveMaterializer</c> selects from <c>roadmap_state</c> and
+    /// <c>transition_journal</c>. Write-dead is not the same as dead.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task EnsureSchemaAsync_FreshDatabase_DoesNotCreateTablesNoProductionCodeTouches()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        foreach (string table in TablesNoProductionCodeTouches)
+        {
+            Assert.False(
+                await TableExistsAsync(connection, table),
+                $"Expected table `{table}` not to be created - nothing reads or writes it.");
+        }
+
+        foreach (string table in TablesStillDeclaredDespiteHavingNoWriter)
+        {
+            Assert.True(
+                await TableExistsAsync(connection, table),
+                $"Expected table `{table}` to exist - it has no writer but it still has a reader.");
+        }
+
+        Assert.True(await TableExistsAsync(connection, "canonical_recovery_markers"));
+        Assert.True(await TableExistsAsync(connection, "agent_sessions"));
+    }
+
+    [Fact]
+    public async Task EnsureSchemaAsync_FreshDatabase_DoesNotCreateIndexesOverDeletedTables()
+    {
+        Repository repository = CreateRepository();
+        string databasePath = CreateDatabasePath(repository);
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+
+        foreach (string index in (string[])["idx_projection_effects_status", "idx_split_family_children_child_path", "idx_artifact_lifecycle_path_key"])
+        {
+            Assert.Null(await ScalarStringAsync(
+                connection,
+                $"SELECT name FROM sqlite_master WHERE type = 'index' AND name = '{index}';"));
+        }
+    }
+
+    private static readonly string[] TablesNoProductionCodeTouches =
+    [
+        "canonical_projection_effects",
+        "persistence_projection_checkpoints",
+        "sync_markers",
+        "decision_ledger",
+        "split_families",
+        "split_family_children",
+        "split_family_dependency_order",
+        "execution_preparation_manifest",
+        "selection_provenance_manifest",
+        "projection_manifest_entries",
+        "completed_epic_archives",
+        "completed_epic_records",
+        "artifact_lifecycle",
+    ];
+
+    private static readonly string[] TablesStillDeclaredDespiteHavingNoWriter =
+    [
+        "canonical_effect_records",
+        "transition_recovery_plans",
+        "roadmap_state",
+        "transition_journal",
+    ];
 
     [Fact]
     public async Task InspectSchemaAsync_ClassifiesBranchLocalContinuityV3WithoutTrustingItsVersionNumber()
@@ -137,7 +232,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             await LegacyContinuityWorkspaceImporter.ImportToShadowAsync(sourcePath, targetPath);
 
         Assert.Equal(WorkspaceSchemaFamily.LegacyContinuity, result.SourceSchema.Family);
-        Assert.Equal(15, result.TargetSchemaVersion);
+        Assert.Equal(16, result.TargetSchemaVersion);
         await using (SqliteConnection source = LoopRelayWorkspaceDatabase.OpenReadOnly(sourcePath))
         {
             await source.OpenAsync();
@@ -150,7 +245,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         WorkspaceSchemaInspection targetInspection =
             await LoopRelayWorkspaceDatabase.InspectSchemaAsync(shadow);
         Assert.Equal(WorkspaceSchemaFamily.CanonicalWorkspace, targetInspection.Family);
-        Assert.Equal(15, targetInspection.Version);
+        Assert.Equal(16, targetInspection.Version);
         Assert.Equal(4L, await ScalarLongAsync(
             shadow,
             $"SELECT COUNT(*) FROM compatibility_import_events WHERE import_id = '{result.ImportId}';"));
@@ -374,8 +469,8 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
         WorkspaceSchemaInspection after = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, after.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, after.ShapeFingerprint);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV16Complete, after.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, after.ShapeFingerprint);
         Assert.True(await TableExistsAsync(connection, "canonical_interaction_requests"));
         Assert.True(await TableExistsAsync(connection, "canonical_interaction_responses"));
         Assert.True(await TableExistsAsync(connection, "canonical_interaction_lifecycle_events"));
@@ -395,11 +490,18 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "canonical_effect_intents",
             "canonical_effect_lifecycle_events",
             "canonical_effect_receipts",
-            "canonical_effect_reconciliation_attempts",
         })
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected v10 table `{table}`.");
         }
+
+        // `canonical_effect_reconciliation_attempts` was write-only: `RecordReconciliationAsync`
+        // inserted into it and nothing ever selected from it, because the reconciler's verdict
+        // reaches durability through the lifecycle append that follows it. Unlike a dropped column,
+        // a dropped table has no single declaration driving both its DDL and its
+        // `ShapeRequirement`, so both were removed by hand; a fresh database is asserted here to
+        // come up without the table at all rather than carrying a permanently-inert one.
+        Assert.False(await TableExistsAsync(connection, "canonical_effect_reconciliation_attempts"));
 
         IReadOnlyList<string> columns = await TableColumnsAsync(connection, "canonical_effect_intents");
         foreach (string column in new[]
@@ -407,11 +509,27 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "workspace_id", "run_id", "workflow_instance_id", "semantic_operation_key",
             "executor_key", "executor_version", "target_json", "payload_json", "payload_hash",
             "requiredness", "dependencies_json", "precondition_json", "postcondition_json",
-            "reconciliation_policy", "row_version", "lease_owner", "lease_expires_at",
-            "attempt_count", "terminal_receipt_id",
+            "reconciliation_policy", "terminal_receipt_id",
         })
         {
             Assert.Contains(column, columns);
+        }
+
+        // Each of these lost its last writer to an earlier cut and then its last reader, and none is
+        // in the base `CREATE TABLE`: each existed only as one `V10EffectIntentColumns` entry, which
+        // is the single source for both the ALTER that used to add it and its `ShapeRequirement`.
+        // Removing the entry drops the DDL and the shape contract together, so a fresh database must
+        // now come up without the column at all rather than carrying a permanently-inert one.
+        // `attempt_count` went with the lease's increment (94dcd313, 01f47c25); `lease_owner` and
+        // `lease_expires_at` went with the lease itself (94dcd313); `row_version` was the last
+        // compare-and-set guard on a single-writer table and is asserted absent here so its drop is
+        // proven against a real database rather than inferred from the declaration.
+        foreach (string column in new[]
+        {
+            "attempt_count", "row_version", "lease_owner", "lease_expires_at",
+        })
+        {
+            Assert.DoesNotContain(column, columns);
         }
     }
 
@@ -428,7 +546,6 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             DELETE FROM schema_metadata WHERE key = 'schema_shape';
             DROP TABLE canonical_effect_lifecycle_events;
             DROP TABLE canonical_effect_receipts;
-            DROP TABLE canonical_effect_reconciliation_attempts;
             INSERT INTO canonical_effect_intents (
                 effect_intent_id, transition_run_id, attempt_id, effect_identity, category,
                 effect_order, idempotency_key, status, definition_json, planned_at
@@ -478,15 +595,15 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
         WorkspaceSchemaInspection complete = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, complete.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, complete.ShapeFingerprint);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV16Complete, complete.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, complete.ShapeFingerprint);
         Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
         Assert.Equal(0L, await ScalarLongAsync(
             connection,
             "SELECT COUNT(*) FROM workspace_schema_migrations WHERE from_version = 9 AND to_version = 9;"));
         Assert.Equal(1L, await ScalarLongAsync(
             connection,
-            "SELECT COUNT(*) FROM workspace_schema_migrations WHERE from_version = 9 AND to_version = 15;"));
+            "SELECT COUNT(*) FROM workspace_schema_migrations WHERE from_version = 9 AND to_version = 16;"));
         Assert.Equal("Merge4V9Partial", await ScalarStringAsync(
             connection,
             "SELECT source_shape FROM workspace_schema_convergences;"));
@@ -514,8 +631,8 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
         WorkspaceSchemaInspection complete = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, complete.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, complete.ShapeFingerprint);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV16Complete, complete.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, complete.ShapeFingerprint);
         Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
         Assert.Equal("ArchitectureConvergenceV9Partial", await ScalarStringAsync(
             connection,
@@ -545,8 +662,8 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
         WorkspaceSchemaInspection complete = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
-        Assert.Equal(WorkspaceSchemaShape.CanonicalV15Complete, complete.Shape);
-        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV15ShapeFingerprint, complete.ShapeFingerprint);
+        Assert.Equal(WorkspaceSchemaShape.CanonicalV16Complete, complete.Shape);
+        Assert.Equal(LoopRelayWorkspaceDatabase.CanonicalV16ShapeFingerprint, complete.ShapeFingerprint);
         Assert.Equal(workspaceId, await LoopRelayWorkspaceDatabase.ReadWorkspaceIdentityAsync(connection));
     }
 
@@ -575,8 +692,11 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
             "SELECT value FROM schema_metadata WHERE key = 'schema_shape';"));
     }
 
+    // Depends on ResetSchemaVerificationCacheForTesting: without the memo reset the tampering below
+    // is skipped by the memoized fast path and never reaches the full verification pipeline.
+#if DEBUG
     [Fact]
-    public async Task EnsureSchemaAsync_RejectsStampedCanonicalV15WhenItsPhysicalShapeIsCorrupt()
+    public async Task EnsureSchemaAsync_RejectsStampedCanonicalV16WhenItsPhysicalShapeIsCorrupt()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -586,10 +706,18 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await ExecuteAsync(connection, "DROP TABLE canonical_runtime_prerequisites;");
 
         WorkspaceSchemaInspection inspection = await LoopRelayWorkspaceDatabase.InspectSchemaAsync(connection);
-        Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV15, inspection.Shape);
+        Assert.Equal(WorkspaceSchemaShape.CorruptCanonicalV16, inspection.Shape);
+
+        // This tampering drops a table without touching the schema_version/schema_shape stamp,
+        // so the per-process memo populated by the first EnsureSchemaAsync call above would
+        // otherwise still match and skip the full verification that would catch this corruption.
+        // Reset the memo to exercise the full pipeline, matching what a freshly started process
+        // (which has no memo entry yet) would actually observe.
+        LoopRelayWorkspaceDatabase.ResetSchemaVerificationCacheForTesting();
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));
     }
+#endif
 
     [Fact]
     public async Task EnsureSchemaAsync_RollsBackAllConvergenceWorkWhenFinalShapeStampFails()
@@ -859,7 +987,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
     }
 
     [Fact]
-    public async Task EnsureSchemaAsync_UpgradesVersionFourDatabaseToVersionFifteenIdempotently()
+    public async Task EnsureSchemaAsync_UpgradesVersionFourDatabaseToVersionSixteenIdempotently()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -880,12 +1008,12 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("16", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.True(await TableExistsAsync(connection, "read_receipts"), "Expected table `read_receipts` to exist after upgrade.");
 
         // The migration is idempotent: a second schema pass succeeds and keeps the same shape.
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
-        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("16", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.True(await TableExistsAsync(connection, "read_receipts"), "Expected table `read_receipts` to survive a second schema pass.");
     }
 
@@ -970,7 +1098,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
     }
 
     [Fact]
-    public async Task EnsureSchemaAsync_UpgradesVersionTwoShapedDatabaseToVersionFifteen()
+    public async Task EnsureSchemaAsync_UpgradesVersionTwoShapedDatabaseToVersionSixteen()
     {
         Repository repository = CreateRepository();
         string databasePath = CreateDatabasePath(repository);
@@ -987,7 +1115,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("16", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         foreach (string table in SpineTables)
         {
             Assert.True(await TableExistsAsync(connection, table), $"Expected spine table `{table}` to exist after upgrade.");
@@ -1082,7 +1210,7 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("15", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
+        Assert.Equal("16", await ScalarStringAsync(connection, "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.Equal("Resumable", await ScalarStringAsync(connection, "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
         Assert.Equal("MissingRequiredInput", await ScalarStringAsync(connection, "SELECT outcome FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
         Assert.Equal("Resumable", await ScalarStringAsync(connection, "SELECT state FROM canonical_stage_states WHERE workflow_identity = 'Plan';"));
@@ -1105,7 +1233,9 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
         await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(databasePath);
         await connection.OpenAsync();
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
-        await ExecuteAsync(connection, "UPDATE schema_metadata SET value = '16' WHERE key = 'schema_version';");
+        await ExecuteAsync(
+            connection,
+            $"UPDATE schema_metadata SET value = '{LoopRelayWorkspaceDatabase.CurrentSchemaVersion + 1}' WHERE key = 'schema_version';");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection));
@@ -1154,7 +1284,6 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
                      "idx_history_evidence_provider",
                      "idx_history_evidence_recovery",
                      "idx_compatibility_import_events_operation",
-                     "idx_projection_effects_status",
                      "idx_transition_recovery_plans_run",
                      "idx_canonical_effect_intents_status",
                      "idx_prompt_dispatch_events_dispatch",
@@ -1190,13 +1319,11 @@ public sealed class LoopRelayWorkspaceDatabaseSchemaV9Tests
                      "history_evidence_items",
                      "compatibility_import_operations",
                      "compatibility_import_events",
-                     "canonical_projection_effects",
                      "transition_recovery_plans",
                      "canonical_effect_intents",
                      "execution_recommendation_evidence",
                      "runtime_profile_evaluations",
                      "prompt_dispatch_events",
-                     "persistence_projection_checkpoints",
                  })
         {
             await ExecuteAsync(connection, $"DROP TABLE IF EXISTS {table};");

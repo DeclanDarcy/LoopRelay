@@ -1,3 +1,4 @@
+using System.Collections;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Orchestration.Chaining;
 using LoopRelay.Orchestration.Resolution;
@@ -77,7 +78,7 @@ public sealed class WorkflowChainRunnerTests
     }
 
     [Fact]
-    public async Task Required_effects_pending_prevents_chain_progression_after_reobservation()
+    public async Task Required_effects_pending_prevents_chain_progression_without_redundant_observation()
     {
         RepositoryObservation observation = Observation();
         Harness harness = new(observation);
@@ -102,7 +103,11 @@ public sealed class WorkflowChainRunnerTests
         Assert.Equal(WorkflowStopReason.RequiredEffectsPending, result.StopReason);
         Assert.True(result.Decision.RequiredEffectsPending);
         Assert.Equal(1, harness.Effects.CallCount);
-        Assert.True(harness.Observations.CallCount > 0);
+        // The controller no longer performs a post-attempt observation solely to populate a
+        // consumerless field, and this path never reaches the chain runner's own boundary-crossing
+        // re-observation (that only fires when advancing past a *completed* workflow). Zero
+        // observation calls is the correct, exact count here.
+        Assert.Equal(0, harness.Observations.CallCount);
     }
 
     [Fact]
@@ -149,7 +154,184 @@ public sealed class WorkflowChainRunnerTests
         KernelDecisionFact decision = Assert.Single(decisions.Decisions);
         Assert.Equal(context.Run, decision.RootRun);
         Assert.Equal(CanonicalWorkflowCatalog.Current.Identity, decision.CatalogIdentity);
-        Assert.True(harness.Observations.CallCount >= 2);
+        // Exactly one observation for this single completed-attempt cycle: the kernel's own
+        // re-observation at the cycle boundary (OrchestrationKernel.RunAsync). The controller's
+        // former post-attempt observation, which only fed the consumerless ObservationAfter
+        // field, is gone.
+        Assert.Equal(1, harness.Observations.CallCount);
+    }
+
+    [Fact]
+    public async Task Kernel_multi_cycle_run_sequences_stop_reasons_and_drops_redundant_post_attempt_observation()
+    {
+        RepositoryObservation observation = Observation();
+        Harness harness = new(observation);
+        // Cycle 0: attempt completes outright -> kernel continues to the next cycle.
+        harness.Runtime.Sequence.Enqueue(RuntimeResult());
+        // Cycle 1: attempt requires effect coordination that remains pending -> kernel stops.
+        harness.Runtime.Sequence.Enqueue(RuntimeResult(
+            RuntimeOutcomeKind.EffectsPending,
+            TransitionDurableState.EffectsPending,
+            effectsPending: true));
+        harness.Effects.Result = new TransitionEffectCoordinationResult(
+            RequiredEffectsPending: true,
+            Failed: false,
+            "push pending",
+            ["effect:push"]);
+        var decisions = new RecordingKernelDecisionStore();
+        var kernel = new OrchestrationKernel(harness.Runner, harness.Observations,
+            new DurableKernelAttemptAuthorizationSelector(), decisions);
+        WorkflowRunContext context = NewContext();
+
+        KernelResult result = await kernel.RunAsync(new KernelCommand(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain), observation,
+            TraditionalRoadmapChain, CanonicalWorkflowCatalog.Current, context, ObservationBudget: 5));
+
+        // Scripted sequence of stop reasons across the two real cycles, recorded in kernel
+        // decision facts (one per cycle actually executed, before the loop decides to stop).
+        Assert.Equal(
+            [WorkflowStopReason.TransitionCompleted, WorkflowStopReason.RequiredEffectsPending],
+            decisions.Decisions.Select(decision => decision.Outcome));
+        Assert.Equal(WorkflowStopReason.RequiredEffectsPending, result.StopReason);
+        Assert.Equal(RuntimeOutcomeKind.EffectsPending, result.Outcome);
+        // Both scripted attempts actually ran (the generous budget of 5 proves the loop stopped
+        // because of the second attempt's outcome, not because the budget was exhausted).
+        Assert.Equal(2, harness.Runtime.Requests.Count);
+        // Exactly one observation total: the kernel's cycle-boundary re-observation after cycle 0
+        // (StopReason == TransitionCompleted). The per-attempt controller observation that used to
+        // fire on *both* cycles is gone, so the count drops by exactly one per attempt (2 -> 0)
+        // while the load-bearing kernel-boundary observation (0 -> 1 in this scenario) is untouched.
+        Assert.Equal(1, harness.Observations.CallCount);
+    }
+
+    [Fact]
+    public async Task Kernel_decision_facts_report_the_controller_eligible_and_rejected_alternatives()
+    {
+        RepositoryObservation observation = Observation();
+        Harness harness = new(observation);
+        var decisions = new RecordingKernelDecisionStore();
+        var kernel = new OrchestrationKernel(harness.Runner, harness.Observations,
+            new DurableKernelAttemptAuthorizationSelector(), decisions);
+
+        await kernel.RunAsync(new KernelCommand(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain), observation,
+            TraditionalRoadmapChain, CanonicalWorkflowCatalog.Current, NewContext(), 1));
+
+        // The first TraditionalRoadmap stage ("Roadmap Context") offers two transitions:
+        // BootstrapRoadmapCompletionContext requires no input products, while
+        // UpdateRoadmapCompletionContext requires the roadmap completion context this observation
+        // does not carry. Both decision-fact lists are therefore non-empty, which is exactly what
+        // makes them sensitive to *which* resolution the controller reported: a resolution computed
+        // from any other (invocation, observation, definitions) triple would change these strings.
+        KernelDecisionFact decision = Assert.Single(decisions.Decisions);
+        Assert.Equal(["BootstrapRoadmapCompletionContext"], decision.EligibleAlternatives);
+        Assert.Equal(
+            ["UpdateRoadmapCompletionContext:MissingRequiredInput:"],
+            decision.RejectedAlternatives);
+        Assert.Equal(
+            new WorkflowTransitionIdentity("BootstrapRoadmapCompletionContext"),
+            Assert.Single(harness.Runtime.Requests).Transition);
+    }
+
+    [Fact]
+    public async Task Chain_cycle_resolves_the_workflow_once_and_hands_the_resolution_to_the_controller()
+    {
+        var workflowStates = new CountingWorkflowStates([]);
+        RepositoryObservation observation = Observation(workflowStates);
+        Harness harness = new(observation);
+
+        WorkflowChainRunResult result = await harness.Runner.RunAsync(new WorkflowChainRunRequest(
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            observation,
+            TraditionalRoadmapChain,
+            Definitions,
+            NewContext(),
+            FreshAttemptAuthorization.Instance));
+
+        Assert.Equal(WorkflowStopReason.TransitionCompleted, result.StopReason);
+        // WorkflowResolver.Resolve enumerates observation.WorkflowStates exactly once per call, and
+        // on this path it is the only reader: WorkflowExitGateEvaluator (the sole other reader)
+        // runs only when the workflow is already completed, which is not this scenario. One
+        // enumeration therefore means one resolution for the cycle -- the chain runner resolves and
+        // hands the result down instead of the controller resolving the identical triple again.
+        Assert.Equal(1, workflowStates.EnumerationCount);
+    }
+
+    [Fact]
+    public async Task Controller_reresolves_when_the_carried_cycle_was_computed_from_a_different_observation()
+    {
+        var invocation = new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain);
+        var resolver = new WorkflowResolver();
+
+        // The request's own observation: the workflow is already completed, so a correct controller
+        // must stop immediately without attempting any transition.
+        RepositoryObservation requestObservation = Observation([Completed(WorkflowIdentity.TraditionalRoadmap)]);
+
+        // A resolution computed from a DIFFERENT observation instance -- nothing has completed here,
+        // so the workflow is eligible to start and has an eligible transition. This stands in for a
+        // stale cycle a caller mistakenly hands down alongside a request carrying a different
+        // observation.
+        RepositoryObservation staleObservation = Observation();
+        WorkflowCycleResolution staleCycle = WorkflowCycleResolution.Resolve(
+            resolver, invocation, staleObservation, Definitions);
+
+        // Sanity check: the two observations really do produce observably different resolutions, so
+        // this test can only pass if the controller actually discards the stale cycle and re-resolves
+        // from its own request.Observation rather than trusting the carried one.
+        Assert.Equal(RepositoryClassification.Fresh, staleCycle.Resolution.Classification);
+
+        var runtime = new FakeTransitionRuntime();
+        var effects = new FakeEffectCoordinator();
+        var controller = new WorkflowController(resolver, runtime, effects);
+        WorkflowRunContext context = NewContext();
+        var execution = new CanonicalTransitionExecutionContext(
+            invocation,
+            context.Workspace,
+            context.Run,
+            WorkflowInstanceIdentity.New(),
+            context.Policy,
+            context.RuntimeProfile,
+            context.PromptPolicyProfile,
+            context.AgentRolePolicyIdentity);
+
+        WorkflowControllerResult result = await controller.RunAsync(new WorkflowControllerRequest(
+            invocation,
+            requestObservation,
+            Definitions,
+            execution,
+            FreshAttemptAuthorization.Instance,
+            Interactive: false,
+            Cycle: staleCycle));
+
+        // The returned resolution reflects the request's own (completed) observation, not the stale
+        // cycle's (fresh) one -- proof the mismatch was detected and the controller re-resolved.
+        Assert.Equal(RepositoryClassification.Completed, result.Resolution.Classification);
+        Assert.Equal(WorkflowStopReason.ChainCompleted, result.StopReason);
+        // A resolution taken from the stale cycle would have found an eligible transition and
+        // invoked the runtime; the correctly re-resolved (completed) result must never reach that.
+        Assert.Empty(runtime.Requests);
+    }
+
+    /// <summary>
+    /// Counts how many times the observed workflow states are enumerated, which is a direct count
+    /// of <see cref="WorkflowResolver.Resolve"/> calls over this observation.
+    /// </summary>
+    private sealed class CountingWorkflowStates(IReadOnlyList<ObservedWorkflowState> _states)
+        : IReadOnlyList<ObservedWorkflowState>
+    {
+        public int EnumerationCount { get; private set; }
+
+        public int Count => _states.Count;
+
+        public ObservedWorkflowState this[int index] => _states[index];
+
+        public IEnumerator<ObservedWorkflowState> GetEnumerator()
+        {
+            EnumerationCount++;
+            return _states.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private sealed class Harness
@@ -162,7 +344,7 @@ public sealed class WorkflowChainRunnerTests
             Instances = new FakeInstanceRecorder();
             Boundaries = new RecordingBoundaryStore();
             var controller = new WorkflowController(
-                new WorkflowResolver(), Runtime, Effects, Observations);
+                new WorkflowResolver(), Runtime, Effects);
             Runner = new WorkflowChainRunner(
                 new WorkflowResolver(),
                 controller,
@@ -207,12 +389,19 @@ public sealed class WorkflowChainRunnerTests
         public List<TransitionRuntimeRequest> Requests { get; } = [];
         public TransitionRuntimeResult Result { get; set; } = RuntimeResult();
 
+        /// <summary>
+        /// Optional scripted per-call outcomes for multi-cycle scenarios. Dequeued in order;
+        /// falls back to <see cref="Result"/> once exhausted (or if never populated).
+        /// </summary>
+        public Queue<TransitionRuntimeResult> Sequence { get; } = new();
+
         public Task<TransitionRuntimeResult> RunAsync(
             TransitionRuntimeRequest request,
             CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
-            return Task.FromResult(Result);
+            TransitionRuntimeResult result = Sequence.Count > 0 ? Sequence.Dequeue() : Result;
+            return Task.FromResult(result);
         }
     }
 

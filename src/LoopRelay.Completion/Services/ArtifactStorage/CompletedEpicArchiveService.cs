@@ -22,9 +22,23 @@ public sealed class CompletedEpicArchiveService(
         cancellationToken.ThrowIfCancellationRequested();
 
         var artifacts = new CompletionArtifacts(_store, request.Repository);
-        int index = await ComputeArchiveIndexAsync(artifacts, request.ArchiveRoot);
+        int index = request.ArchiveIndex ?? await ComputeArchiveIndexAsync(artifacts, request.ArchiveRoot);
         string archiveDirectory = $"{request.ArchiveRoot}/{index}";
         string synthesisPath = $"{request.ArchiveRoot}/{index}.md";
+
+        // Convergence. A caller that owns the index (a durable effect payload) may re-execute this
+        // archival after an uncertain outcome. When the index it names is already fully archived,
+        // observe it and return; do not allocate a second archive and do not re-invoke the synthesis
+        // prompt, which is the one non-retractable outward effect here. The predicate deliberately
+        // matches CompletionArchiveEffectReconciler.ReconcileAsync so that a state which reconciles
+        // as satisfied is exactly a state this converges on. A partially materialized archive is not
+        // satisfied, so it still falls through to the collision guards below.
+        if (request.ArchiveIndex is not null &&
+            await ObserveCompletedArchiveAsync(
+                artifacts, request.ActiveEpicPath, index, archiveDirectory, synthesisPath) is { } completed)
+        {
+            return completed;
+        }
 
         if (await artifacts.ExistsAsync(archiveDirectory) ||
             (await artifacts.ListAsync(archiveDirectory, "*")).Count > 0)
@@ -72,10 +86,70 @@ public sealed class CompletedEpicArchiveService(
         return new CompletedEpicArchiveResult(index, archiveDirectory, synthesisPath, synthesis);
     }
 
-    private static async Task<int> ComputeArchiveIndexAsync(CompletionArtifacts artifacts, string archiveRoot)
+    private static async Task<CompletedEpicArchiveResult?> ObserveCompletedArchiveAsync(
+        CompletionArtifacts artifacts,
+        string activeEpicPath,
+        int index,
+        string archiveDirectory,
+        string synthesisPath)
+    {
+        string? synthesis = await artifacts.ReadAsync(synthesisPath);
+        if (string.IsNullOrWhiteSpace(synthesis))
+        {
+            return null;
+        }
+
+        // The synthesis is written strictly after the archive plan executes, so its presence
+        // witnesses a completed archive phase. epic.md then exists exactly when there was a live
+        // epic to copy - the plan copies it and never deletes it - so demand it only while the
+        // live epic is present. An epicless archive converges on its synthesis alone.
+        string? epic = await artifacts.ReadAsync($"{archiveDirectory}/epic.md");
+        if (string.IsNullOrWhiteSpace(epic) && await artifacts.ExistsAsync(activeEpicPath))
+        {
+            return null;
+        }
+
+        return new CompletedEpicArchiveResult(index, archiveDirectory, synthesisPath, synthesis);
+    }
+
+    /// <summary>
+    /// Next index is one past the highest surviving index, never a directory count: deleting an old
+    /// archive leaves a gap, and count+1 would re-allocate a surviving index and trip the collision
+    /// guard. Dangling synthesis files ({n}.md without a directory) also hold their index. Only
+    /// direct children of the archive root are index allocations - ListAsync is prefix-based and
+    /// also returns artifacts nested inside an archive, whose names never were. Non-numeric entries
+    /// are ignored for the same reason. Public because the durable CLI wrapper must plan with the
+    /// same derivation it forces back into this service.
+    /// </summary>
+    public static async Task<int> ComputeArchiveIndexAsync(CompletionArtifacts artifacts, string archiveRoot)
     {
         IReadOnlyList<string> directories = await artifacts.ListDirectoriesAsync(archiveRoot);
-        return directories.Count + 1;
+        IReadOnlyList<string> syntheses = await artifacts.ListAsync(archiveRoot, "*.md");
+        string root = Normalize(archiveRoot).TrimEnd('/');
+        int highest = 0;
+        foreach (string entry in directories.Concat(syntheses))
+        {
+            string name = Normalize(entry).TrimEnd('/');
+            if (!name.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // A nested artifact keeps a '/' here and so never parses as an index.
+            name = name[(root.Length + 1)..];
+            if (name.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+            {
+                name = name[..^3];
+            }
+
+            if (int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out int value) &&
+                value > highest)
+            {
+                highest = value;
+            }
+        }
+
+        return highest + 1;
     }
 
     private static async Task<IReadOnlyList<ArchiveFileOperation>> BuildRetainedArchivePlanAsync(

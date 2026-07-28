@@ -35,6 +35,10 @@ public sealed class StorageAuthorityPromotionEffectExecutor(Repository _reposito
         }
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         string promotion = target + $".promotion-{intent.Identity.Value}";
+        // The temp name is stable per intent, so a crash between this copy and the move below leaves
+        // a leftover that would fail the next attempt's overwrite:false copy. Clear it, as
+        // ImportAuthorityPromotionEffectExecutor.cs:50 already does on the sibling path.
+        if (File.Exists(promotion)) File.Delete(promotion);
         File.Copy(source, promotion, overwrite: false);
         string copiedHash = await HashAsync(promotion, cancellationToken);
         if (!string.Equals(copiedHash, sourceHash, StringComparison.Ordinal))

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Core.Services.Persistence;
@@ -174,6 +175,27 @@ internal sealed class CanonicalImportGateway(Repository _repository) : IImportGa
 
         CanonicalStorageExportPackage targetProjection = await new CanonicalStorageExportCodec()
             .ExportAsync(workingDatabase, cancellationToken);
+        // Deep-verify the staged working database before it is ever offered for promotion. `working`
+        // is not yet `target` - promotion (below, via ImportAuthorityPromotionEffectExecutor) has not
+        // been planned - so refusing here needs no rollback: nothing has mutated the canonical
+        // authority yet. This closes the residual Wave 3 recorded and accepted: a database carrying
+        // externally-introduced foreign-key violations (e.g. a LegacyContinuity source corrupted
+        // before LoopRelay ever wrote to it, then faithfully page-copied by
+        // LegacyContinuityWorkspaceImporter's SqliteConnection.BackupDatabase) passes routine LIGHT
+        // observation as Healthy and was, until now, never checked by the import boundary at all.
+        // WorkspaceStorageInspector.VerifyAsync cannot be pointed at `working` directly - it resolves
+        // its target from a repository root via the fixed `.LoopRelay/persistence/looprelay.sqlite3`
+        // convention, and `working`'s filename (`import-{operation}.sqlite3`) never matches that
+        // convention - so this calls the same PRAGMA foreign_key_check the Deep tier runs, directly
+        // against the raw staged path.
+        IReadOnlyList<string> unresolvedForeignKeys = await WorkspaceStorageInspector.ForeignKeyViolationsAsync(
+            workingDatabase, cancellationToken);
+        if (unresolvedForeignKeys.Count > 0)
+            return new ImportResult(ImportLifecycle.Refused, preview.Detection, preview, operation, null,
+                "Deep storage verification found unresolved foreign-key references in the imported " +
+                "authority; import refused before promotion. Canonical-only authority is monotonic, " +
+                "so no rollback was necessary: the working database was never promoted.",
+                unresolvedForeignKeys);
         string[] missingDomains = preview.Mappings.Select(item => item.Domain).Distinct(StringComparer.Ordinal)
             .Where(domain => !preview.SemanticDelta.Any(delta => delta.Domain == domain)).ToArray();
         var verification = new ImportVerification(missingDomains.Length == 0, missingDomains,
@@ -214,7 +236,7 @@ internal sealed class CanonicalImportGateway(Repository _repository) : IImportGa
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         var worker = new EffectWorker($"import-{Environment.ProcessId}", effectStore,
             new EffectExecutorRegistry([new ImportAuthorityPromotionEffectExecutor(_repository)]),
-            new ImportAuthorityPromotionEffectReconciler(_repository), TimeSpan.FromMinutes(2));
+            new ImportAuthorityPromotionEffectReconciler(_repository));
         _ = await worker.RunOnceAsync(cancellationToken, only: new HashSet<EffectIntentIdentity> { intent.Identity });
         EffectWorkItem settled = await effectStore.ReadAsync(intent.Identity, cancellationToken)
             ?? throw new InvalidOperationException("Import promotion effect disappeared.");
@@ -232,6 +254,18 @@ internal sealed class CanonicalImportGateway(Repository _repository) : IImportGa
             preview.Mappings.Select(mapping => $"{mapping.SourceIdentity}->{mapping.TargetIdentity}")
                 .Concat([effectReceipt.Identity.Value]).ToArray(), DateTimeOffset.UtcNow);
         await targetStore.CompleteAsync(operation, preview, verification, receipt, CancellationToken.None);
+        // Import completion just replaced `target`'s bytes wholesale (the promotion above).
+        // Regardless of which import-source branch produced the promoted authority - and in
+        // particular because the CanonicalExportPackage branch (CanonicalStorageExportCodec.
+        // RehydrateFreshAsync) rehydrates historical domain rows directly, bypassing
+        // CanonicalDataRepairSql entirely - force the very next EnsureSchemaAsync admission to
+        // re-scan for legacy 'Blocked' vocabulary rather than trusting whatever receipt happened to
+        // travel with the newly-promoted bytes.
+        await using (SqliteConnection promoted = LoopRelayWorkspaceDatabase.OpenReadWrite(target))
+        {
+            await promoted.OpenAsync(CancellationToken.None);
+            await LoopRelayWorkspaceDatabase.DeleteBlockedVocabularyReceiptAsync(promoted, CancellationToken.None);
+        }
         return new ImportResult(ImportLifecycle.Completed, preview.Detection, preview, operation, receipt,
             "Import completed after semantic verification; canonical-only authority is monotonic.",
             receipt.Evidence.Concat([$"canonical-only:{receipt.Identity.Value}"]).ToArray());

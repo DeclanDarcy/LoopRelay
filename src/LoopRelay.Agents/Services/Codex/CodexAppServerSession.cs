@@ -587,7 +587,7 @@ public sealed class CodexAppServerSession : IAgentSession
 
         try
         {
-            rawLine = EnrichFileChangeApproval(rawLine, message);
+            rawLine = EnrichFileChangeApproval(message) ?? rawLine;
             byte[] response = _permissionGateway.Evaluate(
                 Encoding.UTF8.GetBytes(rawLine),
                 new PermissionGatewayContext(
@@ -632,7 +632,15 @@ public sealed class CodexAppServerSession : IAgentSession
         }
     }
 
-    private string EnrichFileChangeApproval(string rawLine, CodexAppServerMessage message)
+    // Deliberately takes only the parsed message, never the raw frame text: EnrichFileChangeApproval
+    // must reuse the read pump's already-parsed CodexAppServerMessage.CompleteResponse to build its
+    // mutable JsonNode view, and must never re-tokenize the frame from scratch on this codex-blocking
+    // path. Not accepting rawLine here makes that structurally enforced rather than merely tested — a
+    // future change that wants a raw-text reparse would have to re-plumb the raw string all the way
+    // through the call chain (EnqueueApprovalResponse -> here), which is a visible, reviewable edit
+    // rather than a silent one-liner. Returns null (instead of echoing the caller's raw line back) when
+    // no enrichment applies, so the caller decides what "unchanged" means.
+    private string? EnrichFileChangeApproval(CodexAppServerMessage message)
     {
         if (!string.Equals(message.Method, "item/fileChange/requestApproval", StringComparison.Ordinal) ||
             message.Params.ValueKind != JsonValueKind.Object ||
@@ -641,14 +649,14 @@ public sealed class CodexAppServerSession : IAgentSession
             !fileChangeTargets.TryGetValue(itemId.GetString()!, out IReadOnlyList<string>? targets) ||
             targets.Count == 0)
         {
-            return rawLine;
+            return null;
         }
 
-        JsonNode? root = JsonNode.Parse(rawLine);
+        JsonNode? root = JsonObject.Create(message.CompleteResponse);
         JsonObject? parameters = root?["params"] as JsonObject;
         if (parameters is null)
         {
-            return rawLine;
+            return null;
         }
 
         if (targets.Count == 1)

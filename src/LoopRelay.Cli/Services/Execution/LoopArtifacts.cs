@@ -3,6 +3,7 @@ using LoopRelay.Core.Abstractions.Artifacts;
 using LoopRelay.Core.Models.Identity;
 using LoopRelay.Core.Models.Repositories;
 using LoopRelay.Infrastructure.Services.Artifacts;
+using LoopRelay.Orchestration.Effects;
 using LoopRelay.Orchestration.Models;
 using LoopRelay.Orchestration.Services;
 
@@ -33,23 +34,27 @@ internal sealed class LoopArtifacts(
 
     public Task<string?> RotateLiveHandoffAsync(
         CanonicalCausalContext causality,
-        HistoryEvidenceAttachments? evidence = null) =>
-        RotateAsync(OrchestrationArtifactPaths.LiveHandoff, LoopHistoryKind.Handoff, causality, evidence);
+        HistoryEvidenceAttachments? evidence = null,
+        EffectParent? parent = null) =>
+        RotateAsync(OrchestrationArtifactPaths.LiveHandoff, LoopHistoryKind.Handoff, causality, evidence, parent);
 
     public async Task<string?> RotateLiveDecisionsAsync(
         CanonicalCausalContext causality,
-        HistoryEvidenceAttachments? evidence = null)
+        HistoryEvidenceAttachments? evidence = null,
+        EffectParent? parent = null)
     {
         string? content = await RotateAsync(
-            OrchestrationArtifactPaths.Decisions, LoopHistoryKind.Decisions, causality, evidence);
+            OrchestrationArtifactPaths.Decisions, LoopHistoryKind.Decisions, causality, evidence, parent);
         await InvalidateExecutionRecommendationProjectionAsync();
         return content;
     }
 
     public Task<string?> RotateOperationalDeltaAsync(
         CanonicalCausalContext causality,
-        HistoryEvidenceAttachments? evidence = null) =>
-        RotateAsync(OrchestrationArtifactPaths.OperationalDelta, LoopHistoryKind.OperationalDelta, causality, evidence);
+        HistoryEvidenceAttachments? evidence = null,
+        EffectParent? parent = null) =>
+        RotateAsync(
+            OrchestrationArtifactPaths.OperationalDelta, LoopHistoryKind.OperationalDelta, causality, evidence, parent);
 
     public Task<(string? Content, string? RelativePath)> ReadLatestHandoffAsync() =>
         ReadLatestAsync(OrchestrationArtifactPaths.LiveHandoff, LoopHistoryKind.Handoff);
@@ -152,11 +157,13 @@ internal sealed class LoopArtifacts(
         string liveRelative,
         LoopHistoryKind kind,
         CanonicalCausalContext causality,
-        HistoryEvidenceAttachments? evidence)
+        HistoryEvidenceAttachments? evidence,
+        EffectParent? parent)
     {
         string? content = await artifacts.ReadAsync(liveRelative);
         if (content is null) return null;
-        await _historyStore.AppendAsync(new LoopHistoryAppendRequest(kind, content, causality, evidence));
+        await _historyStore.AppendAsync(
+            new LoopHistoryAppendRequest(kind, content, causality, evidence, supersedes: null, parent));
         await artifacts.DeleteAsync(liveRelative);
         return content;
     }

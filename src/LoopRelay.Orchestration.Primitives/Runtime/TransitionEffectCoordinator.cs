@@ -10,6 +10,7 @@ public interface ITransitionEffectIntentExecutor
     Task<EffectExecutionRecord> ExecuteAsync(
         CanonicalCausalContext causality,
         EffectIdentity effect,
+        EffectParent? parent,
         CancellationToken cancellationToken);
 }
 
@@ -47,6 +48,7 @@ public sealed class TransitionEffectExecutorAdapter : LoopRelay.Orchestration.Ef
         EffectExecutionRecord result = await _executor.ExecuteAsync(
             intent.Causality,
             new EffectIdentity(intent.Target.Identity),
+            new EffectParent(intent.Identity, intent.Order),
             cancellationToken);
         EffectLifecycle state = result.Status switch
         {
@@ -54,7 +56,9 @@ public sealed class TransitionEffectExecutorAdapter : LoopRelay.Orchestration.Ef
             EffectExecutionStatus.Stalled => EffectLifecycle.Stalled,
             EffectExecutionStatus.Failed => EffectLifecycle.Failed,
             EffectExecutionStatus.Unknown or EffectExecutionStatus.PartiallyFailed => EffectLifecycle.Unknown,
-            EffectExecutionStatus.Started => EffectLifecycle.Started,
+            // EffectExecutionStatus.Started -- a value on the executor return contract, distinct from
+            // the retired lifecycle marker -- has no producer anywhere in src/ or tests/, so it falls
+            // to Pending with EffectExecutionStatus.Planned.
             _ => EffectLifecycle.Pending,
         };
         return new EffectExecutionObservation(

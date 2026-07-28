@@ -54,12 +54,6 @@ public sealed record WorkflowBoundaryEvaluation(
     bool CanAdvance,
     string Explanation);
 
-public sealed record WorkflowBoundaryEvidenceRecord(
-    WorkflowIdentity SourceWorkflow,
-    WorkflowIdentity? TargetWorkflow,
-    string Explanation,
-    IReadOnlyList<string> Evidence);
-
 public sealed record ChainBoundaryEvidenceCapture(
     RunIdentity Run,
     string ChainIdentity,
@@ -90,20 +84,26 @@ public interface ITransitionEffectCoordinator
         CancellationToken cancellationToken);
 }
 
+/// <param name="Cycle">
+/// A resolution the caller already computed for this cycle. The controller reuses it only when it
+/// was produced from the very <c>(Invocation, Observation, Definitions)</c> this request carries,
+/// and otherwise resolves for itself, so supplying one can only skip recomputing an identical
+/// result -- never change the decision.
+/// </param>
 public sealed record WorkflowControllerRequest(
     WorkflowInvocation Invocation,
     RepositoryObservation Observation,
     IReadOnlyList<WorkflowDefinition> Definitions,
     CanonicalTransitionExecutionContext ExecutionContext,
     AttemptAuthorization Authorization,
-    bool Interactive = false);
+    bool Interactive = false,
+    WorkflowCycleResolution? Cycle = null);
 
 public sealed record WorkflowControllerResult(
     WorkflowResolutionResult Resolution,
     TransitionRuntimeResult? Transition,
     WorkflowStopReason StopReason,
     string Explanation,
-    RepositoryObservation ObservationAfter,
     TransitionEffectCoordinationResult? EffectCoordination = null);
 
 public sealed record WorkflowChainRunRequest(
@@ -265,26 +265,12 @@ public sealed class ProductTransferEvaluator
 
 public sealed class WorkflowBoundaryEvidenceWriter(IChainBoundaryEvidenceStore _boundaryStore)
 {
-    private readonly List<WorkflowBoundaryEvidenceRecord> records = [];
-
-    public IReadOnlyList<WorkflowBoundaryEvidenceRecord> Records => records;
-
     public async Task WriteAsync(
         WorkflowBoundaryEvaluation evaluation,
         RunIdentity run,
         string chainIdentity,
         CancellationToken cancellationToken = default)
     {
-        string[] evidence = evaluation.ExitGate.Evidence
-            .Concat(evaluation.EntryGate?.Evidence ?? [])
-            .Concat(evaluation.ProductTransfer?.Gate.Evidence ?? [])
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        records.Add(new WorkflowBoundaryEvidenceRecord(
-            evaluation.SourceWorkflow,
-            evaluation.TargetWorkflow,
-            evaluation.Explanation,
-            evidence));
         await _boundaryStore.AppendAsync(
             new ChainBoundaryEvidenceCapture(run, chainIdentity, evaluation, DateTimeOffset.UtcNow),
             cancellationToken);
@@ -294,23 +280,18 @@ public sealed class WorkflowBoundaryEvidenceWriter(IChainBoundaryEvidenceStore _
 public sealed class WorkflowController(
     WorkflowResolver _resolver,
     ITransitionRuntime _transitionRuntime,
-    ITransitionEffectCoordinator _effects,
-    ICanonicalRepositoryObservationSource _observations)
+    ITransitionEffectCoordinator _effects)
 {
     public async Task<WorkflowControllerResult> RunAsync(
         WorkflowControllerRequest request,
         CancellationToken cancellationToken = default)
     {
-        WorkflowResolutionResult resolution = _resolver.Resolve(
-            request.Invocation,
-            request.Observation,
-            request.Definitions);
+        WorkflowResolutionResult resolution = ResolutionFor(request);
         WorkflowStopReason? terminal = StopReasonFor(resolution);
         if (terminal is not null)
         {
             return new WorkflowControllerResult(
-                resolution, null, terminal.Value, resolution.Explanation.Decision,
-                request.Observation);
+                resolution, null, terminal.Value, resolution.Explanation.Decision);
         }
 
         TransitionEligibility? selectedTransition = resolution.TransitionEligibility
@@ -328,8 +309,7 @@ public sealed class WorkflowController(
                 reason,
                 missingRequiredInput
                     ? "Every candidate transition is missing a required input product."
-                    : "No eligible transition was available for the selected stage.",
-                request.Observation);
+                    : "No eligible transition was available for the selected stage.");
         }
 
         TransitionRuntimeResult attempt = await _transitionRuntime.RunAsync(
@@ -339,7 +319,10 @@ public sealed class WorkflowController(
                 selectedTransition.Transition,
                 request.ExecutionContext,
                 request.Authorization,
-                Interactive: request.Interactive),
+                Interactive: request.Interactive,
+                // The cycle's observation, which `resolution` above was already computed from,
+                // is handed down so attempt-start product resolution reuses it.
+                Observation: request.Observation),
             cancellationToken);
         TransitionEffectCoordinationResult? coordination = null;
         if (attempt.RequiredEffectsPending)
@@ -349,9 +332,11 @@ public sealed class WorkflowController(
             coordination = await _effects.CoordinateAsync(transitionRun, cancellationToken);
         }
 
-        // Runtime results are evidence, not progression authority. Re-observe canonical state after
-        // every attempt/effect cycle before selecting a stop or successor decision.
-        RepositoryObservation observed = await _observations.ObserveAsync(cancellationToken);
+        // Runtime results are evidence, not progression authority, but the stop/successor decision
+        // below is computed entirely from `attempt` and `coordination` — it never reads canonical
+        // state. The kernel (OrchestrationKernel.RunAsync) performs its own fresh observation at
+        // the cycle boundary before the next attempt is authorized, which is what actually matters
+        // for progression authority; an additional observation here had no consumer.
         WorkflowStopReason stop = coordination?.Outcome is { } coordinatedOutcome
             ? StopReasonFor(coordinatedOutcome)
             : coordination is { Failed: true }
@@ -366,9 +351,19 @@ public sealed class WorkflowController(
             attempt,
             stop,
             coordination?.Explanation ?? attempt.Explanation,
-            observed,
             coordination);
     }
+
+    // Resolution is a pure function of (invocation, observation, definitions), so a caller that has
+    // already resolved this cycle -- WorkflowChainRunner does, to decide whether the workflow is
+    // still running -- hands the result down rather than paying for a second identical Resolve.
+    // The pairing is only trusted when it describes this request's own inputs; anything else falls
+    // back to resolving here, which keeps a standalone caller of the controller correct.
+    private WorkflowResolutionResult ResolutionFor(WorkflowControllerRequest request) =>
+        request.Cycle is { } cycle &&
+        cycle.Matches(request.Invocation, request.Observation, request.Definitions)
+            ? cycle.Resolution
+            : _resolver.Resolve(request.Invocation, request.Observation, request.Definitions);
 
     private static WorkflowStopReason? StopReasonFor(WorkflowResolutionResult resolution) =>
         resolution.Classification switch
@@ -427,8 +422,13 @@ public sealed class WorkflowChainRunner(
         for (int guard = 0; guard < request.Chain.Workflows.Count + 1; guard++)
         {
             WorkflowDefinition definition = Definition(request.Definitions, current);
-            WorkflowResolutionResult resolution = _resolver.Resolve(InvocationFor(current), observation, request.Definitions);
-            if (resolution.WorkflowState != WorkflowResolutionState.Completed)
+            WorkflowInvocation invocation = InvocationFor(current);
+            // One resolution per cycle. `observation` is only replaced at the bottom of the loop,
+            // after a boundary crossing, so this result and the controller's decision below are
+            // computed from the same observed cycle by construction.
+            WorkflowCycleResolution cycle = WorkflowCycleResolution.Resolve(
+                _resolver, invocation, observation, request.Definitions);
+            if (cycle.Resolution.WorkflowState != WorkflowResolutionState.Completed)
             {
                 WorkflowInstanceIdentity instance = await _instances.BeginInstanceAsync(
                     request.Context.Run, current, cancellationToken);
@@ -443,12 +443,13 @@ public sealed class WorkflowChainRunner(
                     request.Context.AgentRolePolicyIdentity);
                 WorkflowControllerResult controller = await _controller.RunAsync(
                     new WorkflowControllerRequest(
-                        InvocationFor(current),
+                        invocation,
                         observation,
                         request.Definitions,
                         execution,
                         request.Authorization,
-                        request.Interactive),
+                        request.Interactive,
+                        cycle),
                     cancellationToken);
                 await _instances.CompleteInstanceAsync(
                     instance,

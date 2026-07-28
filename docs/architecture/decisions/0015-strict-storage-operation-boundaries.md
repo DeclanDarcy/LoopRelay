@@ -5,7 +5,7 @@ Date: 2026-07-12
 
 ## Decision
 
-`status` and `storage verify` are strictly read-only. They open an existing SQLite authority through the read-only connection factory, inventory and hash the persistence tree, and report `Healthy`, `ActionRequired`, `Unsupported`, or `Corrupt`. They never initialize, migrate, repair, synchronize, or create SQLite side files.
+`status` and `storage verify` are strictly read-only. They open an existing SQLite authority through the read-only connection factory, inventory the persistence tree, and report `Healthy`, `ActionRequired`, `Unsupported`, or `Corrupt`. They never initialize, migrate, repair, synchronize, or create SQLite side files. Only `storage verify` (and the other explicit `storage` commands, and certification) additionally hashes every file in the persistence tree; `status`'s routine observation - paid on every kernel cycle - hashes nothing, since no consumer ever reads a database-content digest back to make a decision on that path (Task 3.9).
 
 Only `storage migrate` may execute a supported schema upgrade. `storage init` requires an absent authority and uses a durable staging plan plus an absence-guarded typed promotion effect. Compatibility import is exposed separately as `import detect|preview|execute|verify` and is owned by the M12 Import Gateway; it is not a storage subcommand or an ordinary-run fallback. Export uses the versioned canonical codec and M8 effects; sync is bounded to rebuildable projections and already-journaled effects.
 

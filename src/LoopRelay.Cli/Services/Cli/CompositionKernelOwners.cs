@@ -101,15 +101,33 @@ internal sealed partial class LoopRelayCompositionRoot
             Task.FromResult(definition.EligibleSuccessors);
     }
 
-    private sealed class RepositoryObservationProductResolver(
+    // One resolver, two observation owners. ResolveAsync takes its own observation (what the
+    // promotion-time freshness validator requires); ResolveFromObservationAsync reuses the
+    // kernel cycle's. Both run the same Project projection, so the ambient answer differs from
+    // the fresh answer only by the age of the observation - never by the verdict rules.
+    internal sealed class RepositoryObservationProductResolver(
         RepositoryObserver _observer,
         Repository _repository) : IProductResolver
     {
         public async Task<ProductResolutionResult> ResolveAsync(
             IReadOnlyList<ProductRequirement> requirements,
+            CancellationToken cancellationToken) =>
+            Project(await _observer.ObserveAsync(_repository.Path, cancellationToken), requirements);
+
+        public Task<ProductResolutionResult> ResolveFromObservationAsync(
+            RepositoryObservation observation,
+            IReadOnlyList<ProductRequirement> requirements,
             CancellationToken cancellationToken)
         {
-            RepositoryObservation observation = await _observer.ObserveAsync(_repository.Path, cancellationToken);
+            ArgumentNullException.ThrowIfNull(observation);
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Project(observation, requirements));
+        }
+
+        private static ProductResolutionResult Project(
+            RepositoryObservation observation,
+            IReadOnlyList<ProductRequirement> requirements)
+        {
             var products = new List<ProductRecord>();
             var missing = new List<ProductRequirement>();
             var stale = new List<ProductRecord>();
@@ -212,9 +230,9 @@ internal sealed partial class LoopRelayCompositionRoot
             CancellationToken cancellationToken)
         {
             CanonicalCompletionSnapshot snapshot = await new CanonicalCompletionAuthorityStore(_repository)
-                .ReadSnapshotAsync(cancellationToken);
+                .ReadSnapshotAsync(context.Causality.Run, cancellationToken);
             CompletionDecision? decision = snapshot.Decisions.LastOrDefault(item =>
-                item.RootRun == context.Causality.Run && item.Kind == CompletionDecisionKind.CertifiedCandidate);
+                item.Kind == CompletionDecisionKind.CertifiedCandidate);
             CompletionCertificate? certificate = decision is null ? null : snapshot.Certificates
                 .SingleOrDefault(item => item.Decision == decision.Identity);
             CompletionClosurePlan? plan = certificate is null ? null : snapshot.ClosurePlans

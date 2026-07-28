@@ -54,13 +54,13 @@ public sealed class GitEffectExecutorsTests
         var executor = new NestedRepositoryCommitEffectExecutor(repository, process);
         var reconciler = new GitEffectReconciler(repository, process);
 
-        await new EffectWorker("before-crash", faulted, new EffectExecutorRegistry([executor]), reconciler,
-            TimeSpan.FromMinutes(1)).RunOnceAsync();
+        await new EffectWorker("before-crash", faulted, new EffectExecutorRegistry([executor]), reconciler)
+            .RunOnceAsync();
         Assert.Equal(EffectLifecycle.Unknown, (await durable.ReadAsync(intent.Identity, CancellationToken.None))!.State);
         Assert.Equal(1, await CommitCountAsync(process, Path.Combine(repository.Path, ".agents")));
 
-        await new EffectWorker("after-restart", durable, new EffectExecutorRegistry([executor]), reconciler,
-            TimeSpan.FromMinutes(1)).RunOnceAsync();
+        await new EffectWorker("after-restart", durable, new EffectExecutorRegistry([executor]), reconciler)
+            .RunOnceAsync();
 
         Assert.Equal(1, await CommitCountAsync(process, Path.Combine(repository.Path, ".agents")));
         EffectWorkItem settled = (await durable.ReadAsync(intent.Identity, CancellationToken.None))!;
@@ -83,7 +83,7 @@ public sealed class GitEffectExecutorsTests
         var pushExecutor = new GitPushEffectExecutor(repository, process, GitEffectExecutorKeys.NestedRepositoryPush);
         var reconciler = new GitEffectReconciler(repository, process);
         var worker = new EffectWorker("push-test", store,
-            new EffectExecutorRegistry([commitExecutor, pushExecutor]), reconciler, TimeSpan.FromMinutes(1));
+            new EffectExecutorRegistry([commitExecutor, pushExecutor]), reconciler);
         var settlement = new RecordingSettlement();
 
         TransitionEffectCoordinationResult result = await new TransitionEffectCoordinator(store, worker, settlement)
@@ -271,20 +271,19 @@ public sealed class GitEffectExecutorsTests
     private sealed class FailFirstReceiptStore(IEffectWorkStore inner) : IEffectWorkStore
     {
         private bool _failed;
-        public Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken token) => inner.ScanUnsettledAsync(limit, now, token);
+        public Task<IReadOnlyList<EffectScanRow>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken token, IReadOnlySet<EffectIntentIdentity>? only = null) => inner.ScanUnsettledAsync(limit, now, token, only);
         public Task<IReadOnlyList<EffectWorkItem>> ReadPlanAsync(TransitionRunIdentity transition, CancellationToken token) => inner.ReadPlanAsync(transition, token);
         public Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken token) => inner.ReadAsync(identity, token);
-        public Task<EffectLease?> TryLeaseAsync(EffectIntentIdentity identity, long version, string worker, DateTimeOffset now, TimeSpan duration, CancellationToken token) => inner.TryLeaseAsync(identity, version, worker, now, duration, token);
-        public Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, long version, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset at, CancellationToken token) => inner.AppendLifecycleAsync(identity, version, state, worker, explanation, evidence, at, token);
-        public Task RecordReconciliationAsync(EffectIntentIdentity identity, long version, EffectReconciliationObservation observation, string worker, DateTimeOffset at, CancellationToken token) => inner.RecordReconciliationAsync(identity, version, observation, worker, at, token);
-        public Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, long version, EffectReceipt receipt, string worker, CancellationToken token)
+        public Task<bool> DependencySatisfiedAsync(EffectIntent candidate, EffectIntentIdentity dependency, CancellationToken token) => inner.DependencySatisfiedAsync(candidate, dependency, token);
+        public Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset at, CancellationToken token) => inner.AppendLifecycleAsync(identity, state, worker, explanation, evidence, at, token);
+        public Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, EffectReceipt receipt, string worker, CancellationToken token)
         {
             if (!_failed)
             {
                 _failed = true;
                 throw new IOException("Injected receipt persistence loss.");
             }
-            return inner.RecordReceiptAsync(identity, version, receipt, worker, token);
+            return inner.RecordReceiptAsync(identity, receipt, worker, token);
         }
     }
 }

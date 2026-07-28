@@ -73,10 +73,6 @@ project.fragment.lock.json
 /artifacts/
 !schemas/artifacts/
 !schemas/artifacts/**
-!src/LoopRelay.Backend/Artifacts/
-!src/LoopRelay.Backend/Artifacts/**
-!src/LoopRelay.UI/src/features/artifacts/
-!src/LoopRelay.UI/src/features/artifacts/**
 **/debugging/
 **/performance-results/
 **/reports/
@@ -296,10 +292,6 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 dist/
-
-# Rust/Tauri generated output
-src/LoopRelay.Shell/target/
-src/LoopRelay.Shell/gen/
 
 # Compass TypeScript monorepo packages are source, not NuGet restore packages.
 !/packages/

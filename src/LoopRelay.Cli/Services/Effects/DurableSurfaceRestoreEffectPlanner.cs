@@ -36,7 +36,7 @@ internal sealed class DurableSurfaceRestoreEffectPlanner(Repository _repository)
             .Single(item => item.Intent.IdempotencyKey == candidate.IdempotencyKey);
         var worker = new EffectWorker($"surface-restore-{Environment.ProcessId}", store,
             new EffectExecutorRegistry([new SurfaceRestoreEffectExecutor(_repository)]),
-            new SurfaceRestoreEffectReconciler(_repository), TimeSpan.FromMinutes(2));
+            new SurfaceRestoreEffectReconciler(_repository));
         await worker.RunOnceAsync(cancellationToken, includePending: true,
             only: new HashSet<EffectIntentIdentity> { work.Intent.Identity });
         work = await store.ReadAsync(work.Intent.Identity, cancellationToken)

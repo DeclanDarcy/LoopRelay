@@ -16,7 +16,6 @@ public sealed class PermissionSettingsTests
         Assert.Equal(CliSettingsLoader.CurrentSchemaVersion, result.Source.SchemaVersion);
         Assert.Equal(AgentModel.Gpt56Sol, result.Runtime.Brain.Model);
         Assert.Equal(AgentEffort.XHigh, result.Runtime.Brain.Effort);
-        Assert.Empty(result.Runtime.SupportedCodexProfiles);
         Assert.Equal("v1", result.PermissionInputs.FingerprintVersion);
         Assert.Equal(32, result.PolicyInputs.MaxUnboundedContinuationSteps);
         Assert.Equal(2, result.PolicyInputs.MaxNoChangesCommits);
@@ -112,7 +111,6 @@ public sealed class PermissionSettingsTests
         {
             ["decisionResume"] = false,
             ["recoveryPolicy"] = "resume-only",
-            ["supportedCodexProfiles"] = new JsonArray("codex-0.144"),
         };
         settings["artifactPolicy"] = new JsonObject
         {
@@ -127,12 +125,41 @@ public sealed class PermissionSettingsTests
         Assert.Equal("legacy-unversioned", result.Source.SchemaVersion);
         Assert.Equal(AgentModel.Gpt56Luna, result.Runtime.Brain.Model);
         Assert.Equal(AgentEffort.Medium, result.Runtime.Brain.Effort);
-        Assert.Equal(["codex-0.144"], result.Runtime.SupportedCodexProfiles);
         Assert.False(result.PolicyInputs.DecisionSessionResume);
         Assert.Equal("resume-only", result.PolicyInputs.DecisionRecoveryStrategy);
         Assert.NotNull(result.PolicyInputs.LegacyArtifactPolicy);
         Assert.Contains(result.CompatibilityWarnings, warning => warning.Code == "legacy-settings-layout");
         Assert.Contains(result.CompatibilityWarnings, warning => warning.Code == "legacy-artifact-policy");
+    }
+
+    [Fact]
+    public void Removed_canonical_provider_profiles_key_is_rejected_as_unknown_member()
+    {
+        JsonObject settings = DefaultSettings();
+        Object(settings, "runtime")["providers"] = new JsonObject
+        {
+            ["supportedCodexProfiles"] = new JsonArray(),
+        };
+
+        Assert.Throws<CliSettingsException>(() =>
+            CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
+    }
+
+    [Fact]
+    public void Removed_legacy_continuity_provider_profiles_key_is_rejected_as_unknown_member()
+    {
+        JsonObject settings = DefaultSettings();
+        settings.Remove("schemaVersion");
+        settings.Remove("runtime");
+        settings["brainModel"] = "gpt-5.6-sol";
+        settings["brainEffort"] = "xhigh";
+        settings["continuity"] = new JsonObject
+        {
+            ["supportedCodexProfiles"] = new JsonArray("codex-0.144"),
+        };
+
+        Assert.Throws<CliSettingsException>(() =>
+            CliSettingsLoader.LoadFromFile(WriteSettings(settings)));
     }
 
     [Fact]

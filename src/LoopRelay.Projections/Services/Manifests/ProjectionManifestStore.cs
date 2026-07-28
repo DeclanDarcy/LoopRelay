@@ -56,8 +56,88 @@ public sealed class ProjectionManifestStore(ProjectionArtifacts.ProjectionArtifa
     public async Task UpsertAsync(ProjectionManifestEntry entry)
     {
         ProjectionManifest manifest = await LoadAsync();
-        await SaveAsync(manifest.Upsert(entry));
+        await UpsertAsync(manifest, entry, CancellationToken.None);
     }
+
+    /// <summary>
+    /// Upserts <paramref name="entry"/> into the caller-supplied <paramref name="loaded"/> manifest instead of
+    /// re-loading it from disk, and skips the physical <see cref="SaveAsync"/> write entirely when the resulting
+    /// manifest is unchanged from <paramref name="loaded"/>. This is what makes an unchanged steady-state loop
+    /// iteration produce zero manifest writes: <see cref="Models.Manifests.ProjectionManifestEntry.FromTrustedProvenance"/>
+    /// preserves <c>GeneratedAt</c> for non-regenerated entries, so a repeat ensure over unchanged inputs upserts
+    /// an entry that is structurally identical to the one already on disk.
+    /// </summary>
+    /// <remarks>
+    /// Equality here is NOT record `==`/`Equals`: <see cref="ProjectionManifest.Entries"/> and several
+    /// <see cref="ProjectionManifestEntry"/> fields (<c>ProjectContextFiles</c>, <c>CausalInputs</c>,
+    /// <c>StaleReasons</c>) are collections, and generated record equality compares collection-typed fields by
+    /// reference (via <see cref="EqualityComparer{T}.Default"/> on the interface type), not by content. Two
+    /// structurally identical manifests built from distinct <c>List</c>/array instances would therefore compare
+    /// UNEQUAL under record equality even though they represent the same state — which would defeat this gate by
+    /// always taking the "changed" branch. <see cref="ManifestEquals"/> performs the real structural comparison.
+    /// </remarks>
+    public async Task UpsertAsync(
+        ProjectionManifest loaded,
+        ProjectionManifestEntry entry,
+        CancellationToken cancellationToken = default)
+    {
+        ProjectionManifest updated = loaded.Upsert(entry);
+        if (ManifestEquals(loaded, updated))
+        {
+            return;
+        }
+
+        await SaveAsync(updated);
+    }
+
+    /// <summary>
+    /// Structural equality for <see cref="ProjectionManifest"/> that correctly compares collection-typed fields by
+    /// content rather than by reference (see the remarks on <see cref="UpsertAsync(ProjectionManifest,ProjectionManifestEntry,CancellationToken)"/>
+    /// for why record `==` is not sufficient here). Entries are compared positionally: both
+    /// <see cref="ProjectionManifest.Upsert"/> and <see cref="ProjectionManifestPersistenceDocument.ToDomain"/>
+    /// always order entries by <c>RuntimePromptName</c>, so two manifests describing the same state are always in
+    /// the same order.
+    /// </summary>
+    public static bool ManifestEquals(ProjectionManifest left, ProjectionManifest right)
+    {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
+        if (left.Entries.Count != right.Entries.Count)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < left.Entries.Count; index++)
+        {
+            if (!EntryEquals(left.Entries[index], right.Entries[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool EntryEquals(ProjectionManifestEntry left, ProjectionManifestEntry right) =>
+        string.Equals(left.RuntimePromptName, right.RuntimePromptName, StringComparison.Ordinal)
+        && string.Equals(left.ProjectionPromptName, right.ProjectionPromptName, StringComparison.Ordinal)
+        && string.Equals(left.ProjectionPath, right.ProjectionPath, StringComparison.Ordinal)
+        && string.Equals(left.ProjectionPromptSourceHash, right.ProjectionPromptSourceHash, StringComparison.Ordinal)
+        && left.ProjectContextFiles.SequenceEqual(right.ProjectContextFiles, StringComparer.Ordinal)
+        && string.Equals(left.ProjectContextHash, right.ProjectContextHash, StringComparison.Ordinal)
+        && string.Equals(left.ProjectionHash, right.ProjectionHash, StringComparison.Ordinal)
+        && left.GeneratedAt.Equals(right.GeneratedAt)
+        && left.ValidationStatus == right.ValidationStatus
+        && left.StaleStatus == right.StaleStatus
+        && string.Equals(left.LastValidationError, right.LastValidationError, StringComparison.Ordinal)
+        && left.ProvenanceStatus == right.ProvenanceStatus
+        && string.Equals(left.ProjectionIdentity, right.ProjectionIdentity, StringComparison.Ordinal)
+        && string.Equals(left.ProjectionPromptType, right.ProjectionPromptType, StringComparison.Ordinal)
+        && left.EffectiveCausalInputs.SequenceEqual(right.EffectiveCausalInputs)
+        && left.EffectiveStaleReasons.SequenceEqual(right.EffectiveStaleReasons);
 
     private static ProjectionManifest ParseLegacyMarkdown(string content)
     {

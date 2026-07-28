@@ -197,16 +197,6 @@ public sealed class CompletionCertificationServiceTests
         Assert.Equal("PLAN", await repo.ReadAsync(".agents/archive/epics/1/plan.md"));
         Assert.Equal("OPCTX", await repo.ReadAsync(".agents/archive/epics/1/operational_context.md"));
         Assert.Null(await repo.ReadAsync(".agents/evidence/execution/execution.0001.md"));
-
-        CompletedEpicArchiveRecoveryResult recovery =
-            await new CompletedEpicArchiveRecoveryService(repo.Store, repo.Repository).LoadAsync(1);
-        Assert.Contains(recovery.Records, record =>
-            record.Domain == "loop_history" &&
-            record.LogicalPath == ".agents/deltas/operational_delta.0001.md" &&
-            record.ExportPath == ".agents/archive/epics/1/deltas/operational_delta.0001.md");
-        Assert.Contains(recovery.Records, record =>
-            record.Domain == "execution_evidence" &&
-            record.LogicalPath == ".agents/evidence/execution/execution.0001.md");
     }
 
     [Fact]

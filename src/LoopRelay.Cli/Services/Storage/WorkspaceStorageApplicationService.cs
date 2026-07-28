@@ -67,8 +67,8 @@ internal sealed class WorkspaceStorageApplicationService(
     {
         WorkspaceSchemaInspection staged = await new WorkspaceSchemaReadOnlyInspector()
             .InspectAsync(staging, cancellationToken);
-        if (staged.Shape != WorkspaceSchemaShape.CanonicalV15Complete)
-            throw new InvalidDataException("Staged workspace did not validate as canonical v14.");
+        if (staged.Shape != LoopRelayWorkspaceDatabase.CurrentCompleteShape)
+            throw new InvalidDataException("Staged workspace did not validate as the current canonical schema shape.");
         string root = Path.GetFullPath(_repository.Path);
         string sourceRelative = Path.GetRelativePath(root, staging).Replace('\\', '/');
         string targetRelative = Path.GetRelativePath(root, target).Replace('\\', '/');

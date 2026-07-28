@@ -854,6 +854,139 @@ public sealed class WorkflowResolverTests
             product => product.Product.Identity == ProductIdentity.CertifiedCompletion);
     }
 
+    // Task 3.6: FindLatestCompletionArchive picks the max-index archive without fully
+    // enumerating every archived epic directory. Each fixture below is diffed against
+    // LegacyFindLatestCompletionArchive (the pre-change algorithm, preserved near the bottom
+    // of this file) rather than against hand-derived expected evidence lists.
+
+    [Fact]
+    public async Task Latest_completion_archive_selects_max_index_among_non_sequential_epics()
+    {
+        string repo = CreateRepo();
+        Write(repo, ".agents/archive/epics/3.md", "# Epic 3 synthesis");
+        Write(repo, ".agents/archive/epics/3/marker.md", "epic-3");
+        Write(repo, ".agents/archive/epics/12.md", "# Epic 12 synthesis");
+        Write(repo, ".agents/archive/epics/12/marker.md", "epic-12");
+        Write(repo, ".agents/archive/epics/7.md", "# Epic 7 synthesis");
+        Write(repo, ".agents/archive/epics/7/marker.md", "epic-7");
+
+        LegacyArchiveCandidate? legacy = LegacyFindLatestCompletionArchive(repo);
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+        ObservedProduct completionEvidence = Assert.Single(
+            observation.Products, product => product.Product.Identity == ProductIdentity.CompletionEvidence);
+
+        Assert.NotNull(legacy);
+        Assert.Equal(12, legacy!.Index);
+        Assert.Equal(legacy.Evidence, completionEvidence.Evidence);
+        Assert.Contains(".agents/archive/epics/12/marker.md", completionEvidence.Evidence);
+        Assert.DoesNotContain(".agents/archive/epics/3/marker.md", completionEvidence.Evidence);
+        Assert.DoesNotContain(".agents/archive/epics/7/marker.md", completionEvidence.Evidence);
+    }
+
+    [Fact]
+    public async Task Latest_completion_archive_selects_the_only_epic_when_a_single_archive_exists()
+    {
+        string repo = CreateRepo();
+        Write(repo, ".agents/archive/epics/5.md", "# Epic 5 synthesis");
+        Write(repo, ".agents/archive/epics/5/marker.md", "epic-5");
+
+        LegacyArchiveCandidate? legacy = LegacyFindLatestCompletionArchive(repo);
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+        ObservedProduct completionEvidence = Assert.Single(
+            observation.Products, product => product.Product.Identity == ProductIdentity.CompletionEvidence);
+
+        Assert.NotNull(legacy);
+        Assert.Equal(5, legacy!.Index);
+        Assert.Equal(legacy.Evidence, completionEvidence.Evidence);
+    }
+
+    [Fact]
+    public async Task Latest_completion_archive_is_absent_when_no_archive_root_exists()
+    {
+        string repo = CreateRepo();
+        Directory.CreateDirectory(Path.Combine(repo, ".agents"));
+
+        LegacyArchiveCandidate? legacy = LegacyFindLatestCompletionArchive(repo);
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+
+        Assert.Null(legacy);
+        Assert.DoesNotContain(observation.Products, product => product.Product.Identity == ProductIdentity.CompletionEvidence);
+    }
+
+    [Fact]
+    public async Task Latest_completion_archive_is_absent_when_archive_root_exists_but_is_empty()
+    {
+        string repo = CreateRepo();
+        Directory.CreateDirectory(Path.Combine(repo, Normalize(".agents/archive/epics")));
+
+        LegacyArchiveCandidate? legacy = LegacyFindLatestCompletionArchive(repo);
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+
+        Assert.Null(legacy);
+        Assert.DoesNotContain(observation.Products, product => product.Product.Identity == ProductIdentity.CompletionEvidence);
+    }
+
+    [Fact]
+    public async Task Latest_completion_archive_ignores_non_integer_synthesis_file_names()
+    {
+        string repo = CreateRepo();
+        Write(repo, ".agents/archive/epics/notes.md", "# Not an epic archive");
+        Write(repo, ".agents/archive/epics/3.md", "# Epic 3 synthesis");
+        Write(repo, ".agents/archive/epics/3/marker.md", "epic-3");
+        Write(repo, ".agents/archive/epics/9.md", "# Epic 9 synthesis");
+        Write(repo, ".agents/archive/epics/9/marker.md", "epic-9");
+
+        LegacyArchiveCandidate? legacy = LegacyFindLatestCompletionArchive(repo);
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+        ObservedProduct completionEvidence = Assert.Single(
+            observation.Products, product => product.Product.Identity == ProductIdentity.CompletionEvidence);
+
+        Assert.NotNull(legacy);
+        Assert.Equal(9, legacy!.Index);
+        Assert.Equal(legacy.Evidence, completionEvidence.Evidence);
+        Assert.DoesNotContain(".agents/archive/epics/notes.md", completionEvidence.Evidence);
+    }
+
+    [Fact]
+    public async Task Latest_completion_archive_is_absent_when_only_non_integer_synthesis_files_exist()
+    {
+        string repo = CreateRepo();
+        Write(repo, ".agents/archive/epics/notes.md", "# Not an epic archive");
+        Write(repo, ".agents/archive/epics/notes/marker.md", "not-an-epic");
+
+        LegacyArchiveCandidate? legacy = LegacyFindLatestCompletionArchive(repo);
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+
+        Assert.Null(legacy);
+        Assert.DoesNotContain(observation.Products, product => product.Product.Identity == ProductIdentity.CompletionEvidence);
+    }
+
+    [Fact]
+    public async Task Latest_completion_archive_falls_back_when_the_highest_index_archive_directory_is_missing()
+    {
+        string repo = CreateRepo();
+        Write(repo, ".agents/archive/epics/3.md", "# Epic 3 synthesis");
+        Write(repo, ".agents/archive/epics/3/marker.md", "epic-3");
+        Write(repo, ".agents/archive/epics/7.md", "# Epic 7 synthesis");
+        Write(repo, ".agents/archive/epics/7/marker.md", "epic-7");
+        // Epic 12 has a synthesis file but no retained archive directory: the highest index
+        // alone is not a usable archive, so selection must fall back to the next highest index
+        // that does have a matching directory, exactly as the pre-change full enumeration did.
+        Write(repo, ".agents/archive/epics/12.md", "# Epic 12 synthesis without a retained archive");
+
+        LegacyArchiveCandidate? legacy = LegacyFindLatestCompletionArchive(repo);
+        RepositoryObservation observation = await new RepositoryObserver().ObserveAsync(repo);
+        ObservedProduct completionEvidence = Assert.Single(
+            observation.Products, product => product.Product.Identity == ProductIdentity.CompletionEvidence);
+
+        Assert.NotNull(legacy);
+        Assert.Equal(7, legacy!.Index);
+        Assert.Equal(legacy.Evidence, completionEvidence.Evidence);
+        Assert.Contains(".agents/archive/epics/7/marker.md", completionEvidence.Evidence);
+        Assert.DoesNotContain(".agents/archive/epics/3/marker.md", completionEvidence.Evidence);
+        Assert.DoesNotContain(".agents/archive/epics/12.md", completionEvidence.Evidence);
+    }
+
     [Fact]
     public async Task Storage_observer_reports_filesystem_sqlite_mixed_missing_and_corrupt_authority()
     {
@@ -1017,9 +1150,6 @@ public sealed class WorkflowResolverTests
             INSERT INTO roadmap_state (id, document_json, updated_at)
             VALUES (1, '{"SchemaVersion":"roadmap-state.v1"}', '2026-07-10T12:00:00.0000000Z');
 
-            INSERT INTO artifact_lifecycle (path_key, path, state, updated_at, notes)
-            VALUES ('agents-epic', '.agents/epic.md', 'Ready', '2026-07-10T12:00:00.0000000Z', 'legacy');
-
             INSERT INTO transition_journal (
                 correlation_id, event_name, recorded_at, from_state, to_state, transition,
                 projection_path, prompt_contract, input_hashes_json, output_paths_json,
@@ -1043,10 +1173,6 @@ public sealed class WorkflowResolverTests
             observation,
             "PreUnificationTransitionJournal:Sqlite",
             ".LoopRelay/persistence/looprelay.sqlite3:transition_journal");
-        AssertLifecycleRow(
-            observation,
-            "PreUnificationArtifactLifecycle:Sqlite",
-            ".LoopRelay/persistence/looprelay.sqlite3:artifact_lifecycle");
         Assert.Equal(before, after);
     }
 
@@ -1120,9 +1246,16 @@ public sealed class WorkflowResolverTests
 
             INSERT INTO canonical_stage_states (workflow_identity, stage_identity, state, updated_at, evidence_json)
             VALUES ('Plan', 'Planning', 'Blocked', '2026-07-10T12:00:00.0000000Z', '["legacy-blocked-stage.md"]');
+
+            DELETE FROM schema_metadata WHERE key = 'blocked_vocabulary_repaired';
             """);
 
-        // The next invocation's schema pass migrates the legacy labels; no unblock command exists or is needed.
+        // The next invocation's schema pass migrates the legacy labels; no unblock command exists or
+        // is needed. LoopRelayWorkspaceDatabase now receipts a clean blocked-vocabulary scan
+        // (schema_metadata['blocked_vocabulary_repaired']) so it isn't repeated on every admission;
+        // the DELETE above is what a real reintroduction path (legacy-import completion) does to
+        // force this next admission to re-scan and re-repair, exactly like this out-of-band insert
+        // does here.
         await CreateSqliteDatabaseAsync(repo);
 
         Assert.Equal("Resumable", await ScalarStringAsync(repo, "SELECT state FROM canonical_workflow_states WHERE workflow_identity = 'Plan';"));
@@ -1281,6 +1414,59 @@ public sealed class WorkflowResolverTests
             .Select(path => (Relative: Path.GetRelativePath(root, path).Replace('\\', '/'), Hash: Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant()))
             .OrderBy(item => item.Relative, StringComparer.Ordinal)
             .ToDictionary(item => item.Relative, item => item.Hash, StringComparer.Ordinal);
+
+    // Task 3.6 characterization baseline: this is FindLatestCompletionArchive and
+    // CompletionArchiveCandidate exactly as they existed before the max-index optimization
+    // (full enumeration of every archived epic directory, then OrderByDescending + FirstOrDefault).
+    // Kept here so the new implementation's result can be diffed against a known-correct
+    // baseline per fixture instead of against hand-derived expected evidence lists.
+    private static LegacyArchiveCandidate? LegacyFindLatestCompletionArchive(string root)
+    {
+        string archiveRoot = Path.Combine(root, Normalize(".agents/archive/epics"));
+        if (!Directory.Exists(archiveRoot))
+        {
+            return null;
+        }
+
+        return Directory
+            .EnumerateFiles(archiveRoot, "*.md", SearchOption.TopDirectoryOnly)
+            .Select(path => LegacyCompletionArchiveCandidate(root, path))
+            .Where(candidate => candidate is not null)
+            .OrderByDescending(candidate => candidate!.Index)
+            .FirstOrDefault();
+    }
+
+    private static LegacyArchiveCandidate? LegacyCompletionArchiveCandidate(string root, string synthesisPath)
+    {
+        string fileName = Path.GetFileNameWithoutExtension(synthesisPath);
+        if (!int.TryParse(fileName, out int index))
+        {
+            return null;
+        }
+
+        string archiveDirectory = Path.Combine(
+            root,
+            Normalize($".agents/archive/epics/{index.ToString(System.Globalization.CultureInfo.InvariantCulture)}"));
+        if (!Directory.Exists(archiveDirectory))
+        {
+            return null;
+        }
+
+        string relativeSynthesis = Path.GetRelativePath(root, synthesisPath).Replace('\\', '/');
+        string relativeDirectory = Path.GetRelativePath(root, archiveDirectory).Replace('\\', '/');
+        IReadOnlyList<string> archivedFiles = Directory
+            .EnumerateFiles(archiveDirectory, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        IReadOnlyList<string> evidence = new[] { relativeSynthesis, relativeDirectory }
+            .Concat(archivedFiles)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return new LegacyArchiveCandidate(index, evidence);
+    }
+
+    private sealed record LegacyArchiveCandidate(int Index, IReadOnlyList<string> Evidence);
 
     private static async Task CreateSqliteDatabaseAsync(string root)
     {

@@ -68,7 +68,7 @@ public sealed class RepositoryObserver(
         CanonicalPersistenceReadModel persistenceReadModel = verification.UsableAuthority
             ? await _persistenceProjection.ProjectAsync(repository, cancellationToken)
             : CanonicalPersistenceReadModel.Empty;
-        CanonicalWorkflowPersistenceSnapshot canonicalSnapshot = persistenceReadModel.Workflow;
+        CanonicalWorkflowObservationSnapshot canonicalSnapshot = persistenceReadModel.Workflow;
         HashSet<string> attemptsWithUnsettledRequiredEffects = persistenceReadModel
             .UnsettledRequiredEffectAttempts.ToHashSet(StringComparer.Ordinal);
         HashSet<string> certifiedTerminalAttempts = persistenceReadModel.CertifiedTerminalAttempts
@@ -261,7 +261,7 @@ public sealed class RepositoryObserver(
     }
 
     private static IReadOnlyList<ObservedWorkflowState> ObservedWorkflowStates(
-        CanonicalWorkflowPersistenceSnapshot canonicalSnapshot) =>
+        CanonicalWorkflowObservationSnapshot canonicalSnapshot) =>
         canonicalSnapshot.WorkflowStates.Select(state => new ObservedWorkflowState(
             state.Workflow,
             state.State,
@@ -788,12 +788,30 @@ public sealed class RepositoryObserver(
             return null;
         }
 
-        return Directory
+        // CompletionArchiveCandidate recursively walks an archive directory, so evaluating it
+        // for every archived epic just to keep the single latest one would enumerate every
+        // archive on disk. Sort by the (cheap) parsed synthesis-file name first, and only call
+        // it - starting from the highest index - until a candidate with a matching archive
+        // directory is found. In the ordinary case this touches exactly one directory; the
+        // fallback to the next-highest index only runs if the top one turns out to have no
+        // retained archive directory, which preserves the pre-change full-enumeration result.
+        IEnumerable<string> descendingSynthesisPaths = Directory
             .EnumerateFiles(archiveRoot, "*.md", SearchOption.TopDirectoryOnly)
-            .Select(path => CompletionArchiveCandidate(root, path))
-            .Where(candidate => candidate is not null)
-            .OrderByDescending(candidate => candidate!.Index)
-            .FirstOrDefault();
+            .Select(path => (SynthesisPath: path, ParsedIndex: int.TryParse(Path.GetFileNameWithoutExtension(path), out int index) ? (int?)index : null))
+            .Where(file => file.ParsedIndex.HasValue)
+            .OrderByDescending(file => file.ParsedIndex!.Value)
+            .Select(file => file.SynthesisPath);
+
+        foreach (string synthesisPath in descendingSynthesisPaths)
+        {
+            CompletionArchiveRecord? candidate = CompletionArchiveCandidate(root, synthesisPath);
+            if (candidate is not null)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private static CompletionArchiveRecord? CompletionArchiveCandidate(string root, string synthesisPath)
@@ -855,7 +873,12 @@ public sealed class RepositoryObserver(
             startInfo.ArgumentList.Add("status");
             startInfo.ArgumentList.Add("--porcelain=v1");
             startInfo.ArgumentList.Add("--branch");
-            startInfo.ArgumentList.Add("--untracked-files=normal");
+            // Bounded to tracked changes: routine observation does not need untracked-file detail,
+            // and `=normal` walks the whole working tree to produce it. Nothing in production reads
+            // GitFacts.HasWorkingTreeChanges, so this flag only changes whether untracked-only
+            // changes are reported as dirty. The ctx clean-input gate is a separate porcelain call
+            // and deliberately keeps its own untracked-file sensitivity.
+            startInfo.ArgumentList.Add("--untracked-files=no");
             using Process? process = Process.Start(startInfo);
             if (process is null)
             {

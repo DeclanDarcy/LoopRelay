@@ -211,6 +211,9 @@ public sealed class CanonicalRecoveryStore(Repository _repository) : ICanonicalR
     {
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
+        // The plain action journal carries no `document_json`, hence no warm-session scope: both
+        // that column and the v16 `scope_id` derived from it stay NULL here. The warm-session
+        // lookup already excludes these rows via `document_json IS NOT NULL`.
         command.CommandText = """
             INSERT INTO canonical_recovery_action_events (
                 action_id, plan_id, lifecycle, explanation, evidence_json, recorded_at

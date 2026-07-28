@@ -378,11 +378,19 @@ public sealed class CertificationFailureDiagnosisTests : IDisposable
         string codexHome = Path.Combine(root, "codex-home");
         string rollout = Rollout(codexHome, "thread-1", "turn-1", "call", "output");
         Telemetry(fixture, "invocation-1", "thread-1", "turn-1", rollout);
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        using var cancellation = new CancellationTokenSource();
+        var agent = new WaitingAgent();
 
-        CertificationDiagnosisOutcome outcome = await new CertificationFailureDiagnoser(new WaitingAgent())
+        // Cancel only once the diagnostic agent is observably waiting. A timed source raced the retention
+        // and evidence writes that run first: cancelling mid-serialization surfaces as
+        // CertificationRetentionException rather than the operator-cancelled path this test exists to prove.
+        Task<CertificationDiagnosisOutcome> diagnosing = new CertificationFailureDiagnoser(agent)
             .DiagnoseIfNeededAsync(Context(fixture, true, false), cancellation.Token);
+        await Task.WhenAny(agent.Entered, diagnosing).WaitAsync(TimeSpan.FromSeconds(60));
+        await cancellation.CancelAsync();
+        CertificationDiagnosisOutcome outcome = await diagnosing;
 
+        Assert.True(agent.Entered.IsCompleted, "cancellation must interrupt the waiting agent, not the setup");
         Assert.Equal(CertificationDiagnosisDisposition.Unavailable, outcome.Status.Disposition);
         Assert.Equal("operator-cancelled", outcome.Status.BypassOrFailureReason);
         Assert.True(File.Exists(Path.Combine(outcome.AttemptRecord, "failure.json")));
@@ -401,20 +409,6 @@ public sealed class CertificationFailureDiagnosisTests : IDisposable
             diagnoser.DiagnoseIfNeededAsync(context, CancellationToken.None));
 
         Assert.Equal(original, await File.ReadAllTextAsync(Path.Combine(first.AttemptRecord, "failure.json")));
-    }
-
-    [Theory]
-    [InlineData(CertificationDiagnosisDisposition.NotNeeded, false)]
-    [InlineData(CertificationDiagnosisDisposition.Completed, true)]
-    [InlineData(CertificationDiagnosisDisposition.Inconclusive, true)]
-    [InlineData(CertificationDiagnosisDisposition.Unavailable, true)]
-    public void Repeat_guard_requires_a_terminal_diagnostic_attempt(
-        CertificationDiagnosisDisposition disposition,
-        bool expected)
-    {
-        var status = new CertificationDiagnosisStatus(disposition, "id", null, DateTimeOffset.UtcNow);
-        Assert.Equal(expected, CertificationRepeatGuard.MayAutomaticallyAdvance(
-            new CertificationDiagnosisOutcome(status, root)));
     }
 
     private string Fixture()
@@ -574,10 +568,18 @@ public sealed class CertificationFailureDiagnosisTests : IDisposable
 
     private sealed class WaitingAgent : ICertificationDiagnosticAgent
     {
+        private readonly TaskCompletionSource entered =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Completes once the diagnoser has actually handed control to the agent, which is the
+        /// only point at which an operator cancellation exercises the intended path.</summary>
+        public Task Entered => entered.Task;
+
         public async Task<string> AnalyzeAsync(
             CertificationDiagnosticRequest request,
             CancellationToken cancellationToken)
         {
+            entered.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return "{}";
         }

@@ -30,6 +30,29 @@ public sealed class SnapshotInputFreshnessValidatorTests
     }
 
     [Fact]
+    public async Task Promotion_time_validation_takes_its_own_observation_and_never_an_ambient_one()
+    {
+        // Global Constraint 1: no task may hand this validator an older observation. The double
+        // throws if the ambient path is reached, so a regression fails loudly rather than
+        // silently narrowing the concurrent-change detection window.
+        CanonicalCausalContext causality = NewCausality();
+        ProductRecord frozen = Record("input-version", ProductLifecycle.Active);
+        WorkflowTransitionDefinition definition = Definition();
+        var products = new FixedProductResolver(new ProductResolutionResult([frozen], [], [], [], []));
+        var validator = new SnapshotInputFreshnessValidator(products, new ProductHashContextBuilder());
+
+        InputFreshnessResult result = await validator.ValidateAsync(
+            causality,
+            Request(definition),
+            definition,
+            FrozenContext(definition, frozen),
+            CancellationToken.None);
+
+        Assert.Equal(InputFreshnessStatus.Fresh, result.Status);
+        Assert.Equal(1, products.FreshResolutions);
+    }
+
+    [Fact]
     public async Task Foreign_in_place_candidate_still_invalidates_the_frozen_input()
     {
         CanonicalCausalContext causality = NewCausality();
@@ -268,9 +291,25 @@ public sealed class SnapshotInputFreshnessValidatorTests
 
     private sealed class FixedProductResolver(ProductResolutionResult result) : IProductResolver
     {
+        public int FreshResolutions { get; private set; }
+
         public Task<ProductResolutionResult> ResolveAsync(
             IReadOnlyList<ProductRequirement> requirements,
-            CancellationToken cancellationToken) => Task.FromResult(result);
+            CancellationToken cancellationToken)
+        {
+            FreshResolutions++;
+            return Task.FromResult(result);
+        }
+
+        // Global Constraint 1: promotion-time freshness must observe fresh. The validator has no
+        // business reaching the ambient path, so this double refuses it outright rather than
+        // quietly returning the same answer.
+        public Task<ProductResolutionResult> ResolveFromObservationAsync(
+            RepositoryObservation observation,
+            IReadOnlyList<ProductRequirement> requirements,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException(
+                "Promotion-time freshness validation must take its own observation.");
     }
 
     private sealed class ProductHashContextBuilder : IPromptContextBuilder

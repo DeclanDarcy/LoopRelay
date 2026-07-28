@@ -108,6 +108,7 @@ internal sealed partial class LoopRelayCompositionRoot
         PromptPolicyProfileIdentity _promptPolicyProfile,
         IReadOnlyList<WorkflowDefinition> _workflowDefinitions,
         ICanonicalRecoveryCaseRecorder _recoveryCases,
+        RepositoryObserver _repositoryObserver,
         bool _productionRuntime = false) : IProviderPromptTransport, IAsyncDisposable
     {
         private sealed class PromptContextBlockedException(
@@ -1052,60 +1053,62 @@ internal sealed partial class LoopRelayCompositionRoot
                 executeRecoveryStore ??= new CanonicalDecisionRecoveryStore(
                     _repository,
                     new SqliteRecoveryStore(_repository));
-                IAgentSessionContinuityRuntime continuityRuntime = Runtime as IAgentSessionContinuityRuntime
-                    ?? _continuityRuntime
-                    ?? throw new InvalidOperationException("The configured agent runtime does not support decision continuity.");
-                string codexHome = _providerEnvironment.CodexHome;
-                ResumeRecoveryStrategy recoveryPolicy = _policy.Resume.RecoveryStrategy;
-                var recoveryMechanisms = new List<IRecoveryMechanism>();
-                if (recoveryPolicy is ResumeRecoveryStrategy.Reconstructed or ResumeRecoveryStrategy.Certified)
+                if (executeDecisionSession is null)
                 {
-                    recoveryMechanisms.Add(new ThreadReadReconstructionMechanism());
-                    recoveryMechanisms.Add(new RolloutReconstructionMechanism());
-                    recoveryMechanisms.Add(new RepositoryReconstructionMechanism());
-                }
-                if (recoveryPolicy == ResumeRecoveryStrategy.Certified)
-                {
-                    recoveryMechanisms.Add(new NativeForkRecoveryMechanism());
-                }
-                var recoveryRuntime = new RecoveryRuntime(
-                    executeRecoveryStore,
-                    continuityRuntime,
-                    new RecoverySourceCatalog(
-                    [
-                        new ThreadReadRecoverySource(continuityRuntime),
-                        new RolloutSalvageRecoverySource(new CodexRolloutRepository(), codexHome),
-                        new RepositoryContinuationRecoverySource(_repository),
-                    ]),
-                    new RecoveryPlanner(),
-                    new RecoveryMechanismCatalog(recoveryMechanisms),
-                    new CanonicalRecoveryEnvelopeFactory(),
-                    _canonicalStore: new CanonicalRecoveryStore(_repository));
-                LoopArtifacts decisionArtifacts = CreateLoopArtifacts();
-                executeDecisionSession ??= new DecisionSession(
-                    Runtime!,
-                    new DecisionSessionRouter(),
-                    decisionArtifacts,
-                    console,
-                    _repository,
-                    _rolePolicy.Brain,
-                    _costModel: null,
-                    _resumeStore: null,
-                    _projectionService: null,
-                    _resumeEnabled: _policy.Resume.Enabled,
-                    _continuityRuntime: continuityRuntime,
-                    _recoveryStore: executeRecoveryStore,
-                    _recoveryRuntime: recoveryRuntime,
-                    _recoveryPolicyVersion: recoveryPolicy switch
+                    IAgentSessionContinuityRuntime continuityRuntime = Runtime as IAgentSessionContinuityRuntime
+                        ?? _continuityRuntime
+                        ?? throw new InvalidOperationException("The configured agent runtime does not support decision continuity.");
+                    string codexHome = _providerEnvironment.CodexHome;
+                    ResumeRecoveryStrategy recoveryPolicy = _policy.Resume.RecoveryStrategy;
+                    var recoveryMechanisms = new List<IRecoveryMechanism>();
+                    if (recoveryPolicy is ResumeRecoveryStrategy.Reconstructed or ResumeRecoveryStrategy.Certified)
                     {
-                        ResumeRecoveryStrategy.ResumeOnly => "decision-recovery-resume-only.v1",
-                        ResumeRecoveryStrategy.Reconstructed => "decision-recovery-reconstructed.v1",
-                        _ => "decision-recovery-certified.v1",
-                    },
-                    _operationalContextGrowthStreakWarningThreshold: _policy.OperationalContextGrowthWarningStreak,
-                    _promptDispatcher: CreateDecisionPromptDispatcher(),
-                    _artifactEffects: new DurableLoopArtifactEffectCoordinator(_repository, decisionArtifacts));
-                DecisionSessionScope scope = await new DecisionSessionScopeResolver(_repository)
+                        recoveryMechanisms.Add(new ThreadReadReconstructionMechanism());
+                        recoveryMechanisms.Add(new RolloutReconstructionMechanism());
+                        recoveryMechanisms.Add(new RepositoryReconstructionMechanism());
+                    }
+                    if (recoveryPolicy == ResumeRecoveryStrategy.Certified)
+                    {
+                        recoveryMechanisms.Add(new NativeForkRecoveryMechanism());
+                    }
+                    var recoveryRuntime = new RecoveryRuntime(
+                        executeRecoveryStore,
+                        continuityRuntime,
+                        new RecoverySourceCatalog(
+                        [
+                            new ThreadReadRecoverySource(continuityRuntime),
+                            new RolloutSalvageRecoverySource(new CodexRolloutRepository(), codexHome),
+                            new RepositoryContinuationRecoverySource(_repository),
+                        ]),
+                        new RecoveryPlanner(),
+                        new RecoveryMechanismCatalog(recoveryMechanisms),
+                        new CanonicalRecoveryEnvelopeFactory(),
+                        _canonicalStore: new CanonicalRecoveryStore(_repository));
+                    LoopArtifacts decisionArtifacts = CreateLoopArtifacts();
+                    executeDecisionSession = new DecisionSession(
+                        Runtime!,
+                        new DecisionSessionRouter(),
+                        decisionArtifacts,
+                        console,
+                        _repository,
+                        _rolePolicy.Brain,
+                        _costModel: null,
+                        _projectionService: null,
+                        _resumeEnabled: _policy.Resume.Enabled,
+                        _continuityRuntime: continuityRuntime,
+                        _recoveryStore: executeRecoveryStore,
+                        _recoveryRuntime: recoveryRuntime,
+                        _recoveryPolicyVersion: recoveryPolicy switch
+                        {
+                            ResumeRecoveryStrategy.ResumeOnly => "decision-recovery-resume-only.v1",
+                            ResumeRecoveryStrategy.Reconstructed => "decision-recovery-reconstructed.v1",
+                            _ => "decision-recovery-certified.v1",
+                        },
+                        _operationalContextGrowthStreakWarningThreshold: _policy.OperationalContextGrowthWarningStreak,
+                        _promptDispatcher: CreateDecisionPromptDispatcher(),
+                        _artifactEffects: new DurableLoopArtifactEffectCoordinator(_repository, decisionArtifacts));
+                }
+                DecisionSessionScope scope = await new DecisionSessionScopeResolver(_repository, _repositoryObserver)
                     .ResolveAsync(cancellationToken);
                 await executeDecisionSession.RunAsync(
                     new DecisionExecutionContext(
@@ -1919,19 +1922,24 @@ internal sealed partial class LoopRelayCompositionRoot
                 await ResolveCausalityAsync(cancellationToken), transaction,
                 operation.Transition.Value, cancellationToken);
 
-        private async Task<CanonicalCausalContext> ResolveCausalityAsync(
-            CancellationToken cancellationToken)
-        {
-            AttemptRecord attempt = (await _persistence.ReadAttemptsAsync(cancellationToken))
-                .Single(item => item.AttemptId == CurrentExecutionContext.AttemptId &&
-                    item.TransitionRunId == CurrentExecutionContext.TransitionRunId);
-            return new CanonicalCausalContext(
-                new WorkspaceIdentity(await _persistence.ReadWorkspaceIdentityAsync(cancellationToken)),
-                new RunIdentity(attempt.RunId),
-                new WorkflowInstanceIdentity(attempt.WorkflowInstanceId),
-                new TransitionRunIdentity(attempt.TransitionRunId),
-                new AttemptIdentity(attempt.AttemptId));
-        }
+        /// <summary>The attempt's causal spine, answered from the authorization this dispatch already
+        /// carries. TransitionRuntime builds that spine exactly once and hands it to
+        /// <see cref="PromptDispatchAuthorization"/>, which arrives here as
+        /// <see cref="CurrentAuthorization"/> at dispatch — so re-deriving it cost a full attempt-table
+        /// scan plus a workspace-identity read, per call, to rebuild a value this executor was handed.
+        /// The two are equal field for field: the attempt row is written from this same spine, and the
+        /// workspace identity both sides used comes from the one row the workspace store owns.
+        /// Run and workflow-instance equivalence is asserted end to end by
+        /// <c>Resolved_causality_written_into_the_effect_ledger_matches_the_durable_attempt_row</c>;
+        /// workspace identity has a single source and is not independently derivable in a test, so it
+        /// rests instead on the check enforced in production on every dispatch by
+        /// <see cref="LoadingPromptRuntimeDispatcher"/>, which refuses to dispatch unless the
+        /// store-derived prompt-fact causality matches this authorization on all five identities.
+        /// The cancellation token is retained: callers await this as the resolution seam, and only the
+        /// derivation behind it became local.</summary>
+        private Task<CanonicalCausalContext> ResolveCausalityAsync(
+            CancellationToken cancellationToken) =>
+            Task.FromResult(RequireCurrentAuthorization().Causality);
 
         private async Task<CanonicalRecoveryPlan> EnsureWarmRecoveryPlanAsync(
             CanonicalCausalContext causality,
@@ -1963,17 +1971,51 @@ internal sealed partial class LoopRelayCompositionRoot
                 completionRecoveryEvidencePaths = checkpoint.RecoveryEvidencePaths;
             }
 
+            CompletionCertificationRoute? route = completionCertificationResult.Route;
+            if (route is not null)
+            {
+                await RecordCompletionRouteDecisionAsync(route, cancellationToken);
+            }
+
             return $"""
                 # Completion Route
 
                 | Field | Value |
                 |---|---|
                 | Outcome | {completionCertificationResult.Outcome} |
-                | Should Close Epic | {completionCertificationResult.Route?.ShouldCloseEpic} |
+                | Route | {(route is null ? "Unavailable" : route.ShouldCloseEpic ? "Close epic" : "Continue execution")} |
                 | Message | {completionCertificationResult.Message} |
                 | Evidence | {string.Join(", ", completionCertificationResult.EvidencePaths)} |
                 | Recovery Phase Evidence | {string.Join(", ", completionRecoveryEvidencePaths)} |
                 """;
+        }
+
+        /// <summary>
+        /// Persists the close/continue outcome as a typed fact against this transition run, at the
+        /// point the router's decision is in hand. Stage routing reads this at settlement; the
+        /// table above is what a human reads, and is no longer a machine contract. Nothing is
+        /// written when the certification carries no route, so routing fails closed rather than
+        /// settling on a decision nobody made.
+        /// </summary>
+        private async Task RecordCompletionRouteDecisionAsync(
+            CompletionCertificationRoute route,
+            CancellationToken cancellationToken)
+        {
+            CanonicalCausalContext causality = await ResolveCausalityAsync(cancellationToken);
+            await new CanonicalWorkflowPersistenceStore(_repository).AppendTransitionEvidenceAsync(
+                new CanonicalTransitionEvidenceRecord(
+                    0,
+                    causality.TransitionRun.Value,
+                    new WorkflowTransitionIdentity("InterpretCompletionRoute"),
+                    CompletionRouteDecision.EventName,
+                    DateTimeOffset.UtcNow,
+                    TransitionDurableState.PromptCompleted,
+                    route.ShouldCloseEpic
+                        ? "Completion certification routed this epic to closure."
+                        : "Completion certification routed this epic back to execution.",
+                    ["completion-route-decision"],
+                    new CompletionRouteDecision(route.ShouldCloseEpic).ToDocumentJson()),
+                cancellationToken);
         }
 
         private static string RenderCompletionCertificationResult(

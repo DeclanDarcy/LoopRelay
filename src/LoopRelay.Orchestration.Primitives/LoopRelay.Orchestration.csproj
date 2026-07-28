@@ -13,4 +13,8 @@
     <ProjectReference Include="..\LoopRelay.Permissions\LoopRelay.Permissions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="LoopRelay.Orchestration.Tests" />
+  </ItemGroup>
+
 </Project>

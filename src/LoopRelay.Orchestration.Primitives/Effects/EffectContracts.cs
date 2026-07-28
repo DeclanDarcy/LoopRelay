@@ -32,13 +32,6 @@ public static class TransitionalFeatureEffectExecutorKeys
     }
 }
 
-public readonly record struct EffectReconciliationIdentity(string Value)
-{
-    public static EffectReconciliationIdentity New() => new(CausalUlid.NewId("effectreconciliation"));
-    public bool IsEmpty => string.IsNullOrWhiteSpace(Value);
-    public override string ToString() => Value;
-}
-
 public enum EffectRequiredness
 {
     BlockingLocal,
@@ -48,8 +41,6 @@ public enum EffectRequiredness
 public enum EffectLifecycle
 {
     Planned,
-    Leased,
-    Started,
     Pending,
     Succeeded,
     Failed,
@@ -71,19 +62,26 @@ public enum EffectReconciliationVerdict
 
 public static class EffectLifecyclePolicy
 {
+    /// <summary>
+    /// Three arms, one per writer that exists. A discovered row runs its executor and writes exactly
+    /// one outcome; an in-process fault leaves it uncertain and the reconciler is the only reader of
+    /// that state. There is no lease and no start marker, because with one writer and idempotent
+    /// executors "did the outward call already happen?" has the same answer either way: re-run.
+    /// <para>
+    /// <c>Cancelled</c> has no arm: nothing in <c>src/</c> writes or reads it.
+    /// <c>(Failed or Stalled) -> RetryAuthorized</c> is likewise absent, because the only writer of
+    /// <c>RetryAuthorized</c> is <c>EffectWorker.ReconcileAsync</c>, whose source state is always
+    /// <c>Reconciling</c>.
+    /// </para>
+    /// </summary>
     public static bool CanTransition(EffectLifecycle current, EffectLifecycle next) => (current, next) switch
     {
-        (EffectLifecycle.Planned, EffectLifecycle.Leased) => true,
-        (EffectLifecycle.Leased, EffectLifecycle.Started or EffectLifecycle.Planned or EffectLifecycle.Unknown or EffectLifecycle.Reconciling) => true,
-        (EffectLifecycle.Started, EffectLifecycle.Pending or EffectLifecycle.Succeeded or EffectLifecycle.Failed or
-            EffectLifecycle.Stalled or EffectLifecycle.Cancelled or EffectLifecycle.Unknown) => true,
-        (EffectLifecycle.Pending, EffectLifecycle.Leased or EffectLifecycle.Succeeded or EffectLifecycle.Failed or
-            EffectLifecycle.Stalled or EffectLifecycle.Cancelled or EffectLifecycle.Unknown) => true,
-        (EffectLifecycle.Unknown, EffectLifecycle.Leased or EffectLifecycle.Reconciling) => true,
+        (EffectLifecycle.Planned or EffectLifecycle.Pending or EffectLifecycle.RetryAuthorized,
+            EffectLifecycle.Succeeded or EffectLifecycle.Failed or EffectLifecycle.Stalled or
+            EffectLifecycle.Pending or EffectLifecycle.Unknown or EffectLifecycle.HumanActionRequired) => true,
+        (EffectLifecycle.Unknown or EffectLifecycle.Reconciling, EffectLifecycle.Reconciling) => true,
         (EffectLifecycle.Reconciling, EffectLifecycle.Succeeded or EffectLifecycle.Failed or EffectLifecycle.Stalled or
             EffectLifecycle.RetryAuthorized or EffectLifecycle.HumanActionRequired or EffectLifecycle.Unknown) => true,
-        (EffectLifecycle.Failed or EffectLifecycle.Stalled, EffectLifecycle.RetryAuthorized) => true,
-        (EffectLifecycle.RetryAuthorized, EffectLifecycle.Leased) => true,
         _ => false,
     };
 
@@ -92,6 +90,30 @@ public static class EffectLifecyclePolicy
         if (!CanTransition(current, next))
         {
             throw new InvalidOperationException($"Illegal effect lifecycle transition: {current} -> {next}.");
+        }
+    }
+
+    /// <summary>
+    /// Guards the lifecycle-append path, which writes a status and nothing else.
+    /// <see cref="EffectLifecycle.Succeeded"/> is not appendable: every durable gate — the dependency
+    /// gate, the sibling barrier, the unsettled scan and the readiness count — reads settlement off
+    /// the status column, so a status appended without a receipt would be read as settled while the
+    /// verified terminal receipt it stands for does not exist. Success is therefore recorded only by
+    /// <c>IEffectWorkStore.RecordReceiptAsync</c>, which writes the status and the terminal receipt
+    /// pointer in one transaction.
+    /// <para>
+    /// The transition table alone does not carry this: it permits <c>Planned</c>, <c>Pending</c> and
+    /// <c>Reconciling</c> to reach <see cref="EffectLifecycle.Succeeded"/>, because the receipt path
+    /// needs exactly those transitions. This separates "the state machine allows it" from "the append
+    /// path may write it", so the invariant is held by construction rather than by caller discipline.
+    /// </para>
+    /// </summary>
+    public static void RequireAppendableState(EffectLifecycle next)
+    {
+        if (next == EffectLifecycle.Succeeded)
+        {
+            throw new InvalidOperationException(
+                "Effect success is recorded by receipt: use RecordReceiptAsync, not a lifecycle append.");
         }
     }
 }
@@ -281,22 +303,33 @@ public sealed record EffectLifecycleEvent(
     IReadOnlyList<string> Evidence,
     DateTimeOffset RecordedAt);
 
+/// <summary>
+/// The effect whose outward call is running right now, handed to nested planners so a child intent
+/// can be ordered after it and made to depend on it. This was previously rediscovered by querying
+/// for the row whose status is <c>Started</c>; the identity was already in hand at every one of
+/// those call sites, and round-tripping it through the database was the marker's last remaining job.
+/// <para>
+/// <c>null</c> means no effect is executing -- the planner is being driven directly rather than from
+/// inside an executor -- which is a legitimate state for loop-artifact rotation and history append.
+/// </para>
+/// </summary>
+public sealed record EffectParent(EffectIntentIdentity Identity, int Order);
+
 public sealed record EffectWorkItem(
     EffectIntent Intent,
     EffectLifecycle State,
-    long RowVersion,
-    string? LeaseOwner,
-    DateTimeOffset? LeaseExpiresAt,
-    int AttemptCount,
     EffectReceipt? Receipt,
     IReadOnlyList<EffectLifecycleEvent> Events);
 
-public sealed record EffectLease(
+/// <summary>
+/// What the effect worker actually reads from a scan. Deliberately not an <see cref="EffectWorkItem"/>:
+/// the worker consumes only the intent and the lifecycle status, and hydrating receipts and full
+/// event history per discovered row costs 2N+1 statements per pass against a history that grows for
+/// the life of the workspace.
+/// </summary>
+public sealed record EffectScanRow(
     EffectIntent Intent,
-    long RowVersion,
-    string Worker,
-    DateTimeOffset ExpiresAt,
-    EffectLifecycle PreviousState);
+    EffectLifecycle State);
 
 public sealed record EffectExecutionObservation(
     EffectLifecycle State,
@@ -317,13 +350,37 @@ public sealed record EffectReconciliationObservation(
 
 public interface IEffectWorkStore
 {
-    Task<IReadOnlyList<EffectWorkItem>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken cancellationToken);
+    /// <summary>
+    /// Discovers unsettled effect work. When <paramref name="only"/> is supplied the restriction is
+    /// part of the query, not a filter applied to the result: <paramref name="limit"/> bounds the
+    /// scan window, so filtering afterwards lets a requested intent fall outside that window and be
+    /// silently skipped.
+    /// </summary>
+    Task<IReadOnlyList<EffectScanRow>> ScanUnsettledAsync(int limit, DateTimeOffset now, CancellationToken cancellationToken, IReadOnlySet<EffectIntentIdentity>? only = null);
     Task<IReadOnlyList<EffectWorkItem>> ReadPlanAsync(TransitionRunIdentity transitionRun, CancellationToken cancellationToken);
     Task<EffectWorkItem?> ReadAsync(EffectIntentIdentity identity, CancellationToken cancellationToken);
-    Task<EffectLease?> TryLeaseAsync(EffectIntentIdentity identity, long expectedRowVersion, string worker, DateTimeOffset now, TimeSpan duration, CancellationToken cancellationToken);
-    Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset recordedAt, CancellationToken cancellationToken);
-    Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectReceipt receipt, string worker, CancellationToken cancellationToken);
-    Task RecordReconciliationAsync(EffectIntentIdentity identity, long expectedRowVersion, EffectReconciliationObservation observation, string worker, DateTimeOffset recordedAt, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reports whether <paramref name="dependency"/> carries a verified terminal receipt and no
+    /// later-planned sibling still stands as a durable barrier ahead of <paramref name="candidate"/>.
+    /// This is the whole dependency gate for one dependency, answered as a yes/no question rather
+    /// than by hydrating a plan, so no intent document is loaded to decide it.
+    /// <para>
+    /// Implementations MUST observe live durable state on every call. An answer reused from an
+    /// earlier observation — even one taken during the same worker pass — reorders effects across
+    /// the barrier, because a feature executor can plan a child effect between the two.
+    /// </para>
+    /// </summary>
+    Task<bool> DependencySatisfiedAsync(EffectIntent candidate, EffectIntentIdentity dependency, CancellationToken cancellationToken);
+    /// <summary>
+    /// Appends a non-terminal lifecycle observation. <see cref="EffectLifecycle.Succeeded"/> is not
+    /// accepted here — implementations MUST refuse it via
+    /// <see cref="EffectLifecyclePolicy.RequireAppendableState"/>. Settlement is the receipt's to
+    /// record, because the durable gates read it off the status column and this path writes no
+    /// receipt; use <see cref="RecordReceiptAsync"/>.
+    /// </summary>
+    Task<EffectWorkItem> AppendLifecycleAsync(EffectIntentIdentity identity, EffectLifecycle state, string worker, string explanation, IReadOnlyList<string> evidence, DateTimeOffset recordedAt, CancellationToken cancellationToken);
+    Task<EffectWorkItem> RecordReceiptAsync(EffectIntentIdentity identity, EffectReceipt receipt, string worker, CancellationToken cancellationToken);
 }
 
 public interface IEffectPlanStore

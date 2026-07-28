@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Xunit.SkippableFact" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
@@ -20,6 +21,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\LoopRelay.Orchestration.Primitives\LoopRelay.Orchestration.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\TestSupport\Persistence\PreparedStatementCounter.cs" Link="Persistence\TestSupport\PreparedStatementCounter.cs" />
   </ItemGroup>
 
 </Project>

@@ -91,14 +91,23 @@ public sealed class CanonicalDecisionRecoveryStore(
         RecoveryAttempt updated,
         CancellationToken cancellationToken = default)
     {
-        RecoveryAttempt? current = await ReadAttemptAsync(expected.AttemptId, cancellationToken);
-        if (current is null || current.RowVersion != expected.RowVersion || current.Status != expected.Status ||
-            updated.RowVersion != expected.RowVersion + 1)
-            return Conflict("The canonical recovery attempt changed before compare-and-swap.");
-        await AppendAttemptEventAsync(updated, cancellationToken);
-        return Success(updated.RowVersion);
+        await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        return await CompareAndSwapAttemptAsync(connection, expected, updated, cancellationToken);
     }
 
+    /// <summary>
+    /// Records the rich plan document and swaps the attempt onto it.
+    ///
+    /// <para>
+    /// Every statement below runs on one connection. Each helper in this chain used to open (and
+    /// schema-verify) its own, so recording one plan paid six opens: the case lookup, the
+    /// classification lookup, the plan insert, the attempt read, the case lookup again, and the
+    /// event insert. The sequence of statements, their order, and their autocommit boundaries are
+    /// unchanged - only the number of connections carrying them is. In particular the
+    /// compare-and-swap still reads the current attempt and only then appends, so its conflict
+    /// detection is the same decision on the same inputs.
+    /// </para>
+    /// </summary>
     public async Task<RecoveryStoreWriteResult> RecordPlanAsync(
         RecoveryAttempt expected,
         RecoveryAttempt updated,
@@ -107,31 +116,48 @@ public sealed class CanonicalDecisionRecoveryStore(
     {
         if (plan.Digest != RecoveryPlanSerializer.ComputeDigest(plan) || updated.PlanDigest != plan.Digest)
             throw new InvalidOperationException("The rich recovery plan digest does not match its journal transition.");
-        string caseId = await CaseIdAsync(expected.ScopeId, cancellationToken)
-            ?? throw new InvalidOperationException("Canonical warm-session recovery case was not persisted before planning.");
-        string classificationId = await LatestClassificationIdAsync(caseId, cancellationToken)
-            ?? throw new InvalidOperationException("Canonical warm-session recovery classification is missing.");
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO canonical_recovery_plans (
-                plan_id, case_id, classification_id, action, resolved_policy_identity,
-                exact_profile_identity, source_evidence_json, preconditions_json,
-                postconditions_json, idempotency_key, new_attempt_id,
-                compatibility_document_json, planned_at
-            ) VALUES ($plan, $case, $classification, $action, $policy, $profile,
-                $evidence, '[]', '[]', $idempotency, NULL, $document, $planned)
-            ON CONFLICT(idempotency_key) DO NOTHING;
-            """;
-        Add(command,
-            ("$plan", plan.PlanId), ("$case", caseId), ("$classification", classificationId),
-            ("$action", Action(plan.Mechanism).ToString()), ("$policy", plan.PolicyVersion),
-            ("$profile", plan.ContinuityProfileDigest),
-            ("$evidence", JsonSerializer.Serialize(plan.Sources.Select(source => source.Digest), JsonOptions)),
-            ("$idempotency", $"rich-session-plan:{plan.Digest}"),
-            ("$document", RecoveryPlanSerializer.Serialize(plan)), ("$planned", Format(updated.UpdatedAt)));
-        await command.ExecuteNonQueryAsync(cancellationToken);
-        return await CompareAndSwapAttemptAsync(expected, updated, cancellationToken);
+        string caseId = await CaseIdAsync(connection, expected.ScopeId, cancellationToken)
+            ?? throw new InvalidOperationException("Canonical warm-session recovery case was not persisted before planning.");
+        string classificationId = await LatestClassificationIdAsync(connection, caseId, cancellationToken)
+            ?? throw new InvalidOperationException("Canonical warm-session recovery classification is missing.");
+        await using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO canonical_recovery_plans (
+                    plan_id, case_id, classification_id, action, resolved_policy_identity,
+                    exact_profile_identity, source_evidence_json, preconditions_json,
+                    postconditions_json, idempotency_key, new_attempt_id,
+                    compatibility_document_json, planned_at
+                ) VALUES ($plan, $case, $classification, $action, $policy, $profile,
+                    $evidence, '[]', '[]', $idempotency, NULL, $document, $planned)
+                ON CONFLICT(idempotency_key) DO NOTHING;
+                """;
+            Add(command,
+                ("$plan", plan.PlanId), ("$case", caseId), ("$classification", classificationId),
+                ("$action", Action(plan.Mechanism).ToString()), ("$policy", plan.PolicyVersion),
+                ("$profile", plan.ContinuityProfileDigest),
+                ("$evidence", JsonSerializer.Serialize(plan.Sources.Select(source => source.Digest), JsonOptions)),
+                ("$idempotency", $"rich-session-plan:{plan.Digest}"),
+                ("$document", RecoveryPlanSerializer.Serialize(plan)), ("$planned", Format(updated.UpdatedAt)));
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        return await CompareAndSwapAttemptAsync(connection, expected, updated, cancellationToken);
+    }
+
+    private async Task<RecoveryStoreWriteResult> CompareAndSwapAttemptAsync(
+        SqliteConnection connection,
+        RecoveryAttempt expected,
+        RecoveryAttempt updated,
+        CancellationToken cancellationToken)
+    {
+        RecoveryAttempt? current = await ReadAttemptAsync(connection, expected.AttemptId, cancellationToken);
+        if (current is null || current.RowVersion != expected.RowVersion || current.Status != expected.Status ||
+            updated.RowVersion != expected.RowVersion + 1)
+            return Conflict("The canonical recovery attempt changed before compare-and-swap.");
+        await AppendAttemptEventAsync(connection, updated, cancellationToken);
+        return Success(updated.RowVersion);
     }
 
     public async Task<RecoveryStoreWriteResult> RecordReplacementAsync(
@@ -165,6 +191,14 @@ public sealed class CanonicalDecisionRecoveryStore(
     public async Task<RecoveryAttempt?> ReadAttemptAsync(string attemptId, CancellationToken cancellationToken = default)
     {
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        return await ReadAttemptAsync(connection, attemptId, cancellationToken);
+    }
+
+    private async Task<RecoveryAttempt?> ReadAttemptAsync(
+        SqliteConnection connection,
+        string attemptId,
+        CancellationToken cancellationToken)
+    {
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
             SELECT document_json FROM canonical_recovery_action_events
@@ -195,20 +229,42 @@ public sealed class CanonicalDecisionRecoveryStore(
         return latest is not null && !Terminal(latest.Status) ? latest : null;
     }
 
+    /// <summary>
+    /// The warm-session latest-attempt lookup, verbatim as executed (PERF-20).
+    ///
+    /// <para>
+    /// This used to join <c>canonical_recovery_action_events</c> to <c>canonical_recovery_cases</c>
+    /// on <c>json_extract(event.document_json, '$.scopeId') = recovery_case.scope_identity</c>,
+    /// which no index can serve: every candidate row had to be read and its JSON parsed. The scope
+    /// is now denormalised into the indexed <c>scope_id</c> column, and the case table's only
+    /// remaining role - gating on a warm-session case existing for this scope - is expressed as the
+    /// <c>EXISTS</c> guard it always semantically was. The inner join could match several case rows
+    /// for one scope, but every duplicate paired with the same ordered event set, so
+    /// <c>ORDER BY event.event_id DESC LIMIT 1</c> selected the identical row either way.
+    /// </para>
+    ///
+    /// <para>
+    /// Exposed to the test assembly so the index-backing assertion can
+    /// <c>EXPLAIN QUERY PLAN</c> the real statement rather than a copy of it.
+    /// </para>
+    /// </summary>
+    internal const string LatestAttemptByScopeSql = """
+        SELECT event.document_json
+        FROM canonical_recovery_action_events AS event
+        WHERE event.scope_id = $scope
+          AND event.document_json IS NOT NULL
+          AND EXISTS (
+              SELECT 1 FROM canonical_recovery_cases AS recovery_case
+              WHERE recovery_case.scope_kind = 'WarmSession'
+                AND recovery_case.scope_identity = $scope)
+        ORDER BY event.event_id DESC LIMIT 1;
+        """;
+
     public async Task<RecoveryAttempt?> ReadLatestAttemptAsync(string scopeId, CancellationToken cancellationToken = default)
     {
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT event.document_json
-            FROM canonical_recovery_cases AS recovery_case
-            JOIN canonical_recovery_action_events AS event
-              ON json_extract(event.document_json, '$.scopeId') = recovery_case.scope_identity
-            WHERE recovery_case.scope_kind = 'WarmSession'
-              AND recovery_case.scope_identity = $scope
-              AND event.document_json IS NOT NULL
-            ORDER BY event.event_id DESC LIMIT 1;
-            """;
+        command.CommandText = LatestAttemptByScopeSql;
         command.Parameters.AddWithValue("$scope", scopeId);
         object? value = await command.ExecuteScalarAsync(cancellationToken);
         return value is string json ? JsonSerializer.Deserialize<RecoveryAttempt>(json, JsonOptions) : null;
@@ -216,26 +272,41 @@ public sealed class CanonicalDecisionRecoveryStore(
 
     private async Task AppendAttemptEventAsync(RecoveryAttempt attempt, CancellationToken cancellationToken)
     {
-        string caseId = await CaseIdAsync(attempt.ScopeId, cancellationToken)
-            ?? throw new InvalidOperationException("Canonical warm-session recovery case was not persisted before action journaling.");
         await using SqliteConnection connection = await OpenAsync(cancellationToken);
+        await AppendAttemptEventAsync(connection, attempt, cancellationToken);
+    }
+
+    private async Task AppendAttemptEventAsync(
+        SqliteConnection connection,
+        RecoveryAttempt attempt,
+        CancellationToken cancellationToken)
+    {
+        _ = await CaseIdAsync(connection, attempt.ScopeId, cancellationToken)
+            ?? throw new InvalidOperationException("Canonical warm-session recovery case was not persisted before action journaling.");
         await using SqliteCommand command = connection.CreateCommand();
+        // `scope_id` is the denormalised, indexed copy of the document's `$.scopeId`; `document_json`
+        // stays the source of truth (it is what the read path deserializes), so the column is
+        // written from the same `attempt.ScopeId` that serializes into the document.
         command.CommandText = """
             INSERT INTO canonical_recovery_action_events (
-                action_id, plan_id, lifecycle, explanation, evidence_json, document_json, recorded_at
-            ) VALUES ($action, $plan, $lifecycle, $explanation, '[]', $document, $recorded);
+                action_id, plan_id, lifecycle, explanation, evidence_json, document_json,
+                scope_id, recorded_at
+            ) VALUES ($action, $plan, $lifecycle, $explanation, '[]', $document, $scope, $recorded);
             """;
         Add(command,
             ("$action", attempt.AttemptId), ("$plan", attempt.PlanDigest ?? $"attempt:{attempt.AttemptId}"),
             ("$lifecycle", Lifecycle(attempt.Status).ToString()),
             ("$explanation", $"Rich session recovery state: {attempt.Status}."),
-            ("$document", JsonSerializer.Serialize(attempt, JsonOptions)), ("$recorded", Format(attempt.UpdatedAt)));
+            ("$document", JsonSerializer.Serialize(attempt, JsonOptions)), ("$scope", attempt.ScopeId),
+            ("$recorded", Format(attempt.UpdatedAt)));
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private async Task<string?> CaseIdAsync(string scopeId, CancellationToken cancellationToken)
+    private static async Task<string?> CaseIdAsync(
+        SqliteConnection connection,
+        string scopeId,
+        CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
             SELECT case_id FROM canonical_recovery_cases
@@ -246,9 +317,11 @@ public sealed class CanonicalDecisionRecoveryStore(
         return Convert.ToString(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
     }
 
-    private async Task<string?> LatestClassificationIdAsync(string caseId, CancellationToken cancellationToken)
+    private static async Task<string?> LatestClassificationIdAsync(
+        SqliteConnection connection,
+        string caseId,
+        CancellationToken cancellationToken)
     {
-        await using SqliteConnection connection = await OpenAsync(cancellationToken);
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT classification_id FROM canonical_recovery_classifications WHERE case_id = $case ORDER BY rowid DESC LIMIT 1;";
         command.Parameters.AddWithValue("$case", caseId);

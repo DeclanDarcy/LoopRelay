@@ -37,16 +37,19 @@ internal sealed class SessionTelemetryRecorder(
         CancellationToken cancellationToken,
         string? providerThreadId = null)
     {
-        string? path = cachedLogPath;
+        string? path = StillOnDisk(cachedLogPath);
         try
         {
             CodexUsageStatus? post = await ProbePostAsync(cancellationToken);
             if (path is null && providerThreadId is { Length: > 0 })
             {
                 string codexHome = (_providerEnvironment ?? ProviderEnvironmentConfiguration.Resolve()).CodexHome;
-                CodexRolloutReadResult exact = await new CodexRolloutRepository().ReadExactAsync(
+                // LocateAsync, not ReadExactAsync: only the path is wanted here, so nothing is read, hashed
+                // or materialized. It also returns the newest match where ReadExactAsync would refuse a
+                // duplicate thread id outright — a ratified divergence, because a best-effort location beats
+                // no location on the fail-open telemetry path while diagnosis must not guess.
+                path = await new CodexRolloutRepository().LocateAsync(
                     codexHome, providerThreadId, cancellationToken);
-                path = exact.Location;
             }
             path ??= providerThreadId is null ? _locator.Resolve(workingDirectory, openedAtUtc) : null;
 
@@ -102,6 +105,16 @@ internal sealed class SessionTelemetryRecorder(
 
         return path;
     }
+
+    /// <summary>
+    /// Guards the one hazard in caching the rollout path for a whole session: the file it names can be
+    /// rotated, deleted or replaced mid-session. A cached path is therefore only reused while its file is
+    /// still there — otherwise it is dropped, this turn re-resolves, and the session caches whatever came
+    /// back. If nothing does, the row carries no path at all, which is honest; stamping a vanished file onto
+    /// every remaining row is not. Neither outcome touches the turn, which is what fail-open requires.
+    /// </summary>
+    private static string? StillOnDisk(string? cachedLogPath) =>
+        cachedLogPath is { Length: > 0 } && File.Exists(cachedLogPath) ? cachedLogPath : null;
 
     // The post probe is best-effort: the token row is worth keeping even when capacity is unknown. Only a
     // genuine caller cancellation escapes (re-thrown so the outer handler propagates it).

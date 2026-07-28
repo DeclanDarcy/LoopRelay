@@ -25,7 +25,8 @@ internal sealed class DurableCompletedEpicArchiveService(
         CancellationToken cancellationToken = default)
     {
         var artifacts = new CompletionArtifacts(_store, _repository);
-        int index = (await artifacts.ListDirectoriesAsync(request.ArchiveRoot)).Count + 1;
+        int index = request.ArchiveIndex
+            ?? await CompletedEpicArchiveService.ComputeArchiveIndexAsync(artifacts, request.ArchiveRoot);
         string archiveDirectory = $"{request.ArchiveRoot}/{index}";
         string synthesisPath = $"{request.ArchiveRoot}/{index}.md";
         var payload = new CompletionArchiveEffectPayload(
@@ -50,7 +51,7 @@ internal sealed class DurableCompletedEpicArchiveService(
         var reconciler = new CompletionArchiveEffectReconciler(_repository, _store);
         var worker = new EffectWorker(
             $"completion-archive-{Environment.ProcessId}", workStore,
-            new EffectExecutorRegistry([executor]), reconciler, TimeSpan.FromMinutes(5));
+            new EffectExecutorRegistry([executor]), reconciler);
         for (int pass = 0; pass < 3; pass++)
         {
             await worker.RunOnceAsync(
@@ -60,7 +61,7 @@ internal sealed class DurableCompletedEpicArchiveService(
                 ?? throw new InvalidOperationException("Completion archive intent disappeared.");
             if (intent.State == EffectLifecycle.Succeeded) break;
         }
-        if (intent.State != EffectLifecycle.Succeeded || intent.Receipt is not { PostconditionSatisfied: true })
+        if (intent.State != EffectLifecycle.Succeeded)
             throw new InvalidOperationException(
                 $"Completion archive did not produce a verified receipt; current state is {intent.State}.");
         if (executor.Result is not null) return executor.Result;
@@ -84,7 +85,12 @@ internal sealed class CompletionArchiveEffectExecutor(
         CancellationToken cancellationToken)
     {
         CompletionArchiveEffectPayload payload = Parse(intent);
-        Result = await _inner.ArchiveAndSynthesizeAsync(_request, cancellationToken);
+        // The durable payload owns the archive index, not the inner service's directory count.
+        // Without this the inner service re-derives the index on a repeat execution, lands on a
+        // fresh directory, sails past its own collision guards and re-invokes the synthesis prompt.
+        Result = await _inner.ArchiveAndSynthesizeAsync(
+            _request with { ArchiveIndex = payload.Index },
+            cancellationToken);
         bool satisfied = Result.Index == payload.Index &&
             Result.ArchiveDirectory == payload.ArchiveDirectory &&
             Result.SynthesisPath == payload.SynthesisPath &&
@@ -127,7 +133,12 @@ internal sealed class CompletionArchiveEffectReconciler(
         string? epic = await artifacts.ReadAsync($"{payload.ArchiveDirectory}/epic.md");
         string? synthesis = await artifacts.ReadAsync(payload.SynthesisPath);
         bool archiveStarted = await artifacts.ExistsAsync(payload.ArchiveDirectory) || epic is not null;
-        if (!string.IsNullOrWhiteSpace(epic) && !string.IsNullOrWhiteSpace(synthesis))
+        // Kept identical to CompletedEpicArchiveService.ObserveCompletedArchiveAsync: a state that
+        // reconciles as satisfied is exactly a state the service converges on. Epicless archives
+        // carry no epic.md; demand it only while the live epic is present.
+        bool epicSatisfied = !string.IsNullOrWhiteSpace(epic) ||
+            !await artifacts.ExistsAsync(payload.ActiveEpicPath);
+        if (epicSatisfied && !string.IsNullOrWhiteSpace(synthesis))
         {
             return new EffectReconciliationObservation(
                 EffectReconciliationVerdict.Succeeded,

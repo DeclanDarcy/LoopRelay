@@ -6,9 +6,7 @@ public sealed record ConfiguredBrainFacts(
     AgentModel? Model,
     AgentEffort? Effort);
 
-public sealed record ConfiguredRuntimeFacts(
-    ConfiguredBrainFacts Brain,
-    IReadOnlyList<string> SupportedCodexProfiles);
+public sealed record ConfiguredRuntimeFacts(ConfiguredBrainFacts Brain);
 
 public sealed record ConfigurationCompatibilityWarning(string Code, string Message);
 

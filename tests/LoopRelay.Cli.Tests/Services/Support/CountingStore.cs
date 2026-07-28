@@ -4,14 +4,19 @@ namespace LoopRelay.Cli.Tests.Services.Support;
 
 
 /// <summary>
-/// IArtifactStore decorator that forwards to an inner store and counts ReadAsync / ListAsync calls,
-/// so tests can prove the gate's short-circuit skipped all I/O on an unchanged-and-incomplete epic.
+/// IArtifactStore decorator that forwards to an inner store and counts ReadAsync / ListAsync / WriteAsync
+/// calls (the latter per-path), so tests can prove the gate's short-circuit skipped all I/O on an
+/// unchanged-and-incomplete epic, or that a redundant write to a given path was eliminated.
 /// </summary>
 internal sealed class CountingStore(IArtifactStore inner) : IArtifactStore
 {
+    private readonly Dictionary<string, int> writesByPath = new();
+
     public int Reads { get; private set; }
 
     public int Lists { get; private set; }
+
+    public int WritesTo(string path) => writesByPath.TryGetValue(path, out int count) ? count : 0;
 
     public Task<bool> ExistsAsync(string path) => inner.ExistsAsync(path);
 
@@ -21,7 +26,11 @@ internal sealed class CountingStore(IArtifactStore inner) : IArtifactStore
         return inner.ReadAsync(path);
     }
 
-    public Task WriteAsync(string path, string content) => inner.WriteAsync(path, content);
+    public Task WriteAsync(string path, string content)
+    {
+        writesByPath[path] = writesByPath.GetValueOrDefault(path) + 1;
+        return inner.WriteAsync(path, content);
+    }
 
     public Task DeleteAsync(string path) => inner.DeleteAsync(path);
 

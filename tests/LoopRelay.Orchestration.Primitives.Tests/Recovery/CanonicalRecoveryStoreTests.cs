@@ -132,7 +132,7 @@ public sealed class CanonicalRecoveryStoreTests
         Assert.Equal(WorkspaceSchemaShape.CanonicalV10Complete, before.Shape);
         await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
 
-        Assert.Equal("15", await ScalarAsync(connection,
+        Assert.Equal("16", await ScalarAsync(connection,
             "SELECT value FROM schema_metadata WHERE key = 'schema_version';"));
         Assert.Equal("legacy-recovery-1", await ScalarAsync(connection,
             "SELECT case_id FROM canonical_recovery_cases WHERE case_id = 'legacy-recovery-1';"));

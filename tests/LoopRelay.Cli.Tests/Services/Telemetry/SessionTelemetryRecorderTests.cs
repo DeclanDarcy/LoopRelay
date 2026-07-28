@@ -3,6 +3,7 @@ using LoopRelay.Agents.Models.Streams;
 using LoopRelay.Agents.Primitives.Sessions;
 using LoopRelay.Cli.Abstractions;
 using LoopRelay.Cli.Models;
+using LoopRelay.Cli.Services.Agents;
 using LoopRelay.Cli.Services.Telemetry;
 using LoopRelay.Cli.Tests.Services.Support;
 using LoopRelay.Cli.Tests.Services.Usage;
@@ -11,13 +12,24 @@ using Xunit;
 
 namespace LoopRelay.Cli.Tests.Services.Telemetry;
 
-public class SessionTelemetryRecorderTests
+[Xunit.Collection("CliProcessEnvironment")]
+public class SessionTelemetryRecorderTests : IDisposable
 {
+    private readonly List<string> temporaryDirectories = new();
+
+    public void Dispose()
+    {
+        foreach (string directory in temporaryDirectories.Where(Directory.Exists))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private sealed record Kit(
         SessionTelemetryRecorder Recorder, FakeCodexUsageProbe Probe, FakeCodexRolloutLocator Locator,
         FakeSessionTelemetrySink Sink, StubCostModel Cost, RecordingLoopConsole Con);
 
-    private static Kit New()
+    private static Kit New(ProviderEnvironmentConfiguration? providerEnvironment = null)
     {
         var probe = new FakeCodexUsageProbe();
         var locator = new FakeCodexRolloutLocator();
@@ -25,8 +37,29 @@ public class SessionTelemetryRecorderTests
         var cost = new StubCostModel { MeasureValue = 42.0 };
         var con = new RecordingLoopConsole();
         var clock = new FakeClock();
-        var recorder = new SessionTelemetryRecorder(probe, locator, sink, cost, clock, con);
+        var recorder = new SessionTelemetryRecorder(probe, locator, sink, cost, clock, con, providerEnvironment);
         return new Kit(recorder, probe, locator, sink, cost, con);
+    }
+
+    private string NewTemporaryDirectory()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "cc-telemetry-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        temporaryDirectories.Add(directory);
+        return directory;
+    }
+
+    /// <summary>Writes a real codex rollout under <c>&lt;home&gt;/sessions/YYYY/MM/DD</c>.</summary>
+    private static string WriteRollout(string codexHome, string day, string fileName, string threadId)
+    {
+        string directory = Path.Combine(codexHome, "sessions", day);
+        Directory.CreateDirectory(directory);
+        string file = Path.Combine(directory, fileName);
+        File.WriteAllText(
+            file,
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"" + threadId + "\",\"cwd\":\"/work\"," +
+            "\"timestamp\":\"2026-07-01T10:00:00.0000000Z\"}}\n");
+        return file;
     }
 
     private static AgentTurnResult Turn(int index = 3) =>
@@ -85,15 +118,76 @@ public class SessionTelemetryRecorderTests
     {
         var k = New();
         k.Probe.Default = new CodexUsageStatus(50, TimeSpan.Zero, 50, TimeSpan.Zero);
+        string cached = Path.Combine(NewTemporaryDirectory(), "cached.jsonl");
+        File.WriteAllText(cached, "{}\n");
 
         string? path = await k.Recorder.RecordTurnAsync(
             "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.OperationalExecution,
-            DateTimeOffset.UnixEpoch, cachedLogPath: "/cached.jsonl", result: Turn(),
+            DateTimeOffset.UnixEpoch, cachedLogPath: cached, result: Turn(),
             inputWait: null, CancellationToken.None);
 
-        Assert.Equal("/cached.jsonl", path);
+        Assert.Equal(cached, path);
         Assert.Equal(0, k.Locator.Calls);
-        Assert.Equal("/cached.jsonl", Assert.Single(k.Sink.Records).CodexLogPath);
+        Assert.Equal(cached, Assert.Single(k.Sink.Records).CodexLogPath);
+    }
+
+    [Fact]
+    public async Task RecordTurn_WhenTheCachedRolloutHasVanished_DropsItAndReResolvesOnce()
+    {
+        var k = New();
+        k.Locator.Path = "/logs/replacement.jsonl";
+        string vanished = Path.Combine(NewTemporaryDirectory(), "rotated-away.jsonl");
+
+        string? path = await k.Recorder.RecordTurnAsync(
+            "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
+            DateTimeOffset.UnixEpoch, cachedLogPath: vanished, result: Turn(),
+            inputWait: null, CancellationToken.None);
+
+        // A rollout rotated or deleted mid-session must not keep being stamped onto later rows; the session
+        // cache is dropped so this turn re-resolves, and the vanished path is never written.
+        Assert.Equal("/logs/replacement.jsonl", path);
+        Assert.Equal(1, k.Locator.Calls);
+        Assert.Equal("/logs/replacement.jsonl", Assert.Single(k.Sink.Records).CodexLogPath);
+    }
+
+    [Fact]
+    public async Task RecordTurn_WhenTheCachedRolloutHasVanishedAndNothingElseResolves_RecordsNoPath()
+    {
+        var k = New();
+        k.Locator.Path = null;
+        string vanished = Path.Combine(NewTemporaryDirectory(), "rotated-away.jsonl");
+
+        string? path = await k.Recorder.RecordTurnAsync(
+            "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
+            DateTimeOffset.UnixEpoch, cachedLogPath: vanished, result: Turn(),
+            inputWait: null, CancellationToken.None);
+
+        // Recording no path is honest; recording a path that is not there is not. The turn still succeeds.
+        Assert.Null(path);
+        Assert.Null(Assert.Single(k.Sink.Records).CodexLogPath);
+    }
+
+    [Fact]
+    public async Task RecordTurn_WhenAThreadIdMatchesTwoRollouts_RecordsTheNewestRatherThanNothing()
+    {
+        string home = NewTemporaryDirectory();
+        string older = WriteRollout(home, Path.Combine("2026", "07", "01"),
+            "rollout-2026-07-01T10-00-00-thread-x.jsonl", "thread-x");
+        string newer = WriteRollout(home, Path.Combine("2026", "07", "02"),
+            "rollout-2026-07-02T10-00-00-thread-x.jsonl", "thread-x");
+        File.SetLastWriteTimeUtc(older, DateTime.UtcNow.AddHours(-1));
+        File.SetLastWriteTimeUtc(newer, DateTime.UtcNow);
+        var k = New(new ProviderEnvironmentConfiguration(home, "test"));
+
+        string? path = await k.Recorder.RecordTurnAsync(
+            "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
+            DateTimeOffset.UnixEpoch, cachedLogPath: null, result: Turn(),
+            inputWait: null, CancellationToken.None, providerThreadId: "thread-x");
+
+        // Telemetry is fail-open, so it takes the newest match. The diagnosis path's ReadExactAsync refuses
+        // to pick here (Ambiguous, no location) — a ratified divergence, not a discrepancy to reconcile.
+        Assert.Equal(newer, path);
+        Assert.Equal(newer, Assert.Single(k.Sink.Records).CodexLogPath);
     }
 
     [Fact]
@@ -106,10 +200,12 @@ public class SessionTelemetryRecorderTests
             Environment.SetEnvironmentVariable("LOOPRELAY_CERTIFICATION_INVOCATION_ID", "cert-invocation-1");
             Environment.SetEnvironmentVariable("LOOPRELAY_CERTIFICATION_INVOCATION_ROLE", "product");
             var k = New();
+            string cached = Path.Combine(NewTemporaryDirectory(), "cached.jsonl");
+            File.WriteAllText(cached, "{}\n");
 
             await k.Recorder.RecordTurnAsync(
                 "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
-                DateTimeOffset.UnixEpoch, "/cached.jsonl", Turn(), inputWait: null, CancellationToken.None);
+                DateTimeOffset.UnixEpoch, cached, Turn(), inputWait: null, CancellationToken.None);
 
             SessionTelemetryRecord record = Assert.Single(k.Sink.Records);
             Assert.Equal("cert-invocation-1", record.CertificationInvocationId);
@@ -169,12 +265,14 @@ public class SessionTelemetryRecorderTests
         var k = New();
         k.Sink.Throw = true;
         k.Probe.Default = new CodexUsageStatus(50, TimeSpan.Zero, 50, TimeSpan.Zero);
+        string cached = Path.Combine(NewTemporaryDirectory(), "cached.jsonl");
+        File.WriteAllText(cached, "{}\n");
 
         string? path = await k.Recorder.RecordTurnAsync(
             "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
-            DateTimeOffset.UnixEpoch, "/cached.jsonl", Turn(), inputWait: null, CancellationToken.None);
+            DateTimeOffset.UnixEpoch, cached, Turn(), inputWait: null, CancellationToken.None);
 
-        Assert.Equal("/cached.jsonl", path); // still returns the path
+        Assert.Equal(cached, path); // still returns the path
         Assert.Contains(k.Con.Events, e => e.Kind == "warn");
     }
 

@@ -75,44 +75,38 @@ public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStor
         TransitionRunIdentity transitionRun,
         CancellationToken cancellationToken)
     {
-        CanonicalWorkflowPersistenceSnapshot snapshot = await _store.LoadSnapshotAsync(cancellationToken);
         string runId = transitionRun.Value;
-        CanonicalTransitionRunRecord? run = snapshot.TransitionRuns.SingleOrDefault(item => item.RunId == runId);
+        CanonicalTransitionRunRecord? run = await _store.ReadTransitionRunAsync(runId, cancellationToken);
         if (run is null)
         {
             return null;
         }
 
-        PromptExecutionResult? rawOutput = snapshot.TransitionEvidence
-            .Where(item => item.RunId == runId && item.EventName == "RawPromptOutputCaptured")
+        IReadOnlyList<CanonicalTransitionEvidenceRecord> evidence =
+            await _store.ReadTransitionEvidenceByRunAsync(runId, cancellationToken);
+        PromptExecutionResult? rawOutput = evidence
+            .Where(item => item.EventName == "RawPromptOutputCaptured")
             .OrderByDescending(item => item.EvidenceId)
             .Select(item => Deserialize<PromptExecutionResult>(item.DocumentJson))
             .FirstOrDefault(item => item is not null);
-        TransitionBoundaryObservation[] boundaries = snapshot.TransitionEvidence
-            .Where(item => item.RunId == runId && item.EventName == "TransitionBoundaryObserved")
+        TransitionBoundaryObservation[] boundaries = evidence
+            .Where(item => item.EventName == "TransitionBoundaryObserved")
             .OrderBy(item => item.EvidenceId)
             .Select(item => Deserialize<TransitionBoundaryObservation>(item.DocumentJson))
             .Where(item => item is not null)
             .Cast<TransitionBoundaryObservation>()
             .ToArray();
-        EffectExecutionRecord[] effects = snapshot.EffectRecords
-            .Where(item => item.RunId == runId)
+        EffectExecutionRecord[] effects = (await _store.ReadEffectRecordsByRunAsync(runId, cancellationToken))
             .OrderBy(item => item.RecordId)
             .Select(item => new EffectExecutionRecord(item.Effect, item.Status, item.Explanation, item.Evidence))
             .ToArray();
-        IReadOnlyList<AttemptRecord> attempts = await _store.ReadAttemptsAsync(cancellationToken);
-        IReadOnlyList<WorkflowInstanceRecord> instances = await _store.ReadWorkflowInstancesAsync(cancellationToken);
-        IReadOnlyList<RunRecord> rootRuns = await _store.ReadRunsAsync(cancellationToken);
-        AttemptRecord? attempt = attempts
-            .Where(item => item.TransitionRunId == runId)
-            .OrderByDescending(item => item.AttemptIndex)
-            .FirstOrDefault();
+        AttemptRecord? attempt = await _store.ReadLatestAttemptByTransitionRunAsync(runId, cancellationToken);
         WorkflowInstanceRecord? instance = attempt is null
             ? null
-            : instances.SingleOrDefault(item => item.WorkflowInstanceId == attempt.WorkflowInstanceId);
+            : await _store.ReadWorkflowInstanceAsync(attempt.WorkflowInstanceId, cancellationToken);
         RunRecord? rootRun = attempt is null
             ? null
-            : rootRuns.SingleOrDefault(item => item.RunId == attempt.RunId);
+            : await _store.ReadRunAsync(attempt.RunId, cancellationToken);
         if (attempt is null || instance is null || rootRun is null)
         {
             return null;
@@ -154,8 +148,7 @@ public sealed class CanonicalTransitionRunStore(CanonicalWorkflowPersistenceStor
         WorkflowTransitionIdentity transition,
         CancellationToken cancellationToken)
     {
-        CanonicalWorkflowPersistenceSnapshot snapshot = await _store.LoadSnapshotAsync(cancellationToken);
-        CanonicalTransitionRunRecord? existing = snapshot.TransitionRuns.FirstOrDefault(run => run.RunId == runId);
+        CanonicalTransitionRunRecord? existing = await _store.ReadTransitionRunAsync(runId, cancellationToken);
         return existing ?? new CanonicalTransitionRunRecord(
             runId,
             new WorkflowIdentity("Unknown"),
@@ -294,44 +287,6 @@ public sealed class CanonicalTransitionEvidenceStore(CanonicalWorkflowPersistenc
             cancellationToken);
 }
 
-public sealed class CanonicalTransitionWarningStore(CanonicalWorkflowPersistenceStore _store) : ITransitionWarningStore
-{
-    public Task RecordWarningAsync(
-        TransitionWarningCapture warning,
-        CancellationToken cancellationToken) =>
-        _store.AppendWarningAsync(
-            new CanonicalWarningRecord(
-                CausalUlid.NewId("warn"),
-                warning.Request.Workflow,
-                warning.Request.Stage,
-                warning.Transition,
-                warning.Category,
-                warning.Concern,
-                "canonical transition runtime",
-                warning.Remediation,
-                warning.Evidence,
-                warning.RecordedAt,
-                warning.Causality.TransitionRun.Value),
-            cancellationToken);
-}
-
-public sealed class CanonicalTransitionRecoveryStore(CanonicalWorkflowPersistenceStore _store) : ITransitionRecoveryStore
-{
-    public Task RecordRecoveryMarkerAsync(
-        TransitionRecoveryMarkerCapture marker,
-        CancellationToken cancellationToken) =>
-        _store.UpsertRecoveryMarkerAsync(
-            new CanonicalRecoveryMarkerRecord(
-                $"{marker.Causality.TransitionRun.Value}:{marker.Transition.Value}:{marker.DurableState}",
-                marker.Request.Workflow,
-                marker.Request.Stage,
-                marker.Transition,
-                marker.Recovery,
-                marker.Evidence,
-                marker.RecordedAt),
-            cancellationToken);
-}
-
 public sealed class CanonicalTransitionGateEvaluationStore(CanonicalWorkflowPersistenceStore _store) : ITransitionGateEvaluationStore
 {
     public Task RecordGateEvaluationAsync(
@@ -377,13 +332,12 @@ public sealed class CanonicalWorkflowInstanceRecorder(
         WorkflowIdentity workflow,
         CancellationToken cancellationToken)
     {
-        WorkflowInstanceRecord[] active = (await _store.ReadWorkflowInstancesAsync(cancellationToken))
-            .Where(item => item.RunId == run.Value && item.Workflow == workflow && item.Status == "Active")
-            .ToArray();
-        if (active.Length > 1)
+        IReadOnlyList<WorkflowInstanceRecord> active = await _store.ReadActiveWorkflowInstancesAsync(
+            run.Value, workflow.Value, cancellationToken);
+        if (active.Count > 1)
             throw new InvalidOperationException(
                 $"Multiple active workflow instances exist for root '{run}' and workflow '{workflow}'.");
-        if (active.Length == 1)
+        if (active.Count == 1)
             return new WorkflowInstanceIdentity(active[0].WorkflowInstanceId);
         WorkflowInstanceIdentity workflowInstance = WorkflowInstanceIdentity.New();
         await _store.UpsertWorkflowInstanceAsync(
@@ -467,24 +421,31 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
             PromptPolicyProfileId: fact.PolicyProfileIdentity.Value,
             ConsumedInputManifestId: fact.ConsumedInputManifestIdentity.Value,
             RenderedEncoding: fact.RenderedEncoding);
-        await _store.AppendRenderedPromptAsync(record, cancellationToken);
-        IReadOnlyList<CanonicalRenderedPromptRecord> records =
-            await _store.ReadRenderedPromptsAsync(cancellationToken);
-        int index = records.ToList().FindIndex(item => item.RenderedPromptId == fact.Identity.Value);
-        if (index < 0)
-        {
-            throw new InvalidOperationException("Rendered prompt fact was not readable after append.");
-        }
+        long ledgerSequence = await _store.AppendRenderedPromptAsync(record, cancellationToken);
 
         var persisted = new PersistedRenderedPromptFact(
             fact,
             persistenceIdentity,
-            index + 1,
+            ledgerSequence,
             DateTimeOffset.UtcNow);
         appended[fact.Identity] = persisted;
         return persisted;
     }
 
+    /// <summary>
+    /// Reads a rendered-prompt fact by identity. Used to call
+    /// <see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptsAsync"/> - every rendered
+    /// prompt in the workspace, including every other prompt's full <c>RenderedText</c> - and find
+    /// the wanted one with <c>FindIndex</c>, computing the ledger position from that same index
+    /// (Task 3.2). It now reads the row by key
+    /// (<see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptAsync"/>) and passes that
+    /// read's own <c>rowid</c> straight into the ledger position read
+    /// (<see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptLedgerPositionAsync"/>, fix
+    /// pass 1, finding 3), neither of which loads any other row's <c>RenderedText</c>. The attempt
+    /// lookup below still hydrates every attempt in the workspace - out of scope for this task, since
+    /// it carries no large field and the brief's SQL shape contract does not cover it; noted as a
+    /// tangle, not fixed here.
+    /// </summary>
     public async Task<PersistedRenderedPromptFact?> ReadAsync(
         RenderedPromptFactIdentity prompt,
         CancellationToken cancellationToken)
@@ -494,15 +455,13 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
             return persisted;
         }
 
-        IReadOnlyList<CanonicalRenderedPromptRecord> prompts =
-            await _store.ReadRenderedPromptsAsync(cancellationToken);
-        int index = prompts.ToList().FindIndex(item => item.RenderedPromptId == prompt.Value);
-        if (index < 0)
+        (CanonicalRenderedPromptRecord? record, long rowId) =
+            await _store.ReadRenderedPromptAsync(prompt.Value, cancellationToken);
+        if (record is null)
         {
             return null;
         }
 
-        CanonicalRenderedPromptRecord record = prompts[index];
         if (record.AttemptId is null || record.PolicyId is null || record.PersistenceId is null ||
             record.PromptPolicyProfileId is null || record.ConsumedInputManifestId is null)
         {
@@ -515,6 +474,9 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
         {
             return null;
         }
+
+        long ledgerPosition =
+            await _store.ReadRenderedPromptLedgerPositionAsync(rowId, cancellationToken);
 
         var causality = new CanonicalCausalContext(
             new WorkspaceIdentity(await _store.ReadWorkspaceIdentityAsync(cancellationToken)),
@@ -538,7 +500,7 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
         return new PersistedRenderedPromptFact(
             fact,
             new RenderedPromptPersistenceIdentity(record.PersistenceId),
-            index + 1,
+            ledgerPosition,
             record.RenderedAt);
     }
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using LoopRelay.Agents.Abstractions;
 using LoopRelay.Cli.Abstractions;
@@ -17,8 +18,16 @@ namespace LoopRelay.Cli.Services.Telemetry;
 ///
 /// Everything about this probe FAILS OPEN: any failure — a missing/bad codex binary, a child that dies at
 /// launch, a hung session (bounded by <c>readTimeout</c>), or a response the parser cannot use — is
-/// swallowed and reported as null ("usage unknown"). It exists to gate the loop, never to crash it. Only a
-/// caller-requested cancellation is propagated.
+/// swallowed and reported as null ("usage unknown"). Its only consumer is per-turn session telemetry, whose
+/// token row is worth keeping even when capacity is unknown, so a probe failure must never fail a turn. It
+/// does NOT gate the loop — an earlier watermark gate did, and <see cref="UsageLimitDetector"/> replaced it
+/// by reading each failed turn's diagnostics instead. Only a caller-requested cancellation is propagated.
+///
+/// A successful snapshot is reused for <see cref="CacheTtl"/> so the process spawn is paid once per window
+/// rather than once per turn, which is safe precisely because telemetry is the only reader and the number
+/// moves slowly. Nothing coalesces concurrent callers: the loop runs one turn at a time and probes after it,
+/// so overlap is not reachable today, and if it ever were, the worst case is a duplicated spawn rather than
+/// a blocked turn — the cache pair itself is published atomically, so it cannot be observed torn.
 /// </summary>
 internal sealed class CodexUsageProbe : ICodexUsageProbe
 {
@@ -35,7 +44,18 @@ internal sealed class CodexUsageProbe : ICodexUsageProbe
 
     private const int RateLimitsRequestId = 2;
 
+    /// <summary>How long a successful snapshot is reused before the next caller pays for another spawn.</summary>
+    internal static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(5);
+
     private readonly Func<CancellationToken, Task<string?>> _readRateLimitsJson;
+    private readonly Func<TimeSpan> _monotonicNow;
+
+    /// <summary>Snapshot and capture time travel as one immutable reference, so a reader can never pair one
+    /// probe's snapshot with another probe's timestamp. Reference publication is atomic, so no lock is
+    /// needed to keep the pair coherent.</summary>
+    private sealed record CachedSnapshot(CodexUsageStatus Status, TimeSpan CapturedAt);
+
+    private volatile CachedSnapshot? _cache;
 
     public CodexUsageProbe(
         IProcessRunner processRunner, IAgentExecutableResolver executableResolver, Repository repository)
@@ -46,14 +66,54 @@ internal sealed class CodexUsageProbe : ICodexUsageProbe
     /// <summary>Test seam: same live read, but with a short timeout so the timeout/fail-open path is testable.</summary>
     internal CodexUsageProbe(
         IProcessRunner processRunner, IAgentExecutableResolver executableResolver, Repository repository,
-        TimeSpan scrapeTimeout)
-        => _readRateLimitsJson = ct => ReadRateLimitsAsync(processRunner, executableResolver, repository, scrapeTimeout, ct);
+        TimeSpan scrapeTimeout, Func<TimeSpan>? monotonicNow = null)
+        : this(ct => ReadRateLimitsAsync(processRunner, executableResolver, repository, scrapeTimeout, ct), monotonicNow)
+    {
+    }
 
     /// <summary>Test seam: supply the raw rate-limits response JSON directly, bypassing the live codex session.</summary>
-    internal CodexUsageProbe(Func<CancellationToken, Task<string?>> readRateLimitsJson)
-        => _readRateLimitsJson = readRateLimitsJson;
+    internal CodexUsageProbe(
+        Func<CancellationToken, Task<string?>> readRateLimitsJson, Func<TimeSpan>? monotonicNow = null)
+    {
+        _readRateLimitsJson = readRateLimitsJson;
+        _monotonicNow = monotonicNow ?? CreateMonotonicClock();
+    }
+
+    /// <summary>
+    /// Elapsed time from a <see cref="Stopwatch"/>, not the wall clock: a system clock adjustment mid-run
+    /// must not extend or collapse the TTL window.
+    /// </summary>
+    private static Func<TimeSpan> CreateMonotonicClock()
+    {
+        var stopwatch = Stopwatch.StartNew();
+        return () => stopwatch.Elapsed;
+    }
 
     public async Task<CodexUsageStatus?> QueryAsync(CancellationToken cancellationToken)
+    {
+        // Checked before the cache so a cancelled caller still gets OperationCanceledException rather than a
+        // cheap cache hit — the cache is a spawn optimisation, not a change to what cancellation means.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_cache is { } cached && _monotonicNow() - cached.CapturedAt < CacheTtl)
+        {
+            return cached.Status;
+        }
+
+        CodexUsageStatus? status = await ReadSnapshotAsync(cancellationToken);
+        if (status is not null)
+        {
+            // Only a success is stored, and only a success starts a new window. Caching a failure would
+            // report "unknown" for a further full TTL while suppressing the very probe that would correct
+            // it; refreshing the timestamp on failure would do the same to the probe alone. A cancellation
+            // never reaches here, so it leaves any previous snapshot exactly as it was.
+            _cache = new CachedSnapshot(status, _monotonicNow());
+        }
+
+        return status;
+    }
+
+    private async Task<CodexUsageStatus?> ReadSnapshotAsync(CancellationToken cancellationToken)
     {
         string? json;
         try

@@ -9,14 +9,12 @@ namespace LoopRelay.Agents.Compatibility.Tests;
 
 public sealed class CodexAppServerCertificationTests
 {
-    [Fact]
+    [SkippableFact]
     public async Task ExplicitBinaryMatchesCheckedInProtocolFixtureInDisposableHome()
     {
         string? binary = Environment.GetEnvironmentVariable("LOOPRELAY_CODEX_CERT_BINARY");
-        if (string.IsNullOrWhiteSpace(binary))
-        {
-            return; // ordinary hermetic runs validate the checked-in fixture; release runs supply a binary.
-        }
+        Skip.If(string.IsNullOrWhiteSpace(binary),
+            "Set LOOPRELAY_CODEX_CERT_BINARY to run live codex certification.");
 
         string root = Directory.CreateTempSubdirectory("looprelay-codex-cert-").FullName;
         string codexHome = Directory.CreateDirectory(Path.Combine(root, "codex-home")).FullName;
@@ -147,13 +145,11 @@ public sealed class CodexAppServerCertificationTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public void ProductionIdentityProbeMatchesTheCertifiedCanonicalIdentityWhenEnabled()
     {
-        if (Environment.GetEnvironmentVariable("LOOPRELAY_CODEX_CERT_IDENTITY_PROBE") != "1")
-        {
-            return;
-        }
+        Skip.If(Environment.GetEnvironmentVariable("LOOPRELAY_CODEX_CERT_IDENTITY_PROBE") != "1",
+            "Set LOOPRELAY_CODEX_CERT_IDENTITY_PROBE=1 to run the production identity probe.");
 
         CodexInstalledCompatibilityIdentity identity = CodexCompatibilityIdentityProbe.Resolve();
         CertificationFixture fixture = CertificationFixture.LoadAll()

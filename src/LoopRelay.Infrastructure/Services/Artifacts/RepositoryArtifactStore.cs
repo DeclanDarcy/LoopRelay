@@ -58,6 +58,19 @@ public sealed class RepositoryArtifactStore(IArtifactStore _store, Repository _r
     private void EnsureExistingPathSegmentsStayWithinRepository(string resolvedPath, string relativePath)
     {
         string repositoryRoot = Path.GetFullPath(_repository.Path);
+
+        // Deliberately NOT cached (evaluated in PERF-27f, wave 2). ResolveFinalTarget(repositoryRoot)
+        // looks process-invariant, but it is used below both as the walk's starting point and as the
+        // boundary every resolved segment is checked against. If the repository root itself were
+        // replaced with (or re-pointed as) a reparse point after a cached value was captured, a cached
+        // physicalRoot would silently diverge from where the OS actually resolves `repositoryRoot` at
+        // I/O time: the walk would verify segments under the stale target while the real read/write
+        // lands under the live one, so an escape planted under the live target would never be
+        // inspected. That is strictly worse than the false-rejection failure mode and is
+        // indistinguishable, from the caller's side, from a link "created after process start" -
+        // which the escape walk is explicitly required to keep catching. There is no cheap freshness
+        // check for a reparse-point retarget that doesn't cost the same syscall as just re-resolving,
+        // so this call stays per-operation. Do not memoize it without re-litigating this comment.
         string physicalRoot = ResolveFinalTarget(repositoryRoot);
         string current = physicalRoot;
 

@@ -1,5 +1,6 @@
 using LoopRelay.Permissions.Abstractions;
 using LoopRelay.Permissions.Abstractions.Evaluation;
+using LoopRelay.Permissions.Models.Evaluation;
 using LoopRelay.Permissions.Primitives;
 using LoopRelay.Permissions.Primitives.Evaluation;
 using LoopRelay.Permissions.Primitives.Parsing;
@@ -169,6 +170,23 @@ public sealed class PermissionCoreTests
         Assert.Equal(1, engine.Calls);
         Assert.Equal(1, cache.SetCalls);
         Assert.Equal(RuleDecision.Deny, cache.LastEntry.Decision);
+    }
+
+    [Fact]
+    public void GuardEvaluationFlow_throws_for_a_flow_missing_a_required_step()
+    {
+        var malformedFlow = new PermissionEvaluationFlow
+        {
+            Steps = [PermissionEvaluationFlowStep.RequestReceived],
+            TerminalParserFailuresBypassCache = true,
+            CacheLookupPrecedesRuleEvaluation = true,
+            InvariantGuardRunsAfterRuleEvaluation = true
+        };
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => PermissionHandler.GuardEvaluationFlow(malformedFlow));
+
+        Assert.Contains("missing required step", ex.Message, StringComparison.Ordinal);
     }
 
     private static PermissionResult Evaluate(string rawCommand)
