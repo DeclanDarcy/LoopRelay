@@ -287,6 +287,78 @@ public sealed class UnifiedCliRunnerCancellationAndBoundedTraditionalTests : Uni
     }
 
     [Fact]
+    public async Task Quiet_startup_with_only_dependency_blocked_effects_verifies_workspace_storage_once_not_twice()
+    {
+        // Task 3.8: `Discovered > 0` is not the same fact as "the effect worker wrote something".
+        // A discovered intent whose dependency is not yet settled is skipped by a read-only check
+        // (IEffectWorkStore.DependencySatisfiedAsync queries; it never writes) and never reaches a
+        // lease, a lifecycle append, or a receipt. This fixture plants exactly one such intent -
+        // its declared dependency identity was never planned, so the dependency gate reads "not
+        // satisfied" immediately - so EffectWorker.RunOnceAsync discovers one item (Discovered == 1)
+        // but performs zero durable writes (Dispatched == Succeeded == RecoveryRequired == 0). The
+        // pre-existing `Quiet_startup_verifies_workspace_storage_once_not_twice` only covers the
+        // Discovered == 0 case; this covers the Discovered > 0-but-write-free case the same
+        // optimization must also carry the observation across.
+        Repository repository = CreateRepository();
+        var causality = new CanonicalCausalContext(
+            WorkspaceIdentity.New(),
+            RunIdentity.New(),
+            WorkflowInstanceIdentity.New(),
+            TransitionRunIdentity.New(),
+            AttemptIdentity.New());
+        var blockedIntent = new EffectIntent(
+            EffectIntentIdentity.New(),
+            causality,
+            "test:dependency-blocked-effect",
+            new EffectExecutorKey("test-executor"),
+            "1",
+            new EffectTargetDescriptor("Effect", "test-target", "{}"),
+            "{}",
+            "test-hash",
+            0,
+            [new EffectIntentIdentity("effect_never-planned-dependency")],
+            EffectRequiredness.BlockingLocal,
+            new EffectCondition("test-precondition", "{}"),
+            new EffectCondition("test-postcondition", "{}"),
+            "test-reconciliation-policy",
+            $"test-blocked:{causality.TransitionRun.Value}",
+            DateTimeOffset.UtcNow);
+        var effectWorkStore = new CanonicalEffectWorkStore(repository);
+        await effectWorkStore.AppendPlanAsync([blockedIntent], CancellationToken.None);
+        var verifier = new CountingStorageVerifier();
+        LoopRelayCompositionRoot composition =
+            LoopRelayCompositionRoot.CreateForTests(repository, verifier);
+        composition.ProductionRuntime = true;
+        composition.RuntimePrerequisiteProfile = HostProfile();
+        composition.RuntimePrerequisiteDoctor = new RuntimePrerequisiteDoctor(_ => null, _ => false);
+        var invocation = new TestApplicationInvocation(
+            repository,
+            new WorkflowInvocation(InvocationModeKind.ForcedTraditionalChain),
+            new TestApplicationCommand(TestApplicationCommandKind.Run, []));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        int exitCode = await new UnifiedCliRunner(composition, output, error)
+            .RunAsync(invocation, CancellationToken.None);
+
+        Assert.Equal(4, exitCode);
+        Assert.Contains("Stop reason: MissingRuntimePrerequisite", output.ToString(), StringComparison.Ordinal);
+        // The blocked intent was genuinely discovered (still scanned as unsettled afterward) and
+        // genuinely untouched (still Planned, still exactly the one lifecycle event AppendPlanAsync
+        // itself wrote) - proving Discovered > 0 without a single write from the worker pass.
+        IReadOnlyList<EffectScanRow> stillUnsettled = await effectWorkStore
+            .ScanUnsettledAsync(128, DateTimeOffset.UtcNow, CancellationToken.None);
+        EffectScanRow remaining = Assert.Single(stillUnsettled);
+        Assert.Equal(blockedIntent.Identity, remaining.Intent.Identity);
+        Assert.Equal(EffectLifecycle.Planned, remaining.State);
+        EffectWorkItem? persisted = await effectWorkStore.ReadAsync(blockedIntent.Identity, CancellationToken.None);
+        EffectWorkItem item = Assert.IsType<EffectWorkItem>(persisted);
+        Assert.Equal(EffectLifecycle.Planned, item.State);
+        Assert.Single(item.Events);
+        Assert.Equal(1, verifier.Verifications);
+    }
+
+    [Fact]
     public async Task RunAsync_storage_import_fails_closed_for_unregistered_workspace_portfolio()
     {
         Repository repository = CreateRepository();

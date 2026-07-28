@@ -371,13 +371,18 @@ internal sealed class CanonicalCliApplicationService(LoopRelayCompositionRoot _c
         }
 
         // The effect worker is the only thing that can invalidate the observation above, and it
-        // only touches the workspace for work it discovered: with nothing unsettled to scan, its
-        // whole pass is read-only and the first observation still describes the workspace. A
-        // quiet startup therefore verifies storage once, not twice. `Discovered` (not the
-        // executed/settled counters) is the guard because a discovered intent leases and appends
-        // lifecycle rows even when it never reaches a terminal state.
+        // only writes durable state for a discovered item it can actually act on this pass.
+        // `Discovered` alone is not that signal: a discovered intent whose dependency is not yet
+        // settled is skipped by a read-only check (IEffectWorkStore.DependencySatisfiedAsync is a
+        // query, never a write) and never reaches a lease, a lifecycle append, or a receipt - so
+        // `Discovered` can be positive with zero writes. `Dispatched`, `Succeeded`, and
+        // `RecoveryRequired` are the three counters a write can ever produce (dispatch always
+        // appends a receipt or a lifecycle row before returning, even on failure; reconciliation
+        // always appends at least its own "Reconciling" marker); none of them can be positive
+        // without a corresponding write having happened. A quiet startup therefore verifies
+        // storage once, not twice.
         EffectWorkerResult effects = await _composition.EffectWorker.RunOnceAsync(cancellationToken);
-        if (effects.Discovered > 0)
+        if (effects.Dispatched > 0 || effects.Succeeded > 0 || effects.RecoveryRequired > 0)
         {
             observation = await _composition.ObserveAsync(cancellationToken);
         }
