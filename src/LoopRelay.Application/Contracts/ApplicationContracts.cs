@@ -131,30 +131,3 @@ public sealed class LoopRelayApplication(IApplicationUseCaseDispatcher _dispatch
         return _dispatcher.DispatchAsync(request, cancellationToken);
     }
 }
-
-public sealed record ApplicationStartupFailure(
-    IReadOnlyList<string> MissingOwners,
-    IReadOnlyList<string> DuplicateOwners,
-    IReadOnlyList<string> VersionIncompatibleOwners)
-{
-    public bool IsValid => MissingOwners.Count == 0 && DuplicateOwners.Count == 0 &&
-        VersionIncompatibleOwners.Count == 0;
-}
-
-public static class ApplicationCompositionValidator
-{
-    public static ApplicationStartupFailure Validate(
-        IReadOnlyList<(string Owner, string Version)> registrations,
-        IReadOnlyDictionary<string, string> required)
-    {
-        string[] missing = required.Keys.Except(registrations.Select(item => item.Owner), StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal).ToArray();
-        string[] duplicate = registrations.GroupBy(item => item.Owner, StringComparer.Ordinal)
-            .Where(group => group.Count() != 1).Select(group => group.Key).Order(StringComparer.Ordinal).ToArray();
-        string[] incompatible = registrations.Where(item =>
-                required.TryGetValue(item.Owner, out string? version) && version != item.Version)
-            .Select(item => $"{item.Owner}:required={required[item.Owner]}:actual={item.Version}")
-            .Order(StringComparer.Ordinal).ToArray();
-        return new(missing, duplicate, incompatible);
-    }
-}
