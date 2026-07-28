@@ -913,7 +913,7 @@ public sealed class CanonicalEffectPlanSettlementStore(
         // reason to fall back to reading the rendered output.
         CompletionRouteDecision decision = CompletionRouteDecision.FromDocumentJson(json)
             ?? throw new InvalidOperationException(
-                $"Transition run '{transitionRun}' carries no durable CompletionRoute decision " +
+                $"Transition run '{transitionRun.Value}' carries no durable CompletionRoute decision " +
                 $"('{CompletionRouteDecision.EventName}'), so the completion route cannot be resolved.");
         string successor = decision.ShouldCloseEpic ? "Workflow Completion" : "Execution Readiness";
         WorkflowStageIdentity selected = stage.AllowedSuccessors.SingleOrDefault(item => item.Value == successor);

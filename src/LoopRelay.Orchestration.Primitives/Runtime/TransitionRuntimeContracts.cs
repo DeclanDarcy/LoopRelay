@@ -407,13 +407,25 @@ public sealed record CompletionRouteDecision(bool ShouldCloseEpic)
         if (string.IsNullOrWhiteSpace(documentJson)) return null;
         try
         {
-            return JsonSerializer.Deserialize<CompletionRouteDecision>(documentJson, DocumentOptions);
+            DocumentShape? shape = JsonSerializer.Deserialize<DocumentShape>(documentJson, DocumentOptions);
+            return shape?.ShouldCloseEpic is { } shouldCloseEpic
+                ? new CompletionRouteDecision(shouldCloseEpic)
+                : null;
         }
         catch (JsonException)
         {
             return null;
         }
     }
+
+    /// <summary>
+    /// Deserialization-only shape. <see cref="ShouldCloseEpic"/> is nullable here so that a document
+    /// missing the property - well-formed JSON that simply does not carry this shape - can be told
+    /// apart from one that sets it. The public record's non-nullable <c>bool</c> cannot make that
+    /// distinction: System.Text.Json fills an unmatched constructor parameter with <c>default(T)</c>
+    /// rather than failing, which is exactly the false "no row" positive this shape exists to catch.
+    /// </summary>
+    private sealed record DocumentShape(bool? ShouldCloseEpic);
 }
 
 public sealed record InterpretedTransitionOutput(

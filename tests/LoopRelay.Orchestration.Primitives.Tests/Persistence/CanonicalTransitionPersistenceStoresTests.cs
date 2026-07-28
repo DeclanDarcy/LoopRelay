@@ -228,8 +228,45 @@ public sealed class CanonicalTransitionPersistenceStoresTests
             () => SettleCompletionRouteAsync(repository, causality));
 
         // Names the fact that is missing, and the run it is missing from, so the stop is actionable.
+        // Asserts the readable quoted form specifically - a message that instead embedded the
+        // TransitionRunIdentity struct's own ToString (e.g. "TransitionRunIdentity { Value = ... }")
+        // would still satisfy a bare substring check on the raw value, so that is not enough here.
         Assert.Contains(CompletionRouteDecision.EventName, failure.Message, StringComparison.Ordinal);
-        Assert.Contains(causality.TransitionRun.Value, failure.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            $"Transition run '{causality.TransitionRun.Value}' carries no durable",
+            failure.Message,
+            StringComparison.Ordinal);
+        // The run stays unsettled: a refused route must not half-advance the workflow.
+        Assert.Equal(
+            TransitionDurableState.EffectsPending,
+            Assert.Single((await persistence.LoadSnapshotAsync()).TransitionRuns).State);
+    }
+
+    /// <summary>
+    /// Fail-closed also on a malformed fact: a `CompletionRouteDecided` row whose document JSON is
+    /// a well-formed object that simply lacks `shouldCloseEpic` - a rename, or any other producer -
+    /// must hit the same fail-stop as no row at all, never silently default to "continue". This
+    /// guards <c>FromDocumentJson</c> against System.Text.Json filling an unmatched constructor
+    /// parameter with <c>default(bool)</c> instead of failing.
+    /// </summary>
+    [Fact]
+    public async Task Completion_routing_fails_closed_when_the_decision_fact_is_malformed()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        CanonicalCausalContext causality = await SeedCompletionRouteRunAsync(persistence);
+        await RecordRenderedOutputAsync(
+            persistence, causality, "The epic is complete and should close. Should Close Epic: true.");
+        await RecordMalformedRouteDecisionAsync(persistence, causality);
+
+        InvalidOperationException failure = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => SettleCompletionRouteAsync(repository, causality));
+
+        Assert.Contains(CompletionRouteDecision.EventName, failure.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            $"Transition run '{causality.TransitionRun.Value}' carries no durable",
+            failure.Message,
+            StringComparison.Ordinal);
         // The run stays unsettled: a refused route must not half-advance the workflow.
         Assert.Equal(
             TransitionDurableState.EffectsPending,
@@ -297,6 +334,26 @@ public sealed class CanonicalTransitionPersistenceStoresTests
                 "Completion certification decided the epic route.",
                 ["completion-route-decision"],
                 new CompletionRouteDecision(shouldCloseEpic).ToDocumentJson()));
+
+    /// <summary>
+    /// Records a `CompletionRouteDecided` row whose document JSON is a well-formed object lacking
+    /// `shouldCloseEpic`, standing in for a rename or any other producer that drifts from the shape
+    /// <see cref="CompletionRouteDecision"/> expects.
+    /// </summary>
+    private static Task RecordMalformedRouteDecisionAsync(
+        CanonicalWorkflowPersistenceStore persistence,
+        CanonicalCausalContext causality) =>
+        persistence.AppendTransitionEvidenceAsync(
+            new CanonicalTransitionEvidenceRecord(
+                0,
+                causality.TransitionRun.Value,
+                new WorkflowTransitionIdentity("InterpretCompletionRoute"),
+                CompletionRouteDecision.EventName,
+                DateTimeOffset.UtcNow,
+                TransitionDurableState.PromptCompleted,
+                "Completion certification recorded a decision row missing its shouldCloseEpic field.",
+                ["malformed-route-decision"],
+                "{}"));
 
     /// <summary>Settles the run's one effect so routing runs, against the real catalog.</summary>
     private static async Task<bool> SettleCompletionRouteAsync(
