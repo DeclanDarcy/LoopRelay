@@ -1093,7 +1093,6 @@ internal sealed partial class LoopRelayCompositionRoot
                         _repository,
                         _rolePolicy.Brain,
                         _costModel: null,
-                        _resumeStore: null,
                         _projectionService: null,
                         _resumeEnabled: _policy.Resume.Enabled,
                         _continuityRuntime: continuityRuntime,

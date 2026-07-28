@@ -31,56 +31,12 @@ internal static class CanonicalTestStores
         ILoopHistoryStore history) =>
         new(store, repository, history, new MemoryRecommendationStore());
 
-    public static (ExecutionAuthorization Authorization, IExecutionAuthorizationResolver Resolver)
-        ExecutionAuthorization()
-    {
-        CanonicalCausalContext causality = NewAttempt();
-        var profile = new ResolvedRuntimeProfile(
-            new RuntimeProfileIdentity("runtime_test"),
-            "codex",
-            AgentModel.Gpt56Terra,
-            AgentEffort.High,
-            "persistent-session",
-            "danger-full-access",
-            "test",
-            "never",
-            "resume",
-            TimeSpan.FromMinutes(30),
-            "test",
-            "fail-closed");
-        var authorization = new ExecutionAuthorization(
-            ExecutionAuthorizationIdentity.New(),
-            new DecisionProductVersionIdentity("decision_test"),
-            profile.Identity,
-            RuntimeProfileEvaluationIdentity.New(),
-            null,
-            new PolicyIdentity("policy_test"),
-            ProviderCapabilityEvidenceIdentity.New(),
-            new PromptPolicyProfileIdentity("prompt_policy_test"),
-            "catalog_test",
-            WorkflowIdentity.Execute,
-            new WorkflowTransitionIdentity("ExecuteImplementationSlice"),
-            "resolved-ceilings",
-            RenderedPromptFactIdentity.New(),
-            ConsumedInputManifestIdentity.New(),
-            causality);
-        return (authorization, new FixedExecutionAuthorizationResolver(profile));
-    }
-
     private static CanonicalCausalContext NewAttempt(WorkspaceIdentity? workspace = null) => new(
         workspace ?? WorkspaceIdentity.New(),
         RunIdentity.New(),
         WorkflowInstanceIdentity.New(),
         TransitionRunIdentity.New(),
         AttemptIdentity.New());
-
-    private sealed class FixedExecutionAuthorizationResolver(ResolvedRuntimeProfile profile)
-        : IExecutionAuthorizationResolver
-    {
-        public Task<ResolvedRuntimeProfile> ResolveAsync(
-            ExecutionAuthorization authorization,
-            CancellationToken cancellationToken = default) => Task.FromResult(profile);
-    }
 
     private sealed class TestDecisionPromptTurnDispatcher(WorkspaceIdentity? _workspace = null) : IDecisionPromptTurnDispatcher
     {

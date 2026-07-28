@@ -7,16 +7,6 @@ using LoopRelay.Infrastructure.Models.Git;
 
 namespace LoopRelay.Cli.Services.Agents;
 
-internal interface IAgentsSubmodulePublishPreflight
-{
-    Task EnsureFreshExportAsync(CancellationToken cancellationToken);
-}
-
-internal sealed class NullAgentsSubmodulePublishPreflight : IAgentsSubmodulePublishPreflight
-{
-    public Task EnsureFreshExportAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-}
-
 internal sealed class AgentsSubmodulePublisher
 {
     public const string ContextUpdateMessage = "Orchestration loop: context update before execution";
@@ -26,15 +16,13 @@ internal sealed class AgentsSubmodulePublisher
     public const string GitlinkPointerMessage = "Orchestration loop: record .agents submodule pointer";
 
     private readonly Infrastructure.Services.Git.AgentsSubmodulePublisher _publisher;
-    private readonly IAgentsSubmodulePublishPreflight _preflight;
     private readonly IProcessRunner _processRunner;
     private readonly Repository _repository;
 
     public AgentsSubmodulePublisher(
         IProcessRunner processRunner,
         Repository repository,
-        ILoopConsole console,
-        IAgentsSubmodulePublishPreflight? preflight = null)
+        ILoopConsole console)
     {
         _processRunner = processRunner;
         _repository = repository;
@@ -43,7 +31,6 @@ internal sealed class AgentsSubmodulePublisher
             repository,
             console,
             new AgentsSubmodulePublisherOptions(ActorName: "loop"));
-        _preflight = preflight ?? new NullAgentsSubmodulePublishPreflight();
     }
 
     public async Task<bool> PublishAsync(string commitMessage, CancellationToken cancellationToken)
@@ -51,7 +38,6 @@ internal sealed class AgentsSubmodulePublisher
         try
         {
             EnsureSupportedTopology();
-            await _preflight.EnsureFreshExportAsync(cancellationToken);
             bool committed = await _publisher.PublishAgentsAsync(commitMessage, cancellationToken);
             if (committed)
             {
