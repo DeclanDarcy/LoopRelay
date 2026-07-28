@@ -471,6 +471,20 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
         return persisted;
     }
 
+    /// <summary>
+    /// Reads a rendered-prompt fact by identity. Used to call
+    /// <see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptsAsync"/> - every rendered
+    /// prompt in the workspace, including every other prompt's full <c>RenderedText</c> - and find
+    /// the wanted one with <c>FindIndex</c>, computing the ledger position from that same index
+    /// (Task 3.2). It now reads the row by key
+    /// (<see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptAsync"/>) and the ledger
+    /// position by a separate counted query
+    /// (<see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptLedgerPositionAsync"/>),
+    /// neither of which loads any other row's <c>RenderedText</c>. The attempt lookup below still
+    /// hydrates every attempt in the workspace - out of scope for this task, since it carries no
+    /// large field and the brief's SQL shape contract does not cover it; noted as a tangle, not
+    /// fixed here.
+    /// </summary>
     public async Task<PersistedRenderedPromptFact?> ReadAsync(
         RenderedPromptFactIdentity prompt,
         CancellationToken cancellationToken)
@@ -480,15 +494,13 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
             return persisted;
         }
 
-        IReadOnlyList<CanonicalRenderedPromptRecord> prompts =
-            await _store.ReadRenderedPromptsAsync(cancellationToken);
-        int index = prompts.ToList().FindIndex(item => item.RenderedPromptId == prompt.Value);
-        if (index < 0)
+        CanonicalRenderedPromptRecord? record =
+            await _store.ReadRenderedPromptAsync(prompt.Value, cancellationToken);
+        if (record is null)
         {
             return null;
         }
 
-        CanonicalRenderedPromptRecord record = prompts[index];
         if (record.AttemptId is null || record.PolicyId is null || record.PersistenceId is null ||
             record.PromptPolicyProfileId is null || record.ConsumedInputManifestId is null)
         {
@@ -501,6 +513,9 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
         {
             return null;
         }
+
+        long ledgerPosition =
+            await _store.ReadRenderedPromptLedgerPositionAsync(prompt.Value, cancellationToken);
 
         var causality = new CanonicalCausalContext(
             new WorkspaceIdentity(await _store.ReadWorkspaceIdentityAsync(cancellationToken)),
@@ -524,7 +539,7 @@ public sealed class CanonicalRenderedPromptFactStore(CanonicalWorkflowPersistenc
         return new PersistedRenderedPromptFact(
             fact,
             new RenderedPromptPersistenceIdentity(record.PersistenceId),
-            index + 1,
+            ledgerPosition,
             record.RenderedAt);
     }
 }

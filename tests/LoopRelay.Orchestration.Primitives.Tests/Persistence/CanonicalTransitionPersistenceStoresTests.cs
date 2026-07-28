@@ -503,6 +503,314 @@ public sealed class CanonicalTransitionPersistenceStoresTests
         Assert.Equal(historySize + 3, third.LedgerSequence);
     }
 
+    /// <summary>
+    /// Characterization test for Task 3.2: <see cref="CanonicalRenderedPromptFactStore.ReadAsync"/>
+    /// used to call <see cref="CanonicalWorkflowPersistenceStore.ReadRenderedPromptsAsync"/> - every
+    /// rendered-prompt row in the workspace, in insertion order, including every other prompt's full
+    /// <c>RenderedText</c> - and find the wanted one with <c>FindIndex</c>, computing the ledger
+    /// position from that same index. It now reads the row by key and the ledger position by a
+    /// separate counted query, neither of which loads any other row's <c>RenderedText</c>.
+    /// <para>
+    /// The baseline is <see cref="LegacyReadAsync"/>, a byte-for-byte copy of the pre-Task-3.2
+    /// method body (verified identical via <c>git diff</c> against the pre-change file), executed
+    /// for real against the same seeded workspace through the store methods this task left untouched
+    /// (<c>ReadRenderedPromptsAsync</c>, <c>ReadAttemptsAsync</c>, <c>ReadWorkspaceIdentityAsync</c>).
+    /// Comparing its real output to the keyed implementation's real output - rather than reasoning
+    /// about the diff - is what makes this a characterization test.
+    /// </para>
+    /// <para>
+    /// Two prompts (A and B) are seeded with distinct, independently identifiable
+    /// <c>RenderedText</c> - A's deliberately large, to dramatize the row-size risk - after a run of
+    /// unrelated pre-existing history whose own rendered text the keyed reads below must never load.
+    /// This specifically catches the risk keyed SQL introduces that <c>FindIndex</c> over an
+    /// in-memory list could not have: a <c>WHERE rendered_prompt_id = $id</c> clause that is wrong,
+    /// or missing, silently returns the wrong row (or every row) instead of raising.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_matches_the_pre_keyed_implementation_and_does_not_cross_contaminate_prompts()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var promptStore = new CanonicalRenderedPromptFactStore(persistence);
+
+        // Pre-existing, unrelated history - large content of its own - the keyed reads for A and B
+        // below must never load.
+        const int historySize = 5;
+        for (int i = 0; i < historySize; i++)
+        {
+            CanonicalCausalContext other = await SeedCausalityAsync(persistence);
+            await promptStore.AppendAsync(
+                PromptFact(other, new string('h', 10_000) + $"-history-{i}"), CancellationToken.None);
+        }
+
+        CanonicalCausalContext causalityA = await SeedCausalityAsync(persistence);
+        RenderedPromptFact factA = PromptFact(causalityA, new string('a', 100_000) + "-prompt-a-marker");
+        await promptStore.AppendAsync(factA, CancellationToken.None);
+
+        CanonicalCausalContext causalityB = await SeedCausalityAsync(persistence);
+        RenderedPromptFact factB = PromptFact(causalityB, "prompt-b-marker");
+        await promptStore.AppendAsync(factB, CancellationToken.None);
+
+        // Baseline, captured by executing the pre-Task-3.2 algorithm for real before trusting the
+        // keyed replacement - not by reasoning about what it ought to return.
+        PersistedRenderedPromptFact? expectedA =
+            await LegacyReadAsync(persistence, factA.Identity, CancellationToken.None);
+        PersistedRenderedPromptFact? expectedB =
+            await LegacyReadAsync(persistence, factB.Identity, CancellationToken.None);
+        Assert.NotNull(expectedA);
+        Assert.NotNull(expectedB);
+
+        // A fresh store instance: AppendAsync above populated the in-memory `appended` cache on
+        // `promptStore`, which would short-circuit ReadAsync before it ever touches the database.
+        var freshPromptStore = new CanonicalRenderedPromptFactStore(persistence);
+
+        var counter = new PreparedStatementCounter();
+        persistence.ConnectionObserverForTesting = counter.Watch;
+        PersistedRenderedPromptFact? actualB;
+        try
+        {
+            actualB = await freshPromptStore.ReadAsync(factB.Identity, CancellationToken.None);
+        }
+        finally
+        {
+            persistence.ConnectionObserverForTesting = null;
+        }
+        PersistedRenderedPromptFact? actualA =
+            await freshPromptStore.ReadAsync(factA.Identity, CancellationToken.None);
+
+        Assert.NotNull(actualA);
+        Assert.NotNull(actualB);
+        AssertSamePersistedFact(expectedA!, actualA!);
+        AssertSamePersistedFact(expectedB!, actualB!);
+
+        // Counted, not modelled: 1 (keyed record, ReadRenderedPromptSql) + 2 (the counted-position
+        // statement compiles as two SELECTs - the outer COUNT(*) and its inner rowid subquery - per
+        // the brief's own shape, which looks the id up again independently rather than reusing the
+        // rowid the first statement already read) + 3 (the pre-existing, unkeyed attempt lookup
+        // ReadAsync still depends on - out of this task's scope, see the doc comment on the
+        // production method - which itself compiles a data SELECT plus two back-compat
+        // pragma_table_info probes, ColumnExistsAsync for policy_id / agent_role_policy_id).
+        // Verified via a throwaway diagnostic that isolated each of the three calls before this
+        // number was written here, not guessed.
+        Assert.Equal(6, counter.Statements);
+
+        // Discriminating assertions: AssertSamePersistedFact above only proves prompt B's keyed
+        // result matches prompt B's *own* legacy result, which a bug that fed both calls the same
+        // wrong row would not catch. These fail if prompt A's content or position leaked into B's
+        // result, or vice versa - which is the entire point of seeding two distinct prompts.
+        Assert.Equal(factB.RenderedContent, actualB!.Fact.RenderedContent);
+        Assert.Equal(factA.RenderedContent, actualA!.Fact.RenderedContent);
+        Assert.NotEqual(actualA.Fact.RenderedContent, actualB.Fact.RenderedContent);
+        Assert.Equal(historySize + 1, actualA.LedgerSequence);
+        Assert.Equal(historySize + 2, actualB.LedgerSequence);
+        Assert.Equal(causalityA.Attempt, actualA.Fact.Causality.Attempt);
+        Assert.Equal(causalityB.Attempt, actualB.Fact.Causality.Attempt);
+        Assert.Equal(causalityA.Run, actualA.Fact.Causality.Run);
+        Assert.Equal(causalityB.Run, actualB.Fact.Causality.Run);
+        Assert.Equal(causalityA.WorkflowInstance, actualA.Fact.Causality.WorkflowInstance);
+        Assert.Equal(causalityB.WorkflowInstance, actualB.Fact.Causality.WorkflowInstance);
+    }
+
+    /// <summary>
+    /// Non-negotiable per Task 3.2: a keyed read must still return null for an id that does not
+    /// exist in <c>canonical_rendered_prompts</c>, matching <see cref="LegacyReadAsync"/>'s behavior
+    /// for the same case, rather than silently succeeding with a wrong or empty result.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_returns_null_for_a_rendered_prompt_id_that_does_not_exist()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var promptStore = new CanonicalRenderedPromptFactStore(persistence);
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        await promptStore.AppendAsync(PromptFact(causality), CancellationToken.None);
+
+        var missing = new RenderedPromptFactIdentity("does-not-exist");
+        var freshPromptStore = new CanonicalRenderedPromptFactStore(persistence);
+
+        Assert.Null(await LegacyReadAsync(persistence, missing, CancellationToken.None));
+        Assert.Null(await freshPromptStore.ReadAsync(missing, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Ledger-position edge cases per Task 3.2: the very first row ever inserted into a fresh
+    /// table (position 1 - an off-by-one here, e.g. <c>rowid &lt;</c> instead of <c>rowid &lt;=</c>,
+    /// would read 0) and the most recently inserted row (position equal to the table's current row
+    /// count - an off-by-one the other way, e.g. omitting the row's own match, would read one less
+    /// than the true count). A third edge case the brief names - a prompt whose neighbours were
+    /// deleted - does not apply: <c>canonical_rendered_prompts</c> has no production
+    /// <c>DELETE</c> anywhere in this codebase (verified via
+    /// <c>grep -rn "DELETE FROM canonical_rendered_prompts" src/</c>, zero matches), so no row's
+    /// neighbours can ever be removed after insertion; the position query's own doc comment records
+    /// this as the reason the counted approach is equivalent to the old in-memory index.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_ledger_position_is_correct_for_the_first_and_last_prompt_in_the_table()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var promptStore = new CanonicalRenderedPromptFactStore(persistence);
+
+        CanonicalCausalContext causalityFirst = await SeedCausalityAsync(persistence);
+        RenderedPromptFact factFirst = PromptFact(causalityFirst, "first-in-a-fresh-table");
+        await promptStore.AppendAsync(factFirst, CancellationToken.None);
+
+        for (int i = 0; i < 3; i++)
+        {
+            CanonicalCausalContext middle = await SeedCausalityAsync(persistence);
+            await promptStore.AppendAsync(PromptFact(middle, $"middle-{i}"), CancellationToken.None);
+        }
+
+        CanonicalCausalContext causalityLast = await SeedCausalityAsync(persistence);
+        RenderedPromptFact factLast = PromptFact(causalityLast, "last-in-the-table-so-far");
+        await promptStore.AppendAsync(factLast, CancellationToken.None);
+
+        // Fresh store: the two AppendAsync calls above populated `appended` for factFirst/factLast
+        // on `promptStore`, which would short-circuit ReadAsync before it touches the database.
+        var freshPromptStore = new CanonicalRenderedPromptFactStore(persistence);
+        PersistedRenderedPromptFact? readFirst =
+            await freshPromptStore.ReadAsync(factFirst.Identity, CancellationToken.None);
+        PersistedRenderedPromptFact? readLast =
+            await freshPromptStore.ReadAsync(factLast.Identity, CancellationToken.None);
+
+        Assert.NotNull(readFirst);
+        Assert.NotNull(readLast);
+        Assert.Equal(1, readFirst!.LedgerSequence);
+        Assert.Equal(5, readLast!.LedgerSequence);
+    }
+
+    /// <summary>
+    /// Static proof, not a timing measurement, that the keyed rendered-prompt read is a primary-key
+    /// seek rather than a table scan: a <c>SCAN canonical_rendered_prompts</c> plan would visit every
+    /// row - including every other prompt's <c>rendered_text</c> - to find the one matching row. A
+    /// statement-count assertion alone cannot show this: both the old full-table SELECT and this
+    /// keyed SELECT compile as exactly one statement each, so the difference is in what each
+    /// statement's execution touches, which only the query plan (or a timing measurement, which this
+    /// codebase avoids - see <see cref="ReadAsync_matches_the_pre_keyed_implementation_and_does_not_cross_contaminate_prompts"/>'s
+    /// statement-count assertion for the part that *is* provable that way) can show.
+    /// </summary>
+    [Fact]
+    public async Task ReadRenderedPromptAsync_is_backed_by_the_primary_key_not_a_table_scan()
+    {
+        Repository repository = CreateRepository();
+        var persistence = new CanonicalWorkflowPersistenceStore(repository);
+        var promptStore = new CanonicalRenderedPromptFactStore(persistence);
+        CanonicalCausalContext causality = await SeedCausalityAsync(persistence);
+        RenderedPromptFact fact = PromptFact(causality);
+        await promptStore.AppendAsync(fact, CancellationToken.None);
+
+        IReadOnlyList<string> plan = await ExplainRenderedPromptLookupAsync(
+            repository, CanonicalWorkflowPersistenceStore.ReadRenderedPromptSql, fact.Identity.Value);
+
+        Assert.Contains(
+            plan, step => step.Contains("SEARCH canonical_rendered_prompts", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            plan, step => step.Contains("SCAN canonical_rendered_prompts", StringComparison.Ordinal));
+    }
+
+    private static async Task<IReadOnlyList<string>> ExplainRenderedPromptLookupAsync(
+        Repository repository, string sql, string renderedPromptId)
+    {
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadWriteCreate(
+            LoopRelayWorkspaceDatabase.Resolve(repository));
+        await connection.OpenAsync();
+        await LoopRelayWorkspaceDatabase.EnsureSchemaAsync(connection);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = $"EXPLAIN QUERY PLAN {sql}";
+        command.Parameters.AddWithValue("$rendered_prompt_id", renderedPromptId);
+        List<string> steps = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            steps.Add(reader.GetString(reader.GetOrdinal("detail")));
+        }
+
+        return steps;
+    }
+
+    /// <summary>
+    /// Byte-for-byte reproduction of the pre-Task-3.2 <c>CanonicalRenderedPromptFactStore.ReadAsync</c>
+    /// body (full rendered-prompt hydration + <c>FindIndex</c>), kept as the characterization
+    /// baseline. It calls only store methods Task 3.2 left untouched, so it is the same algorithm
+    /// that used to live in production before the keyed reads replaced it. Unlike the production
+    /// method, it never consults the in-memory `appended` cache, since the characterization always
+    /// needs to re-derive the result from the database.
+    /// </summary>
+    private static async Task<PersistedRenderedPromptFact?> LegacyReadAsync(
+        CanonicalWorkflowPersistenceStore store,
+        RenderedPromptFactIdentity prompt,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<CanonicalRenderedPromptRecord> prompts =
+            await store.ReadRenderedPromptsAsync(cancellationToken);
+        int index = prompts.ToList().FindIndex(item => item.RenderedPromptId == prompt.Value);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        CanonicalRenderedPromptRecord record = prompts[index];
+        if (record.AttemptId is null || record.PolicyId is null || record.PersistenceId is null ||
+            record.PromptPolicyProfileId is null || record.ConsumedInputManifestId is null)
+        {
+            return null;
+        }
+
+        IReadOnlyList<AttemptRecord> attempts = await store.ReadAttemptsAsync(cancellationToken);
+        AttemptRecord? attempt = attempts.SingleOrDefault(item => item.AttemptId == record.AttemptId);
+        if (attempt is null)
+        {
+            return null;
+        }
+
+        var causality = new CanonicalCausalContext(
+            new WorkspaceIdentity(await store.ReadWorkspaceIdentityAsync(cancellationToken)),
+            new RunIdentity(attempt.RunId),
+            new WorkflowInstanceIdentity(attempt.WorkflowInstanceId),
+            new TransitionRunIdentity(record.TransitionRunId),
+            new AttemptIdentity(record.AttemptId));
+        var fact = new RenderedPromptFact(
+            new RenderedPromptFactIdentity(record.RenderedPromptId),
+            causality,
+            record.RenderedText,
+            record.RenderedSha256,
+            new PromptTemplateIdentity(record.PromptIdentity),
+            record.TemplateSourceHash,
+            new PolicyIdentity(record.PolicyId),
+            new PromptPolicyProfileIdentity(record.PromptPolicyProfileId),
+            new ConsumedInputManifestIdentity(record.ConsumedInputManifestId),
+            record.ConsumedInputs.Select(input => new ConsumedInputFile(input.Path, input.Sha256)).ToArray(),
+            record.RenderedAt,
+            record.RenderedEncoding);
+        return new PersistedRenderedPromptFact(
+            fact,
+            new RenderedPromptPersistenceIdentity(record.PersistenceId),
+            index + 1,
+            record.RenderedAt);
+    }
+
+    private static void AssertSamePersistedFact(
+        PersistedRenderedPromptFact expected, PersistedRenderedPromptFact actual)
+    {
+        Assert.Equal(expected.PersistenceIdentity, actual.PersistenceIdentity);
+        Assert.Equal(expected.LedgerSequence, actual.LedgerSequence);
+        Assert.Equal(expected.PersistedAt, actual.PersistedAt);
+
+        Assert.Equal(expected.Fact.Identity, actual.Fact.Identity);
+        Assert.Equal(expected.Fact.Causality, actual.Fact.Causality);
+        Assert.Equal(expected.Fact.RenderedContent, actual.Fact.RenderedContent);
+        Assert.Equal(expected.Fact.ContentHash, actual.Fact.ContentHash);
+        Assert.Equal(expected.Fact.TemplateIdentity, actual.Fact.TemplateIdentity);
+        Assert.Equal(expected.Fact.TemplateSourceHash, actual.Fact.TemplateSourceHash);
+        Assert.Equal(expected.Fact.PolicyIdentity, actual.Fact.PolicyIdentity);
+        Assert.Equal(expected.Fact.PolicyProfileIdentity, actual.Fact.PolicyProfileIdentity);
+        Assert.Equal(expected.Fact.ConsumedInputManifestIdentity, actual.Fact.ConsumedInputManifestIdentity);
+        Assert.Equal(expected.Fact.RenderedAt, actual.Fact.RenderedAt);
+        Assert.Equal(expected.Fact.RenderedEncoding, actual.Fact.RenderedEncoding);
+        Assert.Equal(expected.Fact.ConsumedInputs, actual.Fact.ConsumedInputs);
+    }
+
     [Fact]
     public async Task ReadTransitionRunAsync_matches_full_snapshot_lookup_for_existing_and_missing_runs()
     {
@@ -1101,9 +1409,8 @@ public sealed class CanonicalTransitionPersistenceStoresTests
             FreshAttemptAuthorization.Instance);
     }
 
-    private static RenderedPromptFact PromptFact(CanonicalCausalContext causality)
+    private static RenderedPromptFact PromptFact(CanonicalCausalContext causality, string content = "rendered")
     {
-        const string content = "rendered";
         return new RenderedPromptFact(
             RenderedPromptFactIdentity.New(),
             causality,

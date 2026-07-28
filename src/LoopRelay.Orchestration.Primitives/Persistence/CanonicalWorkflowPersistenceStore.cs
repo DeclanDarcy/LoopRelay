@@ -781,6 +781,7 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
         {
             await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
             await connection.OpenAsync(cancellationToken);
+            ConnectionObserverForTesting?.Invoke(connection);
 
             var rows = new List<CanonicalRenderedPromptRecord>();
             await using SqliteCommand command = connection.CreateCommand();
@@ -795,28 +796,116 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                rows.Add(new CanonicalRenderedPromptRecord(
-                    reader.GetString(0),
-                    reader.GetString(1),
-                    reader.IsDBNull(2) ? null : reader.GetString(2),
-                    reader.GetString(5),
-                    reader.IsDBNull(6) ? null : reader.GetString(6),
-                    reader.GetString(7),
-                    reader.GetString(8),
-                    ReadJson<List<CanonicalReadReceiptFile>>(reader.GetString(9)),
-                    reader.IsDBNull(10) ? null : reader.GetString(10),
-                    ParseDate(reader.GetString(11)),
-                    reader.IsDBNull(3) ? null : reader.GetString(3),
-                    reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.IsDBNull(12) ? null : reader.GetString(12),
-                    reader.IsDBNull(13) ? null : reader.GetString(13),
-                    reader.IsDBNull(14) ? null : reader.GetString(14),
-                    reader.IsDBNull(15) ? "utf-8" : reader.GetString(15)));
+                rows.Add(MapRenderedPrompt(reader));
             }
 
             return rows;
         });
     }
+
+    /// <summary>
+    /// The keyed rendered-prompt lookup, verbatim as executed (Task 3.2). Reading one rendered
+    /// prompt used to call <see cref="ReadRenderedPromptsAsync"/> - every row in the table, in
+    /// insertion order, including every other prompt's full <c>rendered_text</c> - and find the
+    /// wanted one with <c>FindIndex</c>. <c>rendered_text</c> can be arbitrarily large, so that was
+    /// a row-size problem as much as a row-count one. This SELECT is scoped by the table's primary
+    /// key instead: the column list is identical to <see cref="ReadRenderedPromptsAsync"/>'s so
+    /// <see cref="MapRenderedPrompt"/> can serve both.
+    /// <para>
+    /// Exposed to the test assembly so the index-backing assertion can <c>EXPLAIN QUERY PLAN</c> the
+    /// real statement rather than a copy of it.
+    /// </para>
+    /// </summary>
+    internal const string ReadRenderedPromptSql = """
+        SELECT rendered_prompt_id, transition_run_id, attempt_id, session_id, turn_id,
+               prompt_identity, template_source_hash, rendered_sha256, rendered_text,
+               consumed_inputs_json, policy_id, rendered_at, persistence_id,
+               prompt_policy_profile_id, consumed_input_manifest_id, rendered_encoding
+        FROM canonical_rendered_prompts WHERE rendered_prompt_id = $rendered_prompt_id;
+        """;
+
+    /// <summary>
+    /// The counted ledger-position lookup, verbatim as executed (Task 3.2). This table is
+    /// append-only - rows are never deleted (see <see cref="AppendRenderedPromptAsync"/>) - so the
+    /// count of rows at-or-before a row's own <c>rowid</c> is exactly the 1-based insertion-order
+    /// position the old <c>FindIndex(...) + 1</c> over the full <c>ORDER BY rowid</c> list produced,
+    /// without loading any row's content to compute it. Exposed to the test assembly for the same
+    /// reason as <see cref="ReadRenderedPromptSql"/>.
+    /// </summary>
+    internal const string RenderedPromptLedgerPositionSql = """
+        SELECT COUNT(*) FROM canonical_rendered_prompts
+        WHERE rowid <= (SELECT rowid FROM canonical_rendered_prompts WHERE rendered_prompt_id = $rendered_prompt_id);
+        """;
+
+    /// <summary>
+    /// Reads a single rendered-prompt row by id without loading every rendered prompt in the
+    /// workspace (see <see cref="ReadRenderedPromptSql"/>). Used by
+    /// <see cref="CanonicalRenderedPromptFactStore.ReadAsync"/>.
+    /// </summary>
+    public async Task<CanonicalRenderedPromptRecord?> ReadRenderedPromptAsync(
+        string renderedPromptId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return null;
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+        ConnectionObserverForTesting?.Invoke(connection);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = ReadRenderedPromptSql;
+        command.Parameters.AddWithValue("$rendered_prompt_id", renderedPromptId);
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? MapRenderedPrompt(reader) : null;
+    }
+
+    /// <summary>
+    /// Reads the 1-based ledger position of a single rendered-prompt row by id - the same value the
+    /// old full-table <c>FindIndex(...) + 1</c> produced - without loading every row (see
+    /// <see cref="RenderedPromptLedgerPositionSql"/>). Returns 0 if no row with this id exists;
+    /// callers only call this once <see cref="ReadRenderedPromptAsync"/> has confirmed the row
+    /// exists, so that case never surfaces as a real position.
+    /// </summary>
+    public async Task<long> ReadRenderedPromptLedgerPositionAsync(
+        string renderedPromptId,
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return 0;
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+        ConnectionObserverForTesting?.Invoke(connection);
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = RenderedPromptLedgerPositionSql;
+        command.Parameters.AddWithValue("$rendered_prompt_id", renderedPromptId);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    private static CanonicalRenderedPromptRecord MapRenderedPrompt(SqliteDataReader reader) =>
+        new(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.GetString(5),
+            reader.IsDBNull(6) ? null : reader.GetString(6),
+            reader.GetString(7),
+            reader.GetString(8),
+            ReadJson<List<CanonicalReadReceiptFile>>(reader.GetString(9)),
+            reader.IsDBNull(10) ? null : reader.GetString(10),
+            ParseDate(reader.GetString(11)),
+            reader.IsDBNull(3) ? null : reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.IsDBNull(12) ? null : reader.GetString(12),
+            reader.IsDBNull(13) ? null : reader.GetString(13),
+            reader.IsDBNull(14) ? null : reader.GetString(14),
+            reader.IsDBNull(15) ? "utf-8" : reader.GetString(15));
 
     public async Task UpsertRunAsync(
         RunRecord run,
