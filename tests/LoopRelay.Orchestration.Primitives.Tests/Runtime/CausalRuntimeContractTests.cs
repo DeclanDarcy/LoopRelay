@@ -22,14 +22,6 @@ public sealed class CausalRuntimeContractTests
     }
 
     [Fact]
-    public void Legacy_context_requires_an_explicit_compatibility_source()
-    {
-        Assert.Throws<ArgumentException>(() => new LegacyTransitionExecutionContext(
-            new WorkflowInvocation(InvocationModeKind.DefaultChained),
-            ""));
-    }
-
-    [Fact]
     public void Rendered_prompt_fact_rejects_a_content_hash_mismatch()
     {
         CanonicalCausalContext attempt = NewAttempt();

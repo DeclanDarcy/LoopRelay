@@ -46,12 +46,6 @@ public sealed record LogicalArtifactDescriptor(
 
 public sealed record LogicalArtifactContent(string Text);
 
-public sealed record LogicalArtifactPathPattern(
-    string Directory,
-    string SearchPattern,
-    LogicalArtifactDomain Domain,
-    string IdentityPrefix = "");
-
 public sealed record LogicalArtifactResolutionResult(
     LogicalArtifactDescriptor Descriptor,
     LogicalArtifactResolutionStatus Status,

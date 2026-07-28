@@ -125,29 +125,6 @@ public sealed record CanonicalTransitionExecutionContext : TransitionExecutionCo
         new(Workspace, Run, WorkflowInstance, transitionRun, attempt);
 }
 
-/// <summary>
-/// Explicit compatibility boundary for callers that do not yet possess the canonical spine.
-/// A translator must replace this context before canonical runtime execution begins.
-/// </summary>
-public sealed record LegacyTransitionExecutionContext : TransitionExecutionContext
-{
-    public LegacyTransitionExecutionContext(
-        WorkflowInvocation rootInvocation,
-        string compatibilitySource)
-        : base(rootInvocation)
-    {
-        ArgumentNullException.ThrowIfNull(rootInvocation);
-        if (string.IsNullOrWhiteSpace(compatibilitySource))
-        {
-            throw new ArgumentException("Compatibility source must not be empty.", nameof(compatibilitySource));
-        }
-
-        CompatibilitySource = compatibilitySource.Trim();
-    }
-
-    public string CompatibilitySource { get; }
-}
-
 /// <param name="Observation">
 /// The observation the kernel cycle already owns, handed down so attempt-start product
 /// resolution does not rebuild a global one. Null means the caller owns no cycle observation
