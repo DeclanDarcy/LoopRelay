@@ -16,7 +16,7 @@ public sealed record CanonicalUnsettledEffectProjection(
 
 public sealed record CanonicalPersistenceReadModel(
     string ProjectionIdentity,
-    CanonicalWorkflowPersistenceSnapshot Workflow,
+    CanonicalWorkflowObservationSnapshot Workflow,
     IReadOnlyList<CanonicalChainBoundaryEventRecord> ChainBoundaries,
     IReadOnlyList<string> CertifiedTerminalAttempts,
     IReadOnlyList<string> UnsettledRequiredEffectAttempts,
@@ -24,7 +24,7 @@ public sealed record CanonicalPersistenceReadModel(
 {
     public static CanonicalPersistenceReadModel Empty { get; } = new(
         "canonical-persistence-read-model.v1",
-        new CanonicalWorkflowPersistenceSnapshot([], [], [], [], [], [], [], [], []),
+        new CanonicalWorkflowObservationSnapshot([], [], [], [], [], [], [], [], []),
         [], [], [], []);
 }
 
@@ -63,7 +63,7 @@ public sealed class CanonicalPersistenceProjection : ICanonicalPersistenceProjec
             .ToArray();
         return new CanonicalPersistenceReadModel(
             "canonical-persistence-read-model.v1",
-            await store.LoadSnapshotAsync(cancellationToken),
+            await store.LoadObservationSnapshotAsync(cancellationToken),
             await store.ReadChainBoundaryEventsAsync(cancellationToken),
             await store.ReadCertifiedTerminalAttemptIdentitiesAsync(cancellationToken),
             unsettledRequiredAttempts,

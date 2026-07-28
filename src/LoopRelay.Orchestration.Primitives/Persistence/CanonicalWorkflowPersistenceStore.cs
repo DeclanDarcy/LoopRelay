@@ -55,6 +55,15 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
     /// </summary>
     internal Action? ReadWorkflowInstancesAsyncInvokedForTesting { get; set; }
 
+    /// <summary>
+    /// Test-only observability (Task 3.5): fires whenever the full-document
+    /// <see cref="ReadTransitionEvidenceAsync"/> path actually runs (inside <see cref="LoadSnapshotAsync"/>),
+    /// so a test can assert directly that the documents-free routine-observation path
+    /// (<see cref="LoadObservationSnapshotAsync"/>) never falls back to it. Instance-scoped, like
+    /// <see cref="ConnectionObserverForTesting"/>.
+    /// </summary>
+    internal Action? ReadTransitionEvidenceAsyncInvokedForTesting { get; set; }
+
     public async Task UpsertWorkflowStateAsync(
         CanonicalWorkflowStateRecord state,
         CancellationToken cancellationToken = default)
@@ -1317,6 +1326,43 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             await ReadRecoveryMarkersAsync(connection, cancellationToken));
     }
 
+    /// <summary>
+    /// Task 3.5: the routine observation path's snapshot loader. Identical to
+    /// <see cref="LoadSnapshotAsync"/> in every respect except the evidence table read, which selects
+    /// identity/location columns only (<see cref="ReadTransitionEvidenceLocationsAsync"/>) and never
+    /// <c>document_json</c>. Backs <see cref="LoopRelay.Orchestration.Persistence.CanonicalPersistenceProjection.ProjectAsync"/>,
+    /// which feeds <c>RepositoryObserver.ObserveAsync</c> - the routine observation path, which only
+    /// ever reads evidence locations, never document bodies. Any consumer that needs the document
+    /// body (recovery's keyed read, certification's session-continuity readers, the CLI's own direct
+    /// snapshot load) must keep using <see cref="LoadSnapshotAsync"/>; this method exists so the
+    /// routine path can stop paying for documents it never reads, without changing what those other
+    /// callers get.
+    /// </summary>
+    public async Task<CanonicalWorkflowObservationSnapshot> LoadObservationSnapshotAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string databasePath = LoopRelayWorkspaceDatabase.Resolve(_repository);
+        if (!File.Exists(databasePath))
+        {
+            return new CanonicalWorkflowObservationSnapshot([], [], [], [], [], [], [], [], []);
+        }
+
+        await using SqliteConnection connection = LoopRelayWorkspaceDatabase.OpenReadOnly(databasePath);
+        await connection.OpenAsync(cancellationToken);
+        ConnectionObserverForTesting?.Invoke(connection);
+
+        return new CanonicalWorkflowObservationSnapshot(
+            await ReadWorkflowStatesAsync(connection, cancellationToken),
+            await ReadStageStatesAsync(connection, cancellationToken),
+            await ReadTransitionRunsAsync(connection, cancellationToken),
+            await ReadTransitionEvidenceLocationsAsync(connection, cancellationToken),
+            await ReadProductsAsync(connection, cancellationToken),
+            await ReadGateEvaluationsAsync(connection, cancellationToken),
+            await ReadEffectRecordsAsync(connection, cancellationToken),
+            await ReadWarningsAsync(connection, cancellationToken),
+            await ReadRecoveryMarkersAsync(connection, cancellationToken));
+    }
+
     public async Task<IReadOnlyList<RunRecord>> ReadRunsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -2088,10 +2134,11 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
             reader.GetString(9),
             ReadJson<IReadOnlyList<string>>(reader.GetString(10)));
 
-    private static async Task<IReadOnlyList<CanonicalTransitionEvidenceRecord>> ReadTransitionEvidenceAsync(
+    private async Task<IReadOnlyList<CanonicalTransitionEvidenceRecord>> ReadTransitionEvidenceAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
+        ReadTransitionEvidenceAsyncInvokedForTesting?.Invoke();
         var rows = new List<CanonicalTransitionEvidenceRecord>();
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
@@ -2112,6 +2159,42 @@ public sealed class CanonicalWorkflowPersistenceStore(Repository _repository)
                 reader.GetString(6),
                 ReadJson<IReadOnlyList<string>>(reader.GetString(7)),
                 reader.GetString(8)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Task 3.5: the routine observation path's evidence read, backing
+    /// <see cref="LoadObservationSnapshotAsync"/>. Identical to <see cref="ReadTransitionEvidenceAsync"/>
+    /// above except the SELECT omits <c>document_json</c> entirely and the mapped row type
+    /// (<see cref="CanonicalTransitionEvidenceLocationRecord"/>) has no field to carry it - so a
+    /// future edit cannot silently start threading the document through this path again without a
+    /// compile error.
+    /// </summary>
+    private static async Task<IReadOnlyList<CanonicalTransitionEvidenceLocationRecord>> ReadTransitionEvidenceLocationsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var rows = new List<CanonicalTransitionEvidenceLocationRecord>();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT evidence_id, run_id, transition_identity, event_name, recorded_at,
+                   state, explanation, evidence_json
+            FROM canonical_transition_evidence ORDER BY evidence_id;
+            """;
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new CanonicalTransitionEvidenceLocationRecord(
+                reader.GetInt64(0),
+                reader.GetString(1),
+                new WorkflowTransitionIdentity(reader.GetString(2)),
+                reader.GetString(3),
+                ParseDate(reader.GetString(4)),
+                ParseEnum<TransitionDurableState>(reader.GetString(5)),
+                reader.GetString(6),
+                ReadJson<IReadOnlyList<string>>(reader.GetString(7))));
         }
 
         return rows;

@@ -68,7 +68,7 @@ public sealed class RepositoryObserver(
         CanonicalPersistenceReadModel persistenceReadModel = verification.UsableAuthority
             ? await _persistenceProjection.ProjectAsync(repository, cancellationToken)
             : CanonicalPersistenceReadModel.Empty;
-        CanonicalWorkflowPersistenceSnapshot canonicalSnapshot = persistenceReadModel.Workflow;
+        CanonicalWorkflowObservationSnapshot canonicalSnapshot = persistenceReadModel.Workflow;
         HashSet<string> attemptsWithUnsettledRequiredEffects = persistenceReadModel
             .UnsettledRequiredEffectAttempts.ToHashSet(StringComparer.Ordinal);
         HashSet<string> certifiedTerminalAttempts = persistenceReadModel.CertifiedTerminalAttempts
@@ -261,7 +261,7 @@ public sealed class RepositoryObserver(
     }
 
     private static IReadOnlyList<ObservedWorkflowState> ObservedWorkflowStates(
-        CanonicalWorkflowPersistenceSnapshot canonicalSnapshot) =>
+        CanonicalWorkflowObservationSnapshot canonicalSnapshot) =>
         canonicalSnapshot.WorkflowStates.Select(state => new ObservedWorkflowState(
             state.Workflow,
             state.State,

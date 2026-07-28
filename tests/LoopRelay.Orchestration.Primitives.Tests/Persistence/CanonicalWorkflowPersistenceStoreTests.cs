@@ -980,6 +980,205 @@ public sealed class CanonicalWorkflowPersistenceStoreTests
         Assert.Null(attempt.PolicyId);
     }
 
+    /// <summary>
+    /// Characterization test for Task 3.5: <see cref="CanonicalWorkflowPersistenceStore.LoadObservationSnapshotAsync"/>
+    /// must return the same identity/location data as the pre-existing, untouched
+    /// <see cref="CanonicalWorkflowPersistenceStore.LoadSnapshotAsync"/> for every table both methods
+    /// share, and the same identity/location fields for transition evidence - the one table whose row
+    /// shape differs between the two, by omitting the document body. Comparing the real output of
+    /// both methods against the same seeded workspace - rather than hand-writing expected values - is
+    /// what makes this a characterization test. The seeded evidence includes one row with a large,
+    /// distinctive document body, dramatizing that only the document is dropped: every other field
+    /// on that same row still matches exactly.
+    /// </summary>
+    [Fact]
+    public async Task LoadObservationSnapshotAsync_matches_LoadSnapshotAsync_for_every_field_except_evidence_documents()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        DateTimeOffset now = new(2026, 7, 27, 12, 0, 0, TimeSpan.Zero);
+        var workflow = WorkflowIdentity.Plan;
+        var stage = new WorkflowStageIdentity("Planning");
+        var transition = new WorkflowTransitionIdentity("CreateExecutablePlan");
+        var runId = "run-obs-001";
+
+        await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
+            workflow, WorkflowResolutionState.Active, stage, RuntimeOutcomeKind.Waiting, now, ["workflow-state.md"]));
+        await store.UpsertStageStateAsync(new CanonicalStageStateRecord(
+            workflow, stage, WorkflowResolutionState.Active, now, ["stage-state.md"]));
+        await store.UpsertTransitionRunAsync(new CanonicalTransitionRunRecord(
+            runId, workflow, stage, transition, TransitionDurableState.OutputValidated, RuntimeOutcomeKind.Waiting,
+            now, now.AddMinutes(1), "input-hash", "transition waiting", ["transition.md"]));
+        await store.AppendTransitionEvidenceAsync(new CanonicalTransitionEvidenceRecord(
+            0, runId, transition, "OutputValidated", now.AddSeconds(10), TransitionDurableState.OutputValidated,
+            "output validated", ["output.md"], """{"kind":"output"}"""));
+        await store.AppendTransitionEvidenceAsync(new CanonicalTransitionEvidenceRecord(
+            0, runId, transition, "RawPromptOutputCaptured", now.AddSeconds(20), TransitionDurableState.PromptCompleted,
+            "raw output captured", ["raw-output"], new string('d', 200_000) + "-document-marker"));
+        await store.UpsertProductAsync(new ProductRecord(
+            ProductIdentity.ExecutablePlan, workflow, transition, [WorkflowIdentity.Execute],
+            "repository-owned", "canonical", [".agents/plan.md"], "causal-hash",
+            ProductFreshness.Fresh, ProductValidationState.Valid, ProductLifecycle.Active, ["product.md"]));
+        await store.AppendGateEvaluationAsync(new CanonicalGateEvaluationRecord(
+            0, workflow, stage, transition, new GateIdentity("CreateExecutablePlan.Output"), GateStatus.Satisfied,
+            now.AddSeconds(30),
+            [new GateRequirementResult("plan.exists", GateStatus.Satisfied, "plan exists", [".agents/plan.md"])],
+            "gate satisfied", ["gate.md"]));
+        await store.AppendWarningAsync(new CanonicalWarningRecord(
+            "warn_obs_001", workflow, stage, transition, WarningCategory.Human, "review required",
+            "workflow resolver", "approve review", ["warning.md"], now.AddSeconds(40)));
+        await store.UpsertRecoveryMarkerAsync(new CanonicalRecoveryMarkerRecord(
+            "recovery-obs-001", workflow, stage, transition,
+            new RecoveryDefinition("PlanRecovery", "resume from output validation", ["resume"], ["silent repair"]),
+            ["recovery.md"], now.AddSeconds(50)));
+
+        CanonicalWorkflowPersistenceSnapshot legacy = await store.LoadSnapshotAsync();
+        CanonicalWorkflowObservationSnapshot actual = await store.LoadObservationSnapshotAsync();
+
+        // The eight tables Task 3.5 leaves untouched: both methods call the exact same private
+        // reader for each, so this pins that LoadObservationSnapshotAsync still wires them through
+        // unchanged rather than, say, dropping one by accident while restructuring the constructor
+        // call.
+        Assert.Equal(legacy.WorkflowStates.Count, actual.WorkflowStates.Count);
+        Assert.Equal(legacy.WorkflowStates[0].State, actual.WorkflowStates[0].State);
+        Assert.Equal(legacy.WorkflowStates[0].Evidence, actual.WorkflowStates[0].Evidence);
+        Assert.Equal(legacy.StageStates.Count, actual.StageStates.Count);
+        Assert.Equal(legacy.StageStates[0].Evidence, actual.StageStates[0].Evidence);
+        Assert.Equal(legacy.TransitionRuns.Count, actual.TransitionRuns.Count);
+        Assert.Equal(legacy.TransitionRuns[0].State, actual.TransitionRuns[0].State);
+        Assert.Equal(legacy.TransitionRuns[0].Evidence, actual.TransitionRuns[0].Evidence);
+        Assert.Equal(legacy.Products.Count, actual.Products.Count);
+        Assert.Equal(legacy.Products[0].Identity, actual.Products[0].Identity);
+        Assert.Equal(legacy.Products[0].EvidenceLocations, actual.Products[0].EvidenceLocations);
+        Assert.Equal(legacy.GateEvaluations.Count, actual.GateEvaluations.Count);
+        Assert.Equal(legacy.GateEvaluations[0].Evidence, actual.GateEvaluations[0].Evidence);
+        Assert.Equal(legacy.EffectRecords.Count, actual.EffectRecords.Count);
+        Assert.Equal(legacy.Warnings.Count, actual.Warnings.Count);
+        Assert.Equal(legacy.Warnings[0].Evidence, actual.Warnings[0].Evidence);
+        Assert.Equal(legacy.RecoveryMarkers.Count, actual.RecoveryMarkers.Count);
+        Assert.Equal(legacy.RecoveryMarkers[0].Evidence, actual.RecoveryMarkers[0].Evidence);
+
+        // Transition evidence: the one table whose row shape changed. Every identity/location field
+        // must still match its legacy counterpart row-for-row; only DocumentJson has no counterpart
+        // on the observation side.
+        Assert.Equal(legacy.TransitionEvidence.Count, actual.TransitionEvidence.Count);
+        for (int index = 0; index < legacy.TransitionEvidence.Count; index++)
+        {
+            CanonicalTransitionEvidenceRecord expected = legacy.TransitionEvidence[index];
+            CanonicalTransitionEvidenceLocationRecord observed = actual.TransitionEvidence[index];
+            Assert.Equal(expected.EvidenceId, observed.EvidenceId);
+            Assert.Equal(expected.RunId, observed.RunId);
+            Assert.Equal(expected.Transition, observed.Transition);
+            Assert.Equal(expected.EventName, observed.EventName);
+            Assert.Equal(expected.RecordedAt, observed.RecordedAt);
+            Assert.Equal(expected.State, observed.State);
+            Assert.Equal(expected.Explanation, observed.Explanation);
+            Assert.Equal(expected.Evidence, observed.Evidence);
+        }
+    }
+
+    /// <summary>
+    /// Task 3.5's core guard: <see cref="CanonicalWorkflowPersistenceStore.LoadObservationSnapshotAsync"/> -
+    /// the routine observation path's snapshot loader - must never materialize evidence document
+    /// bodies, however large. A statement-count assertion cannot show this (the locations-only SELECT
+    /// and the pre-existing full-document SELECT each still compile as exactly one statement); this
+    /// asserts two direct signals instead of an inferred one: (1) the full-document
+    /// <see cref="CanonicalWorkflowPersistenceStore.ReadTransitionEvidenceAsync"/> path this task
+    /// leaves untouched for <see cref="CanonicalWorkflowPersistenceStore.LoadSnapshotAsync"/> never
+    /// runs when the observation path is used, and (2) a large, distinctive marker seeded into
+    /// evidence's <c>document_json</c> never appears anywhere in the returned
+    /// <see cref="CanonicalWorkflowObservationSnapshot"/> - which structurally has no field capable
+    /// of carrying it, but this proves the absence at the data level rather than only at the type
+    /// level.
+    /// </summary>
+    [Fact]
+    public async Task LoadObservationSnapshotAsync_never_materializes_evidence_document_bodies()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        DateTimeOffset now = new(2026, 7, 27, 12, 0, 0, TimeSpan.Zero);
+        var workflow = WorkflowIdentity.Execute;
+        var stage = new WorkflowStageIdentity("Implementation");
+        var transition = new WorkflowTransitionIdentity("ExecuteImplementationSlice");
+        const string marker = "document-body-marker-3.5";
+        string largeDocument = new string('m', 500_000) + "-" + marker;
+
+        await store.UpsertTransitionRunAsync(new CanonicalTransitionRunRecord(
+            "run-guard-001", workflow, stage, transition, TransitionDurableState.PromptCompleted,
+            RuntimeOutcomeKind.Waiting, now, null, "input-hash", "transition started", ["transition.md"]));
+        for (int index = 0; index < 5; index++)
+        {
+            await store.AppendTransitionEvidenceAsync(new CanonicalTransitionEvidenceRecord(
+                0, "run-guard-001", transition, "RawPromptOutputCaptured", now.AddSeconds(index),
+                TransitionDurableState.PromptCompleted, "raw output captured", [$"evidence-{index}.md"],
+                index == 2 ? largeDocument : $$"""{"kind":"output","index":{{index}}}"""));
+        }
+
+        bool fullDocumentReadInvoked = false;
+        store.ReadTransitionEvidenceAsyncInvokedForTesting = () => fullDocumentReadInvoked = true;
+        CanonicalWorkflowObservationSnapshot observation;
+        try
+        {
+            observation = await store.LoadObservationSnapshotAsync();
+        }
+        finally
+        {
+            store.ReadTransitionEvidenceAsyncInvokedForTesting = null;
+        }
+
+        Assert.False(
+            fullDocumentReadInvoked,
+            "LoadObservationSnapshotAsync must never fall back to the full-document ReadTransitionEvidenceAsync path.");
+
+        Assert.Equal(5, observation.TransitionEvidence.Count);
+        foreach (CanonicalTransitionEvidenceLocationRecord evidence in observation.TransitionEvidence)
+        {
+            Assert.DoesNotContain(marker, evidence.EventName, StringComparison.Ordinal);
+            Assert.DoesNotContain(marker, evidence.Explanation, StringComparison.Ordinal);
+            Assert.All(evidence.Evidence, item => Assert.DoesNotContain(marker, item, StringComparison.Ordinal));
+        }
+    }
+
+    /// <summary>
+    /// Supplementary evidence for Task 3.5 alongside the byte-materialization guard above:
+    /// <see cref="CanonicalWorkflowPersistenceStore.LoadObservationSnapshotAsync"/> still compiles
+    /// the same number of statements as <see cref="CanonicalWorkflowPersistenceStore.LoadSnapshotAsync"/> -
+    /// one per underlying table read, unchanged by swapping the evidence table's column list.
+    /// </summary>
+    [Fact]
+    public async Task LoadObservationSnapshotAsync_compiles_the_same_statement_count_as_LoadSnapshotAsync()
+    {
+        Repository repository = CreateRepository();
+        var store = new CanonicalWorkflowPersistenceStore(repository);
+        await store.UpsertWorkflowStateAsync(new CanonicalWorkflowStateRecord(
+            WorkflowIdentity.Plan, WorkflowResolutionState.Active, new WorkflowStageIdentity("Planning"),
+            RuntimeOutcomeKind.Waiting, DateTimeOffset.UtcNow, ["workflow-state.md"]));
+
+        var legacyCounter = new PreparedStatementCounter();
+        store.ConnectionObserverForTesting = legacyCounter.Watch;
+        try
+        {
+            await store.LoadSnapshotAsync();
+        }
+        finally
+        {
+            store.ConnectionObserverForTesting = null;
+        }
+
+        var observationCounter = new PreparedStatementCounter();
+        store.ConnectionObserverForTesting = observationCounter.Watch;
+        try
+        {
+            await store.LoadObservationSnapshotAsync();
+        }
+        finally
+        {
+            store.ConnectionObserverForTesting = null;
+        }
+
+        Assert.Equal(legacyCounter.Statements, observationCounter.Statements);
+    }
+
     private static readonly string[] ExpectedTables =
     [
         "canonical_workflow_states",

@@ -32,9 +32,12 @@ internal static class CanonicalStatusSnapshotComposer
         IReadOnlyList<ConsumedInputDrift> inputDrift = observation.StorageAuthority.UsableAuthority
             ? await ReadReceiptStaleness.ProjectAsync(composition.Repository, cancellationToken)
             : [];
-        CanonicalWorkflowPersistenceSnapshot workflow = healthyStorage
-            ? await composition.Persistence.LoadSnapshotAsync(cancellationToken)
-            : new CanonicalWorkflowPersistenceSnapshot([], [], [], [], [], [], [], [], []);
+        // Task 3.5: this used to load the full nine-table snapshot (including every evidence row's
+        // document body) into a local `workflow` variable that nothing downstream in this method or
+        // ComposeAsync ever read - dead since some earlier refactor moved workflow-state reporting
+        // over to `observation.WorkflowStates`/`observation.TransitionRuns` (see the Workflow
+        // projection below) without removing the now-orphaned load. Removed rather than migrated to
+        // a documents-free read, since it needs neither locations nor documents: nothing.
         IReadOnlyList<string> pendingEffects = healthyStorage
             ? (await new CanonicalEffectWorkStore(composition.Repository).ScanUnsettledAsync(
                     256, DateTimeOffset.UtcNow, cancellationToken))
