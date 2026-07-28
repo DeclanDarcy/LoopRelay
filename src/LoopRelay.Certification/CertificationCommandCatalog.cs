@@ -51,7 +51,7 @@ public static class CertificationCommandCatalog
         new(TraditionalRoadmap, "Certify the live TraditionalRoadmap transition chain to Plan entry.", CertificationCommandKind.Live, true, true, "traditional-roadmap.latest.json"),
         new(EvalRoadmap, "Certify the live EvalRoadmap transition chain to Plan entry.", CertificationCommandKind.Live, true, true, "eval-roadmap.latest.json"),
         new(CompletionClosure, "Certify completion, archival closure, continuity retirement, and rerun idempotency.", CertificationCommandKind.Live, true, true, "completion-closure.latest.json"),
-        new(FailureOracleMatrix, "Audit maintained failure classes, recovery coverage, and oracle controls.", CertificationCommandKind.Deterministic, false, false, "failure-oracle-matrix.latest.json"),
+        new(FailureOracleMatrix, "Audit transition recovery coverage, oracle controls, and exclusions; supported failure rows are documentation.", CertificationCommandKind.Deterministic, false, false, "failure-oracle-matrix.latest.json"),
         new(TraditionalFullChain, "Run the TraditionalRoadmap-to-Plan-to-Execute full chain.", CertificationCommandKind.Live, true, true, "traditional-full-chain.latest.json"),
         new(EvalFullChain, "Run the EvalRoadmap-to-Plan-to-Execute full chain.", CertificationCommandKind.Live, true, true, "eval-full-chain.latest.json"),
         new(DiagnoseAttempt, "Diagnose an already-retained failed attempt without rerunning its fixture.", CertificationCommandKind.Live, false, true, null),
